@@ -362,10 +362,19 @@ export function signCls(v: number | null | undefined, text?: string): "k-up" | "
   return `k-${t}`;
 }
 
-/** A plain number with its sign, in Indian grouping: +1,234 / −5. */
-export function signed(v: number | null | undefined, dp = 0): string {
+/** A plain number with its sign, in Indian grouping: +1,234 / −5. `market` "US" (or any market but India) groups
+ * the international way, +208,772, as a US company's figures are written (DESIGN.md "Numbers"). */
+export function signed(v: number | null | undefined, dp = 0, market?: string | null): string {
   if (!ok(v)) return "–";
-  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${nf(Math.abs(v), dp)}`;
+  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${grouped(Math.abs(v), dp, market)}`;
+}
+
+/** A plain count or amount without a currency sign, grouped as its market writes it: 2,08,772 in India, 208,772 in the
+ * US. With no market, India's. */
+export function grouped(v: number | null | undefined, dp = 0, market?: string | null): string {
+  if (!ok(v)) return "–";
+  const s = Math.abs(v).toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: dp, minimumFractionDigits: 0 });
+  return `${v < 0 && /[1-9]/.test(s) ? "−" : ""}${s}`;
 }
 
 /** The first name to greet by, from what the sign-in gave the profile (a first or given name, else the first word of the

@@ -34,6 +34,19 @@ test("an ETF badge never sets today's price against yesterday's NAV (R5O-005)", 
   assert.match(read("src/pages/EtfGapsPage.tsx"), /header: "Close vs NAV"/);
 });
 
+test("AAPL's page: no unsourced segment split, an insider net that matches its rows, US grouping (R5O-007)", async () => {
+  const { signed, grouped } = await import("../src/lib/format.ts");
+  assert.equal(signed(208772, 0, "US"), "+208,772");
+  assert.equal(signed(-139005, 0, "US"), "−139,005");
+  assert.equal(signed(-139005), "−1,39,005");                 // India keeps its grouping
+  assert.equal(grouped(4753636, 0, "US"), "4,753,636");
+  assert.equal(grouped(4753636), "47,53,636");
+  const research = read("src/pages/Research.tsx");
+  assert.match(research, /signed\(Math\.round\(v\), 0, region\)/);
+  assert.match(research, /shares over the \{c\.insider\.rows\.length\} filing/);
+  assert.doesNotMatch(research + read("src/components/Research.tsx"), /Revenue by segment|<Donut/);
+});
+
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);

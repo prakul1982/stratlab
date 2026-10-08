@@ -25,7 +25,7 @@ export interface Company {
   pros?: string[]; cons?: string[];
   earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
-  insider: { net: number; rows: { name: string; change: number; date: string }[] } | null;
+  insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
   sources: SourceStatus[]; links: { label: string; url: string }[];

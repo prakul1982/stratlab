@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, dayIn, marketTz, pct, price, quoteAt, safeHref } from "../lib/format";
+import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
@@ -296,11 +296,12 @@ export function CompanyPage() {
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />
-            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("en-IN")}`} /> shares across recent filings</p>
+            {/* the net is the sum of exactly the rows below, grouped as the company's market writes numbers */}
+            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => signed(Math.round(v), 0, region)} /> shares over the {c.insider.rows.length} filing{c.insider.rows.length === 1 ? "" : "s"} below</p>
             <DataTable label="Insider trades" rows={c.insider.rows} rowKey={(t) => `${t.name}-${t.date}-${t.change}`}
               columns={[{ key: "n", header: "Name", rowHeader: true, wrap: true, cell: (t) => t.name },
-                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toLocaleString("en-IN")}`} /> },
-                { key: "d", header: "Date", numeric: true, cell: (t) => t.date }]} />
+                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => signed(v, 0, region)} /> },
+                { key: "d", header: "Date", numeric: true, cell: (t) => (t.date ? fmtDate(t.date) : "–") }]} />
           </Card>
         )}
       </div>

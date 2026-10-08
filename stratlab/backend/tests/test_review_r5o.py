@@ -120,3 +120,24 @@ def test_an_adr_page_is_its_us_listing_in_dollars():
     # its "similar companies" were ENI.MI and GSP.MI, Milan's euro prices shown with a dollar sign: US listings only
     from app.intel.company import FOREIGN_TICKER
     assert [x for x in ("ENI.MI", "GSP.MI", "BRK.B", "XOM", "SHEL.L", "BP") if not FOREIGN_TICKER.search(x)] == ["BRK.B", "XOM", "BP"]
+
+
+# ---------- R5O-007: AAPL's page ----------
+def test_insider_net_is_the_sum_of_the_rows_shown():
+    from app.intel.company import insider_view
+    # AAPL, 8 Oct: the 8 visible rows all sold (-1,39,005 in total) while the header said "Net +2,08,772" over 40
+    sold = [-108136, -4000, -6500, -3200, -2900, -5000, -4269, -5000]
+    later = [{"name": "Grant", "change": 120000, "filingDate": "2026-04-01"}] * 32         # older awards, not shown
+    ins = [{"name": f"Officer {i}", "change": c, "filingDate": f"2026-09-{20 - i:02d}"} for i, c in enumerate(sold)] + later
+    v = insider_view(ins)
+    assert v["count"] == 8 and len(v["rows"]) == 8 and v["net"] == sum(sold) == -139005
+    assert insider_view([]) is None and insider_view([{"name": "x", "change": 0}]) is None
+
+
+def test_the_ai_read_carries_no_revenue_split():
+    from app.intel import ai as A
+    # a stored read with the model's split ("iPhone 100%, Services 0%, Mac 0%") goes out without it
+    stored = {"summary": "Apple makes phones.", "segments": [{"label": "iPhone", "share": 100}, {"label": "Services", "share": 0}]}
+    assert A.clean_company(stored)["segments"] == []
+    import inspect
+    assert '"segments"' not in inspect.getsource(A.company).split("RULES")[0]          # the model isn't asked for one

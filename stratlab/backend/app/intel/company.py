@@ -136,6 +136,16 @@ def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> di
             "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
 
 
+def insider_view(ins: list[dict], n: int = 8) -> dict | None:
+    """The latest insider trades and their net: the net is the sum of exactly the rows shown, so the header and the
+    table agree (AAPL, 8 Oct 2026: "Net +2,08,772 shares" over 40 filings above 8 rows that all sold, -1,39,005)."""
+    rows = [{"name": t.get("name"), "change": num(t.get("change")), "date": t.get("filingDate") or t.get("transactionDate")}
+            for t in ins if num(t.get("change"))][:n]
+    if not rows:
+        return None
+    return {"net": sum(r["change"] for r in rows), "count": len(rows), "rows": rows}
+
+
 def _public(row: dict) -> dict:
     return {k: v for k, v in row.items() if k != "_t"}
 
@@ -391,9 +401,7 @@ class Research:
                           ((e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100 if e["estimate"] else 0)} for e in earn],
             "next_earnings": {"date": nxt[0]["date"], "eps_estimate": nxt[0].get("epsEstimate")} if nxt else None,
             "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
-            "insider": {"net": sum(num(t.get("change")) or 0 for t in ins[:40]),
-                        "rows": [{"name": t.get("name"), "change": t.get("change"), "date": t.get("filingDate") or t.get("transactionDate")}
-                                 for t in ins[:8]]} if ins else None,
+            "insider": insider_view(ins),
             "peers": [x for x in (r["peers"] or []) if x and x != sym and not FOREIGN_TICKER.search(x)][:8],   # US listings only: ENI.MI is in euros
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}

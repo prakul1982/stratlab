@@ -90,14 +90,12 @@ Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
  "valuation_note": "one sentence stating its valuation in numbers against its own history (e.g. P/E now vs its usual range), no judgement",
  "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
- "segments": [{{"label": "business segment", "share": 0}}],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 upcoming things that could move the stock"],
  "ideas": [{{"title": "3-6 words", "text": "one trading rule in plain English", "why": "one sentence"}}]}}
 No scores, ratings or grades of any kind: no 0-100 numbers, letter grades or stars, and no "strong", "weak", "good",
 "poor", "healthy" or "excellent" labels on the business, its growth, its price trend or its balance sheet. State the
 numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt is 0.4 times equity".
-Segment shares are estimates that add up to about 100.
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
 (trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
@@ -112,15 +110,12 @@ Segment shares are estimates that add up to about 100.
         if isinstance(i, dict) and str(i.get("text", "")).strip():
             ideas.append({"title": str(i.get("title") or "Idea")[:60], "text": str(i["text"])[:400],
                           "why": str(i.get("why") or "")[:300]})
-    segs = []
-    for s in r.get("segments") or []:
-        if isinstance(s, dict) and s.get("label") and _share(s.get("share")) is not None:
-            segs.append({"label": str(s["label"])[:50], "share": _share(s["share"])})
     if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear"):
         raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
     return {"summary": str(r.get("summary") or "")[:700], "facts": key_facts or [],
             "valuation_note": str(r.get("valuation_note") or "")[:300],
-            "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": segs[:8],
+            # no revenue split: the model's guess isn't sourced (AAPL read "iPhone 100%, Services 0%, Mac 0%")
+            "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": [],
             "position": str(r.get("position") or "")[:500], "watch": _clip(r.get("watch"), 4), "ideas": ideas[:3]}
 
 
@@ -129,6 +124,7 @@ def clean_company(read: dict) -> dict:
     still carry them), and an empty list of fact rows when it has none."""
     out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
     out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
+    out["segments"] = []                        # a read stored with the model's unsourced revenue split shows none
     return out
 
 
