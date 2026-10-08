@@ -7,7 +7,8 @@ import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
-import { pickFy, rememberFy } from "../../lib/fy";
+import { fyLink, movedYearNote, openFy, rememberFy, savedFy } from "../../lib/fy";
+import { useAskedFy } from "../../lib/useFy";
 
 /* /money/tax-tools: dividends and the TDS on them, advance tax by date, and the long-term exemption, built on the tax
  * report and My Holdings. Estimates and arithmetic on the user's own figures. Built from the kit (components/kit). */
@@ -86,13 +87,21 @@ function DividendsTab() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<Dividends | null>(null);
   const [fy, setFy] = useState<number | null>(null);
+  const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const asked = useAskedFy();             // a link's year ("?fy=2026", from My Holdings) is the year it opens on
   const show = useCallback((d: Dividends) => {
     setV(d);
-    setFy((cur) => cur ?? pickFy(d.years.map((y) => y.fy), d.current_fy, (fy) => d.years.some((y) => y.fy === fy && y.total > 0)));     // the Money pages' shared year
-  }, []);
+    // the Money pages' one rule (lib/fy openFy): the year being filed, or the latest year with dividends when that has none
+    setFy((cur) => {
+      if (cur != null) return cur;
+      const o = openFy(d.years.map((y) => y.fy), d.current_fy, (fy) => d.years.some((y) => y.fy === fy && y.count > 0), undefined, asked);
+      setMovedFrom(o.from);
+      return o.fy;
+    });
+  }, [asked]);
   useEffect(() => { api<Dividends>("/money/dividends").then(show).catch(fail); }, [show, fail]);
 
   const pick = async (files: FileList | null, reset: () => void) => {
@@ -153,8 +162,9 @@ function DividendsTab() {
             <CardHead title={`Dividends, ${y.label}`} actions={<>
               {y.source === "files" && <Badge>From your files</Badge>}
               {y.source === "estimated" && <Badge>Estimated</Badge>}
-              <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); }} options={yearOptions(v.years, v.current_fy)} />
+              <Select small label="Financial year" value={y.fy} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); }} options={yearOptions(v.years, v.current_fy)} />
             </>} />
+            {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="dividends-moved-year">{movedYearNote(movedFrom, y.fy, v.current_fy, "dividends")}</p>}
             {y.source !== "none" && y.taxed && (
               <FieldGroup label="In the total tax estimate" info="Whether this year's dividends are counted as income in the total tax estimate on the tax report.">
                 <Seg label="In the total tax estimate" options={[{ value: "in", label: "Include in the tax estimate" }, { value: "out", label: "Leave out" }]} value={y.include ? "in" : "out"} onChange={(x) => include(y.fy, x === "in")} />
@@ -175,8 +185,8 @@ function DividendsTab() {
                   )}
                 </StatRow>
                 <p className="k-small">{y.taxed ? (y.include
-                  ? <>Included in the <Link className="link" to="/tax-report">total tax estimate</Link> as income from other sources, taxed at your slab rate.</>
-                  : <>Not in the <Link className="link" to="/tax-report">total tax estimate</Link>{y.source === "estimated" ? " (an estimate is left out until you include it)" : ""}.</>)
+                  ? <>Included in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link> as income from other sources, taxed at your slab rate.</>
+                  : <>Not in the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link>{y.source === "estimated" ? " (an estimate is left out until you include it)" : ""}.</>)
                   : "Dividends were exempt in your hands before FY 2020-21 (the company paid dividend distribution tax)."}</p>
                 <p className="k-note">Added up by financial year, each payment in the year of its record date. <Link className="link" to="/holdings">My Holdings</Link> shows the last 12 months instead, a different slice of the same dividends.</p>
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
@@ -214,7 +224,16 @@ function AdvanceTab() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<Advance | null>(null);
   const [fy, setFy] = useState<number | null>(null);
-  useEffect(() => { api<Advance>(`/money/advance-tax${fy ? `?fy=${fy}` : ""}`).then(setV).catch(fail); }, [fy, fail]);
+  const asked = useAskedFy();
+  // Advance tax is paid during the year, so it opens on the year running now; a year picked or asked for on the other Money
+  // pages carries here when this page has it (this year and the one before)
+  useEffect(() => {
+    api<Advance>(`/money/advance-tax${fy ? `?fy=${fy}` : ""}`).then((a) => {
+      const want = fy == null ? asked ?? savedFy() : null;
+      if (want != null && want !== a.fy && (want === a.current_fy || want === a.current_fy - 1)) setFy(want);
+      else setV(a);
+    }).catch(fail);
+  }, [fy, fail, asked]);
   const remind = async (on: boolean) => {
     try { await api("/money/advance-tax/reminders", { method: "PUT", body: { on } }); setV((x) => (x ? { ...x, remind: on } : x)); notify(on ? "Reminders on: 7 days and 1 day before each date." : "Reminders off."); }
     catch (e) { fail(e); }
@@ -254,7 +273,7 @@ function AdvanceTab() {
             <CardHead title="What is due" />
             <StatRow>
               <Stat label="Tax for the year (estimate)" value={<span aria-label="Tax for the year">{inr(s.tax)}</span>}
-                note={<>from the <Link className="link" to="/tax-report">tax report</Link>{v.income_saved ? "" : ", no other income entered"}{v.dividends_in_estimate ? ` · ${inr(v.dividends_in_estimate)} of dividends in it` : ""}</>} />
+                note={<>from the <Link className="link" to={fyLink("/tax-report", v.fy)}>tax report</Link>{v.income_saved ? "" : ", no other income entered"}{v.dividends_in_estimate ? ` · ${inr(v.dividends_in_estimate)} of dividends in it` : ""}</>} />
               <Stat label="Less TDS" value={inr(s.tds)} note="as you entered it" />
               <Stat label="Advance tax for the year" value={<span aria-label="Advance tax for the year">{s.due ? inr(s.net) : "None due"}</span>} note={s.due ? `${inr(s.paid)} paid so far` : `below ${inr(s.threshold)}`} />
               {s.due && <Stat label="Interest so far (234C)" value={inr(s.interest_234c)} tone={s.interest_234c > 0 ? "down" : undefined} note="on instalments already due" />}

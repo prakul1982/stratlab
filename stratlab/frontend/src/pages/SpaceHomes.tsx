@@ -19,7 +19,7 @@ import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
-import { pickFy } from "../lib/fy";
+import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -295,7 +295,7 @@ function RedFlags() {
 /* ---------- Money: what you own ---------- */
 type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number };
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; updated_at: string | null; prices_at?: string | null };
-type TaxYear = { fy: number; label: string; count: number; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
+type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
 
@@ -358,11 +358,13 @@ function HoldingsSummary() {
 function TaxSummary() {
   const [t, setT] = useState<Tax | null | "error">(null);
   useEffect(() => { api<Tax>("/tax").then(setT).catch(() => setT("error")); }, []);
-  // the Money pages' shared year (lib/fy): the one being filed now, unless another was picked
-  const year = t && t !== "error" ? t.years.find((y) => y.fy === pickFy(t.years.map((x) => x.fy), t.current_fy, (fy) => t.years.some((x) => x.fy === fy && x.count > 0))) ?? null : null;
-  const elsewhere = t && t !== "error" && year && !year.count ? t.years.filter((y) => y.count > 0).sort((a, b) => b.fy - a.fy)[0] ?? null : null;
+  // the Money pages' one rule for the year (lib/fy openFy): the year last picked, else the one being filed now, or the latest
+  // year with sales when that has none (said in one line); the link to the tax report carries the year shown
+  const ok = t && t !== "error" ? t : null;
+  const open = ok ? openFy(ok.years.map((x) => x.fy), ok.current_fy, (fy) => ok.years.some((x) => x.fy === fy && yearHasTrades(x))) : null;
+  const year = ok && open ? ok.years.find((y) => y.fy === open.fy) ?? null : null;
   return (
-    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to="/tax-report" className="link" data-money="/tax-report">Open Tax report →</Link>}>
+    <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Open Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !t.trades ? (
@@ -377,7 +379,7 @@ function TaxSummary() {
               <Fig label="Short-term gains" tone={signClass(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signClass(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
-            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{elsewhere ? ` ${elsewhere.label} has ${elsewhere.count}.` : ""} An estimate to check with your CA.</p>
+            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />
           </div>
         )}
