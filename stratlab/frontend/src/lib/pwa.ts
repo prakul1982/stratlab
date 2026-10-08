@@ -1,4 +1,5 @@
-import { api } from "./api";
+/** The server, loaded when first needed: the install prompt and the service worker need no account, so a visitor does not download the sign-in code for them. */
+const api = <T = any>(path: string, o?: Parameters<typeof import("./api").api>[1]) => import("./api").then((m) => m.api<T>(path, o));
 
 /** Installing StratLab on a phone or computer, and turning on its notifications. */
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };

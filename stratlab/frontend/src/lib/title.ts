@@ -36,7 +36,7 @@ export function titleFor(path: string): string {
  * "about". Every public page has a title of its own, never the sign-in page's. */
 export const PUBLIC_TITLES: Record<string, string> = {
   "/terms": "Terms", "/privacy": "Privacy", "/refunds": "Refunds", "/contact": "Contact",
-  "/login": "Sign in", "/signup": "Sign up", "/about": "About",
+  "/login": "Sign in", "/signup": "Sign up", "/about": "About", "/faq": "Questions", "/library": "Strategy library",
 };
 
 /** The title of a page nothing is at. */

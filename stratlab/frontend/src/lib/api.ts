@@ -1,29 +1,17 @@
 import { AuthClient } from "@supabase/auth-js";
 import { fieldWords, invalidField, invalidText, serverProblems } from "./validate";
+import { CFG, sessionKey } from "./config";
+import { ApiError } from "./http";
 
-declare global {
-  interface Window {
-    STRATLAB_CONFIG?: { API_BASE: string; SUPABASE_URL: string; SUPABASE_ANON_KEY: string; SENTRY_DSN?: string;
-      BUSINESS_NAME?: string; CONTACT_EMAIL?: string; PRIVACY_EMAIL?: string; BILLING_EMAIL?: string; BUSINESS_ADDRESS?: string; POSTHOG_KEY?: string; POSTHOG_HOST?: string };
-    Razorpay?: any;
-  }
-}
+export { CFG } from "./config";
+export { ApiError } from "./http";
 
-export const CFG: NonNullable<Window["STRATLAB_CONFIG"]> = window.STRATLAB_CONFIG ?? { API_BASE: "", SUPABASE_URL: "", SUPABASE_ANON_KEY: "" };
-
-// Error alerts: only when a Sentry DSN is in config.js, and the SDK is only downloaded then.
-if (CFG.SENTRY_DSN) {
-  import("@sentry/browser").then((S) => S.init({ dsn: CFG.SENTRY_DSN, environment: location.hostname,
-    // nothing personal: no user fields, cookies, headers, bodies or query strings
-    dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
-    ignoreErrors: ["ResizeObserver loop", "AbortError", "Failed to fetch", "Load failed", "NetworkError"] })).catch(() => {});
-}
 // Only sign-in is used, so the standalone auth client is loaded rather than the whole Supabase client (database,
 // storage, realtime): the same settings the full client would use, down to the storage key, so saved logins carry over.
 const sbBase = new URL((CFG.SUPABASE_URL || "http://localhost").replace(/\/?$/, "/"));
 const sbKey = CFG.SUPABASE_ANON_KEY || "missing";
 /** Where the saved login lives in localStorage. */
-export const SESSION_KEY = `sb-${sbBase.hostname.split(".")[0]}-auth-token`;
+export const SESSION_KEY = sessionKey();
 export const supabase = {
   auth: new AuthClient({
     url: new URL("auth/v1", sbBase).href,
@@ -33,12 +21,6 @@ export const supabase = {
   }),
 };
 
-export class ApiError extends Error {
-  status = 0;
-  code?: string;
-  /** For a 422: each field the server turned down, with what's wrong in plain words and its limit (lib/validate). */
-  fields?: Record<string, string>;
-}
 
 /** `file` sends a file as the request body itself (no JSON, no base64), for uploads too big to wrap. */
 type Opts = { method?: string; body?: unknown; raw?: boolean; file?: Blob };

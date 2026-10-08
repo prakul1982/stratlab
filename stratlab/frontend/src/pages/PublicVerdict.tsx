@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { api, ApiError } from "../lib/api";
+import { publicGet, type ApiError } from "../lib/http";
 import { money, pct, TF_NAME } from "../lib/format";
 import { upDown, checkTone } from "../lib/tradeUi";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { moneyCompact } from "../lib/chartFormat";
-import { Logo } from "../components/Logo";
+import { PublicFrame } from "../components/PublicFrame";
 import { STATUS_NAME } from "../components/ui";
-import { Badge, Card, CardHead, DataTable, ErrorState, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge } from "../components/kit/Badge";
+import { Card, CardHead } from "../components/kit/Card";
+import { DataTable, type Column } from "../components/kit/DataTable";
+import { Stat, StatRow } from "../components/kit/Stat";
+import { ErrorState, Skeleton } from "../components/kit/States";
 import "./trade/trade.css";
 
 /* /verdict/:token: a verdict someone shared, readable without an account. Built from the kit (components/kit). */
@@ -26,12 +29,11 @@ type Member = NonNullable<Snapshot["group"]>["members"][number];
 const d = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 
 /** A verdict someone shared: readable without an account, with no rules and no owner details. */
-export function PublicVerdict() {
-  const { token = "" } = useParams();
+export function PublicVerdict({ token }: { token: string }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   useEffect(() => {
-    api<Snapshot>(`/public/v/${encodeURIComponent(token)}`).then(setSnap).catch((e: ApiError) => setGone(e.message));
+    publicGet<Snapshot>(`/public/v/${encodeURIComponent(token)}`).then(setSnap).catch((e: ApiError) => { setGone(e.message); document.title = "Verdict not available · StratLab"; });
   }, [token]);
 
   const v = snap?.verdict;
@@ -47,12 +49,7 @@ export function PublicVerdict() {
   ];
 
   return (
-    <div className="pub">
-      <header className="pub-nav">
-        <a href="/" aria-label="StratLab home"><Logo size={40} /></a>
-        <a className="btn sm" href="/">Test your own idea free</a>
-      </header>
-      <main className="pub-main k-page">
+    <PublicFrame action={<a className="btn sm" href="/">Test your own idea free</a>}>
         {!snap && !gone && <Card><Skeleton label="Opening the verdict" /></Card>}
         {gone && (
           <ErrorState title="This verdict isn't available" action={{ label: "See what StratLab does", to: "/" }}>
@@ -112,7 +109,6 @@ export function PublicVerdict() {
             <p className="k-note">Shared from StratLab. Research and paper trading only: past results don't predict future returns, and this isn't investment advice. The strategy's rules are private to the person who shared it.</p>
           </>
         )}
-      </main>
-    </div>
+    </PublicFrame>
   );
 }
