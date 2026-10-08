@@ -119,6 +119,36 @@ def build_stocks(uid: str, day: date, weekly: bool = False, store: bool = True) 
     return save(issue) if store else issue
 
 
+def repair_index_moves(region: str, days: int = 21) -> int:
+    """Rebuild the index numbers of the daily Market Briefs stored in the last `days` days from that day's closes.
+    Until Oct 2026 a day's change was read against the close about a week earlier; the levels were right. The rest of
+    each issue (rotation, scans, headlines) stays as it was, and the summary becomes the plain template (the AI's
+    restated the wrong changes). Returns how many issues changed."""
+    from datetime import timedelta
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    for iid in ids("market", region):
+        issue = load(iid)
+        if not issue or issue.get("weekly") or issue.get("day", "") < cutoff or not issue.get("indices"):
+            continue
+        day = date.fromisoformat(issue["day"])
+        indices = []
+        for i in issue["indices"]:
+            sym = dict(content.INDICES.get(region, [])).get(i["name"])
+            got = content.index_close(sym, day) if sym else None
+            indices.append({**i, **got} if got else i)
+        if indices == issue["indices"]:
+            continue
+        rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
+        f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
+        issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
+        issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
 # ---------- readers ----------
 def address(profile: dict) -> str | None:
     """Where newsletters go: the alert email set in Account, else the address they sign in with."""
@@ -191,7 +221,21 @@ class Job:
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="newsletters").start()
 
+    def repair_once(self):
+        """Once per database: correct the daily briefs stored with the week-old day's change (see repair_index_moves)."""
+        flag = "newsfix:index-day-change"
+        if db.get_setting(flag):
+            return
+        try:
+            n = sum(repair_index_moves(r) for r in SEND_AT)
+        except Exception as e:
+            print("newsletters repair:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: corrected the index moves in {n} stored briefs")
+
     def _loop(self):
+        self.repair_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))
