@@ -15,6 +15,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from .auth import current_profile
+from .email_kit import inr as _inr
 from .engine import costs as C
 from .money_mf import xirr
 from .plans import FEATURE_PLAN, PLANS, allows
@@ -332,7 +333,7 @@ def words(plan: dict, legs: list[dict]) -> str:
     split = ", ".join(f"{round(leg['weight'] * 100)}% {leg['symbol']}" for leg in legs) if len(legs) > 1 else legs[0]["symbol"]
     when = {"daily": "Every trading day", "weekly": f"Every {WEEKDAYS[plan['weekday']]} (or the next trading day)",
             "monthly": f"On day {plan['dom']} of every month (or the next trading day)"}[plan["freq"]]
-    what = (f"invest ₹{plan['amount']:,.0f}" if plan["mode"] == "amount" else f"purchase {plan['qty']} share{'s' if plan['qty'] != 1 else ''}")
+    what = (f"invest {_inr(plan['amount'])}" if plan["mode"] == "amount" else f"purchase {plan['qty']} share{'s' if plan['qty'] != 1 else ''}")
     s = f"{when}, {what} in {split}" + (" (split by these weights)" if len(legs) > 1 and plan["mode"] == "amount" else "") + "."
     if plan["step_up"]:
         s += f" Raise the amount by {plan['step_up'] * 100:g}% each year."

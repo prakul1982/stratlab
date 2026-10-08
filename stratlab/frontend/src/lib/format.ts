@@ -73,7 +73,7 @@ export function bigMoney(v: number | null | undefined, currency: string): string
   const a = Math.abs(v);
   const step = shortStep(a, [[1e12, "T", 2], [1e9, "B", 1], [1e6, "M", 0]]);      // $999.96B reads $1.00T, not $1000.0B
   if (step) return `${v < 0 ? "-" : ""}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
-  return `${s}${Math.round(v).toLocaleString()}`;
+  return `${s}${Math.round(v).toLocaleString("en-US")}`;            // a dollar figure is grouped the international way, whatever the reader's locale
 }
 
 export function pct(v: number | null | undefined, dp = 1): string {

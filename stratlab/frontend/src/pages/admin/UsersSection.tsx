@@ -8,7 +8,7 @@ import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
 import { PLAN_FILTERS, PLAN_NAME, planNote, usersPath, type PlanFilter, type UserRow } from "./users";
 
-interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null }
+interface SessionRow { id: string; name: string; email: string | null; symbol: string; market: string; started_at: string; capital: number | null; equity: number | null; trades: number | null; currency?: string | null }
 
 const PAGE = 25;
 
@@ -131,7 +131,7 @@ export function UsersSection() {
     { key: "user", header: "User", wrap: true, cell: (s) => s.email },
     { key: "sym", header: "Instrument", cell: (s) => s.symbol },
     { key: "at", header: "Started", cell: (s) => ago(s.started_at) },
-    { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity) : "–") },
+    { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity, s.currency ?? "INR") : "–") },
     { key: "tr", header: "Trades", numeric: true, cell: (s) => s.trades ?? 0 },
     { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" onClick={() => setStopping(s)}>Stop</button> },
   ];

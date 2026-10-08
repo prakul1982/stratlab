@@ -99,6 +99,15 @@ test("dates: quarter ends, the app's date format for an expiry, ticks on trading
   assert.equal(tickOnPoint({ t: ms("2026-10-01"), label: "Oct" }, ms("2026-10-01"), false, IST), "Oct");
 });
 
+test("rupees in Indian grouping, dollars in international, whatever the reader's locale (R5O-034)", async () => {
+  const { bigMoney, money } = await import("../src/lib/format.ts");
+  assert.equal(money(4753636, "INR"), "₹47,53,636");                 // an admin paper account, was 4,753,636
+  assert.equal(money(10000, "USD"), "$10,000");
+  assert.match(read("src/lib/format.ts"), /Math\.round\(v\)\.toLocaleString\("en-US"\)/);
+  assert.equal(bigMoney(999_000, "USD"), "$999,000");
+  assert.match(read("src/pages/admin/UsersSection.tsx"), /money\(s\.equity, s\.currency \?\? "INR"\)/);
+});
+
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);

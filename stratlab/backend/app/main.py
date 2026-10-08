@@ -4152,7 +4152,9 @@ def admin_sessions(_=Depends(admin.admin_profile)):
         out.append({"id": s.id, "name": s.name, "email": emails.get(s.user_id), "symbol": s.inst.get("symbol"),
                     "market": getattr(s, "market", s.inst.get("market")), "kind": getattr(s, "kind", "rules"),
                     "started_at": s.started_at, "capital": account.get("capital"),
-                    "equity": account.get("equity"), "trades": account.get("trades")})
+                    "equity": account.get("equity"), "trades": account.get("trades"),
+                    # the account's currency, so its money is grouped as that currency writes it (Rs47,53,636, $10,000)
+                    "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", s.inst.get("market")) == "IN" else "USD")})
     return out
 
 

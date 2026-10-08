@@ -447,7 +447,10 @@ def _money(f: dict, v) -> str:
     v = _num(v)
     if v is None:
         return "–"
-    return ("$" if f.get("currency") == "USD" else "₹") + f"{v:,.2f}"
+    if f.get("currency") == "USD":
+        return f"${v:,.2f}"
+    from .email_kit import inr
+    return inr(v, 2)                            # Indian grouping for rupees: Rs1,40,250.00
 
 
 def _inr_group(v: float) -> str:

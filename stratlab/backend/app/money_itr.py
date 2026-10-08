@@ -39,6 +39,7 @@ from . import money_us_tax as us, tax_lots, xlsx_write
 from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows
 from .tax_lots import GF_DATE, RATE_CHANGE, fy_label, money
+from .email_kit import fmt_date as _day
 
 router = APIRouter(prefix="/money/itr", tags=["money"])
 LABEL = ("Prepared by StratLab from your files to help you or your CA fill the return. This is not a filed return, "
@@ -594,7 +595,7 @@ def to_pdf(g: dict) -> bytes:
     story += [PageBreak(), Paragraph("Where the figures come from", h2)] + [Paragraph("• " + escape(s), body) for s in sources(g)]
     story += [Paragraph("Assumptions", h2)] + [Paragraph("• " + escape(s), body) for s in assumptions(g)]
     story += [Paragraph("Set-off rules", h2)] + [Paragraph("• " + escape(s), body) for s in tax_lots.SETOFF_RULES]
-    story += [Spacer(1, 8), Paragraph(f"Made by StratLab on {g['made']:%d %b %Y}. " + escape(LABEL), small)]
+    story += [Spacer(1, 8), Paragraph(f"Made by StratLab on {_day(g['made'])}. " + escape(LABEL), small)]
     doc.build(story)
     return buf.getvalue()
 
