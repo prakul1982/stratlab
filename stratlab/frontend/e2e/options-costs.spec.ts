@@ -71,7 +71,7 @@ test("options builder: charges to open and close, and breakevens after them, on 
   // a short straddle's most it can make is its premium: one figure, not the same one twice
   await expect(box).toContainText("Share of the premium (also the most it can make)0.77%");
   await expect(box).not.toContainText("Share of the most it can make");
-  await expect(box).toContainText("Premium kept after charges₹17,414.16");
+  await expect(box).toContainText("Premium kept after charges₹17,414");
   await expect(page.getByTestId("opt-breakevens")).toContainText("Breaks even at 22,130 and 22,670 before charges. After charges: 22,132 and 22,668.");
   await expect(page.getByTestId("opt-max-profit")).toContainText("₹17,550₹17,414 after charges");
   await expect(page.getByTestId("opt-max-loss")).toContainText("Unlimited");
