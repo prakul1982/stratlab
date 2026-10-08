@@ -1449,13 +1449,41 @@ def _stored_scan(profile, region: str, group: str, preset: str, name: str) -> di
     got = scan_presets.stored_view(group, preset)
     if got is None or not got["checked"]:
         err(404, "not_stored", f"{name} hasn't been checked yet: it is read once a day after the market closes. Try a smaller group for now.")
-    rows = got["rows"][:SCAN_ROWS]
+    rows = with_nse_close(region, got["rows"][:SCAN_ROWS], "as_of", "chg")
     names = _scan_names(region, [r["symbol"] for r in rows])
     return {"rows": [{**r, **names.get(r["symbol"], {})} for r in rows], "matches": len(got["rows"]), "checked": got["checked"], "as_of": got["as_of"],
             "updated_at": got["at"], "missing": [], "problems": [], "stored": True}
 
 
 SCAN_ROWS = 300       # the most rows one scan answer carries (the count of all matches is given beside them)
+_nse_quotes = TTLCache(max_items=200)
+
+
+def nse_quotes(symbols: list[str]) -> dict[str, dict]:
+    """The exchange's quotes for Indian stocks (the company page's price), for up to 500 at once, kept a minute; none
+    when the data login isn't ready or the call fails (the rows then keep their candle's close)."""
+    syms = sorted({str(x).upper() for x in symbols if x})[:500]
+    if not syms or not kite.ready():
+        return {}
+    key = tuple(syms)
+    hit = _nse_quotes.get(key)
+    if hit is not None:
+        return hit
+    try:
+        got = kite.quote(syms) or {}
+    except Exception as e:
+        print("nse quotes:", str(e)[:120])
+        got = {}
+    _nse_quotes.set(key, got, 60)
+    return got
+
+
+def with_nse_close(region: str, rows: list[dict], day_key: str, change_key: str | None = None) -> list[dict]:
+    """Indian rows with the company page's close (R6O-009); other markets as they are."""
+    if region != "IN" or not rows:
+        return rows
+    from . import page_close
+    return page_close.overlay(rows, nse_quotes([r.get("symbol") for r in rows]), day_key, change_key)
 
 
 @app.post("/research/scan")
@@ -1487,6 +1515,7 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
                    "stored": False, **got}
         _results.set(key, out, 300)
     out = dict(out)
+    out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
     return ok({"name": name, "market": req.region, **out})
 
@@ -3266,7 +3295,9 @@ def screens_meta(region: str = "IN", profile=Depends(current_profile)):
 def screens_run(req: ScreenRunReq, profile=Depends(current_profile)):
     """The companies that meet the filters, from the stored index (never a data source or AI per request)."""
     try:
-        return ok(screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset))
+        got = screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset)
+        got["rows"] = with_nse_close(got["region"], got["rows"], "price_at")      # the company page's close (R6O-009)
+        return ok(got)
     except screens.ScreenError as e:
         err(400, "bad_screen", str(e))
 

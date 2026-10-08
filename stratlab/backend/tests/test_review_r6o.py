@@ -387,3 +387,24 @@ def test_groups_without_counts_are_filled_at_the_first_chance(monkeypatch):
         assert v["today"] and v["as_of"] == "2026-10-08", g
     # tried once a day: a check five minutes later, or after a restart, doesn't read the market again
     assert B.Job(runner, ready=lambda r: r == "IN").tick(now + timedelta(minutes=5)) == 0
+
+
+# ---------- R6O-009: one close per stock on the screener, the scan and the company page ----------
+def test_the_screener_and_scan_take_the_company_pages_close():
+    from app.page_close import overlay
+    quotes = {"TCS": {"price": 2076.0, "change_pct": -0.2067, "at": "2026-10-08T15:59:58+05:30"}}
+    screen = [{"symbol": "TCS", "price": 2077.0, "price_at": "2026-10-08"}, {"symbol": "INFY", "price": 1400.0, "price_at": "2026-10-08"}]
+    got = overlay(screen, quotes, "price_at")
+    assert got[0]["price"] == 2076.0 and got[0]["price_source"] == "NSE" and got[1]["price"] == 1400.0
+    scan_rows = [{"symbol": "TCS", "price": 2077.0, "chg": -0.159, "t": "2026-10-08"}]
+    got = overlay(scan_rows, quotes, "t", "chg")
+    assert got[0]["price"] == 2076.0 and round(got[0]["chg"], 2) == -0.21
+    # a quote for another day (the scan stored yesterday's match) leaves the row's own close
+    assert overlay([{"symbol": "TCS", "price": 2080.3, "as_of": "2026-10-07"}], quotes, "as_of")[0]["price"] == 2080.3
+
+
+def test_the_scan_and_screener_routes_use_it():
+    import inspect
+    from app import main
+    assert "with_nse_close" in inspect.getsource(main.run_scan) and "with_nse_close" in inspect.getsource(main.screens_run)
+    assert "with_nse_close" in inspect.getsource(main._stored_scan)
