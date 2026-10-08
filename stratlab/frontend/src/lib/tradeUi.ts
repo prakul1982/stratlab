@@ -1,7 +1,8 @@
 import type { CheckStatus } from "./types";
+import { signCls } from "./format";
 
 /** The class for a gain or a loss in the kit's colours (green up, red down, nothing at zero or when unknown). */
-export const upDown = (v: number | null | undefined): string => (v == null || !Number.isFinite(v) || v === 0 ? "" : v > 0 ? "k-up" : "k-down");
+export const upDown = (v: number | null | undefined): string => signCls(v);
 
 /** The kit Badge tone for a check's status. */
 /** Every verdict runs the same four checks (unseen data, nearby settings, bad-luck drawdown, enough trades). */
