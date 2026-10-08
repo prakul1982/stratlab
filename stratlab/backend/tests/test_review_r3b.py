@@ -32,6 +32,45 @@ def test_the_dated_list_marks_a_weekend_minutes_due_date():
     assert M.mark_weekend(dict(due))["weekend"] == "Sunday"
 
 
+@pytest.fixture
+def w(monkeypatch):
+    from tests import world
+    built = world.build(monkeypatch)
+    yield built
+    built["close"]()
+
+
+def test_tell_me_when_plans_open_is_per_person_once_and_counted_for_admin(w):
+    from app import plan_interest
+    c, H = w["client"], w["headers"]
+    free, pro, admin = H("free-token"), H("pro-token"), H("admin-token")
+    assert c.get("/me/plan-interest").status_code in (401, 403)                      # signed in only
+    assert c.get("/me/plan-interest", headers=free).json() == {"registered": False, "at": None}
+    first = c.put("/me/plan-interest", headers=free, json={"source": "lock"}).json()
+    assert first["registered"] and first["at"]
+    again = c.put("/me/plan-interest", headers=free, json={"source": "plans"}).json()
+    assert again == first                                                              # asking twice changes nothing
+    assert c.get("/me/plan-interest", headers=pro).json()["registered"] is False      # someone else's is their own
+    assert c.put("/me/plan-interest", headers=free, json={"source": "nonsense"}).status_code == 422
+    c.put("/me/plan-interest", headers=pro, json={})
+    assert plan_interest.count() == 2
+    ov = c.get("/admin/overview", headers=admin).json()
+    assert ov["stats"]["plan_interest"] == 2
+    assert c.get("/admin/overview", headers=free).status_code in (401, 403)
+    assert c.delete("/me/plan-interest", headers=free).json() == {"registered": False, "at": None}
+    assert plan_interest.count() == 1
+
+
+def test_the_list_goes_with_the_persons_data(w):
+    from app import plan_interest, user_data
+    c, H = w["client"], w["headers"]
+    c.put("/me/plan-interest", headers=H("free-token"), json={"source": "inline"})
+    uid = "u-free"
+    assert plan_interest.get(uid)["registered"]
+    user_data._prefs(uid)
+    assert not plan_interest.get(uid)["registered"]
+
+
 def test_the_scan_alert_spells_out_stage_2_plus_supertrend():
     from app import scan
     text = scan.alert_text("IN", [{"symbol": "TCS"}])

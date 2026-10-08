@@ -62,6 +62,7 @@ export function OverviewSection() {
           <Stat item label={paidStat.label} value={paidStat.value} note={paidStat.note} />
           <Stat item label="Revenue today" value={invoices ? money(rupees, "INR") : "–"}
             note={invoices ? `${todays.length} invoice${todays.length === 1 ? "" : "s"}${others.length ? ` · also in ${others.join(", ")}` : ""}` : undefined} />
+          {st.plan_interest != null && <Stat item label="Waiting for plans" value={st.plan_interest} note={st.plan_interest === 1 ? "person asked to be told when plans open" : "people asked to be told when plans open"} />}
           <Stat item label="Server errors" value={errors} note={<Link className="link" to="/admin/system">since the last restart</Link>} />
         </StatRow>
       </Card>

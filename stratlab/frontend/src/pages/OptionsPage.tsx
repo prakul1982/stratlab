@@ -23,6 +23,7 @@ import {
 import "./trade/trade.css";
 import "./trade/options.css";
 import "./trade/paper.css";
+import { usePlansToast } from "../components/PlanInterest";
 
 /* /options: build an option structure (straddle, strangle, condor, any legs), see its numbers at the live bid and ask, and
  * paper trade it. Built from the kit (components/kit): a picker for what to trade, settings written as sentences, a
@@ -315,6 +316,7 @@ export function OptionsPage() {
   const feats = me?.plan_info?.features;
   const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
   const nav = useNavigate();
+  const plansToast = usePlansToast();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
@@ -376,7 +378,7 @@ export function OptionsPage() {
       nav(`/options/s/${snap.id}`);
     } catch (e) {
       const err = e as ApiError;
-      if (err.code === "live_limit" || err.code === "trial_ended") notify(err.message, { label: "See plans", run: () => nav("/plans") });
+      if (err.code === "live_limit" || err.code === "trial_ended") plansToast(err.message);
       else fail(e);
     } finally { setStarting(false); }
   };

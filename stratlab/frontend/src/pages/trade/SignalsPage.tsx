@@ -11,6 +11,7 @@ import { upDown } from "../../lib/tradeUi";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import "./trade.css";
 import "./paper.css";
+import { usePlansAction } from "../../components/PlanInterest";
 
 /* /trade/signals: forward-test outside signals (Trade, Pro). A secret webhook URL for TradingView or Chartink alerts;
  * each signal moves one of the user's own paper sessions, filled at StratLab's live price (not the alert's) with the
@@ -258,6 +259,7 @@ function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {
 }
 
 export function SignalsPage() {
+  const plansAction = usePlansAction();
   const { sid } = useParams();
   const nav = useNavigate();
   const { fail, refreshMe } = useApp();
@@ -281,7 +283,7 @@ export function SignalsPage() {
         info="Point your TradingView or Chartink alerts at a secret URL. Each signal fills at StratLab's own live price with charges, every signal is logged, and the verdict's checks run once there are enough trades. Paper only: no real orders. Facts, not advice." />
       {failed && !ov ? <ErrorState title="Your signal sessions couldn't be read" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening signal sessions" /></Card> : !ov.allowed ? (
-        <EmptyState title="Forward-testing outside signals" action={{ label: "See plans", to: "/plans" }}>It is on the {ov.plan} plan.</EmptyState>
+        <EmptyState title="Forward-testing outside signals" action={plansAction}>It is on the {ov.plan} plan.</EmptyState>
       ) : (
         <>
           {(current.length > 0 || stopped.length > 0) && (

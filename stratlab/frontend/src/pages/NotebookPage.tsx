@@ -18,6 +18,7 @@ import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
+import { usePlansToast } from "../components/PlanInterest";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the two-column layout with the lab notes beside it stays. */
@@ -76,6 +77,7 @@ function marketName(inst: Instrument | null, markets: { id: string; name: string
 export function NotebookPage() {
   const { id } = useParams();
   const nav = useNavigate();
+  const plansToast = usePlansToast();
   const loc = useLocation();
   const { markets, fail, notify, refreshMe, refreshNotebooks, me, allIndicators, fno } = useApp();
   const canExport = !!me?.plan_info.features?.export;
@@ -144,8 +146,8 @@ export function NotebookPage() {
   const run = async () => {
     if (running) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
-    if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
-    if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!fno && inst?.fno) { plansToast("Indian F&O is on the Pro plan."); return; }
+    if (!allIndicators && usesPro(s)) { plansToast("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them."); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -196,7 +198,7 @@ export function NotebookPage() {
   };
 
   const exportStrategy = async () => {
-    if (!canExport) { notify("Strategy export is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!canExport) { plansToast("Strategy export is on the Pro plan."); return; }
     try {
       const r = await api<Response>("/export/strategy", { method: "POST", body: { strategy: s, instrument: inst?.id ?? null }, raw: true });
       const a = document.createElement("a");

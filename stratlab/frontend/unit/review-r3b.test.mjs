@@ -78,6 +78,22 @@ test("alerts: Delete asks first, the form offers 'Where alerts go' once and its 
   assert.match(form, /link && !\(nowhere && !editing\) &&/);             // the button link and the notice's never show together
 });
 
+test("while no plan can be bought, locks offer 'Tell me when plans open', not a dead-end 'See plans' (R3-015)", async () => {
+  const { plansCall } = await import("../src/lib/offer.ts");
+  const early = { mode: "early", payments: false, yearly: false, promo_until: null };
+  assert.deepEqual(plansCall(early, false), { kind: "join", label: "Tell me when plans open" });
+  assert.deepEqual(plansCall(early, true), { kind: "joined", label: "You're on the list" });
+  assert.equal(plansCall({ ...early, mode: "paid", payments: true }, false).kind, "see");     // on sale: see the plans
+  assert.equal(plansCall(undefined, false).kind, "see");                                       // unknown: promise nothing
+  // every lock banner, plan limit and plan note goes through the one component
+  for (const f of ["components/PageLock.tsx", "components/kit/Notice.tsx", "components/BizUpdates.tsx", "pages/trade/JournalPage.tsx"]) assert.match(src(f), /<PlanActions /, f);
+  for (const f of ["pages/NotebookPage.tsx", "pages/OptionsPage.tsx"]) assert.match(src(f), /usePlansToast\(\)/, f);
+  for (const f of ["pages/trade/ReplayPage.tsx", "pages/trade/SignalsPage.tsx"]) assert.match(src(f), /usePlansAction\(\)/, f);
+  for (const f of ["pages/NotebookPage.tsx", "pages/OptionsPage.tsx", "components/PageLock.tsx", "pages/HoldingsPage.tsx", "pages/money/MutualFundsPage.tsx"]) assert.doesNotMatch(src(f), /label: "See plans"|>See plans</, f);
+  assert.match(src("pages/PlansPage.tsx"), /<PlanInterestButton source="plans" \/>/);
+  assert.match(src("pages/admin/OverviewSection.tsx"), /Waiting for plans/);
+});
+
 test("options premiums and what is left after charges are rounded alike (R3-020)", async () => {
   const { optMoney } = await import("../src/lib/options.ts");
   assert.equal(optMoney(22455), "₹22,455");

@@ -15,6 +15,7 @@ import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
 import "./trade.css";
 import "./journal.css";
+import { PlanActions } from "../../components/PlanInterest";
 
 /* The real-trade journal (Trade space): import a tradebook or tax P&L, see every round trip with its charges, keep a
  * note on each, and see the stats and the backtest verdict's honesty checks run on the real trades. Each market (India,
@@ -236,7 +237,7 @@ export function JournalPage() {
         ) : (
           <>
             {j.beyond_limit > 0 && (
-              <Notice action={{ label: "See plans", to: "/plans" }}>
+              <Notice actions={<PlanActions source="limit" />}>
                 Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString("en-IN")} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
               </Notice>
             )}

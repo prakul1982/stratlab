@@ -14,6 +14,7 @@ import { Badge, Card, CardHead, ChipBar, type Column, ConfirmDialog, DataTable, 
 import "./trade.css";
 import "./paper.css";
 import { Info } from "../../components/ui";
+import { usePlansAction } from "../../components/PlanInterest";
 
 /* /trade/replay: chart replay practice (Trade, Basic). A past stretch of candles on StratLab's own price chart, the
  * future hidden: step or play, go long or short with a stop and a target, and see the result after charges. The page
@@ -261,6 +262,7 @@ function Result({ f, onNew }: { f: Finished; onNew: () => void }) {
 }
 
 export function ReplayPage() {
+  const plansAction = usePlansAction();
   const { fail } = useApp();
   const [ov, setOv] = useState<Overview | null>(null);
   const [failed, setFailed] = useState(false);
@@ -279,7 +281,7 @@ export function ReplayPage() {
         lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished sessions go to your journal as practice. A historical simulation: facts, not advice." />
       {failed && !ov ? <ErrorState title="Chart replay couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening chart replay" /></Card> : !ov.allowed ? (
-        <EmptyState title="Chart replay practice" action={{ label: "See plans", to: "/plans" }}>It is on the {ov.plan} plan.</EmptyState>
+        <EmptyState title="Chart replay practice" action={plansAction}>It is on the {ov.plan} plan.</EmptyState>
       ) : done ? <Result f={done} onNew={() => { setDone(null); setS(null); load(); }} />
         : s ? <Player key={s.id} s={s} onDone={(f) => { setDone(f); setS(null); load(); }} onDiscard={() => { setS(null); load(); }} />
         : (

@@ -4,6 +4,7 @@ import type { StateAction } from "./States";
 import { CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { unlockHint } from "../../lib/offer";
+import { PlanActions } from "../PlanInterest";
 
 /** One line of words beside the page, with an optional button: a plan note ("on the Basic plan" + See plans), an
  * estimate-only reminder. `tone="warn"` gives it the orange edge. Use it instead of a bare `.banner`. */
@@ -25,5 +26,5 @@ export function Notice({ children, action, actions, tone = "info", label, role =
  * "See plans". */
 export function PlanNote({ children }: { children: ReactNode }) {
   const { me } = useApp();
-  return <Notice className="plan-note" action={{ label: "See plans", to: "/plans" }}><span className="plan-lock" aria-hidden="true">🔒 </span>{children} {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined)}</Notice>;
+  return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true">🔒 </span>{children} {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined)}</Notice>;
 }

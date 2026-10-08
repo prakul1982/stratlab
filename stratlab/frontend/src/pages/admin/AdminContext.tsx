@@ -18,7 +18,9 @@ export interface Overview {
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number;
     /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
-    paying?: Record<"basic" | "pro", number>; given?: Record<"basic" | "pro", number> };
+    paying?: Record<"basic" | "pro", number>; given?: Record<"basic" | "pro", number>;
+    /** people who pressed "Tell me when plans open" (older servers don't send it) */
+    plan_interest?: number };
 }
 
 export type JobRow = {
