@@ -4716,6 +4716,32 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     return {"sent_to": to}
 
 
+@app.post("/admin/review-link")
+def admin_review_link(profile=Depends(admin.admin_profile)):
+    """A one-time sign-in link for the owner's own account, emailed to the owner's own address, for the automated
+    reviewer that tries the live site as the owner (Google sign-in can't be driven by a script). It expires in an hour
+    and works once; only an admin can ask for one, and only for themselves."""
+    throttle(profile, "admin_review_link", 5, 3600, "You've asked for 5 reviewer links this hour. Try again later.")
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
+    to = profile["email"]
+    try:
+        res = db.sb().auth.admin.generate_link({"type": "magiclink", "email": to,
+                                                "options": {"redirect_to": settings.PUBLIC_SITE_URL.rstrip("/") + "/"}})
+        link = res.properties.action_link
+    except Exception as e:
+        err(502, "link_failed", f"The sign-in service couldn't make a link: {public_text(str(e))[:200]}")
+    text = ("A one-time sign-in link for your StratLab account, for the automated reviewer. It works once and expires "
+            f"in an hour. If you didn't ask for it, ignore this email.\n\n{link}\n")
+    html = (f"<p>A one-time sign-in link for your StratLab account, for the automated reviewer. It works once and expires "
+            f"in an hour. If you didn't ask for it, ignore this email.</p><p><a href=\"{link}\">Sign in to StratLab</a></p>")
+    try:
+        alerts.send_email(to, "StratLab reviewer sign-in link", text, html=html)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+    return {"sent_to": to}
+
+
 def lifecycle_kind(kind: str) -> str:
     if kind not in lifecycle.EMAILS:
         err(404, "not_found", "There's no such email.")

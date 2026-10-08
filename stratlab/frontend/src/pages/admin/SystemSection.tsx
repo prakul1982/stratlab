@@ -33,6 +33,10 @@ export function SystemSection() {
     const r = await api<{ sent_to: string }>("/admin/alerts/test", { method: "POST" });
     notify(`Test email sent to ${r.sent_to}. Check your inbox (and spam).`);
   });
+  const reviewLink = () => run("review", async () => {
+    const r = await api<{ sent_to: string }>("/admin/review-link", { method: "POST" });
+    notify(`A one-time sign-in link for the reviewer was sent to ${r.sent_to}. It expires in an hour.`);
+  });
   const sendWeekly = () => run("weekly", async () => {
     const r = await api<{ subject: string; reached: number }>("/admin/weekly/test", { method: "POST" });
     notify(r.reached ? `"${r.subject}" sent. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.");
@@ -68,6 +72,7 @@ export function SystemSection() {
             {sv.admin_alerts && mail && <StatusRow state={mail.state} label={mail.label} detail={mail.fix ?? mail.detail}
               actions={<>
                 {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
+                {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "review"} onClick={reviewLink} title="A one-time link that signs the automated reviewer in as you, sent to your own address">{busy === "review" ? "Sending…" : "Email a reviewer sign-in link"}</button>}
                 <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>
               </>} />}
             <StatusRow state={!filing ? "warn" : filing.ok ? "ok" : "bad"} word={filing ? undefined : "Not checked"} label={`Exchange filings${filing ? ` (${filing.symbol})` : ""}`}
