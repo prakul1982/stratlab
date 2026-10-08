@@ -51,7 +51,9 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
   await expect(page).toHaveURL(/\/mine$/, { timeout: 30_000 });
   const home = page.getByTestId("mine-home");
   await expect(home.getByRole("heading", { level: 1 })).toContainText(/^Good (morning|afternoon|evening)/);
-  await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${new Date().toLocaleDateString("en-GB", { weekday: "long" })}, ${new Date().getDate()} ${new Date().toLocaleDateString("en-GB", { month: "long" })}$`));
+  // the date is India's (the test browser runs in UTC, which the page treats as no real zone), so it is right after midnight IST too
+  const ist = (o: Intl.DateTimeFormatOptions) => new Date().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
+  await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}$`));
   await expect(home.locator(".k-lede")).not.toBeEmpty();
   expect(await order(page)).toEqual(CARDS.map((c) => c.id));
 
