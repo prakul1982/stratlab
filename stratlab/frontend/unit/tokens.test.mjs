@@ -31,6 +31,13 @@ for (const [name, t] of Object.entries(themes)) {
         assert.ok(r >= 4.5, `${fg} on ${bg} (${name}) is ${r.toFixed(2)}:1, needs 4.5:1`);
       }
     }
+    // a signed figure is green or red wherever it can sit: on the page, a card, a hovered row, a highlighted (at-the-money) row or a chip
+    for (const fg of ["--up", "--down"]) {
+      for (const bg of ["--paper", "--card", "--paper-2", "--chip"]) {
+        const r = ratio(t[fg], t[bg]);
+        assert.ok(r >= 4.5, `${fg} (a signed figure) on ${bg} (${name}) is ${r.toFixed(2)}:1, needs 4.5:1`);
+      }
+    }
     for (const [fg, bg] of [["--up", "--up-soft"], ["--down", "--down-soft"], ["--blue-ink", "--blue-soft"], ["--orange-ink", "--orange-soft"], ["--on-ink", "--ink"], ["--on-blue", "--blue"]]) {
       const r = ratio(t[fg], t[bg]);
       assert.ok(r >= 4.5, `${fg} on ${bg} (${name}) is ${r.toFixed(2)}:1, needs 4.5:1`);
