@@ -293,8 +293,9 @@ function RedFlags() {
 }
 
 /* ---------- Money: what you own ---------- */
-type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number };
-type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; updated_at: string | null; prices_at?: string | null };
+type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number;
+  no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[] };
+type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
   total?: { available: boolean; total?: number }; audit?: string | null };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
@@ -343,12 +344,17 @@ function HoldingsSummary() {
         ) : (
           <div className="k-stack" data-testid="holdings-summary">
             <div className="k-stats">
-              <Fig label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />
+              {(() => { const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
+                return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
               <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
                 note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
               {h.totals.day != null && <Fig label="Today" tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
-              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")} />}
+              {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
+                note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
+            {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
+            {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}).</p>}
+            {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
           </div>
         )}

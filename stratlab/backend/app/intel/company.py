@@ -405,7 +405,8 @@ class Research:
             "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
         })
         q, M = r["q"] or {}, r["m"] or {}
-        trend = self._us_trend(r["fin"])
+        # the yearly results are in the currency the company reports in (Eni: euros), not the US listing's dollars
+        trend = self._us_trend(r["fin"], (p.get("currency") or "USD").upper())
         earn = [e for e in (r["earn"] or []) if e.get("actual") is not None and e.get("estimate") is not None][:4][::-1]
         ins = (r["ins"] or {}).get("data") or []
         today = ist_date().isoformat()
@@ -473,7 +474,7 @@ class Research:
         }
 
     @staticmethod
-    def _us_trend(rep) -> dict | None:
+    def _us_trend(rep, unit: str = "USD") -> dict | None:
         by_year = {}
         for f in (rep or {}).get("data") or []:
             y = str(f.get("year") or str(f.get("endDate", ""))[:4])
@@ -492,7 +493,7 @@ class Research:
         years = sorted(by_year)[-6:]
         rev = [{"y": f"FY{y[2:]}", "v": by_year[y][0]} for y in years if by_year[y][0] is not None]
         ni = [{"y": f"FY{y[2:]}", "v": by_year[y][1]} for y in years if by_year[y][1] is not None]
-        return {"unit": "USD", "revenue": rev, "profit": ni, "revenue_label": "Revenue", "profit_label": "Net income"} \
+        return {"unit": unit, "revenue": rev, "profit": ni, "revenue_label": "Revenue", "profit_label": "Net income"} \
             if len(rev) > 1 or len(ni) > 1 else None
 
     def _company_in(self, sym: str) -> dict:

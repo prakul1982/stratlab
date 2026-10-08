@@ -670,7 +670,9 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
         if stocks.get("us"):
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
                            "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": "market price",
-                           "rule": "From My Holdings, at today's prices in rupees", "facts": {}, "linked": "/holdings"})
+                           "rule": "From My Holdings, at today's prices in rupees"
+                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else ""),
+                           "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
                        "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV",

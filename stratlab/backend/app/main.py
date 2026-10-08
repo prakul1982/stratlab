@@ -2542,7 +2542,7 @@ def _nw_stocks(profile) -> dict:
     rate = h.get("usd_inr")
     return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
-            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"])}
+            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate}
 
 
 app.include_router(money_networth.make_router(

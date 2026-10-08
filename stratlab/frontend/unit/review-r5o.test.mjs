@@ -114,6 +114,11 @@ test("holdings name what is left out of the totals and of Today (R5O-004)", () =
   assert.match(page, /last change is left out of Today/);
   assert.match(page, /r\.session !== t\.session/);
   assert.match(page, /view\.us && view\.us\.count > 0/);
+  // the Money home's holdings panel reads the same totals and says the same: what is left out, and the one dollar rate
+  const money = read("src/pages/SpaceHomes.tsx");
+  assert.match(money, /Not in these totals: \{h\.totals\.no_cost\.symbols\.join/);
+  assert.match(money, /h\.totals\.count - \(h\.totals\.no_cost\?\.count \?\? 0\)/);
+  assert.match(money, /at ₹\$\{h\.usd_inr\.toFixed\(2\)\} a dollar/);
 });
 
 // ---------- the reliability, AI and flows side ----------

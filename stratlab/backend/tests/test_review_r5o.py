@@ -77,6 +77,14 @@ def test_holdings_totals_add_up_with_a_us_stock_without_a_buy_price():
     assert holdings.us_sector("XLK") == "Information Technology"
 
 
+def test_net_worth_states_the_dollar_rate_its_us_stocks_are_at():
+    from app import money_networth as N
+    stocks = {"in": 42139.0, "us": 3 * 336.67 * 96.77, "as_of": "2026-10-08T14:27:00+05:30", "count": 4, "usd_inr": 96.77}
+    v = N.build([], stocks, None, N.Prices())
+    us = next(a for a in v["assets"] if a["kind"] == "stocks_us")
+    assert us["rule"] == "From My Holdings, at today's prices in rupees, at ₹96.77 a dollar"
+
+
 # ---------- R5O-005: an ETF's gap is one day's close against that day's NAV ----------
 def test_etf_gap_through_the_day_is_the_last_close_against_its_nav(monkeypatch):
     from app import etf_nav as E
@@ -126,6 +134,15 @@ def test_an_adr_page_is_its_us_listing_in_dollars():
     # its "similar companies" were ENI.MI and GSP.MI, Milan's euro prices shown with a dollar sign: US listings only
     from app.intel.company import FOREIGN_TICKER
     assert [x for x in ("ENI.MI", "GSP.MI", "BRK.B", "XOM", "SHEL.L", "BP") if not FOREIGN_TICKER.search(x)] == ["BRK.B", "XOM", "BP"]
+
+
+def test_an_adrs_yearly_results_are_in_the_currency_they_are_reported_in():
+    from app.intel.company import Research
+    # Eni files its annual report in euros: the sales and profit charts say EUR, not the ADR's USD
+    rep = {"data": [{"year": y, "report": {"ic": [{"label": "Total revenue", "value": v}, {"label": "Net income", "value": v / 20}]}}
+                    for y, v in ((2023, 93.7e9), (2024, 88.8e9))]}
+    assert Research._us_trend(rep, "EUR")["unit"] == "EUR"
+    assert Research._us_trend(rep)["unit"] == "USD"
 
 
 # ---------- R5O-007: AAPL's page ----------
