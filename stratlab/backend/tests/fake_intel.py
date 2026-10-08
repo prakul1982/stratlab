@@ -200,6 +200,10 @@ WIKI_PAGES = {
                             "Reliance Industries Limited is an Indian multinational conglomerate headquartered in Mumbai."),
     "tata consultancy services": ("Tata Consultancy Services", "Indian information technology company",
                                   "Tata Consultancy Services Limited is an Indian multinational information technology services and consulting company headquartered in Mumbai."),
+    "infosys": ("Infosys", "Indian information technology company",
+                "Infosys Limited is an Indian multinational information technology company headquartered in Bengaluru."),
+    "apple": ("Apple Inc.", "American technology company",
+              "Apple Inc. is an American multinational technology company headquartered in Cupertino, California."),
 }
 
 
@@ -213,8 +217,8 @@ def fake_wiki() -> httpx.MockTransport:
         for k, v in WIKI_PAGES.items():
             if key.startswith(k):
                 return v
-        title = name.replace("_", " ").replace(" company", "").strip().title()
-        return (title, "Indian listed company", f"{title} is an Indian listed company.")
+        title = name.replace("_", " ").replace(" company", "").strip()        # the name as given ("HDFC Bank", not "Hdfc Bank")
+        return (title, "Listed company", f"{title} is a listed company.")
 
     def handler(req: httpx.Request):
         if req.url.path == "/w/api.php":

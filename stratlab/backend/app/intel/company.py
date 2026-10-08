@@ -311,7 +311,10 @@ class Research:
             "industry": p.get("finnhubIndustry"),
             "market_cap": (p["marketCapitalization"] * 1e6) if p.get("marketCapitalization") else None,
             "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
-                      "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc")} if q.get("c") else None,
+                      "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc"),
+                      # the time of the last trade (the close, out of hours), for the page's "as of", never the moment of asking
+                      "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
+                      } if q.get("c") else None,
             "range52": {"low": num(M.get("52WeekLow")), "high": num(M.get("52WeekHigh"))},
             "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},

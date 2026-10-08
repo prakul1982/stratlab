@@ -102,6 +102,13 @@ def test_each_company_is_itself(w):
     assert aapl["name"] == "Apple Inc" and "NVIDIA" not in str(aapl["news"])
     assert aapl["quote"]["price"] == P.last("AAPL") == main.research_hub.yahoo.meta("AAPL")["price"]
     assert aapl["market_cap"] == pytest.approx(P.market_cap("AAPL"), rel=1e-3)
+    assert "Apple" in aapl["about"]["wiki"]["extract"] and "Indian" not in aapl["about"]["wiki"]["extract"]
+    # its prices are as of its last trade (the close, out of hours), never the moment the page was asked for
+    from datetime import datetime
+    # (in market hours "now" moves on between the read and this line: within a few minutes then)
+    clock = P.session_clock(None, "US")
+    for at in (aapl["quote"]["at"], aapl["as_of"]):
+        assert abs((datetime.fromisoformat(at) - clock).total_seconds()) < 300
 
 
 def test_the_reported_numbers_are_as_of_a_year_that_has_ended():
