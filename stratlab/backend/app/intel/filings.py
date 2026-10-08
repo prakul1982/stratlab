@@ -25,7 +25,21 @@ LOOKBACK_DAYS = 365          # how far back the timeline goes
 RULES: list[tuple[str, str, str, list[str]]] = [
     ("auditor_resign", "Auditor resigned", "red", [r"resignation of (the )?(statutory |secretarial |internal )?auditor", r"auditors? .{0,40}resign"]),
     ("default", "Default or delayed payment", "red", [r"\bdefault\b", r"delay in (payment|servicing)", r"non[- ]payment of (interest|principal)"]),
-    ("insolvency", "Insolvency proceedings", "red", [r"insolvency", r"\bnclt\b", r"\bibc\b", r"corporate insolvency resolution"]),
+    # a subsidiary wound up, struck off or dissolved is routine housekeeping, whoever certifies it (RELIANCE, Sep 2026:
+    # "Roptonal Limited, a step-down subsidiary, stands dissolved ... certificate from Department of Insolvency, Cyprus")
+    ("subsidiary_closed", "Subsidiary dissolved or struck off", "info", [
+        r"subsidiar(y|ies)\b.{0,160}\b(dissolv|struck off|strike[- ]off|striking off|wound up|winding[- ]up|liquidat|deregist|ceased to exist)",
+        r"\b(dissolution|striking off|strike[- ]off|winding[- ]up|liquidation)\b.{0,80}\bsubsidiar(y|ies)"]),
+    # routine servicing of debt already raised: record dates, interest and redemption, allotments of NCDs and paper, and
+    # the debt's own trading suspended for its record date (UGROCAP's "Suspension of Trading" read as a debt raise)
+    ("debt_routine", "Debt servicing or allotment", "info", [
+        r"(record date|redemption|interest payment|payment of interest|suspension of trading|allotment|allot(ted)?)\b.{0,120}"
+        r"\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b",
+        r"\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b.{0,120}"
+        r"\b(record date|redemption|interest payment|payment of interest|suspension of trading|allotment|allotted)"]),
+    ("suspension", "Trading suspended", "red", [r"suspension of trading", r"trading .{0,20}suspended"]),
+    ("insolvency", "Insolvency proceedings", "red", [r"corporate insolvency resolution", r"insolvency (and bankruptcy|resolution|proceedings?|petition|application)",
+                                                     r"\bnclt\b", r"\bibc\b", r"\bcirp\b", r"initiation of .{0,30}insolvency"]),
     ("qip", "QIP (fund raise)", "red", [r"qualified institutions? placement", r"\bqip\b"]),
     ("preferential", "Preferential issue (fund raise)", "red", [r"preferential (issue|allotment|basis)"]),
     ("rights", "Rights issue (fund raise)", "red", [r"rights issue", r"issue .{0,20}on rights basis"]),
@@ -56,7 +70,8 @@ RULES: list[tuple[str, str, str, list[str]]] = [
 ]
 _COMPILED = [(i, label, sev, [re.compile(p, re.I) for p in pats]) for i, label, sev, pats in RULES]
 FUND_RAISE = {"qip", "preferential", "rights", "warrants", "fund_raise"}
-LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update"}
+LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change"}
+RULES_VERSION = 2              # raised when the rules change, so the stored whole-market list is read again
 
 
 def ist_now() -> datetime:
@@ -90,6 +105,33 @@ def is_call(subject: str | None, text: str | None, url: str | None = None) -> bo
     return bool(CALL.search(f"{MEET_SUBJECT.sub(' ', subject or '')} {text or ''} {file_words(url)}"))
 
 
+# who left, for a resignation or cessation: a director or a key managerial person (managing director, CEO, CFO,
+# company secretary, compliance officer) is worth a look; senior management below them, and a term that simply ended
+# (completion of tenure, retirement, death) are routine changes. The exchange's generic subject ("Resignation of
+# Director/KMP/SMP") names every kind, so it is read without that phrase.
+_GENERIC_ROLES = re.compile(r"directors?\s*/\s*kmps?(\s*/\s*smps?)?|kmps?\s*/\s*smps?|\(?\s*smps?\s*\)?", re.I)
+_KEY_ROLE = re.compile(r"\bdirector\b|managing director|\bmd\b|\bceo\b|chief executive|\bcfo\b|chief financial|company secretary|"
+                       r"compliance officer|whole[- ]time director|independent director|\bchairman\b|\bchairperson\b|"
+                       r"key managerial|\bkmp\b", re.I)
+_SENIOR_ONLY = re.compile(r"senior management|\bsmp\b|\bhead\b|\bmanager\b|vice[- ]president|\bvp\b|\bpresident\b|"
+                          r"general manager|\bofficer\b|\bchief\b", re.I)
+_TERM_ENDED = re.compile(r"(completion|expiry|expiration|end) of (his |her |their )?(second |first )?(tenure|term)|"
+                         r"\bretire(d|ment|s)?\b|superannuat|\bdemise\b|\bdeath\b|passed away|\bdeceased\b", re.I)
+
+
+def _officer_change(desc: str, text: str) -> tuple[str, str]:
+    """A resignation or cessation filing: a director or key officer who resigned is amber; a term that ended, or
+    someone below the key officers, is a routine change."""
+    hay = _GENERIC_ROLES.sub(" ", f"{desc or ''} || {text or ''}")
+    if _TERM_ENDED.search(hay):
+        return "officer_change", "info"
+    if _KEY_ROLE.search(hay):
+        return "kmp_resign", "amber"
+    if text and _SENIOR_ONLY.search(hay):
+        return "officer_change", "info"
+    return "kmp_resign", "amber"              # nothing says who: kept, to be read
+
+
 def classify(desc: str, text: str, url: str | None = None) -> tuple[str, str]:
     """(category id, severity) for one announcement, from the exchange's subject and summary (and its file's name).
     Earnings calls, meetings with analysts or investors, and shareholders' meetings are three different kinds."""
@@ -98,6 +140,8 @@ def classify(desc: str, text: str, url: str | None = None) -> tuple[str, str]:
         if any(r.search(hay) for r in rx):
             if cid == "investor_meet" and is_call(desc, text, url):
                 return "concall", sev
+            if cid == "kmp_resign":
+                return _officer_change(desc, text)
             return cid, sev
     return "other", "info"
 
@@ -156,8 +200,30 @@ def flagged_rows(raw: list[dict]) -> list[dict]:
             seen.add(fid)
             out.append({"id": fid, "symbol": sym, "company": str(r.get("sm_name") or r.get("comp") or "").strip()[:80] or None,
                         "at": it["at"], "category": it["category"], "label": it["label"], "severity": it["severity"],
-                        "subject": it["subject"][:160], "url": it["url"]})
-    return out
+                        "subject": it["subject"][:160], "text": it["text"][:240], "url": it["url"]})
+    return one_per_filing(out)
+
+
+def _same_filing_key(i: dict) -> tuple:
+    """What makes two rows one filing: the company, the day, the rule and the words (the subject, and the summary
+    when it was kept). The exchange lists a filing again when it is revised or re-sent, with a new time and number."""
+    norm = (lambda s: re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).strip())
+    return (i.get("symbol"), str(i.get("at"))[:10], i.get("category"), norm(i.get("subject")), norm(i.get("text"))[:160])
+
+
+def one_per_filing(items: list[dict]) -> list[dict]:
+    """The rows with each filing once (the latest copy, which keeps its id), and `copies` when it was listed more
+    than once (KSHITIJPOL's one resignation, 7 Oct 2026, three times)."""
+    best: dict[tuple, dict] = {}
+    for i in items:
+        k = _same_filing_key(i)
+        have = best.get(k)
+        if have is None:
+            best[k] = {**i}
+            continue
+        keep = i if (i["at"], i["id"]) > (have["at"], have["id"]) else have
+        best[k] = {**keep, "copies": have.get("copies", 1) + 1}
+    return list(best.values())
 
 
 def summarise(items: list[dict], now: datetime | None = None) -> dict:

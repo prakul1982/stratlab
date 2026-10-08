@@ -141,3 +141,90 @@ def test_the_ai_read_carries_no_revenue_split():
     assert A.clean_company(stored)["segments"] == []
     import inspect
     assert '"segments"' not in inspect.getsource(A.company).split("RULES")[0]          # the model isn't asked for one
+
+
+# ---------- R5O-009: the red-flag rules, on the filings the owner saw ----------
+import pytest  # noqa: E402
+
+from app.intel import filings as F  # noqa: E402
+
+
+@pytest.mark.parametrize("desc,text,cat,sev", [
+    # RELIANCE, 5 Sep 2026: a dissolved step-down subsidiary, certified by Cyprus's Department of Insolvency
+    ("Other Restructuring", "Roptonal Limited, a step-down subsidiary of the Company, stands dissolved with effect from September 4, 2026, "
+     "pursuant to the certificate issued by the Department of Insolvency, Republic of Cyprus.", "subsidiary_closed", "info"),
+    ("Updates", "XYZ Limited, a wholly owned subsidiary, has been struck off from the register of companies", "subsidiary_closed", "info"),
+    # the company's own insolvency is still a red flag
+    ("Insolvency and Bankruptcy", "The NCLT has admitted the application under Section 7 of the IBC and initiated the corporate insolvency resolution process",
+     "insolvency", "red"),
+    # routine NCD allotments and servicing
+    ("Allotment of Non-Convertible Debentures", "The Company has allotted 50,000 secured NCDs of Rs 1,00,000 each on private placement basis", "debt_routine", "info"),
+    ("Record Date", "Record date for payment of interest on NCDs", "debt_routine", "info"),
+    # UGROCAP: its NCDs' trading suspended for a record date, which was read as a debt raise
+    ("Suspension of Trading", "Suspension of trading in Non-Convertible Debentures on account of record date for redemption", "debt_routine", "info"),
+    ("Suspension of Trading", "Trading in the equity shares of the Company is suspended with effect from 12 October 2026 for non-compliance",
+     "suspension", "red"),
+    # a new borrowing plan stays worth a look
+    ("Board Meeting Outcome", "The Board approved the issue of non-convertible debentures up to Rs 500 crore", "ncd", "amber"),
+    # resignations: directors and key officers stay; senior management and terms that ended are routine
+    ("Resignation of Director/KMP/SMP", "Resignation of Mr. A Kumar, Senior Manager - Sales (Senior Management Personnel)", "officer_change", "info"),
+    ("Resignation of Director/KMP/SMP", "Resignation of Ms. B Rao as Chief Financial Officer and Key Managerial Personnel", "kmp_resign", "amber"),
+    ("Change in Directorate", "Cessation of Mr. C Shah as Independent Director on completion of his second term", "officer_change", "info"),
+    ("Change in Directorate", "Resignation of Mr X as Independent Director", "kmp_resign", "amber"),
+    ("Resignation of Director/KMP/SMP", "", "kmp_resign", "amber"),                 # nothing says who: kept
+])
+def test_red_flag_rules_on_real_filings(desc, text, cat, sev):
+    assert F.classify(desc, text) == (cat, sev)
+
+
+def test_the_same_filing_listed_again_shows_once():
+    def nse(seq, when, text="Resignation of Mr. D Jain as Company Secretary and Compliance Officer"):
+        return {"symbol": "KSHITIJPOL", "sm_name": "Kshitij Polyline Limited", "desc": "Resignation of Director/KMP/SMP", "attchmntText": text,
+                "sort_date": when, "seq_id": seq, "attchmntFile": "https://nsearchives.nseindia.com/c/x.pdf"}
+    rows = F.flagged_rows([nse("1", "2026-10-07 11:02:00"), nse("2", "2026-10-07 11:40:00"), nse("3", "2026-10-07 16:05:00"),
+                           nse("4", "2026-10-07 16:10:00", "Resignation of Mr. E Patel as Whole-time Director")])
+    assert len(rows) == 2                                           # KSHITIJPOL: the one secretary's filing three times, and another
+    one = next(r for r in rows if "Secretary" in r["text"])
+    assert one["copies"] == 3 and one["at"] == "2026-10-07T16:05"
+
+
+def test_stored_rows_are_read_with_todays_rules_and_once(monkeypatch):
+    from app import redflags as R
+    rows = [
+        {"id": "a", "symbol": "RELIANCE", "company": "Reliance", "at": "2026-09-05T18:00", "category": "insolvency", "label": "Insolvency proceedings",
+         "severity": "red", "subject": "Other Restructuring", "text": "Roptonal Limited, a step-down subsidiary, stands dissolved; certificate from the Department of Insolvency, Republic of Cyprus", "url": None},
+        {"id": "b", "symbol": "OLAELEC", "company": "Ola Electric", "at": "2026-10-01T10:00", "category": "rights", "label": "Rights issue (fund raise)",
+         "severity": "red", "subject": "Rights Issue", "url": None},
+        {"id": "c", "symbol": "OLAELEC", "company": "Ola Electric", "at": "2026-10-01T12:30", "category": "rights", "label": "Rights issue (fund raise)",
+         "severity": "red", "subject": "Rights Issue", "url": None},
+    ]
+    got = R.current("IN", rows)
+    assert [(i["symbol"], i.get("copies", 1)) for i in got] == [("OLAELEC", 2)]
+
+
+def test_a_rules_change_reads_the_last_90_days_again(monkeypatch):
+    from datetime import date
+    from app import db, redflags as R
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    R.forget()
+    today = date(2026, 10, 8)
+    old = {"id": "RELIANCE|2026-09-07T18:00|x", "symbol": "RELIANCE", "company": "Reliance", "at": "2026-09-07T18:00", "category": "insolvency",
+           "label": "Insolvency proceedings", "severity": "red", "subject": "Other Restructuring", "url": None}
+    R.flags.add("IN", [old])
+    store[R.STATE_KEY + "IN"] = json.dumps({"through": "2026-10-07"})          # stored under the old rules
+    asked = []
+
+    class Feed:
+        def market_flags(self, day):
+            asked.append(day)
+            return []
+    runner = R.Runner(lambda: {"in": Feed()}, sleep=lambda s: None, pause=0)
+    runner.run("IN", today)
+    assert asked[0] <= date(2026, 7, 10) and R.flags.between("IN", date(2026, 9, 1), today) == []    # the false flag is gone
+    assert R.state("IN")["rules"] == F.RULES_VERSION
+    asked.clear()
+    runner.run("IN", today)
+    assert asked[0] == date(2026, 10, 6)                                       # then the usual two-day overlap
+    R.forget()
