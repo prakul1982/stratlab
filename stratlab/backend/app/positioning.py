@@ -1121,6 +1121,8 @@ class Job(news_job.Job):
     remembers a finished day across restarts. At any other time it catches up on what an evening run missed (every
     twenty minutes while something is behind), and outside market hours it walks the archives back a few days."""
 
+    status_key = "positioning"
+
     def __init__(self, runner: Runner):
         super().__init__()
         self.runner = runner

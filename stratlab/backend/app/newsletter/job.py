@@ -260,9 +260,15 @@ class Job:
             return None
         return day
 
+    # the key Admin keeps this job's status under across restarts (job_status); None: not kept
+    status_key: str | None = None
+
     def mark(self, name: str, day: date):
         self.last[name] = day.isoformat()
         db.set_setting(f"newsjob:{name}", day.isoformat())
+        if self.status_key:
+            from .. import job_status
+            job_status.keep(self.status_key, self)           # Admin shows its last run after a restart too
 
     def tick(self, now: datetime) -> int:
         sent, ran = 0, False

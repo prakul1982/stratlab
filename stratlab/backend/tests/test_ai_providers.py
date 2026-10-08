@@ -653,7 +653,7 @@ def test_gemini_native_turns_thinking_off_and_reads_the_answer(monkeypatch):
                                                          "finishReason": "STOP"}]})
     assert "entry" in P.complete("s", "t", transport=httpx.MockTransport(handler))
     path, body = seen[0]
-    assert path.endswith("/models/gemini-2.5-flash:generateContent")
+    assert path.endswith("/models/gemini-3.5-flash:generateContent")
     assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0} and body["generationConfig"]["responseMimeType"] == "application/json"
 
 

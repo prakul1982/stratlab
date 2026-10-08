@@ -120,7 +120,7 @@ _GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 def _candidates() -> list[str]:
     """Gemini models for reading scanned PDFs (ocr.py): the measured ones in use, Flash models only."""
     models = [m for m in ai_rank.in_use("gemini") if m.startswith("gemini")]
-    return models or ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+    return models or ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
 
 
 def _gemini(system: str, text: str, max_tokens: int = 8192) -> str:

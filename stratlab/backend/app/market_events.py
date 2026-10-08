@@ -1106,6 +1106,8 @@ class Job(news_job.Job):
     never sends twice. With nothing stored yet (a new server), it reads at once."""
     RUNS = (("mktevents-am", "Asia/Kolkata", "07:20"), ("mktevents-pm", "Asia/Kolkata", "18:40"))
 
+    status_key = "events"
+
     def __init__(self, web_fn, remind_fn):
         super().__init__()
         self.web_fn, self.remind_fn = web_fn, remind_fn

@@ -184,6 +184,32 @@ def test_when_the_list_is_down_nothing_passes_as_checked():
     assert out["screen"] == [] and out["etfs"] == []
 
 
+# ---------- R5O-016: a job's last run survives a restart ----------
+def test_a_jobs_last_run_is_shown_after_a_restart(monkeypatch):
+    from app import job_status
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(job_status, "_written", {})
+
+    class Job:
+        status = {"last_run": "2026-10-08T03:00:00+00:00", "last_error": None, "problems": []}
+    job_status.keep("positioning", Job())
+    after_restart = {"last_run": None, "last_error": None, "problems": []}
+    got = job_status.kept("positioning", after_restart)
+    assert got["last_run"] == "2026-10-08T03:00:00+00:00" and got["before_restart"] is True
+    assert job_status.kept("never-ran", after_restart) == after_restart
+
+
+def test_the_news_jobs_keep_their_status_when_they_mark_a_run():
+    from app import etf_nav, fo_changes, market_events, positioning, surveillance, vix
+    keys_ = {m.Job.status_key for m in (etf_nav, fo_changes, market_events, positioning, surveillance, vix)}
+    assert keys_ == {"etf", "fo", "events", "positioning", "surveillance", "vix"}
+    src = open(__import__("app.admin_jobs", fromlist=["x"]).__file__).read()
+    for k in keys_ | {"corp", "results", "closing-auction"}:
+        assert f'"{k}")' in src, k
+
+
 # ---------- R5O-014: the library's cards beside buy and hold ----------
 def test_library_entries_carry_their_return_beside_buy_and_hold():
     from app import library

@@ -62,6 +62,30 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
     assert.doesNotMatch(read(p), /Rules others published/, p);
 });
 
+test("Admin's 'Needs your attention' lists feeds on Check and each AI provider that can't answer, with its reason (R5O-016)", async () => {
+  const { attention, aiUp } = await import("../src/pages/admin/attention.ts");
+  const ai = [
+    { label: "Groq", configured: true, in_use: true, model: "m", last_error: null, answering: true, state_text: "Working." },
+    { label: "OpenRouter", configured: true, in_use: true, model: "m", last_error: "rate limited (429: slow down)", answering: true, state_text: "Working; rate limited" },
+    { label: "Vercel AI Gateway", configured: true, in_use: true, model: "m", last_error: "x", answering: false,
+      state_text: "The key was rejected: the account needs a payment method on file (403: AI Gateway requires a valid credit card on file)" },
+  ];
+  assert.equal(ai.filter(aiUp).length, 2);
+  assert.equal(aiUp({ last_error: "old server", quota: false }), false);          // an older server: the last error decides
+  const ov = { server: { kite_ready: true, feed_connected: true, live_sessions: 0, auto_login_configured: true, auto_login: { ok: true, message: "ok" },
+    ai, billing_enabled: true }, stats: {} };
+  const jobs = [
+    { id: "positioning", name: "Positioning", schedule: "Trading days", last_run: null, error: null, state: "warn" },
+    { id: "corp", name: "Corporate actions", schedule: "7:20 AM", last_run: null, error: null, state: "warn" },
+    { id: "option-chains", name: "Option chain recording", schedule: "Off", last_run: null, error: null, state: "warn" },
+    { id: "etf", name: "ETF", schedule: "x", last_run: "2026-10-08T09:00:00Z", error: null, state: "ok" },
+  ];
+  const items = attention(ov, null, jobs).map((a) => a.text);
+  assert.ok(items.includes("2 data feeds on Check: Positioning (not run yet), Corporate actions (not run yet)."), items.join("\n"));
+  assert.ok(items.some((t) => t.startsWith("AI, Vercel AI Gateway: The key was rejected: the account needs a payment method on file (403:")), items.join("\n"));
+  assert.ok(!items.some((t) => t.includes("OpenRouter")));
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);
