@@ -20,7 +20,7 @@ PAGES = [
 def library_pages() -> list[tuple[str, str | None]]:
     """StratLab's own library strategies that visitors can open (/library/<id>), with the day each was published."""
     out = []
-    for e in library.all_entries():
-        if library.is_public(e) and library.ID.match(e.get("id") or ""):
+    for e in library.public_entries():
+        if library.ID.match(e.get("id") or ""):
             out.append((f"/library/{e['id']}", str(e.get("published_at") or "")[:10] or None))
     return sorted(out)

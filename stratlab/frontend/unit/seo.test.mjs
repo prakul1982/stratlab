@@ -161,6 +161,18 @@ test("boot guard: a failed file reloads once, a second failure says so instead o
   assert.ok(c.ctx.timers.some(([, ms]) => ms >= 10000), "a long wait with only the start-up text shows the message");
 });
 
+test("the public half never imports the account code (the sign-in library comes only with the app)", () => {
+  const visitor = ["visitor/VisitorApp.tsx", "visitor/visitorMain.tsx", "pages/Login.tsx", "pages/Gate.tsx", "pages/LegalPage.tsx", "pages/PublicVerdict.tsx", "pages/PublicLibrary.tsx",
+    "components/PublicFrame.tsx", "components/SkipLink.tsx", "components/LoadGuard.tsx", "components/LibraryBits.tsx", "components/LegalLinks.tsx", "lib/signin.ts",
+    "lib/currency.ts", "lib/http.ts", "lib/config.ts", "lib/entry.ts", "lib/seo.ts", "lib/title.ts", "lib/deepLinks.ts", "lib/analytics.ts", "entry.tsx", "components/ui.tsx"];
+  for (const f of visitor) {
+    const src = read(`src/${f}`);
+    const imports = [...src.matchAll(/^import[^;]*?from\s+"([^"]+)"/gms)].map((m) => m[1]);
+    for (const i of imports) assert.doesNotMatch(i, /(^|\/)lib\/(api|app)$|^\.\/(api|app)$|\/kit$|CompanySearch|CompanyCombobox|\/main$/, `${f} imports ${i}`);
+  }
+  assert.match(read("src/lib/signin.ts"), /await import\("\.\/api"\)/, "the sign-in library loads when someone signs in");
+});
+
 test("the visitor routes: /faq, /library and a strategy, a made-up market, a gate and not found", () => {
   const kind = (p) => links.visitorView(p).kind;
   assert.deepEqual(links.visitorView("/faq"), { kind: "landing", section: "faq", panel: undefined });

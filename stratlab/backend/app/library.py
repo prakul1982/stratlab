@@ -141,8 +141,13 @@ def carry_moderation(old: dict | None, new: dict) -> dict:
     return new
 
 
+_official_cache: list = [0.0, []]
+OFFICIAL_TTL = 60.0          # seconds a visitor's list is reused: the public routes need no account, so a crowd can't each read the store
+
+
 def save(e: dict):
     db.set_setting(PREFIX + e["id"], json.dumps(e))
+    _official_cache[0] = 0.0
 
 
 def load(eid: str) -> dict | None:
@@ -155,6 +160,15 @@ def load(eid: str) -> dict | None:
 def remove(eid: str):
     if ID.match(eid or ""):
         db.delete_setting(PREFIX + eid)
+        _official_cache[0] = 0.0
+
+
+def public_entries() -> list[dict]:
+    """StratLab's own visible entries, for the routes that need no sign-in (kept for a minute)."""
+    import time
+    if time.time() - _official_cache[0] >= OFFICIAL_TTL:
+        _official_cache[:] = [time.time(), [e for e in all_entries() if is_public(e)]]
+    return _official_cache[1]
 
 
 def all_entries() -> list[dict]:

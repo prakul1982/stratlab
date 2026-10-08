@@ -114,6 +114,14 @@ and a small bar for the selected drawing (colour, line style, lock, duplicate, d
 Maths is in `drawGeo.ts` (tested in `unit/drawings.test.mjs`); drawings are saved per user, market and symbol at `/me/drawings/{region}/{symbol}`, with this browser as the fallback.
 A long or short position is the person's own planning box: label it with facts only (target, stop, risk : reward, quantity for their risk amount), never advice. In chart replay a drawing shows only once the replay has reached the candle it was drawn on.
 
+## The public half and the app
+
+`entry.tsx` is the one entry point. A page load with no saved sign-in (and not just back from Google) runs only the public half (`visitor/`): the landing page, the policies, a shared verdict, StratLab's own library, "Sign in to see …" and "Page not found". It must not import `lib/api`, `lib/app`, the kit barrel (`components/kit`), `CompanySearch` or anything that reads the account: use `lib/http` (`publicGet`, the error type), `lib/config` and the kit files one by one. `signIn()` loads the sign-in library when it is pressed. `unit/seo.test.mjs` checks this, and `e2e/review-r5.spec.ts` checks what a policy page and the landing page download. The pieces of the kit the landing page uses (`Seg`, `Dialog`) have their own chunk in `vite.config.ts`.
+
+Every public address has its title, description, canonical address and robots tag in `src/content/seo.ts` (the build writes them into that page's own HTML, and `lib/seo.ts` keeps them right while someone moves around). A new public page goes in that table, in `backend/app/site_pages.py` (the sitemap) and in the address list of `vercel.json`: only the app's own addresses go to `index.html`, so a made-up address gets a real 404.
+
+A page that fails to download reloads once by itself and then says "Couldn't load StratLab. Reload" (`public/boot.js`, `components/LoadGuard.tsx`); never leave a page blank. A price that depends on the visitor's currency is held back (`lp-skel`) until it is known, so it never flashes the wrong one.
+
 ## Checklist before a page is done
 
 Desktop 1300px and phone 400px, dark and light; empty, loading, error, long names; no sideways page scroll; keyboard reaches every control; screenshots saved (`E2E_SHOTS=<folder> npx playwright test e2e/kit.spec.ts` does `/dev/kit` and Margin funding).

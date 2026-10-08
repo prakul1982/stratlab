@@ -58,6 +58,26 @@ def test_one_public_entry_is_read_only_and_only_for_stratlabs_own(api, store):
     assert set(writes.values()) == {405}, writes
 
 
+def test_a_crowd_of_visitors_reads_the_store_once_a_minute(api, store, monkeypatch):
+    library.save(_entry("seed-ema-nifty50"))
+    reads = []
+    real = library.all_entries
+    monkeypatch.setattr(library, "all_entries", lambda: reads.append(1) or real())
+    main.app.dependency_overrides.pop(main.current_profile, None)
+    try:
+        for _ in range(5):
+            assert api.get("/public/library").json()["total"] == 1
+            assert api.get("/public/library/seed-ema-nifty50").status_code == 200
+        assert len(reads) == 1
+        library.save(_entry("seed-rsi2-nifty50"))                 # a change shows at once
+        assert api.get("/public/library").json()["total"] == 2
+        library.save(_entry("seed-rsi2-nifty50", hidden=True))    # so does hiding one
+        assert api.get("/public/library").json()["total"] == 1
+        assert api.get("/public/library/seed-rsi2-nifty50").status_code == 404
+    finally:
+        as_user("user-1")
+
+
 def test_the_library_behind_sign_in_is_unchanged(api, store):
     library.save(_entry("user-made-1", owner="user-9", official=False))
     library.save(_entry("seed-ema-nifty50"))

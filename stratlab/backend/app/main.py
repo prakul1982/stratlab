@@ -2953,8 +2953,7 @@ def public_library(market: str = "", verdict: str = "", q: str = "", sort: str =
     """StratLab's own library strategies, readable without an account: the rules that were tested and the verdict each
     earned, as the app's own backtest gave it. Only entries StratLab published itself and that are not hidden; a user's
     published strategy is never listed here (signed-in people see those in /library)."""
-    shown = [e for e in library.all_entries() if library.is_public(e)]
-    rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
+    rows = library.search(library.public_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
     cap = max(1, min(limit, 200))
     return JSONResponse({"entries": [library.public_view(e) for e in rows[:cap]], "total": len(rows), "reasons": library.REASONS},
                         headers=PUBLIC_LIBRARY_HEADERS)
@@ -2962,8 +2961,8 @@ def public_library(market: str = "", verdict: str = "", q: str = "", sort: str =
 
 @app.get("/public/library/{eid}")
 def public_library_entry(eid: str):
-    e = library.load(eid)
-    if not e or not library.is_public(e):
+    e = next((x for x in library.public_entries() if x.get("id") == eid), None)
+    if not e:
         err(404, "not_found", "That strategy isn't in StratLab's public library.")
     return JSONResponse(library.public_view(e), headers=PUBLIC_LIBRARY_HEADERS)
 
