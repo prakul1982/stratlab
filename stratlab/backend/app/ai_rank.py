@@ -128,6 +128,7 @@ class Status:
     last_error: str | None = None
     last_error_at: float | None = None
     model: str | None = None             # the model that answered last
+    last_error_kind: str | None = None   # what kind of failure the last error was (CallError.kind, or "bad_reply")
     cooldown_until: float = 0.0          # the provider is skipped until then (rate limit, bad key, repeated failures)
     cool_reason: str | None = None
     quota: bool = False                  # the free quota is used up for now (it resets on its own)
@@ -285,13 +286,26 @@ def in_use(name: str) -> list[str]:
     """The provider's models to try, best first: the pinned one alone, else the measured top few, else (before any
     measurement) the curated defaults. Blocked models never."""
     p = pinned(name)
-    if p:
+    if p and not pin_gone(name, p):
         return [p]
     st = status(name)
-    order = [m for m in st.order if not blocked(name, m)]
+    order = [m for m in st.order if not blocked(name, m) and m != p and not _UUID.match(m)]
     if order:
         return order[:IN_USE]
-    return [m for m in PROVIDERS[name].defaults if not blocked(name, m)][:IN_USE]
+    return [m for m in PROVIDERS[name].defaults if not blocked(name, m) and m != p][:IN_USE]
+
+
+# a model the provider says doesn't exist (any more) for this key: retired, renamed, or never served to it
+_GONE = re.compile(r"\((?:404|400): .*(no longer available|not found|no such model|does not exist|is not supported|deprecated|retired)", re.I)
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)   # a stored Cloudflare id, not a model name
+
+
+def pin_gone(name: str, model: str) -> bool:
+    """A pinned model the provider has retired (Gemini 2.5 Flash: "no longer available to new users", 404). The pin
+    then stops holding the provider to it: the measured models answer instead, and Admin says to remove the pin
+    (R5O-016). A pin on a model that merely failed once stays."""
+    s = status(name).models.get(model)
+    return bool(s and s.last_error and _GONE.search(s.last_error) and (s.last_ok_at or 0) < (s.last_error_at or 0))
 
 
 def score(name: str, model: str, task: str) -> float:
@@ -411,11 +425,11 @@ def record_fail(name: str, model: str, err: Exception, live: bool = True) -> str
             else:
                 s.fails += 1
                 _open_model(s, wait, detail)
-            st.last_error, st.last_error_at = detail, now
+            st.last_error, st.last_error_at, st.last_error_kind = detail, now, kind
             return detail
         if live:
             s.live.append((False, 0.0))
-        s.last_error, s.last_error_at, st.last_error, st.last_error_at = detail, now, detail, now
+        s.last_error, s.last_error_at, st.last_error, st.last_error_at, st.last_error_kind = detail, now, detail, now, kind
         if kind == "auth":
             st.config_error = True
             _open_provider(st, 30 * 60, detail)

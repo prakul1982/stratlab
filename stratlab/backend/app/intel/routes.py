@@ -16,7 +16,7 @@ from ..config import settings
 from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
-from . import key_facts
+from . import grounding, key_facts
 from .company import Research, with_dividend_yield
 from .net import NotFound, SourceError
 
@@ -222,7 +222,9 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
-    return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh, lambda: A.sector(theme, r, _ai)))
+    # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
+    return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
+                      lambda: grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search)))
 
 
 @router.get("/compare")

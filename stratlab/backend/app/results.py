@@ -473,6 +473,8 @@ class Job:
                 sent, ran = sent + self.follow_up(region, day, who), True
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            from . import job_status
+            job_status.keep("results", self)       # Admin shows this run after a restart too
         return sent
 
     def refresh(self, region: str, who: dict | None = None, day: date | None = None) -> dict:

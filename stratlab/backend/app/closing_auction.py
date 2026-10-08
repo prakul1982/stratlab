@@ -463,6 +463,8 @@ class Job:
             n = record_day(day.isoformat(), live)
             db.set_setting("closeauc:recorded", day.isoformat())
             self.status.update(recorded=day.isoformat())
+            from . import job_status
+            job_status.keep("closing-auction", self)   # Admin shows the stored day after a restart too
             return "recorded" if n else None
         return None
 

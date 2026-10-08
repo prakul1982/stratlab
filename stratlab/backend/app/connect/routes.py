@@ -167,6 +167,13 @@ def kite_login(profile=Depends(current_profile)):
     _limit(profile, "connect_kite", 30)
     if not kite_user.allowed(profile):
         err(403, "not_open", "Zerodha login isn't open yet.")
+    try:
+        # the owner's own account is already logged in for the market data: share that login (a second one would
+        # cancel it), and come straight back to Settings (R5O-031)
+        if kite_user.link_shared(profile["id"], profile) is not None:
+            return ok({"url": settings.PUBLIC_SITE_URL + "/settings?kite=ok#accounts", "shared": True})
+    except kite_user.KiteConnectError:
+        pass
     return ok({"url": kite_user.login_url(profile["id"], profile)})
 
 

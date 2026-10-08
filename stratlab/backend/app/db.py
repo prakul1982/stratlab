@@ -4,17 +4,68 @@ import json
 import threading
 import time
 from datetime import datetime, timezone
+import httpx
 from supabase import create_client, Client
+from supabase.lib.client_options import SyncClientOptions
 from .config import settings
 from . import market_store
 
 _client: Client | None = None
+_client_lock = threading.Lock()
+
+# The database client's own HTTP connection. The library's default is one HTTP/2 connection shared by every thread:
+# when the server closes it (an idle timeout, a restart) every request in flight fails with "Server disconnected",
+# and two threads using one HTTP/2 stream table at once fail with a bare KeyError (the stream number). HTTP/1.1 keeps a
+# pool of connections instead (one request each, safe across threads), and a dropped connection is simply left out.
+READ_METHODS = ("GET", "HEAD", "OPTIONS")
+RETRY_PAUSE = 0.25            # seconds before the one retry, so a server that is restarting has a moment
+
+
+class RetryReads(httpx.BaseTransport):
+    """A read that fails because the connection broke is sent once more, on a new connection. A write is sent again
+    only when it never left (the connection couldn't be opened), so nothing is ever saved twice."""
+
+    def __init__(self, inner: httpx.BaseTransport):
+        self.inner = inner
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        try:
+            return self._send(request)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            print("database: connect failed, trying again:", type(e).__name__)
+        except (httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError, httpx.ReadTimeout, httpx.PoolTimeout) as e:
+            if request.method not in READ_METHODS:
+                raise
+            print("database: connection dropped during a read, trying again:", type(e).__name__)
+        time.sleep(RETRY_PAUSE)
+        return self._send(request)
+
+    def _send(self, request: httpx.Request) -> httpx.Response:
+        resp = self.inner.handle_request(request)
+        try:
+            resp.read()             # read the body here, so a connection that drops halfway is also caught above
+        except BaseException:
+            resp.close()
+            raise
+        return resp
+
+    def close(self) -> None:
+        self.inner.close()
+
+
+def _http() -> httpx.Client:
+    return httpx.Client(http2=False, follow_redirects=True, timeout=httpx.Timeout(30.0, connect=10.0),
+                        limits=httpx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=30.0),
+                        transport=RetryReads(httpx.HTTPTransport(http2=False)))
 
 
 def sb() -> Client:
     global _client
     if _client is None:
-        _client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+        with _client_lock:
+            if _client is None:
+                _client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY,
+                                        options=SyncClientOptions(httpx_client=_http()))
     return _client
 
 

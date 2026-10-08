@@ -107,7 +107,7 @@ export interface DrawFmt {
 
 export interface DrawTheme {
   ink: string; accent: string; muted: string; text: string; bg: string; font: string;
-  down: string; green: string; magenta: string;
+  down: string; green: string; magenta: string; orange?: string;
   /** A colour with an alpha, for fills. */
   alpha(color: string, a: number): string;
 }
@@ -115,7 +115,7 @@ export interface DrawTheme {
 export function colorOf(d: Drawing, th: DrawTheme): string {
   switch (d.color) {
     case "blue": return th.accent;
-    case "orange": return th.down;
+    case "orange": return th.orange ?? th.down;
     case "green": return th.green;
     case "magenta": return th.magenta;
     case "grey": return th.muted;

@@ -4,11 +4,10 @@ import { publicGet, type ApiError } from "../lib/http";
 import { applySeo, seoFor } from "../lib/seo";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { checksLine } from "../lib/tradeUi";
 import { signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { PublicFrame } from "../components/PublicFrame";
-import { Rules, shownStats, VERDICTS, type LibEntry } from "../components/LibraryBits";
+import { checksOf, HoldLine, Rules, shownStats, VERDICTS, type LibEntry } from "../components/LibraryBits";
 import { STATUS_NAME, VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
@@ -76,7 +75,8 @@ export function PublicLibrary() {
                       <CardHead title={plainTerms(e.name)} level={2} />
                       <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>by {e.author}</span></span>
                     </div>
-                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                    <HoldLine e={e} />
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
                       {([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], ["Unseen years", sh.unseen]] as [string, number | null][])
@@ -128,7 +128,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>{e.range ? `Tested ${e.range.from} to ${e.range.to}` : "Tested on past prices"}</span></span>
           </div>
           <Card label="Results">
-            <CardHead title="Results after costs" actions={<span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span>} />
+            <CardHead title="Results after costs" actions={<span className="k-note">{checksOf(e)}</span>} />
             <StatRow label="Results">
               <Stat item label="Return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={tone(sh.ret)} />
               <Stat item label="Buy and hold" value={sh.buy_hold == null ? "–" : pct(sh.buy_hold)} tone={tone(sh.buy_hold)} />

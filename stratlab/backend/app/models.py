@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 RefType = Literal[
@@ -154,7 +154,20 @@ class GroupReq(BaseModel):
     maxOpen: int = Field(10, ge=1, le=50)       # positions open at once, across the group
 
 
+class GapsReq(BaseModel):
+    """The questions a new notebook still asks about what its idea didn't say (the sell rule, candles, stop…), kept
+    with the notebook so they are still there after the person leaves and comes back (R5O-010)."""
+    mentioned: list[Annotated[str, Field(max_length=20)]] = Field(default_factory=list, max_length=20)
+    notes: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
+    instName: Optional[str] = Field(None, max_length=80)
+    usedAI: bool = True
+    fallback: str = Field("", max_length=400)
+    answered: dict[Annotated[str, Field(max_length=20)], Annotated[str, Field(max_length=120)]] = Field(default_factory=dict, max_length=20)
+
+
 class NotebookReq(BaseModel):
+    gaps: Optional[GapsReq] = None
+    clearGaps: bool = False
     name: Optional[str] = Field(None, max_length=80)
     question: Optional[str] = Field(None, max_length=300)
     notes: Optional[str] = Field(None, max_length=4000)

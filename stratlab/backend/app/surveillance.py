@@ -345,6 +345,8 @@ class Job(news_job.Job):
     nothing stored yet (a new server), it reads the lists at once."""
     RUNS = (("surv-am", "Asia/Kolkata", "08:20"), ("surv-pm", "Asia/Kolkata", "19:45"))
 
+    status_key = "surveillance"
+
     def __init__(self, feed_fn, fire):
         super().__init__()
         self.feed_fn, self.fire = feed_fn, fire

@@ -129,7 +129,8 @@ def test_us_company_profile(research):
     assert c["range52"] == {"low": 86.6, "high": 195.6}
     assert [p["y"] for p in c["trend"]["revenue"]] == ["FY22", "FY23", "FY24", "FY25"]
     assert c["earnings"][0]["period"] == "2024-10-31" and c["earnings"][-1]["surprise_pct"] == 3.9
-    assert c["peers"] == ["AMD", "AVGO", "INTC"] and c["next_earnings"]["date"] == "2099-11-19"
+    # the largest US companies in its sector first, then the source's narrow-industry peers (R5O-020)
+    assert c["peers"] == ["AAPL", "MSFT", "AVGO", "AMD", "INTC"] and c["next_earnings"]["date"] == "2099-11-19"
     assert c["analysts"]["buy"] == 38 and c["insider"]["net"] == -150000
     assert c["news"][0]["headline"].startswith("Nvidia unveils")
     assert all(s["ok"] for s in c["sources"])

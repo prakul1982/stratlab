@@ -668,6 +668,8 @@ class Job(news_job.Job):
     server), it reads at once."""
     RUNS = (("fochanges-am", "Asia/Kolkata", "08:15"), ("fochanges-pm", "Asia/Kolkata", "19:50"))
 
+    status_key = "fo"
+
     def __init__(self, feed_fn, fire_fn, expiry=None):
         """`expiry()` makes a run's expiry(symbol, month) (the day's listed contracts); the rule when not given."""
         super().__init__()

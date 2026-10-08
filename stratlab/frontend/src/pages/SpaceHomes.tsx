@@ -92,7 +92,7 @@ export function TradeHome() {
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
     { ...TRADE_TOP[2],
       status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")}` : "" },
-    { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Rules others published, with the verdict they earned." },
+    { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
   ];
   return (
     <div className="space-home">

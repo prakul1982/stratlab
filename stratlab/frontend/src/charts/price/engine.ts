@@ -20,6 +20,8 @@ export interface PriceLevel { price: number; label: string; tone: "up" | "down" 
 export interface Theme {
   bg: string; text: string; muted: string; grid: string; border: string; ink: string;
   up: string; down: string; onUp: string; onDown: string; accent: string; slots: string[]; font: string;
+  /** the drawing tools' orange (the candles' down colour is red) */
+  orange?: string;
 }
 export interface Compare { label: string; bars: Bar[] }
 export interface Hover { index: number; bar: Bar; prev: Bar | null; x: number; compare: number | null }
@@ -1128,7 +1130,7 @@ export class PriceChartEngine {
       c.save();
       c.beginPath(); c.rect(0, pane.top, pw, pane.height); c.clip();
       const m = this.mapper();
-      const dth: DrawTheme = { ink: th.ink, accent: th.accent, muted: th.muted, text: th.text, bg: th.bg, font: th.font, down: th.down,
+      const dth: DrawTheme = { ink: th.ink, accent: th.accent, muted: th.muted, text: th.text, bg: th.bg, font: th.font, down: th.down, orange: th.orange,
         green: th.slots[0], magenta: th.slots[1], alpha: withAlpha };
       const sym = this.sym;
       const fmt: DrawFmt = {

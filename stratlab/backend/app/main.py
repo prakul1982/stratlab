@@ -1159,7 +1159,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -1224,6 +1224,8 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
     return save_notebook(profile, nb)
 
 
@@ -1251,6 +1253,10 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb.pop("group", None)                 # picking one instrument replaces a group
     if req.group is not None:
         nb["group"] = group_body(req.group)
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()
+    if req.clearGaps:
+        nb.pop("gaps", None)
     return ok(save_notebook(profile, nb))
 
 
@@ -1881,12 +1887,21 @@ def deep_years(years: int) -> int:
 BSE_WAIT = "Documents are not available from BSE right now (it is turning requests away). Try again later."
 
 
+_deep_pool = ThreadPoolExecutor(max_workers=12, thread_name_prefix="deep-dive")   # the deep dive's sources, read side by side
+
+
 def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True) -> dict:
     """Numbers and the list of readable documents for one company (no AI), documents from the last `years` years.
     `trades`: also read its insider-trading disclosures, for the checklist (the market audit leaves them out)."""
     if region == "US":
         return deep_base_us(sym, years)
     code = bse_code(sym)                                  # listed only on BSE: its numbers are under the BSE code
+    # the filings, insider trades and prices don't wait for the numbers: they are read alongside them (R5O-025: the
+    # sources were read one after another)
+    ahead = {"items": _deep_pool.submit(filings_feed.announcements, sym, max(deepdive.DOC_DAYS, 366 * years)),
+             "trend": _deep_pool.submit(price_status, sym)}
+    if trades:
+        ahead["insider"] = _deep_pool.submit(lambda: _quiet(lambda: filings_feed.insider_trades(sym)))
     p = with_industry(sym, research_routes.source_call(lambda: research_hub.screener.company(code or sym)))
     try:
         p = research_hub.screener.with_cash(p)           # cash on hand, for enterprise value
@@ -1899,14 +1914,14 @@ def deep_base(sym: str, region: str = "IN", years: int = 2, trades: bool = True)
         except Exception:
             pass
     try:
-        items = filings_feed.announcements(sym, max(deepdive.DOC_DAYS, 366 * years))
+        items = ahead["items"].result()
         doc_note, fsum = None, filings.summarise(items)
     except SourceError as e:
         # a company listed only on BSE, and BSE turning this server away: its documents wait, they aren't missing
         note = BSE_WAIT if code and getattr(e, "busy", False) else str(e)
         items, doc_note, fsum = [], public_text(note), None
-    insider = _quiet(lambda: filings_feed.insider_trades(sym)) if trades else None
-    trend, why = price_status(sym)
+    insider = ahead["insider"].result() if trades else None
+    trend, why = ahead["trend"].result()
     cut = (datetime.now(IST) - timedelta(days=366 * years)).strftime("%Y-%m-%dT%H:%M")
     told = None if doc_note else deepdive.meetings(items, cut)
     # four of each kind a year: a deck and a transcript a quarter, so a run of decks can't push the transcripts out
@@ -1969,6 +1984,15 @@ def price_trend(sym: str, market: str = "IN") -> dict | None:
     return price_status(sym, market)[0]
 
 
+def candle_day(t) -> str | None:
+    """A daily candle's time as its day ("2026-10-08"): the candle is stamped at midnight, so the page said "Last
+    close as of 8 Oct 2026, 00:00 IST" (R5O-025). A time within the day stays as it is."""
+    s = str(t or "")
+    if not s:
+        return None
+    return s[:10] if len(s) <= 10 or s[11:19] in ("00:00:00", "") else s
+
+
 def deep_view(sym: str, base: dict) -> dict:
     p = base["p"]
     us = p.get("region") == "US"
@@ -1989,7 +2013,7 @@ def deep_view(sym: str, base: dict) -> dict:
             "card": card_view, "card_stale": not deepdive.fresh(card), "trend": base["trend"], "filings": base["filings"],
             "checklist": checklist.evaluate(p, nums, base["filings"], base["trend"], card_view, None if us else sym, base.get("trades")),
             "ai": True, "report_card": True, "as_of": datetime.now(timezone.utc).isoformat(timespec="minutes"),
-            "numbers_at": p.get("fetched_at"), "price_at": (base["trend"] or {}).get("t"),
+            "numbers_at": p.get("fetched_at"), "price_at": candle_day((base["trend"] or {}).get("t")),
             "calls": sum(d["kind"] == ("earnings_release" if us else "transcript") for d in base["docs"])}
 
 

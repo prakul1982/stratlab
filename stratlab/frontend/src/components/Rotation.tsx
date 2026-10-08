@@ -112,9 +112,10 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
         {rows.map((r) => {
           const end = shown(r)[shown(r).length - 1];
           return (
-            <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={12} fill="transparent" tabIndex={0} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
+            <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={12} fill="transparent" tabIndex={0} role="button" aria-pressed={focus === r.id} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
               onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(r.id)} onBlur={() => setHover(null)}
-              onClick={() => onFocus?.(focus === r.id ? null : r.id)} className="rot-hit" />
+              onClick={() => onFocus?.(focus === r.id ? null : r.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onFocus?.(focus === r.id ? null : r.id); } }} className="rot-hit" />
           );
         })}
       </svg>

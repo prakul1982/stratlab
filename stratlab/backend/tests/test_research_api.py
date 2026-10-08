@@ -27,7 +27,7 @@ SECTOR_AI = {"sector": "AI data centers", "summary": "Power is the bottleneck.",
              "screen": [{"name": "Vertiv", "ticker": "VRT", "composite": 70}, {"name": "Nvidia", "ticker": "NVDA", "composite": 90}],
              "tailwinds": ["Capex"], "risks": ["Rates"], "etfs": [{"ticker": "SMH", "name": "Semis"}]}
 PULSE_AI = {"tone": "Calm.", "hot": [{"name": "Reliance", "ticker": "RELIANCE", "why": "Jio"}],
-            "flows": [{"title": "FIIs", "detail": "Selling", "direction": "outflow"}, {"title": "x", "detail": "y", "direction": "weird"}],
+            "flows": [{"title": "Selling at the close", "detail": "Selling", "direction": "outflow"}, {"title": "x", "detail": "y", "direction": "weird"}],
             "themes": [{"theme": "Capex", "detail": "Rails", "example": "RVNL"}]}
 COMPARE_AI = {"verdict": "NVDA is stronger.", "winner": "nvda", "differences": ["Margins"], "a": {"composite": 80, "valuation": "RICH"},
               "b": {"composite": 60, "valuation": "fair"}}

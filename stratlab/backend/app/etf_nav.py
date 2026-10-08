@@ -427,6 +427,8 @@ class Job(news_job.Job):
     after the close, record the day's closing prices once (run marker newsjob:etfnav-close); and fill in NAVs the
     evening file has since published. With nothing stored yet (a new server), it reads the list at once."""
 
+    status_key = "etf"
+
     def __init__(self, feed_fn):
         super().__init__()
         self.feed_fn = feed_fn

@@ -109,6 +109,8 @@ export interface NotebookItem {
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
   group?: Group | null;
+  /** The questions about the idea still open, and the answers so far (R5O-010). */
+  gaps?: import("../components/Gaps").GapInfo | null;
 }
 
 export interface PlanInfo {

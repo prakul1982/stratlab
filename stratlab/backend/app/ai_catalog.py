@@ -58,7 +58,9 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
     Provider("gemini", "Google Gemini", "gemini", "https://generativelanguage.googleapis.com/v1beta", "GEMINI_API_KEY",
              "https://aistudio.google.com/apikey",
              "Free tier: Flash models allow a few hundred to a thousand requests a day; Gemma models far more.", "ok",
-             ("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemma-3-27b-it"),
+             # 2.5 Flash and Flash-Lite are "no longer available to new users" (404, Oct 2026); Google names 3.8 Flash and
+             # 3.5 Flash-Lite instead, and 3.5 Flash answered every test on the live key
+             ("gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemma-3-27b-it"),
              # Pro models get few or no free requests; "live", "native-audio" and "image" models aren't text chat
              deny=r"pro|live|native|image|tts|robotics|computer|aqa|learnlm|nano-banana",
              limit_scope="model", ctx=1000000, max_out=65536, prior=(3, 3, 1),
@@ -115,7 +117,8 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
     Provider("nvidia", "NVIDIA API catalog", "openai", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "https://build.nvidia.com/settings/api-keys",
              "Free for development: about 40 requests a minute.", "prototype",
              ("meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
-             ctx=32000, probe_max=4, prior=(21, 21, 21),
+             # listed in the catalog but not served to a free account ("Function ... Not found for account", 404)
+             deny=r"palmyra|llama2-|chatqa", ctx=32000, probe_max=4, prior=(21, 21, 21),
              note="NVIDIA's terms allow the free API for development and testing only, so StratLab asks it last among the free ones."),
     Provider("anthropic", "Anthropic", "anthropic", "https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys",
              "Paid only: no free allowance.", "paid", (), models_url=None, ctx=200000, probe_max=1, probe_every_h=0, prior=(99, 99, 99)),

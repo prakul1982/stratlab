@@ -109,7 +109,7 @@ const TOOLS: [string, string][] = [
   ["Positioning", "Who holds index futures and options, FII and DII flows, PCR and max pain."],
   ["Trade journal", "Your real trades as round trips after charges, with the same four checks."],
   ["Bring any strategy", "Pine Script, Python, MetaTrader, AmiBroker or plain words."],
-  ["Strategy library", "Rules others published with the verdict they earned. Copy and re-test."],
+  ["Strategy library", "Published rules, each with the result of its checks. Copy and re-test."],
   ["Compare experiments", "Every run saved; two side by side show what changed."],
   ["Share the verdict", "A card or a public link with all four checks. Your rules stay private."],
 ];

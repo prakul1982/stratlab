@@ -30,7 +30,7 @@ BAN_AT, FREE_AT, WATCH_AT = 95.0, 80.0, 80.0
 ROLL_WINDOW = 5              # trading days before the near expiry when the share in later expiries is the rollover
 RANGES = {"1m": 31, "3m": 92, "6m": 183, "1y": 366}
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
-SOURCE = "the exchange's F&O bhavcopy and its combined open interest file (MWPL)"
+SOURCE = "the exchange's daily F&O file and its combined open interest file (MWPL)"
 NOTE = ("Exchange data as published after the close, and arithmetic on it. The buildup words describe what price and "
         "open interest did together on the day; they say nothing about what the price will do next.")
 # the market's own terms for price and open interest moving together: code -> (label, what it means)
@@ -186,7 +186,7 @@ def streak(series: list[list], code: str | None) -> int:
 # ---------- the desk ----------
 class Desk(X.Desk):
     name = "fno"
-    what = "F&O bhavcopy and combined open interest file"
+    what = "daily F&O file and combined open interest file"
     ready_at = "19:30"
     backfill_days = 130
     store = X.DayStore(PREFIX, KEEP, point)
