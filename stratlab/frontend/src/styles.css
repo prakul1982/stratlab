@@ -1881,9 +1881,6 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-card[tabindex="-1"]:focus { outline: none; }
 
 /* ---------- round 5 (a visitor's review): skip link, the landing's demo, plans while they load, phone menu ---------- */
-.skip-link { position: absolute; left: var(--s2); top: -120px; z-index: 100; padding: var(--s2) var(--s4); border-radius: var(--r-ctl); background: var(--ink); color: var(--on-ink);
-  font-weight: 600; text-decoration: none; }
-.skip-link:focus { top: var(--s2); }
 #main:focus { outline: none; }
 .legal-head { position: relative; }
 

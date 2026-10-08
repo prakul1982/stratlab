@@ -9,6 +9,7 @@ import { FAQ } from "../content/faq";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
+import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { Dialog } from "../components/kit/Dialog";
 import { publicGet } from "../lib/http";
@@ -223,7 +224,7 @@ export function Login({ section = null, panel }: { section?: string | null; pane
 
   return (
     <div className="lp">
-      <a className="skip-link" href="#main">Skip to main content</a>
+      <SkipLink />
       <header className="lp-nav">
         <a href="#top" className="brand" aria-label="StratLab home"><Logo size={46} /></a>
         <nav aria-label="Sections">

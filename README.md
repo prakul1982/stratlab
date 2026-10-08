@@ -283,7 +283,7 @@ Set on the backend (Railway, or `stratlab/backend/.env`). Names and purposes onl
 | `HEAVY_SLOTS` | Heavy requests (backtests, scans, document reads) run at once (default 2) |
 
 The frontend's `public/config.js` sets `API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public), and optionally
-`SENTRY_DSN`, `POSTHOG_KEY`, `POSTHOG_HOST`, `BUSINESS_NAME`, `CONTACT_EMAIL` and `BUSINESS_ADDRESS`.
+`SENTRY_DSN`, `POSTHOG_KEY`, `POSTHOG_HOST`, `BUSINESS_NAME`, `CONTACT_EMAIL`, `BILLING_EMAIL`, `PRIVACY_EMAIL`, `BUSINESS_ADDRESS` and `BUSINESS_GSTIN` (the last two are listed on the Contact page when set). The file is served to every visitor as it is, so keep comments and notes out of it (`unit/seo.test.mjs` checks).
 
 ## Tests
 

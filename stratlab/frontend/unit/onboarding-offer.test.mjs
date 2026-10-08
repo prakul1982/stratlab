@@ -30,7 +30,7 @@ test("payments off: Free is open, Basic and Pro open soon, and nothing says paid
   assert.equal(i.lede, "The Free plan is open to everyone. Basic and Pro aren't on sale yet; each will include what its card lists. Ask us at support@stratlab.studio for early access.");
   assert.doesNotMatch(i.lede, /every feature is open|open to everyone until|Cancel any time/);
   assert.deepEqual(offer.landingAction(early, "pro"), { note: "Opens soon" });
-  assert.deepEqual(offer.landingAction(early, "free"), { label: "Start free", buy: false });
+  assert.deepEqual(offer.landingAction(early, "free"), { label: "Continue with Google", buy: false });      // every sign-in button says it goes to Google (R5V-011)
   assert.equal(offer.canBuy(early), false);
   assert.equal(offer.unlockHint(early), "Paid plans open soon; ask us at support@stratlab.studio for early access.");
   assert.equal(offer.unlockHint(paid), "See the plans to upgrade.");
@@ -43,7 +43,7 @@ test("payments off: Free is open, Basic and Pro open soon, and nothing says paid
 });
 
 test("payments on: plans can be bought, cancelled any time, yearly in the visitor's own currency", () => {
-  assert.deepEqual(offer.landingAction(paid, "basic"), { label: "Start with Basic", buy: true });
+  assert.deepEqual(offer.landingAction(paid, "basic"), { label: "Continue with Google to get Basic", buy: true });
   assert.match(offer.pricingIntro(paid, LIMITS.pro, "landing").lede, /Cancel any time\.$/);
   const usd = offer.finePrint(paid, { currency: "USD", inRupees: true, inRupeesYear: true, year: { basic: "$80", pro: "$200" }, charged: { basic: "₹699", pro: "₹1,999" } });
   assert.ok(usd.some((l) => l.startsWith("Paid in rupees for now: a card is charged ₹699 (Basic) or ₹1,999 (Pro) a month")));
@@ -60,7 +60,16 @@ test("the launch offer names its end; an unknown offer promises nothing", () => 
   assert.equal(offer.promoUntil(promo, Date.parse("2099-10-30")), promo.promo_until);
   assert.equal(offer.promoUntil(promo, Date.parse("2099-11-01")), null);
   assert.equal(offer.offerMode(null), "unknown");
-  assert.deepEqual(offer.landingAction(null, "pro"), { note: "Choose a plan after you sign in" });
+  // the offer couldn't be read: the same cards, a real button and no promise (R5V-006: one pricing look, not a second old one)
+  assert.deepEqual(offer.landingAction(null, "pro"), { label: "Continue with Google to see plans", buy: true });
+  const unknown = offer.pricingIntro(null, LIMITS.pro, "landing");
+  assert.equal(unknown.title, "Plans");
+  assert.doesNotMatch(unknown.title + unknown.lede, /Free to start|Choose a plan after/);
+  assert.equal(offer.yearlySaving(699, 6999), 1389);              // Basic's year is exactly ten months
+  assert.equal(offer.yearlySaving(1999, 19999), 3989);            // Pro's is 9 rupees over ten months, so the label says "about"
+  assert.equal(offer.yearlySaving(8, 80), 16);
+  assert.equal(offer.yearlySaving(8, 96), null);
+  assert.match(offer.YEARLY_LABEL, /about 2 months/);
   assert.deepEqual(offer.finePrint(null, { currency: "EUR", inRupees: true, inRupeesYear: true }), []);
 });
 
