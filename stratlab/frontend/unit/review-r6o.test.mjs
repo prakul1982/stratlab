@@ -104,3 +104,13 @@ test("Money: the tax card shows the F&O income the tax is on; Today names its US
   assert.equal(usTodayNote([us], { day: 5.28, in_total: false }, 96.77, live), null);       // not in the rupee Today: nothing to name
   assert.match(read("src/pages/HoldingsPage.tsx"), /usTodayNote\(markets, view\.us, view\.usd_inr\)/);
 });
+
+test("ETF vs NAV: the close the gap uses and the price's day are shown, and a phone pages the cards (R6O-018)", () => {
+  const p = read("src/pages/EtfGapsPage.tsx");
+  assert.match(p, /\$\{price\(r\.nav_price, "INR"\)\}, /);
+  assert.match(p, /fmtDate\(dayIn\(r\.price_at\) \?\? r\.price_at, \{ year: false \}\)/);
+  assert.match(p, /stack phonePage=\{25\}/);
+  const dt = read("src/components/kit/DataTable.tsx");
+  assert.match(dt, /const cap = stack && phonePage && phone \? phonePage \* pages : Infinity;/);
+  assert.match(dt, /Show \{Math\.min\(left, phonePage \?\? left\)\} more/);
+});

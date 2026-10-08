@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { asOf, fmtDate, price } from "../lib/format";
+import { asOf, dayIn, fmtDate, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { FUND_NAME, gapShort, loadEtfGaps, type EtfGap, type EtfGaps, type Fund } from "../lib/etfGaps";
 import { EtfGapDetailView } from "../components/EtfGap";
@@ -53,14 +53,16 @@ export function EtfGapsPage() {
       <><Link className="link" to={`/invest/etf-gaps?etf=${encodeURIComponent(r.symbol)}`} onClick={(e) => { e.preventDefault(); open(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></Link>
         {" "}<Badge tone="plain" dot={false}>{r.fund_label}</Badge>
         <span className="k-sub-line">{r.name}</span></>) },
-    { key: "px", header: "Price", numeric: true, cell: (r) => price(r.price, "INR") },
+    // the price with its day, so it is never read against the close the gap uses (R6O-018)
+    { key: "px", header: "Price", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{fmtDate(dayIn(r.price_at) ?? r.price_at, { year: false })}</span>}</> },
     ...(hasInav ? [
       { key: "inav", header: "iNAV", numeric: true, cell: (r: EtfGap) => (r.inav == null ? "–" : price(r.inav, "INR")) },
       { key: "ig", header: "Gap to iNAV", numeric: true, cell: (r: EtfGap) => gapShort(r.inav_gap) }] : []),
     { key: "nav", header: "Last NAV", numeric: true, cell: (r) => <>{r.nav == null ? "–" : price(r.nav, "INR")}{r.nav_date && <span className="k-sub-line">{asOf(r.nav_date)}</span>}</> },
     // one day's close against that day's NAV: never today's price against yesterday's NAV (the day's market move)
     { key: "ng", header: "Close vs NAV", numeric: true, cell: (r) => (r.nav_gap != null
-      ? <>{gapShort(r.nav_gap)}{r.nav_price_day && <span className="k-sub-line">{fmtDate(r.nav_price_day, { year: false })} close</span>}</>
+      // the close the gap is worked out from, with its day: its direction agrees with the close and NAV it names (R6O-018)
+      ? <>{gapShort(r.nav_gap)}{r.nav_price_day && <span className="k-sub-line">{r.nav_price != null ? `${price(r.nav_price, "INR")}, ` : ""}{fmtDate(r.nav_price_day, { year: false })} close</span>}</>
       : r.nav_waiting && r.nav_date ? <>–<span className="k-sub-line">no close of {fmtDate(r.nav_date, { year: false })}</span></> : "–") },
     { key: "d30", header: "30 trading days", numeric: true, wrap: true, cell: (r) => (r.days
       ? <>{r.days.low === r.days.high ? gapShort(r.days.low) : <>{gapShort(r.days.low)} to {gapShort(r.days.high)}</>}<span className="k-sub-line">avg {gapShort(r.days.avg)}</span></> : "–") },
@@ -86,7 +88,7 @@ export function EtfGapsPage() {
             <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="e.g. NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
           </FormGrid>
           {/* stack: on a phone each ETF is a card with every figure labelled, instead of columns cut off at the edge */}
-          <DataTable label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack sticky={rows.length > 14} empty="No ETF matches that."
+          <DataTable label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack phonePage={25} sticky={rows.length > 14} empty="No ETF matches that."
             rowAttrs={(r) => ({ "data-etf": r.symbol, className: pick === r.symbol ? "on" : "" })} columns={columns} />
           {!all && !q.trim() && rows.length > TOP && (
             <div className="k-row"><span className="k-note">Showing {TOP} of {rows.length} ETFs, in the order above.</span>

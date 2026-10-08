@@ -458,3 +458,21 @@ def test_clearly_unrelated_companies_leave_the_theme_map():
     assert [c["ticker"] for c in got["value_chain"][0]["companies"]] == ["HAL"]
     assert tidy_text("Defence spending is rising through partnerships..") == "Defence spending is rising through partnerships."
     assert tidy_text("and so on...") == "and so on..."
+
+
+# ---------- R6O-018: an ETF's close is a day it traded ----------
+def test_an_etf_that_didnt_trade_has_no_close_for_the_day(monkeypatch):
+    from app import etf_nav as E
+    saved = {}
+    monkeypatch.setattr(E.db, "set_setting", lambda k, v: saved.__setitem__(k, v))
+    monkeypatch.setattr(E, "prune", lambda: None)
+    live = {"rows": {"MOGSEC": {"price": 62.5, "isin": "", "nav": 64.7, "nav_date": "2026-10-07", "volume": 0},
+                     "NIFTYBEES": {"price": 254.08, "isin": "", "nav": 254.4, "nav_date": "2026-10-07", "volume": 125000}}}
+    assert E.record_close("2026-10-07", live, {}) == 2
+    import json as _j
+    day = _j.loads(saved["etfnav:day:2026-10-07"])
+    assert day["MOGSEC"][0] is None and day["NIFTYBEES"][0] == 254.08
+    # through the day: a price with no trades isn't set against that day's NAV either
+    assert E.same_day("MOGSEC", 62.5, "2026-10-07", "2026-10-07", 0)[0] != 62.5
+    parsed = E.parse_exchange({"data": [{"symbol": "MOGSEC", "ltP": "62.50", "qty": 0, "nav": "64.70"}], "navDate": "07-Oct-2026"})
+    assert parsed["rows"]["MOGSEC"]["volume"] == 0
