@@ -29,5 +29,22 @@ export function pickFy(years: number[], current: number, hasData: (fy: number) =
   return busy ?? (years.includes(current) ? current : years[0] ?? current);
 }
 
+/** The year a tax page opens on: the shared year (pickFy, normally the year being filed), unless that year has nothing
+ * in it and another year has: then the latest year that has something, and `from` the year it was moved from, so the
+ * page can say why in one line. A page never opens on a year of zeros when there is a year with data. */
+export function openFy(years: number[], current: number, hasData: (fy: number) => boolean, saved = savedFy()): { fy: number; from: number | null } {
+  const fy = pickFy(years, current, hasData, saved);
+  if (hasData(fy)) return { fy, from: null };
+  const busy = [...years].sort((a, b) => b - a).find(hasData);
+  return busy == null ? { fy, from: null } : { fy: busy, from: fy };
+}
+
+/** Why a page opened on another year than the shared one: "No trades in FY 2025-26, the year being filed, so this is
+ * FY 2024-25, the latest year with trades." */
+export function movedYearNote(from: number, to: number, current: number, what: string): string {
+  const which = from === current - 1 ? "the year being filed" : from === current ? "this year" : "the year last opened";
+  return `No ${what} in ${fyLabel(from)}, ${which}, so this is ${fyLabel(to)}, the latest year with ${what}.`;
+}
+
 /** "FY 2025-26". */
 export const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;

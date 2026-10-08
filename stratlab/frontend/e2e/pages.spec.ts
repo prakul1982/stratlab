@@ -115,7 +115,8 @@ test("results calendar: every company's dates, and the company page links to it"
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
   const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");
   await barsAroundZero(page);
-  await expect(page.getByText("−133").first()).toBeVisible();      // the real minus, never a hyphen
+  // TCS, the demo world's loss case, at its own scale: a ₹53,360 crore loss in FY22 (tests/fake_fundamentals.py)
+  await expect(page.getByText("−53,360").first()).toBeVisible();      // the real minus, never a hyphen
   await expect(page.getByText("loss years in between, so no yearly rate").first()).toBeVisible();
   await sane(page, errors);
 });
@@ -486,9 +487,10 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
   // the non-equity file is read now (a gold ETF under its own rules), so nothing is left out
   await expect(page.getByRole("list", { name: "Files left out" })).toHaveCount(0);
-  // every Money page opens on the year being filed (FY 2025-26 here), empty or not; a note offers the year that has the trades
-  await expect(page.getByRole("heading", { name: "Total tax estimate, FY 2025-26" })).toBeVisible();
-  await page.getByRole("button", { name: "Show FY 2024-25" }).click();
+  // the report opens on the year being filed (FY 2025-26 here) unless it has no trades: then on the latest year with trades,
+  // saying why in one line, never a page of zeros first (R3-011)
+  await expect(page.getByTestId("tax-moved-year")).toHaveText("No trades in FY 2025-26, the year being filed, so this is FY 2024-25, the latest year with trades.");
+  await expect(page.getByRole("button", { name: "Show FY 2024-25" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "ETFs and gold bonds" }).getByText("Gold ETF")).toBeVisible();
   // the year with the sales
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();

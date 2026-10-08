@@ -10,7 +10,7 @@ import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
-import { pickFy, rememberFy } from "../lib/fy";
+import { movedYearNote, openFy, rememberFy } from "../lib/fy";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -91,12 +91,13 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
   };
 }
 
-/** The year to open on: the one already open if it has sales, else the Money pages' shared year (lib/fy). */
+/** The year to open on: the one already open if it has sales, else the Money pages' shared year (the year being filed,
+ * lib/fy), or the latest year with trades when that one has none (`from`: the year it moved from, said in one line). */
 const hasTrades = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
-function bestYear(r: Report, cur: number | null): number {
+function bestYear(r: Report, cur: number | null): { fy: number; from: number | null } {
   const open = r.years.find((y) => y.fy === cur);
-  if (open && hasTrades(open)) return open.fy;
-  return pickFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)));
+  if (open && hasTrades(open)) return { fy: open.fy, from: null };
+  return openFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)));
 }
 
 export function TaxReportPage() {
@@ -104,6 +105,7 @@ export function TaxReportPage() {
   const [rep, setRep] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fy, setFy] = useState<number | null>(null);
+  const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const [mode, setMode] = useState<"add" | "replace">("add");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
@@ -114,7 +116,12 @@ export function TaxReportPage() {
   const lotsMore = useMoreColumns("tax-below", 3);
   const [getting, setGetting] = useState<"csv" | "pdf" | null>(null);
 
-  const show = useCallback((r: Report) => { setRep(r); setFy((cur) => bestYear(r, cur)); }, []);
+  const open = useCallback((r: Report, cur: number | null) => {
+    const b = bestYear(r, cur);
+    if (b.fy !== cur) setMovedFrom(b.from);
+    return b.fy;
+  }, []);
+  const show = useCallback((r: Report) => { setRep(r); setFy((cur) => open(r, cur)); }, [open]);
   const load = useCallback(() => {
     setError(null);
     api<Report>("/tax").then(show).catch((e) => { setError(e instanceof Error ? e.message : "Your tax report couldn't be read."); fail(e); });
@@ -142,7 +149,7 @@ export function TaxReportPage() {
         got = combine(got, one);
         track("tax file imported", { rows: one.added, method: mode, zip: /\.zip$/i.test(f.name) });
       }
-      if (got) { setResult(got); setRep(got.report); setFy(bestYear(got.report, null)); setMode("add"); }
+      if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
     } catch (e) { fail(e); } finally {
       setBusy(false);
       reset();
@@ -290,17 +297,18 @@ export function TaxReportPage() {
         <>
           <Card compact>
             <CardHead title="Financial year" actions={<>
-              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setAllSales(false); }}
+              <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                 options={rep.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === rep.current_fy ? " (this year)" : ""}` }))} />
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("csv")}><Download size={16} />{getting === "csv" ? "Making the CSV…" : "Download CSV"}</button>
               <button type="button" className="btn quiet sm" disabled={!!getting} onClick={() => download("pdf")}><Download size={16} />{getting === "pdf" ? "Making the PDF…" : "Download PDF summary"}</button>
             </>} />
+            {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="tax-moved-year">{movedYearNote(movedFrom, y.fy, rep.current_fy, "trades")}</p>}
           </Card>
 
           {!hasTrades(y) && (() => {
             const other = rep.years.filter((x) => x.fy !== y.fy && hasTrades(x)).sort((a, b) => b.fy - a.fy)[0];
             return other ? (
-              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); rememberFy(other.fy); setAllSales(false); } }}>
+              <Notice label="A year with trades" action={{ label: `Show ${other.label}`, onClick: () => { setFy(other.fy); rememberFy(other.fy); setMovedFrom(null); setAllSales(false); } }}>
                 No trades in {y.label}. {other.label} has trades in your files.
               </Notice>
             ) : null;

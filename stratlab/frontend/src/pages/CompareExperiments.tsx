@@ -6,7 +6,7 @@ import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Skeleton, type Column } from "../components/kit";
-import { useNotebook } from "./NotebookPage";
+import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 
 const condText = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
@@ -51,7 +51,8 @@ export function CompareExperiments() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const nav = useNavigate();
-  const { nb } = useNotebook(id);
+  const { nb, problem, reload } = useNotebook(id);
+  if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
   const exps = nb.experiments;
   const va = Number(params.get("a")), vb = Number(params.get("b"));

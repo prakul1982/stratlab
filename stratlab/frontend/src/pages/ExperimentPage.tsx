@@ -11,7 +11,7 @@ import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../chart
 import { Info, Modal, STATUS_NAME } from "../components/ui";
 import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
-import { useNotebook } from "./NotebookPage";
+import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
@@ -391,7 +391,8 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
 export function ExperimentPage() {
   const { id, v } = useParams();
-  const { nb } = useNotebook(id);
+  const { nb, problem, reload } = useNotebook(id);
+  if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
   if (!e) return <div className="k-page"><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
