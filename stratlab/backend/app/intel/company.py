@@ -78,6 +78,43 @@ def at_live_price(s: dict, live: float | None) -> dict:
     return out
 
 
+def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
+    """The page's dividend yield as the dividends a share with an ex-date in the last twelve months (the corporate
+    actions on the same page) over the price, saying what it includes: a special dividend is counted and named, with
+    the yield without it beside (TCS, 8 Oct 2026: 3.1% shown beside "Rs111 a share in the last 12 months", the Rs46
+    special left out without a word). Without those dividends the source's figure stays, labelled as its own."""
+    price = num(((c.get("quote") or {}).get("price")))
+    from datetime import date, timedelta
+    try:
+        year_ago = (date.fromisoformat(today) - timedelta(days=365)).isoformat()
+    except ValueError:
+        return c
+    rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago <= str(d.get("ex_date")) < today]
+    if not rows or not price:
+        note = "From the last reported year's dividends" if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
+        return _set_metric(c, "Div yield", None, note) if note else c
+    total = sum(num(d["amount"]) for d in rows)
+    special = sum(num(d["amount"]) for d in rows if d.get("sub") == "special")
+    y = round(total / price * 100, 2)
+    note = f"₹{total:,.2f} a share in the last 12 months".replace(".00 ", " ")
+    if special:
+        note += f", including a ₹{special:,.2f} special dividend; {(total - special) / price * 100:.1f}% without it".replace(".00 ", " ")
+    out = _set_metric(c, "Div yield", y, note)
+    if isinstance(out.get("summary"), dict):
+        out["summary"] = {**out["summary"], "div_yield": y}
+    return out
+
+
+def _set_metric(c: dict, label: str, value: float | None, note: str | None) -> dict:
+    """A copy of the page with one Key numbers item given a new value (None keeps it) and a note."""
+    groups = []
+    for g in c.get("metrics") or []:
+        items = [{**i, **({"value": value} if value is not None else {}), **({"note": note} if note else {})} if i["label"] == label else i
+                 for i in g["items"]]
+        groups.append({**g, "items": items})
+    return {**c, "metrics": groups}
+
+
 def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
     """Sales and profit compounded over the last 3 and 5 reported years (the deep dive's and the AI read facts' own
     sums), and the price's change over a year of daily candles. Empty for what can't be worked out."""
@@ -537,7 +574,9 @@ class Research:
                                       _item("5Y", gpr.get("5 Years"), "%±"), _item("10Y", gpr.get("10 Years"), "%±")]),
             ),
             "trend": trend, "quarters": quarters, "shareholding": holding,
-            "pros": (scr or {}).get("pros") or [], "cons": (scr or {}).get("cons") or [],
+            # no "strengths and concerns" from the fundamentals source: its lines judge ("poor sales growth of 10.2%")
+            # and work figures out again at their own price ("7.20 times its book value" beside a P/B of 7.01)
+            "pros": [], "cons": [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
             "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],

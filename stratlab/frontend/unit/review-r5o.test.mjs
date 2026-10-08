@@ -47,6 +47,19 @@ test("AAPL's page: no unsourced segment split, an insider net that matches its r
   assert.doesNotMatch(research + read("src/components/Research.tsx"), /Revenue by segment|<Donut/);
 });
 
+test("TCS's key numbers: no scraped strengths and concerns, and a figure's note shows (R5O-011)", () => {
+  const research = read("src/pages/Research.tsx");
+  assert.doesNotMatch(research, /Strengths and concerns|c\.pros|c\.cons/);
+  assert.match(read("src/components/Research.tsx"), /\{m\.label\}\{m\.note && <span className="k-sub-line">\{m\.note\}<\/span>\}/);
+});
+
+test("the screener starts with the largest companies (R5O-012)", () => {
+  const screens = read("src/pages/Screens.tsx");
+  assert.match(screens, /useState\("market_cap"\)/);
+  assert.match(screens, /const \[desc, setDesc\] = useState\(true\)/);
+  assert.doesNotMatch(screens, /the list is alphabetical/);
+});
+
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);

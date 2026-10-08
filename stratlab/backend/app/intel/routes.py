@@ -17,7 +17,7 @@ from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
 from . import key_facts
-from .company import Research
+from .company import Research, with_dividend_yield
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -116,7 +116,18 @@ def company(region: str, symbol: str, profile=Depends(current_profile)):
     its market is trading now (else the price is the last close)."""
     r = region_of(region)
     c = source_call(lambda: hub.company(r, symbol_of(symbol)))
+    if r == "IN":
+        c = with_dividend_yield(c, stored_dividends(c["symbol"]), datetime.now(IST).date().isoformat())
     return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r)})
+
+
+def stored_dividends(symbol: str) -> list[dict]:
+    """A company's stored corporate actions (no new read: the page's own Corporate actions card reads them), or none."""
+    try:
+        from .. import corp_actions
+        return corp_actions.actions_for("IN", symbol, None, fetch=False)
+    except Exception:
+        return []
 
 
 @router.get("/chart/{region}/{symbol}")

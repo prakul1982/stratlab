@@ -162,7 +162,8 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 const b = bandPosition(m.label, m.value, industry);
                 return (
                   <div key={m.label} className="inv-metric">
-                    <span className="k-small k-muted">{m.label}</span>
+                    {/* a note says what a figure counts (a dividend yield with a special dividend in it) */}
+                    <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">

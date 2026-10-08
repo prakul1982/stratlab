@@ -228,3 +228,84 @@ def test_a_rules_change_reads_the_last_90_days_again(monkeypatch):
     runner.run("IN", today)
     assert asked[0] == date(2026, 10, 6)                                       # then the usual two-day overlap
     R.forget()
+
+
+# ---------- R5O-011: TCS's key numbers, one computation each ----------
+def tcs_page():
+    return {"ratios": {"Market Cap": "₹ 7,70,345 Cr.", "Current Price": "₹ 2,080", "Book Value": "₹ 296", "Face Value": "₹ 1.00",
+                       "Dividend Yield": "3.13 %", "Stock P/E": "14.0"},
+            "pl": {"cols": ["Mar 2024", "Mar 2025", "Mar 2026", "TTM"],
+                   "rows": {"Sales +": [240893, 255324, 267021, 275859], "Net Profit +": [46099, 48797, 49454, 50055],
+                            "EPS in Rs": [126.88, 134.19, 136.32, 137.64]}},
+            "balance": {"cols": ["Mar 2025", "Mar 2026"], "rows": {"Equity Capital": [362, 362], "Reserves": [94394, 104766], "Borrowings": [10000, 11283]}}}
+
+
+def test_net_margin_is_the_last_reported_years():
+    from app.intel.screener import summary
+    s = summary(tcs_page())
+    assert round(s["net_margin"], 1) == 18.5                # FY26 49,454 / 2,67,021, not the TTM 18.1%
+
+
+def test_market_value_counts_one_number_of_shares():
+    from app.intel.screener import market_cap, summary
+    # the screener's 7,70,345 cr at 2,080.30 is 370.3 crore shares; the share capital says 362 (of Rs 1)
+    assert market_cap(770345, 2080.30, 362, 1.0) == round(2080.30 * 362, 2)
+    assert market_cap(751000, 2076.40, 362, 1.0) == 751000            # 361.7 against 362: within 1.5%, the source's stands
+    assert market_cap(751000, 2076.40, None, None) == 751000
+    assert round(summary(tcs_page())["market_cap_cr"]) == round(2080 * 362)
+
+
+def test_no_scraped_strengths_and_concerns():
+    import inspect
+    from app.intel import company
+    src = inspect.getsource(company.Research._company_in)
+    assert '"pros": [], "cons": []' in src
+    from app.intel import ai as A
+    assert "screener_pros" not in inspect.getsource(A.company_facts)
+
+
+def test_dividend_yield_counts_the_special_and_says_so():
+    from app.intel.company import with_dividend_yield
+    c = {"quote": {"price": 2076.40}, "summary": {"div_yield": 3.1},
+         "metrics": [{"title": "Valuation", "items": [{"label": "Div yield", "value": 3.1, "unit": "%"}]}]}
+    divs = [{"kind": "dividend", "sub": "interim", "amount": 12, "ex_date": "2026-07-15"},
+            {"kind": "dividend", "sub": "final", "amount": 31, "ex_date": "2026-05-25"},
+            {"kind": "dividend", "sub": "interim", "amount": 11, "ex_date": "2026-01-16"},
+            {"kind": "dividend", "sub": "special", "amount": 46, "ex_date": "2026-01-16"},
+            {"kind": "dividend", "sub": "interim", "amount": 11, "ex_date": "2025-10-15"},
+            {"kind": "dividend", "sub": "interim", "amount": 10, "ex_date": "2025-07-10"}]      # over a year ago
+    out = with_dividend_yield(c, divs, "2026-10-08")
+    item = out["metrics"][0]["items"][0]
+    assert item["value"] == round(111 / 2076.40 * 100, 2) == 5.35 and out["summary"]["div_yield"] == 5.35
+    assert item["note"] == "₹111 a share in the last 12 months, including a ₹46 special dividend; 3.1% without it"
+    # nothing stored: the source's figure stays, saying what it is
+    same = with_dividend_yield(c, [], "2026-10-08")["metrics"][0]["items"][0]
+    assert same["value"] == 3.1 and same["note"] == "From the last reported year's dividends"
+
+
+# ---------- R5O-012: the screener's rows, order and size bands ----------
+def test_a_company_on_both_exchanges_is_one_row_the_nse_one():
+    from app import screens
+    rows = [{"symbol": "3BFILMS", "name": "3B Films Ltd", "market_cap": 60, "price": 14.00},
+            {"symbol": "544412", "name": "3B Films Ltd", "market_cap": 57, "price": 13.33},
+            {"symbol": "3CIT", "name": "3C IT Solutions & Telecoms (India) Ltd", "market_cap": 40},
+            {"symbol": "544190", "name": "3C IT Solutions and Telecoms India Limited", "market_cap": 41},   # named by the twin list
+            {"symbol": "540615", "name": "7NR Retail Ltd", "market_cap": 20},                                  # BSE only: kept
+            {"symbol": "ACCEL", "name": "Accel Ltd", "market_cap": 100}, {"symbol": "517494", "name": "Accel Limited", "market_cap": 98}]
+    kept = screens.one_per_company(rows, {"544190": "3CIT"})
+    assert [r["symbol"] for r in kept] == ["3BFILMS", "3CIT", "540615", "ACCEL"]
+
+
+def test_size_bands_are_ranks_as_sebi_defines_them_and_the_default_is_the_largest_first():
+    from app import screens
+    rows = screens.with_ranks([{"symbol": f"S{n}", "name": f"Co {n:04d}", "market_cap": 1_000_000 - n} for n in range(1, 601)])
+    by = {r["symbol"]: r for r in rows}
+    band = lambda s, b: screens._in_band("IN", by[s], [b])  # noqa: E731
+    assert band("S100", "large") and band("S101", "mid") and band("S250", "mid") and band("S251", "small")
+    assert band("S500", "small") and band("S501", "micro") and not band("S101", "large")
+    assert screens.CAP_BANDS["IN"]["large"][0] == "Large (the 100 largest)"
+    got = screens.run("IN", {}, index={"rows": rows, "at": None})
+    assert [r["symbol"] for r in got["rows"][:3]] == ["S1", "S2", "S3"] and got["sort"] == "market_cap" and got["desc"] is True
+    assert "cap_rank" not in got["rows"][0]
+    from app.models import ScreenRunReq
+    assert (ScreenRunReq().sort, ScreenRunReq().desc) == ("market_cap", True)

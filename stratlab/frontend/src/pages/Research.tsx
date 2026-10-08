@@ -286,13 +286,6 @@ export function CompanyPage() {
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} /></Card>}
         {c.shareholding && c.shareholding.rows.length > 0 && <Card id="co-owners"><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
-        {((c.pros?.length ?? 0) > 0 || (c.cons?.length ?? 0) > 0) && (
-          <Card>
-            <CardHead title="Strengths and concerns" info="Automatic checks on the company's reported numbers." />
-            {(c.pros?.length ?? 0) > 0 && <ul className="k-list">{c.pros!.map((p) => <li key={p}>{p}</li>)}</ul>}
-            {(c.cons?.length ?? 0) > 0 && <ul className="k-list">{c.cons!.map((p) => <li key={p}>{p}</li>)}</ul>}
-          </Card>
-        )}
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />

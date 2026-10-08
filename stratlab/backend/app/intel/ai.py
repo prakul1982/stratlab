@@ -72,7 +72,6 @@ def company_facts(c: dict) -> dict:
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
              "shareholding": c.get("shareholding"),
-             "screener_pros": c.get("pros"), "screener_cons": c.get("cons"),
              "about": ((c.get("about") or {}).get("wiki") or {}).get("extract") or (c.get("about") or {}).get("profile"),
              "recent_headlines": [n["headline"] for n in (c.get("news") or [])[:6]], "today": ist_date().isoformat()}
     return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}

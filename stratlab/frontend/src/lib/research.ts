@@ -5,7 +5,7 @@ import { focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
-export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr" }
+export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string }
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
