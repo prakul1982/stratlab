@@ -210,3 +210,41 @@ def test_a_filed_results_day_is_said_as_filed_on_the_money_calendar(monkeypatch)
     evs = {e["symbol"]: e for e in money_calendar.holdings_events("u", day, date(2026, 10, 31)) if e.get("symbol")}
     assert evs["TCS"]["title"] == "TCS: results filed" and evs["TCS"]["kind"] == "results_out"
     assert evs["INFY"]["title"] == "INFY: results" and evs["INFY"]["kind"] == "results"
+
+
+# ---------- R6O-002: red flags follow what the filing is about ----------
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("desc,text,cat,sev", [
+    # MOL Meghmani: an amalgamation the NCLT sanctions is a merger, not insolvency
+    ("Amalgamation/Merger", "MOL Meghmani Organics Limited has informed the Exchange that the Hon'ble NCLT, Ahmedabad Bench has "
+     "sanctioned the Scheme of Amalgamation of the wholly owned subsidiary with the Company", "deal", "info"),
+    # POLYCAB: a filing under the insolvency subject that doesn't show the company as the debtor
+    ("Corporate Insolvency Resolution Process", "Polycab India Limited has informed the Exchange regarding Corporate Insolvency Resolution Process",
+     "insolvency_other", "info"),
+    ("Corporate Insolvency Resolution Process", "The Company, as an operational creditor, filed an application against XYZ Limited under Section 9 of the IBC",
+     "insolvency_other", "info"),
+    # ICICIBANK: the depositories certificate is routine whatever it names
+    ("Certificate under SEBI (Depositories and Participants) Regulations, 2018",
+     "ICICI Bank Limited has informed the Exchange about Certificate under Regulation 74(5) for the quarter, covering its bonds", "other", "info"),
+    # RAYMONDREL: a generic update reporting on money already raised
+    ("General Updates", "Raymond Realty Limited has informed the Exchange regarding the monitoring agency report for the preferential issue",
+     "other", "info"),
+    # TITAN: a generic update that names commercial paper without raising any
+    ("Updates", "Titan Company Limited has informed the Exchange regarding listing of commercial papers on the exchange", "other", "info"),
+    # still flagged: the company's own insolvency, and a generic update reporting a decision to raise money
+    ("Corporate Insolvency Resolution Process", "The NCLT has admitted the application filed by a financial creditor and initiated the corporate "
+     "insolvency resolution process against the Company; an interim resolution professional has been appointed", "insolvency", "red"),
+    ("Insolvency and Bankruptcy", "The NCLT has admitted the application under Section 7 of the IBC and initiated the corporate insolvency resolution process against the Company",
+     "insolvency", "red"),
+    ("General Updates", "The Board approved the issue of equity shares on a preferential basis to the promoters", "preferential", "red"),
+])
+def test_red_flags_on_the_filings_the_owner_saw(desc, text, cat, sev):
+    from app.intel import filings as F
+    assert F.classify(desc, text) == (cat, sev)
+
+
+def test_stored_flags_are_read_again_with_the_new_rules():
+    from app.intel import filings as F
+    assert F.RULES_VERSION >= 3
