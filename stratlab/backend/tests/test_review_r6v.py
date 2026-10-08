@@ -106,12 +106,43 @@ def test_the_index_row_carries_the_checked_value():
     assert good["market_cap"] == 4_000_000.0
 
 
+COVER_HEAD = ("ANNUAL REPORT PURSUANT TO SECTION 12(b) OR (g) OF THE SECURITIES EXCHANGE ACT OF 1934 OR ANNUAL REPORT PURSUANT TO "
+              "SECTION 13 OR 15(d) For the fiscal year ended December 31, 2025 Commission file number: 001-00000 " + "x " * 200)
+
+
+def test_the_depositary_ratio_is_read_as_the_cover_writes_it():
+    from app.intel.sec import ads_ratio
+    # Ecopetrol writes "Depository": its ADSs of 20 shares were counted as single shares ($696 billion)
+    ec = COVER_HEAD + ("Securities registered or to be registered pursuant to Section 12(b) of the Act. Title of each class Trading "
+                       "Symbol(s) American Depository Shares (as evidenced by American Depository Receipts), each representing 20 "
+                       "common shares par value COP 609 per share EC New York Stock Exchange. Table of contents")
+    assert ads_ratio(ec) == {"ratio": 20.0, "ads": True}
+    # Banco Santander-Chile: a "Table of contents" page link sits above the list of registered securities
+    bsac = COVER_HEAD + ("Table of contents Securities registered or to be registered pursuant to Section 12(b) of the Act: Title of "
+                         "each class American Depositary Shares (“ADS”), each representing the right to receive 400 Shares of "
+                         "Common Stock without par value BSAC New York Stock Exchange. " + "y " * 300 + "TABLE OF CONTENTS Item 1")
+    assert ads_ratio(bsac) == {"ratio": 400.0, "ads": True}
+    plain = COVER_HEAD + "Securities registered pursuant to Section 12(b) of the Act: Ordinary Shares AZN New York Stock Exchange. Table of contents"
+    assert ads_ratio(plain) == {"ratio": None, "ads": False}
+
+
 def test_a_us_page_build_stores_what_the_value_is_checked_against():
     p = {"currency": "MXN", "fx": {"rate": 0.054}, "share_note": "The US-listed shares are American depositary shares (ADSs), and how many ...",
          "pl": {"cols": ["Dec 2024"], "rows": {"Sales": [62_260.0]}}, "cashflow": {"cols": ["Dec 2024"], "rows": {"Dividends paid": [-1_000.0]}}}
     got = main.us_cap_checks(p, "TV")
     assert got == {"sales_usd": round(62_260.0 * 0.054, 2), "cap_unverified": True, "divs_paid": True}
     assert main.us_cap_checks({"currency": "USD", "pl": {"cols": [], "rows": {}}}, "AKTX") == {"sales_usd": 0.0}
+    # a foreign company's annual report that couldn't be read this time: its value isn't taken on trust
+    assert main.us_cap_checks({"currency": "EUR", "fx": {"rate": 1.1}, "ads_unread": True}, "ASML")["cap_unverified"] is True
+
+
+def test_an_unread_annual_report_is_said_not_taken_as_no_depositary_shares(monkeypatch):
+    from app.intel.sec import SEC
+    s = SEC()
+    monkeypatch.setattr(s.limit, "take", lambda *a, **k: False)               # the filing source's ration is spent
+    subs = {"cik": 1444406, "filings": {"recent": {"form": ["20-F"], "accessionNumber": ["0001-26-000001"], "primaryDocument": ["ec.htm"]}}}
+    got = s.ads(subs)
+    assert got["unread"] is True and got["ads"] is None and got["ratio"] is None
 
 
 # ---------- R6V-002: no stale or intraday price called a close; every page follows each close ----------

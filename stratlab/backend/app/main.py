@@ -3153,8 +3153,8 @@ def us_cap_checks(p: dict, sym: str) -> dict:
     if rate:
         sales = sec._latest(p.get("pl"), "Sales")
         out["sales_usd"] = round(float(sales or 0) * rate, 2)
-    if not p.get("ads_ratio") and "depositary" in str(p.get("share_note") or "") and not sec.non_common(sym):
-        out["cap_unverified"] = True
+    if not sec.non_common(sym) and (p.get("ads_unread") or not p.get("ads_ratio") and "depositary" in str(p.get("share_note") or "")):
+        out["cap_unverified"] = True        # depositary shares of an unknown ratio, or a report that couldn't be read now
     if sec._latest(p.get("cashflow"), "Dividends paid"):
         out["divs_paid"] = True
     return out
