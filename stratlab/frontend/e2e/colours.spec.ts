@@ -26,6 +26,44 @@ async function open(page: Page, path: string, ready: string) {
   return errors;
 }
 
+test("positioning: every change and net figure carries the up or down colour, and keeps its sign", async ({ page }) => {
+  const errors = await open(page, "/trade/positioning", "Participant-wise open interest");
+  const main = page.locator("main");
+  const table = main.getByTestId("part-table");
+  // the change line under each cell: a plus is green, a minus red, anything else plain
+  const changes = table.locator(".k-sub-line");
+  expect(await changes.count(), "the table has change lines").toBeGreaterThan(5);
+  const lines = await changes.evaluateAll((els) => els.map((el) => ({ text: (el.textContent ?? "").trim(), coloured: el.querySelector(".k-up, .k-down")?.className ?? "" })));
+  let ups = 0, downs = 0;
+  for (const { text, coloured } of lines) {
+    if (/^\+/.test(text)) { expect(coloured, text).toContain("k-up"); ups++; }
+    else if (/^−/.test(text)) { expect(coloured, text).toContain("k-down"); downs++; }
+    else expect(coloured, text).toBe("");
+  }
+  expect(ups, "some changes are up").toBeGreaterThan(0);
+  expect(downs, "some changes are down").toBeGreaterThan(0);
+  // the net futures column: the number itself is coloured with its sign
+  const nets = await table.locator("tbody tr").evaluateAll((rows) => rows.map((r) => {
+    const el = r.querySelectorAll("td")[2]?.querySelector(":scope > .k-up, :scope > .k-down");
+    return el ? { text: (el.textContent ?? "").trim(), cls: el.className } : null;
+  }));
+  expect(nets.filter(Boolean).length, "some net figures are coloured").toBeGreaterThan(1);
+  for (const n of nets) if (n) expect(n.cls, n.text).toContain(n.text.startsWith("+") ? "k-up" : "k-down");
+  // across the page, green is never a minus and red is never a plus
+  for (const t of await main.locator(".k-up").allInnerTexts()) expect(t.trim(), "green is never a minus").not.toMatch(/^−/);
+  for (const t of await main.locator(".k-down").allInnerTexts()) expect(t.trim(), "red is never a plus").not.toMatch(/^\+/);
+  // the headline net and its change from the day before
+  const net = main.getByTestId("part-figs").locator(".k-stat").first();
+  await expect(net.locator(".k-stat-v")).toHaveClass(/k-(up|down)/);
+  await expect(net.locator(".k-stat-d .k-up, .k-stat-d .k-down")).toContainText(/^[+−]/);
+  await expect(net.locator(".k-stat-d")).toContainText("from the day before");
+  // a level stays plain
+  await expect(table.locator("tbody tr").first().locator("td").nth(1).locator(":scope > .k-up, :scope > .k-down")).toHaveCount(0);
+  // the FII/DII cash figures are coloured by sign too
+  await expect(main.locator("#pos-cash .k-stat-v.k-up, #pos-cash .k-stat-v.k-down").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 // ---- before / after pictures ----
 const SHOT_PAGES: [string, string, string][] = [["positioning", "/trade/positioning", "Participant-wise open interest"], ["holdings", "/holdings", "By sector"], ["mine", "/mine", "Good "]];
 
