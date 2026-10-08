@@ -8,6 +8,7 @@ import { applySeo, seoFor } from "./lib/seo";
 import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { PageLock } from "./components/PageLock";
+import { ViewAsBanner } from "./components/ViewAs";
 import { Loading } from "./components/ui";
 import { Toast } from "./components/Toast";
 import { VisitorApp } from "./visitor/VisitorApp";
@@ -195,6 +196,7 @@ function Routed() {
   if (!session) return <VisitorApp />;
   return (
     <Shell>
+      <ViewAsBanner />{/* the owner is viewing the app as another plan: on every page until it is turned off */}
       {meError && <div className="banner" role="alert">StratLab couldn't load your account: {meError}</div>}
       {dataOffline && !meError && <DataBanner note={me?.data_note ?? null} />}
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
