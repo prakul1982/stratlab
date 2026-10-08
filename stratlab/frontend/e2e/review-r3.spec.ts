@@ -43,10 +43,13 @@ test("a company page is about its own company, in one unit, and says when its pr
 
 test("compare fills both companies, with units, and says when there's no AI comparison (R3-004)", async ({ page }) => {
   const errors = await open(page, "/research/compare?region=IN&a=TCS&b=INFY", "The numbers side by side");
-  const table = page.getByRole("table", { name: "Measures for both companies" });
-  const debt = table.getByRole("row").filter({ hasText: /^Debt/ }).first();
+  // one table a section, each labelled (R5O-021: "5Y CAGR" of sales and of profit were one unlabelled row)
+  const quality = page.getByRole("table", { name: "Returns and quality for both companies" });
+  const debt = quality.getByRole("row").filter({ hasText: /^Debt/ }).first();
   await expect(debt).toContainText(/₹[\d.,]+ (lakh )?cr.*₹[\d.,]+ (lakh )?cr/);
-  const pe = table.getByRole("row").filter({ hasText: "P/E" }).first();
+  const pe = page.getByRole("table", { name: "Valuation for both companies" }).getByRole("row").filter({ hasText: "P/E" }).first();
+  await expect(page.getByRole("table", { name: "Sales growth for both companies" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Profit growth for both companies" })).toBeVisible();
   expect(await pe.locator("td").last().innerText()).not.toBe("–");                    // Infosys has its numbers
   // the AI's part always has its place: the comparison, or one line saying there's none right now
   await expect(page.getByRole("heading", { name: "AI comparison" })).toBeVisible();

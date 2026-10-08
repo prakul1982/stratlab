@@ -532,8 +532,13 @@ export function ComparePage() {
     setAsking(true);
     researchApi.compare(region, a, b, true).then((x) => setRes((r) => (r ? { ...r, ai: x.ai } : x))).catch(() => {}).finally(() => setAsking(false));
   };
-  const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [i.label, i])));
-  const labels = res ? Array.from(new Set([...res.a.metrics, ...res.b.metrics].flatMap((g) => g.items.map((i) => i.label)))) : [];
+  // each measure under its section ("5Y CAGR" is in Sales growth and in Profit growth): keyed by both, so one never
+  // stands in for the other, and each section is labelled
+  const key = (g: string, l: string) => `${g} · ${l}`;
+  const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [key(g.title, i.label), i])));
+  const groups = res ? [...res.a.metrics, ...res.b.metrics] : [];
+  const sections = Array.from(new Set(groups.map((g) => g.title)))
+    .map((t) => ({ title: t, labels: Array.from(new Set(groups.filter((g) => g.title === t).flatMap((g) => g.items.map((i) => i.label)))) }));
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
   // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
   const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m ? metricText(m, c.currency) : "–");
@@ -583,9 +588,15 @@ export function ComparePage() {
           </div>
           <Card>
             <CardHead title="The numbers side by side" />
-            <DataTable label="Measures for both companies" rows={labels} rowKey={(l) => l}
-              columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
-                { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[l], res.a) }, { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[l], res.b) }]} />
+            {sections.map((sec) => (
+              <div key={sec.title} className="k-stack">
+                <span className="k-eyebrow">{sec.title}</span>
+                <DataTable label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
+                  columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
+                    { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a) },
+                    { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />
+              </div>
+            ))}
           </Card>
         </>
       )}

@@ -425,3 +425,16 @@ def test_stored_briefs_get_one_style_and_the_pages_rotation(monkeypatch):
     assert [s["title"] for s in d["sections"]] == ["Indices"] and "Leading" not in d["html"] + d["text"]
     assert not d["ai"] and "leading" not in d["summary"].lower()
     assert job.repair_briefs("IN", shifts=lambda region, wk, day: []) == 0          # once is enough
+
+
+# ---------- R5O-021: whole-number growth rates stay whole ----------
+def test_a_whole_number_rate_from_the_source_says_so():
+    from app.intel.company import _item
+    # TCS's stock price CAGRs from the source: "-12%" and "6%", shown as "-12.0%" and "+6.0%"
+    assert _item("5Y", "-12%", "%±") == {"label": "5Y", "value": -12.0, "unit": "%±", "dp": 0}
+    assert _item("10Y", "6%", "%±")["dp"] == 0
+    assert "dp" not in _item("1Y", -31.42, "%±")                     # worked out from the candles: its decimals stand
+    assert "dp" not in _item("Div yield", "3.13 %", "%") and "dp" not in _item("P/E", "14", "x")
+    # TCS and Infosys's identical 5Y and 10Y profit CAGRs are real (5 Oct pages: 8.72% and 8.70% over FY21-FY26 from
+    # 32,562 -> 49,454 and 19,423 -> 29,474 crore; both "8%" over ten years); the compare page now names each section
+    assert round(((49454 / 32562) ** (1 / 5) - 1) * 100, 1) == round(((29474 / 19423) ** (1 / 5) - 1) * 100, 1) == 8.7

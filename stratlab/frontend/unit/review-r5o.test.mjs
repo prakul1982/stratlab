@@ -3,7 +3,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
 import { quoteAt } from "../src/lib/format.ts";
+
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const IST = "Asia/Kolkata";
@@ -58,6 +62,16 @@ test("the screener starts with the largest companies (R5O-012)", () => {
   assert.match(screens, /useState\("market_cap"\)/);
   assert.match(screens, /const \[desc, setDesc\] = useState\(true\)/);
   assert.doesNotMatch(screens, /the list is alphabetical/);
+});
+
+test("whole-number growth rates stay whole, and the compare page names each section (R5O-021)", async () => {
+  const { metricText } = await import("../src/lib/researchFormat.ts");
+  assert.equal(metricText({ label: "5Y", value: -12, unit: "%±", dp: 0 }, "INR"), "−12%");
+  assert.equal(metricText({ label: "10Y", value: 6, unit: "%±", dp: 0 }, "INR"), "+6%");
+  assert.equal(metricText({ label: "1Y", value: -31.42, unit: "%±" }, "INR"), "−31.4%");
+  const research = read("src/pages/Research.tsx");
+  assert.match(research, /label=\{`\$\{sec\.title\} for both companies`\}/);
+  assert.match(research, /<span className="k-eyebrow">\{sec\.title\}<\/span>/);
 });
 
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {

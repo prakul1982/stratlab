@@ -46,7 +46,12 @@ def inr(v: float) -> str:
 
 
 def _item(label, value, unit="x"):
-    return {"label": label, "value": num(value), "unit": unit}
+    """One Key numbers figure. A percentage the source gives in whole numbers ("-12%": its compounded growth rates
+    and price returns) says so with `dp` 0, so it is never shown as a precise "-12.0%"."""
+    out = {"label": label, "value": num(value), "unit": unit}
+    if unit in ("%", "%±") and isinstance(value, str) and re.fullmatch(r"\s*[-+−]?\d+\s*%?\s*", value):
+        out["dp"] = 0
+    return out
 
 
 def _groups(*groups) -> list[dict]:
