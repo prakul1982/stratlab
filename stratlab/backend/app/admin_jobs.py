@@ -80,9 +80,18 @@ def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
 
 
+KEPT = ("positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
+
+
 def rows() -> list[dict]:
     m = _m()
     out: list[dict] = []
+    # every kept status in one database read, not one per job (R6O-023: Overview still "Loading the data feeds" at 5 s)
+    try:
+        from . import db
+        db.prefetch_settings([f"jobstatus:{k}" for k in KEPT])
+    except Exception:
+        pass
 
     def add(name: str, build):
         try:
