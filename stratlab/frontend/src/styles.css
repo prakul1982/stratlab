@@ -259,6 +259,13 @@ a.link { margin-inline: -2px; }
 .acct-pop [role="menuitem"]:hover, .acct-pop [role="menuitem"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
 .acct-pop [role="menuitem"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .acct-pop .plan-tag { margin-left: auto; }
+.acct-viewas { display: flex; align-items: center; gap: 4px; padding: 2px 8px 4px; }
+.acct-viewas-t { flex: none; margin-right: 4px; color: var(--muted); font-size: 13px; }
+.acct-pop [role="menuitemradio"] { flex: 1 1 auto; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink-2);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.acct-pop [role="menuitemradio"]:hover, .acct-pop [role="menuitemradio"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
+.acct-pop [role="menuitemradio"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.acct-pop [role="menuitemradio"][aria-checked="true"] { background: var(--ink); color: var(--card); }
 .acct-pop hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 .acct-email { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* touch: rows a finger can hit */
@@ -272,6 +279,7 @@ a.link { margin-inline: -2px; }
   .mkt-btn { height: 36px; }
   .acct-btn { height: 44px; }
   .acct-pop [role="menuitem"] { height: 44px; }
+  .acct-pop [role="menuitemradio"] { height: 44px; }
   .mkt-list li { height: 36px; }
 }
 /* a phone: the pop-ups are sheets from the bottom of the screen */
@@ -1509,6 +1517,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-notice { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--paper-2); font-size: var(--t-label); }
 .k-notice.warn { border-color: var(--orange); background: var(--orange-soft); color: var(--orange-ink); }
 .k-notice > span { min-width: 0; }
+.k-viewas-banner { margin-bottom: var(--s4); font-weight: 500; }
 select.k-input { -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
   background-position: calc(100% - 19px) 52%, calc(100% - 14px) 52%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }

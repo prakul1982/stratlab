@@ -2,6 +2,7 @@ import { AuthClient } from "@supabase/auth-js";
 import { fieldWords, invalidField, invalidText, serverProblems } from "./validate";
 import { CFG, sessionKey } from "./config";
 import { ApiError } from "./http";
+import { viewAsHeaders } from "./viewAs";
 
 export { CFG } from "./config";
 export { ApiError } from "./http";
@@ -44,7 +45,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
   try {
     r = await fetch(CFG.API_BASE + path, {
       method,
-      headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Content-Type": file ? "application/octet-stream" : "application/json", ...(token ? { Authorization: `Bearer ${token}`, ...viewAsHeaders() } : {}) },
       body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
     });
   } catch {

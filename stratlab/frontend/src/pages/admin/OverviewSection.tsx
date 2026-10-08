@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
 import { money } from "../../lib/format";
 import { Badge, Card, CardHead, EmptyState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
+import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
 import { attention, lights, paidUsers } from "./attention";
 
@@ -39,6 +40,8 @@ export function OverviewSection() {
 
   return (
     <>
+      <ViewAsCard />
+
       <Card label="Needs your attention">
         <CardHead title="Needs your attention" actions={todo.length ? <Badge tone="warn">{todo.length} need{todo.length === 1 ? "s" : ""} a look</Badge> : <Badge tone="ok">All clear</Badge>} />
         {!todo.length ? (

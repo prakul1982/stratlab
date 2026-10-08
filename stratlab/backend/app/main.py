@@ -100,7 +100,7 @@ from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGre
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
 from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
-                     Strategy, SubscribeReq, VerifyReq)
+                     Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
 from .plans import networth_items
@@ -626,19 +626,25 @@ def me(profile=Depends(current_profile)):
     except Exception as e:
         print("lifecycle visit failed:", str(e)[:160])
     plan = profile["_plan"]
-    paid = profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free"
+    # the site owner's "View as": every plan field below reads as that plan (no launch offer, no stored plan); the real
+    # plan and billing are untouched in the database, and billing changes are refused while it is on
+    seen = profile.get("_view_as") if profile.get("_view_as") in PLANS else None
+    paid = seen or (profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free")
     info = plan_info(plan)
     used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
     return ok({
         "id": profile["id"], "email": profile.get("email"),
-        "plan": plan, "plan_info": info, "paid_plan": profile.get("_paid_plan", plan),
-        "promo": {"until": until.isoformat()} if (until := promo_until()) and promo_active() else None,
-        "free_basic_until": fb.isoformat() if profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
-        "billing": {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
-                    "renews_or_ends": profile.get("current_period_end"),
-                    "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
-                    # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
-                    "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")},
+        "plan": plan, "plan_info": info, "paid_plan": seen or profile.get("_paid_plan", plan),
+        "view_as": seen,
+        "promo": {"until": until.isoformat()} if not seen and (until := promo_until()) and promo_active() else None,
+        "free_basic_until": fb.isoformat() if not seen and profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
+        "billing": ({"subscribed_plan": None if seen == "free" else seen, "status": None if seen == "free" else "active",
+                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": seen != "free"} if seen else
+                    {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
+                     "renews_or_ends": profile.get("current_period_end"),
+                     "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
+                     # a paid plan the site owner gave by hand (Admin → Change plan): nothing renews and nothing to cancel
+                     "given_by_owner": profile.get("_paid_plan", plan) != "free" and not profile.get("razorpay_subscription_id")}),
         "signed_in_with": profile.get("_signed_in_with"),
         "usage": {"backtests_used": used["backtest"], "backtests_limit": info["backtests_per_month"],
                   "ai_used": used["ai"], "ai_limit": info["ai_builds_per_month"],
@@ -646,7 +652,7 @@ def me(profile=Depends(current_profile)):
                   "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
                   # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
                   "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
-                  "lifted_by": "the launch offer" if promo_active() else None},
+                  "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
@@ -655,7 +661,7 @@ def me(profile=Depends(current_profile)):
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
-        "offer": offer_state(),
+        "offer": offer_state(promo=not seen),
         "onboarding": onboarding_of(profile["id"]),
         "established": established_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
@@ -3881,8 +3887,16 @@ def import_options(text: str, profile) -> dict:
 
 
 # ---------- billing ----------
+def not_viewing(profile) -> None:
+    """Billing is the real account's. While the owner views the app as a plan, it is closed (the Plans page would be
+    showing a plan they don't have), so a click there can never start a subscription."""
+    if profile.get("_view_as"):
+        err(409, "view_as_on", "You're viewing as another plan. Turn off View as to change your billing.")
+
+
 @app.post("/billing/subscribe")
 def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
+    not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
     try:
@@ -3902,6 +3916,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
 
 @app.post("/billing/verify")
 def verify(req: VerifyReq, profile=Depends(current_profile)):
+    not_viewing(profile)
     try:
         billing.verify_checkout(profile, req.razorpay_payment_id, req.razorpay_subscription_id, req.razorpay_signature)
     except SignatureVerificationError:
@@ -3960,6 +3975,7 @@ def admin_invoice_seller(req: SellerReq, _=Depends(admin.admin_profile)):
 
 @app.post("/billing/cancel")
 def cancel(profile=Depends(current_profile)):
+    not_viewing(profile)
     try:
         billing.cancel(profile)
     except ValueError as e:
@@ -4660,6 +4676,14 @@ def admin_audit_stop(_=Depends(admin.admin_profile)):
     """Stop a running audit after the current company; the rows so far are kept."""
     audit_runner.cancel()
     return audit_runner.status()
+
+
+@app.put("/admin/view-as")
+def admin_view_as(req: ViewAsReq, who=Depends(admin.admin_profile)):
+    """Check a "View as" choice before the page keeps it: free, basic, pro, or off (null). Nothing is stored on the
+    server: the page sends the choice with each request (the X-View-As header), and auth.current_profile honours it for
+    the site owner only. Anyone else gets a 403 here, and the header does nothing for them."""
+    return {"view_as": req.plan}
 
 
 @app.post("/admin/promo")

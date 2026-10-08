@@ -4,6 +4,11 @@ What shipped, newest first, grouped by month. Built from the git history.
 
 ## October 2026
 
+### 8 October 2026: Admin "View as" a plan
+
+- **View as Free / Basic / Pro / Off (site owner only):** the app reads as that plan's user would see it, with its locks, upgrade prompts and monthly limits, on the live site. Choose it in the account menu ("View as:") or on Admin → Overview; a banner on every page says "Viewing as Free. Your real plan is unchanged." with a Turn off button, and the choice stays on this device across reloads until turned off.
+- **How it works:** the page sends the choice in the `X-View-As` header; `auth.current_profile` honours it for a Google-proved admin address only (it does nothing for anyone else), and `plans.access_plan` returns that plan first, so the launch offer and free Basic time are bypassed too. `/me` shows the viewed plan, its limits and billing as that plan; the stored plan, `_paid_plan`, billing and Admin access are never touched, and subscribing, verifying and cancelling are refused (`view_as_on`) while it is on. `PUT /admin/view-as` checks a choice (403 for anyone else).
+
 ### 8 October 2026: a visitor's review of the live site (round 5)
 
 - **Never a blank page:** `public/boot.js` reloads once when a script or a page's code fails to download, then shows "Couldn't load StratLab. Reload"; the page has a start-up fallback and a `<noscript>` message in `index.html`; `config.js` is read again once if it failed, is served as a plain static file with a 5-minute cache, and carries no notes.

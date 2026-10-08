@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/api";
+import { useApp } from "../lib/app";
+import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import type { Market, Me } from "../lib/types";
 import { Close, Compass, Download, Layers, LogOut, Pencil, Share, Shield, Updown, User, Wallet } from "./Icons";
@@ -95,11 +97,12 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
   const email = me?.email ?? "";
   const initial = (email.match(/[a-z0-9]/i)?.[0] ?? "?").toUpperCase();
   const plan = me?.plan_info.name;
+  const { viewAs, setViewAs } = useApp();
   // the item goes with the menu, so focus goes back to the button first (and a dialog the item opens returns it there)
   const done = (f?: () => void) => () => { setOpen(false); btn.current?.focus(); f?.(); };
   // up and down move between the items, as in any menu
   const keys = (e: ReactKeyboardEvent) => {
-    const items = Array.from(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
+    const items = Array.from(panel.current?.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemradio]") ?? []);
     const i = items.indexOf(document.activeElement as HTMLElement);
     const to = e.key === "ArrowDown" ? (i + 1) % items.length : e.key === "ArrowUp" ? (i - 1 + items.length) % items.length
       : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
@@ -127,6 +130,16 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
           <Link role="menuitem" to="/app" onClick={done(onGo)}><Download size={16} />Get the app</Link>
           <hr />
           {me?.is_admin && <Link role="menuitem" to="/admin" onClick={done(onGo)}><Shield size={16} />Admin</Link>}
+          {/* the owner sees the app as a Free, Basic or Pro user would; the page reloads as that plan (lib/viewAs.ts) */}
+          {me?.is_admin && (
+            <div className="acct-viewas" role="group" aria-label="View as plan">
+              <span className="acct-viewas-t" aria-hidden="true">View as:</span>
+              {VIEW_AS_CHOICES.map((c) => (
+                <button key={c.value} type="button" role="menuitemradio" aria-checked={planToChoice(viewAs) === c.value}
+                  onClick={done(() => { void setViewAs(choiceToPlan(c.value)); })}>{c.label}</button>
+              ))}
+            </div>
+          )}
           <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
           <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Help</button>
           <hr />

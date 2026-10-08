@@ -375,6 +375,10 @@ class IdeasReq(BaseModel):
     q: str = Field(..., min_length=2, max_length=4000)
 
 
+class ViewAsReq(BaseModel):
+    plan: Literal["free", "basic", "pro"] | None = None      # null is off
+
+
 class SubscribeReq(BaseModel):
     plan: Literal["basic", "pro"]
     period: Literal["month", "year"] = "month"
