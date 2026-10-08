@@ -19,7 +19,7 @@ ET = ZoneInfo("America/New_York")
 
 LEVELS = {
     # indices (the last close). NIFTY 500 sits below NIFTY 50 as the real one does (about 0.92 of it).
-    "NIFTY 50": 25000.0, "NIFTY BANK": 55000.0, "SENSEX": 82000.0, "INDIA VIX": 13.0, "NIFTY 500": 23000.0,
+    "NIFTY 50": 25000.0, "NIFTY BANK": 55000.0, "SENSEX": 82000.0, "INDIA VIX": 15.03, "NIFTY 500": 23000.0,   # VIX: the exchange's reading in fake_vix
     # stocks (round numbers near their real levels)
     "RELIANCE": 1400.0, "TCS": 3050.0, "INFY": 1480.0, "HDFCBANK": 960.0, "ICICIBANK": 1350.0, "SBIN": 820.0,
     "AXISBANK": 1150.0, "ITC": 405.0, "HINDUNILVR": 2450.0, "HCLTECH": 1450.0, "WIPRO": 245.0, "LT": 3600.0,
