@@ -63,7 +63,7 @@ def test_one_price_per_stock_on_every_page(w):
         # one market value: shares x that price, on the company page and the screener
         # the company page re-prices the fundamentals source's market value, which that source states to the whole crore
         assert page["market_cap"] / 1e7 == pytest.approx(P.market_cap(sym), abs=1.0), sym
-        assert rows[sym]["market_cap"] == pytest.approx(P.market_cap(sym), rel=1e-6), sym
+        assert rows[sym]["market_cap"] == pytest.approx(P.market_cap(sym), abs=1.0), sym       # the screener's, likewise
         candles = c.get(f"/research/chart/IN/{sym}?range=1m&tf=1d", headers=H).json()["candles"]
         assert candles[-1]["c"] == price, sym                                                 # the chart's last candle
     cmp = c.get("/research/compare?region=IN&a=TCS&b=INFY", headers=H).json()
