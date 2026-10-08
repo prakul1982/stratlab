@@ -119,24 +119,26 @@ def build_stocks(uid: str, day: date, weekly: bool = False, store: bool = True) 
     return save(issue) if store else issue
 
 
-def repair_index_moves(region: str, days: int = 21) -> int:
+def repair_index_moves(region: str, days: int = 60) -> int:
     """Rebuild the index numbers of the daily Market Briefs stored in the last `days` days from that day's closes.
     Until Oct 2026 a day's change was read against the close about a week earlier; the levels were right. The rest of
     each issue (rotation, scans, headlines) stays as it was, and the summary becomes the plain template (the AI's
-    restated the wrong changes). Returns how many issues changed."""
+    restated the wrong changes). Issues stored before 6 Oct 2026 kept their indices only as text in the Indices
+    section; those get the region's main indices rebuilt from the closes. Returns how many issues changed."""
     from datetime import timedelta
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
     for iid in ids("market", region):
         issue = load(iid)
-        if not issue or issue.get("weekly") or issue.get("day", "") < cutoff or not issue.get("indices"):
+        if not issue or issue.get("weekly") or issue.get("day", "") < cutoff:
             continue
         day = date.fromisoformat(issue["day"])
         indices = []
-        for i in issue["indices"]:
+        for i in issue.get("indices") or [{"name": n} for n, _ in content.INDICES.get(region, [])]:
             sym = dict(content.INDICES.get(region, [])).get(i["name"])
             got = content.index_close(sym, day) if sym else None
             indices.append({**i, **got} if got else i)
-        if indices == issue["indices"]:
+        indices = [i for i in indices if i.get("price") is not None]
+        if not indices or indices == issue.get("indices"):
             continue
         rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
         f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
@@ -223,7 +225,7 @@ class Job:
 
     def repair_once(self):
         """Once per database: correct the daily briefs stored with the week-old day's change (see repair_index_moves)."""
-        flag = "newsfix:index-day-change"
+        flag = "newsfix:index-day-change-2"      # -2: the first pass skipped issues stored before 6 Oct
         if db.get_setting(flag):
             return
         try:

@@ -340,3 +340,21 @@ def test_stored_briefs_get_the_right_index_moves_and_keep_their_order(w, monkeyp
     assert [s["title"] for s in fixed["sections"]][:2] == ["Indices", "Sector rotation"] and "−0.76%" in fixed["html"]
     assert "0.08" not in fixed["html"] + fixed["text"]
     assert job.repair_index_moves("IN") == 0                                                  # already right: nothing to do
+
+
+def test_briefs_stored_before_the_indices_field_are_rebuilt_too(w, monkeypatch):
+    # an issue as stored before 6 Oct 2026: the indices only as text in the Indices section, an AI summary
+    old = {"id": "market.IN.2026-10-05", "kind": "market", "region": "IN", "day": "2026-10-05", "weekly": False,
+           "subject": "Market Brief India, Mon 05 Oct: NIFTY 50 -0.99%", "summary": "The NIFTY 50 slipped 0.99%.", "ai": True,
+           "sections": [{"title": "Indices", "items": [{"text": "NIFTY 50: 22,555.75, -0.99% on the day", "url": None, "lines": []}]},
+                        {"title": "Headlines", "items": [{"text": "Markets end higher", "url": None, "lines": []}]}],
+           "at": "2026-10-05T16:15+05:30"}
+    old["html"], old["text"] = write.render(old)
+    job.save(old)
+    _candles(monkeypatch)
+    monkeypatch.setattr(job, "date", type("D", (date,), {"today": classmethod(lambda cls: date(2026, 10, 8))}))
+    assert job.repair_index_moves("IN") == 1
+    fixed = job.load("market.IN.2026-10-05")
+    assert fixed["indices"] == [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.6}]   # from 1 Oct, over the 2 Oct holiday
+    assert fixed["subject"].endswith("NIFTY 50 +0.60%") and not fixed["ai"] and "0.99" not in fixed["html"] + fixed["text"]
+    assert [s["title"] for s in fixed["sections"]] == ["Indices", "Headlines"]

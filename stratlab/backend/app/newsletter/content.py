@@ -64,7 +64,8 @@ def _pct(now: float | None, then: float | None) -> float | None:
 def index_close(sym: str, day: date, since: str | None = None) -> dict | None:
     """An index's close on `day` and its change from the session before (or from the last close on or before `since`,
     for the week), read from the daily candles: the same numbers whenever the issue is built or rebuilt."""
-    candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", 21, ttl=300)["candles"], []) or []
+    back = max(21, (date.today() - day).days + 14)        # far enough back to hold that day and the session before it
+    candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", back, ttl=300)["candles"], []) or []
     upto = [c for c in candles if c["t"][:10] <= day.isoformat()]
     if not upto or (not since and upto[-1]["t"][:10] != day.isoformat()):
         return None                                    # no candle for that day (yet); the week ends at its last close
