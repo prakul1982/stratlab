@@ -610,6 +610,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await edit.getByRole("button", { name: "Save alert" }).click();
   await expect(row).toContainText("Price crosses below its 200-day average");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -619,6 +620,9 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const errors = await open(page, "/alerts", "Your stock alerts");
   await answerLevel(page);
   await page.getByRole("button", { name: "New alert" }).click();
+  // "Where alerts go" is offered once, and the Stock box is a half row at least, not a 190px sliver
+  await expect(page.getByRole("link", { name: /Where alerts go/ }).or(page.getByRole("button", { name: /Where alerts go/ }))).toHaveCount(1);
+  if (info.project.name !== "phone") expect((await page.getByLabel("Stock").boundingBox())!.width, "the Stock box is narrow").toBeGreaterThan(250);
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");
@@ -629,7 +633,12 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Moves 4% or more either way in a day");
   await expect(row).toContainText("Repeats");
+  // Delete asks first: Cancel keeps the alert
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Cancel" }).click();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -656,6 +665,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });
 
@@ -1166,6 +1176,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("A bulk or block deal is reported");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");
@@ -1249,6 +1260,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Enters or leaves an exchange surveillance list");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");

@@ -69,6 +69,15 @@ test("library groups say what they hold, and ST S2 is spelled out (R3-014)", asy
   }
 });
 
+test("alerts: Delete asks first, the form offers 'Where alerts go' once and its boxes pair up (R3-013)", () => {
+  const page = src("pages/AlertsPage.tsx"), form = src("components/AlertForm.tsx");
+  assert.match(page, /<ConfirmDialog title=\{`Delete the alert on/);
+  assert.doesNotMatch(page, /onDelete=\{\(\) => remove\(a\)\}/);        // a click on Delete opens the question, it doesn't delete
+  assert.match(page, /link=\{false\}/);                                  // the page's own card already links to where alerts go
+  assert.match(form, /<FormGrid pair /);                                  // Market and Stock each take half a row
+  assert.match(form, /link && !\(nowhere && !editing\) &&/);             // the button link and the notice's never show together
+});
+
 test("options premiums and what is left after charges are rounded alike (R3-020)", async () => {
   const { optMoney } = await import("../src/lib/options.ts");
   assert.equal(optMoney(22455), "₹22,455");

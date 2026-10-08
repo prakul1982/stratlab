@@ -13,11 +13,14 @@ import { numberProblem } from "../lib/validate";
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
 
 /** Create or edit one alert. A stock passed in is fixed; `choices` offers a list (the watchlist) instead. */
-export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere }: {
+export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere, link = true }: {
   region?: Region; symbol?: string; editing?: StockAlert; choices?: { region: Region; symbol: string }[]; onSaved: (r: Saved) => void;
   condition?: string;
   /** Nothing is set up to send an alert yet (no phone, Telegram or confirmed email): said before it's set. */
   nowhere?: boolean;
+  /** Offer "Where alerts go" (once: in the notice when nothing is set up, else beside the button). A page that already
+   * has that link on it passes false. */
+  link?: boolean;
 }) {
   const { fail, notify } = useApp();
   const fixed = !editing && !!s0 && !choices;
@@ -91,10 +94,10 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const takeValue = (v: string) => { setValue(v); setErrs((x) => ({ ...x, value: undefined })); };
 
   return (
-    <FormGrid onSubmit={save} label="Alert">
+    <FormGrid pair onSubmit={save} label="Alert">
       {nowhere && !editing && (
         <div className="k-form-wide">
-          <Notice role="status" action={{ label: "Where alerts go", to: "/settings#notifications" }}>
+          <Notice role="status" action={link ? { label: "Where alerts go", to: "/settings#notifications" } : undefined}>
             Nothing is set up to send alerts yet, so this one will only show on the Alerts page when it fires.
           </Notice>
         </div>
@@ -137,7 +140,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       </div>
       <FormActions>
         <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
-        <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>
+        {link && !(nowhere && !editing) && <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>}
       </FormActions>
     </FormGrid>
   );
