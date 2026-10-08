@@ -98,6 +98,11 @@ def test_public_company_lookup(w):
     r = c.get("/public/company/IN/reliance")                     # on StratLab's own lists, with no name stored yet
     assert r.status_code == 200
     assert r.json() == {"region": "IN", "symbol": "RELIANCE", "name": "RELIANCE", "page": "/stocks/in/RELIANCE"}
+    # the link the "Sign in to see …" screen offers is a route that answers 200 as written (no redirect on the way, so the
+    # site's host forwarding /stocks/* to the API serves it), whatever case the visitor typed
+    page = c.get(r.json()["page"], follow_redirects=False)
+    assert page.status_code == 200 and "RELIANCE" in page.text
+    assert c.get("/stocks/IN/reliance", follow_redirects=False).status_code == 301   # the other spellings redirect to that one address
     stock_pages.save_list("IN", [{"symbol": "RELIANCE", "name": "Reliance Industries Ltd"}] + [{"symbol": f"X{i}"} for i in range(100)])
     assert c.get("/public/company/IN/RELIANCE").json()["name"] == "Reliance Industries Ltd"
     assert c.get("/public/company/IN/NOSUCHCO").status_code == 404
