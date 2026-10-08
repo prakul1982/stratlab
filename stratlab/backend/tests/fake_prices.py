@@ -7,7 +7,8 @@ How a price is made: each instrument follows a slow wave around a gentle rise, `
 so that the latest session's close is exactly the instrument's level below: NIFTY 50 closed at 25,000.00, RELIANCE at
 ₹1,400.00. Out of market hours every price stands still at that close (the sources say "last close"); in hours it
 moves from it, a little. The broad Indian indices move together (NIFTY 500 tracks NIFTY 50 and stays below it, as the
-real ones do). Holidays are the app's own trading calendar's."""
+real ones do). Holidays are the app's own trading calendar's. The exceptions are the exchange-traded funds, which stand at the last close
+in hours too (the exchange's ETF list is read at the close), so the ETF page, the holdings and the NAV gap agree whenever the page is opened."""
 import functools
 import math
 import zlib
@@ -107,6 +108,14 @@ def trading_day(market: str, d: date) -> bool:
     return is_trading_day(market, d)
 
 
+def on_trading_day(d: date, market: str = "IN", back: bool = False) -> date:
+    """The first trading day on or after `d` (before it with `back`, for past events). The exchange's events (ex-dates, results meetings, data releases) fall on
+    trading days, so the demo's dates, which are counted from today, are moved to one instead of landing on a weekend."""
+    while not trading_day(market, d):
+        d += timedelta(days=-1 if back else 1)
+    return d
+
+
 def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
     """The time of the market's last trade: now while it is open (09:15 to 15:30 IST on a trading day; 09:30 to 16:00
     New York time for the US), else the close of the latest session. Out of hours quotes stand still at that close and
@@ -173,6 +182,8 @@ def price(name: str, when: datetime | float, now: datetime | None = None) -> flo
     name = canonical(name)
     t = when.timestamp() if isinstance(when, datetime) else float(when)
     anchor = last_close(market_of(name), now).timestamp()
+    if name in ETF_NAMES:
+        t = min(t, anchor)           # the ETF list is read at the close and stands: the ETF page and holdings show one price
     return round(base(name) * _shape(name, t) / _shape(name, anchor), 2)
 
 

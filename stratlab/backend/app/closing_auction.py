@@ -232,7 +232,9 @@ def record_day(day: str, live: dict) -> int:
 def stock_view(sym: str, r: dict, phase: str) -> dict:
     """One stock: its reference price and band, the IEP (or final price) and the gap to the reference, and the
     quantities."""
-    final = pos(r.get("final"))
+    # a final price is the official close: it is only called final once the auction is over (the phase "closed", or a read from an
+    # earlier day, whose rows are passed as "closed"); before that the price is the indicative one, whatever the read carries
+    final = pos(r.get("final")) if phase == "closed" else None
     price = final if final else pos(r.get("iep"))
     g = gap(price, r.get("ref"))
     imb = num(r.get("imb"))
@@ -353,7 +355,8 @@ def view(profile: dict, now: datetime | None = None) -> dict:
         phase = "preopen"            # a trading day, but the market has not opened yet: not "continuous trading"
     live = load_live()
     fresh = live.get("day") == today.isoformat()
-    stocks = [stock_view(s, r, phase) for s, r in live["stocks"].items()] if live["stocks"] else []
+    rows_phase = phase if fresh else "closed"          # a read from an earlier day is that day's finished auction
+    stocks = [stock_view(s, r, rows_phase) for s, r in live["stocks"].items()] if live["stocks"] else []
     stocks.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
     indices = [index_view(n, r, live["start"].get(n)) for n, r in live["indices"].items()]
     shown_day, from_stored = live.get("day"), False

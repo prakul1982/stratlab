@@ -16,7 +16,13 @@ ETFS = [
 ]
 
 
-def answer(stamp: str = "03-Oct-2026 15:30:00") -> dict:
+def last_close_stamp() -> str:
+    """The exchange's timestamp for the close of the latest trading day that has ended ("07-Oct-2026 15:30:00")."""
+    from tests.fake_prices import last_close
+    return last_close("IN").strftime("%d-%b-%Y %H:%M:%S")
+
+
+def answer(stamp: str = "02-Oct-2026 15:30:00") -> dict:
     """The exchange's /api/etf answer, in its shape (as read live in October 2026): numbers as text, "assets" naming the
     underlying, no ISIN (that is in the ETF securities file, securities_csv). The live answer's "nav" is the last
     published NAV; these ETFs give an indicative NAV instead ("iNavValue"), the case where a source has one."""
@@ -25,9 +31,11 @@ def answer(stamp: str = "03-Oct-2026 15:30:00") -> dict:
         for s, name, isin, p, i, _ in ETFS]}
 
 
-def answer_live(stamp: str = "03-Oct-2026 15:30:00") -> dict:
+def answer_live(stamp: str | None = None) -> dict:
     """The answer as the exchange really gives it (October 2026): "nav" is the fund's last published NAV, dated by
-    "navDate", and there is no indicative NAV. The browser tests' world serves this one."""
+    "navDate", and there is no indicative NAV. The browser tests' world serves this one, stamped with the close of the
+    latest trading day (never a weekend, never a time still to come); the demo prices stand at that close (fake_prices)."""
+    stamp = stamp or last_close_stamp()
     return {"timestamp": stamp, "navDate": stamp[:11], "data": [
         {"symbol": s, "assets": name.split("ETF ")[-1], "ltP": p, "nav": f"{nav:.4f}" if nav is not None else "-", "chn": "0.5", "per": "0.4"}
         for s, name, isin, p, _, nav in ETFS]}

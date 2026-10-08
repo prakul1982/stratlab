@@ -125,7 +125,7 @@ function Stocks({ v }: { v: CasView }) {
     return t ? v.stocks.filter((r) => r.symbol.includes(t)) : v.stocks;
   }, [v.stocks, q]);
   const shown = rows.slice(0, 40), rest = rows.slice(40);
-  const final = v.phase === "closed" || !!v.from_stored;
+  const final = v.phase === "closed" || !!v.from_stored || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
   const cols: Column<CasStock>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link> },
     { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { distinctTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
+import { distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
 import { tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
@@ -71,6 +71,8 @@ export interface XYChartProps {
   legend?: boolean;                 // default: with two or more series
   table?: boolean;                  // offer a table of the points in view (default on)
   includeZero?: boolean;
+  /** Values the y axis must hold besides the points' own (a day's published high and low that the sampled line never touched). */
+  include?: (number | null | undefined)[];
   tableX?: string;                  // the table's first column heading
   onHover?: (i: number | null) => void;
   tipExtra?: (i: number) => ReactNode;
@@ -185,16 +187,17 @@ export function XYChart(p: XYChartProps) {
       for (let i = in0; i <= in1; i++) { const v = vals[k][i]; if (v != null && Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } }
     });
     if (!indexed) for (const r of refs) if (Number.isFinite(r.v)) { lo = Math.min(lo, r.v); hi = Math.max(hi, r.v); }
+    if (!indexed) for (const v of p.include ?? []) if (v != null && Number.isFinite(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
     if (indexed) { lo = Math.min(lo, 100); hi = Math.max(hi, 100); }
     const d = niceDomain(lo, hi, H < 200 ? 4 : 5, hasBars || !!p.includeZero);
     return [d.min, d.max];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vals, hidden, in0, in1, refs, indexed, hasBars, p.includeZero, H]);
+  }, [vals, hidden, in0, in1, refs, indexed, hasBars, p.includeZero, p.include, H]);
   const [ymin, ymax] = useTween(yTarget, 280, instant);
   const yFmt = indexed && canIndex ? plainTick : p.axisFormat ?? format;
   // a tick whose label reads the same as an earlier one ("1, 1, 1, 0" on a small count, "5%, 5%, 0%") is left out
   const [yTicks, yLabels] = useMemo(() => {
-    const all = niceTicks(ymin, ymax, H < 200 ? 4 : 5).filter((t) => t >= ymin && t <= ymax);
+    const all = honestTicks(ymin, ymax, H < 200 ? 4 : 5, yFmt).filter((t) => t >= ymin && t <= ymax);
     return distinctTicks(all, yFmt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ymin, ymax, H, yFmt]);

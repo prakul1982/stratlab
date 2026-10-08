@@ -22,6 +22,22 @@ export function niceTicks(lo: number, hi: number, count = 5): number[] {
   return out;
 }
 
+/** Ticks whose labels tell the truth. A formatter that shows whole numbers turns the tick 22.5 into "23%", a label that
+ * reads as another place on the axis (and 17.5 as "18%", 20 as "20%": uneven steps). When any fractional tick reads the
+ * same as its rounded neighbour, fewer, wider ticks are tried (2.5 apart becomes 5 or 10 apart, or 2 when the range is
+ * short), and failing that only the whole-number ticks are kept, so every label is the number at its tick. */
+export function honestTicks(lo: number, hi: number, count: number, format: (v: number) => string): number[] {
+  const lossy = (ts: number[]) => ts.some((t) => !Number.isInteger(t) && format(t) === format(Math.round(t)));
+  let ts = niceTicks(lo, hi, count);
+  if (!lossy(ts)) return ts;
+  for (let c = count - 1; c >= 2; c--) {
+    const alt = niceTicks(lo, hi, c);
+    if (alt.length >= 2 && !lossy(alt)) return alt;
+  }
+  ts = niceTicks(lo, hi, count).filter((t) => Number.isInteger(t));
+  return ts;
+}
+
 /** The ticks with their labels, each label once: a tick that reads the same as one already kept ("1, 1, 1, 0" on a count
  * that rounds, "5%, 5%, 0%") is dropped, the first (lowest) one stays. */
 export function distinctTicks(ticks: number[], format: (v: number) => string): [number[], string[]] {

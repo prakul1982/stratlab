@@ -61,7 +61,7 @@ export function VixPanel() {
                 {v.intraday.length < 2 ? <ChartEmpty height={200}>Today's line starts when the market opens.</ChartEmpty> : (
                   <LineChart lines={[{ values: v.intraday.map((p) => p.v), color: "var(--series-1)", width: 2, label: "India VIX" }]}
                     labels={v.intraday.map((p) => vixTime(p.t) ?? p.t)} times={v.intraday.map((p) => p.t)} tz={IST} ranges={false}
-                    format={vixNum} height={200} testId="vix-intraday" ariaLabel={fresh?.lineStale ? `India VIX through ${fresh.lineTitle}, times in IST` : "India VIX through today, times in IST"}
+                    format={vixNum} height={200} testId="vix-intraday" include={fresh && fresh.quoteDay === fresh.lineDay ? [q?.low, q?.high, q?.open] : undefined} ariaLabel={fresh?.lineStale ? `India VIX through ${fresh.lineTitle}, times in IST` : "India VIX through today, times in IST"}
                     refs={q?.prev_close != null ? [{ v: q.prev_close, label: "Previous close", dash: true }] : []} />
                 )}
               </div>

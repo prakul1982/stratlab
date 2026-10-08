@@ -206,9 +206,19 @@ def live_breadth(mp, sizes):
     mp.setattr(BL, "STALE_AFTER", 10**9)
     mp.setattr(main.breadth_live_job, "start", lambda: None)
     from tests import fake_prices as P
-    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    # The points run up to the market's last trade (now while it is open, else the latest close), never past it: a card never
+    # claims "live as of" a time still to come. The card is asked at that same moment, so the run's day is the points' day
+    # whatever the clock says. A quarter hour at a time from the open, the last six; before 09:45 the day has too few, so
+    # the card shows the session before.
+    now = P.session_clock(None, "IN").astimezone(ZoneInfo("Asia/Kolkata"))
+    if now.strftime("%H:%M") < "09:45":
+        now = P.last_close("IN").astimezone(ZoneInfo("Asia/Kolkata"))
     day = now.date().isoformat()
-    times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
+    marks = [f"{9 + (15 + 15 * k) // 60:02d}:{(15 + 15 * k) % 60:02d}" for k in range(26)]
+    times = [t for t in marks if t <= now.strftime("%H:%M")][-6:]
+    asked_at = now.astimezone(ZoneInfo("UTC"))
+    ask = BL.view
+    mp.setattr(BL, "view", lambda group, now=None, ready=True: ask(group, now or asked_at, ready))
     # each group's index at each time, from the demo world's price table (NIFTY 500 below NIFTY 50, moving with it)
     level = {g: [P.price(name, now.replace(hour=int(t[:2]), minute=int(t[3:]), second=0, microsecond=0)) for t in times]
              for g, name in (("nifty500", "NIFTY 500"), ("nifty50", "NIFTY 50"))}
@@ -282,10 +292,14 @@ def breadth(mp):
 
 def closing_auction(mp):
     """Today's closing auction, as read just after it ended, and 8 stored days for the history."""
-    from datetime import date
+    from datetime import date, timezone
     from app import closing_auction as CA
     from tests import fake_cas
-    CA.refresh(main.filings_feed)
+    from tests.fake_prices import last_close
+    # read just after the latest auction that has ended (today's once it is 15:35, else the trading day before's), so a page
+    # opened through the day's continuous trading shows that earlier auction, labelled with its day, never a "final" price
+    # from an auction that has not happened yet
+    CA.refresh(main.filings_feed, now=last_close("IN").astimezone(timezone.utc))
     fake_cas.seed(date.today())
     mp.setattr(main.closing_auction_job, "start", lambda: None)
 
@@ -296,7 +310,8 @@ def etf_gaps(mp):
     from datetime import date
     from app import etf_nav
     from tests import fake_etf
-    data = fake_etf.navs(date(2026, 10, 3))
+    from tests.fake_prices import last_close
+    data = fake_etf.navs(last_close("IN").date())          # the NAV of the latest trading day, as the list's date says
     mp.setattr(etf_nav, "navs", lambda: data)
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())

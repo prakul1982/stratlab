@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, num, pct, price, safeHref } from "../lib/format";
+import { ago, marketTz, num, pct, price, safeHref } from "../lib/format";
 import {
   bandPosition, metricText, monthsOld, newsAge, ordinal, researchApi, staleQuarter, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -73,8 +73,9 @@ export function Change({ q, currency, closed = false }: { q: Quote | null; curre
 
 /* ---------- price chart ---------- */
 /** The company's candles in the shared price chart (its code loads only on pages that show one). */
-export function PriceChart({ region, symbol, currency }: { region: Region; symbol: string; currency: string }) {
-  const load = useMemo(() => companyLoader(region, symbol), [region, symbol]);
+export function PriceChart({ region, symbol, currency, price: shown, asOf: shownAt }: { region: Region; symbol: string; currency: string; price?: number | null; asOf?: string | null }) {
+  // the header's price and the title's are this page's one reading; the newest candle is it too (see settleLast)
+  const load = useMemo(() => companyLoader(region, symbol, { price: shown, asOf: shownAt, tz: marketTz(region) }), [region, symbol, shown, shownAt]);
   const compare = useCallback((other: string) => companyLoader(region, other)("1d", { range: "max" }).then((r) => r.candles), [region]);
   return (
     <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load}

@@ -173,10 +173,12 @@ def us_calendar(today=None) -> list[dict]:
     """The whole US results calendar, relative to today: AAPL tomorrow after the close, NVDA next week, and MSFT,
     which reported two days ago (its row carries the reported numbers and, like the real feed, the estimates)."""
     from datetime import date, timedelta
+    from tests.fake_prices import on_trading_day
     t = today or date.today()
-    return [{"symbol": "AAPL", "date": (t + timedelta(days=1)).isoformat(), "hour": "amc", "quarter": 4, "year": 2026, "epsEstimate": 1.6},
-            {"symbol": "NVDA", "date": (t + timedelta(days=8)).isoformat(), "hour": "amc", "quarter": 3, "year": 2026},
-            {"symbol": "MSFT", "date": (t - timedelta(days=2)).isoformat(), "hour": "amc", "quarter": 1, "year": 2027,
+    day = lambda n: on_trading_day(t + timedelta(days=n), "US", n < 0).isoformat()      # companies report on trading days
+    return [{"symbol": "AAPL", "date": day(1), "hour": "amc", "quarter": 4, "year": 2026, "epsEstimate": 1.6},
+            {"symbol": "NVDA", "date": day(8), "hour": "amc", "quarter": 3, "year": 2026},
+            {"symbol": "MSFT", "date": day(-2), "hour": "amc", "quarter": 1, "year": 2027,
              "epsActual": 3.21, "epsEstimate": 3.1, "revenueActual": 69_400_000_000, "revenueEstimate": 68e9},
             {"symbol": "bad symbol!", "date": t.isoformat()}, {"symbol": "XYZ", "date": "someday"}]
 
@@ -264,7 +266,8 @@ def fake_bse():
                 rows = [r for r in json.loads(text) if frm.isoformat() <= r["DissemDT"][:10] <= to.isoformat()]
             return httpx.Response(200, json={"Table": rows, "Table1": [{"ROWCNT": len(rows)}]})
         if req.url.path.endswith("/DefaultData/w"):           # corporate actions: an interim dividend for the BSE-only company
-            ex = (date.today() + timedelta(days=7)).strftime("%d %b %Y")
+            from tests.fake_prices import on_trading_day
+            ex = on_trading_day(date.today() + timedelta(days=7)).strftime("%d %b %Y")
             rows = [{"scrip_code": "543210", "short_name": "TINYCO", "long_name": "Tiny Co Ltd", "Ex_date": ex, "RD_Date": ex,
                      "Purpose": "Interim Dividend - Rs. - 0.5000"}] if req.url.params.get("scripcode") == "543210" else []
             return httpx.Response(200, json={"Table": rows})

@@ -87,8 +87,9 @@ class Switch(httpx.BaseTransport):
 def board_meetings(today=None) -> list[dict]:
     """The exchange's board-meeting list, relative to today: RELIANCE's results in two days, TCS's next week, and an
     INFY meeting about a dividend (not results)."""
+    from tests.fake_prices import on_trading_day
     t = today or date.today()
-    f = lambda d: (t + timedelta(days=d)).strftime("%d-%b-%Y")
+    f = lambda d: on_trading_day(t + timedelta(days=d), back=d < 0).strftime("%d-%b-%Y")        # the exchange's meetings are on trading days
     return [{"bm_symbol": "RELIANCE", "sm_name": "Reliance Industries Limited", "bm_date": f(2), "bm_purpose": "Financial Results",
              "bm_desc": "To consider and approve the financial results for the quarter ended September 30, 2026",
              "attachment": "https://nsearchives.nseindia.com/bm.pdf"},
@@ -100,8 +101,9 @@ def board_meetings(today=None) -> list[dict]:
 def corporate_actions(today=None) -> list[dict]:
     """The exchange's corporate-actions list, relative to today: a TCS bonus going ex today and its dividend in three
     days, a RELIANCE dividend, an INFY split, an ITC buyback just gone, an AGM (not an action), and past dividends."""
+    from tests.fake_prices import on_trading_day
     t = today or datetime.now(IST).date()
-    f = lambda d: (t + timedelta(days=d)).strftime("%d-%b-%Y")
+    f = lambda d: on_trading_day(t + timedelta(days=d), back=d < 0).strftime("%d-%b-%Y")        # ex-dates fall on trading days
     rows = [("TCS", "Tata Consultancy Services Limited", "Bonus 1:1", 0), ("TCS", "Tata Consultancy Services Limited", "Interim Dividend - Rs 11 Per Share", 3),
             ("RELIANCE", "Reliance Industries Limited", "Dividend - Rs 5.50 Per Share", 5),
             ("INFY", "Infosys Limited", "Face Value Split (Sub-Division) - From Rs 5/- Per Share To Re 1/- Per Share", 12),
