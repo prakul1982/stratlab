@@ -117,6 +117,19 @@ def companies(region: str) -> dict[str, dict]:
     return out
 
 
+def nse_twins() -> dict[str, str]:
+    """{BSE scrip code: NSE symbol} for companies whose BSE page sits beside an NSE one (the BSE list's trading symbol
+    is also an NSE page), so a list of companies can keep each one once."""
+    cos = companies("IN")
+    bse = _setting("audit:bse-only") or {}
+    out = {}
+    for code, v in bse.items():
+        ts = str((v or {}).get("ts") or "").upper() if isinstance(v, dict) else ""
+        if ts and ts in cos and cos[ts].get("bse") is None and code in cos:
+            out[code] = ts
+    return out
+
+
 def find(region: str, symbol: str) -> tuple[str, dict] | None:
     """(page symbol, company) for a symbol in an address, case-insensitively; None for a company with no page. A US
     share class reads the same written either way (BRK.B, BRK-B, BRK/B), and the address then redirects to one."""

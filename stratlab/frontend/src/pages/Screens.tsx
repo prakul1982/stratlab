@@ -73,15 +73,15 @@ function Group({ title, help, children }: { title: string; help?: string; childr
 }
 
 /** Companies filtered by plain facts, in a table. No ranking, scores or picks: the user's own conditions, sorted
- * alphabetically or by the column they choose. */
+ * by market value (the largest first) or by the column they choose. */
 export function ScreensPage() {
   const { fail, notify } = useApp();
   const [region, setRegion] = useRegion();
   const [meta, setMeta] = useState<ScreenMeta | null>(null);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [draft, setDraft] = useState<Draft>({});
-  const [sort, setSort] = useState("name");
-  const [desc, setDesc] = useState(false);
+  const [sort, setSort] = useState("market_cap");             // the largest companies first (R5O-012)
+  const [desc, setDesc] = useState(true);
   const [out, setOut] = useState<ScreenResult | null>(null);
   const [rows, setRows] = useState<ScreenRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +123,7 @@ export function ScreensPage() {
     });
   const setBound = (k: RangeId, side: "min" | "max", v: string) =>
     setDraft((d) => ({ ...d, [k]: { min: d[k]?.min ?? "", max: d[k]?.max ?? "", [side]: v } }));
-  const clear = () => { setFilters(NO_FILTERS); setDraft({}); setSort("name"); setDesc(false); setOpen(null); };
+  const clear = () => { setFilters(NO_FILTERS); setDraft({}); setSort("market_cap"); setDesc(true); setOpen(null); };
   const sortBy = (id: string) => { if (sort === id) setDesc((d) => !d); else { setSort(id); setDesc(false); } };
 
   const load = (s: SavedScreen) => {
@@ -161,7 +161,7 @@ export function ScreensPage() {
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
-        lede="Pick the conditions; see every company that meets them. Nothing here ranks or scores companies: the list is alphabetical unless you sort by a column." />
+        lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
 
       {saved && saved.items.length > 0 && (
@@ -184,7 +184,7 @@ export function ScreensPage() {
           <Card label="Filters">
             <CardHead title="Filters" actions={<>
               <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
-              <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "name" && !desc}>Clear</button></>} />
+              <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
             {!meta ? <Skeleton label="Loading the filters" lines={4} /> : showFilters && <>
               <Group title="Sector" help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>

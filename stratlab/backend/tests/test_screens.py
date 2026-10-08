@@ -107,8 +107,10 @@ def idx(w):
 @pytest.mark.parametrize("filters,want", [
     ({}, ["HDFCBANK", "RELIANCE", "SMALLCO", "TCS"]),
     ({"sector": ["Information Technology"]}, ["SMALLCO", "TCS"]),
-    ({"cap": ["large"]}, ["HDFCBANK", "RELIANCE", "TCS"]),
-    ({"cap": ["micro", "small"]}, ["SMALLCO"]),
+    # R5O-012: India's bands are by rank in market value (large: the 100 largest), so all four companies here are
+    # large; these were fixed amounts (large from Rs20,000 crore, which put SMALLCO's Rs900 crore in micro)
+    ({"cap": ["large"]}, ["HDFCBANK", "RELIANCE", "SMALLCO", "TCS"]),
+    ({"cap": ["micro", "small"]}, []),
     ({"stage": [2, 3]}, ["RELIANCE", "TCS"]),
     ({"red_flags": "yes"}, ["TCS"]),
     ({"red_flags": "no"}, ["HDFCBANK", "RELIANCE", "SMALLCO"]),
@@ -124,7 +126,8 @@ def idx(w):
     ({"ranges": {"pe": {"min": None, "max": None}}}, ["HDFCBANK", "RELIANCE", "SMALLCO", "TCS"]),   # empty bounds: no condition
 ])
 def test_each_filter(idx, filters, want):
-    assert syms(screens.run("IN", filters, index=idx)) == want
+    # A to Z, to compare the matches (the default order is now the largest first: R5O-012)
+    assert syms(screens.run("IN", filters, "name", False, index=idx)) == want
 
 
 def test_sort_by_any_column_with_missing_values_last(idx):
@@ -132,7 +135,7 @@ def test_sort_by_any_column_with_missing_values_last(idx):
     assert syms(screens.run("IN", {}, "pe", True, index=idx)) == ["TCS", "HDFCBANK", "RELIANCE", "SMALLCO"]
     assert syms(screens.run("IN", {}, "market_cap", True, index=idx))[0] == "TCS"
     assert syms(screens.run("IN", {}, "symbol", index=idx)) == ["HDFCBANK", "RELIANCE", "SMALLCO", "TCS"]
-    page = screens.run("IN", {}, limit=2, offset=2, index=idx)
+    page = screens.run("IN", {}, "name", limit=2, offset=2, index=idx)
     assert page["total"] == 4 and syms(page) == ["SMALLCO", "TCS"]
     with pytest.raises(screens.ScreenError):
         screens.run("IN", {}, "score", index=idx)

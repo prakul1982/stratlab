@@ -52,10 +52,12 @@ RANGES = {
     "from_high": ("Price vs 52-week high", "%", "How far the last price is from the highest price of the last year. "
                                                 "-10 means 10% below the high; 0 means at the high."),
 }
-# market-cap bands, in the unit each market's numbers are in (₹ crore, $ million): id -> (label, low, high)
+# size bands. India: by rank in market value, as SEBI's categories for mutual funds define large (the 100 largest
+# listed companies) and mid caps (the 101st to 250th); small and micro split the rest at the 500th, as the NIFTY
+# indices do. id -> (label, first rank, last rank). The US: the usual fixed amounts, in $ million: id -> (label, low, high).
 CAP_BANDS = {
-    "IN": {"large": ("Large (₹20,000 crore and up)", 20000, None), "mid": ("Mid (₹5,000 to 20,000 crore)", 5000, 20000),
-           "small": ("Small (₹500 to 5,000 crore)", 500, 5000), "micro": ("Micro (under ₹500 crore)", None, 500)},
+    "IN": {"large": ("Large (the 100 largest)", 1, 100), "mid": ("Mid (101st to 250th largest)", 101, 250),
+           "small": ("Small (251st to 500th largest)", 251, 500), "micro": ("Micro (smaller than the 500th)", 501, None)},
     "US": {"large": ("Large ($10 billion and up)", 10000, None), "mid": ("Mid ($2 to 10 billion)", 2000, 10000),
            "small": ("Small ($300 million to 2 billion)", 300, 2000), "micro": ("Micro (under $300 million)", None, 300)},
 }
@@ -63,7 +65,9 @@ STAGES = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)
 HELP = {
     "market": "India (NSE and BSE) or the US.",
     "sector": "The company's sector, from its industry classification.",
-    "cap": "The company's market value: share price times shares. Bands are fixed amounts, not a ranking.",
+    "cap": "The company's market value: share price times shares. In India the bands are by rank in market value among "
+           "the listed companies here (large: the 100 largest, mid: the 101st to 250th, as SEBI defines them for mutual "
+           "funds; small: the 251st to 500th; micro: the rest). In the US they are fixed amounts.",
     "stage": "Where the price sits against its 150-day average. " + "; ".join(
         f"{v}: {stock_pages.STAGE_WHY[k]}" for k, v in STAGES.items()) + ".",
     "insider_buy": "Purchases on the open market by the company's promoters, directors or key staff, from the "
@@ -193,6 +197,8 @@ def build_index(region: str, store: bool = True) -> dict:
     rows.sort(key=lambda r: (r["name"].lower(), r["symbol"]))
     if region == "US":
         with_us_red(rows)
+    else:
+        rows = with_ranks(one_per_company(rows, stock_pages.nse_twins()))
     index = {"region": region, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": rows}
     if store:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
@@ -218,6 +224,8 @@ def load_index(region: str) -> dict:
     index = {"region": region, "at": index.get("at"), "rows": [r for r in index.get("rows") or [] if isinstance(r, dict) and r.get("symbol")]}
     if region == "US":
         with_us_red(index["rows"])               # always the newest stored count, whenever the index was built
+    else:                                        # an index stored before: each company once, ranked by size
+        index["rows"] = with_ranks(one_per_company(index["rows"], stock_pages.nse_twins()))
     with _mem_lock:
         _mem[region] = (time.time(), index)
     return index
@@ -297,7 +305,12 @@ def clean(region, filters) -> dict:
     return out
 
 
-def _in_band(region: str, cap, bands: list[str]) -> bool:
+def _in_band(region: str, r: dict, bands: list[str]) -> bool:
+    if region == "IN":                       # by rank in market value (load_index numbers them)
+        rank = r.get("cap_rank")
+        return rank is not None and any(CAP_BANDS[region][b][1] <= rank and (CAP_BANDS[region][b][2] is None or rank <= CAP_BANDS[region][b][2])
+                                        for b in bands)
+    cap = _num(r.get("market_cap"))
     if cap is None:
         return False
     for b in bands:
@@ -307,11 +320,37 @@ def _in_band(region: str, cap, bands: list[str]) -> bool:
     return False
 
 
+_NAME_WORDS = re.compile(r"\b(ltd|limited|the)\b|[^a-z0-9]+")
+
+
+def one_per_company(rows: list[dict], twins: dict[str, str] | None = None) -> list[dict]:
+    """Each company once: a company on both exchanges has a page under its NSE symbol and one under its BSE code
+    (3B Films: 3BFILMS at Rs14.00 and 544412 at Rs13.33), and the NSE one is kept. A BSE code row goes when `twins` names
+    its NSE symbol, or when an NSE row has the same name."""
+    twins = twins or {}
+    nse = {r["symbol"] for r in rows if not r["symbol"].isdigit()}
+    names = {_NAME_WORDS.sub(" ", r["name"].lower()).strip() for r in rows if not r["symbol"].isdigit()}
+    keep = []
+    for r in rows:
+        if r["symbol"].isdigit() and (twins.get(r["symbol"]) in nse or _NAME_WORDS.sub(" ", r["name"].lower()).strip() in names):
+            continue
+        keep.append(r)
+    return keep
+
+
+def with_ranks(rows: list[dict]) -> list[dict]:
+    """Each row with its rank in market value (1 the largest), for India's size bands."""
+    ranked = sorted((r for r in rows if _num(r.get("market_cap"))), key=lambda r: -_num(r["market_cap"]))
+    for n, r in enumerate(ranked, 1):
+        r["cap_rank"] = n
+    return rows
+
+
 def matches(region: str, r: dict, f: dict) -> bool:
     """The company meets every condition. A number the company doesn't report never meets a condition on it."""
     if f["sector"] and r.get("sector") not in f["sector"]:
         return False
-    if f["cap"] and not _in_band(region, _num(r.get("market_cap")), f["cap"]):
+    if f["cap"] and not _in_band(region, r, f["cap"]):
         return False
     if f["stage"] and r.get("stage") not in f["stage"]:
         return False
@@ -333,12 +372,14 @@ def matches(region: str, r: dict, f: dict) -> bool:
     return True
 
 
-def run(region: str, filters: dict, sort: str = "name", desc: bool = False, limit: int = 100, offset: int = 0,
+def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None = None, limit: int = 100, offset: int = 0,
         index: dict | None = None) -> dict:
-    """The companies that meet the conditions, sorted by the column picked (alphabetically by default). Companies
-    without a value in the sort column come last, whichever way it's sorted."""
+    """The companies that meet the conditions, sorted by the column picked (the largest market value first by
+    default). Companies without a value in the sort column come last, whichever way it's sorted."""
     f = clean(region, filters)
     region = region.upper()
+    if desc is None:                     # unsaid: market value from the largest, anything else from the lowest or A
+        desc = sort == "market_cap"
     if sort not in COLUMNS:
         raise ScreenError("Sort by one of the table's columns.")
     index = index or load_index(region)
@@ -358,7 +399,7 @@ def run(region: str, filters: dict, sort: str = "name", desc: bool = False, limi
 
 def _shown(region: str, r: dict, flags: dict) -> dict:
     """One row as the table shows it, with the stock's surveillance flags today (India)."""
-    out = {k: v for k, v in r.items() if k != "built_at"}
+    out = {k: v for k, v in r.items() if k not in ("built_at", "cap_rank")}
     if region == "IN":
         out["surveillance"] = flags.get(r["symbol"], [])
     return out

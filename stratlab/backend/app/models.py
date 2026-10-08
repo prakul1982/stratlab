@@ -281,8 +281,8 @@ class ScreenRunReq(BaseModel):
     """A stock screen to run; screens.clean checks the filters themselves."""
     region: Literal["IN", "US"] = "IN"
     filters: Optional[dict] = None
-    sort: str = Field("name", max_length=20)
-    desc: bool = False
+    sort: str = Field("market_cap", max_length=20)          # the largest companies first, not an A-to-Z list of micro caps
+    desc: bool = True
     limit: int = Field(100, ge=1, le=500)
     offset: int = Field(0, ge=0, le=100000)
 
