@@ -3,6 +3,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+// the app's files import each other without an extension (the bundler adds it); Node needs a hint to find the .ts
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
@@ -39,6 +44,22 @@ test("notebook defaults invent nothing, and the sell question stays (R5O-010)", 
   assert.ok(exitBlock.indexOf('exitPick("exit"') > exitBlock.indexOf('title="Target"'), "add button under the stop and target line");
   const gaps = read("src/components/Gaps.tsx");
   assert.match(gaps, /label: hasExit \? "No target, let the sell rule decide" : "No target", rec: true/);
+});
+
+test("library cards: facts about the checks, buy and hold beside the return, which check didn't run (R5O-014)", async () => {
+  const { checksLine } = await import("../src/lib/tradeUi.ts");
+  assert.equal(checksLine(3, 3, ["nearby settings"]), "3 of 4 checks passed · nearby settings not run");
+  assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
+  const lib = read("src/pages/LibraryPage.tsx");
+  assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts \/>/);
+  assert.doesNotMatch(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} \/>/);
+  assert.match(lib, /<HoldLine e=\{e\} \/>/);
+  assert.match(lib, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
+  assert.match(lib, /lede=\{onlyOurs \?/);
+  const ui = read("src/components/ui.tsx");
+  assert.match(ui, /edge: "Passed the checks"/);
+  for (const p of ["src/pages/Login.tsx", "src/pages/SpaceHomes.tsx", "src/pages/LibraryPage.tsx"])
+    assert.doesNotMatch(read(p), /Rules others published/, p);
 });
 
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {

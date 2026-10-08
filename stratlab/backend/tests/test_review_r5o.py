@@ -184,6 +184,15 @@ def test_when_the_list_is_down_nothing_passes_as_checked():
     assert out["screen"] == [] and out["etfs"] == []
 
 
+# ---------- R5O-014: the library's cards beside buy and hold ----------
+def test_library_entries_carry_their_return_beside_buy_and_hold():
+    from app import library
+    e = {"stats": {"ret": 55.8, "buy_hold": 172.9, "trades": 40}, "verdict": {"verdict": "edge", "checks": []}}
+    assert library.public(e)["vs_hold"] == {"ret": 55.8, "hold": 172.9, "gap": -117.1}
+    assert library.public({**e, "stats": {**e["stats"], "trades": 0}})["vs_hold"] is None       # never traded: nothing to compare
+    assert library.public({**e, "stats": {"ret": 5.0, "buy_hold": None, "trades": 20}})["vs_hold"] is None
+
+
 # ---------- R5O-010: notebook defaults ----------
 @pytest.fixture
 def w(monkeypatch):

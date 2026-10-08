@@ -81,10 +81,21 @@ def reason(e: dict) -> str | None:
     return ". ".join(parts) + "."
 
 
+def versus_hold(e: dict) -> dict | None:
+    """The return after costs beside buying and holding over the same period, as the notebook's verdict states it
+    (R5O-014): {ret, hold, gap} in percent, `gap` negative when the rules trail buy and hold. None when either is
+    missing or the rules never traded."""
+    st = e.get("stats") or {}
+    r, h = st.get("ret"), st.get("buy_hold")
+    if not ran(e) or not isinstance(r, (int, float)) or not isinstance(h, (int, float)):
+        return None
+    return {"ret": round(r, 2), "hold": round(h, 2), "gap": round(r - h, 2)}
+
+
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
-    out["ran"], out["reason"] = ran(e), reason(e)
+    out["ran"], out["reason"], out["vs_hold"] = ran(e), reason(e), versus_hold(e)
     out["mine"] = bool(viewer and e.get("owner") == viewer)
     out["reported"] = bool(viewer and viewer in (e.get("reports") or {}))
     if out["mine"] and e.get("hidden"):
