@@ -84,7 +84,8 @@ def test_alert_contacts_are_checked():
 
 def test_public_health_has_no_provider_details():
     body = TestClient(main.app).get("/health").json()
-    assert set(body) == {"ok", "data_online", "feed_connected", "ai_configured"}
+    assert set(body) == {"ok", "data_online", "feed_connected", "feed", "ai_configured"}
+    assert body["feed"] in ("idle", "connected", "disconnected")
 
 
 def test_news_feed_with_a_dtd_is_refused(monkeypatch):

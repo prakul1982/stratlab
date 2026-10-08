@@ -603,6 +603,10 @@ td.num, .num { font-family: var(--sans); }
 .lp-rmock { display: flex; flex-direction: column; gap: 18px; box-shadow: var(--shadow); padding: 22px; }
 .lp-rfacts { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-ridea { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px; background: var(--blue-soft); }
+/* "Illustration: made-up figures": the landing's pictures say what they are in type as readable as the figures beside them */
+.lp-illus { align-self: flex-start; padding: 2px 10px; border: 1px dashed var(--dash); border-radius: 999px; background: var(--card);
+  color: var(--ink-2); font: 600 var(--t-label) / 1.5 var(--sans); }
+.lp-illus-note { color: var(--ink-2); }
 .lp-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
 .lp-tool { display: flex; flex-direction: column; gap: 6px; padding: 22px 22px 22px 0; border-bottom: 1px solid var(--line); }
 .lp-tool b { font-size: 16px; }

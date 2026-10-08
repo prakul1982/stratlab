@@ -242,7 +242,7 @@ export function DeepDivePage() {
       )}
       {v && n && (
         <>
-          <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. OPM is operating profit as a share of sales.">
+          <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. EBITDA margin is operating profit before depreciation, interest and tax, as a share of sales.">
             <StatRow>
               <Growth label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Growth label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
               <Growth label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} />
@@ -259,7 +259,7 @@ export function DeepDivePage() {
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
-                  { key: "o", header: n.bank ? "Financing margin" : "Operating margin", numeric: true, cell: (q) => pc(q.opm) },
+                  { key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q) => pc(q.opm) },
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
           </Panel>

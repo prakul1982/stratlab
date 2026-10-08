@@ -142,7 +142,7 @@ const TERMS: Record<string, string> = {
   "Face value": "The nominal value printed on each share; it doesn't change with the price.",
   "ROCE": "Return on capital employed: operating profit as a share of all the money in the business, borrowed or not.",
   "ROE": "Return on equity: profit as a share of the shareholders' money in the business.",
-  "OPM": "Operating profit margin: the share of sales left after running costs, before interest and tax.",
+  "EBITDA margin": "Operating profit before depreciation, interest and tax (EBITDA) as a share of sales: what is left after running costs.",
   "Net margin": "Profit after everything, as a share of sales.",
   "Debt / equity": "Borrowings divided by the shareholders' money in the business.",
   "Latest YoY": "The latest year against the year before.",
@@ -377,7 +377,7 @@ export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
   const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
     { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
-    { name: "Operating margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
+    { name: "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ];
   return (
     <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}

@@ -106,6 +106,27 @@ def parse(html: str) -> dict:
     return out
 
 
+def _pe(p: dict, price: float | None) -> float | None:
+    """P/E as the page's own numbers give it: the price over the trailing twelve months' earnings per share (the EPS
+    row's TTM column: profit that belongs to the shareholders), else over the latest year's; none for a loss. The
+    source's own "Stock P/E" doesn't always reconcile with the consolidated figures beside it (TCS, October 2026: 14.0
+    against 2,075 / 137.64 = 15.1), so it is only the fallback when the page has no EPS row. US filings' ratios are
+    worked out from the filings (sec.ratios) and stand as they are."""
+    r = p.get("ratios") or {}
+    pl = p.get("pl") or {}
+    eps = next((v for k, v in (pl.get("rows") or {}).items() if str(k).upper().startswith("EPS")), None)
+    if p.get("region") == "US" or not eps or not price:
+        return num(r.get("Stock P/E"))
+    cols = [str(c).strip().upper() for c in pl.get("cols") or []]
+    pairs = [(c, num(v)) for c, v in zip(cols, eps)]
+    ttm = next((v for c, v in pairs if c == "TTM"), None)
+    years = [v for c, v in pairs if c != "TTM" and v is not None]
+    latest = ttm if ttm is not None else (years[-1] if years else None)
+    if latest is None:
+        return num(r.get("Stock P/E"))
+    return round(price / latest, 1) if latest > 0 else None
+
+
 def summary(p: dict) -> dict:
     """The handful of numbers the research page and the AI need."""
     r = p.get("ratios", {})
@@ -135,7 +156,7 @@ def summary(p: dict) -> dict:
     return {
         "market_cap_cr": num(r.get("Market Cap")), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
-        "pe": num(r.get("Stock P/E")), "book_value": book, "pb": (price / book) if price and book else None,
+        "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book else None,
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
         "net_margin": net_margin, "opm": opm[-1] if opm else None,

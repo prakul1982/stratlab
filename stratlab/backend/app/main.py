@@ -548,8 +548,13 @@ def _kite_error(request, exc):
 # ---------- account ----------
 @app.get("/health")
 def health():
-    """Public: only whether things are up. Provider details are on the admin page."""
+    """Public: only whether things are up. Provider details are on the admin page.
+    `data_online`: the Indian market data login is valid, so Indian prices (quotes, charts, company pages) are read live.
+    `feed`: the streaming tick connection that only live paper-trading sessions on Indian instruments use. It opens with
+    the first such session and stays shut while there is none ("idle"), which says nothing about prices elsewhere;
+    "disconnected" means it was opened and has dropped. `feed_connected` is kept for monitors that read it."""
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
+            "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
             "ai_configured": any(p["in_use"] for p in ai_health())}
 
 
@@ -3042,17 +3047,33 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     trend = prices = None
     try:
         ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
-        bars = scan._bars(markets, ids[0]) if ids else []
+        # closed sessions only: the page's price is the last close, with its date, never a session still trading
+        bars = stock_pages.closed_bars(scan._bars(markets, ids[0]) if ids else [], region)
         if bars:
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
         pass
+    close = (prices or {}).get("price")
+    if region == "US" and close and not sec.non_common(sym):
+        # the ratios at the same close the page shows (the quote read above is the live price), and the dividend yield
+        # from the dividends the price history lists for the year to that close: none in the year is a real 0%, a
+        # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
+        p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
+        try:
+            divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
+            dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
+        except Exception:
+            dy = None
+        if dy is None:
+            p["ratios"].pop("Dividend Yield", None)
+        else:
+            p["ratios"]["Dividend Yield"] = dy
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
-        snap = at_live_price(snap, (prices or {}).get("price"))
+        snap = at_live_price(snap, close)
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
 
 
@@ -3070,6 +3091,36 @@ def stock_list_job():
             except Exception as e:
                 print(f"stock list {region} failed:", str(e)[:160])
         time.sleep(24 * 3600)
+
+
+@app.get("/stocks", response_class=HTMLResponse)
+@app.get("/stocks/", response_class=HTMLResponse, include_in_schema=False)
+def stock_index(q: str = "", m: str = ""):
+    """Every company page's way in: search by name or symbol (`m`: in or us), and each market's largest companies."""
+    r = stock_pages.REGIONS.get((m or "").lower())
+    return HTMLResponse(stock_pages.index_page(r if q else None, q), headers=SEO_HEADERS)
+
+
+@app.get("/stocks/{region}", response_class=HTMLResponse)
+@app.get("/stocks/{region}/", response_class=HTMLResponse, include_in_schema=False)
+def stock_region_index(region: str, q: str = ""):
+    r = stock_pages.REGIONS.get(region.lower())
+    if not r:
+        return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
+    if region != region.lower():
+        return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)
+    return HTMLResponse(stock_pages.index_page(r, q), headers=SEO_HEADERS)
+
+
+@app.get("/stocks/{region}/{symbol}/", include_in_schema=False)
+def stock_page_slash(region: str, symbol: str):
+    """An address with a trailing slash: one address per company, without it (a relative redirect, so it stays on the
+    site's own host)."""
+    r = stock_pages.REGIONS.get(region.lower())
+    hit = stock_pages.find(r, symbol) if r else None
+    if not hit:
+        return HTMLResponse(stock_pages.not_found(r, symbol), status_code=404)
+    return RedirectResponse(stock_pages.path(r, hit[0]), status_code=301)
 
 
 @app.get("/stocks/{region}/{symbol}", response_class=HTMLResponse)

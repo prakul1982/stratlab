@@ -470,11 +470,16 @@ function HeroDemo() {
   );
 }
 
-/** A small picture of each space as it looks inside (sample figures), so the three choices show, not tell. */
+/** What every made-up picture on the landing page says about itself, in readable type. A real company or asset beside
+ * invented numbers would contradict its own public page, so the pictures name no real company, ticker or date. */
+const ILLUSTRATION = "Illustration: made-up figures";
+
+/** A small picture of each space as it looks inside, so the three choices show, not tell. */
 function SpaceArt({ space }: { space: string }) {
   if (space === "trade") return (
     <div className="lp-space-art" aria-hidden="true">
-      <span className="tiny muted mono">BTC/USD · 61 trades</span>
+      <span className="lp-illus">{ILLUSTRATION}</span>
+      <span className="tiny muted mono">An RSI idea · 61 trades</span>
       <span className="serif lp-space-big">Likely a real edge.</span>
       <span className="row wrap g4">
         {(["pass", "pass", "warn", "pass"] as Status[]).map((st, k) => <span key={k} className={`badge ${st}`}>{["Unseen", "Nearby", "Drawdown", "Trades"][k]}</span>)}
@@ -483,16 +488,18 @@ function SpaceArt({ space }: { space: string }) {
   );
   if (space === "invest") return (
     <div className="lp-space-art" aria-hidden="true">
-      <span className="tiny muted mono">NSE · RELIANCE</span>
+      <span className="lp-illus">{ILLUSTRATION}</span>
+      <span className="tiny muted mono">Sample Industries · a made-up company</span>
       <span className="lp-space-rows">
         <span><span className="muted">Sales, 3 years</span><b className="num">+11.2% a year</b></span>
         <span><span className="muted">Debt to equity</span><b className="num">0.41</b></span>
-        <span><span className="muted">Results</span><b className="num">18 Oct</b></span>
+        <span><span className="muted">Next results</span><b className="num">in 12 days</b></span>
       </span>
     </div>
   );
   return (
     <div className="lp-space-art" aria-hidden="true">
+      <span className="lp-illus">{ILLUSTRATION}</span>
       <span className="tiny muted mono">My Holdings · 6 stocks</span>
       <span className="lp-space-rows">
         <span><span className="muted">Value</span><b className="num">₹7,10,215</b></span>
@@ -504,25 +511,27 @@ function SpaceArt({ space }: { space: string }) {
 }
 
 function ResearchMock() {
-  // the company page's AI read: plain numbers from reported results and prices, never scores (sample figures)
+  // what a company page's AI read looks like: plain numbers from reported results and prices, never scores. The company,
+  // its ticker and every figure are made up, and the card says so where it can't be missed (no live quote, no day's change)
   const facts: [string, string][] = [["Growth", "Sales, 3 years 68.2% a year · Net profit, 3 years 91.4% a year"],
     ["Price trend", "6.1% above the 200-day average · 1-year change +32.5% · Stage 2 (advancing)"],
     ["Debt and cash", "Debt to equity 0.11 · Cash from operations 94% of net profit"],
-    ["Margins and returns", "Operating margin 33% → 62% over 5 years · ROE 91.9%"]];
+    ["Margins and returns", "EBITDA margin 33% → 62% over 5 years · ROE 41.9%"]];
   return (
-    <div className="lp-card lp-rmock" aria-label="Example company research page">
+    <div className="lp-card lp-rmock" aria-label="Illustration of a company research page: a made-up company with made-up figures">
+      <span className="lp-illus">Illustration: a made-up company and made-up figures</span>
       <div className="spread lp-top">
-        <div className="stack g2"><span className="eyebrow">NASDAQ · NVDA</span><b className="serif lp-rm-title">NVIDIA Corp</b></div>
-        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="badge next">▲ +1.33% today</span></div>
+        <div className="stack g2"><span className="eyebrow">SAMPLE · made-up ticker</span><b className="serif lp-rm-title">Sample Motors Inc.</b></div>
+        <div className="stack g4 lp-end"><b className="serif lp-rm-title">$183.20</b><span className="badge next">Last close ▲ 1.33%</span></div>
       </div>
       <div className="lp-rfacts">
         {facts.map(([l, t]) => <div key={l} className="stack g1"><b className="small">{l}</b><span className="small muted">{t}</span></div>)}
-        <span className="tiny muted">Sample figures. Facts from reported results and prices, not advice.</span>
+        <span className="small lp-illus-note">Facts from reported results and prices, never advice. A real company's page shows its own numbers.</span>
       </div>
       <div className="lp-ridea">
-        <b className="small">Ideas to test on NVDA</b>
-        <p className="small">"Buy NVDA when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 7% stop loss"</p>
-        <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new?market=US&symbol=NVDA")}>Test an idea on NVDA →</button>
+        <b className="small">Ideas to test</b>
+        <p className="small">"Buy when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below, 7% stop loss"</p>
+        <button type="button" className="btn sm lp-idea-btn" onClick={() => void signIn("/new")}>Test an idea like this →</button>
       </div>
     </div>
   );
