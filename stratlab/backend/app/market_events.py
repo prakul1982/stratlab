@@ -137,9 +137,10 @@ def ist_time(day: date, hhmm: str, tz: ZoneInfo) -> tuple[date, str]:
 
 def mark_weekend(e: dict) -> dict:
     """A dated event that falls on a Saturday or Sunday says so (`weekend`, and a sentence in its detail): the exchanges
-    are shut that day. Holidays and expiries are about the calendar itself and are left alone."""
+    are shut that day. Holidays and expiries are about the calendar itself, and an event the owner added by hand (a Budget
+    on a Saturday, a special session) is the owner's word, so those are left alone."""
     d = _day(e.get("date"))
-    if d and d.weekday() >= 5 and e.get("kind") not in ("holiday", "expiry"):
+    if d and d.weekday() >= 5 and e.get("kind") not in ("holiday", "expiry") and not e.get("custom"):
         name = f"{d:%A}"
         e["weekend"] = name
         e["detail"] = ((e.get("detail") or "").rstrip() + f" This day is a {name}, so the exchanges are closed.").strip()

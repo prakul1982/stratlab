@@ -22,6 +22,8 @@ def test_an_event_on_a_weekend_says_so_and_a_weekday_one_is_left_alone():
     # holidays and expiries are about the calendar itself
     assert "weekend" not in M.mark_weekend(ev("holiday", "2026-10-11"))
     assert "weekend" not in M.mark_weekend(ev("expiry", "2026-10-17"))
+    # a special session the owner added (a Saturday Budget) is not marked closed
+    assert "weekend" not in M.mark_weekend(ev("budget", "2026-10-17", custom="abc"))
 
 
 def test_the_dated_list_marks_a_weekend_minutes_due_date():

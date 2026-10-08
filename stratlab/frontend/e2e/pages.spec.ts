@@ -620,9 +620,11 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const errors = await open(page, "/alerts", "Your stock alerts");
   await answerLevel(page);
   await page.getByRole("button", { name: "New alert" }).click();
-  // "Where alerts go" is offered once, and the Stock box is a half row at least, not a 190px sliver
+  // "Where alerts go" is offered once, and the Stock box takes the whole row, not a 190px sliver
   await expect(page.getByRole("link", { name: /Where alerts go/ }).or(page.getByRole("button", { name: /Where alerts go/ }))).toHaveCount(1);
-  if (info.project.name !== "phone") expect((await page.getByLabel("Stock").boundingBox())!.width, "the Stock box is narrow").toBeGreaterThan(250);
+  const stock = await page.getByLabel("Stock").evaluate((el) => ({ box: el.getBoundingClientRect().width, form: (el.closest("form") as HTMLElement).getBoundingClientRect().width }));
+  expect(stock.box, "the Stock box is narrow").toBeGreaterThan(stock.form * 0.9);
+  expect(await page.getByLabel("Stock").evaluate((el) => (el as HTMLInputElement).scrollWidth <= (el as HTMLInputElement).clientWidth), "its placeholder is clipped").toBe(true);
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");

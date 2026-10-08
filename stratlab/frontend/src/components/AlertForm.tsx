@@ -94,7 +94,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const takeValue = (v: string) => { setValue(v); setErrs((x) => ({ ...x, value: undefined })); };
 
   return (
-    <FormGrid pair onSubmit={save} label="Alert">
+    <FormGrid onSubmit={save} label="Alert">
       {nowhere && !editing && (
         <div className="k-form-wide">
           <Notice role="status" action={link ? { label: "Where alerts go", to: "/settings#notifications" } : undefined}>
@@ -106,14 +106,14 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
       ) : (
         <>
-          <Field label="Market">{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
+          <Field label="Market" wide>{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
           {choices ? (
-            <Field label="Stock">
+            <Field label="Stock" wide>
               {(id) => <Select id={id} value={`${region}:${symbol}`} onChange={(v) => { const [rg, s] = v.split(":"); setRegion(rg as Region); setSymbol(s); }}
                 options={choices.map((x) => ({ value: `${x.region}:${x.symbol}`, label: x.symbol }))} />}
             </Field>
           ) : (
-            <Field label="Stock" error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
+            <Field label="Stock" wide error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
               {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
                 onText={(t) => { setSymbol(t); setErrs((x) => ({ ...x, symbol: undefined })); }} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); setErrs((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>

@@ -69,12 +69,13 @@ test("library groups say what they hold, and ST S2 is spelled out (R3-014)", asy
   }
 });
 
-test("alerts: Delete asks first, the form offers 'Where alerts go' once and its boxes pair up (R3-013)", () => {
+test("alerts: Delete asks first, the form offers 'Where alerts go' once and its Stock box is full width (R3-013)", () => {
   const page = src("pages/AlertsPage.tsx"), form = src("components/AlertForm.tsx");
   assert.match(page, /<ConfirmDialog title=\{`Delete the alert on/);
   assert.doesNotMatch(page, /onDelete=\{\(\) => remove\(a\)\}/);        // a click on Delete opens the question, it doesn't delete
   assert.match(page, /link=\{false\}/);                                  // the page's own card already links to where alerts go
-  assert.match(form, /<FormGrid pair /);                                  // Market and Stock each take half a row
+  assert.match(form, /<Field label="Stock" wide error=/);                 // the Stock box (and its placeholder) takes the whole row
+  assert.match(form, /<Field label="Market" wide>/);
   assert.match(form, /link && !\(nowhere && !editing\) &&/);             // the button link and the notice's never show together
 });
 
