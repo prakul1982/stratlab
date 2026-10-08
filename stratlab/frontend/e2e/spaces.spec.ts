@@ -226,8 +226,8 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await expect(holdings).toContainText("₹");
   await expect(holdings.locator(".as-of")).toContainText("as of");
   const tax = page.getByTestId("tax-summary");
-  await expect(tax).toContainText(/Capital gains tax, FY ?\d{4}/, { timeout: 30_000 });
-  await expect(tax).toContainText("Assumes only the sales in the tradebooks you uploaded");       // every estimate says what it assumes
+  await expect(tax).toContainText(/Total tax estimate, FY ?\d{4}/, { timeout: 30_000 });         // the tax report's own total (R5O-022)
+  await expect(tax).toContainText(/As the tax report works it out|Assumes only the sales in the tradebooks you uploaded/);   // every estimate says what it assumes
   await expect(tax.locator(".as-of")).toContainText("as of");
   // one card per Money feature that exists, and nothing for one that doesn't yet
   const cards = page.locator("[data-money]");

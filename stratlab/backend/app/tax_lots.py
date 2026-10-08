@@ -263,6 +263,7 @@ def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: fl
     return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
             "filing": tax_total.filing_facts(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
+            "audit": tax_total.audit_fact(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
             "turnover": _r(turnover)}
 
 

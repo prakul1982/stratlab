@@ -438,3 +438,16 @@ def test_a_whole_number_rate_from_the_source_says_so():
     # TCS and Infosys's identical 5Y and 10Y profit CAGRs are real (5 Oct pages: 8.72% and 8.70% over FY21-FY26 from
     # 32,562 -> 49,454 and 19,423 -> 29,474 crore; both "8%" over ten years); the compare page now names each section
     assert round(((49454 / 32562) ** (1 / 5) - 1) * 100, 1) == round(((29474 / 19423) ** (1 / 5) - 1) * 100, 1) == 8.7
+
+
+# ---------- R5O-022: the Money card's tax is the tax report's; the audit limit as a fact ----------
+def test_turnover_past_the_audit_limit_is_said_as_a_fact():
+    from app import tax_total as T
+    import re
+    got = T.audit_fact(2025, 39.7e7, True)                       # the owner's FY 2025-26 F&O turnover, Rs39.7 crore
+    assert got == "Turnover of ₹39.7 crore is above ₹10 crore, the higher limit in section 44AB: a tax audit applies."
+    assert got in T.filing_facts(2025, 39.7e7, True)
+    mid = T.audit_fact(2025, 4.2e7, True)
+    assert mid.startswith("Turnover of ₹4.2 crore is above ₹1 crore") and "₹10 crore" in mid
+    assert T.audit_fact(2025, 0.8e7, True) is None and T.audit_fact(2025, 39.7e7, False) is None
+    assert not re.search(r"\b(should|must get|we recommend|consult|advise)\b", got + mid, re.I)

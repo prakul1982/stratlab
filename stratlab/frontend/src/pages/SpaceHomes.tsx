@@ -295,7 +295,8 @@ function RedFlags() {
 /* ---------- Money: what you own ---------- */
 type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number };
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; updated_at: string | null; prices_at?: string | null };
-type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number } };
+type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
+  total?: { available: boolean; total?: number }; audit?: string | null };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
 
 
@@ -375,11 +376,14 @@ function TaxSummary() {
         ) : (
           <div className="k-stack" data-testid="tax-summary">
             <div className="k-stats">
-              <Fig label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`} value={money(year?.tax_with_cess ?? 0, "INR")} />
+              {/* the tax report's own total (capital gains, F&O and intraday business income, slab, surcharge and cess), so the
+                  two pages agree; the capital gains part alone said ₹0 beside a report of ₹77,61,298 */}
+              <Fig label={`Total tax estimate, ${year?.label ?? "this year"}`} value={money(year?.total?.available ? year.total.total ?? 0 : year?.tax_with_cess ?? 0, "INR")} />
               <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
-            <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
+            {year?.audit && <p className="small">{year.audit}</p>}
+            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />
           </div>
         )}
