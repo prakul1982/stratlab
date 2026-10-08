@@ -27,6 +27,18 @@ test("an event on a weekend says the exchanges are closed (R3-007)", async () =>
   assert.equal(evWhen({ date: "2026-10-12" }), "Mon 12 Oct");
 });
 
+test("an empty journal has nothing to delete (R3-019)", async () => {
+  const { journalEmpty } = await import("../src/lib/journalEmpty.ts");
+  assert.equal(journalEmpty({ practice_count: 0, real_count: 0, removed: 0, files: [] }), true);
+  assert.equal(journalEmpty({ practice_count: 0, real_count: 3, removed: 0, files: [] }), false);
+  assert.equal(journalEmpty({ practice_count: 2, real_count: 0, removed: 0, files: [] }), false);   // practice trades are kept too
+  assert.equal(journalEmpty({ practice_count: 0, real_count: 0, removed: 1, files: [] }), false);
+  assert.equal(journalEmpty({ practice_count: 0, real_count: 0, removed: 0, files: [{ name: "a.csv" }] }), false);
+  const page = src("pages/trade/JournalPage.tsx");
+  assert.match(page, /summary="How this works"/);
+  assert.match(page, /!journalEmpty\(j\) && .*Delete my journal/);
+});
+
 test("options premiums and what is left after charges are rounded alike (R3-020)", async () => {
   const { optMoney } = await import("../src/lib/options.ts");
   assert.equal(optMoney(22455), "₹22,455");

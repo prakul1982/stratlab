@@ -8,6 +8,7 @@ import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
+import { journalEmpty } from "../../lib/journalEmpty";
 import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
@@ -173,7 +174,7 @@ export function JournalPage() {
               <button type="button" className="btn quiet sm" onClick={() => setSetup(true)}>Capital and brokerage</button>
               <button type="button" className="btn quiet sm" onClick={() => setAdding(true)}><Plus size={16} />Add a trade by hand</button>
             </>} />
-          <p className="k-small k-muted">Upload the tradebook (every purchase and sale) from Zerodha Console, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or the tax P&amp;L ZIP or its "Tradewise Exits" files (equity, F&amp;O, commodity and currency, intraday and delivery). Any CSV works with the columns Date, Symbol, Type (B or S), Quantity and Price. Trades already in the journal are skipped. US stocks and crypto are added by hand.</p>
+          <p className="k-small k-muted">Upload your broker's tradebook or tax P&amp;L file, or any CSV with the columns Date, Symbol, Type (B or S), Quantity and Price. Add US stocks and crypto by hand.</p>
           <div className="k-row">
             <UploadButton label="Upload files" busy={busy} multiple accept=".csv,.txt,.tsv,.xlsx,.xls,.zip" ariaLabel="Tradebook or tax P&L files" onFiles={pick} />
             {anyTrades && (
@@ -182,7 +183,6 @@ export function JournalPage() {
             )}
             <button type="button" className="btn outline" disabled={busy} onClick={fromTax}>Use my tax report's trades</button>
           </div>
-          <p className="k-note">The tax report keeps equity trade by trade, so those come across. Its F&amp;O, commodity and currency are kept as totals for each year: they show under the trades, and the tax P&amp;L's own files above bring them in trade by trade.</p>
           {result && (
             <div className="k-stack k-tight" role="status">
               <p className="k-small"><b>{result.added.toLocaleString("en-IN")} trade line{result.added === 1 ? "" : "s"} added</b>{result.duplicates > 0 && `, ${result.duplicates.toLocaleString("en-IN")} already in the journal (skipped)`}{result.broker !== "CSV" ? ` from a ${result.broker} file` : ""}.</p>
@@ -256,11 +256,17 @@ export function JournalPage() {
         {has && (j.open.length > 0 || j.unmatched.length > 0) && <OpenList j={j} />}
 
         <section className="k-stack k-tight" aria-label="About these numbers">
-          <p className="k-note">{j.assumptions} Facts about past trades, not advice.</p>
-          <p className="k-note">Worked out as of {day(j.as_of)}{j.updated_at ? ` · trades saved as of ${day(j.updated_at)}` : ""}.</p>
+          {has && <p className="k-note">Worked out as of {day(j.as_of)}{j.updated_at ? ` · trades saved as of ${day(j.updated_at)}` : ""}.</p>}
+          <Disclosure summary="How this works" testId="j-how">
+            <div className="k-stack k-tight">
+              <p className="k-small">Upload the tradebook (every purchase and sale) from Zerodha Console, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or the tax P&amp;L ZIP or its "Tradewise Exits" files (equity, F&amp;O, commodity and currency, intraday and delivery). Any CSV works with the columns Date, Symbol, Type (B or S), Quantity and Price. Trades already in the journal are skipped. US stocks and crypto are added by hand.</p>
+              <p className="k-small">The tax report keeps equity trade by trade, so those come across. Its F&amp;O, commodity and currency are kept as totals for each year: they show under the trades, and the tax P&amp;L's own files bring them in trade by trade.</p>
+              <p className="k-small">{j.assumptions} Facts about past trades, not advice.</p>
+            </div>
+          </Disclosure>
           <div className="k-row">
             {j.removed > 0 && <button type="button" className="btn quiet sm" onClick={() => api<Journal>("/trade/journal/restore", { method: "POST" }).then(adopt).catch(fail)}>Show {j.removed} removed trade{j.removed === 1 ? "" : "s"} again</button>}
-            <button type="button" className="btn quiet sm danger" onClick={() => setAskDelete(true)}><Trash size={16} />Delete my journal</button>
+            {!journalEmpty(j) && <button type="button" className="btn quiet sm danger" onClick={() => setAskDelete(true)}><Trash size={16} />Delete my journal</button>}
           </div>
         </section>
 
