@@ -314,7 +314,7 @@ def nifty_iv(options_data, now: datetime) -> dict:
         if got:
             at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" else now
             iv = positioning.atm_iv(sorted(got["chain"], key=lambda r: r[0]), got.get("spot"), got["expiry"], at)
-            today = {"iv": iv["iv"], "as_of": got["taken_at"], "source": got["source"]} if iv else None
+            today = {"iv": iv["iv"], "as_of": got["taken_at"], "source": got["source"], "at_close": bool(got.get("at_close"))} if iv else None
     except Exception as e:
         print("india vix: nifty iv", str(e)[:120])
     since = (now.date() - timedelta(days=YEAR_DAYS)).isoformat()

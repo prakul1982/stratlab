@@ -804,16 +804,33 @@ def _read_live(options_data, names: list[str], choice: str) -> dict[str, dict]:
             plan[n] = (c, spot, c.strikes[max(0, i - AROUND_LIVE): i + AROUND_LIVE + 1])
         keys = [k for c, _, ks in plan.values() for s in ks for o in ("CE", "PE") if (k := c.key(o, s))]
         q = options_data.quotes(keys)
-        now = ist_now().isoformat(timespec="seconds")
+        now, source = chain_time(ist_now())
         for n, (c, spot, ks) in plan.items():
             rows = [{"strike": s, "ce": q.get(c.key("CE", s)), "pe": q.get(c.key("PE", s))} for s in ks]
             if spot is None or not any(r["ce"] or r["pe"] for r in rows):
                 continue
             got[n] = {"expiry": c.expiry, "expiries": options_data.expiries(NAMES[n], n)[:6], "spot": spot,
-                      "chain": _compact({"rows": rows}), "taken_at": now, "source": "live"}
+                      "chain": _compact({"rows": rows}), "taken_at": now, "source": "live", "at_close": source == "close"}
     except Exception as e:
         print("positioning: live chains", ",".join(names), str(e)[:120])
     return got
+
+
+def chain_time(now: datetime) -> tuple[str, str]:
+    """(the time a chain read from the feed is of, "live" or "close"): now during market hours; outside them the
+    feed's prices are the last session's close, so the chain is of that close (R6O-019: "Live chain, 8 Oct, 23:45
+    IST" after a 15:30 close)."""
+    from .data.calendar import is_trading_day
+    local = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
+    hm = local.strftime("%H:%M")
+    if is_trading_day("IN", local.date()) and "09:15" <= hm < "15:30":
+        return local.isoformat(timespec="seconds"), "live"
+    day = local.date() if is_trading_day("IN", local.date()) and hm >= "15:30" else local.date() - timedelta(days=1)
+    for _ in range(10):
+        if is_trading_day("IN", day):
+            break
+        day -= timedelta(days=1)
+    return datetime(day.year, day.month, day.day, 15, 30, tzinfo=IST).isoformat(timespec="seconds"), "close"
 
 
 def live_chain(options_data, exchange: str, name: str, choice: str) -> dict | None:
@@ -865,7 +882,7 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
         strikes.append({"strike": r[0], "call_oi": co, "put_oi": po, "call_vol": _at(r, 9), "put_vol": _at(r, 10),
                         "call_chg": co - _at(p, 4) if p and co is not None and _at(p, 4) is not None else None,
                         "put_chg": po - _at(p, 8) if p and po is not None and _at(p, 8) is not None else None})
-    out.update(source=got["source"], as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
+    out.update(source=got["source"], at_close=bool(got.get("at_close")), as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
                spot=got.get("spot"), rows=strikes, change_from=_taken(prev).astimezone(IST).isoformat(timespec="minutes") if prev else None,
                strikes_counted=len(rows), **{k: stats[k] for k in ("pcr", "pcr_near", "pcr_near_vol", "max_pain", "top", "atm_iv", "atm")})
     out["iv"] = None
@@ -889,7 +906,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
         p = pcr(got["chain"])
         out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": p["oi"], "pcr_vol": p["vol"],
                     "pcr_near": pcr(near(got["chain"], got.get("spot")))["oi"], "spot": got.get("spot"),
-                    "source": got["source"], "as_of": got["taken_at"]})
+                    "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
     return out
 
 
