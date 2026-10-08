@@ -480,3 +480,31 @@ def test_the_lowest_xirr_is_never_above_the_run_shown():
     assert s["worst"]["xirr"] <= shown["xirr"]
     old = SIP.spread(legs, plan(), 5, days[0], days[-1])
     assert old["worst"]["xirr"] > shown["xirr"]                     # what the page said before
+
+
+# ---------- R5O-033: the break-even percentage is rounded once ----------
+def test_margin_funding_break_even_is_rounded_once():
+    from app import mtf
+    # Rs1,000 a share, 100 shares, half funded at 15% for 45 days: Rs924.66 of interest, Rs1,009.25 to break even
+    out = mtf.cost(mtf.CostReq(buy=1000, qty=100, margin_pct=50, rate_pct=15, days=45))
+    assert out["breakeven"] == 1009.25
+    assert f"{out['breakeven_pct']:.2f}" == "0.92"                  # was 0.925 on the wire, shown "+0.93%"
+
+
+# ---------- R5O-039: a stop hit never costs more than the stated risk ----------
+def test_risk_sizing_never_exceeds_the_stated_risk():
+    from app.engine.core import backtest
+    from app.models import Strategy
+    from tests.test_engine import bars_from
+    # 1% of Rs5,00,000 with a 2% stop: Rs5,000 at risk. After a winning trade the account had grown, and the next entry at
+    # NIFTY 24,187 took 11 units (11 x 2% x 24,187 = Rs5,321); it takes 10 (Rs4,837), the most within Rs5,000
+    s = Strategy(entry=[{"l": {"t": "price"}, "op": "xa", "r": {"t": "num", "v": 20000}}],
+                 exit=[{"l": {"t": "price"}, "op": "xa", "r": {"t": "num", "v": 23000}}],
+                 risk={"capital": 500000, "riskPct": 1, "sl": 2, "tgt": 0, "brokerage": 0, "slippage": 0})
+    closes = [19000.0] * 10 + [20500.0] * 3 + [23500.0] * 3 + [19000.0] * 5 + [24187.0] * 5
+    out = backtest(bars_from(closes), s, start=2, cost_kind="flat")
+    buys = [e for e in out["events"] if e["side"] == "buy"]
+    assert len(buys) == 2 and out["equity"][15] > 500000                 # the first trade won: the account grew
+    for e in buys:
+        assert e["qty"] * e["px"] * 0.02 <= 5000 + 1e-6, e
+    assert buys[1]["qty"] == 10
