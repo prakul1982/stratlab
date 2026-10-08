@@ -435,3 +435,26 @@ def test_a_demerger_in_the_test_window_is_named(monkeypatch):
     got = CA.unadjusted("IN", "RELIANCE", "2021-10-08", "2026-10-08", {"in": Feed()})
     assert [(r["kind"], r["ex_date"]) for r in got] == [("demerger", "2023-07-20")]       # a bonus is adjusted in the candles
     assert CA.unadjusted("IN", "RELIANCE", "2024-01-01", "2026-10-08", {"in": Feed()}) == []
+
+
+# ---------- R6O-017: the theme map keeps companies tied to the theme ----------
+def test_clearly_unrelated_companies_leave_the_theme_map():
+    from app.intel.grounding import drop_unrelated, tidy_text
+    ind = {"HAL": "Capital Goods Aerospace & Defense", "BEL": "Capital Goods Aerospace & Defense", "BDL": "Capital Goods Aerospace & Defense",
+           "SOLARINDS": "Chemicals Explosives", "RELIANCE": "Oil Gas & Consumable Fuels Refineries & Marketing",
+           "HAVELLS": "Consumer Durables Consumer Electronics", "MTNL": "Telecommunication Telecom - Services",
+           "DATAPATTNS": "Capital Goods Aerospace & Defense"}
+    out = {"sector": "India defence",
+           "screen": [{"ticker": t, "name": t} for t in ("HAL", "BEL", "BDL", "SOLARINDS")],
+           "clusters": [{"name": "Missiles & Rocketry", "companies": [{"name": "BDL", "ticker": "BDL"}, {"name": "Reliance", "ticker": "RELIANCE"},
+                                                                      {"name": "Solar", "ticker": "SOLARINDS"}]},
+                        {"name": "Defence Electronics & Systems", "companies": [{"name": "BEL", "ticker": "BEL"}, {"name": "Havells", "ticker": "HAVELLS"},
+                                                                                {"name": "MTNL", "ticker": "MTNL"}, {"name": "Data Patterns", "ticker": "DATAPATTNS"},
+                                                                                {"name": "Hindustan Shipyard Ltd", "ticker": ""}]}],
+           "value_chain": [{"layer": "Platforms", "companies": [{"name": "HAL", "ticker": "HAL"}, {"name": "Reliance", "ticker": "RELIANCE"}]}]}
+    got = drop_unrelated(out, ind.get)
+    names = [[c["ticker"] or c["name"] for c in cl["companies"]] for cl in got["clusters"]]
+    assert names == [["BDL", "SOLARINDS"], ["BEL", "DATAPATTNS", "Hindustan Shipyard Ltd"]]
+    assert [c["ticker"] for c in got["value_chain"][0]["companies"]] == ["HAL"]
+    assert tidy_text("Defence spending is rising through partnerships..") == "Defence spending is rising through partnerships."
+    assert tidy_text("and so on...") == "and so on..."

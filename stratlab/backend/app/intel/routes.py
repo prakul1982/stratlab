@@ -245,7 +245,18 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
     return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
-                      lambda: grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search)))
+                      lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r))))
+
+
+def industry_lookup(region: str):
+    """{symbol: "sector industry"} from the screener's stored index, for the theme map's relevance check (R6O-017)."""
+    try:
+        from .. import screens
+        rows = screens.load_index(region).get("rows") or []
+    except Exception:
+        return None
+    got = {r["symbol"]: " ".join(x for x in (r.get("sector"), r.get("industry")) if x) for r in rows if r.get("symbol")}
+    return got.get if got else None
 
 
 @router.get("/compare")

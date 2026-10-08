@@ -85,11 +85,26 @@ class Resolver:
         return None
 
 
+# words an industry shares with every other, which say nothing about the theme
+_IND_GENERIC = {"and", "the", "of", "other", "others", "services", "service", "products", "product", "diversified", "industries",
+                "industry", "misc", "miscellaneous", "general", "goods", "related", "activities", "allied", "india", "indian"}
+
+
+def _stems(text: str | None) -> set[str]:
+    return {w[:5] for w in re.findall(r"[a-z]+", str(text or "").lower()) if len(w) > 2 and w not in _IND_GENERIC}
+
+
+def tidy_text(t):
+    """A doubled full stop ("...partnerships..") made single; an ellipsis stays (R6O-017)."""
+    return re.sub(r"(?<!\.)\.\.(?!\.)", ".", t) if isinstance(t, str) else t
+
+
 def ground_sector(out: dict, region: str, lookup) -> dict:
     """A theme map with only tickers that are real and belong to the company named (R5O-008):
     - "Listed companies across the chain": a row whose company can't be found is dropped;
     - "Who's in it" and the value chain: the company stays by name, without a ticker (it isn't on the list);
-    - "Funds to track": a fund that can't be found is dropped."""
+    - "Funds to track": a fund that can't be found is dropped.
+    A doubled full stop in the text is made single (R6O-017); drop_unrelated then checks each company's industry."""
     res = Resolver(lookup, region)
 
     def fix(c: dict) -> dict:
@@ -123,7 +138,45 @@ def ground_sector(out: dict, region: str, lookup) -> dict:
         if got and got["symbol"] not in {x["ticker"] for x in funds}:
             funds.append({"ticker": got["symbol"], "name": got["name"] or e.get("name") or ""})
     out["etfs"] = funds
+    for k in ("summary", "core", "market_size"):
+        out[k] = tidy_text(out.get(k))
+    out["sub_themes"] = [{**x, "detail": tidy_text(x.get("detail"))} for x in out.get("sub_themes") or []]
+    out["value_chain"] = [{**x, "description": tidy_text(x.get("description"))} for x in out.get("value_chain") or []]
+    out["screen"] = [{**x, "one_line": tidy_text(x.get("one_line"))} for x in out.get("screen") or []]
+    out["tailwinds"] = [tidy_text(x) for x in out.get("tailwinds") or []]
+    out["risks"] = [tidy_text(x) for x in out.get("risks") or []]
     out["checked"] = True
+    return out
+
+
+def drop_unrelated(out: dict, industry_of) -> dict:
+    """With `industry_of(symbol)` (the screener's stored industry), a listed company in "Who's in it" or the value chain
+    whose industry shares nothing with the theme or with the industries of the theme's most direct names (the "Listed
+    companies across the chain") is dropped as clearly unrelated (R6O-017: Reliance under "Missiles & Rocketry",
+    Havells and MTNL under "Defence Electronics & Systems"). A company whose industry isn't known stays."""
+    if not industry_of:
+        return out
+
+    def ind(sym):
+        try:
+            return industry_of(sym) if sym else None
+        except Exception:
+            return None
+    direct = {x["ticker"] for x in out.get("screen") or []}
+    core = _stems(out.get("sector"))
+    for x in out.get("screen") or []:
+        core |= _stems(ind(x["ticker"]))
+    if not (out.get("screen") or []):
+        return out                                  # nothing to measure against: the map stays as the AI gave it
+
+    def keep(c):
+        if not c.get("ticker") or c["ticker"] in direct:
+            return True
+        i = ind(c["ticker"])
+        return not i or bool(_stems(i) & core)
+    out["clusters"] = [{**c, "companies": [x for x in c.get("companies") or [] if keep(x)]} for c in out.get("clusters") or []]
+    out["clusters"] = [c for c in out["clusters"] if c["companies"]]
+    out["value_chain"] = [{**v, "companies": [x for x in v.get("companies") or [] if keep(x)]} for v in out.get("value_chain") or []]
     return out
 
 
