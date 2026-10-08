@@ -12,7 +12,7 @@ export const DEFAULT_TITLE = "StratLab: test it, research it, track it";
 const OWN: Record<string, string> = {
   "/mine": "My space", "/account": "Account", "/settings": "Settings", "/assistant": "AI assistant", "/app": "Get the app",
   "/invite": "Invite friends", "/plans": "Plans", "/features": "All features", "/dev/kit": "Design kit", "/new": "New notebook",
-  "/trade": "Trade home", "/invest": "Invest home", "/money": "Money home", "/research/compare": "Compare",
+  "/trade": "Trade home", "/invest": "Invest home", "/money": "Money home", "/research/compare": "Compare", "/help": "Help",
 };
 
 /** "Page · StratLab" (or the brand's line alone when the page has no name). */

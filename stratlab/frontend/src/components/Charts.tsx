@@ -53,7 +53,8 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
   return (
     <div style={{ position: "relative" }} onPointerLeave={() => setOn(null)}>
       <div role="grid" aria-label={label} style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 2 }}>
-        {grid.flatMap((row, r) => row.map((val, c) => {
+        {/* each row is a row for screen readers (a grid's cells must sit in rows) without changing the layout (R5O-030) */}
+        {grid.map((row, r) => <div key={r} role="row" aria-label={`Row ${r + 1}`} style={{ display: "contents" }}>{row.map((val, c) => {
           const a = Math.min(1, 0.25 + Math.abs(val) / 20).toFixed(2);
           const mine = r === yours[0] && c === yours[1];
           return (
@@ -65,7 +66,7 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
                 outline: mine ? "2.5px solid var(--ink)" : on && on[0] === r && on[1] === c ? "1.5px solid var(--ink-2)" : undefined, outlineOffset: 1,
               }} />
           );
-        }))}
+        })}</div>)}
       </div>
       <div className="ch-legend static" aria-label="Colour key">
         <span><i className="ch-key-bar" style={{ background: "var(--series-1)" }} />Made money</span>

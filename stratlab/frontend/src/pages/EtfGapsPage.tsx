@@ -12,6 +12,7 @@ import { Badge, Card, CardHead, ChipBar, DataTable, ErrorState, Field, FieldGrou
 type Sort = "wide" | "above" | "below";
 const SORTS: { value: Sort; label: string }[] = [{ value: "wide", label: "Widest gap" }, { value: "above", label: "Most above" }, { value: "below", label: "Most below" }];
 const FUNDS: (Fund | "all")[] = ["all", "equity", "gold", "silver", "debt", "intl"];
+const TOP = 50;
 
 export function EtfGapsPage() {
   const [params, setParams] = useSearchParams();
@@ -22,6 +23,8 @@ export function EtfGapsPage() {
   const [sort, setSort] = useState<Sort>("wide");
   const [q, setQ] = useState("");
   const [tries, setTries] = useState(0);
+  // the widest gaps first, a page of them: all 350-odd made a 38,000 px page on a phone (R5O-017)
+  const [all, setAll] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -79,8 +82,12 @@ export function EtfGapsPage() {
             <Field label="Order">{(id) => <Select id={id} value={sort} onChange={(v) => setSort(v as Sort)} options={SORTS} />}</Field>
             <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="e.g. NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
           </FormGrid>
-          <DataTable label="ETFs by gap to NAV" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} empty="No ETF matches that."
+          {/* stack: on a phone each ETF is a card with every figure labelled, instead of columns cut off at the edge */}
+          <DataTable label="ETFs by gap to NAV" rows={all || q.trim() ? rows : rows.slice(0, TOP)} rowKey={(r) => r.symbol} stack sticky={rows.length > 14} empty="No ETF matches that."
             rowAttrs={(r) => ({ "data-etf": r.symbol, className: pick === r.symbol ? "on" : "" })} columns={columns} />
+          {!all && !q.trim() && rows.length > TOP && (
+            <div className="k-row"><span className="k-note">Showing {TOP} of {rows.length} ETFs, in the order above.</span>
+              <button type="button" className="btn quiet sm" onClick={() => setAll(true)}>Show all {rows.length}</button></div>)}
           <p className="k-note">{data.alerts ? <>Set an alert on a gap from an ETF's view, or on the <Link className="link" to="/alerts">Alerts page</Link>.</>
             : <>Alerts when a gap passes a level you set are on the <Link className="link" to="/plans">Basic plan</Link>.</>}</p>
         </Card>

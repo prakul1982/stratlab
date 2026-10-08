@@ -48,6 +48,15 @@ export function Coachmark({ anchor, label, onClose, children }: { anchor: string
       const r = el.getBoundingClientRect();
       delete hole.dataset.off;
       for (const [k, v] of [["--cm-hx", r.left - 4], ["--cm-hy", r.top - 4], ["--cm-hw", r.width + 8], ["--cm-hh", r.height + 8]] as const) hole.style.setProperty(k, `${Math.round(v)}px`);
+      // a thing in the left-hand menu: the note goes beside it, not under it, so it never covers the menu items it is
+      // talking about (R5O-029)
+      if (el.closest(".sidebar") && r.right + GAP + w <= vw - EDGE) {
+        box.style.setProperty("--cm-x", `${Math.round(r.right + GAP)}px`);
+        box.style.setProperty("--cm-y", `${Math.round(Math.min(Math.max(EDGE, r.top), vh - EDGE - h))}px`);
+        box.dataset.side = "right";
+        setPlaced(true);
+        return;
+      }
       const below = r.bottom + GAP + h <= vh - EDGE || r.top - GAP - h < EDGE;
       const right = r.left + w > vw - EDGE && r.width < vw / 2 && r.left > vw / 2;    // a thing on the right: hang the note leftwards
       const x = Math.min(Math.max(EDGE, right ? r.right - w : r.left), vw - EDGE - w);

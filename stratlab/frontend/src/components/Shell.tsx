@@ -198,6 +198,14 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
         {spaceGroups ?? minePart}
       </nav>
+      {/* the menu's faded bottom edge says there is more; this says it in words and scrolls to it (R5O-038). The mouse
+          wheel and the keyboard reach the same items, so it is left out of the Tab order and of screen readers. */}
+      {(fade === "bottom" || fade === "both") && (
+        <button type="button" className="side-more" tabIndex={-1} aria-hidden="true"
+          onClick={() => sideScroll.current?.scrollBy({ top: Math.round((sideScroll.current?.clientHeight ?? 300) * 0.6), behavior: "smooth" })}>
+          More below <Chevron size={12} />
+        </button>
+      )}
       <div className="side-foot">
         <MarketsNow markets={markets} />
         <AccountMenu me={me} onTour={() => { setOpen(false); openTour(); }} onGo={() => setOpen(false)} />
@@ -207,7 +215,17 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className={`shell${slim ? " slim" : ""}`}>
+      {/* skip links: past the 30-odd menu stops straight to the page, to its own sections when it lists them, or to the
+          menu (R5O-030) */}
       <a className="skip-link sr-only" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to content</a>
+      <a className="skip-link sr-only" href="#main" onClick={(e) => {
+        e.preventDefault();
+        const first = document.querySelector<HTMLElement>("#main .k-pagenav a");
+        const to = first ?? document.querySelector<HTMLElement>("#main h1") ?? document.getElementById("main");
+        if (to && !first && !to.hasAttribute("tabindex")) to.setAttribute("tabindex", "-1");
+        to?.focus();
+      }}>Skip to the page's sections</a>
+      <a className="skip-link sr-only" href="#side-menu" onClick={(e) => { e.preventDefault(); sideScroll.current?.querySelector<HTMLElement>("a, button")?.focus(); }}>Skip to the menu</a>
       {slim && <button className="side-show" aria-label="Show the menu" title="Show the menu" onClick={() => setSlim(false)}><Menu /></button>}
       <header className="topbar">
         <button className="icon-btn" aria-label="Open menu" aria-expanded={open} aria-controls="side-menu" onClick={() => setOpen(true)}><Menu /></button>

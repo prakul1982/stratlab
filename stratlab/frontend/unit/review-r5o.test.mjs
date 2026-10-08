@@ -130,6 +130,48 @@ test("My space greets in India's time for the Indian market, or the person's own
   assert.doesNotMatch(read("src/pages/MineHome.tsx"), /new Date\(\)\.getHours\(\)/);
 });
 
+test("ETF vs NAV on a phone: cards, a page of the widest gaps, then Show all; bigger targets (R5O-017)", () => {
+  const p = read("src/pages/EtfGapsPage.tsx");
+  assert.match(p, /const TOP = 50;/);
+  assert.match(p, /rows=\{all \|\| q\.trim\(\) \? rows : rows\.slice\(0, TOP\)\} rowKey=\{\(r\) => r\.symbol\} stack/);
+  assert.match(p, />Show all \{rows\.length\}<\/button>/);
+  assert.match(read("src/styles.css"), /\.k-table td a, \.k-table th a, \.k-table td \.btn\.sm, \.k-table td button, \.k-cal-ev a, \.k-cal-evs button \{ min-height: 32px;/);
+});
+
+test("tour, replay and journal (R5O-029)", () => {
+  assert.match(read("src/components/kit/Coachmark.tsx"), /if \(el\.closest\("\.sidebar"\) && r\.right \+ GAP \+ w <= vw - EDGE\)/);
+  const rp = read("src/pages/trade/ReplayPage.tsx");
+  assert.match(rp, /if \(e\.key !== "ArrowRight"/);
+  assert.match(rp, /aria-keyshortcuts="ArrowRight"/);
+  const j = read("src/pages/trade/JournalPage.tsx");
+  assert.match(j, /<TimeInput id=\{id\} label="Entry time"/);
+  assert.match(j, /<TimeInput id=\{id\} label="Exit time"/);
+  for (const k of ["symbol", "qty", "entry_price", "exit_price"]) assert.match(j, new RegExp(`error=\\{bad\\.${k}\\}`));
+});
+
+test("accessibility: grid rows, chart buttons, unique table names, skip links (R5O-030)", () => {
+  assert.match(read("src/components/Charts.tsx"), /role="row"/);
+  const rot = read("src/components/Rotation.tsx");
+  assert.match(rot, /role="button" aria-pressed=\{focus === r\.id\}/);
+  assert.match(rot, /onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter" \|\| e\.key === " "\)/);
+  assert.match(read("src/pages/trade/EventsPage.tsx"), /announcement \$\{n \+ 1\} of/);
+  const shell = read("src/components/Shell.tsx");
+  assert.match(shell, />Skip to the page's sections</);
+  assert.match(shell, />Skip to the menu</);
+});
+
+test("polish: Help's title, candle colours, card heights, option tiles, the menu's scroll hint (R5O-032, 035-038, 040)", async () => {
+  const { titleFor } = await import("../src/lib/title.ts");
+  assert.equal(titleFor("/help"), "Help · StratLab");
+  const pc = read("src/charts/price/priceChart.css");
+  assert.equal((pc.match(/--pc-up: var\(--up\); --pc-down: var\(--down\);/g) || []).length, 3);
+  assert.doesNotMatch(pc, /#1F4FB5|#B4500F/);
+  assert.match(read("src/styles-invest.css"), /^\.k-cols \{[^}]*align-items: start; \}/m);
+  assert.match(read("src/styles.css"), /\.mine-slot\[data-card="coming"\], \.mine-slot\[data-card="watch"\] \{ align-self: start; \}/);
+  assert.match(read("src/styles.css"), /\.k-tiles \{ display: grid; grid-template-columns: repeat\(auto-fill, minmax\(max\(140px, calc\(\(100% - 30px\) \/ 4\)\), 1fr\)\)/);
+  assert.match(read("src/components/Shell.tsx"), /className="side-more"/);
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);
