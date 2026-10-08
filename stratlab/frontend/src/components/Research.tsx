@@ -316,7 +316,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
-            <span className="k-note">{n.source}{n.at ? ` · ${ago(n.at)}` : ""}{old ? ` · ${old}` : ""} ↗</span>
+            <span className="k-note">{[n.source, n.at ? ago(n.at) : null, old].filter(Boolean).join(" · ")} ↗</span>
           </a>
         );
       })}

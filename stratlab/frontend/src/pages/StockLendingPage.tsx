@@ -86,7 +86,7 @@ export function StockLendingPage() {
       {error ? <ErrorState title="The lending fees couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState> : !t ? <Card><Skeleton label="Reading the lending fees" lines={4} /></Card> : (
         <Card label="Your holdings and watchlist">
           <CardHead title="Your holdings and watchlist" />
-          <p className="k-note" data-testid="slb-status">{statusText(t.status, "the SLB bhavcopy")}<Info label="Where the numbers come from">{t.note} Source: {t.source}.</Info></p>
+          <p className="k-note" data-testid="slb-status">{statusText(t.status, "the exchange's daily lending file")}<Info label="Where the numbers come from">{t.note} Source: {t.source}.</Info></p>
           {!t.rows.length ? (
             <EmptyState title="No Indian stocks to show yet">Add Indian stocks to <Link className="link" to="/holdings">My Holdings</Link> or your <Link className="link" to="/research/watchlist">watchlist</Link>, or look one up above.</EmptyState>
           ) : (

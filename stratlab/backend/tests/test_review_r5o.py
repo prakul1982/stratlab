@@ -184,6 +184,118 @@ def test_when_the_list_is_down_nothing_passes_as_checked():
     assert out["screen"] == [] and out["etfs"] == []
 
 
+# ---------- R5O-018: the market read, checked against the index numbers ----------
+NIFTY_8_OCT = [{"name": "NIFTY 50", "price": 22231.80, "change_pct": -1.64, "high52": 26400.0, "low52": 22182.55,
+                "from_high_pct": -15.79},
+               {"name": "SENSEX", "price": 71593.24, "change_pct": -1.44, "high52": 85900.0, "low52": 71000.0, "from_high_pct": -16.7}]
+HEADLINES = [{"headline": "Sensex, Nifty fall 1.6% as IT and banking shares slide; RBI raises repo rate to 5.5%"}]
+
+
+def test_the_market_read_keeps_only_what_the_numbers_and_headlines_support():
+    from app.intel.grounding import ground_pulse
+    ai = {"tone": ("The NIFTY 50 fell 1.64% to 22,231.80 and the SENSEX lost 1.44%. Selling pushed the indices well below their "
+                   "52-week lows, erasing roughly ₹7 lakh crore of market value. Hawkish Fed minutes weighed on sentiment. "
+                   "Money rotated into utilities. The RBI raised the repo rate to 5.5%. Markets could rebound next week."),
+          "hot": [{"name": "Infosys", "ticker": "INFY", "why": "IT shares slid."}, {"name": "Reliance", "ticker": "RELIANCE", "why": "Jio."}],
+          "flows": [{"title": "FII selling", "detail": "Foreign investors sold.", "direction": "OUTFLOW"}],
+          "themes": []}
+    out = ground_pulse(ai, NIFTY_8_OCT, HEADLINES)
+    assert out["tone"] == "The NIFTY 50 fell 1.64% to 22,231.80 and the SENSEX lost 1.44%. The RBI raised the repo rate to 5.5%."
+    assert out["hot"] == [] and out["flows"] == []        # no headline names them
+    for gone in ("52-week lows", "lakh crore", "Fed", "utilities", "rebound"):
+        assert gone not in out["tone"]
+
+
+def test_a_52_week_claim_must_match_the_levels():
+    from app.intel.grounding import range_claims_ok
+    assert not range_claims_ok("The indices fell well below their 52-week lows.", NIFTY_8_OCT)
+    assert range_claims_ok("The NIFTY 50 closed near its 52-week low.", NIFTY_8_OCT)          # 0.2% above it
+    assert not range_claims_ok("The market hit record highs.", NIFTY_8_OCT)
+    below = [{**NIFTY_8_OCT[0], "price": 22100.0}]
+    assert range_claims_ok("The NIFTY 50 broke below its 52-week low.", below)
+
+
+def test_when_nothing_survives_the_read_is_the_numbers_alone():
+    from app.intel.grounding import ground_pulse
+    out = ground_pulse({"tone": "Stocks rallied to record highs on hopes of a Fed cut."}, NIFTY_8_OCT, HEADLINES)
+    assert out["tone"].startswith("NIFTY 50 at 22,231.80, −1.64% on the day, 0.2% above its 52-week low and 15.8% below its high.")
+
+
+def test_the_pulse_gives_the_ai_the_52_week_position_and_checks_its_reply(monkeypatch):
+    import json as _json
+    from app.intel import ai as A
+    seen = {}
+
+    def fake(system, text, **k):
+        seen["facts"] = text
+        return _json.dumps({"tone": "Indices sank below their 52-week lows. The NIFTY 50 fell 1.64%.", "hot": [], "flows": [], "themes": []})
+    monkeypatch.setattr(A, "complete", fake)
+    out = A.pulse("IN", "", NIFTY_8_OCT, HEADLINES, (None, None))
+    assert out["tone"] == "The NIFTY 50 fell 1.64%." and '"from_low_pct": 0.22' in seen["facts"]
+
+
+# ---------- R5O-027: the company read, checked against the company's numbers ----------
+def test_the_company_read_states_facts_only():
+    from datetime import date
+    from app.intel.grounding import ground_company
+    facts = {"symbol": "AAPL", "price": 336.67, "metrics": {"P/E": 37.98, "200-day average": 290.2}, "range_52w": [190.0, 340.0]}
+    read = {"summary": "Apple sells iPhones, Macs and services. Its P/E is 37.98, lower than the typical range of 20-30 for the company.",
+            "valuation_note": "The share price is 16% above its 200-day average, indicating limited upside.",
+            "bull": ["Services keep growing.", "The stock looks cheap at 37.98 times earnings."], "bear": ["Rivals may pressure margins."],
+            "position": "", "watch": ["Q4 FY2025 earnings release"],
+            "ideas": [{"title": "Fade overbought", "text": "Sell AAPL short when 14-day RSI exceeds 70, cover when it drops below 50, 3% stop loss", "why": "x"},
+                      {"title": "Trend", "text": "Buy AAPL when the 20-day EMA crosses above the 50-day EMA, sell when it crosses back below", "why": "y"}]}
+    out = ground_company(read, facts, "US", date(2026, 10, 8))
+    assert out["summary"] == "Apple sells iPhones, Macs and services."
+    assert out["valuation_note"] == ""                     # "limited upside" is a forecast; 16% isn't in the facts either
+    assert out["bull"] == ["Services keep growing."] and out["bear"] == []
+    texts = [i["text"] for i in out["ideas"]]
+    assert texts[0] == "Enter short when 14-day RSI exceeds 70, cover when it drops below 50, 3% stop loss"
+    assert texts[1] == "Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below"
+    assert not any("AAPL" in t or t.lower().startswith(("sell", "buy")) for t in texts)
+
+
+def test_indian_fiscal_quarter_labels_follow_the_calendar():
+    from datetime import date
+    from app.intel.grounding import fiscal_quarter, fix_fiscal_labels, ground_company
+    assert fiscal_quarter(date(2026, 10, 8), "IN") == (2, 2027)
+    assert fiscal_quarter(date(2027, 2, 1), "IN") == (3, 2027)
+    assert fiscal_quarter(date(2026, 5, 1), "IN") == (4, 2026)
+    assert fix_fiscal_labels("Q2 FY2026 earnings release", date(2026, 10, 8), "IN") == "Q2 FY2027 earnings release"
+    assert fix_fiscal_labels("Q1 FY27 results", date(2026, 10, 8), "IN") == "Q1 FY2027 results"
+    out = ground_company({"summary": "Revenue grew in Q3 FY26.", "watch": ["Q2 FY2026 earnings release"]}, {"symbol": "TCS"}, "IN", date(2026, 10, 8))
+    assert out["watch"] == ["Q2 FY2027 earnings release"] and out["summary"] == "Revenue grew in Q3 FY26."   # the past stays
+
+
+def test_company_profiles_lose_scrape_residue():
+    from app.intel.screener import clean_profile
+    raw = ("Tata Consultancy Services is an IT services, consulting and business solutions company.[1] "
+           "[1] Revenue Breakup Q3FY26 [1] BFSI : 31.9% Manufacturing : 8.4%")
+    assert clean_profile(raw) == "Tata Consultancy Services is an IT services, consulting and business solutions company."
+
+
+# ---------- R5O-020: no provider names; a US company's own news and peers ----------
+def test_us_peers_start_with_companies_of_its_size_in_its_sector():
+    from app.intel.company import us_peers
+    got = us_peers("AAPL", ["DELL", "SNDK", "WDC", "HPE", "NTAP", "SMCI", "HPQ", "NOTREAL"])
+    assert got[:3] == ["MSFT", "NVDA", "AVGO"] and "NOTREAL" not in got and len(got) == 8
+
+
+def test_a_providers_news_page_is_not_shown_as_the_publisher():
+    from app.branding import public_research
+    out = public_research({"news": [{"headline": "Apple unveils", "source": "Yahoo"}, {"headline": "x", "source": "Reuters"}]})
+    assert [n["source"] for n in out["news"]] == [None, "Reuters"]
+
+
+def test_us_company_news_is_about_the_company():
+    from app.intel.news import mentions
+    assert mentions("Apple Inc", "AAPL", "Apple's iPhone 18 sales rise in China")
+    assert not mentions("Apple Inc", "AAPL", "Dow futures slip ahead of jobs data")
+    assert not mentions("Apple Inc", "AAPL", "OneKey launches a new hardware wallet")
+    src = open(__import__("app.intel.company", fromlist=["x"]).__file__).read()
+    assert 'mentions(p["name"], sym, n["headline"])' in src
+
+
 # ---------- R5O-016: a job's last run survives a restart ----------
 def test_a_jobs_last_run_is_shown_after_a_restart(monkeypatch):
     from app import job_status
@@ -202,6 +314,7 @@ def test_a_jobs_last_run_is_shown_after_a_restart(monkeypatch):
 
 
 def test_the_news_jobs_keep_their_status_when_they_mark_a_run():
+    from app import main  # noqa: F401  (the jobs import each other through the app, as when it starts)
     from app import etf_nav, fo_changes, market_events, positioning, surveillance, vix
     keys_ = {m.Job.status_key for m in (etf_nav, fo_changes, market_events, positioning, surveillance, vix)}
     assert keys_ == {"etf", "fo", "events", "positioning", "surveillance", "vix"}

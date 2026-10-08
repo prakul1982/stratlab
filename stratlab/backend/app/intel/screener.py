@@ -13,6 +13,23 @@ from bs4 import BeautifulSoup
 from .net import BROWSER_UA, Source, SourceError, num
 
 
+_CITE = re.compile(r"\s*\[\d{1,3}\]")
+# where a profile's own words end and its pasted breakdowns begin: "[1] Revenue Breakup Q3FY26 [1] BFSI : 31.9% …"
+_BREAKDOWN = re.compile(r"\s*(?:\[\d{1,3}\]\s*)?\b(?:Revenue|Business|Segment(?:al)?|Geograph\w*|Product|Order book|Key)\s+"
+                        r"(?:Breakup|Break-up|Mix|Split|Share|Wise|Highlights?)\b.*$", re.I | re.S)
+
+
+def clean_profile(text: str | None) -> str | None:
+    """A company profile as people read it: no "[1]" footnote marks and no breakdown lists pasted after the
+    description (R5O-027). Nothing left: None."""
+    if not text:
+        return text
+    t = _BREAKDOWN.sub("", str(text))
+    t = _CITE.sub("", t)
+    t = re.sub(r"\s+", " ", t).strip(" :;,-")
+    return t or None
+
+
 def _text(el) -> str:
     return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).replace(" ", " ").strip() if el else ""
 
@@ -69,7 +86,9 @@ def parse(html: str) -> dict:
         paras = [_text(p) for p in prof.find_all("p")]
         paras = [p for p in paras if len(p) > 30]
         if paras:
-            out["about"] = " ".join(paras[:2])[:1200]
+            about = clean_profile(" ".join(paras[:2]))
+            if about:
+                out["about"] = about[:1200]
         for a in prof.find_all("a", href=True):
             href = a["href"]
             if href.startswith("http") and "screener.in" not in href and "bseindia" not in href and "nseindia" not in href:

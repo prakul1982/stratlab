@@ -86,6 +86,15 @@ test("Admin's 'Needs your attention' lists feeds on Check and each AI provider t
   assert.ok(!items.some((t) => t.includes("OpenRouter")));
 });
 
+test("no data provider's name on the company and lending pages (R5O-020)", () => {
+  const page = read("src/pages/Research.tsx");
+  assert.doesNotMatch(page, /More on Wikipedia|From Wikipedia/);
+  assert.match(page, /Read the full entry ↗/);
+  assert.doesNotMatch(read("src/pages/StockLendingPage.tsx"), /bhavcopy/i);
+  // a headline with no publisher shows its time alone, without a stray " · "
+  assert.match(read("src/components/Research.tsx"), /\{\[n\.source, n\.at \? ago\(n\.at\) : null, old\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);

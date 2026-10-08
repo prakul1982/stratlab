@@ -13,7 +13,7 @@ from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num
 from .news import GoogleNews, Wikipedia, mentions
-from .screener import Screener, summary as scr_summary
+from .screener import Screener, clean_profile, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
 
@@ -103,6 +103,21 @@ def _public(row: dict) -> dict:
 def _yahoo_in(sym: str) -> str:
     """Yahoo's ticker for an Indian stock: NSE symbol.NS, or a BSE code.BO."""
     return f"{sym}.BO" if sym.isdigit() else f"{sym}.NS"
+
+
+def us_peers(sym: str, listed: list) -> list[str]:
+    """Similar US companies: for one of the largest US companies, the others of that size in its sector first (Apple:
+    Microsoft, NVIDIA, Broadcom); then the data source's peers in its narrow industry that are in the S&P 500 (a stray
+    or delisted ticker is left out); at most 8 (R5O-020: Apple's were only storage and server makers)."""
+    from .. import universes
+    try:
+        rows = {r[0]: r[2] for r in universes.sp500_doc()["rows"]}
+    except Exception:
+        rows = {}
+    big = next((p["symbols"] for p in universes.PRESETS.get("US", []) if p["id"] == "us_mega"), [])
+    same_size = [s for s in big if s != sym and sym in big and rows.get(s) and rows.get(s) == rows.get(sym)]
+    narrow = [x for x in listed if isinstance(x, str) and x and x != sym and (not rows or x in rows)]
+    return list(dict.fromkeys(same_size + narrow))[:8]
 
 
 class Research:
@@ -349,10 +364,13 @@ class Research:
             "insider": {"net": sum(num(t.get("change")) or 0 for t in ins[:40]),
                         "rows": [{"name": t.get("name"), "change": t.get("change"), "date": t.get("filingDate") or t.get("transactionDate")}
                                  for t in ins[:8]]} if ins else None,
-            "peers": [x for x in (r["peers"] or []) if x and x != sym][:8],
+            "peers": us_peers(sym, r["peers"] or []),
+            # the company's own news: a headline (or its summary) that names it, not the day's market stories the feed
+            # files under every big ticker (R5O-020)
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                     for n in (r["news"] or [])[:8] if n.get("headline")],
+                     for n in (r["news"] or []) if n.get("headline")
+                     and (mentions(p["name"], sym, n["headline"]) or mentions(p["name"], sym, str(n.get("summary") or "")[:400]))][:8],
             "about": {"wiki": r["wiki"], "profile": None},
             "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
             "testable": True, "instrument_id": f"US:{sym}",
@@ -488,7 +506,7 @@ class Research:
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
             "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],
-            "about": {"wiki": r2.get("wiki"), "profile": (scr or {}).get("about")},
+            "about": {"wiki": r2.get("wiki"), "profile": clean_profile((scr or {}).get("about"))},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
                      + ([{"label": "BSE", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),

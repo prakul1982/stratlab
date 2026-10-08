@@ -252,12 +252,12 @@ export function CompanyPage() {
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (
           <Card>
-            <CardHead title="What they do" info="From Wikipedia and the company's own profile: facts, not AI." />
+            <CardHead title="What they do" info="From an encyclopedia entry and the company's own profile: facts, not AI." />
             {wiki?.description && <p className="k-sub">{wiki.description}</p>}
             <p className="k-small">{wiki?.extract || c.about.profile}</p>
             {wiki && c.about.profile && <p className="k-small k-muted">{c.about.profile}</p>}
             {c.facts.some((f) => !/market cap/i.test(f.label)) && <dl className="k-dl">{c.facts.filter((f) => !/market cap/i.test(f.label)).map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl>}
-            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">More on Wikipedia ↗</a>}
+            {wiki && <a className="link k-small" href={safeHref(wiki.url)} target="_blank" rel="noopener noreferrer">Read the full entry ↗</a>}
           </Card>
         )}
         {c.margins && c.margins.gross != null && <Card><CardHead title="Where a sale goes" info={HELP.researchMargins} /><MarginCascade {...c.margins} /></Card>}
