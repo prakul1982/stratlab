@@ -32,6 +32,19 @@ def _from_quote(meta: dict, tz, day: datetime, ohl: tuple, prev_close: float | N
     return o, max(h, o, c), min(l, o, c), c
 
 
+def _previous_close(meta: dict, candles: list[dict]) -> float | None:
+    """The close of the session before the last trade's. The meta's chartPreviousClose is the close before the chart's
+    window (about a week back for a 7-day window), so a "day's change" read from it is really the week's."""
+    last = meta.get("regularMarketTime")
+    try:
+        day = datetime.fromtimestamp(last, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")).date().isoformat() \
+            if isinstance(last, (int, float)) else (candles[-1]["t"][:10] if candles else None)
+    except (OverflowError, OSError, ValueError):
+        day = candles[-1]["t"][:10] if candles else None
+    before = [c["c"] for c in candles if day and c["t"][:10] < day]
+    return before[-1] if before else (meta.get("previousClose") or meta.get("chartPreviousClose"))
+
+
 class Yahoo(Source):
     name = "Yahoo Finance"
 
@@ -136,9 +149,10 @@ class Yahoo(Source):
 
     def meta(self, symbol: str) -> dict:
         """Price, previous close, day range and 52-week range for one symbol."""
-        # exact: the previous close in a chart's meta is the close before its window, so it must be this short window
-        m = self.chart(symbol, "1d", 7, ttl=60, exact=True)["meta"]
-        price, prev = m.get("regularMarketPrice"), m.get("chartPreviousClose") or m.get("previousClose")
+        # exact: a fresh short window, never cut from a long download, so the last sessions are today's
+        got = self.chart(symbol, "1d", 7, ttl=60, exact=True)
+        m = got["meta"]
+        price, prev = m.get("regularMarketPrice"), _previous_close(m, got["candles"])
         return {
             "symbol": m.get("symbol", symbol), "name": m.get("longName") or m.get("shortName"),
             "currency": m.get("currency"), "exchange": m.get("fullExchangeName") or m.get("exchangeName"),
