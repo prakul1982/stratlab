@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, dataUrl, type ApiError } from "../lib/api";
 import { numberProblem, problems, type Limits } from "../lib/validate";
 import { useApp } from "../lib/app";
+import { usTodayNote } from "../lib/marketHours";
 import { ago, dateOnly, fmtDate, inr, money, pct, price, qty as qtyText, safeHref, signTone, sourceWords } from "../lib/format";
 import { Modal } from "../components/ui";
 import { Trash } from "../components/Icons";
@@ -62,7 +63,7 @@ const QTY: Limits = { min: 0, above: true, max: 1e9 };
 const AVG: Limits = { min: 0, max: 1e8, optional: true };
 
 export function HoldingsPage() {
-  const { fail, notify } = useApp();
+  const { fail, notify, markets } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState<FactsReply | null>(null);
@@ -257,6 +258,7 @@ export function HoldingsPage() {
                 Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
               </p>
             )}
+            {view.us && usTodayNote(markets, view.us, view.usd_inr) && <p className="k-note" data-testid="us-today">{usTodayNote(markets, view.us, view.usd_inr)}</p>}
             {t.session && (t.other_session?.length ?? 0) > 0 && (
               <p className="k-note">Today is the {fmtDate(t.session, { year: false })} session. {t.other_session!.join(", ")} {t.other_session!.length === 1 ? "has" : "have"} not traded in it yet, so {t.other_session!.length === 1 ? "its" : "their"} last change is left out of Today.</p>
             )}

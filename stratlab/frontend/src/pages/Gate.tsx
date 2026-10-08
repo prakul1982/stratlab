@@ -44,7 +44,7 @@ export function SignInGate() {
   const deep = !!d.company?.deep;
   const none = !!d.company && look.state === "none";
   const what = d.company ? (co ? (deep ? `the deep dive on ${co.name}` : co.name) : deep ? "this company's deep dive" : "this company's page") : d.what;
-  const title = none ? `No company page for ${symbol}` : `Sign in to see ${what}`;
+  const title = none ? `No company page for ${symbol}` : d.restricted ? "Sign in to StratLab" : `Sign in to see ${what}`;
   useEffect(() => {
     if (none) document.title = withBrand("Company not found");
     else if (co) document.title = withBrand(`Sign in · ${co.name}`);
@@ -54,6 +54,7 @@ export function SignInGate() {
       <PageHeader eyebrow="StratLab" title={title}
         lede={none ? "StratLab has no company page at this address. Check the symbol, or sign in with Google to search every listed company."
           : d.company ? "Company pages, with their numbers, filings, owners and charts, are inside StratLab. It's free to start: sign in with Google and the page opens if StratLab has one for this company."
+          : d.restricted ? "Sign in with Google to continue. It's free to start."
           : `${what.charAt(0).toUpperCase()}${what.slice(1)} ${/s$/.test(what) && !/^this /.test(what) ? "are" : "is"} in your StratLab account. Sign in with Google and this page opens.`} />
       <div className="gate-actions">
         <SignInButton />

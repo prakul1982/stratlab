@@ -815,11 +815,124 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
             "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
 
 
+# actions the backtests' prices don't adjust for: the broker's daily candles are adjusted for bonus issues and splits,
+# not for a demerger, so the price drops by the value moved to the new company on its ex-date (R6O-010: RELIANCE's
+# JioFin demerger in a five-year test read as part of buy and hold's -6.9%)
+UNADJUSTED = ("demerger",)
+_unadj = TTLCache(max_items=500)
+
+
+def unadjusted(region: str, symbol: str, frm: str, to: str, sources: dict | None) -> list[dict]:
+    """A company's actions between two days (YYYY-MM-DD) that the test's prices are not adjusted for, from the
+    exchange's whole list for the company (not only the three years kept for the corporate actions card)."""
+    symbol = symbol.upper()
+    if region != "IN" or not sources or sources.get("in") is None:
+        return []
+    hit = _unadj.get(symbol)
+    if hit is None:
+        try:
+            where, raw = sources["in"].actions_of(symbol)
+            rows = bse_rows(raw, symbol) if where == "bse" else [r for r in india_rows(raw) if r["symbol"] == symbol]
+        except (SourceError, AttributeError, KeyError, TypeError) as e:
+            print("unadjusted actions:", symbol, str(e)[:120])
+            rows = None
+        hit = [r for r in rows or [] if r.get("kind") in UNADJUSTED] if rows is not None else []
+        _unadj.set(symbol, hit, 12 * 3600 if rows is not None else 600)
+    have = {r["id"]: r for r in hit}
+    for r in history(region, symbol, None, fetch=False):          # what the card has stored, too
+        if r.get("kind") in UNADJUSTED:
+            have.setdefault(r["id"], r)
+    return sorted((r for r in have.values() if frm <= r["ex_date"] <= to), key=lambda r: r["ex_date"])
+
+
+# a foreign company's own (home) listing, by the end of its ticker: the exchanges a US depositary share is issued on
+HOME_SUFFIX = (".MI", ".PA", ".DE", ".AS", ".MC", ".L", ".T", ".HK", ".SW", ".TO", ".AX", ".CO", ".ST", ".OL", ".HE",
+               ".BR", ".LS", ".KS", ".TW", ".SA", ".MX", ".JO", ".NS", ".SS", ".SZ", ".IR", ".VI", ".TA", ".SI")
+_home_fill = TTLCache(max_items=500)
+
+
+def home_listing_dividends(symbol: str, rows: list[dict], yahoo, today: date) -> list[dict]:
+    """The payments a US depositary share's price history leaves out, from its home listing (R6O-008: Eni's E has no
+    Sep and Nov 2025 dividends, which ENI.MI has as EUR0.26 each). Each missing home payment is converted at that
+    day's rate and the depositary ratio the two histories share (EUR0.27 to $0.628: 2 shares at 1.163), and is
+    marked as converted. Nothing is added unless at least two payments pair up at one steady ratio."""
+    key = (symbol.upper(), today.isoformat())
+    hit = _home_fill.get(key)
+    if hit is not None:
+        return hit
+    out: list[dict] = []
+    try:
+        out = _home_missing(symbol.upper(), rows, yahoo, today)
+    except Exception as e:                     # a source down or an odd answer: the listed payments stand
+        print("home listing dividends:", symbol, type(e).__name__, str(e)[:120])
+    _home_fill.set(key, out, 12 * 3600)
+    return out
+
+
+def _home_missing(symbol: str, rows: list[dict], yahoo, today: date) -> list[dict]:
+    from statistics import median
+    from .intel.grounding import names_agree
+    us = sorted((r for r in rows if r.get("kind") == "dividend" and r.get("amount")), key=lambda r: r["ex_date"])
+    if len(us) < 2:
+        return []
+    # a depositary share's dividends are a home payment converted at the day's rate, so they change by fractions of a
+    # cent from one to the next (Eni: 0.543, 0.52, 0.571, 0.614); a US company's are set in cents (Apple: 0.25, 0.26).
+    # Only the first kind is looked up abroad, so a US company's page costs no extra reads.
+    if not any(abs(r["amount"] * 100 - round(r["amount"] * 100)) > 0.05 for r in us[-4:]):
+        return []
+    name = (yahoo.meta(symbol) or {}).get("name")
+    if not name:
+        return []
+    home = next((x["symbol"] for x in yahoo.search(name) if str(x.get("symbol", "")).upper().endswith(HOME_SUFFIX)
+                 and x.get("quoteType") == "EQUITY" and names_agree(name, x.get("longname") or x.get("shortname"))), None)
+    if not home:
+        return []
+    cur = str((yahoo.meta(home) or {}).get("currency") or "")
+    scale = 0.01 if cur in ("GBp", "GBX", "ILA", "ZAc") else 1.0
+    cur = {"GBp": "GBP", "GBX": "GBP", "ILA": "ILS", "ZAc": "ZAR"}.get(cur, cur).upper()
+    if not cur or cur == "USD":
+        return []
+    fx = {b["t"][:10]: b["c"] for b in yahoo.chart(f"{cur}USD=X", "1d", HIST_DAYS + 30, ttl=12 * 3600).get("candles") or [] if b.get("c")}
+    days = sorted(fx)
+
+    def rate(d: str) -> float | None:
+        before = [x for x in days if x <= d]
+        return fx[before[-1]] if before else None
+    frm = (today - timedelta(days=HIST_DAYS)).isoformat()
+    theirs = [(d["date"], d["amount"] * scale) for d in yahoo.events(home).get("dividends") or [] if d.get("amount") and d["date"] >= frm]
+    ratios, missing = [], []
+    for day, amt in theirs:
+        r = rate(day)
+        if not r:
+            continue
+        near = [u for u in us if abs((date.fromisoformat(u["ex_date"]) - date.fromisoformat(day)).days) <= 10]
+        if near:
+            ratios.append(near[0]["amount"] / (amt * r))
+        elif us[0]["ex_date"] <= day < today.isoformat():
+            missing.append((day, amt, r))
+    if len(ratios) < 2:
+        return []
+    k = median(ratios)
+    if any(abs(x / k - 1) > 0.1 for x in ratios):
+        return []                              # the two histories don't pair up at one ratio: nothing is guessed
+    out = []
+    for day, amt, r in missing:
+        usd = amt * r * k
+        a = {"kind": "dividend", "sub": "dividend", "label": "Dividend", "text": f"Dividend about {money(round(usd, 3), '$')} a share (converted)",
+             "short": f"Dividend about {money(round(usd, 3), '$')} a share", "amount": round(usd, 4)}
+        rw = row("US", symbol, a, date.fromisoformat(day), src="home listing",
+                 purpose=f"Converted from the home listing's {cur} {amt:g} a share at that day's rate")
+        out.append({**rw, "converted": True})
+    return out
+
+
 def company(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True) -> dict:
     """One company's actions: those ahead, and the past ones (newest first), with the dividends a share of the
-    last twelve months added up."""
+    last twelve months added up. A US depositary share's missing payments come from its home listing."""
     today = today or local_today(region)
     rows = actions_for(region, symbol, sources, today, fetch, keep_empty=False)
+    if region == "US" and fetch and sources and sources.get("us") is not None:
+        rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()
     year_ago = (today - timedelta(days=365)).isoformat()
     divs = [r for r in rows if r["kind"] == "dividend" and r.get("amount") and year_ago <= r["ex_date"] < t]

@@ -15,9 +15,23 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** The India paper sessions that need the broker's live feed (other markets are polled). Older servers sent only the total. */
 export const indiaSessions = (sv: Overview["server"]): number => sv.india_sessions ?? sv.live_sessions;
 
-/** Whether a provider with a key can answer now: the server's own reading (a short rate limit or a used-up free quota
- * still counts as up; one listed model it can't use doesn't make it down). Older servers sent only the last error. */
+/** Whether a provider with a key can answer now: the server's own reading (a short rate limit still counts as up; a
+ * used-up free quota or a paused provider does not; one listed model it can't use doesn't make it down). Older servers
+ * sent only the last error. */
 export const aiUp = (a: AIRow): boolean => (a.answering ?? null) !== null ? !!a.answering : !a.last_error || !!a.quota;
+
+/** The AI providers' light: how many can answer now, and, said plainly, those out of free quota and those with a model
+ * paused (R6O-003: "OK, 12 of 12 answering" beside a paused provider and one whose free credit was used up). */
+export function aiTile(ai: AIRow[]): Service {
+  const keys = ai.filter((a) => a.configured);
+  const up = keys.filter(aiUp).length;
+  const quota = keys.filter((a) => a.quota_used).length;
+  const paused = keys.filter((a) => aiUp(a) && (a.paused_models ?? 0) > 0).length;
+  const notes = [quota ? `${quota} out of free quota` : "", paused ? `${paused} with a model paused` : ""].filter(Boolean);
+  const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : up < keys.length || paused ? "warn" : "ok";
+  return { key: "ai", label: "AI providers", state, to: "/admin/system",
+    detail: keys.length ? [`${up} of ${keys.length} answering`, ...notes].join(" · ") : "No keys set" };
+}
 
 /** Every service's light, worded once. */
 export function services(ov: Overview | null): Service[] {
@@ -34,10 +48,7 @@ export function services(ov: Overview | null): Service[] {
     state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : sv.auto_login.ok ? "ok" : "warn",
     detail: !sv.auto_login_configured ? "Off" : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`,
     fix: !sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : undefined });
-  const keys = sv.ai.filter((a) => a.configured);
-  const up = keys.filter(aiUp).length;
-  out.push({ key: "ai", label: "AI providers", state: !keys.length ? "bad" : up === keys.length ? "ok" : up ? "warn" : "bad", to: "/admin/system",
-    detail: keys.length ? `${up} of ${keys.length} answering` : "No keys set" });
+  out.push(aiTile(sv.ai));
   if (sv.admin_alerts) {
     const a = sv.admin_alerts;
     out.push({ key: "mail", label: "Alert emails", state: a.email_ready ? "ok" : "bad", to: "/admin/system",

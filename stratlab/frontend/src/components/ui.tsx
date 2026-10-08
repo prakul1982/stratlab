@@ -14,8 +14,9 @@ export const VERDICT_FACT: Record<VerdictKind, string> = {
   edge: "Passed the checks", mixed: "Mixed check results", luck: "Failed a robustness check", not_enough: "Too few trades", no_edge: "Lost money after costs",
 };
 
-export const VerdictBadge = ({ v, facts }: { v: VerdictKind | null | undefined; facts?: boolean }) =>
-  v ? <span className={`badge ${v}`}>{(facts ? VERDICT_FACT : VERDICT_NAME)[v]}</span> : <span className="badge skip">No experiments yet</span>;
+/** `label`: the server's own words for this verdict (a library entry's "Passed all 3 checks run"), shown instead. */
+export const VerdictBadge = ({ v, facts, label }: { v: VerdictKind | null | undefined; facts?: boolean; label?: string | null }) =>
+  v ? <span className={`badge ${v}`}>{label || (facts ? VERDICT_FACT : VERDICT_NAME)[v]}</span> : <span className="badge skip">No experiments yet</span>;
 
 /** The kit's modal dialog (components/kit/Dialog), under its old name. */
 export { Dialog as Modal } from "./kit/Dialog";

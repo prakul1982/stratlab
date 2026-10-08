@@ -686,7 +686,11 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # is checked against the latest year's profit over its earnings per share, which is restated for any split before
     # the report was issued; more than three times apart, the count the earnings imply is used
     eps_basic = flows(facts, ("EarningsPerShareBasic", "BasicEarningsLossPerShare"), "annual", f"{cur}/shares")
-    last = ends[-1]
+    # (the latest year that has both, within two years: Bradesco's last two reports tag no earnings per share, and its
+    # share count is a thousand times its real one, 10.6 trillion, which made a $46 trillion bank, R6V-001)
+    recent = (date.fromisoformat(ends[-1]) - timedelta(days=740)).isoformat()
+    both = [e for e in sorted(eps_basic) if e >= recent and abs(eps_basic.get(e) or 0) >= 0.05 and ni_a.get(e)]
+    last = ends[-1] if ends[-1] in both else (both[-1] if both else ends[-1])
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3:
@@ -913,8 +917,10 @@ class SEC(Source):
         hit = self.cache.get(("ads", url))
         if hit is not None:
             return hit
+        # a foreign company's report that couldn't be read now: said, so its market value isn't taken on trust (R6V-001)
+        unread = {"ratio": None, "ads": None, "unread": True, "form": forms[i], "url": url}
         if not self.limit.take():
-            return None
+            return unread
         try:
             with self.http.stream("GET", url) as r:
                 self.check(r)
@@ -924,7 +930,7 @@ class SEC(Source):
                     if len(buf) > 60 * 1024 * 1024:
                         break
         except (httpx.HTTPError, SourceError):
-            return None
+            return unread
         out = {**ads_ratio(filing_text(bytes(buf).decode("utf-8", "replace"))), "form": forms[i], "url": url}
         self.cache.set(("ads", url), out, 30 * 86400)
         return out
@@ -979,6 +985,8 @@ class SEC(Source):
             dep = None
         if dep and dep.get("ads"):
             p = with_ads(p, dep.get("ratio"))
+        elif dep and dep.get("unread"):
+            p["ads_unread"] = True          # whether its US shares are depositary shares isn't known this time
         with self._build_lock:
             if len(self._built) > 300:
                 self._built.pop(next(iter(self._built)))
@@ -1113,7 +1121,7 @@ _PARTS = {"half": 2, "third": 3, "quarter": 4, "fourth": 4, "fifth": 5, "tenth":
 _NUM = (r"\d[\d,]*(?:\.\d+)?\s*/\s*\d[\d,]*(?:th)?|\d[\d,]*(?:\.\d+)?|(?:one|a)[\s-]+(?:" + "|".join(_PARTS) + r")|"
         r"twenty[\s-]five|one\s+hundred|one\s+thousand|" + "|".join(sorted(_SMALL, key=len, reverse=True)))
 ADS_RATIO = re.compile(
-    r"(?:american\s+depositary\s+(?:shares?|receipts?)|\bADSs?|\bADRs?)\b[^.;]{0,100}?\b"
+    r"(?:american\s+deposit[ao]ry\s+(?:shares?|receipts?)|\bADSs?|\bADRs?)\b[^.;]{0,100}?\b"
     r"represent(?:s|ing)\s+(?:an\s+ownership\s+interest\s+in\s+|the\s+right\s+to\s+receive\s+)?"
     r"(?P<n>" + _NUM + r")\s+(?:\(\s*[\d.,/]+\s*\)\s+)?(?:of\s+(?:one|an?)\s+)?(?P<rest>[^.;%]{0,60}?)\b(?:shares?|stock)\b", re.I)
 COVER = re.compile(r"pursuant\s+to\s+section\s+12\s*\(\s*b\s*\)", re.I)
@@ -1137,7 +1145,7 @@ def ads_ratios(text: str) -> list[float]:
     """Every "each ADS represents N shares" in a filing's text, in order: ordinary shares per depositary share."""
     out = []
     for m in ADS_RATIO.finditer(text):
-        if re.search(r"\b(?:ADSs?|ADRs?|depositary|million|billion|thousand)\b", m.group("rest"), re.I):
+        if re.search(r"\b(?:ADSs?|ADRs?|deposit[ao]ry|million|billion|thousand)\b", m.group("rest"), re.I):
             continue
         n = _number(m.group("n"))
         if n and 1e-4 <= n <= 1e7:
@@ -1153,9 +1161,13 @@ def ads_ratio(text: str) -> dict:
     m = COVER.search(text)
     if m:                                     # the cover page: to the table of contents, with its footnotes
         cover = text[m.start(): m.start() + 8000]
-        toc = re.search(r"table\s+of\s+contents", cover[500:], re.I)
-        cover = cover[: 500 + toc.start()] if toc else cover
-    ads = bool(re.search(r"depositary|\bADSs?\b|\bADRs?\b", cover, re.I))
+        # the table of contents ends the cover, but only one after the list of registered securities: a page header
+        # "Table of contents" link can sit above that list (Banco Santander-Chile's 20-F, R6V-001)
+        listed = re.search(r"registered\s+pursuant\s+to\s+section\s+12\s*\(\s*b\s*\)\s+of\s+the\s+act", cover[200:], re.I)
+        after = max(500, 200 + listed.end()) if listed else 500
+        toc = re.search(r"table\s+of\s+contents", cover[after:], re.I)
+        cover = cover[: after + toc.start()] if toc else cover
+    ads = bool(re.search(r"deposit[ao]ry|\bADSs?\b|\bADRs?\b", cover, re.I))
     if not ads:
         return {"ratio": None, "ads": False}
     first = ads_ratios(cover)

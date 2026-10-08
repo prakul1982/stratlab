@@ -165,9 +165,10 @@ class YahooProvider:
         per_day = self.info["per_day"][tf]
         return math.ceil(candles / per_day * 7 / 5) + 3
 
-    def history(self, inst: dict, tf: str, days: int) -> list[dict]:
+    def history(self, inst: dict, tf: str, days: int, ttl: float | None = None) -> list[dict]:
+        """`ttl`: the oldest cached answer to reuse, in seconds (None: the source's own default)."""
         try:
-            c = self.yahoo.chart(inst["token"], tf, days)
+            c = self.yahoo.chart(inst["token"], tf, days, ttl=ttl) if ttl is not None else self.yahoo.chart(inst["token"], tf, days)
         except SourceError as e:
             raise DataError(str(e)) from None
         k = self._scale(inst, c["meta"])

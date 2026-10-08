@@ -268,7 +268,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
           <div className="k-stack" data-testid="chain-facts">
             <div className="k-stack k-tight">
               <p className="k-small k-muted">
-                Expiry {dayName(c.expiry)} · spot {strike(c.spot)} · {c.source === "live" ? "live chain" : "recorded chain"}, {istTime(c.as_of)}
+                Expiry {dayName(c.expiry)} · spot {strike(c.spot)} · {c.at_close ? "chain at the close" : c.source === "live" ? "live chain" : "recorded chain"}, {istTime(c.as_of)}
               </p>
               <Source testId="chain-recorded">{recordedLine(name, c.recorded)}</Source>
             </div>

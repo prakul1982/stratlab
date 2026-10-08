@@ -59,7 +59,7 @@ export function AlertSettingsCard() {
           <div className="k-stack">
             <CheckField checked={alerts.daily} disabled={!canReport} onChange={(on) => setAlerts({ ...alerts, daily: on })} label="A short report after each market closes" />
             <CheckField checked={alerts.enabled} disabled={!canAlert} onChange={(on) => setAlerts({ ...alerts, enabled: on })}
-              label={<>A message for every paper trade{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Pro</Badge></span>}</>} />
+              label={<>A message for every paper trade{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic</Badge></span>}</>} />  {/* on Basic, as Plans lists it (R6O-012) */}
           </div>
         </FieldGroup>
         {ch.telegram && <Field label="Telegram chat ID" optional info="Open the StratLab bot and press Start, then message @userinfobot to find your chat ID."

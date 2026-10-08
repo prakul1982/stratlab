@@ -7,8 +7,8 @@ import { pct, TF_NAME } from "../lib/format";
 import { signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { PublicFrame } from "../components/PublicFrame";
-import { checksOf, HoldLine, Rules, shownStats, VERDICTS, type LibEntry } from "../components/LibraryBits";
-import { STATUS_NAME, VerdictBadge } from "../components/ui";
+import { CHECK_RESULT, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
 import { Select } from "../components/kit/Form";
@@ -22,6 +22,13 @@ import "./trade/trade.css";
  * Only entries StratLab published itself come from the server (/public/library), never a user's. */
 
 const CHECK_NAME: Record<string, string> = { unseen: "Unseen years", nearby: "Nearby settings", shuffle: "Bad-luck drawdown", sample: "Enough trades" };
+/** What each check asks, so "Not run" and "Passed" mean something to a visitor. */
+const CHECK_SAYS: Record<string, string> = {
+  unseen: "Did it make money on the last part of the period, which the rules weren't tuned on?",
+  nearby: "Do settings near the chosen ones make money too? Not run on a group of stocks.",
+  shuffle: "With the same trades in a worse order, how much deeper could the worst fall have been?",
+  sample: "Were there enough trades to tell skill from luck (30 or more)?",
+};
 const MARKETS: [string, string][] = [["", "Every market"], ["IN", "India"], ["US", "United States"]];
 const NOTE = "Tested by StratLab on past prices, for research and paper trading. A verdict describes the past, not what comes next, and nothing here is investment advice.";
 
@@ -75,7 +82,7 @@ export function PublicLibrary() {
                       <CardHead title={plainTerms(e.name)} level={2} />
                       <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>by {e.author}</span></span>
                     </div>
-                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                     <HoldLine e={e} />
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
@@ -108,9 +115,9 @@ export function PublicLibraryEntry({ id }: { id: string }) {
   }, [id]);
   useEffect(() => {
     if (!e) return;
-    const title = `${plainTerms(e.name)}: ${e.verdict.headline} · StratLab`;
+    const title = `${plainTerms(e.name)}: ${e.verdict.label ?? e.verdict.headline} · StratLab`;
     document.title = title;
-    const desc = `${plainTerms(e.name)} on ${where(e)}: ${e.verdict.headline} ${e.reason ?? ""} Rules, results after costs and the four checks, as StratLab tested them on past prices.`.replace(/\s+/g, " ").trim();
+    const desc = `${plainTerms(e.name)} on ${where(e)}: ${e.verdict.fact_headline ?? e.verdict.headline} ${e.reason ?? ""} Rules, results after costs and the four checks, as StratLab tested them on past prices.`.replace(/\s+/g, " ").trim();
     applySeo({ ...seoFor(`/library/${id}`, "public"), description: desc, canonical: seoFor(`/library/${id}`).canonical, index: true }, title);
   }, [e, id]);
   const sh = e ? shownStats(e) : null;
@@ -121,11 +128,12 @@ export function PublicLibraryEntry({ id }: { id: string }) {
       {e && sh && (
         <>
           <div className="k-stack">
-            <span className="k-eyebrow">{plainTerms(e.name)} · {where(e)} · {TF_NAME[e.tf] ?? e.tf} candles</span>
-            <h1 className={`verdict-head pub-head ${e.verdict.verdict}`}>{e.verdict.headline}</h1>
-            <p className="k-lede">{e.verdict.summary}</p>
-            {e.reason && <p className="k-small k-muted">{e.reason}</p>}
-            <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>{e.range ? `Tested ${e.range.from} to ${e.range.to}` : "Tested on past prices"}</span></span>
+            <span className="k-eyebrow">{[plainTerms(e.name), whereShown(plainTerms(e.name), where(e), e.group?.name), `${TF_NAME[e.tf] ?? e.tf} candles`].filter(Boolean).join(" · ")}</span>
+            {/* the result in the checks' own words, with buy and hold beside it, the same words as the library card (R6V-005) */}
+            <h1 className={`verdict-head pub-head ${e.verdict.verdict}`} data-testid="lib-headline">{e.verdict.fact_headline ?? e.verdict.headline}</h1>
+            <p className="k-lede">{e.verdict.fact_summary ?? e.verdict.summary}</p>
+            <HoldLine e={e} />
+            <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span data-testid="lib-tested">{e.range ? `Tested ${testedRange(e.range)}` : "Tested on past prices"}</span></span>
           </div>
           <Card label="Results">
             <CardHead title="Results after costs" actions={<span className="k-note">{checksOf(e)}</span>} />
@@ -141,7 +149,8 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             <section className="pub-checks" aria-label="The four checks">
               {e.verdict.checks.map((c) => (
                 <Card key={c.id} label={CHECK_NAME[c.id] ?? c.id}>
-                  <CardHead level={3} title={CHECK_NAME[c.id] ?? c.id} actions={<Badge tone={c.status === "pass" ? "ok" : c.status === "fail" ? "warn" : "plain"}>{STATUS_NAME[c.status as keyof typeof STATUS_NAME] ?? c.status}</Badge>} />
+                  <CardHead level={3} title={CHECK_NAME[c.id] ?? c.id} actions={<Badge tone={c.status === "pass" ? "ok" : c.status === "fail" || c.status === "not_passed" ? "warn" : "plain"}>{CHECK_RESULT[c.status] ?? c.status}</Badge>} />
+                  <p className="k-small k-muted">{CHECK_SAYS[c.id]}</p>
                 </Card>
               ))}
             </section>

@@ -81,6 +81,7 @@ from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
 from . import plan_interest
+from . import email_kit
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -285,6 +286,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
     threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
     threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
+    threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start()   # pages follow each close
     screen_job.start()
     breadth_job.start()
     threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start()
@@ -309,6 +311,7 @@ _docs = api_docs_enabled()
 app = FastAPI(title="StratLab API", lifespan=lifespan, docs_url="/docs" if _docs else None, redoc_url="/redoc" if _docs else None,
               openapi_url="/openapi.json" if _docs else None)
 research_routes.setup(research_hub, _gemini, _anthropic)
+research_routes.corp_sources = corp_job.sources          # a US company page's dividend yield from its listed payments
 app.include_router(research_routes.router)
 app.include_router(money_mf.router)          # /money/mutual-funds
 app.include_router(money_mf_ter.router)      # /money/mutual-funds/costs
@@ -877,6 +880,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str = ""):
     """Asks before unsubscribing: mail scanners open every link in an email, and shouldn't unsubscribe anyone."""
+    if t == email_kit.PREVIEW_TOKEN:          # the link in Admin → Email previews: what it does for a reader, nothing changed
+        return mail_page("Unsubscribe (preview)", "In a real email this link opens a page with one Unsubscribe button: no "
+                         "sign-in, and that one email type is turned off. This is a preview, so nothing was changed.")
     name = _unsubscribe(t, act=False)
     if not name:
         return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
@@ -1448,13 +1454,41 @@ def _stored_scan(profile, region: str, group: str, preset: str, name: str) -> di
     got = scan_presets.stored_view(group, preset)
     if got is None or not got["checked"]:
         err(404, "not_stored", f"{name} hasn't been checked yet: it is read once a day after the market closes. Try a smaller group for now.")
-    rows = got["rows"][:SCAN_ROWS]
+    rows = with_nse_close(region, got["rows"][:SCAN_ROWS], "as_of", "chg")
     names = _scan_names(region, [r["symbol"] for r in rows])
     return {"rows": [{**r, **names.get(r["symbol"], {})} for r in rows], "matches": len(got["rows"]), "checked": got["checked"], "as_of": got["as_of"],
             "updated_at": got["at"], "missing": [], "problems": [], "stored": True}
 
 
 SCAN_ROWS = 300       # the most rows one scan answer carries (the count of all matches is given beside them)
+_nse_quotes = TTLCache(max_items=200)
+
+
+def nse_quotes(symbols: list[str]) -> dict[str, dict]:
+    """The exchange's quotes for Indian stocks (the company page's price), for up to 500 at once, kept a minute; none
+    when the data login isn't ready or the call fails (the rows then keep their candle's close)."""
+    syms = sorted({str(x).upper() for x in symbols if x})[:500]
+    if not syms or not kite.ready():
+        return {}
+    key = tuple(syms)
+    hit = _nse_quotes.get(key)
+    if hit is not None:
+        return hit
+    try:
+        got = kite.quote(syms) or {}
+    except Exception as e:
+        print("nse quotes:", str(e)[:120])
+        got = {}
+    _nse_quotes.set(key, got, 60)
+    return got
+
+
+def with_nse_close(region: str, rows: list[dict], day_key: str, change_key: str | None = None) -> list[dict]:
+    """Indian rows with the company page's close (R6O-009); other markets as they are."""
+    if region != "IN" or not rows:
+        return rows
+    from . import page_close
+    return page_close.overlay(rows, nse_quotes([r.get("symbol") for r in rows]), day_key, change_key)
 
 
 @app.post("/research/scan")
@@ -1486,6 +1520,7 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
                    "stored": False, **got}
         _results.set(key, out, 300)
     out = dict(out)
+    out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
     return ok({"name": name, "market": req.region, **out})
 
@@ -1784,6 +1819,16 @@ def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind
     r = research_routes.region_of(region)
     corp_ready(r)
     return research_routes.ok(corp_actions.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], kind[:20]))
+
+
+@app.get("/research/corp-actions/{region}/{symbol}/unadjusted")
+def corp_actions_unadjusted(region: str, symbol: str, start: str, end: str, profile=Depends(current_profile)):
+    """The company's actions in a test window that its prices aren't adjusted for (a demerger), for the backtest page's
+    note (R6O-010). Facts as the exchange lists them."""
+    r, s = research_routes.region_of(region), research_routes.symbol_of(symbol)
+    if not (re.fullmatch(r"\d{4}-\d{2}-\d{2}", start or "") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end or "")):
+        err(400, "bad_dates", "Give the start and end as YYYY-MM-DD.")
+    return research_routes.ok({"rows": corp_actions.unadjusted(r, s, start, end, corp_job.sources())})
 
 
 @app.get("/research/corp-actions/{region}/{symbol}")
@@ -3080,10 +3125,14 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     """One company's public page from the deep dive's cheap sources: reported numbers, the filings list and daily
     prices. Never AI. None when the sources have no page for it; a source that is down or busy raises."""
     sym = co["sym"]
+    checks: dict = {}
     try:
         if region == "US":
             p = sec.with_fx(dict(sec_feed.company(sym)), usd_per)
-            us_price_ratios(p, sym)
+            quote = us_price_ratios(p, sym)
+            kind = stock_pages.FUND_TYPES.get(str(quote.get("type") or "").upper())
+            if kind:                      # an ETN filed under its bank's name, a fund: not a company (R6V-001)
+                checks["not_company"] = kind
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
@@ -3101,9 +3150,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         return None                       # no company page at the source
     trend = prices = None
     try:
-        ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or sym}])
-        # closed sessions only: the page's price is the last close, with its date, never a session still trading
-        bars = stock_pages.closed_bars(scan._bars(markets, ids[0]) if ids else [], region)
+        # closed sessions only, read after the close settled: the page's price is the last close, with its date, never
+        # a session still trading or a cached read from before the close (R6V-002)
+        bars = stock_pages.closed_bars(stock_page_bars(region, co), region)
         if bars:
             trend, prices = scan.analyse(bars), stock_pages.price_facts(bars)
     except Exception:                     # no prices: the page goes without the price facts
@@ -3123,13 +3172,49 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             p["ratios"].pop("Dividend Yield", None)
         else:
             p["ratios"]["Dividend Yield"] = dy
+    if region == "US":
+        checks.update(us_cap_checks(p, sym))
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
         snap = at_live_price(snap, close)
-    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
+    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
+
+
+def us_cap_checks(p: dict, sym: str) -> dict:
+    """What a US page's market value is checked against (stock_pages.cap_problem): the latest twelve months' (or year's)
+    revenue in dollars, 0 for a company that reports none; whether its US shares are depositary shares whose ratio to
+    ordinary shares couldn't be read; and whether its accounts show dividends paid (a price history with none then
+    gives n/a, not 0%)."""
+    out: dict = {}
+    rate = sec.usd_rate(p)
+    if rate:
+        sales = sec._latest(p.get("pl"), "Sales")
+        out["sales_usd"] = round(float(sales or 0) * rate, 2)
+    if not sec.non_common(sym) and (p.get("ads_unread") or not p.get("ads_ratio") and "depositary" in str(p.get("share_note") or "")):
+        out["cap_unverified"] = True        # depositary shares of an unknown ratio, or a report that couldn't be read now
+    if sec._latest(p.get("cashflow"), "Dividends paid"):
+        out["divs_paid"] = True
+    return out
+
+
+def stock_page_bars(region: str, co: dict) -> list[dict]:
+    """A company's daily candles for its public page, read after its market's latest close settled: a copy cached
+    from before then (a session still trading, a last trade before the official close) is read again."""
+    ids, _ = universes.resolve(markets, region, [{"symbol": co["bse"] or co["sym"]}])
+    if not ids:
+        return []
+    prov, inst = markets.resolve(ids[0])
+    if not prov or not inst:
+        return []
+    _, at = stock_pages.last_close(region)
+    age = time.time() - (at.timestamp() + stock_pages.settle(region))     # how old a copy may be and still be after it
+    try:
+        return prov.history(inst, "1d", scan.DAYS, ttl=max(60.0, age))
+    except TypeError:                     # a source without its own cache control: the scan's copy
+        return scan._bars(markets, ids[0])
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
@@ -3195,6 +3280,8 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     except stock_pages.Busy:
         return JSONResponse(status_code=503, headers={"Retry-After": "600"},
                             content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+    if (stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}).get("not_company"):
+        return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
     return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
@@ -3245,6 +3332,37 @@ def screen_warm(region: str, sym: str, co: dict):
 
 
 screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
+
+# after each close, how many stored pages' prices are re-read per run, and the pause between reads (seconds): India's
+# broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first
+PRICE_REFRESH = {"IN": (300, 1.0), "US": (150, 2.0)}
+PRICE_REFRESH_EVERY = 15 * 60
+price_refresh_status: dict = {"last_run": None, "IN": None, "US": None}
+
+
+def stock_price_refresh_once(sleep=time.sleep) -> dict:
+    """One pass of the price job: every market's stored pages that are a close behind, largest first (R6V-002)."""
+    def bars_of(region: str, symbol: str) -> list[dict]:
+        co = stock_pages.companies(region).get(symbol)
+        return stock_page_bars(region, co) if co else []
+    for region, (limit, gap) in PRICE_REFRESH.items():
+        try:
+            price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep)
+        except Exception as e:                        # a source or storage down: the next pass tries again
+            price_refresh_status[region] = {"error": str(e)[:160]}
+    price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return price_refresh_status
+
+
+def stock_price_refresh_job():
+    """Every quarter of an hour: re-read the prices of stored company pages that are a close behind."""
+    time.sleep(420)                           # after startup traffic, the company lists and the first screens index
+    while True:
+        try:
+            stock_price_refresh_once()
+        except Exception as e:
+            print("stock price refresh failed:", str(e)[:160])
+        time.sleep(PRICE_REFRESH_EVERY)
 screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
 
 
@@ -3265,7 +3383,9 @@ def screens_meta(region: str = "IN", profile=Depends(current_profile)):
 def screens_run(req: ScreenRunReq, profile=Depends(current_profile)):
     """The companies that meet the filters, from the stored index (never a data source or AI per request)."""
     try:
-        return ok(screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset))
+        got = screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset)
+        got["rows"] = with_nse_close(got["region"], got["rows"], "price_at")      # the company page's close (R6O-009)
+        return ok(got)
     except screens.ScreenError as e:
         err(400, "bad_screen", str(e))
 
@@ -4672,7 +4792,8 @@ def weekly_facts(now: datetime) -> dict:
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
     origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "admin_url": f"{origin}/admin" if origin else None}
+            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "errors_listed": len(RECENT_ERRORS),
+            "admin_url": f"{origin}/admin" if origin else None}
 
 
 def weekly_summary(now: datetime | None = None) -> tuple[str, str]:

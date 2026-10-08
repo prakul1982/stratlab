@@ -50,7 +50,10 @@ RULES: list[tuple[str, str, str, list[str]]] = [
                                                    r"income tax (search|survey)", r"enforcement directorate", r"\bpenalty\b"]),
     ("rating_down", "Credit rating downgraded", "red", [r"downgrad", r"rating .{0,30}(revised|placed) .{0,30}(negative|watch)"]),
     ("kmp_resign", "Director or key officer resigned", "amber", [r"resignation", r"resigned", r"cessation"]),
-    ("ncd", "Debt raise (NCDs or bonds)", "amber", [r"non[- ]convertible debentures", r"\bncds?\b", r"commercial paper", r"\bbonds?\b"]),
+    # a new borrowing: the filing raises or approves debt, not one that only names bonds (R6O-002)
+    ("ncd", "Debt raise (NCDs or bonds)", "amber", [
+        r"\b(issu\w*|rais\w*|approv\w*|offer\w*|placement|borrow\w*)\b.{0,80}\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b",
+        r"\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b.{0,60}\b(issu(e|ed|ance)|rais(e|ed|ing)|approved|offer(ed)?|placement)\b"]),
     ("results", "Financial results", "info", [r"financial results", r"outcome of board meeting.{0,60}results", r"\bresults\b"]),
     # a shareholders' meeting's own transcript, recording or deck is neither an earnings call nor an analyst meeting
     ("agm", "Shareholder meeting", "info", [r"(?:transcript|recording|audio|proceedings|presentation|minutes)\b.{0,100}\b(?:annual|extra[- ]?ordinary|general) (?:general )?meeting",
@@ -70,8 +73,35 @@ RULES: list[tuple[str, str, str, list[str]]] = [
 ]
 _COMPILED = [(i, label, sev, [re.compile(p, re.I) for p in pats]) for i, label, sev, pats in RULES]
 FUND_RAISE = {"qip", "preferential", "rights", "warrants", "fund_raise"}
-LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change"}
-RULES_VERSION = 2              # raised when the rules change, so the stored whole-market list is read again
+LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change",
+                                                  "insolvency_other": "Insolvency filing, the company not shown as the debtor"}
+RULES_VERSION = 3              # raised when the rules change, so the stored whole-market list is read again
+
+# R6O-002: the filing's subject says what it is about. A routine certificate is routine whatever its body names
+# (ICICIBANK's "Certificate under SEBI (Depositories and Participants) Regulations, 2018" read as a debt raise).
+ROUTINE_SUBJECT = re.compile(r"depositories and participants|regulation 74\s*\(5\)|trading window|loss of share certificate|"
+                             r"duplicate share certificate|statement of investor complaints|newspaper|compliance certificate|"
+                             r"transfer of (physical )?shares|dematerial", re.I)
+# a generic subject ("Updates", "General Updates") names nothing: a flag needs the body to report a decision or an
+# event, not a passing mention (TITAN's "Updates" read as a debt raise, RAYMONDREL's "General Updates" as a
+# preferential issue), and a report on money already raised is routine
+GENERIC_SUBJECT = re.compile(r"^\s*((general|other|others|miscellaneous)\s*)?(updates?|general|others?|miscellaneous|press release|disclosure|intimation)\s*$", re.I)
+DECISION = re.compile(r"\b(approv\w*|allot\w*|resolved|decided|opened|launch\w*|initiat\w*|admitted|downgrad\w*|resign\w*|"
+                      r"default\w*|delay\w*|creation of pledge|invoked|imposed|levied|search|seizure|show[- ]cause|penalt\w*|"
+                      r"suspend\w*|revised|raising|raise)\b", re.I)
+ROUTINE_TEXT = re.compile(r"monitoring agency|utili[sz]ation of (the )?(issue )?proceeds|statement of deviation|deviation or variation|"
+                          r"depositories and participants|regulation 74|in[- ]principle approval|listing approval|trading approval|"
+                          r"record date|payment of interest|interest payment|redemption", re.I)
+# insolvency: only the listed company as the debtor in a case against it (R6O-002: MOL Meghmani's amalgamation,
+# which the NCLT sanctions, and POLYCAB's filing on another company's insolvency, both read as its own)
+DEBTOR = re.compile(r"against the company|(the|our) company (has been|was|is|stands) admitted|admitted .{0,80}(against|in respect of) the company|"
+                    r"initiat\w* .{0,80}(of|against|in respect of) the company|moratorium|interim resolution professional|"
+                    r"\birp\b|committee of creditors|\bcoc\b|(the )?company is under (cirp|corporate insolvency)|"
+                    r"powers of the board .{0,40}suspended|nclt has admitted|admitted the (application|petition)", re.I)
+OTHER_PARTY = re.compile(r"(the|our) company,? (as|being) an? (operational |financial )?creditor|filed by the company|"
+                         r"(company|we) (has |have )?filed an? (application|petition)|"
+                         r"claim (has been )?(filed|submitted|admitted)|subsidiar|step[- ]down|associate company|joint venture|customer|"
+                         r"amalgamation|merger|scheme of arrangement|demerger", re.I)
 
 
 def ist_now() -> datetime:
@@ -136,14 +166,23 @@ def classify(desc: str, text: str, url: str | None = None) -> tuple[str, str]:
     """(category id, severity) for one announcement, from the exchange's subject and summary (and its file's name).
     Earnings calls, meetings with analysts or investors, and shareholders' meetings are three different kinds."""
     hay = f"{desc or ''} || {text or ''}"
+    if ROUTINE_SUBJECT.search(desc or ""):
+        return "other", "info"
+    generic = bool(GENERIC_SUBJECT.match(desc or ""))
+    insolvency_named = False
     for cid, _, sev, rx in _COMPILED:
         if any(r.search(hay) for r in rx):
+            if cid == "insolvency" and not (DEBTOR.search(hay) and not OTHER_PARTY.search(hay)):
+                insolvency_named = True
+                continue                      # not the company's own case: what the filing is otherwise about
+            if generic and sev != "info" and (not DECISION.search(text or "") or ROUTINE_TEXT.search(text or "")):
+                continue
             if cid == "investor_meet" and is_call(desc, text, url):
                 return "concall", sev
             if cid == "kmp_resign":
                 return _officer_change(desc, text)
             return cid, sev
-    return "other", "info"
+    return ("insolvency_other", "info") if insolvency_named else ("other", "info")
 
 
 def _date(s: str) -> datetime | None:

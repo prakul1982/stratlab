@@ -92,6 +92,11 @@ class TTLCache:
                 _, old = self._d.popitem(last=False)
                 self.bytes -= old[2]
 
+    def pop(self, key):
+        """Forget one entry (no error when it isn't there)."""
+        with self._lock:
+            self._drop(key)
+
     def clear(self):
         with self._lock:
             self._d.clear()

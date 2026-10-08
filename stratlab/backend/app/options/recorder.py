@@ -49,9 +49,10 @@ class Recorder:
         self.prune, self.keep_days = prune, keep_days   # prune(iso) deletes snapshots older than iso
         self._pruned_day = None
         self.targets, self.every = targets, max(1, every_minutes) * 60
-        self.status = {"enabled": bool(targets), "targets": [f"{e}:{n}" for e, n in targets], "every_minutes": self.every // 60,
-                       "today": 0, "day": None, "last_at": None, "last_error": None,
-                       "keep_days": keep_days}
+        from ..job_status import Status       # stores itself on each save, so Admin has it after a restart (R6O-003)
+        self.status = Status("option-chains", {"enabled": bool(targets), "targets": [f"{e}:{n}" for e, n in targets],
+                                               "every_minutes": self.every // 60, "today": 0, "day": None, "last_at": None,
+                                               "last_error": None, "keep_days": keep_days})
         self._next = 0.0
 
     def prune_old(self, now: datetime):

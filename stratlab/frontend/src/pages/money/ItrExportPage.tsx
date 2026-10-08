@@ -8,6 +8,8 @@ import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHea
 import { movedYearNote, rememberFy, savedFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
+import { featureName } from "../../lib/gates";
+import { PLAN_NAME } from "../../lib/plans";
 
 /* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
  * to download as a workbook, CSV files or a PDF pack for a CA. Built from the kit (components/kit). */
@@ -38,7 +40,8 @@ function Schedule({ t }: { t: Sheet }) {
 }
 
 export function ItrExportPage() {
-  const { fail } = useApp();
+  const { fail, me } = useApp();
+  const yours = PLAN_NAME[(me?.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const [v, setV] = useState<View | null>(null);
   const [getting, setGetting] = useState<Format | null>(null);
   const [open, setOpen] = useState<string | null>("112a");
@@ -105,7 +108,8 @@ export function ItrExportPage() {
         <>
           <Card>
             <CardHead title={`Download for ${v.label} (AY ${v.ay})`} />
-            {v.locked && <PlanNote>The downloads and the full schedules are on the {v.plan} plan. Below is what each schedule would hold.</PlanNote>}
+            {/* the same words as the lock shown while the page loads, on every plan (R6O-013) */}
+            {v.locked && <PlanNote>Part of this page is on {v.plan}. {featureName("itr_export")}: on the {v.plan} plan. You're on {yours}; the rest of the page is yours, and below is what each schedule would hold.</PlanNote>}
             <div className="k-downloads">
               {FORMATS.map(([f, label, hint]) => (
                 <button key={f} type="button" className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting} onClick={() => download(f)}>

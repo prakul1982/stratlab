@@ -71,6 +71,16 @@ export function periodEnd(label: string): Date | null {
   return i < 0 ? null : new Date(Date.UTC(Number(m![2]), i + 1, 0));
 }
 
+/** Whether a results day has already brought its results: the day is today or past and the quarter just before it is
+ * in the page's quarterly table (TCS at 23:47 on 8 Oct 2026: "Results on Thu, 8 Oct" above a table with Sep 2026, R6O-016). */
+export function resultsFiled(day: string | null | undefined, latestQuarter: string | null | undefined, today: string): boolean {
+  if (!day || !latestQuarter || day.slice(0, 10) > today) return false;
+  const end = periodEnd(latestQuarter);
+  if (!end) return false;
+  const gap = (Date.parse(`${day.slice(0, 10)}T00:00:00Z`) - end.getTime()) / 86400000;
+  return gap >= 0 && gap <= 75;
+}
+
 /** How many whole months old a quarter's figures are, when a newer quarter's should be out by now (companies file
  * results within 45 days of a quarter's end, 60 for the year's last; shareholding within 21): `lagDays` after the end
  * of a later quarter has passed. null when the figures are the latest that can be out, or the label can't be read. */

@@ -59,7 +59,7 @@ async function start() {
   const account = !isPublicForAll(path) && wantsAccount({ supabaseUrl: window.STRATLAB_CONFIG?.SUPABASE_URL, search: location.search, hash: location.hash, storage: localStorage });
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
   captureRef();                       // a friend's invite link: kept until sign-in
-  startErrorReports();
+  startErrorReports({ lazy: !account });   // a visitor's page downloads the error reporter only if something breaks
   if (account) {
     const app = await import("./main");
     app.startApp(root);

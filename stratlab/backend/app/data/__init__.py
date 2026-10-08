@@ -50,8 +50,9 @@ class KiteProvider:
     def warmup_days(tf: str, candles: int = 210) -> int:
         return KiteService.warmup_days(tf, candles)
 
-    def history(self, inst: dict, tf: str, days: int) -> list[dict]:
-        return self.kite.history(inst["token"], tf, days)
+    def history(self, inst: dict, tf: str, days: int, ttl: float | None = None) -> list[dict]:
+        """`ttl`: the oldest cached answer to reuse, in seconds (None: the source's own default)."""
+        return self.kite.history(inst["token"], tf, days, ttl=ttl)
 
 
 def split_id(inst_id: str) -> tuple[str, str]:

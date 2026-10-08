@@ -96,14 +96,19 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
         return c
     rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago <= str(d.get("ex_date")) < today]
     if not rows or not price:
-        note = "From the last reported year's dividends" if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
+        what = "From the last reported year's dividends" if c.get("region", "IN") == "IN" else "From the company's stated yearly dividend"
+        note = what if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
         return _set_metric(c, "Div yield", None, note) if note else c
+    cur = "₹" if c.get("region", "IN") == "IN" else "$"
     total = sum(num(d["amount"]) for d in rows)
     special = sum(num(d["amount"]) for d in rows if d.get("sub") == "special")
     y = round(total / price * 100, 2)
-    note = f"₹{total:,.2f} a share in the last 12 months".replace(".00 ", " ")
+    amount = f"{total:,.2f}" if cur == "₹" else f"{total:,.3f}".rstrip("0").rstrip(".") if total < 10 else f"{total:,.2f}"
+    note = f"{cur}{amount} a share in the last 12 months".replace(".00 ", " ")
     if special:
-        note += f", including a ₹{special:,.2f} special dividend; {(total - special) / price * 100:.1f}% without it".replace(".00 ", " ")
+        note += f", including a {cur}{special:,.2f} special dividend; {(total - special) / price * 100:.1f}% without it".replace(".00 ", " ")
+    if any(d.get("converted") for d in rows):
+        note += "; payments missing from the US listing's history are converted from the home listing's at that day's rate"
     out = _set_metric(c, "Div yield", y, note)
     if isinstance(out.get("summary"), dict):
         out["summary"] = {**out["summary"], "div_yield": y}
@@ -176,6 +181,17 @@ def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> di
     rate = fx(home, cur) if cap else None
     return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
             "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
+
+
+def us_pe(price, eps_ttm, source_pe):
+    """A US company's P/E as the page's price over the page's own EPS TTM, so the two figures on the page agree
+    (R6O-008: AAPL "P/E 37.98" beside "EPS TTM $8.72" at $339.37, which is 38.9). Within 1% of each other the
+    source's figure stands (the same EPS, a price a few cents apart); without both, the source's P/E."""
+    p, e, src = num(price), num(eps_ttm), num(source_pe)
+    if p and e and e > 0:
+        mine = round(p / e, 2)
+        return src if src and abs(src / mine - 1) <= 0.01 else mine
+    return source_pe
 
 
 def insider_view(ins: list[dict], n: int = 8) -> dict | None:
@@ -431,7 +447,7 @@ class Research:
             "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
-                ("Valuation", [_item("P/E", M.get("peTTM")), _item("Fwd P/E", M.get("forwardPE")),
+                ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _item("Fwd P/E", M.get("forwardPE")),
                                _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
                                _item("EV/EBITDA", M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
                                _item("PEG (fwd)", M.get("forwardPEG"))]),

@@ -46,6 +46,37 @@ export const PAGES: PageMeta[] = [
   { path: "/signup", title: "Sign up · StratLab", description: "Create a free StratLab account with Google. No card needed.", index: false },
 ];
 
+/** StratLab's own library strategies, [id, name], as backend/app/library_seed.py publishes them (backend test
+ * test_review_r6v checks the two lists agree). The build writes each one's page with its own title, description and
+ * address, so a crawler that doesn't run scripts never takes it for the home page (R6V-012). */
+export const LIBRARY_SEEDS: [string, string][] = [
+  ["seed-st-s2-in", "ST S2: Stage 2 + Supertrend · NIFTY 50 stocks"],
+  ["seed-st-s2-us", "ST S2: Stage 2 + Supertrend · 20 US large caps"],
+  ["seed-ema-20-50-in", "20/50 EMA cross · NIFTY 50 stocks"],
+  ["seed-ema-20-50-us", "20/50 EMA cross · 20 US large caps"],
+  ["seed-rsi2-revert-in", "RSI(2) mean reversion · NIFTY 50 stocks"],
+  ["seed-rsi2-revert-us", "RSI(2) mean reversion · 20 US large caps"],
+  ["seed-breakout-52w-in", "52-week breakout with ATR stop · NIFTY 50 stocks"],
+  ["seed-breakout-52w-us", "52-week breakout with ATR stop · 20 US large caps"],
+  ["seed-boll-squeeze-in", "Bollinger squeeze breakout · NIFTY 50 stocks"],
+  ["seed-boll-squeeze-us", "Bollinger squeeze breakout · 20 US large caps"],
+  ["seed-orb-15m-fo", "Opening-range breakout (intraday) · 25 most liquid F&O stocks"],
+  ["seed-golden-cross-in", "Golden cross · NIFTY 50 stocks"],
+  ["seed-golden-cross-us", "Golden cross · 20 US large caps"],
+  ["seed-donchian-20-10-in", "Donchian 20/10 (turtle-style) · NIFTY 50 stocks"],
+  ["seed-donchian-20-10-us", "Donchian 20/10 (turtle-style) · 20 US large caps"],
+  ["seed-macd-cross-in", "MACD signal cross · NIFTY 50 stocks"],
+  ["seed-macd-cross-us", "MACD signal cross · 20 US large caps"],
+  ["seed-supertrend-in", "Supertrend flip · NIFTY 50 stocks"],
+  ["seed-supertrend-us", "Supertrend flip · 20 US large caps"],
+];
+
+/** A library strategy's page: its own title, description and address. */
+export const libraryMeta = (id: string, name: string): PageMeta => ({
+  path: `/library/${id}`, title: `${name}: rules and verdict · StratLab`, index: true,
+  description: `${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks, as they came out on past prices. Facts about the past, not advice.`,
+});
+
 /** What a page that is not in the table says: a sign-in page for an address inside the app, or a missing page. */
 export const GATE_DESCRIPTION = "Sign in to StratLab to open this page.";
 export const NOT_FOUND_DESCRIPTION = "There is no page at this address on StratLab.";

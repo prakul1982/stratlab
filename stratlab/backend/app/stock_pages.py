@@ -12,8 +12,14 @@ never from AI. Fresh builds are rationed per minute, so a crawler going through 
 data sources: past the ration it gets the stored copy, or a "busy, come back later" answer.
 
 One price rule on every page: the last close, with its date ("As of 7 Oct 2026 close"). A session still trading is
-left out (its candle isn't a close yet), and a stored page is rebuilt once its market has closed again, so a page is
-never a session behind and never mixes an intraday price with a daily label."""
+left out (its candle isn't a close yet, and an Indian day's official close is only taken some hours after the bell), a
+stored page is rebuilt once its market has closed again, and a background job re-reads the price of every stored page
+after each close (Pages.refresh_prices). A page whose price is still older than the market's last close says so: "Last
+price, 5 Oct 2026", never "close" (R6V-002).
+
+Market values are checked before they are shown or ranked (cap_problem): an American depositary share counted as an
+ordinary share, a share count a thousand times off or a shell's stray trade can make a $46 trillion bank. Such a value
+is n/a on the page and left out of every "largest" list, and so is a P/E above 1,000 (R6V-001)."""
 import json
 import re
 import threading
@@ -33,6 +39,10 @@ REGIONS = {"in": "IN", "us": "US"}
 FRESH = 24 * 3600              # the longest a stored page is kept, whatever the market did (the reported numbers change quarterly)
 EMPTY_FOR = 6 * 3600           # a company the sources had nothing on: not asked again for this long
 SETTLE = 45 * 60               # a market's closing prices are taken as final this long after its close (past the price caches)
+# India's official closing prices (the last half hour's average, not the last trade) reach the daily candles some time
+# after the bell; until then the day's candle can carry a last-traded price, so the page keeps the day before (R6V-002)
+SETTLE_BY = {"IN": 3 * 3600}
+FACTS_VERSION = 2              # pages built before market values were checked are rebuilt when next opened
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
 PEERS = 12
 # browsers keep a page five minutes and the site's cache fifteen: a page follows its market's close within minutes, never
@@ -50,6 +60,14 @@ US_FUNDS = {"SPY", "QQQ", "IVV", "VOO", "VTI", "DIA", "IWM", "EFA", "EEM", "GLD"
             "CIBR", "PAVE", "IEMG", "IJH", "IJR", "VUG", "VTV", "VYM", "RSP", "IBIT"}
 US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJIA", "RUT", "VIX", "^VIX"}
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
+# a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
+CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
+PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
+PS_MAX = 250.0                 # market value over a year's revenue, for a company with $1 billion of revenue or more
+PRE_REVENUE_MAX = 20_000.0     # $ million: a company with under $10 million of revenue isn't worth $20 billion
+# what the price source calls something that trades but isn't a company's stock
+FUND_TYPES = {"ETF": "an exchange-traded product (an ETF or ETN)", "MUTUALFUND": "a fund", "INDEX": "an index",
+              "CURRENCY": "a currency", "CRYPTOCURRENCY": "a crypto asset", "FUTURE": "a futures contract"}
 
 
 class Busy(Exception):
@@ -175,9 +193,14 @@ def not_a_company(region: str | None, symbol: str) -> str | None:
 
 
 # ---------- the market's last close ----------
+def settle(region: str | None) -> int:
+    """Seconds after a market's close before its closing prices are taken as final."""
+    return SETTLE_BY.get(region or "", SETTLE)
+
+
 def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime]:
-    """(day, when) of the market's latest settled close: the latest trading day whose close was at least SETTLE ago.
-    Before then, today's candle is still a session in progress, not a close."""
+    """(day, when) of the market's latest settled close: the latest trading day whose close was at least settle(region)
+    ago. Before then, today's candle is still a session in progress (or not yet the official close), not a close."""
     from .data.calendar import is_trading_day
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
@@ -187,7 +210,7 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
     d = local.date()
     for _ in range(15):
         at = datetime.combine(d, dtime(int(hh), int(mm)), tz)
-        if is_trading_day(region, d) and at + timedelta(seconds=SETTLE) <= local:
+        if is_trading_day(region, d) and at + timedelta(seconds=settle(region)) <= local:
             return d, at
         d -= timedelta(days=1)
     return d, datetime.combine(d, dtime(int(hh), int(mm)), tz)
@@ -224,6 +247,31 @@ def price_facts(bars: list[dict], region: str | None = None, now: datetime | Non
             "high52": max(highs) if highs else None, "low52": min(lows) if lows else None}
 
 
+def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
+    """A page's facts at a newer close (already only closed sessions): the price, its date and the year's range from
+    the candles, the trend when `analyse` is given, and the market value and P/E scaled by the price's move (shares and
+    profit as reported), the dividend yield against it. Unchanged when the candles have no newer close."""
+    new = price_facts(bars) if bars else {}
+    old_p, new_p = _num(f.get("price")), _num(new.get("price"))
+    if not new_p or new_p <= 0 or str(new.get("price_at") or "") <= str(f.get("price_at") or ""):
+        return f
+    out = {**f, **{k: new[k] for k in ("price", "price_at", "price_basis", "high52", "low52") if new.get(k) is not None}}
+    if old_p and old_p > 0:
+        k = new_p / old_p
+        for key in ("market_cap", "pe"):
+            if _num(f.get(key)) is not None:
+                out[key] = round(_num(f[key]) * k, 2)
+        if _num(f.get("div_yield")) is not None:
+            out["div_yield"] = round(_num(f["div_yield"]) / k, 2)
+    if analyse:
+        try:
+            t = analyse(bars) or {}
+            out.update({k: t.get(k) for k in ("stage", "stage_days", "st_up", "st_days")})
+        except Exception:                 # too few candles for the trend: the old one stays
+            pass
+    return out
+
+
 def dividend_yield(dividends: list[dict], price, as_of: str | None) -> float | None:
     """Dividends with an ex-date in the year to `as_of`, per share, as a share of `price` (%). 0 when the year had none:
     the price history lists every dividend, so none is a fact, not a gap. None without a price."""
@@ -237,6 +285,77 @@ def dividend_yield(dividends: list[dict], price, as_of: str | None) -> float | N
     start = (end - timedelta(days=365)).isoformat()
     total = sum(_num(d.get("amount")) or 0 for d in dividends or [] if start < str(d.get("date") or "") <= end.isoformat())
     return round(total / price * 100, 2)
+
+
+def _latest_sales(f: dict):
+    """The latest year's revenue from the page's own table, when it is in the market value's unit."""
+    unit, cap_unit = str(f.get("unit") or ""), str(f.get("market_cap_unit") or "")
+    if not unit or unit != cap_unit:
+        return None
+    vals = [_num(y.get("sales")) for y in f.get("years") or []]
+    vals = [v for v in vals if v is not None]
+    return vals[-1] if vals else None
+
+
+def cap_problem(f: dict | None) -> str | None:
+    """Why a page's market value can't be right, or None when it passes every check (or there is none). Checked:
+    - depositary shares whose ratio to ordinary shares couldn't be read (the value counts ordinary shares at the ADS price);
+    - above any company's worth (CAP_CEILING);
+    - a US company's value against its revenue: over PS_MAX times a year's revenue of $1 billion or more, or over
+      PRE_REVENUE_MAX with almost no revenue (a shell's stray trade, a share count far off);
+    - a P/E above PE_MAX on a company reporting in another currency (a page built before the revenue was stored)."""
+    if not f:
+        return None
+    cap = _num(f.get("market_cap"))
+    if cap is None or cap <= 0:
+        return None
+    region = f.get("region") or ("US" if f.get("currency") == "USD" else "IN")
+    if f.get("not_company"):
+        return "not a company"
+    if f.get("cap_unverified"):
+        return "depositary share ratio unknown"
+    if cap > CAP_CEILING.get(region, float("inf")):
+        return "above any company's value"
+    if region == "US":
+        sales = _num(f.get("sales_usd"))
+        if sales is None:
+            sales = _latest_sales(f)
+        if sales is not None:
+            if sales < 10 and cap > PRE_REVENUE_MAX:
+                return "no revenue to match the value"
+            if sales >= 1000 and cap / sales > PS_MAX:
+                return "out of line with revenue"
+        elif not str(f.get("unit") or "$").startswith("$") and (_num(f.get("pe")) or 0) > PE_MAX:
+            return "out of line with profit"
+    return None
+
+
+def shown_cap(f: dict | None):
+    """The market value to show and rank on: None when there is none or it fails a check."""
+    if not f or cap_problem(f):
+        return None
+    v = _num(f.get("market_cap"))
+    return v if v is not None and v > 0 else None
+
+
+def shown_pe(f: dict | None):
+    """The P/E to show: None for a loss, a P/E above PE_MAX, or a market value that fails a check."""
+    pe = _num((f or {}).get("pe"))
+    if pe is None or pe <= 0 or pe > PE_MAX or cap_problem(f):
+        return None
+    return pe
+
+
+def shown_yield(f: dict | None):
+    """The dividend yield to show: None when unknown, when the market value it's measured on fails a check, and a 0%
+    from a price history that lists no dividend while the company's own accounts show dividends paid (R6V-011)."""
+    f = f or {}
+    dy = _num(f.get("div_yield"))
+    if dy is None or (f.get("region") == "US" and cap_problem(f)):
+        return None
+    if dy == 0 and f.get("divs_paid"):
+        return None
+    return dy
 
 
 def _dedupe(parts) -> list[str]:
@@ -260,12 +379,16 @@ def _ttm_profit(p: dict):
 
 
 def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict | None, prices: dict | None,
-          filings: list[dict], exchange: str, red_flags: int | None = None) -> dict:
+          filings: list[dict], exchange: str, red_flags: int | None = None, checks: dict | None = None) -> dict:
     """What a page shows, from what the deep dive already works out. Plain numbers and words; nothing from AI.
-    `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens."""
+    `red_flags` is how many red-flag filings (India) the last three months held, for the stock screens. `checks` carries
+    what the market value is checked against (see cap_problem): "sales_usd" (a year's revenue, $ million),
+    "cap_unverified" (depositary shares whose ratio couldn't be read) and "not_company" (what the symbol is instead)."""
     years = [{k: y.get(k) for k in ("year", "sales", "profit", "opm", "debt")} for y in (nums.get("years") or [])[-5:]]
     prices = prices or {}
+    checks = checks or {}
     return {
+        "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid") if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": public_text(p.get("name") or symbol), "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
@@ -295,7 +418,11 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return now - ts < EMPTY_FOR
     if now - ts >= FRESH:
         return False
-    return ts >= last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + SETTLE
+    if stored["facts"].get("region") == "US" and (stored["facts"].get("v") or 1) < FACTS_VERSION:
+        return False                     # a US page built before market values were checked: rebuilt when next opened
+    settled = last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + settle(region)
+    # its own build, or the price job's re-read of its price, came after the market's latest settled close
+    return ts >= settled or (stored.get("price_ts") or 0) >= settled
 
 
 _thin: set[tuple[str, str]] = set()          # companies already marked in this process
@@ -336,6 +463,7 @@ class Pages:
         self.recent: deque = deque()
         self.lock = threading.Lock()
         self.building: dict[str, threading.Lock] = {}
+        self.prices_done: dict[str, str] = {}          # {region: the close every stored page's price was read at}
 
     def _may_build(self) -> bool:
         with self.lock:
@@ -385,6 +513,52 @@ class Pages:
             self.mem.set(key, got or {}, 600)
             return got
 
+    def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
+                       now: datetime | None = None) -> dict:
+        """After a market's close: re-read the price of stored pages whose last close is older than the market's, the
+        largest companies first, at most `limit` a run with `gap` seconds between reads (so people's pages and
+        backtests keep the price sources' room). `bars_of(region, symbol)` gives a company's daily candles, read after
+        the close settled. The price, its date, the year's range and the trend move to the new close; the market value
+        and P/E move with the price (the share count and the profit stay what was reported); the dividend yield moves
+        against it. The reported numbers wait for the page's next full build. {"refreshed", "left", "failed"}."""
+        now = now or datetime.now(timezone.utc)
+        day, at = last_close(region, now)
+        if self.prices_done.get(region) == day.isoformat():
+            return {"refreshed": 0, "left": 0, "failed": 0}       # every page already read at this close: no storage read
+        settled = at.timestamp() + settle(region)
+        prefix = f"stocks:page:{region}:"
+        due = []
+        try:
+            rows = db.all_settings_with_prefix(prefix)
+        except Exception as ex:                       # storage down: next run
+            print("stock pages: price refresh could not read", region, str(ex)[:120])
+            return {"refreshed": 0, "left": 0, "failed": 0}
+        for key, raw in rows:
+            stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
+            f = stored.get("facts") or {}
+            if not f or str(f.get("price_at") or "") >= day.isoformat() or (stored.get("price_ts") or 0) >= settled:
+                continue
+            due.append((key[len(prefix):], stored))
+        due.sort(key=lambda x: -(shown_cap(x[1]["facts"]) or 0))
+        done = failed = 0
+        for i, (symbol, stored) in enumerate(due[:limit]):
+            if i and gap:
+                sleep(gap)
+            try:
+                bars = closed_bars(bars_of(region, symbol) or [], region, now)
+            except Exception as ex:                   # no prices for this one today: tried again next run
+                failed += 1
+                print("stock pages: price refresh failed:", region, symbol, str(ex)[:120])
+                continue
+            stored = {**stored, "facts": with_new_close(stored["facts"], bars, analyse), "price_ts": time.time()}
+            _put(prefix + symbol, stored)
+            self.mem.pop(prefix + symbol)
+            self.mem.pop(f"html:{region}:{symbol}")
+            done += 1
+        if len(due) <= limit:
+            self.prices_done[region] = day.isoformat()            # a page that failed is tried again at its next build
+        return {"refreshed": done, "left": max(0, len(due) - limit), "failed": failed}
+
     def html(self, region: str, symbol: str, co: dict) -> str:
         """The rendered page, kept in memory for ten minutes (the sector links read the screens' index)."""
         key = f"html:{region}:{symbol}"
@@ -404,46 +578,74 @@ def _index_rows(region: str) -> list[dict]:
         return []
 
 
-def peers(region: str, symbol: str, industry: list[str]) -> tuple[list[tuple[str, str]], bool]:
-    """(page symbol, full name) of the largest companies in the same industry by market value, then in the same sector,
-    then StratLab's own sector lists (the index's large companies) when the stored pages know too few; and whether the
-    list is ranked by market value."""
+def _sized(region: str) -> list[dict]:
+    """The index's companies whose market value passed its checks, largest first. A US row must come from an index
+    built after the checks existed ("cap_checked"); any row above CAP_CEILING is left out whatever its age."""
     cos = companies(region)
-    rows = [r for r in _index_rows(region) if r.get("symbol") != symbol and r.get("symbol") in cos and _num(r.get("market_cap"))]
-    ind = [x.lower() for x in _dedupe(industry)]
-    picked: list[dict] = []
-    for match in ((lambda r: ind and str(r.get("industry") or "").lower() == ind[-1]),
-                  (lambda r: ind and str(r.get("sector") or "").lower() == ind[0])):
-        picked += sorted((r for r in rows if match(r) and r not in picked), key=lambda r: -_num(r["market_cap"]))
-    out = [(r["symbol"], str(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"])) for r in picked][:PEERS]
-    ranked = bool(out)
-    seen = {s for s, _ in out} | {symbol}
-    for members in sector_members.BY_MARKET.get(region, {}).values():
-        if symbol in members and len(out) < PEERS:
-            for s in members:
-                if s not in seen and s in cos and len(out) < PEERS:
-                    out.append((s, cos[s]["name"] or s))
-                    seen.add(s)
-    return out, ranked
+    out = []
+    for r in _index_rows(region):
+        cap = _num(r.get("market_cap"))
+        if r.get("symbol") not in cos or cap is None or cap <= 0 or cap > CAP_CEILING.get(region, float("inf")):
+            continue
+        if region == "US" and not r.get("cap_checked"):
+            continue
+        out.append(r)
+    return sorted(out, key=lambda r: -_num(r["market_cap"]))
 
 
-def largest(region: str, n: int = 24) -> list[tuple[str, str]]:
-    """The market's largest companies with a stored page, by market value; StratLab's sector lists before there are any."""
+def peer_sections(region: str, symbol: str, industry: list[str]) -> list[dict]:
+    """The page's lists of related companies, each {"title", "caption", "rows": [(page symbol, full name)]}, and each
+    caption true of its list (R6V-003): the largest companies in the company's own industry by checked market value;
+    when that industry has few, the largest in its wider sector; when the index knows none, StratLab's own sector lists,
+    said to be unranked."""
     cos = companies(region)
-    rows = sorted((r for r in _index_rows(region) if r.get("symbol") in cos and _num(r.get("market_cap"))),
-                  key=lambda r: -_num(r["market_cap"]))
-    out = [(r["symbol"], str(r.get("name") or r["symbol"])) for r in rows[:n]]
-    if len(out) < n:
-        have = {s for s, _ in out}
-        for s in sorted(_seeds(region)):
-            if s not in have and s in cos and len(out) < n:
-                out.append((s, cos[s]["name"] or s))
+    ind = _dedupe(industry)
+    rows = [r for r in _sized(region) if r.get("symbol") != symbol]
+    name = lambda r: str(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"])        # noqa: E731
+    out: list[dict] = []
+    same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()][:PEERS]
+    if same_ind:
+        out.append({"title": "Same industry", "rows": [(r["symbol"], name(r)) for r in same_ind],
+                    "caption": f"The largest companies in the same industry ({ind[-1]}), by market value."})
+    if len(same_ind) < 4 and len(ind) > 1:
+        have = {r["symbol"] for r in same_ind}
+        sector = [r for r in rows if r["symbol"] not in have and str(r.get("sector") or "").lower() == ind[0].lower()]
+        sector = sector[:PEERS - len(same_ind)]
+        if sector:
+            out.append({"title": "Same sector", "rows": [(r["symbol"], name(r)) for r in sector],
+                        "caption": f"The largest companies in the wider sector ({ind[0]}), by market value."})
+    if not out:
+        listed: list[tuple[str, str]] = []
+        for group, members in sector_members.BY_MARKET.get(region, {}).items():
+            if symbol in members:
+                listed += [(s, cos[s]["name"] or s) for s in members if s != symbol and s in cos and s not in dict(listed)]
+        if listed:
+            out.append({"title": "Same sector", "rows": listed[:PEERS],
+                        "caption": "Companies StratLab lists in the same sector, in no particular order."})
     return out
+
+
+def peers(region: str, symbol: str, industry: list[str]) -> tuple[list[tuple[str, str]], bool]:
+    """(page symbol, full name) of related companies, as the page lists them, and whether the first list is ranked by
+    market value (see peer_sections)."""
+    sections = peer_sections(region, symbol, industry)
+    rows = [x for s in sections for x in s["rows"]][:PEERS]
+    return rows, bool(sections) and "by market value" in sections[0]["caption"]
+
+
+def largest(region: str, n: int = 24) -> tuple[list[tuple[str, str]], bool]:
+    """The market's largest companies with a stored page, by checked market value, and True; before the index has any,
+    StratLab's own sector lists and False (the page then doesn't call them the largest)."""
+    cos = companies(region)
+    out = [(r["symbol"], str(r.get("name") or r["symbol"])) for r in _sized(region)[:n]]
+    if out:
+        return out, True
+    return [(s, cos[s]["name"] or s) for s in sorted(_seeds(region)) if s in cos][:n], False
 
 
 def search(region: str, q: str, n: int = 30) -> list[tuple[str, str]]:
     """Companies whose symbol or name matches what was typed: the exact symbol first, then symbols that start with it,
-    then names that contain it."""
+    then names that contain it. At most `n` (ask for one more to know whether the list was cut)."""
     q = re.sub(r"\s+", " ", (q or "").strip()).upper()[:40]
     if not q:
         return []
@@ -459,9 +661,18 @@ def search(region: str, q: str, n: int = 30) -> list[tuple[str, str]]:
 
 # ---------- the page ----------
 def _fmt(v, digits: int = 1, suffix: str = "") -> str:
+    """A number with `digits` decimals. One that would round to zero shows two more decimals (a $40,000 loss in a
+    $ million column is -0.04, not "-0"), and only a real zero is 0 (R6V-011)."""
     v = _num(v)
     if v is None:
         return "–"
+    if v != 0 and round(v, digits) == 0:
+        if round(v, digits + 2) == 0:
+            v = 0.0                               # nothing to show even with more decimals: zero
+        else:
+            digits += 2
+    if v == 0:
+        v = 0.0                                   # never "-0"
     return f"{v:,.{digits}f}{suffix}"
 
 
@@ -494,19 +705,20 @@ def _inr_group(v: float) -> str:
 
 
 def cap_text(f: dict) -> str:
-    """Market value in the words people use: "$4.87T", "$85.8B", "$950M"; "₹7.70 lakh crore", "₹20,345 crore"."""
-    v = _num(f.get("market_cap"))
-    if v is None or v <= 0:
+    """Market value in the words people use: "$4.87T", "$85.8B", "$950M", "<$1M"; "₹7.70 lakh crore", "₹20,345 crore".
+    "–" when there is none or it failed its checks (cap_problem)."""
+    v = shown_cap(f)
+    if v is None:
         return "–"
     if f.get("currency") == "USD":                       # stored in $ million
         if v >= 1e6:
             return f"${v / 1e6:,.2f}T"
         if v >= 1e3:
             return f"${v / 1e3:,.1f}B"
-        return f"${v:,.0f}M"
+        return f"${v:,.0f}M" if v >= 0.5 else "<$1M"
     if v >= 1e5:                                          # stored in ₹ crore
         return f"₹{v / 1e5:,.2f} lakh crore"
-    return f"₹{_inr_group(v)} crore"
+    return f"₹{_inr_group(v)} crore" if v >= 0.5 else "<₹1 crore"
 
 
 def _date(iso: str | None) -> str:
@@ -517,10 +729,33 @@ def _date(iso: str | None) -> str:
         return ""
 
 
-def as_of_text(f: dict) -> str:
-    """The page's one "as of": the close the price is from ("7 Oct 2026 close"), or when the page was built."""
+def behind(f: dict, now: datetime | None = None) -> bool:
+    """Whether the page's price is from before its market's latest settled close: then it isn't "the last close", and
+    the page says "Last price" with its date instead (R6V-002)."""
+    at = str(f.get("price_at") or "")[:10]
+    region = f.get("region")
+    if not at or region not in REGIONS.values():
+        return False
+    try:
+        return at < last_close(region, now)[0].isoformat()
+    except Exception:                     # no calendar: nothing to say against the date shown
+        return False
+
+
+def price_label(f: dict, now: datetime | None = None) -> str:
+    """The price's name on the page: "Last close, 7 Oct 2026", or "Last price, 5 Oct 2026" for a price older than the
+    market's latest close (never called a close then)."""
+    when = _date(f.get("price_at"))
+    if not when:
+        return "Last price"
+    return ("Last price, " if behind(f, now) else "Last close, ") + when
+
+
+def as_of_text(f: dict, now: datetime | None = None) -> str:
+    """The page's one "as of": the close the price is from ("7 Oct 2026 close"), the date of a price older than the
+    market's last close ("5 Oct 2026 (last price this page has)"), or, with no price at all, when it was built."""
     if f.get("price_at"):
-        return _date(f["price_at"]) + " close"
+        return _date(f["price_at"]) + (" (the last price this page has; the market has closed since)" if behind(f, now) else " close")
     return _date(f.get("built_at"))
 
 
@@ -528,7 +763,8 @@ def description(f: dict) -> str:
     """The search result's snippet: what the page holds, in facts."""
     bits = [f"{f['name']} ({f['symbol']})"]
     if _num(f.get("price")) is not None:
-        bits.append(f"last close {_money(f, f['price'])}" + (f" on {_date(f['price_at'])}" if f.get("price_at") else ""))
+        word = "last price" if behind(f) else "last close"
+        bits.append(f"{word} {_money(f, f['price'])}" + (f" on {_date(f['price_at'])}" if f.get("price_at") else ""))
     if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None:
         bits.append(f"1-year range {_money(f, f['low52'])} to {_money(f, f['high52'])}")
     out = ", ".join(bits) + ". Revenue and profit trend, margins, debt, recent filings and the price trend, from reported data."
@@ -674,8 +910,16 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
         body = f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">Listed in {country}. Its reported numbers aren't available to show here right now.</p>"""
         return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep))
+    if f.get("not_company"):
+        return _not_company_page(region, symbol, str(f["not_company"]))
     desc = description(f)
     as_of = as_of_text(f)
+    if _num(f.get("price")) is not None:
+        as_of_line = (f"As of {e(as_of)}. Prices are closing prices; facts from reported results, exchange filings and "
+                      "daily prices. Not investment advice.")
+    else:                                 # no price to date the page by: say so, never a bare "As of" over no price
+        as_of_line = ("No recent share price is available for this company. Facts from reported results and exchange "
+                      f"filings{', page built ' + e(as_of) if as_of else ''}. Not investment advice.")
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
                "url": canonical, **({"industry": f["industry"][-1]} if f.get("industry") else {})},
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
@@ -684,7 +928,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     ind = " · ".join(_dedupe(f.get("industry")))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
-<p class="small muted" data-as-of>As of {e(as_of)}. Prices are closing prices; facts from reported results, exchange filings and daily prices. Not investment advice.</p>"""]
+<p class="small muted" data-as-of>{as_of_line}</p>"""]
     parts.append('<div class="card grid">' + "".join(
         f'<div class="stat"><span>{e(label)}</span><b>{e(val)}</b></div>' for label, val in _stats(f)) + "</div>")
     parts += _notes(f)
@@ -695,10 +939,8 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
         parts.append("<h2>Recent filings</h2><div class=\"card\"><ul class=\"plain\">" + "".join(
             f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(x["title"])}</li>' for x in f["filings"]) + "</ul></div>")
     parts.append(_cta(symbol, test, deep))
-    same, ranked = peers(region, symbol, f.get("industry") or [])
-    if same:
-        parts.append(f"<h2>Same sector</h2>" + ('<p class="small muted">The largest companies in the same industry, by market value.</p>'
-                                                 if ranked else "") + _links(region, same))
+    for sec in peer_sections(region, symbol, f.get("industry") or []):
+        parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
     return _page(_head(title, desc, canonical, ld), app, "".join(parts))
 
 
@@ -717,16 +959,21 @@ def _whole(values) -> bool:
 def _stats(f: dict) -> list[tuple[str, str]]:
     unit = f.get("unit") or ""
     whole = f.get("region") == "IN" and _whole([f.get("opm")] + [y.get("opm") for y in f.get("years") or []])
-    out = [("Last close" + (f", {_date(f['price_at'])}" if f.get("price_at") else ""), _money(f, f.get("price"))),
-           ("1-year range", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
+    cap = cap_text(f)
+    if cap == "–" and cap_problem(f):
+        cap = "n/a"                               # a value that failed its checks: said, not hidden (see _notes)
+    pe, dy = shown_pe(f), shown_yield(f)
+    out = [(price_label(f), _money(f, f.get("price"))),
+           # the range is the year's highest and lowest trade, not closes (R6V-014)
+           ("1-year range (intraday)", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
-           ("Market cap", cap_text(f)), ("P/E", _fmt(f.get("pe")) if _num(f.get("pe")) is not None else "n/a"),
+           ("Market cap", cap), ("P/E", _fmt(pe) if pe is not None else "n/a"),
            (f"Net profit, last 12 months ({unit})", _fmt(f.get("profit_ttm"), 0)),
            ("Return on equity", _pct(f.get("roe")))]
     if not f.get("bank"):
         out += [("EBITDA margin", _pct(f.get("opm"), whole)), ("Debt to equity", _fmt(f.get("debt_equity"), 2))]
     out += [("Net margin", _pct(f.get("net_margin"))),
-            ("Dividend yield", _fmt(f.get("div_yield"), 2, "%") if _num(f.get("div_yield")) is not None else "n/a")]
+            ("Dividend yield", _fmt(dy, 2, "%") if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
 
 
@@ -749,6 +996,14 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-currency-note>The share price and market cap are in US dollars. Reported results are in '
                    f"{e(unit)}, as the company files them; P/E and the dividend yield set them against the dollar price at the "
                    f"exchange rate when the page was built, while the table and the margins stay in {e(cur)}.</p>")
+    if cap_problem(f):
+        out.append('<p class="note warn" data-cap-check>The market value worked out from the share count and the price '
+                   "doesn't agree with the company's own reported figures (it may count ordinary shares against a "
+                   "depositary share's price), so it isn't shown, nor is P/E, and the company is left out of lists "
+                   "ranked by size.</p>")
+    if behind(f):
+        out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
+                   "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
     if extreme(f):
         out.append('<p class="note warn" data-extreme>Revenue is very small next to this company\'s costs or profit, so its margins '
                    "here are extreme figures (beyond ±100%). They are what the reported numbers give, but they say little about "
@@ -761,13 +1016,16 @@ def _how(f: dict) -> str:
     india = f.get("region") == "IN"
     items = [
         "Last close: the closing price on the date shown. The page follows the market's close; it doesn't show prices "
-        "during the session.",
-        "Market cap: the last close times the shares in issue.",
+        "during the session. A price older than the market's latest close is labelled as the last price, with its date.",
+        "1-year range: the lowest and highest prices traded during the sessions of the last year (intraday), so they can "
+        "lie outside the closing prices.",
+        "Market cap: the last close times the shares in issue. It is n/a when it doesn't agree with the company's own "
+        "reported figures (for example a depositary share counted as an ordinary share).",
         ("P/E: the last close divided by earnings per share over the last four reported quarters. Earnings per share use the "
          "profit that belongs to the company's shareholders, after minority interests, so P/E can differ from market cap "
          "divided by the net profit in the table (a full year, before minority interests)." if india else
          "P/E: market cap divided by net profit over the last four reported quarters (shown above as net profit, last 12 "
-         "months). A loss has no P/E."),
+         "months). A loss has no P/E.") + " Above 1,000 it is n/a.",
         "EBITDA margin: operating profit before depreciation, interest and tax (and before other income), as a share of "
         "revenue." + (" The results give it in whole percent." if india else ""),
         "Net margin: net profit as a share of revenue in the latest reported period.",
@@ -866,25 +1124,33 @@ def with_ref(page: str, code: str) -> str:
 def not_found(region: str | None, symbol: str) -> str:
     """No company page for this symbol: say what it is when it's plainly a fund or an index (and where it can be
     charted and tested), and offer the company search."""
-    site = settings.PUBLIC_SITE_URL
     s = (symbol or "")[:40]
     kind = not_a_company(region, s)
     if kind:
-        market = "US" if region == "US" else "IN"
-        app = f"{site}/research/{market}/{quote(s.upper(), safe='')}"
-        title = f"{s.upper()} is {kind} · StratLab"
-        body = (f"<h1>{e(s.upper())} is {e(kind)}</h1>"
-                f'<p>Public pages here cover listed companies, with their reported results. {e(s.upper())} isn\'t a company, so it '
-                f"has no page of its own. Inside StratLab you can chart it and test a trading idea on its prices.</p>"
-                f'<div class="ctas"><a class="btn" href="{e(app)}">Open {e(s.upper())} in StratLab</a>'
-                f'<a class="btn ghost" href="/stocks">Find a company</a></div>')
-        sign_in = app
-    else:
-        title = "Company not found · StratLab"
-        body = (f"<h1>No company page for {e(s)}</h1>"
-                '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region))
-        sign_in = None
-    return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), sign_in, body)
+        return _not_company_page(region, s, kind)
+    site = settings.PUBLIC_SITE_URL
+    title = "Company not found · StratLab"
+    body = (f"<h1>No company page for {e(s)}</h1>"
+            '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region))
+    return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
+
+
+def _not_company_page(region: str | None, symbol: str, kind: str) -> str:
+    """A fund, an exchange-traded note or an index: what it is, and where it can be charted and tested."""
+    site = settings.PUBLIC_SITE_URL
+    s = symbol.upper()
+    market = "US" if region == "US" else "IN"
+    app = f"{site}/research/{market}/{quote(s, safe='')}"
+    title = f"{s} is {kind} · StratLab"
+    body = (f"<h1>{e(s)} is {e(kind)}</h1>"
+            f'<p>Public pages here cover listed companies, with their reported results. {e(s)} isn\'t a company, so it '
+            f"has no page of its own. Inside StratLab you can chart it and test a trading idea on its prices.</p>"
+            f'<div class="ctas"><a class="btn" href="{e(app)}">Open {e(s)} in StratLab</a>'
+            f'<a class="btn ghost" href="/stocks">Find a company</a></div>')
+    return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), app, body)
+
+
+SEARCH_SHOWN = 30
 
 
 def index_page(region: str | None, q: str = "") -> str:
@@ -896,15 +1162,23 @@ def index_page(region: str | None, q: str = "") -> str:
             "reported results, margins, debt and recent filings. Facts, not advice.</p>", _find_form(region, q)]
     if q:
         for r in regions:
-            got = search(r, q)
+            got = search(r, q, SEARCH_SHOWN + 1)
+            more, got = len(got) > SEARCH_SHOWN, got[:SEARCH_SHOWN]
             label = "India" if r == "IN" else "US"
-            body.append(f"<h2>{label}: {len(got)} {'match' if len(got) == 1 else 'matches'} for “{e(q)}”</h2>"
-                        + (_links(r.lower(), got) if got else '<p class="muted">None. Try part of the name, or the symbol.</p>'))
+            # a list cut at its length says so: "the first 30 matches", never "30 matches" (R6V-015)
+            count = f"the first {len(got)} matches" if more else f"{len(got)} {'match' if len(got) == 1 else 'matches'}"
+            body.append(f"<h2>{label}: {count} for “{e(q)}”</h2>"
+                        + (_links(r.lower(), got) if got else '<p class="muted">None. Try part of the name, or the symbol.</p>')
+                        + ('<p class="small muted">More companies match. Type more of the name or the symbol to narrow it down.</p>' if more else ""))
     else:
         for r in regions:
-            big = largest(r)
+            big, ranked = largest(r)
             if big:
-                body.append(f"<h2>{'India' if r == 'IN' else 'US'}: the largest companies</h2>{_links(r.lower(), big)}")
+                where = "India" if r == "IN" else "US"
+                head = (f"{where}: the largest companies" if ranked else f"{where}: some of the companies")
+                cap = ('<p class="small muted">By market value, among companies whose value passed StratLab\'s checks against '
+                       "their reported figures. Funds and notes are left out.</p>" if ranked else "")
+                body.append(f"<h2>{head}</h2>{cap}{_links(r.lower(), big)}")
     canonical = site + (f"/stocks/{region.lower()}" if region else "/stocks")
     return _page(_head("Company pages: India and US · StratLab", "Find any company listed in India or the US: price, results, "
                        "margins, debt and filings, from reported data.", canonical, robots="noindex,follow" if q else "index,follow"),

@@ -61,7 +61,7 @@ def reader(uid, email, plan="pro", confirmed=True, **choices):
 
 # ---------- facts ----------
 def test_market_facts_from_the_world(w, monkeypatch):
-    f = content.market_facts("IN", date.today())
+    f = content.market_facts("IN", datetime.now(content.ZoneInfo("Asia/Kolkata")).date())   # the brief's day is India's date, not UTC's
     assert f["kind"] == "market" and f["region"] == "IN"
     assert f["indices"] and all("change_pct" in i for i in f["indices"])
     assert f["headlines"] and len(f["headlines"]) <= content.HEADLINES and all(h["headline"] for h in f["headlines"])

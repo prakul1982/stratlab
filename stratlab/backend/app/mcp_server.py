@@ -656,7 +656,9 @@ def _need(profile):
 
 
 def page(profile) -> dict:
+    # "plan" is the plan the feature is on; "your_plan" the plan the page is seen on (the owner's View as included, R6O-005)
     return {"allowed": allows(profile["_plan"], FEATURE), "plan": PLANS[FEATURE_PLAN[FEATURE]]["name"],
+            "your_plan": PLANS.get(profile.get("_plan"), PLANS["free"])["name"],
             "endpoint": f"{settings.PUBLIC_API_URL}/mcp", "keys": mcp_keys.keys(profile["id"]), "max_keys": mcp_keys.MAX_KEYS,
             "log": mcp_keys.entries(profile["id"])[:100], "tools": [{"name": t["name"], "title": t["title"],
                                                                       "paper": t in PAPER_TOOLS} for t in TOOLS + PAPER_TOOLS],

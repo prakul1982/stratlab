@@ -269,7 +269,7 @@ export function questionFrom(text: string, instrument?: string | null): string {
   const clean = text.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
   const first = clean.split(/(?<=[.!?])\s/)[0];
   const short = first.length > 110 ? first.slice(0, 107).trimEnd() + "…" : first;
-  const lead = short.charAt(0).toLowerCase() + short.slice(1);
+  const lead = short;                 // in the person's own words and casing (R6O-010: "R test" came back as "r test")
   const named = !instrument || lead.toLowerCase().includes(instrument.toLowerCase().split(/[\s/-]/)[0]);
   return `Does "${lead}" work${named ? "" : ` on ${instrument}`}?`;
 }

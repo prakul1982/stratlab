@@ -205,6 +205,26 @@ def template(f: dict) -> str:
     return " ".join(parts)
 
 
+_WORDS_N = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+_SECTORS_MOVED = re.compile(r"[^.]*?\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten) sectors? (moved|shifted|changed|switched)[^.]*\.\s*", re.I)
+
+
+def fix_counts(text: str, sections: list[dict]) -> str:
+    """The summary's "N sectors moved" as the Sector rotation section has them (R6O-004: India 7 Oct said 6 and listed 2;
+    US 7 Oct said 5 with no rotation section). Without the section the sentence goes."""
+    n = len(next((s.get("items") or [] for s in sections or [] if s.get("title") == "Sector rotation"), []))
+
+    def one(m):
+        if not n:
+            return ""
+        said = m.group(1).lower()
+        if _WORDS_N.get(said, int(said) if said.isdigit() else -1) == n:
+            return m.group(0)
+        return re.sub(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten) sectors?\b",
+                      f"{n} sector{'s' if n != 1 else ''}", m.group(0), count=1, flags=re.I)
+    return _SECTORS_MOVED.sub(one, text or "").strip()
+
+
 def grounded(text: str, f: dict) -> bool:
     """Every ticker-like word in the text is in the facts, and no advice, forecast or hype words."""
     if not text or banned(text):

@@ -6,7 +6,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, HOME_DESCRIPTION, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -52,6 +52,15 @@ export function pageFiles(template) {
   return files;
 }
 
+/** StratLab's own library strategies, one file each (dist/library/<id>/index.html), with that strategy's own tags
+ * (R6V-012: they carried the home page's title and canonical address). */
+export function libraryFiles(template) {
+  return LIBRARY_SEEDS.map(([id, name]) => {
+    const p = libraryMeta(id, name);
+    return [`${p.path.slice(1)}/index.html`, pageHtml(template, { title: p.title, description: p.description, canonical: absolute(p.path), index: true })];
+  });
+}
+
 export function seoPages() {
   let out = "dist";
   return {
@@ -60,7 +69,7 @@ export function seoPages() {
     configResolved(c) { out = join(c.root, c.build.outDir); },
     closeBundle() {
       const template = readFileSync(join(out, "index.html"), "utf8");
-      for (const [file, html] of pageFiles(template)) {
+      for (const [file, html] of [...pageFiles(template), ...libraryFiles(template)]) {
         mkdirSync(dirname(join(out, file)), { recursive: true });
         writeFileSync(join(out, file), html);
       }

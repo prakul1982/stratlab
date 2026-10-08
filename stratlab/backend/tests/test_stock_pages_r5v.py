@@ -45,7 +45,10 @@ def test_a_session_still_trading_is_not_a_close():
     assert got["price_at"] == "2026-10-07" and got["price"] == bars[-2]["c"] and got["price_basis"] == "close"
     just_shut = datetime(2026, 10, 8, 16, 0, tzinfo=IST)             # closed, but not yet settled
     assert stock_pages.price_facts(bars, "IN", just_shut)["price_at"] == "2026-10-07"
-    after = datetime(2026, 10, 8, 16, 20, tzinfo=IST)
+    # India's official close reaches the daily candles hours after the bell (R6V-002: a last trade was shown as the
+    # close for an evening), so the day counts as closed only from 18:30 India time
+    assert stock_pages.price_facts(bars, "IN", datetime(2026, 10, 8, 16, 20, tzinfo=IST))["price_at"] == "2026-10-07"
+    after = datetime(2026, 10, 8, 18, 31, tzinfo=IST)
     assert stock_pages.price_facts(bars, "IN", after)["price_at"] == "2026-10-08"
     # New York: at 14:00 India time on 8 Oct the US session of 7 Oct closed hours ago (it was a session behind before)
     us = _bars("2026-10-07")
@@ -54,7 +57,7 @@ def test_a_session_still_trading_is_not_a_close():
 
 
 def test_a_stored_page_is_rebuilt_once_its_market_closes_again():
-    close = stock_pages.last_close("IN")[1].timestamp() + stock_pages.SETTLE
+    close = stock_pages.last_close("IN")[1].timestamp() + stock_pages.settle("IN")
     built_after = {"ts": close + 60, "facts": {"price": 1}}
     built_before = {"ts": close - 60, "facts": {"price": 1}}
     assert stock_pages.fresh(built_after, "IN", now=close + 120) and not stock_pages.fresh(built_before, "IN", now=close + 120)

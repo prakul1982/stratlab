@@ -27,7 +27,7 @@ from .newsletter import job as news_job
 from .plans import allows
 from .responses import err, ok
 
-LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date]}}
+LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date, volume]}}
 DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None]}
 KEEP_DAYS = 30                     # trading days of history kept
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
@@ -75,6 +75,17 @@ def num(v) -> float | None:
     except (TypeError, ValueError):
         return None
     return x if 0 < x < 1e8 else None
+
+
+def volume_of(v) -> float | None:
+    """Units traded, 0 included ("0", "1,200"); None when not given."""
+    if isinstance(v, bool) or v is None or v == "":
+        return None
+    try:
+        x = float(str(v).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return x if 0 <= x < 1e12 else None
 
 
 def gap(price, ref) -> float | None:
@@ -133,9 +144,11 @@ def parse_exchange(data) -> dict:
         nav = num(it.get("nav"))
         name = " ".join(str(meta.get("companyName") or it.get("companyName") or it.get("assets") or sym).split())[:120]
         under = " ".join(str(it.get("underlyingAsset") or it.get("assets") or "").split())[:120] or None
+        # the units traded today: an ETF with none has only an old last price, never a close of today (R6O-018)
+        vol = volume_of(it.get("qty") if it.get("qty") is not None else it.get("totalTradedVolume"))
         rows[sym] = {"name": name, "isin": money_mf_nav._isin(meta.get("isin") or it.get("isin") or ""),
                      "price": round(price, 4), "inav": round(inav, 4) if inav else None, "underlying": under,
-                     "nav": round(nav, 4) if nav else None, "nav_date": nav_day}
+                     "nav": round(nav, 4) if nav else None, "nav_date": nav_day, **({"volume": vol} if vol is not None else {})}
     stamp = data.get("timestamp") if isinstance(data, dict) else None
     return {"as_of": _when(stamp) if stamp else None, "rows": rows}
 
@@ -154,7 +167,7 @@ def add_isins(parsed: dict, feed) -> None:
 
 
 def _pack(parsed: dict, read: str) -> str:
-    rows = {s: [r["name"], r["isin"], r["price"], r["inav"], r["underlying"], r.get("nav"), r.get("nav_date")]
+    rows = {s: [r["name"], r["isin"], r["price"], r["inav"], r["underlying"], r.get("nav"), r.get("nav_date"), r.get("volume")]
             for s, r in parsed["rows"].items()}
     return json.dumps({"read": read, "as_of": parsed["as_of"], "rows": rows}, separators=(",", ":"))
 
@@ -171,9 +184,9 @@ def load_live() -> dict:
     rows = {}
     for s, r in (got.get("rows") or {}).items() if isinstance(got, dict) else []:
         try:
-            name, isin, price, inav, under, nav, nav_day = (list(r) + [None, None])[:7]     # older rows have five
+            name, isin, price, inav, under, nav, nav_day, vol = (list(r) + [None, None, None])[:8]     # older rows have five or seven
             rows[s] = {"name": name, "isin": isin, "price": float(price), "inav": float(inav) if inav else None, "underlying": under,
-                       "nav": float(nav) if nav else None, "nav_date": nav_day}
+                       "nav": float(nav) if nav else None, "nav_date": nav_day, "volume": volume_of(vol)}
         except (TypeError, ValueError):
             continue
     out = {"read": got.get("read") if isinstance(got, dict) else None, "as_of": got.get("as_of") if isinstance(got, dict) else None,
@@ -238,7 +251,8 @@ def record_close(day: date | str, live: dict, data: dict) -> int:
     rows = {}
     for s, r in live["rows"].items():
         sch = nav_of(r, data)
-        rows[s] = [r["price"], sch["nav"] if sch and sch.get("date") == day else None]
+        # no units traded that day: its last price is an older day's, so there's no close of this day to keep (R6O-018)
+        rows[s] = [None if r.get("volume") == 0 else r["price"], sch["nav"] if sch and sch.get("date") == day else None]
     if not rows:
         return 0
     db.set_setting(DAY_KEY + day, json.dumps(rows, separators=(",", ":")))
@@ -313,14 +327,14 @@ def day_of(iso: str | None) -> str | None:
     return (t if t.tzinfo is None else t.astimezone(IST)).date().isoformat()
 
 
-def same_day(sym: str, price, price_day: str | None, nav_day: str | None) -> tuple[float | None, str | None]:
+def same_day(sym: str, price, price_day: str | None, nav_day: str | None, volume=None) -> tuple[float | None, str | None]:
     """The price to set against a NAV of `nav_day`, and its day: the list's price when it is from that same day (after
     the close, once the evening NAV is out), else that day's stored close. None while neither exists: a price from
     today against yesterday's NAV is the day's market move, not a gap (8 Oct 2026: NIFTYBEES at 254.15 against the
     7 Oct NAV of 257.80 read "1.4% below" with the market down 1.7%)."""
     if not nav_day:
         return None, None
-    if price_day == nav_day:
+    if price_day == nav_day and volume != 0:
         return num(price), nav_day
     close = (_days().get(nav_day) or {}).get(sym)
     if isinstance(close, list) and close and num(close[0]) is not None:
@@ -335,7 +349,7 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     that there is a NAV but no price of its day to set against it."""
     sch = nav_of(r, data)
     nav, nav_day = (sch["nav"], sch.get("date")) if sch else (None, None)
-    vs, vs_day = same_day(sym, r["price"], day_of(as_of), nav_day)
+    vs, vs_day = same_day(sym, r["price"], day_of(as_of), nav_day, r.get("volume"))
     inav_gap, nav_gap = gap(r["price"], r.get("inav")), gap(vs, nav)
     basis = "iNAV" if inav_gap is not None else "NAV" if nav_gap is not None else None
     g = inav_gap if basis == "iNAV" else nav_gap

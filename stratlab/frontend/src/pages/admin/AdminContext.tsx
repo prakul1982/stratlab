@@ -5,8 +5,9 @@ import type { CalendarStatus } from "./HolidaysPanel";
 
 export type Plan = "free" | "basic" | "pro";
 export type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null;
-  /** whether it can answer now (a short rate limit or a used-up free quota still counts), and why not in the provider's own words */
-  answering?: boolean | null; state_text?: string | null };
+  /** whether it can answer now (a short rate limit still counts; a used-up free quota or a paused provider does not), and why
+   * not in the provider's own words; how many of its models in use are paused; whether its free quota is used up */
+  answering?: boolean | null; state_text?: string | null; paused_models?: number; quota_used?: boolean };
 export type ServerError = { ref: string; at: string; method: string; path: string; error: string; where: string };
 
 export interface Overview {

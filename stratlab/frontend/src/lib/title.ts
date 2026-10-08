@@ -52,6 +52,7 @@ export function signedOutTitle(path: string): string {
   if (p === "/help") return withBrand("Help");
   if (p === "/" || p === "/features") return DEFAULT_TITLE;
   if (!isAppPath(p)) return NOT_FOUND_TITLE;
+  if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Sign in");     // never names a page only some open
   const t = titleFor(p);
   return t === DEFAULT_TITLE ? withBrand("Sign in") : `Sign in · ${t}`;
 }

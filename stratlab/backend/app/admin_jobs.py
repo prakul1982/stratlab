@@ -57,13 +57,41 @@ def _plain(job, key: str | None = None) -> dict:
     return job_status.kept(key, st) if key else st
 
 
+def data_at(fn) -> str | None:
+    """When a feed's stored data was last written, by the data's own stamp; None when it can't be read. Used when this
+    server hasn't run the job and nothing was kept (R6O-003: nine fresh feeds on "Not run yet")."""
+    try:
+        got = fn()
+        return str(got) if got else None
+    except Exception:
+        return None
+
+
+def _ran(st: dict, *keys: str, data=None) -> tuple[str | None, list[str]]:
+    """(last run, an extra log line): the job's own run when it has one, else the stored data's own time."""
+    for k in keys:
+        if st.get(k):
+            return st[k], []
+    at = data_at(data) if data else None
+    return at, ["Time from the stored data: this server hasn't run the job since its last restart."] if at else []
+
+
 def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
+
+
+KEPT = ("positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
 
 
 def rows() -> list[dict]:
     m = _m()
     out: list[dict] = []
+    # every kept status in one database read, not one per job (R6O-023: Overview still "Loading the data feeds" at 5 s)
+    try:
+        from . import db
+        db.prefetch_settings([f"jobstatus:{k}" for k in KEPT])
+    except Exception:
+        pass
 
     def add(name: str, build):
         try:
@@ -99,16 +127,20 @@ def rows() -> list[dict]:
 
     def positioning():
         st = _plain(m.positioning_job, "positioning")
-        return _row("positioning", "Positioning", "Trading days from 6:40 PM IST until the day's files are in", st.get("last_run"),
-                    st.get("last_error"), [str(st.get("last_result") or "")], [{"label": "Run now", "path": "/admin/positioning/run"}],
+        from . import positioning as P
+        at, why = _ran(st, "last_run", data=lambda: P.state().get("last_run"))
+        return _row("positioning", "Positioning", "Trading days from 6:40 PM IST until the day's files are in", at,
+                    st.get("last_error"), [str(st.get("last_result") or "")] + why, [{"label": "Run now", "path": "/admin/positioning/run"}],
                     running=m.positioning_runner.running)
     add("Positioning", positioning)
 
     def etf():
         st = _plain(m.etf_job, "etf")
+        from . import etf_nav
+        at, why = _ran(st, "read", "last_run", data=lambda: etf_nav.load_live().get("read"))
         return _row("etf", "ETF price against NAV", "Every 4 minutes while the market is open; closing prices after 3:45 PM IST",
-                    st.get("read") or st.get("last_run"), st.get("last_error"),
-                    [f"Closing prices recorded for {st['recorded']}" if st.get("recorded") else "", f"{st.get('filled')} NAVs filled in" if st.get("filled") else ""],
+                    at, st.get("last_error"),
+                    [f"Closing prices recorded for {st['recorded']}" if st.get("recorded") else "", f"{st.get('filled')} NAVs filled in" if st.get("filled") else ""] + why,
                     [{"label": "Read now", "path": "/admin/etf-gaps/refresh"}])
     add("ETF price against NAV", etf)
 
@@ -134,8 +166,10 @@ def rows() -> list[dict]:
 
     def corp():
         st = _plain(m.corp_job, "corp")
-        return _row("corp", "Corporate actions", "India 7:20 AM and 6:40 PM IST, US 6:10 AM New York time", st.get("last_run"),
-                    st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/corp-actions/refresh"},
+        from . import corp_actions
+        at, why = _ran(st, "last_run", data=lambda: max(filter(None, (corp_actions.load(r).get("at") for r in corp_actions.REGIONS)), default=None))
+        return _row("corp", "Corporate actions", "India 7:20 AM and 6:40 PM IST, US 6:10 AM New York time", at,
+                    st.get("last_error"), _problems(st) + why, [{"label": "Run now", "path": "/admin/corp-actions/refresh"},
                                                            {"label": "Read the whole US universe", "path": "/admin/corp-actions/refresh?universe=true"}],
                     running=bool(getattr(m.corp_job, "universe_running", False)),
                     note="The US list covers the S&P 500 and StratLab's own groups, read from price histories at 6:20 AM New York time (several minutes).")
@@ -144,36 +178,46 @@ def rows() -> list[dict]:
     def events():
         from . import market_events_routes as r
         st = _plain(r.job, "events")
-        return _row("events", "Market events", "7:20 AM and 6:40 PM IST", st.get("last_run"), st.get("last_error"), _problems(st),
+        from . import market_events
+        at, why = _ran(st, "last_run", data=lambda: market_events.load_state().get("last_run"))
+        return _row("events", "Market events", "7:20 AM and 6:40 PM IST", at, st.get("last_error"), _problems(st) + why,
                     [{"label": "Run now", "path": "/admin/events/refresh"}], parts=st.get("parts"))
     add("Market events", events)
 
     def fo():
         from . import fo_changes_routes as r
         st = _plain(r.job, "fo")
-        return _row("fo", "F&O contract changes", "8:15 AM and 7:50 PM IST on trading days", st.get("last_run"), st.get("last_error"),
-                    _problems(st), [{"label": "Run now", "path": "/admin/fo-changes/refresh"}], parts=st.get("parts"))
+        from . import fo_changes
+        at, why = _ran(st, "last_run", data=lambda: fo_changes.load_state().get("last_run"))
+        return _row("fo", "F&O contract changes", "8:15 AM and 7:50 PM IST on trading days", at, st.get("last_error"),
+                    _problems(st) + why, [{"label": "Run now", "path": "/admin/fo-changes/refresh"}], parts=st.get("parts"))
     add("F&O contract changes", fo)
 
     def surv():
         st = _plain(m.surv_job, "surveillance")
-        return _row("surveillance", "Surveillance lists", "8:20 AM and 7:45 PM IST on trading days", st.get("last_run"), st.get("last_error"),
-                    _problems(st), [{"label": "Run now", "path": "/admin/surveillance/refresh"}], parts=st.get("parts"))
+        from . import surveillance
+        at, why = _ran(st, "last_run", data=lambda: max((p.get("checked") or "" for p in surveillance.load().values()), default="") or None)
+        return _row("surveillance", "Surveillance lists", "8:20 AM and 7:45 PM IST on trading days", at, st.get("last_error"),
+                    _problems(st) + why, [{"label": "Run now", "path": "/admin/surveillance/refresh"}], parts=st.get("parts"))
     add("Surveillance lists", surv)
 
     def auction():
         st = _plain(m.closing_auction_job, "closing-auction")
+        from . import closing_auction
+        at, why = _ran(st, "read", "recorded", data=lambda: closing_auction.load_live().get("read"))
         return _row("closing-auction", "Closing auction", "Every 30 seconds from 3:14 to 3:40 PM IST; the day is stored after 3:40",
-                    st.get("read") or st.get("recorded"), st.get("last_error"), [f"Stored for {st['recorded']}" if st.get("recorded") else ""])
+                    at, st.get("last_error"), [f"Stored for {st['recorded']}" if st.get("recorded") else ""] + why)
     add("Closing auction", auction)
 
     def vix():
         st = _plain(m.vix_job, "vix")
-        return _row("vix", "India VIX history", "After each trading day's close", st.get("last_run") or st.get("read"), st.get("last_error"))
+        from . import vix
+        at, why = _ran(st, "last_run", "read", data=lambda: max(vix.closes(), default=None))
+        return _row("vix", "India VIX history", "After each trading day's close", at, st.get("last_error"), why)
     add("India VIX history", vix)
 
     def recorder():
-        st = dict(m.recorder.status or {})
+        st = _plain(m.recorder, "option-chains")
         if not st.get("enabled"):
             return _row("option-chains", "Option chain recording", "Off", None, None, [], [], note="Off. Set OPTION_SNAPSHOTS to record option chains.")
         return _row("option-chains", "Option chain recording", f"Every {st.get('every_minutes')} minutes in market hours", st.get("last_at"),

@@ -265,9 +265,10 @@ a.link { margin-inline: -2px; }
 .acct-pop [role="menuitem"]:hover, .acct-pop [role="menuitem"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
 .acct-pop [role="menuitem"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .acct-pop .plan-tag { margin-left: auto; }
-.acct-viewas { display: flex; align-items: center; gap: 4px; padding: 2px 8px 4px; }
-.acct-viewas-t { flex: none; margin-right: 4px; color: var(--muted); font-size: 13px; }
-.acct-pop [role="menuitemradio"] { flex: 1 1 auto; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink-2);
+/* the label on its own line and the four chips sharing the menu's width, so none is cut at its edge (R6O-011: "Off" read "Of") */
+.acct-viewas { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 4px; }
+.acct-viewas-t { flex: 1 0 100%; color: var(--muted); font-size: 13px; }
+.acct-pop [role="menuitemradio"] { flex: 1 1 0; min-width: 0; height: 28px; padding: 0 6px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink-2);
   font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 .acct-pop [role="menuitemradio"]:hover, .acct-pop [role="menuitemradio"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
 .acct-pop [role="menuitemradio"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
@@ -1477,6 +1478,13 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 @media (max-width: 640px) {
   .k-table td a, .k-table th a, .k-table td .btn.sm, .k-table td button, .k-cal-ev a, .k-cal-evs button { min-height: 32px; display: inline-flex; align-items: center; }
   .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { min-width: 24px; min-height: 24px; margin: 4px; }
+  /* R6O-024: the screener's sort headers, the chart's icon buttons, a card's small header links and the reminder ticks
+     on Market events were still under 32px */
+  .k-th-sort { min-height: 32px; display: inline-flex; align-items: center; }
+  .pc-btn { min-width: 32px; }
+  .k-card-head a, .k-card-head .btn.sm, .inv-head-price a { min-height: 32px; }
+  .inv-head-price a { display: inline-flex; align-items: center; }
+  .k-check input[type="checkbox"], .k-check input[type="radio"] { width: 24px; height: 24px; }   /* the label around it is the 32px target */
 }
 /* on a phone a stacked table is a list of cards: the row's name on top, each figure under its own column name */
 @media (max-width: 640px) {
@@ -1923,6 +1931,11 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-sample { flex: none; padding: 1px 10px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--ink-2); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .lp-space .lp-space-art .badge { font-size: 12.5px; }
 .lp-art { position: relative; }
+/* Safari on a phone sized the drawings from the SVG's own width and pushed the right-hand column 14px past the screen
+ * (R6V-006): every grid cell may shrink, and a drawing never outgrows its card */
+.lp-checks > *, .lp-steps > *, .lp-tools > *, .lp-markets > * { min-width: 0; }
+.lp-art { max-width: 100%; min-width: 0; overflow: hidden; }
+.lp-art svg { max-width: 100%; }
 .lp-art-tag { position: absolute; top: 10px; right: 10px; font: 600 12.5px var(--sans); color: var(--orange-ink); }
 
 /* plans: amounts are held back until the prices have come, so nothing flashes and nothing moves */

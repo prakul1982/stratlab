@@ -1,15 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { breadthApi, count, savedPick, share, type BreadthView } from "../lib/breadth";
+import { BROAD_GROUP, breadthApi, count, savedPick, share, type BreadthView } from "../lib/breadth";
+import { savedRegion } from "../lib/research";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
 import { Stat } from "./kit";
 import { marketTz } from "../lib/format";
 
-/** Market breadth on the Invest home: the latest day's numbers for the group last picked (every plan). */
+/** Market breadth on the Invest home: the latest day's numbers for the reader's market (every plan): the group last
+ * picked for it, else the market's own group, or its broad group while that one has no counts yet (R6O-007). */
 export function BreadthCard() {
   const [d, setD] = useState<BreadthView | null | "error">(null);
-  useEffect(() => { breadthApi.get(savedPick().group, "1y", true).then(setD).catch(() => setD("error")); }, []);
+  useEffect(() => {
+    const region = savedRegion();
+    const pick = savedPick(region);
+    breadthApi.get(pick.group, "1y", true)
+      .then((v) => (!v.today && !pick.picked && BROAD_GROUP[region] !== pick.group ? breadthApi.get(BROAD_GROUP[region], "1y", true) : v))
+      .then(setD).catch(() => setD("error"));
+  }, []);
   return (
     <Panel title="Market breadth" right={<Link to="/invest/breadth" className="link">Charts →</Link>}>
       {d === null ? <PanelSkel figs label="Counting the market" />

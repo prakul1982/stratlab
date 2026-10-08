@@ -10,7 +10,7 @@ export type PRow = { id: "client" | "dii" | "fii" | "pro" | "total"; label: stri
 
 export type Flow = { buy: number | null; sell: number | null; net: number | null };
 export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
-  spot?: number | null; source: "live" | "recorded" | null; as_of?: string };
+  spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
 
 /** How many days are stored: the first and the last. */
 export type Span = { days: number; first: string | null; last: string | null };
@@ -26,7 +26,7 @@ export type StrikeRow = { strike: number; call_oi: number | null; put_oi: number
   call_chg: number | null; put_chg: number | null };
 export type IvStats = { days: number; need: number; percentile: number | null; rank: number | null; low: number | null; high: number | null };
 export type ChainFacts = {
-  name: string; exchange: string; choice: string; source: "live" | "recorded" | null; as_of?: string; expiry?: string; expiries?: string[];
+  name: string; exchange: string; choice: string; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string; expiry?: string; expiries?: string[];
   spot?: number | null; rows: StrikeRow[]; change_from?: string | null; strikes_counted?: number;
   pcr?: { oi: number | null; vol: number | null; call_oi: number; put_oi: number; call_vol: number | null; put_vol: number | null };
   pcr_near?: number | null; pcr_near_vol?: number | null; max_pain?: number | null; atm_iv?: number | null; atm?: number | null;

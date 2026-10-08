@@ -88,6 +88,14 @@ def api_routes() -> list[re.Pattern]:
             and "GET" in r.methods]
 
 
+@lru_cache(maxsize=None)
+def forwarded() -> frozenset[str]:
+    """The exact paths the site's host (frontend/vercel.json) forwards to the API."""
+    import json
+    rewrites = json.loads((SRC.parent / "vercel.json").read_text()).get("rewrites") or []
+    return frozenset(r["source"] for r in rewrites if r["destination"].startswith("http") and ":" not in r["source"])
+
+
 # ---------- the check ----------
 def links(html: str, text: str) -> set[str]:
     """Every address in the HTML's links and in the plain text."""
@@ -108,6 +116,8 @@ def problem(url: str) -> str | None:
     if origin != site:
         own = {o.rstrip("/") for o in settings.FRONTEND_ORIGINS}
         return f"links to {origin}, not the public site" if origin in own else None    # another site: a source
+    if u.path in forwarded():            # the site sends it on to the API: it must be an API page
+        return None if any(rx.match(u.path) for rx in api_routes()) else f"no API route {u.path}"
     comp = page_for(u.path or "/")
     if not comp:
         return f"the app has no page {u.path} (an unknown address just goes home)"

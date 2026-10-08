@@ -301,7 +301,9 @@ def health() -> list[dict]:
                     "model": st.model or (R.in_use(name)[:1] or [None])[0] if configured(name) else None,
                     "last_ok": st.last_ok, "last_error": st.last_error, "quota": st.quota,
                     "answering": answering, "state": view["state"] if view else "off",
-                    "state_text": view["state_text"] if view else None})
+                    "state_text": view["state_text"] if view else None,
+                    "paused_models": view["paused_models"] if view else 0,
+                    "quota_used": bool(view and view["quota"]["limited"])})
     return out
 
 
@@ -351,13 +353,15 @@ def _provider_view(name: str, now: float) -> dict:
     if pin and R.pin_gone(name, pin):
         text += (f" The pinned model {pin} isn't available any more ({R.stats(name, pin).last_error}), so the measured models "
                  f"answer instead: " + (f"remove {p.model_env} in Railway." if pin_env and not pin_admin else "unpin it here."))
-    # can it answer: a used-up free quota or a short rate limit (it answers again in a moment) counts as yes; a rejected
-    # key, a model gone or a provider that keeps failing does not (R5O-016)
-    answering = None if not is_on else state in ("ok", "idle") or bool(st.quota) or (state == "warn" and st.last_error_kind == "rate")
+    # can it answer now: a short rate limit (it answers again in a moment) counts as yes; a used-up free quota, a
+    # paused provider, a rejected key or a model gone does not (R5O-016; R6O-003: "12 of 12 answering" beside a paused
+    # provider and one whose free credit was used up)
+    answering = None if not is_on else state in ("ok", "idle") or (state == "warn" and st.last_error_kind == "rate" and not st.quota)
+    paused_models = sum(1 for m in models if m["in_use"] and m["open_until"])
     reset_at = st.quota_reset if (st.quota_reset or 0) > now else (st.cooldown_until if cooling else None)
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
-            "state": state, "state_text": text, "answering": answering,
+            "state": state, "state_text": text, "answering": answering, "paused_models": paused_models,
             "quota": {"limited": bool(st.quota and (cooling or all_closed)), "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
                       "remaining_at": st.remaining.get("at")},

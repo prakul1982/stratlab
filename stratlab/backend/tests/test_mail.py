@@ -119,12 +119,14 @@ def test_secret_falls_back_to_one_derived_from_the_service_key(monkeypatch):
 
 
 def test_unsubscribe_links_and_headers(monkeypatch):
+    # on the public site's own domain, which forwards them to the API (R6V-016: readers saw the API's raw host)
     monkeypatch.setattr(settings, "PUBLIC_API_URL", "https://api.example.com")
+    monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "https://site.example.com")
     url = alerts.unsubscribe_url("u-1", "my_stocks")
-    assert url.startswith("https://api.example.com/unsubscribe?t=")
+    assert url.startswith("https://site.example.com/unsubscribe?t=") and "api.example.com" not in url
     assert mail_tokens.read(url.split("t=", 1)[1], "unsubscribe") == ("u-1", "my_stocks")
     h = alerts.list_unsubscribe_headers("u-1", "my_stocks")
-    assert h["List-Unsubscribe"].startswith("<https://api.example.com/unsubscribe?t=") and h["List-Unsubscribe"].endswith(">")
+    assert h["List-Unsubscribe"].startswith("<https://site.example.com/unsubscribe?t=") and h["List-Unsubscribe"].endswith(">")
     assert h["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
 
 

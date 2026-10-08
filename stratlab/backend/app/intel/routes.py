@@ -115,18 +115,32 @@ def company(region: str, symbol: str, profile=Depends(current_profile)):
     """One company's page. `as_of` is when its prices were read, for the page's "as of" line; `market_open` whether
     its market is trading now (else the price is the last close)."""
     r = region_of(region)
-    c = source_call(lambda: hub.company(r, symbol_of(symbol)))
-    if r == "IN":
-        c = with_dividend_yield(c, stored_dividends(c["symbol"]), datetime.now(IST).date().isoformat())
+    c = page_figures(r, source_call(lambda: hub.company(r, symbol_of(symbol))))
     return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r)})
 
 
-def stored_dividends(symbol: str) -> list[dict]:
-    """A company's stored corporate actions (no new read: the page's own Corporate actions card reads them), or none."""
+def page_figures(region: str, c: dict) -> dict:
+    """The company page's own figures, as the page and its AI read both use them: the dividend yield from the
+    dividends listed on the page (R6O-008: Eni's 6.1% beside $1.87 of listed payments, TCS's AI read on another
+    yield than the page's)."""
+    return with_dividend_yield(c, stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+
+
+corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
+
+
+def stored_dividends(region: str, symbol: str) -> list[dict]:
+    """A company's corporate actions as its page's Corporate actions card lists them (India: stored, no new read; the
+    US: the card's own read, kept for a day), or none."""
     try:
         from .. import corp_actions
-        return corp_actions.actions_for("IN", symbol, None, fetch=False)
-    except Exception:
+        if region == "IN":
+            return corp_actions.actions_for("IN", symbol, None, fetch=False)
+        src = corp_sources() if callable(corp_sources) else None
+        got = corp_actions.company("US", symbol, src, fetch=src is not None)
+        return (got.get("past") or []) + (got.get("ahead") or [])
+    except Exception as e:
+        print("dividends for the page:", region, symbol, str(e)[:120])
         return []
 
 
@@ -164,7 +178,14 @@ def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(
     pro = has_indicators(profile["_plan"])       # which indicators the read may mention; the facts are the same
 
     def build():
-        c = source_call(lambda: hub.company(r, s))
+        # the same figures as the page (its dividend yield) and the results calendar, so the read can tell a
+        # filed quarter from one still to come (R6O-001)
+        c = page_figures(r, source_call(lambda: hub.company(r, s)))
+        try:
+            from .. import results as results_calendar
+            c = {**c, "results_calendar": results_calendar.lookup(r, c["symbol"])}
+        except Exception:
+            pass
         return A.company(c, _ai, pro, company_key_facts(r, c))
     try:
         read = ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build)
@@ -205,7 +226,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             news = hub.headlines(r, f)
         except SourceError:
             news = []
-        return A.pulse(r, f, indices, news, _ai)
+        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r))
     try:
         return ok(ai_call(profile, "pulse", (r, f.lower(), hour), 3600, refresh, build))
     except HTTPException as e:
@@ -224,7 +245,18 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
     return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
-                      lambda: grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search)))
+                      lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r))))
+
+
+def industry_lookup(region: str):
+    """{symbol: "sector industry"} from the screener's stored index, for the theme map's relevance check (R6O-017)."""
+    try:
+        from .. import screens
+        rows = screens.load_index(region).get("rows") or []
+    except Exception:
+        return None
+    got = {r["symbol"]: " ".join(x for x in (r.get("sector"), r.get("industry")) if x) for r in rows if r.get("symbol")}
+    return got.get if got else None
 
 
 @router.get("/compare")

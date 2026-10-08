@@ -40,7 +40,9 @@ export function landingSection(path: string): string | null | undefined {
   return p in LANDING_SECTIONS ? LANDING_SECTIONS[p] : undefined;
 }
 
-export type Described = { what: string; company?: { region: "IN" | "US"; symbol: string; deep: boolean } };
+/** `restricted`: an address only some accounts open (the admin pages): a visitor is asked to sign in, with no promise
+ * of what is there (R6V-013). */
+export type Described = { what: string; company?: { region: "IN" | "US"; symbol: string; deep: boolean }; restricted?: boolean };
 
 /** A name for what's at this address, for "Sign in to see …". Null for an address the app doesn't have. */
 export function describePath(path: string): Described | null {
@@ -60,7 +62,7 @@ export function describePath(path: string): Described | null {
   if (/^\/paper\/[^/]+$/.test(p)) return { what: "this paper trading session" };
   if (/^\/options\/s\/[^/]+$/.test(p)) return { what: "this options session" };
   if (/^\/trade\/signals\/[^/]+$/.test(p)) return { what: "this signal session" };
-  if (/^\/admin(\/|$)/.test(p)) return { what: "the admin pages" };
+  if (/^\/admin(\/|$)/.test(p)) return { what: "StratLab", restricted: true };
   const named: Record<string, string> = {
     "/": "your StratLab", "/mine": "My space", "/all": "My space", "/trade": "your Trade home", "/invest": "your Invest home",
     "/money": "your Money home", "/notebooks": "your notebooks", "/new": "the idea builder", "/plans": "the plans",
