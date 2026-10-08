@@ -9,7 +9,8 @@ import { Badge, Card, CardHead, CheckField, ConfirmDialog, Disclosure, EmptyStat
 type Key = { id: string; name: string; paper: boolean; hint: string; created_at: string; last_used_at: string | null; revoked_at: string | null };
 type Entry = { at: string; key_id: string; key: string; tool: string; args: string; result: "ok" | "error" | "refused" | "rate_limited"; detail: string; ms: number };
 export type AssistantPage = {
-  allowed: boolean; plan: string; endpoint: string; keys: Key[]; max_keys: number; log: Entry[];
+  /** plan: the plan the feature is on; your_plan: the plan this page is seen on (View as included) */
+  allowed: boolean; plan: string; your_plan?: string; endpoint: string; keys: Key[]; max_keys: number; log: Entry[];
   tools: { name: string; title: string; paper: boolean }[];
   limits: { per_minute: number; per_day: number; paper_per_hour: number; scans_per_hour: number };
 };
@@ -92,7 +93,8 @@ export function AssistantCards() {
   };
 
   if (!p) return <Card label="Your assistants"><Skeleton label="Loading your assistants" /></Card>;
-  if (!p.allowed) return <PlanNote>Connecting an AI assistant is on the Pro plan. You are on the {p.plan} plan.</PlanNote>;
+  // the plan the page is seen on (View as included), never the feature's own plan read as the reader's (R6O-005)
+  if (!p.allowed) return <PlanNote>Connecting an AI assistant is on the {p.plan} plan.{p.your_plan ? ` You are on the ${p.your_plan} plan.` : ""}</PlanNote>;
 
   const endpoint = mcpEndpoint(CFG.API_BASE, location.origin, p.endpoint);
   const live = p.keys.filter((k) => !k.revoked_at);

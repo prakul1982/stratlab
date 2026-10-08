@@ -30,3 +30,24 @@ test("A results day whose quarter is already in the table reads as filed (R6O-01
   assert.equal(resultsFiled(null, "Sep 2026", "2026-10-08"), false);
   assert.match(read("src/lib/mine.ts"), /results_out/);                           // filed results aren't "coming up"
 });
+
+test("Service worker: an offline page load with no kept copy gets an offline page, never nothing; the shell is cached file by file (R6O-006)", async () => {
+  const vm = await import("node:vm");
+  const src = read("public/sw.js");
+  const handlers = {}, added = [];
+  const caches = {
+    open: async () => ({ put: async () => undefined, add: async (f) => { if (f === "/icon-192.png") throw new Error("502"); added.push(f); } }),
+    match: async () => undefined, keys: async () => [], delete: async () => true,
+  };
+  class Response { constructor(body, init) { this.body = body; this.status = init.status; } static error() { return "error"; } }
+  const self = { addEventListener: (t, f) => { handlers[t] = f; }, location: { origin: "https://stratlab.studio" }, skipWaiting() {}, clients: { claim() {} } };
+  vm.runInNewContext(src, { self, caches, fetch: () => Promise.reject(new Error("TLS handshake")), URL, Response, Promise });
+  let waited;
+  handlers.install({ waitUntil: (p) => { waited = p; } });
+  await waited;
+  assert.ok(added.includes("/") && added.includes("/config.js"), "one failed file doesn't stop the others");
+  let answer;
+  handlers.fetch({ request: { method: "GET", url: "https://stratlab.studio/mine", mode: "navigate" }, respondWith: (p) => { answer = p; } });
+  const res = await answer;
+  assert.ok(res && res.status === 503 && /can't be reached/.test(res.body));
+});

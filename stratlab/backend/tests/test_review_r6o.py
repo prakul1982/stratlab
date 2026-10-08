@@ -342,3 +342,13 @@ def test_stored_briefs_are_tidied_once(monkeypatch):
     assert [i["text"] for i in got["sections"][1]["items"]] == ["Sensex falls 1,100 points"]
     assert _j.loads(store[f"news:market:IN:{yday}"])["summary"].endswith("4 sectors moved to another quadrant on the rotation chart.")
     assert J.repair_headlines("IN") == 0                        # once: nothing left to change
+
+
+# ---------- R6O-005: the assistant page says the plan it is seen on ----------
+def test_the_assistant_page_names_the_viewed_plan(monkeypatch):
+    from app import mcp_keys, mcp_server
+    monkeypatch.setattr(mcp_keys, "keys", lambda uid: [])
+    monkeypatch.setattr(mcp_keys, "entries", lambda uid: [])
+    got = mcp_server.page({"id": "owner", "_plan": "free", "_view_as": "free"})
+    assert got["allowed"] is False and got["plan"] == "Pro" and got["your_plan"] == "Free"
+    assert mcp_server.page({"id": "owner", "_plan": "basic"})["your_plan"] == "Basic"
