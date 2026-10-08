@@ -283,7 +283,7 @@ export function NotebookPage() {
             ]} />
           </>} />
           <FormGrid label="Notebook name and question">
-            <Field label="Notebook name" maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
+            <Field label="Notebook name" wide maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
               onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
             <Field label="The question this notebook tests" wide>{(fid) => (
               <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}
