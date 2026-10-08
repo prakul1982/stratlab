@@ -1,4 +1,4 @@
-import { money, price, signClass, when } from "../lib/format";
+import { money, price, signCls, when } from "../lib/format";
 
 /* Paper orders, the same way on every session page: the orders sent at one moment for one reason (an entry, a
  * re-centre, a stop) under one line with their P&L added up, each order a row: side, contract, quantity × price. */
@@ -13,7 +13,7 @@ export function OrderList({ events, cur, tz, newest = false }: { events: PaperOr
     <div className="order-list">{groups.map((g) => (
       <div key={g.key} className="order-group">
         <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {when(g.t, tz, true, true)}</span></span>
-          {g.pnl != null && <span className={`order-num ${signClass(g.pnl)}`}>{money(g.pnl, cur)}</span>}</div>
+          {g.pnl != null && <span className={`order-num ${signCls(g.pnl)}`}>{money(g.pnl, cur)}</span>}</div>
         <ul className="orders order-rows">{g.rows.map((e, i) => (
           <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
             <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
