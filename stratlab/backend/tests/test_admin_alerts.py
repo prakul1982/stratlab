@@ -98,3 +98,28 @@ def test_brevo_emails_carry_a_reply_to_a_real_inbox(monkeypatch):
     alerts.send_email("owner@example.com", "Subject", "Body")
     assert sent["sender"]["email"] == "hello@stratlab.studio"
     assert sent["replyTo"] == {"email": "support@stratlab.studio"}
+
+
+def test_admin_can_email_themselves_a_reviewer_sign_in_link(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from app import db, main
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        asked = []
+
+        def generate_link(params):
+            asked.append(params)
+            return NS(properties=NS(action_link="https://auth.example.com/verify?token=t1&type=magiclink"))
+        real = db.sb()
+        monkeypatch.setattr(db, "sb", lambda: NS(auth=NS(admin=NS(generate_link=generate_link), get_user=real.auth.get_user),
+                                                 table=real.table))
+        sent = _smtp(monkeypatch)
+        h = W.headers("admin-token")
+        assert w["client"].post("/admin/review-link", headers=h).json() == {"sent_to": "owner@example.com"}
+        assert asked[0]["type"] == "magiclink" and asked[0]["email"] == "owner@example.com"     # only ever the admin's own
+        assert sent[-1][0] == "owner@example.com" and "token=t1" in str(sent[-1])
+        assert w["client"].post("/admin/review-link", headers=W.headers("pro-token")).status_code == 403
+    finally:
+        w["close"]()

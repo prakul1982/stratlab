@@ -95,13 +95,24 @@ class Feed:
 
 def answer(path: str, params) -> dict | list | None:
     """The fake exchange's answer to the CAS calls (the world's): the latest auction is over, its final prices out, at
-    the demo world's last close (fake_prices), the same prices every other page shows."""
+    the demo world's close of that day (fake_prices), the same prices every other page shows for it."""
     if path != PATH:
         return None
     from tests import fake_prices as P
+    close = last_auction_close()
     if params.get("functionName") == "getCASData":
-        return auction_stocks(True, {s: P.last(s) for s in GAPS})
-    return auction_indices(True, {n: (P.last(n), P.prev(n)) for n in ("NIFTY 50", "NIFTY BANK")})
+        return auction_stocks(True, {s: P.price(s, close) for s in GAPS})
+    before = P.previous_close("IN", close + timedelta(hours=1))
+    return auction_indices(True, {n: (P.price(n, close), P.price(n, before)) for n in ("NIFTY 50", "NIFTY BANK")})
+
+
+def last_auction_close():
+    """The close of the latest closing auction that is over: the latest close at least six minutes old (the auction ends at
+    15:35, five minutes after the close), so a page opened through the day's trading shows the auction before it, never a
+    "final" price from one that has not happened."""
+    from datetime import datetime
+    from tests import fake_prices as P
+    return P.last_close("IN", datetime.now(P.IST) - timedelta(minutes=6))
 
 
 def seed(today: date):

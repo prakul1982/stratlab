@@ -19,7 +19,7 @@ Everything lives in `src/components/kit/` (import from `../components/kit`), its
 11. **Same thing, same look.** One component per job. No one-off versions on a single page.
 12. **Every state checked.** Empty, loading, error, long names, phone (400px), dark and light.
 
-Also, always: facts and arithmetic only (no advice, no "good/bad" colour on a number where a rise is not good news), and never a data provider's name in anything a user sees.
+Also, always: facts and arithmetic only (no advice), and never a data provider's name in anything a user sees. Colour on a number follows the sign and nothing else: see "Colour on numbers" below.
 
 ## Tokens (top of `styles.css`)
 
@@ -41,8 +41,9 @@ The dark values are written twice in `styles.css` (explicit dark and "follow the
 |---|---|---|
 | Top of a page | `PageHeader` (eyebrow "Space · Group", title, one-line lede, "Data up to" badge + (i)) | a bare `h1.page-title` |
 | A box of content | `Card` + `CardHead` (title, (i), actions on the right in the same row); `compact` when it has little to say | `section.card` + `h2.h3` |
-| A headline number | `Stat` in a `StatRow` (sans, with note, optional `Delta`) | `Fig` / `.space-fig` (mono) |
-| A change | `Delta` (▲/▼ pill). `tone="neutral"` where a rise is not good news | colouring the number |
+| A headline number | `Stat` in a `StatRow` (sans, with note, optional `Delta`; a signed value gets `tone={signTone(v)}`) | `Fig` / `.space-fig` (mono) |
+| A change | `Delta` (▲/▼ pill, green or red). `tone="neutral"` where a rise is not good news by nature | a grey change |
+| A signed figure inside a sentence, table cell or readout | `Signed` (`<Signed value={v} fmt={signed} />`, or the finished text as children): green above zero, red below, plain at zero | a hand-made `k-up` / `k-down` span, or a plain `signed(v)` |
 | A service or feed's health | `HealthGrid` + `HealthTile` (green, amber or red light, always with its word OK / Check / Problem); `StatusList` + `StatusRow` for a card's own rows | colour-only dots |
 | A status | `Badge` (`ok`, `warn`, `plain`, `live`), always with its word | colour alone |
 | 2 to 4 choices | `Seg` | 5+ buttons; stretched full-width segs |
@@ -64,7 +65,17 @@ If nothing fits, add the piece to the kit and to `/dev/kit` first; do not build 
 
 ## Numbers
 
-`inr(v, dp=0)` full rupees (`₹1,00,000`; `inr(1849.3, 2)` is `₹1,849.30`). `inrCompact(v)` Indian units (`₹925`, `₹5.2 lakh`, `₹3,472 cr`, `₹1.51 lakh cr`). `signedInrCompact(v)` adds a `+`. `axisInr(v)` for chart axes (`₹1.45L cr`). `pct(v)` signed, `pctPlain(v)` unsigned, `signed(v)` plain signed number. `num(v, dp)` a plain number with fixed decimals. Never `toFixed` or `toLocaleString` on a figure that can be negative: they print a hyphen; `minus(text)` fixes a string, and `Stat` and `DataTable` cells fix what they are given. All take **rupees** (multiply crore by `CRORE`), print `–` for missing values and a real minus (−). Exact figures belong in the tooltip and the Table view, not on the axis.
+`inr(v, dp=0)` full rupees (`₹1,00,000`; `inr(1849.3, 2)` is `₹1,849.30`). `inrCompact(v)` Indian units (`₹925`, `₹5.2 lakh`, `₹3,472 cr`, `₹1.51 lakh cr`). `signedInrCompact(v)` adds a `+`. `axisInr(v)` for chart axes (`₹1.45L cr`). `pct(v)` signed, `pctPlain(v)` unsigned, `signed(v)` plain signed number (put it in `Signed` to colour it). `num(v, dp)` a plain number with fixed decimals. Never `toFixed` or `toLocaleString` on a figure that can be negative: they print a hyphen; `minus(text)` fixes a string, and `Stat` and `DataTable` cells fix what they are given. All take **rupees** (multiply crore by `CRORE`), print `–` for missing values and a real minus (−). Exact figures belong in the tooltip and the Table view, not on the axis.
+
+## Colour on numbers
+
+**Colour a number when its sign is its meaning.** Any signed change, P&L, return or net figure (day changes, "from the day before" lines, change rows under a table cell, net positions, P&L in holdings, paper, backtests and tax, "today" moves, sparkline badges, breadth counts that are explicitly up against down) is **green above zero (`--up`), red below it (`--down`), and plain at zero**. This holds for raw market-positioning numbers too (a participant's net long or short, open interest added or cut): the direction is a fact, so it is coloured.
+
+**Keep neutral:** levels, prices, totals, open interest itself, counts, volumes, market values and any figure without a sign. Where a rise is not good news by nature, the change keeps its arrow or sign but not its colour (`Delta tone="neutral"`, `Spark tone="neutral"`): the market's margin-funded book, India VIX, currency pairs and gold, TRIN, a fund's expense ratio, a loan rate gap, a premium or discount to NAV, a futures basis, the distance below a 52-week high, option Greeks.
+
+**How:** `Signed` in a sentence, a table cell or a tooltip; `Stat tone={signTone(v)}` for the big number and `Signed` in its `note`; `Delta` for a pill; `upDown(v)` / `signCls(v)` where you need only the class; `XYChart signedTip` for a chart whose tooltip numbers are changes or nets. Pass the finished text when you have it (`<Signed value={d}>{pct(d, 2)}</Signed>`): a figure that rounds to nothing ("0.0%") stays plain, so the colour always agrees with the sign that is printed.
+
+**Always keep the sign or the ▲/▼ in the text.** Colour is a second signal, never the only one (colour-blind readers, screen readers, a printout). `--up` and `--down` pass 4.5:1 on the page, a card, a hovered row, a highlighted row and a chip in both themes (`unit/tokens.test.mjs`); a new token beside them is added to that test. Never use blue or orange for a gain or a loss.
 
 ## Dates
 
@@ -80,7 +91,8 @@ Time zones: **a market's times are in the market's own zone, with the zone's nam
 - **Do** put range, Table and other card controls in the card's header row. **Don't** add a second row of controls inside the card.
 - **Do** write "₹1.51 lakh cr". **Don't** write "₹150.0k cr" or "₹1,51,134 crore".
 - **Do** give an empty state a sentence and, if there is something to do, one button. **Don't** leave a big empty box.
-- **Do** use `Delta tone="neutral"` for market-wide quantities. **Don't** paint a number green or red when the direction is not good or bad.
+- **Do** colour a signed figure with `Signed`, `Delta`, `Stat tone` or `upDown`/`signCls` (green `--up`, red `--down`). **Don't** colour a level, price, total, count, volume or size, or a figure with no sign.
+- **Do** keep the sign (+ / −) or the ▲/▼ in the text beside the colour. **Don't** let colour be the only thing that says up or down.
 - **Don't** add inline `style={{}}` for spacing or font; use the tokens and kit classes.
 - **Don't** hard-code colours (`#b42318`); use tokens.
 

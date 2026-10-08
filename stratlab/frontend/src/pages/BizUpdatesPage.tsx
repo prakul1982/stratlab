@@ -4,6 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
 import { safeHref } from "../lib/format";
 import { bizChange, bizValue, filedOn, periodName, type Exchange } from "../components/BizUpdates";
+import { foldEmptyMonths } from "../lib/biz";
 import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, type Column } from "../components/kit";
 
 /* Business updates: the latest monthly or quarterly headline figure each company filed (NSE and BSE filings), with the change
@@ -107,8 +108,14 @@ export function BizUpdatesPage() {
 
 /** The sector's companies side by side, month by month (newest first): each cell its figure and the change on the same month a year earlier. */
 function Compare({ c, label }: { c: Compare; label: string }) {
+  // a run of months nobody filed anything for is one row ("Oct 2025 to Aug 2026, 11 months with no figures"), not a screen of dashes
+  const rows = foldEmptyMonths(c.periods, (p) => c.companies.some((co) => !!co.points[p]));
   const cols: Column<string>[] = [
-    { key: "m", header: "Month", rowHeader: true, cell: (p) => periodName(p, "month") },
+    { key: "m", header: "Month", rowHeader: true, cell: (p) => {
+      if (!p.startsWith("gap:")) return periodName(p, "month");
+      const [, newest, oldest, n] = p.split(":");
+      return <>{periodName(oldest, "month")} to {periodName(newest, "month")}<span className="k-sub-line">{n} months with no figures filed</span></>;
+    } },
     ...c.companies.map((co) => ({
       key: co.symbol, numeric: true, header: <>{co.name}<span className="k-sub-line">{co.metric}{co.unit ? ` · ${co.unit}` : ""}</span></>,
       cell: (p: string) => {
@@ -125,7 +132,7 @@ function Compare({ c, label }: { c: Compare; label: string }) {
       <CardHead title={`${label}: month by month`} info="Each company's own headline figure for each month, in its own unit, with the change on the same month a year earlier. Each figure links to the filing it was read from. Quarterly filers have a figure in the last month of each quarter." />
       {c.companies.length === 0
         ? <EmptyState title="No month to compare yet">Once companies in this list have updates read into numbers, they appear here side by side, month by month.</EmptyState>
-        : <DataTable label={`${label}, month by month`} rows={c.periods} rowKey={(p) => p} columns={cols} sticky={c.periods.length > 14} />}
+        : <DataTable label={`${label}, month by month`} rows={rows} rowKey={(p) => p} columns={cols} sticky={rows.length > 14} />}
       {c.without.length > 0 && c.companies.length > 0 && <p className="k-note">No figures yet: {c.without.join(", ")}.</p>}
       <p className="k-note">{c.note}</p>
     </Card>

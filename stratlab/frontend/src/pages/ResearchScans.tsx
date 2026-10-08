@@ -149,7 +149,7 @@ export function ScanPage() {
                   {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
-                <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg} tone="neutral">{pct(r.chg, 2)}</Delta></span>}</>) },
+                <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
@@ -174,7 +174,7 @@ export function ScanPage() {
                   {r.name && r.name !== r.symbol && <span className="k-sub-line">{r.name}</span>}
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
-                <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg} tone="neutral">{pct(r.chg, 2)}</Delta></span>}</>) },
+                <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "st", header: "Stage", cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{days(r.stage_days)}</span> : null}</> },
               { key: "sp", header: "Supertrend", cell: (r) => <>{r.st_up ? "Up" : "Down"}<span className="k-sub-line">for {days(r.st_days)}</span></> },
               { key: "sg", header: "Signal", cell: (r) => (r.signal ? <Badge tone={SIGNAL[r.signal][0]} dot={false}>{SIGNAL[r.signal][1]}</Badge> : <span className="k-muted">–</span>) },
@@ -391,7 +391,7 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
                   actions={<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>} />
-                <SummaryLine s={r.summary} />
+                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>

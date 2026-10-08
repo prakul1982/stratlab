@@ -79,8 +79,8 @@ export function StockLendingPage() {
         lede="The fees that lending your shares actually fetched on the exchange's SLB segment, for the stocks you hold and watch: past traded fees with their dates, and how often anything traded at all. Actual demand and fees vary; StratLab doesn't arrange lending."
         info={t ? <>{t.note} Source: {t.source}.</> : undefined} infoLabel="Where the numbers come from" />
       <Card id="slb-lookup">
-        <CardHead title="Look up a stock" info="Any company listed in India. Shows the lending fees that traded for it, day by day." />
-        <Field label="Look up a stock">{(id) => <StockPicker id={id} value={pick} placeholder="Look up a stock, like RELIANCE" onPick={(s) => open(s)} />}</Field>
+        <CardHead title="Lending fees for any stock" info="Any company listed in India. Shows the lending fees that traded for it, day by day." />
+        <Field label="Look up a stock">{(id) => <StockPicker id={id} value={pick} placeholder="Name or symbol, e.g. RELIANCE" onPick={(s) => open(s)} />}</Field>
       </Card>
       {pick && <OneStock key={pick} symbol={pick} onClose={() => open(null)} />}
       {error ? <ErrorState title="The lending fees couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState> : !t ? <Card><Skeleton label="Reading the lending fees" lines={4} /></Card> : (

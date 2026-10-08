@@ -18,8 +18,10 @@ function save(key: string, list: Choice[]) {
 /** Many choices in one scrolling row of chips (timeframes, ranges of more than four). With `custom`, a dashed "+ Custom"
  * chip opens a number and unit box; what is added joins the row and is remembered on this device under `custom.storageKey`
  * (the chip's value is "35 minutes"-style text: `${n} ${unit.value}`). */
-export function ChipBar({ label, options, value, onChange, custom }: {
+export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   label: string; options: Choice[]; value: string; onChange: (v: string) => void;
+  /** Keep wrapping onto more lines on a phone, instead of one row that scrolls: for a short row whose every chip should show. */
+  wrap?: boolean;
   custom?: { storageKey: string; units: CustomUnit[]; defaultUnit?: string; max?: number; validate?: (n: number, unit: string) => CustomCheck };
 }) {
   const [mine, setMine] = useState<Choice[]>(() => (custom ? load(custom.storageKey) : []));
@@ -57,7 +59,7 @@ export function ChipBar({ label, options, value, onChange, custom }: {
   };
   return (
     <div className="k-chipwrap">
-      <div className="k-chipbar" role="group" aria-label={label}>
+      <div className={`k-chipbar${wrap ? " wrap" : ""}`} role="group" aria-label={label}>
         {all.map((o) => <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
         {custom && <button ref={opener} type="button" className="k-chip add" aria-expanded={open} onClick={() => setOpen((x) => !x)}>+ Custom</button>}
       </div>

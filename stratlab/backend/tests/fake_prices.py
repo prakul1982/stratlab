@@ -7,7 +7,8 @@ How a price is made: each instrument follows a slow wave around a gentle rise, `
 so that the latest session's close is exactly the instrument's level below: NIFTY 50 closed at 25,000.00, RELIANCE at
 ₹1,400.00. Out of market hours every price stands still at that close (the sources say "last close"); in hours it
 moves from it, a little. The broad Indian indices move together (NIFTY 500 tracks NIFTY 50 and stays below it, as the
-real ones do). Holidays are the app's own trading calendar's."""
+real ones do). Holidays are the app's own trading calendar's. The exceptions are the exchange-traded funds, which stand at the last close
+in hours too (the exchange's ETF list is read at the close), so the ETF page, the holdings and the NAV gap agree whenever the page is opened."""
 import functools
 import math
 import zlib
@@ -27,6 +28,7 @@ LEVELS = {
     "NIFTYBEES": 270.5, "GOLDBEES": 81.2, "SILVERBEES": 105.2, "BANKBEES": 560.0, "LIQUIDBEES": 1000.0,   # as the ETF list (fake_etf)
     "JSWSTEEL": 1050.0, "NESTLEIND": 2400.0, "DABUR": 520.0, "VEDL": 460.0, "SAIL": 130.0, "ULTRACEMCO": 12000.0,
     "AMBUJACEM": 600.0, "TVSMOTOR": 3400.0,
+    "ORIONPOLY": 140.0,       # a made-up company: the demo's loss-years case (fake_fundamentals), not a well-known profitable one
     # US: the companies the screener lists, Apple among them
     "AAPL": 183.0, "MSFT": 510.0, "XOM": 112.0, "JPM": 300.0, "KO": 68.0, "NUE": 140.0, "NVDA": 183.2,
     # the markets strip's other tiles: the S&P 500, the dollar in rupees and gold in dollars an ounce
@@ -39,7 +41,7 @@ SHARES = {
     "AXISBANK": 309.5, "ITC": 1251.2, "HINDUNILVR": 234.96, "HCLTECH": 271.36, "WIPRO": 1046.0, "LT": 137.5,
     "BHARTIARTL": 609.0, "TATASTEEL": 1248.0, "ONGC": 1258.0, "NTPC": 969.67, "COALINDIA": 616.27, "MARUTI": 31.44,
     "JSWSTEEL": 244.5, "NESTLEIND": 192.8, "DABUR": 177.4, "VEDL": 391.0, "SAIL": 413.05, "ULTRACEMCO": 29.47,
-    "AMBUJACEM": 246.3, "TVSMOTOR": 47.5,
+    "AMBUJACEM": 246.3, "TVSMOTOR": 47.5, "ORIONPOLY": 60.0,
     "AAPL": 14840.0, "MSFT": 7430.0, "XOM": 4300.0, "JPM": 2760.0, "KO": 4300.0, "NUE": 230.0, "NVDA": 24300.0,
 }
 
@@ -58,7 +60,7 @@ COMPANIES = {
     "NESTLEIND": ("Nestle India Ltd", "Fast Moving Consumer Goods"), "DABUR": ("Dabur India Ltd", "Fast Moving Consumer Goods"),
     "VEDL": ("Vedanta Ltd", "Commodities"), "SAIL": ("Steel Authority of India Ltd", "Commodities"),
     "ULTRACEMCO": ("UltraTech Cement Ltd", "Commodities"), "AMBUJACEM": ("Ambuja Cements Ltd", "Commodities"),
-    "TVSMOTOR": ("TVS Motor Company Ltd", "Consumer Discretionary"),
+    "TVSMOTOR": ("TVS Motor Company Ltd", "Consumer Discretionary"), "ORIONPOLY": ("Orion Polymers Ltd", "Commodities"),
     "AAPL": ("Apple Inc.", "Information Technology"), "MSFT": ("Microsoft Corp.", "Information Technology"),
     "XOM": ("Exxon Mobil Corp.", "Energy"), "JPM": ("JPMorgan Chase & Co.", "Financials"), "KO": ("Coca-Cola Co.", "Consumer Staples"),
     "NUE": ("Nucor Corp.", "Materials"),
@@ -107,6 +109,14 @@ def trading_day(market: str, d: date) -> bool:
     return is_trading_day(market, d)
 
 
+def on_trading_day(d: date, market: str = "IN", back: bool = False) -> date:
+    """The first trading day on or after `d` (before it with `back`, for past events). The exchange's events (ex-dates, results meetings, data releases) fall on
+    trading days, so the demo's dates, which are counted from today, are moved to one instead of landing on a weekend."""
+    while not trading_day(market, d):
+        d += timedelta(days=-1 if back else 1)
+    return d
+
+
 def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
     """The time of the market's last trade: now while it is open (09:15 to 15:30 IST on a trading day; 09:30 to 16:00
     New York time for the US), else the close of the latest session. Out of hours quotes stand still at that close and
@@ -146,15 +156,32 @@ def previous_close(market: str = "IN", now: datetime | None = None) -> datetime:
     return c
 
 
+TRACKS = {"NIFTY 50", "NIFTY 500", "NIFTY 100", "NIFTY NEXT 50"}    # exactly NIFTY 50's wave (NIFTY 500 stays 0.92 of it)
+AMP = {"USDINR=X": 0.012, "GC=F": 0.05, "^GSPC": 0.05, "NIFTY BANK": 0.06, "INDIA VIX": 0.15}     # how far a name swings
+
+
+def _unit(name: str, salt: str) -> float:
+    """A steady number in [0, 1) for a name: its own, whatever its level, spread over the range (never a handful of values)."""
+    return (zlib.crc32(f"{salt}|{name}".encode()) % 10007) / 10007
+
+
 def _phase(name: str) -> float:
     key = "NIFTY 50" if name in BROAD else name
-    return (100 + zlib.crc32(key.encode()) % 3000) % 7         # each name keeps its own rhythm whatever its level
+    return 2 * math.pi * _unit(key, "phase")                   # each name keeps its own rhythm whatever its level
 
 
 def _shape(name: str, epoch: float) -> float:
+    """A name's wave: the broad Indian indices share NIFTY 50's, with SENSEX and the others on top of it a little of their
+    own; every other name has its own phase, swing, period and a faster wave on top, so no two lines (or day changes, or
+    distances from a 52-week high) are the same by accident."""
     d = epoch / 86400
-    amp = 0.05 if name in BROAD else 0.08
-    return math.exp(0.0003 * (d - 20000)) * (1 + amp * math.sin(d / 11 + _phase(name)))
+    key = "NIFTY 50" if name in BROAD else name
+    amp = 0.05 if name in BROAD else AMP.get(name, 0.05 + 0.05 * _unit(name, "amp"))
+    wave = amp * math.sin(d / (11 if name in BROAD else 8 + 6 * _unit(key, "period")) + _phase(name))
+    if name not in TRACKS:
+        own = 0.004 if name in BROAD else amp * 0.4
+        wave += own * math.sin(d / (2.3 + 2 * _unit(name, "fast")) + 2 * math.pi * _unit(name, "phase2"))
+    return math.exp(0.0003 * (d - 20000)) * (1 + wave)
 
 
 def base(name: str) -> float:
@@ -173,6 +200,8 @@ def price(name: str, when: datetime | float, now: datetime | None = None) -> flo
     name = canonical(name)
     t = when.timestamp() if isinstance(when, datetime) else float(when)
     anchor = last_close(market_of(name), now).timestamp()
+    if name in ETF_NAMES:
+        t = min(t, anchor)           # the ETF list is read at the close and stands: the ETF page and holdings show one price
     return round(base(name) * _shape(name, t) / _shape(name, anchor), 2)
 
 

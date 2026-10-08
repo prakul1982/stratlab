@@ -45,13 +45,14 @@ def test_a_us_lookup_and_its_backtest_share_one_download():
             "meta": {"symbol": "AAPL", "currency": "USD", "regularMarketPrice": 200.0, "chartPreviousClose": 150.0 if len(calls) == 1 else 198.0,
                      "longName": "Apple", "exchangeTimezoneName": "America/New_York", "instrumentType": "EQUITY"},
             "timestamp": [t0 + i * 86400 for i in range(n)],
-            "indicators": {"quote": [{"open": [1.0] * n, "high": [1.0] * n, "low": [1.0] * n, "close": [1.0] * n, "volume": [1] * n}]}}]}})
+            "indicators": {"quote": [{"open": [1.0] * n, "high": [1.0] * n, "low": [1.0] * n, "volume": [1] * n,
+                                        "close": [1.0] * (n - 2) + ([1.5, 2.0] if len(calls) == 1 else [199.0, 200.0])}]}}]}})
     y = Yahoo(transport=httpx.MockTransport(handler))
     y.chart("AAPL", "1d", Yahoo.WINDOW)
     y.chart("AAPL", "1d", 420)
     y.chart("AAPL", "1d", 220)
     assert len(calls) == 1                                  # the backtest windows were cut from the lookup's download
-    assert y.meta("AAPL")["prev_close"] == 198.0 and len(calls) == 2   # the day's change never uses a year-old close
+    assert y.meta("AAPL")["prev_close"] == 199.0 and len(calls) == 2   # the day's change never uses a year-old close
 
 
 def test_a_source_that_is_down_is_skipped_for_a_minute_not_waited_on():

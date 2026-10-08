@@ -204,7 +204,12 @@ function Routed() {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
-  useEffect(() => { if (ready && !session) document.title = signedOutTitle(loc.pathname); }, [ready, session, loc.pathname]);     // "Sign in · Options builder · StratLab": a tab says what it waits for
+  // "Sign in · Options builder · StratLab": a tab says what it waits for. The policies are open to everyone and have a title of
+  // their own, signed in or not (the shell that titles the other pages isn't around them).
+  useEffect(() => {
+    if (LEGAL_PAGES.some((p) => p.path === loc.pathname)) document.title = signedOutTitle(loc.pathname);
+    else if (ready && !session) document.title = signedOutTitle(loc.pathname);
+  }, [ready, session, loc.pathname]);
   // back from Google sign-in: open the page the visitor started on (lib/returnTo.ts keeps it to StratLab's own pages)
   const signedIn = !!session;
   useEffect(() => {
@@ -237,6 +242,10 @@ function Routed() {
         <Route path="/mine" element={<MineHome />} />
         <Route path="/all" element={<Navigate to="/mine" replace />} />
         <Route path="/features" element={<FeaturesPage />} />
+        {/* the landing page's own addresses, signed in: nothing to sign in to, so home; "about" is what the features page tells */}
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/signup" element={<Navigate to="/" replace />} />
+        <Route path="/about" element={<Navigate to="/features" replace />} />
         <Route path="/trade/g/:group" element={<GroupPage />} />
         <Route path="/invest/g/:group" element={<GroupPage />} />
         <Route path="/money/g/:group" element={<GroupPage />} />

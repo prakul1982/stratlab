@@ -92,7 +92,7 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                 v.append(0 if sym.endswith("=X") else 1000)     # spot forex has no exchange volume
                 t += g
             meta = {"symbol": sym, "currency": cur, "exchangeTimezoneName": tz, "regularMarketPrice": c[-1],
-                    "chartPreviousClose": c[-2] if len(c) > 1 else c[-1], "fiftyTwoWeekHigh": max(c) * 1.02,
+                    "chartPreviousClose": c[0] * 0.97,     # like the real feed: the close before the window, not the day before "fiftyTwoWeekHigh": max(c) * 1.02,
                     "fiftyTwoWeekLow": min(c) * 0.98, "regularMarketDayHigh": h[-1], "regularMarketDayLow": l[-1],
                     "regularMarketVolume": 123456, "longName": next((x.get("longname") or x["shortname"] for x in CATALOGUE if x["symbol"] == sym), sym),
                     "instrumentType": "ETF" if sym == "SPY" else "EQUITY", "fullExchangeName": "Test"}

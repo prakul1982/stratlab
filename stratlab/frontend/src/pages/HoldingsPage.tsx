@@ -11,7 +11,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
@@ -171,14 +171,14 @@ export function HoldingsPage() {
         {r.exchange === "BSE" && <span className="k-note"> BSE</span>}{isUS(r) && <span className="k-note"> US</span>}
         {r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}
         <div className="k-note k-clip">{r.name}</div>
-        {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} />}
+        {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} price={r.price} />}
       </>) },
     { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
     // a missing figure says why, so a dash is never a puzzle (R1-053)
     { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
       ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
-      : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
-    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <span className={tone(r.day)}>{money(r.day, cur(r), 0)}<span className="k-sub-line">{pct(r.day_pct, 2)}</span></span>) },
+      : <><span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.pnl}>{pct(r.pnl_pct)}</Signed></span></>) },
+    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span></>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
     // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
     { key: "qty", header: "Qty · avg → last", numeric: true, cell: (r) => <>{qtyText(r.qty)}<span className="k-sub-line">{price(r.avg, cur(r))} → {price(r.price, cur(r))}</span></> },
@@ -289,13 +289,13 @@ export function HoldingsPage() {
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
-            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
+            <Field wide label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
               {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
                 onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
                 onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
             {/* each number is checked as it's typed, with its limit named (lib/validate) */}
-            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} hint="More than 0"
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} rule="More than 0"
               onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? numberProblem(e.target.value, QTY) ?? undefined : undefined })); }} />
             <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
               onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />

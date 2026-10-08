@@ -6,7 +6,10 @@ import { upDown } from "../../lib/tradeUi";
 import { gapText, LIVE_PHASES, PHASE_TEXT, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
 import { Earlier } from "../../components/Earlier";
 import { Search } from "../../components/Icons";
-import { Badge, Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, DataTable, EmptyState, ErrorState, PageHeader, Signed, Skeleton, type Column } from "../../components/kit";
+
+/** A gap against the 15:15 reference price: green when the indicative price is above it, red when below, the sign printed. */
+const Gap = ({ g }: { g: number | null | undefined }) => <Signed value={g}>{gapText(g)}</Signed>;
 import "./trade.css";
 
 /* /trade/closing-auction: India's closing auction session as the exchange publishes it. Through the auction (15:15-15:35)
@@ -105,7 +108,7 @@ function Indices({ v }: { v: CasView }) {
     { key: "name", header: "Index", rowHeader: true, cell: (i) => <b>{i.name}</b> },
     { key: "value", header: done ? "Close" : "Value", numeric: true, cell: (i) => (i.value == null ? "–" : price(i.value)) },
     { key: "ind", header: "Indicative close", numeric: true, cell: (i) => (i.indicative == null ? "–" : price(i.indicative)) },
-    { key: "gap", header: "Gap", numeric: true, cell: (i) => gapText(i.gap) },
+    { key: "gap", header: "Gap", numeric: true, cell: (i) => <Gap g={i.gap} /> },
     { key: "start", header: "At 15:15", numeric: true, cell: (i) => (i.start == null ? "–" : price(i.start)) },
   ];
   return (
@@ -125,13 +128,13 @@ function Stocks({ v }: { v: CasView }) {
     return t ? v.stocks.filter((r) => r.symbol.includes(t)) : v.stocks;
   }, [v.stocks, q]);
   const shown = rows.slice(0, 40), rest = rows.slice(40);
-  const final = v.phase === "closed" || !!v.from_stored;
+  const final = v.phase === "closed" || !!v.from_stored || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
   const cols: Column<CasStock>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link> },
     { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
       {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },
     { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}<span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span></> },
-    { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => gapText(r.gap) },
+    { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => <Gap g={r.gap} /> },
     { key: "qty", header: final ? "Quantity" : "Indicative quantity", numeric: true, cell: (r) => qtyText(r.final_out ? r.final_qty : r.ieq) },
     { key: "bid", header: "Bid / ask quantity", numeric: true, cell: (r) => `${qtyText(r.buy_qty)} / ${qtyText(r.sell_qty)}` },
     { key: "imb", header: "Unmatched", numeric: true, cell: (r) => qtyText(r.imbalance) },
@@ -170,8 +173,8 @@ function History({ v }: { v: CasView }) {
     { key: "n", header: "Stocks", numeric: true, cell: (d) => d.stocks },
     { key: "avg", header: "Average gap (either way)", numeric: true, cell: (d) => (d.avg_abs_gap == null ? "–" : `${d.avg_abs_gap.toFixed(2)}%`) },
     { key: "ud", header: "Above / below", numeric: true, cell: (d) => `${d.up} / ${d.down}` },
-    { key: "wide", header: "Widest", numeric: true, cell: (d) => (d.widest ? <>{d.widest.symbol} {gapText(d.widest.gap)}</> : "–") },
-    { key: "n50", header: "NIFTY 50 close", numeric: true, cell: (d) => { const n50 = d.indices.find((i) => i.name === "NIFTY 50"); return n50 ? <>{n50.close == null ? "–" : price(n50.close)}<span className="k-sub-line">{gapText(n50.gap)} from 15:15</span></> : "–"; } },
+    { key: "wide", header: "Widest", numeric: true, cell: (d) => (d.widest ? <>{d.widest.symbol} <Gap g={d.widest.gap} /></> : "–") },
+    { key: "n50", header: "NIFTY 50 close", numeric: true, cell: (d) => { const n50 = d.indices.find((i) => i.name === "NIFTY 50"); return n50 ? <>{n50.close == null ? "–" : price(n50.close)}<span className="k-sub-line"><Gap g={n50.gap} /> from 15:15</span></> : "–"; } },
   ];
   const attrs = (d: CasDay) => ({ "data-cas-day": d.day });
   return (

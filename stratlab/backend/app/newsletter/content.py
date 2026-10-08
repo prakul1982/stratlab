@@ -61,19 +61,31 @@ def _pct(now: float | None, then: float | None) -> float | None:
 
 
 # ---------- the Market Brief ----------
+def index_close(sym: str, day: date, since: str | None = None) -> dict | None:
+    """An index's close on `day` and its change from the session before (or from the last close on or before `since`,
+    for the week), read from the daily candles: the same numbers whenever the issue is built or rebuilt."""
+    candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", 21, ttl=300)["candles"], []) or []
+    upto = [c for c in candles if c["t"][:10] <= day.isoformat()]
+    if not upto or (not since and upto[-1]["t"][:10] != day.isoformat()):
+        return None                                    # no candle for that day (yet); the week ends at its last close
+    before = [c for c in upto if c["t"][:10] <= since] if since else upto[:-1]
+    return {"price": round(upto[-1]["c"], 2), "change_pct": _pct(upto[-1]["c"], before[-1]["c"]) if before else None}
+
+
 def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
-    """The main indices: level and change on the day, or over the week."""
-    hub = _main().research_hub
-    if not weekly:
-        return [{"name": r["name"], "price": round(r["price"], 2), "change_pct": None if r.get("change_pct") is None else round(r["change_pct"], 2),
-                 "from_high_pct": None if r.get("from_high_pct") is None else round(r["from_high_pct"], 1)}
-                for r in hub.indices(region)]
-    out, since = [], reference_day(region, day, True).isoformat()
+    """The main indices: level and change on the day (from the session before), or over the week."""
+    since = reference_day(region, day, True).isoformat() if weekly else None
+    live = {} if weekly else {r["name"]: r for r in _safe(lambda: _main().research_hub.indices(region), []) or []}
+    out = []
     for name, sym in INDICES.get(region, []):
-        candles = _safe(lambda: hub.yahoo.chart(sym, "1d", 21)["candles"], [])
-        before = [c for c in candles if c["t"][:10] <= since]
-        if candles and before:
-            out.append({"name": name, "price": round(candles[-1]["c"], 2), "change_pct": _pct(candles[-1]["c"], before[-1]["c"])})
+        got, now = index_close(sym, day, since), live.get(name)
+        if got is None and now and not weekly:         # the day's candle isn't out yet: the live quote, same measure
+            got = {"price": round(now["price"], 2), "change_pct": None if now.get("change_pct") is None else round(now["change_pct"], 2)}
+        if got is None:
+            continue
+        if now and now.get("from_high_pct") is not None:
+            got["from_high_pct"] = round(now["from_high_pct"], 1)
+        out.append({"name": name, **got})
     return out
 
 

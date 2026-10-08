@@ -652,6 +652,7 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "offer": offer_state(),
         "onboarding": onboarding_of(profile["id"]),
+        "established": established_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -748,6 +749,18 @@ def onboarding_of(uid: str) -> dict:
     o = o if isinstance(o, dict) else {}
     return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
             "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+def established_of(uid: str) -> bool:
+    """The account already has holdings, notebooks, a paper session or a watchlist, so the "What brings you here?" question
+    is not asked of it. Only looked up while the question is still pending (it costs a few reads); otherwise false."""
+    prefs = prefs_of(uid)
+    o = prefs.get("onboarding")
+    if isinstance(o, dict) and o.get("welcome"):
+        return False
+    if prefs.get("level") and prefs.get("focus"):
+        return False
+    return first_steps.has_activity(uid)
 
 
 @app.put("/me/onboarding")
@@ -4713,6 +4726,32 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
         if "unreachable" in why.lower() or "timed out" in why.lower():
             why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
+    return {"sent_to": to}
+
+
+@app.post("/admin/review-link")
+def admin_review_link(profile=Depends(admin.admin_profile)):
+    """A one-time sign-in link for the owner's own account, emailed to the owner's own address, for the automated
+    reviewer that tries the live site as the owner (Google sign-in can't be driven by a script). It expires in an hour
+    and works once; only an admin can ask for one, and only for themselves."""
+    throttle(profile, "admin_review_link", 5, 3600, "You've asked for 5 reviewer links this hour. Try again later.")
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
+    to = profile["email"]
+    try:
+        res = db.sb().auth.admin.generate_link({"type": "magiclink", "email": to,
+                                                "options": {"redirect_to": settings.PUBLIC_SITE_URL.rstrip("/") + "/"}})
+        link = res.properties.action_link
+    except Exception as e:
+        err(502, "link_failed", f"The sign-in service couldn't make a link: {public_text(str(e))[:200]}")
+    text = ("A one-time sign-in link for your StratLab account, for the automated reviewer. It works once and expires "
+            f"in an hour. If you didn't ask for it, ignore this email.\n\n{link}\n")
+    html = (f"<p>A one-time sign-in link for your StratLab account, for the automated reviewer. It works once and expires "
+            f"in an hour. If you didn't ask for it, ignore this email.</p><p><a href=\"{link}\">Sign in to StratLab</a></p>")
+    try:
+        alerts.send_email(to, "StratLab reviewer sign-in link", text, html=html)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
     return {"sent_to": to}
 
 

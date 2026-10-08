@@ -5,7 +5,7 @@ import json
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import db, newsletter_prefs, push
+from . import db, holdings, newsletter_prefs, push
 from .plans import _dt
 
 KEY = "firststeps:"
@@ -60,6 +60,16 @@ def _watchlist(uid: str) -> bool:
         return bool(json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items"))
     except (ValueError, TypeError, AttributeError):
         return False
+
+
+def has_activity(uid: str) -> bool:
+    """Whether the account has done anything yet: holdings, a notebook, a paper session or a watchlist. The "What brings
+    you here?" question is for an empty account only; an established one is never asked. A failed look counts as activity
+    (better to skip the question than to ask someone who has been here for months)."""
+    try:
+        return bool(holdings.load(uid)["items"]) or _watchlist(uid) or db.has_strategy(uid) or bool(db.user_sessions(uid, 1))
+    except Exception:
+        return True
 
 
 def done(profile: dict, st: dict | None = None) -> dict[str, bool]:

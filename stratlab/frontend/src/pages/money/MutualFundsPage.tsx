@@ -6,10 +6,11 @@ import { ago, dateOnly, inr, pct, price, qty as qtyText, signTone } from "../../
 import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
-import { pickFy, rememberFy } from "../../lib/fy";
+import { movedYearNote, openFy, rememberFy } from "../../lib/fy";
+import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
@@ -57,15 +58,24 @@ export function MutualFundsPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportReply | null>(null);
   const [fy, setFy] = useState<number | null>(null);
+  const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
+  const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
   const [allSales, setAllSales] = useState(false);
   const [asking, setAsking] = useState(false);
   const resetFile = useRef<() => void>(() => undefined);
 
   const show = useCallback((v: View) => {
     setView(v);
-    setFy((cur) => (cur != null && v.gains?.years.some((y) => y.fy === cur) ? cur
-      : v.gains?.years.length ? pickFy(v.gains.years.map((y) => y.fy), v.gains.current_fy) : null));     // the Money pages' shared year
-  }, []);
+    // the Money pages' one rule (lib/fy openFy): the year being filed, or the latest year with sales when that has none
+    setFy((cur) => {
+      const ys = v.gains?.years ?? [];
+      if (cur != null && ys.some((y) => y.fy === cur)) return cur;
+      if (!ys.length) return null;
+      const o = openFy(ys.map((y) => y.fy), v.gains!.current_fy, (fy) => ys.some((y) => y.fy === fy && y.count > 0), undefined, asked);
+      setMovedFrom(o.from);
+      return o.fy;
+    });
+  }, [asked]);
   const load = useCallback(() => {
     setError(null);
     api<View>("/money/mutual-funds").then(show).catch((e) => { setError(e instanceof Error ? e.message : "Your funds couldn't be read."); fail(e); });
@@ -128,7 +138,7 @@ export function MutualFundsPage() {
     { key: "nav", header: "NAV", numeric: true, cell: (s) => <>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></> },
     { key: "inv", header: "Invested", numeric: true, cell: (s) => inr(s.invested) },
     { key: "val", header: "Value", numeric: true, cell: (s) => inr(s.value) },
-    { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <span className={tone(s.gain)}>{inr(s.gain)}<span className="k-sub-line">{pct(s.gain_pct)}</span></span>) },
+    { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <><span className={tone(s.gain)}>{inr(s.gain)}</span><span className="k-sub-line"><Signed value={s.gain}>{pct(s.gain_pct)}</Signed></span></>) },
     { key: "xirr", header: "XIRR", numeric: true, cell: (s) => <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span> },
     { key: "kind", header: "Taxed as", cell: (s) => (
       <>
@@ -223,6 +233,8 @@ export function MutualFundsPage() {
               <Stat label={<>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>}
                 value={xirrText(t.xirr)} tone={signTone(t.xirr)} />
             </StatRow>
+            {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
+            {view.limit != null && <p className="k-note">{schemes.length} of {view.limit} free schemes used. Basic keeps every scheme, with capital gains by year.</p>}
           </Card>
 
           <Card>
@@ -246,9 +258,10 @@ export function MutualFundsPage() {
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (
-                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setAllSales(false); }}
+                <Select small label="Financial year" value={fy ?? ""} onChange={(x) => { setFy(Number(x)); rememberFy(Number(x)); setMovedFrom(null); setAllSales(false); }}
                   options={view.gains.years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === view.gains!.current_fy ? " (this year)" : ""}` }))} />
               ) : undefined} />
+              {movedFrom != null && y && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="mf-moved-year">{movedYearNote(movedFrom, y.fy, view.gains.current_fy, "redemptions")}</p>}
               {view.gains.years.length === 0 && <EmptyState title="No gains realised yet">No redemptions or switches out yet, so no gains have been realised.</EmptyState>}
               {y && (
                 <>

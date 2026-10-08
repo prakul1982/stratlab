@@ -147,6 +147,8 @@ export interface Me {
   offer?: Offer;
   /** The first-run guide, kept on the account: shown once per person, not once per device. */
   onboarding?: { welcome: string | null; tour: "done" | "skipped" | null };
+  /** The account already has holdings, notebooks, a paper session or a watchlist: the welcome question is not asked of it. */
+  established?: boolean;
 }
 
 /** plans.offer_state() on the server: payments on or not, the launch offer, and Free's limits as they apply today. */

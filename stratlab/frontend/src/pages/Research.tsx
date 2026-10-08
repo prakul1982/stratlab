@@ -33,7 +33,7 @@ import { FilingsPanel } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 
@@ -55,7 +55,7 @@ export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
     <StatRow label="Index levels">
       {indices.map((i) => (
         <Stat key={i.name} item label={i.name} value={Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}
-          delta={i.change_pct != null ? <Delta value={i.change_pct} tone="neutral">{pct(i.change_pct, 2)}</Delta> : undefined}
+          delta={i.change_pct != null ? <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta> : undefined}
           note={<>today{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</>} />
       ))}
     </StatRow>
@@ -188,7 +188,7 @@ export function CompanyPage() {
   const wiki = c.about.wiki;
   const deepTo = `/research/${region}/${encodeURIComponent(c.symbol)}/deep`;
   const lead = focus === "invest" || !c.testable ? "deep" : "test";
-  const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={`/research/${region}/${encodeURIComponent(c.symbol)}/deep`}>Deep dive: business, capex, management →</Link>;
+  const deep = (cls: string) => <Link className={`btn ${cls} sm`} to={deepTo} title="Business, capex and management">Deep dive →</Link>;
   const wrap = (title: string, id: string, info: string) => (body: React.ReactNode, right?: React.ReactNode) => (
     <Card id={id}><CardHead title={title} info={info} actions={right} />{body}</Card>
   );
@@ -210,7 +210,7 @@ export function CompanyPage() {
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             <div className="inv-badges">
               <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} />}
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} />}
               <FoBadges region={region} symbol={c.symbol} />
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
@@ -227,12 +227,13 @@ export function CompanyPage() {
         </div>
         {/* one main action (what this person came for), Watch and an alert; the rest under More */}
         <div className="k-row">
+          {/* the page's two main paths are both buttons: the one this person came for first and solid, the other beside it */}
           {lead === "deep" ? deep("") : <button className="btn sm" onClick={() => test(c)}>Test a strategy on {c.symbol} →</button>}
+          {lead === "deep" ? (c.testable && <button className="btn quiet sm" onClick={() => test(c)}>Test a strategy</button>) : deep("quiet")}
+          <Link className="btn quiet sm" to={`/research/compare?region=${region}&a=${encodeURIComponent(c.symbol)}`}>Compare</Link>
           <StarButton region={region} symbol={c.symbol} name={c.name} />
           <AlertButton region={region} symbol={c.symbol} />
           <MoreMenu items={[
-            ...(lead === "deep" ? (c.testable ? [{ label: `Test a strategy on ${c.symbol}`, run: () => test(c) }] : []) : [{ label: "Deep dive: business, capex, management", run: () => nav(deepTo) }]),
-            { label: "Compare with another company", run: () => nav(`/research/compare?region=${region}&a=${c.symbol}`) },
             { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
             ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
             ...c.links.map((l) => ({ label: `${l.label} ↗`, run: () => openOut(l.url) })),
@@ -245,8 +246,8 @@ export function CompanyPage() {
         ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
-      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} /></Card>
-      {region === "IN" && <EtfGapDetailView symbol={c.symbol} quiet />}
+      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>
+      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (
@@ -295,10 +296,10 @@ export function CompanyPage() {
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />
-            <p className="k-small k-muted">Net {c.insider.net > 0 ? "+" : c.insider.net < 0 ? "−" : ""}{Math.abs(Math.round(c.insider.net)).toLocaleString("en-IN")} shares across recent filings</p>
+            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("en-IN")}`} /> shares across recent filings</p>
             <DataTable label="Insider trades" rows={c.insider.rows} rowKey={(t) => `${t.name}-${t.date}-${t.change}`}
               columns={[{ key: "n", header: "Name", rowHeader: true, wrap: true, cell: (t) => t.name },
-                { key: "c", header: "Shares", numeric: true, cell: (t) => `${t.change > 0 ? "+" : t.change < 0 ? "−" : ""}${Math.abs(t.change).toLocaleString("en-IN")}` },
+                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toLocaleString("en-IN")}`} /> },
                 { key: "d", header: "Date", numeric: true, cell: (t) => t.date }]} />
           </Card>
         )}
@@ -580,7 +581,7 @@ export function ComparePage() {
                   <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
                 <StatRow>
                   <Stat label={c.market_open === false ? "Last close" : "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct} tone="neutral">{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
+                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
               </Card>
@@ -638,7 +639,7 @@ export function WatchlistPage() {
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
               { key: "p", header: "Price", numeric: true, cell: (w) => (quotes == null ? "…" : quotes[w.symbol]?.price != null ? price(quotes[w.symbol]!.price!, region === "IN" ? "INR" : "USD") : "–") },
-              { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x} tone="neutral">{pct(x, 2)}</Delta>; } },
+              { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w).catch(fail)}>Remove</button> },
             ]} />

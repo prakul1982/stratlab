@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "../pages/trade/options.css";
 import { contracts, contractsShort, signed, strike as strikeText, type StrikeRow } from "../lib/positioning";
+import { Signed } from "./kit";
 
 /* Open interest by strike as a butterfly: one row per strike, calls to the left of the strike column and puts to the
  * right, each growing out from the middle. In "change" mode each side's zero sits in the middle of its half: open
@@ -74,8 +75,8 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
       {h && (
         <div className="strike-tip ch-num" role="status" style={{ top: Math.min(y(hover!) + ROW + 4, H - 70), left: "50%" }}>
           <div className="muted">Strike {strikeText(h.strike)}{h.strike === nearest ? " · nearest the spot" : ""}</div>
-          <div className="k-row"><span className="key-line call" /><b>{contracts(h.call_oi)}</b> calls <span className="muted">({signed(h.call_chg)})</span></div>
-          <div className="k-row"><span className="key-line put" /><b>{contracts(h.put_oi)}</b> puts <span className="muted">({signed(h.put_chg)})</span></div>
+          <div className="k-row"><span className="key-line call" /><b>{contracts(h.call_oi)}</b> calls <span className="muted">(<Signed value={h.call_chg} fmt={signed} />)</span></div>
+          <div className="k-row"><span className="key-line put" /><b>{contracts(h.put_oi)}</b> puts <span className="muted">(<Signed value={h.put_chg} fmt={signed} />)</span></div>
         </div>
       )}
       <p className="k-note">

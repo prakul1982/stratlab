@@ -11,8 +11,7 @@
 .adm-link.active .adm-count { background: var(--card); color: var(--ink); }
 @media (max-width: 900px) {
   .adm { grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
-  .adm-menu { position: static; flex-direction: row; overflow-x: auto; gap: var(--s1); padding-bottom: var(--s1); scrollbar-width: none; }
-  .adm-menu::-webkit-scrollbar { display: none; }
+  .adm-menu { position: static; flex-direction: row; flex-wrap: wrap; gap: var(--s1); padding-bottom: var(--s1); }   /* the tabs wrap onto more lines, so none hides off the edge */
   .adm-link { flex: none; white-space: nowrap; min-height: var(--ctl-sm); background: var(--chip); }
   .adm-link.active { background: var(--ink); }
 }

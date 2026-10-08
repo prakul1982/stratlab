@@ -12,6 +12,21 @@ export function periodName(p: string, span: "month" | "quarter" = "month") {
   return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${y}`;
 }
 
+/** The month rows of a side-by-side table (newest first) with each run of two or more months that no company has a figure
+ * for folded into one row, "gap:<newest>:<oldest>:<months>", so a table never runs down a screen of dashes. A single empty
+ * month stays a row of its own (a missing month between two filed ones is worth seeing). */
+export function foldEmptyMonths(periods: string[], hasFigure: (period: string) => boolean): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < periods.length;) {
+    if (hasFigure(periods[i])) { out.push(periods[i++]); continue; }
+    let j = i;
+    while (j < periods.length && !hasFigure(periods[j])) j++;
+    out.push(j - i >= 2 ? `gap:${periods[i]}:${periods[j - 1]}:${j - i}` : periods[i]);
+    i = j;
+  }
+  return out;
+}
+
 /** 2,36,013 units, ₹33,275 billion, 34.2%: the unit as filed, Indian digit grouping. */
 export function bizValue(v: number | null | undefined, unit: string | null) {
   if (v == null || !Number.isFinite(v)) return "–";

@@ -9,7 +9,7 @@ import { LineChart } from "../../components/Charts";
 import { Info } from "../../components/ui";
 import { sipParams } from "../../lib/sip";
 import { numberProblem, type Limits } from "../../lib/validate";
-import { Card, CardHead, ChartFrame, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, ChartFrame, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Signed, Stat, StatRow, type Column } from "../../components/kit";
 
 /* /money/sip-test: test a stock or ETF SIP before setting one up: a fixed amount (or number of shares) every day, week or
  * month into one Indian stock or ETF or a split across up to 10, with a yearly step-up and an optional dip rule, on past
@@ -42,6 +42,9 @@ const SIP_KINDS = ["EQ", "ETF"];
 const DOM: Limits = { min: 1, max: 28, whole: true };
 const rate = (v: number | null | undefined) => (v == null ? "–" : pctPlain(v * 100, 1));
 const signedPts = (v: number | null | undefined) => (v == null ? "–" : `${signed(v, 1)} pts`);
+/** A return in the kit's colours (green above zero, red below). */
+const rateNode = (v: number | null | undefined) => <Signed value={v}>{rate(v)}</Signed>;
+const ptsNode = (v: number | null | undefined) => <Signed value={v}>{signedPts(v)}</Signed>;
 const month = (m: string) => new Date(`${m.slice(0, 7)}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const span = (days: number) => (days >= 365 ? `${(days / 365).toFixed(1)} years` : days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`);
@@ -133,7 +136,7 @@ export function SipTestPage() {
     { key: "name", header: "", rowHeader: true, cell: (x) => x.name },
     { key: "in", header: "Put in", numeric: true, cell: (x) => inr(x.invested) },
     { key: "val", header: "Value", numeric: true, cell: (x) => inr(x.value) },
-    { key: "xirr", header: "XIRR", numeric: true, cell: (x) => rate(x.xirr) },
+    { key: "xirr", header: "XIRR", numeric: true, cell: (x) => rateNode(x.xirr) },
     { key: "fall", header: "Deepest fall", numeric: true, cell: (x) => pctPlain(x.fall, 1) },
     { key: "ch", header: "Charges", numeric: true, cell: (x) => inr(x.charges) },
   ];
@@ -182,7 +185,7 @@ export function SipTestPage() {
             : <Field label="Shares each time" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />}
           <Field label="How often">{(id) => <Select id={id} value={freq} onChange={(v) => setFreq(v as typeof freq)} options={FREQ} />}</Field>
           {freq === "monthly" && <Field label="Day of the month" inputMode="numeric" value={dom} onChange={(e) => setDom(e.target.value)}
-            hint="1 to 28, so every month has it" error={numberProblem(dom, DOM)} />}
+            rule="1 to 28, so every month has it" error={numberProblem(dom, DOM)} />}
           {freq === "weekly" && <Field label="Day of the week">{(id) => <Select id={id} value={weekday} onChange={setWeekday} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />}</Field>}
           <Field label="Step-up a year" unit="%" type="number" min={0} max={50} value={stepUp} onChange={(e) => setStepUp(e.target.value)} info="Raises the amount by this much each year." />
           <Field label="Years">{(id) => <Select id={id} value={years} onChange={setYears} options={YEARS} />}</Field>
@@ -213,8 +216,8 @@ export function SipTestPage() {
             <p className="k-small k-muted">{dateOnly(r.start)} to {dateOnly(r.end)}: {r.instalments} instalment{r.instalments === 1 ? "" : "s"}{res.legs.length > 1 ? ` into ${res.legs.map((l) => `${l.weight}% ${l.symbol}`).join(", ")}` : ` into ${res.legs[0].symbol}`}.</p>
             <StatRow>
               <Stat label="Put in" value={inr(r.invested)} />
-              <Stat label="Value at the end" value={inr(r.value)} note={`${pct(r.gain_pct)} on the money put in`} />
-              <Stat label="XIRR" value={rate(r.xirr)} />
+              <Stat label="Value at the end" value={inr(r.value)} note={<><Signed value={r.gain_pct}>{pct(r.gain_pct)}</Signed> on the money put in</>} />
+              <Stat label="XIRR" value={rateNode(r.xirr)} />
               <Stat label={<>Deepest fall <Info label="What the deepest fall is">The largest drop of the pot from a high, leaving out the instalments themselves.</Info></>} value={pctPlain(r.deepest_fall_pct, 1)} />
               <Stat label="Longest below the money put in" value={r.underwater_days ? span(r.underwater_days) : "Never"} note={r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined} />
               <Stat label="Charges" value={inr(r.charges)} note={`${inr(r.stamp)} of it stamp duty`} />
@@ -243,22 +246,22 @@ export function SipTestPage() {
               stats={<>
                 <p className="k-small k-muted">{res.spread.count} runs of {res.spread.years} year{res.spread.years === 1 ? "" : "s"} each, starting {res.spread.every_months > 1 ? `every ${res.spread.every_months} months` : "every month"} from {month(res.spread.runs[0].start)}.</p>
                 <StatRow>
-                  <Stat label="Lowest XIRR" value={rate(res.spread.worst.xirr)} note={`from ${month(res.spread.worst.start)}`} />
-                  <Stat label="Middle XIRR" value={rate(res.spread.median)} />
-                  <Stat label="Highest XIRR" value={rate(res.spread.best.xirr)} note={`from ${month(res.spread.best.start)}`} />
+                  <Stat label="Lowest XIRR" value={rateNode(res.spread.worst.xirr)} note={`from ${month(res.spread.worst.start)}`} />
+                  <Stat label="Middle XIRR" value={rateNode(res.spread.median)} />
+                  <Stat label="Highest XIRR" value={rateNode(res.spread.best.xirr)} note={`from ${month(res.spread.best.start)}`} />
                   <Stat label="Runs below zero" value={`${res.spread.below_zero} of ${res.spread.count}`} />
                 </StatRow>
               </>}
               table={{ label: "XIRR by start month", rows: res.spread.runs.map((x, i) => ({ ...x, i })), rowKey: (x) => String(x.i),
-                columns: [{ key: "s", header: "Started", rowHeader: true, cell: (x) => month(x.start) }, { key: "x", header: "XIRR", numeric: true, cell: (x) => rate(x.xirr) },
-                  ...(res.spread.dip ? [{ key: "p", header: "No dip rule", numeric: true, cell: (x: SpreadRun) => rate(x.plain_xirr) }] : [])] }}
+                columns: [{ key: "s", header: "Started", rowHeader: true, cell: (x) => month(x.start) }, { key: "x", header: "XIRR", numeric: true, cell: (x) => rateNode(x.xirr) },
+                  ...(res.spread.dip ? [{ key: "p", header: "No dip rule", numeric: true, cell: (x: SpreadRun) => rateNode(x.plain_xirr) }] : [])] }}
               footer={res.spread.dip && (
                 <p className="k-small">The dip rule's XIRR was above the plain SIP's in {res.spread.dip.beat} of {res.spread.dip.compared} start months;
-                  the middle difference was {signedPts(res.spread.dip.median_diff_pp)} (from {signedPts(res.spread.dip.worst_diff_pp)} to {signedPts(res.spread.dip.best_diff_pp)}).</p>
+                  the middle difference was {ptsNode(res.spread.dip.median_diff_pp)} (from {ptsNode(res.spread.dip.worst_diff_pp)} to {ptsNode(res.spread.dip.best_diff_pp)}).</p>
               )}>
               <LineChart lines={[{ values: res.spread.runs.map((x) => x.xirr * 100), color: "var(--series-1)", width: 2, label: "XIRR" },
                 ...(res.spread.dip ? [{ values: res.spread.runs.map((x) => (x.plain_xirr == null ? null : x.plain_xirr * 100)), color: "var(--series-2)", width: 2, dash: "4 3", label: "No dip rule" }] : [])]}
-                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => pct(v)} baseline={0}
+                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => pct(v)} signedTip baseline={0}
                 height={200} legend={!!res.spread.dip} ranges={false} table={false} ariaLabel="XIRR by start month" />
             </ChartFrame>
           )}

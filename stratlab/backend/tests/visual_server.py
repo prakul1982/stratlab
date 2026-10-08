@@ -1,6 +1,6 @@
 """The app on the fake world, for the browser tests in stratlab/frontend/e2e: every source faked, with one price table
 for every source (tests/fake_prices.py) and a fundamentals page for each Indian company in it (tests/fake_fundamentals.py),
-TCS among them with loss years (it stands in for one, as only listed symbols open) so the charts' handling of losses
+ORIONPOLY among them, a made-up commodity maker with loss years (it stands in for one, as only listed symbols open) so the charts' handling of losses
 can be checked.
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
@@ -20,7 +20,7 @@ from app import main  # noqa: E402
 from tests import world  # noqa: E402
 
 PORT = int(os.environ.get("E2E_API_PORT", "8765"))     # another port lets two test runs share a machine
-LOSS = "TCS"      # the company with loss years (tests/fake_fundamentals.py)
+LOSS = "ORIONPOLY"      # the made-up company with loss years (tests/fake_fundamentals.py)
 
 
 def build():
@@ -30,7 +30,7 @@ def build():
     for limit in ("PER_MINUTE_USER", "PER_MINUTE_ANON", "PER_MINUTE_ADDRESS"):   # the sweep opens hundreds of pages a minute as one user
         mp.setattr(guard, limit, 100_000)
     # every Indian company in the price table has its own fundamentals page (tests/fake_fundamentals.py), priced at the
-    # same last close as the broker's quotes: TCS stands in for a company with loss years
+    # same last close as the broker's quotes: ORIONPOLY (made up) stands in for a company with loss years
     from tests import fake_fundamentals
     fake_fundamentals.install(mp, main.research_hub.screener)
     from datetime import datetime, timezone
@@ -206,9 +206,19 @@ def live_breadth(mp, sizes):
     mp.setattr(BL, "STALE_AFTER", 10**9)
     mp.setattr(main.breadth_live_job, "start", lambda: None)
     from tests import fake_prices as P
-    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    # The points run up to the market's last trade (now while it is open, else the latest close), never past it: a card never
+    # claims "live as of" a time still to come. The card is asked at that same moment, so the run's day is the points' day
+    # whatever the clock says. A quarter hour at a time from the open, the last six; before 09:45 the day has too few, so
+    # the card shows the session before.
+    now = P.session_clock(None, "IN").astimezone(ZoneInfo("Asia/Kolkata"))
+    if now.strftime("%H:%M") < "09:45":
+        now = P.last_close("IN").astimezone(ZoneInfo("Asia/Kolkata"))
     day = now.date().isoformat()
-    times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
+    marks = [f"{9 + (15 + 15 * k) // 60:02d}:{(15 + 15 * k) % 60:02d}" for k in range(26)]
+    times = [t for t in marks if t <= now.strftime("%H:%M")][-6:]
+    asked_at = now.astimezone(ZoneInfo("UTC"))
+    ask = BL.view
+    mp.setattr(BL, "view", lambda group, now=None, ready=True: ask(group, now or asked_at, ready))
     # each group's index at each time, from the demo world's price table (NIFTY 500 below NIFTY 50, moving with it)
     level = {g: [P.price(name, now.replace(hour=int(t[:2]), minute=int(t[3:]), second=0, microsecond=0)) for t in times]
              for g, name in (("nifty500", "NIFTY 500"), ("nifty50", "NIFTY 50"))}
@@ -282,10 +292,13 @@ def breadth(mp):
 
 def closing_auction(mp):
     """Today's closing auction, as read just after it ended, and 8 stored days for the history."""
-    from datetime import date
+    from datetime import date, timezone
     from app import closing_auction as CA
     from tests import fake_cas
-    CA.refresh(main.filings_feed)
+    # read just after the latest auction that has ended (today's once it is 15:35, else the trading day before's), so a page
+    # opened through the day's continuous trading shows that earlier auction, labelled with its day, never a "final" price
+    # from an auction that has not happened yet
+    CA.refresh(main.filings_feed, now=fake_cas.last_auction_close().astimezone(timezone.utc))
     fake_cas.seed(date.today())
     mp.setattr(main.closing_auction_job, "start", lambda: None)
 
@@ -296,7 +309,8 @@ def etf_gaps(mp):
     from datetime import date
     from app import etf_nav
     from tests import fake_etf
-    data = fake_etf.navs(date(2026, 10, 3))
+    from tests.fake_prices import last_close
+    data = fake_etf.navs(last_close("IN").date())          # the NAV of the latest trading day, as the list's date says
     mp.setattr(etf_nav, "navs", lambda: data)
     etf_nav.refresh(main.filings_feed)
     fake_etf.seed_history(date.today())
@@ -359,11 +373,13 @@ def screen_index():
         rows = []
         for i, sym in enumerate(syms):
             market = "IN" if region == "IN" else "US"
-            price = P.last(sym)
+            # the price and the 52-week range are the company page's own, read from the same sources the page reads (the broker's
+            # quote and its last 252 daily candles for India), so "vs 52-week high" is that page's price over that page's high
+            co = main.research_hub.company(region, sym)
+            price = co["quote"]["price"]
             end = P.session_clock(None, market)
-            closes = [P.price(sym, end - timedelta(days=d)) for d in range(0, 366)]
             f = {"region": region, "symbol": sym, "name": P.name_of(sym) or sym, "industry": [P.sector_of(sym) or "Diversified"],
-                 "price": price, "high52": max(closes), "low52": min(closes), "price_at": end.date().isoformat(),
+                 "price": price, "high52": co["range52"]["high"], "low52": co["range52"]["low"], "price_at": end.date().isoformat(),
                  "stage": 1 + i % 4, "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [],
                  "built_at": f"{today}T12:00:00+00:00"}
             page = main.research_hub.screener.company(sym) if region == "IN" else None

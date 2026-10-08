@@ -54,6 +54,22 @@ test("signed out: a company's address says what's there, and Google sign-in come
   expect(errors).toEqual([]);
 });
 
+// R4-001: the public page link is the API's own route, and a local copy forwards /stocks to the API as the site's host does
+// (vite.config.ts), so following the link lands on the company's page, not on the app's "Page not found".
+test("signed out: the public page link opens the company's public page on this site's own address", async ({ page }) => {
+  const errors = await offline(page);
+  await page.goto("/research/IN/TCS");
+  const link = page.getByRole("link", { name: /Open the public page for/ });
+  await expect(link).toHaveAttribute("href", "/stocks/in/TCS", { timeout: 30_000 });
+  await link.click();
+  await expect(page).toHaveURL(/\/stocks\/in\/TCS$/);
+  await expect(page.locator("h1")).toContainText("Tata Consultancy");
+  await expect(page.getByText("Page not found")).toHaveCount(0);
+  const res = await page.request.get("/stocks/in/TCS");
+  expect(res.status()).toBe(200);
+  expect(errors).toEqual([]);
+});
+
 test("signed out: other app addresses, a page that doesn't exist, and no way back to another site", async ({ page }) => {
   const errors = await offline(page);
   for (const [path, title] of [["/holdings", "Sign in to see Holdings"], ["/n/abc123", "Sign in to see this notebook"],

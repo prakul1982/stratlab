@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { asOf as asOfText, dateOnly, inr, pctPlain, signed, signedInrCompact } from "../../lib/format";
 import { Info } from "../../components/ui";
 import { Earlier } from "../../components/Earlier";
-import { Card, CardHead, DataTable, Disclosure, EmptyState, PlanNote, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, Disclosure, EmptyState, PlanNote, Signed, Stat, StatRow, type Column } from "../../components/kit";
 
 // Your SIP and fund behaviour: your XIRR beside each fund's own NAV return over the same dates, the gap in points and
 // rupees, the SIP record, redemptions after a fall from the high, and holding periods. What happened, never advice.
@@ -25,8 +25,9 @@ type Behaviour = { full: boolean; plan: string; schemes: Row[]; total: Total | n
 type FallRow = Fall & { name: string; source?: "history" | "statement"; i: number };
 
 const rate = (v: number | null | undefined) => (v == null ? "–" : pctPlain(v * 100, 1));
-const pts = (v: number | null | undefined) => (v == null ? "–" : `${signed(v, 1)} pts`);
-const rupees = (v: number | null | undefined) => signedInrCompact(v);
+const pts = (v: number | null | undefined) => <Signed value={v}>{v == null ? "–" : `${signed(v, 1)} pts`}</Signed>;
+const rupees = (v: number | null | undefined) => <Signed value={v}>{signedInrCompact(v)}</Signed>;
+const rateNode = (v: number | null | undefined) => <Signed value={v}>{rate(v)}</Signed>;
 const month = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 const span = (days: number | null | undefined) => (days == null ? "–" : days >= 365 ? `${(days / 365).toFixed(1)} years` : `${days} days`);
 
@@ -65,8 +66,8 @@ export function FundBehaviour({ version }: { version: string }) {
         {s.idcw && <span className="k-sub-line">IDCW option: the NAV return leaves out payouts; your XIRR counts them.</span>}
         {s.short_span && <span className="k-sub-line">Under a year: both rates annualised from a short span.</span>}
       </>) },
-    { key: "xirr", header: "Your XIRR", numeric: true, cell: (s) => rate(s.xirr) },
-    { key: "fund", header: "Fund's NAV return", numeric: true, cell: (s) => rate(s.fund) },
+    { key: "xirr", header: "Your XIRR", numeric: true, cell: (s) => rateNode(s.xirr) },
+    { key: "fund", header: "Fund's NAV return", numeric: true, cell: (s) => rateNode(s.fund) },
     { key: "gap", header: "Gap", numeric: true, cell: (s) => pts(s.gap_pp) },
     ...(b.full ? [{ key: "gapr", header: "Gap in ₹", numeric: true, cell: (s: Row) => rupees(s.gap_rupees) }] : []),
   ];

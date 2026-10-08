@@ -422,6 +422,8 @@ export function NetWorthPage() {
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
+            {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
+            {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
             {!view.history_allowed
               ? <PlanNote>The net worth history is on the Basic plan{view.history_count ? ` (${view.history_count} snapshot${view.history_count === 1 ? "" : "s"} recorded so far)` : ""}.</PlanNote>

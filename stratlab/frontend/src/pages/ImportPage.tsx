@@ -14,7 +14,7 @@ const ROUTES: [string, string][] = [
 export function ImportPage() {
   const create = useCreateNotebook(null);
   return (
-    <div className="k-page k-narrow">
+    <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Import a strategy"
         lede="Drop in a strategy you already run: a config file, Pine Script, Python, MetaTrader, AmiBroker, a StratLab export, or plain words. StratLab works out what it is and sets it up in the right place." />
       <Card label="Where an import goes">

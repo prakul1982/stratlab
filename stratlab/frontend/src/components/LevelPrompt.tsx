@@ -40,7 +40,7 @@ export function LevelPrompt({ onDone }: { onDone: (saved: Promise<void>) => void
   };
   return (
     // closing keeps the page as it is: the default answer is saved, so it isn't asked again
-    <Modal title="What brings you here?" onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }))}>
+    <Modal title="What brings you here?" startOnClose onClose={() => onDone(savePrefs({ focus: focus ?? "both", level: lvl }))}>
       <div className="k-stack">
         <p className="k-muted">StratLab has four spaces: Trade, Invest, Money and My space, your own summary of all three. We'll open the one you pick. The others stay one tap away, and you can change this any time in Settings.</p>
         <div className="k-stack snug">

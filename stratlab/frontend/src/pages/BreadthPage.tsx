@@ -149,7 +149,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
       <Card label="Breadth today, live">
         <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<Badge tone="live">Live</Badge>} />
         <StatRow>
-          <Stat label="Rose / fell" value={<>{count(l.adv)} <span className="k-muted">/</span> {count(l.dec)}</>} note={`${count(l.unch)} unchanged · against yesterday's close`} />
+          <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against yesterday's close`} />
           <Stat label="Above 20-day average" value={share(l.pct20)} />
           <Stat label="Above 50-day average" value={share(l.pct50)} />
           <Stat label="Above 200-day average" value={share(l.pct200)} />
@@ -184,10 +184,11 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
 function Headline({ t, help, lastClose }: { t: Today; help: Record<string, string>; lastClose?: boolean }) {
   const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
   const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
-  const chg = (v: number | null | undefined, unit: "" | "pts", dp: number) => {
+  // a change in a share or an oscillator is up or down in colour; TRIN is the one inverted figure (a rise in it is selling pressure), so its change keeps the direction without judging
+  const chg = (v: number | null | undefined, unit: "" | "pts", dp: number, neutral = false) => {
     if (v == null) return undefined;
     const text = delta(v, unit, dp);
-    return text ? <Delta value={Number(v.toFixed(dp))} tone="neutral">{text}{vs}</Delta> : undefined;
+    return text ? <Delta value={Number(v.toFixed(dp))} tone={neutral ? "neutral" : "auto"}>{text}{vs}</Delta> : undefined;
   };
   const pts = (k: "pct20" | "pct50" | "pct200" | "stage2") => chg(t[k].change, "pts", 1);
   // two counts: the day before's pair, which reads more plainly than two signed changes
@@ -200,16 +201,16 @@ function Headline({ t, help, lastClose }: { t: Today; help: Record<string, strin
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
       <CardHead title={lastClose ? `Last close · ${shortDay(t.day)}` : `Today's numbers · ${shortDay(t.day)}`} />
       <StatRow>
-        <Stat label={lab("Rose / fell", help.ad)} value={<>{count(t.adv.value)} <span className="k-muted">/</span> {count(t.dec.value)}</>}
+        <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />
         <Stat label={lab("Above 50-day average", help.ma)} value={share(t.pct50.value)} delta={pts("pct50")} note={`20-day: ${share(t.pct20.value)}`} />
         <Stat label={lab("Above 200-day average", help.ma)} value={share(t.pct200.value)} delta={pts("pct200")} />
-        <Stat label={lab("52-week highs / lows", help.highs_lows)} value={<>{count(t.highs.value)} <span className="k-muted">/</span> {count(t.lows.value)}</>} note={pair("highs", "lows")} />
-        <Stat label={lab("Up 4% / down 4%", help.moves)} value={<>{count(t.up4.value)} <span className="k-muted">/</span> {count(t.down4.value)}</>} note={pair("up4", "down4")} />
+        <Stat label={lab("52-week highs / lows", help.highs_lows)} value={<><span className="k-up">{count(t.highs.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.lows.value)}</span></>} note={pair("highs", "lows")} />
+        <Stat label={lab("Up 4% / down 4%", help.moves)} value={<><span className="k-up">{count(t.up4.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.down4.value)}</span></>} note={pair("up4", "down4")} />
         <Stat label={lab("In Stage 2", help.stage2)} value={share(t.stage2.value)} delta={pts("stage2")} />
         <Stat label={lab("McClellan oscillator", help.mcclellan)} value={t.mcclellan.value == null ? "–" : fmt1(t.mcclellan.value)}
           delta={chg(t.mcclellan.change, "", 1)} note={t.summation.value == null ? undefined : `Summation ${fmt1(t.summation.value)}`} />
-        <Stat label={lab("TRIN", help.trin)} value={t.trin.value == null ? "–" : t.trin.value.toFixed(2)} delta={chg(t.trin.change, "", 2)} />
+        <Stat label={lab("TRIN", help.trin)} value={t.trin.value == null ? "–" : t.trin.value.toFixed(2)} delta={chg(t.trin.change, "", 2, true)} />
       </StatRow>
     </Card>
   );

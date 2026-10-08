@@ -80,7 +80,7 @@ export function InvestorHomePage() {
           {shown!.map((r) => (
             <Card key={r.symbol}>
               <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>{r.name}</Link>}
-                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg} tone="neutral">{pct(r.chg)}</Delta>}</> : undefined} />
+                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg)}</Delta>}</> : undefined} />
               <span className="k-note">{r.symbol}</span>
               {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
               <div className="inv-stat-cells">

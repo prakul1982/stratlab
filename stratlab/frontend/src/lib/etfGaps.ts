@@ -47,22 +47,4 @@ export const etfGapApi = {
   detail: (symbol: string) => api<EtfGapDetail>(`/invest/etf-gaps/${encodeURIComponent(symbol)}`),
 };
 
-/** "4.2%" or "0.35%": one place from 1% up, two below it, without the sign. */
-export function gapPct(g: number): string {
-  const a = Math.abs(g);
-  return `${a >= 1 ? a.toFixed(1) : a.toFixed(2)}%`;
-}
-
-/** "4.2% above", "0.35% below", "0.00%" (for a badge or a table cell). */
-export function gapShort(g: number | null | undefined): string {
-  if (g == null) return "–";
-  if (Math.abs(g) < 0.005) return "0.00%";
-  return `${gapPct(g)} ${g > 0 ? "above" : "below"}`;
-}
-
-/** "trades 4.2% above its last NAV". */
-export function gapWords(g: number | null | undefined, basis: string): string {
-  if (g == null) return "";
-  if (Math.abs(g) < 0.005) return `trades at its ${basis}`;
-  return `trades ${gapPct(g)} ${g > 0 ? "above" : "below"} its ${basis}`;
-}
+export { gapAtPrice, gapPct, gapShort, gapWords } from "./etfGapMath";

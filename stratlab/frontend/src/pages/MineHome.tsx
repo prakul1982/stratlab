@@ -10,7 +10,7 @@ import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "..
 import { usePersisted } from "../lib/persist";
 import { researchApi, useWatchlist, type Quote, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
-import { Badge, Card, CardHead, Delta, EmptyState, PageHeader, Skeleton, Spark, Stat } from "../components/kit";
+import { Badge, Card, CardHead, Delta, EmptyState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInline } from "../components/PlanInterest";
@@ -173,7 +173,7 @@ function PnlCard() {
     <Card testId="mine-pnl">
       <CardHead title={fresh ? "Today's P&L" : "Last session's P&L"} actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
       <Stat label={`${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
-        note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? `Holdings ${pct(h.totals.day_pct, 2)}` : undefined} />
+        note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {h.prices_at && <div><Badge>Prices as of {asOf(h.prices_at)}</Badge></div>}
     </Card>
   );

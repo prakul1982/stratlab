@@ -302,3 +302,41 @@ def test_admin_builds_a_preview(w, monkeypatch):
     issue = r.json()
     assert issue["kind"] == "market" and issue["region"] == "IN" and write.FOOTER in issue["html"] and issue["text"]
     assert job.ids("market", "IN") == []                 # a preview isn't stored, so the real issue uses closing data
+
+
+# ---------- the day's index change (real NIFTY 50 closes, Oct 2026) ----------
+NIFTY = [("2026-09-25", 23140.50), ("2026-10-01", 22421.95), ("2026-10-05", 22555.75), ("2026-10-06", 22776.10), ("2026-10-07", 22603.05)]
+
+
+def _candles(monkeypatch, closes=NIFTY):
+    bars = [{"t": f"{d}T00:00:00+05:30", "o": c, "h": c, "l": c, "c": c, "v": 0} for d, c in closes]
+    monkeypatch.setattr(main.research_hub.yahoo, "chart", lambda sym, tf="1d", days=365, ttl=None, exact=False:
+                        {"meta": {}, "candles": bars if sym == "^NSEI" else []})
+
+
+def test_the_brief_measures_the_day_from_the_session_before(w, monkeypatch):
+    _candles(monkeypatch)
+    moves = {i["name"]: i for i in content.index_moves("IN", date(2026, 10, 7), False)}
+    assert moves["NIFTY 50"]["price"] == 22603.05 and moves["NIFTY 50"]["change_pct"] == -0.76     # not the -0.08% since 30 Sep
+    assert content.index_moves("IN", date(2026, 10, 5), False)[0]["change_pct"] == 0.6         # from 1 Oct, over the 2 Oct holiday
+    assert content.index_moves("IN", date(2026, 10, 3), True)[0]["change_pct"] == -3.11        # the week to Saturday 3 Oct
+
+
+def test_stored_briefs_get_the_right_index_moves_and_keep_their_order(w, monkeypatch):
+    def stored(day, pct):
+        f = {**market(day=day), "indices": [{"name": "NIFTY 50", "price": dict(NIFTY)[day.isoformat()], "change_pct": pct, "from_high_pct": -7.1}]}
+        job.save(job.make_issue(f, "IN"))
+    monkeypatch.setattr(write, "ai_summary", lambda f: "The NIFTY 50 slipped 0.08% today.")
+    for day, wrong in ((date(2026, 10, 5), -0.99), (date(2026, 10, 6), 0.26), (date(2026, 10, 7), -0.08)):
+        stored(day, wrong)
+    _candles(monkeypatch)
+    monkeypatch.setattr(job, "date", type("D", (date,), {"today": classmethod(lambda cls: date(2026, 10, 8))}))
+    assert job.repair_index_moves("IN") == 3
+    assert job.ids("market", "IN") == ["market.IN.2026-10-07", "market.IN.2026-10-06", "market.IN.2026-10-05"]
+    fixed = job.load("market.IN.2026-10-07")
+    assert fixed["indices"][0]["change_pct"] == -0.76 and fixed["indices"][0]["from_high_pct"] == -7.1
+    assert fixed["subject"].endswith("NIFTY 50 −0.76%") and fixed["title"] == "NIFTY 50 down 0.76%"
+    assert not fixed["ai"] and "0.08" not in fixed["summary"] and "−0.76%" in fixed["summary"]
+    assert [s["title"] for s in fixed["sections"]][:2] == ["Indices", "Sector rotation"] and "−0.76%" in fixed["html"]
+    assert "0.08" not in fixed["html"] + fixed["text"]
+    assert job.repair_index_moves("IN") == 0                                                  # already right: nothing to do

@@ -2,6 +2,7 @@
 export { PageHeader } from "./PageHeader";
 export { Card, CardHead } from "./Card";
 export { Stat, StatRow, Delta } from "./Stat";
+export { Signed } from "./Signed";
 export { Badge } from "./Badge";
 export { Seg, type Choice } from "./Seg";
 export { ChipBar, type CustomUnit, type CustomCheck } from "./ChipBar";

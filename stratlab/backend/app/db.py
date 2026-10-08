@@ -125,6 +125,11 @@ def list_notebook_rows(user_id: str) -> list[dict]:
             .eq("user_id", user_id).order("updated_at", desc=True).execute().data)
 
 
+def has_strategy(user_id: str) -> bool:
+    """Whether the user has any notebook or saved strategy (one row is enough to know)."""
+    return bool(sb().table("strategies").select("id").eq("user_id", user_id).limit(1).execute().data)
+
+
 def delete_strategy(user_id: str, sid: str) -> None:
     sb().table("strategies").delete().eq("user_id", user_id).eq("id", sid).execute()
 

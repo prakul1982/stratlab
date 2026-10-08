@@ -343,6 +343,15 @@ export function signTone(v: number | null | undefined): "up" | "down" | undefine
   return ok(v) ? (v > 0 ? "up" : v < 0 ? "down" : undefined) : undefined;
 }
 
+/** The colour class for a signed figure: `k-up` (green) above zero, `k-down` (red) below it, "" for zero or a missing
+ * value. Pass the text the figure is shown as, and one that rounds to nothing ("0.0%", "+0") stays plain, so the colour
+ * always agrees with the sign that is printed. The sign or ▲/▼ stays in the text: colour is never the only signal. */
+export function signCls(v: number | null | undefined, text?: string): "k-up" | "k-down" | "" {
+  const t = signTone(v);
+  if (!t || (text !== undefined && /\d/.test(text) && !/[1-9]/.test(text))) return "";
+  return `k-${t}`;
+}
+
 /** A plain number with its sign, in Indian grouping: +1,234 / −5. */
 export function signed(v: number | null | undefined, dp = 0): string {
   if (!ok(v)) return "–";

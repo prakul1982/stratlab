@@ -12,7 +12,7 @@ import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type Ra
 import { ChipBar } from "../../components/kit/ChipBar";
 import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
-import { currencySymbol } from "../../lib/format";
+import { currencySymbol, signCls } from "../../lib/format";
 import "./priceChart.css";
 
 export type Tf = "5m" | "15m" | "1h" | "1d" | "1w" | "1mo";
@@ -599,11 +599,11 @@ export default function PriceChart(props: PriceChartProps) {
                 <span className="pc-hide-phone"><span className="k">O</span>{fmt(h.bar.o)}</span><span className="pc-hide-phone"><span className="k">H</span>{fmt(h.bar.h)}</span><span className="pc-hide-phone"><span className="k">L</span>{fmt(h.bar.l)}</span>
               </>}
               <span><span className="k">C</span>{fmt(h.bar.c)}</span>
-              {chg != null && <span>{chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
+              {chg != null && <span className={signCls(chg, signedPct(chgPct))}>{chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
           {h && showVolume && h.bar.v > 0 && <div><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
-          {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span>{signedPct(cmpPct)}</span></div>}
+          {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span className={signCls(cmpPct, signedPct(cmpPct))}>{signedPct(cmpPct)}</span></div>}
           {e?.studies.map((s) => {
             const i = h?.index ?? -1;
             const own = STUDY[s.config.type].params.length > 0;
