@@ -226,7 +226,8 @@ def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=D
                           lambda: A.compare(ca, cb, _ai))
     except HTTPException as e:
         verdict = {"error": (e.detail or {}).get("message") if isinstance(e.detail, dict) else str(e.detail)}
-    return ok({"a": ca, "b": cb, "ai": verdict})
+    is_open = market_open(r)
+    return ok({"a": {**ca, "market_open": is_open}, "b": {**cb, "market_open": is_open}, "ai": verdict})
 
 
 # ---------- watchlist (one row per user in app_settings) ----------

@@ -17,6 +17,7 @@ test("sales and profit share one unit, so a lakh-crore chart never sits beside a
   assert.equal(scaleFor([...sales, ...profit], false).unit, "₹ cr");     // together, both in crore
   const page = read("pages/Research.tsx");
   assert.match(page, /scaleFor\(\[\.\.\.t\.revenue, \.\.\.t\.profit\]/, "the company page scales both series together");
+  assert.match(read("pages/DeepDive.tsx"), /scaleFor\(years\.flatMap\(\(y\) => \[y\.sales, y\.profit\]\)[^)]*\), profitS = salesS/, "so does the deep dive");
 });
 
 test("a percentage that isn't zero never reads as 0.0% (R3-005)", () => {

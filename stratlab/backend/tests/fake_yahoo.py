@@ -98,6 +98,12 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                     "instrumentType": "ETF" if sym == "SPY" else "EQUITY", "fullExchangeName": "Test"}
             if clock is not None:            # the time of the last trade: the close, out of hours
                 meta["regularMarketTime"] = int(clock.timestamp())
+                # the year's range from the same daily closes the chart draws, whatever window was asked for
+                from datetime import timedelta
+                market = fake_prices.market_of(sym)
+                days = [clock - timedelta(days=d) for d in range(0, 366)]
+                year = [fake_prices.price(sym, t) for t in days if fake_prices.trading_day(market, t.date())]
+                meta["fiftyTwoWeekHigh"], meta["fiftyTwoWeekLow"] = max(year), min(year)
                 meta["longName"] = fake_prices.name_of(fake_prices.canonical(sym)) or meta["longName"]
             res = {"meta": meta, "timestamp": ts, "indicators": {"quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}]}}
             if "div" in req.url.params.get("events", "") and sym == "AAPL" and g == 86400:     # a dividend and a split in its history

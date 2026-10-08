@@ -98,6 +98,8 @@ def test_an_empty_comparison_is_unavailable_not_blank(w):
     got = r.json()
     assert got["ai"].get("error") and not got["ai"].get("verdict")
     assert got["b"]["name"] and got["b"]["quote"]["price"] > 0                # the numbers don't depend on it
+    from app.intel.routes import market_open
+    assert got["a"]["market_open"] is got["b"]["market_open"] is market_open("IN")       # last close or today, as on the company page
 
 
 def test_the_market_read_answers_unavailable_instead_of_failing(w):
