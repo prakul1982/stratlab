@@ -51,3 +51,18 @@ test("Service worker: an offline page load with no kept copy gets an offline pag
   const res = await answer;
   assert.ok(res && res.status === 503 && /can't be reached/.test(res.body));
 });
+
+test("Breadth opens on the reader's market: an India reader gets an Indian group, never the S&P 500 picked elsewhere (R6O-007)", async () => {
+  const mem = new Map();
+  globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+  const { savedPick, savePick } = await import("../src/lib/breadthPick.ts");
+  assert.deepEqual(savedPick("IN"), { group: "nifty500", range: "1y", picked: false });
+  mem.set("stratlab.breadth", JSON.stringify({ group: "sp500", range: "6m" }));       // the S&P 500, picked once while on the US
+  assert.deepEqual(savedPick("IN"), { group: "nifty500", range: "6m", picked: false });
+  assert.equal(savedPick("US").group, "sp500");
+  savePick("midcap150", "1y");
+  assert.deepEqual(savedPick("IN"), { group: "midcap150", range: "1y", picked: true });
+  assert.equal(savedPick("US").group, "sp500");                                        // each market keeps its own pick
+  assert.match(read("src/components/BreadthCard.tsx"), /BROAD_GROUP\[region\]/);         // no counts yet: the broad group
+  delete globalThis.localStorage;
+});

@@ -352,3 +352,38 @@ def test_the_assistant_page_names_the_viewed_plan(monkeypatch):
     got = mcp_server.page({"id": "owner", "_plan": "free", "_view_as": "free"})
     assert got["allowed"] is False and got["plan"] == "Pro" and got["your_plan"] == "Free"
     assert mcp_server.page({"id": "owner", "_plan": "basic"})["your_plan"] == "Basic"
+
+
+# ---------- R6O-007: NIFTY 500, Midcap 150 and Smallcap 250 get their counts ----------
+def test_groups_without_counts_are_filled_at_the_first_chance(monkeypatch):
+    """8 Oct 2026: the three groups got their lists after the day's run was marked done, while All NSE and the NIFTY 50
+    already had history, so the job counted the market as filled and the three stayed on "No counts ... yet"."""
+    from datetime import datetime, timedelta, timezone
+    from app import breadth as B, db
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    now = datetime(2026, 10, 8, 17, 30, tzinfo=timezone.utc)          # 23:00 IST, the day's run already marked done
+    store["newsjob:breadth-IN"] = "2026-10-08"
+    kept = [(date(2026, 10, 7) - timedelta(days=n)).isoformat() for n in range(400)]
+    for g in ("nse_all", "nifty50"):
+        B.save_hist(g, {d: [1] * len(B.COLS) for d in kept})
+    syms = [f"S{i:02d}" for i in range(24)]
+
+    def load(region, sym, days):
+        start = date(2026, 10, 8) - timedelta(days=days)
+        out, px = [], 100.0 + int(sym[1:])
+        for n in range(days + 1):
+            d = start + timedelta(days=n)
+            if d.weekday() < 5:
+                px *= 1.001 if (n + int(sym[1:])) % 3 else 0.998
+                out.append({"t": d.isoformat(), "o": px, "h": px * 1.01, "l": px * 0.99, "c": px, "v": 1000})
+        return out
+    runner = B.Runner(load, None, lambda name: syms, lambda: [{"symbol": s} for s in syms], sectors=lambda r: {}, gap=0)
+    job = B.Job(runner, ready=lambda r: r == "IN")
+    assert job.tick(now) == 1
+    for g in ("nifty500", "midcap150", "smallcap250"):
+        v = B.view(g, "1y", full=False, brief=True)
+        assert v["today"] and v["as_of"] == "2026-10-08", g
+    # tried once a day: a check five minutes later, or after a restart, doesn't read the market again
+    assert B.Job(runner, ready=lambda r: r == "IN").tick(now + timedelta(minutes=5)) == 0

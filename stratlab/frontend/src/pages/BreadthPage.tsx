@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
+  BROAD_GROUP, breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
 import { flatZero } from "../lib/chartFormat";
 import { marketTz } from "../lib/format";
+import { savedRegion } from "../lib/research";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
 import {
@@ -32,7 +33,8 @@ const PERIOD_UNITS = [
 
 export function BreadthPage() {
   const { fail } = useApp();
-  const first = savedPick();
+  // the reader's market opens on its own group (R6O-007: an India reader landed on the S&P 500)
+  const [first] = useState(() => { const region = savedRegion(); return { ...savedPick(region), region }; });
   const [group, setGroup] = useState<GroupId>(first.group);
   const [period, setPeriod] = useState<string>(first.range);
   const [data, setData] = useState<BreadthView | null>(null);
@@ -45,7 +47,12 @@ export function BreadthPage() {
     const n = ++seq.current;
     setLoading(true);
     breadthApi.get(group, "all")
-      .then((d) => { if (n === seq.current) { setData(d); setError(null); } })
+      .then((d) => {
+        if (n !== seq.current) return;
+        // a market's own group with no counts yet, not one the reader picked: its broad group, which has them
+        if (!d.today && !first.picked && group === first.group && BROAD_GROUP[first.region] !== group) { setGroup(BROAD_GROUP[first.region]); return; }
+        setData(d); setError(null);
+      })
       .catch((e) => {
         if (n !== seq.current) return;
         if ((e as { status?: number }).status === 404 && group !== "nifty500") { setGroup("nifty500"); return; }   // a group no longer offered

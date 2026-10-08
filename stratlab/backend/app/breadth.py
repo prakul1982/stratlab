@@ -33,6 +33,7 @@ from .newsletter import job as news_job
 HIST_KEY = "breadth:hist:"            # breadth:hist:<group> = {"fields": [...], "rows": [[day, ...], ...], "at"}
 SECTOR_KEY = "breadth:sectors:"       # breadth:sectors:<group> = {"days": [...], "sectors": {name: {"a": [...], "n": [...]}}}
 MEMBERS_KEY = "breadth:members:"      # the last good list of a group's stocks
+FILL_KEY = "breadth:fill-tried:"      # breadth:fill-tried:<region> = "<day>|<groups without days>": filled at the first chance once a day
 BASE_KEY = "breadth:base:"            # breadth:base:<region> = {"day", "stocks": {symbol: base_row}} for the intraday view
 STATUS_KEY = "breadth:status"         # {region: {ran_at, as_of, stocks, loaded, failed, last_error}}
 
@@ -781,7 +782,7 @@ class Job(news_job.Job):
                 continue
             tz, at = RUN_AT[region]
             day = self.due(name, now, tz, at, region=region)
-            if not day and (self.last.get(f"{name}-filled") or self._has_history(region)):
+            if not day and (self.last.get(f"{name}-filled") or self._has_history(region, now)):
                 continue
             try:
                 result = self.runner.run(region, now)
@@ -799,9 +800,22 @@ class Job(news_job.Job):
             self.status.update(last_run=now.isoformat(), last_error=None)
         return ran
 
-    def _has_history(self, region: str) -> bool:
-        """Some group of the market has stored days (remembered, so storage is read once, not every check)."""
-        has = any(load_hist(g) for g, v in GROUPS.items() if v["region"] == region)
-        if has:
+    def _has_history(self, region: str, now: datetime | None = None) -> bool:
+        """Every group of the market has stored days (remembered, so storage is read once, not every check).
+
+        R6O-007: this used to ask whether *some* group had days. NIFTY 500, Midcap 150 and Smallcap 250 got their lists
+        of stocks (R5O-013) after the All NSE and NIFTY 50 groups had history, so the market counted as filled and the
+        three empty groups waited for a scheduled run that, that day, had already been marked done before the fix was
+        live. Now a group without days is filled at the first chance; the try is remembered for the day in the
+        database, so a group the exchange gives no list for isn't read again on every check or restart."""
+        empty = sorted(g for g, v in GROUPS.items() if v["region"] == region and not load_hist(g))
+        if not empty:
             self.last[f"breadth-{region}-filled"] = "1"
-        return has
+            return True
+        day = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(RUN_AT[region][0])).date().isoformat()
+        mark = f"{day}|{','.join(empty)}"
+        if db.get_setting(FILL_KEY + region) == mark:
+            self.last[f"breadth-{region}-filled"] = "1"
+            return True                 # tried today for these groups: the next scheduled run tries again
+        db.set_setting(FILL_KEY + region, mark)
+        return False

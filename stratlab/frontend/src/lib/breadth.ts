@@ -1,14 +1,14 @@
 import { api } from "./api";
-import { isPeriod } from "./period";
 import type { LiveView } from "./breadthLive";
 import { fmtDate } from "./format";
 export { liveSeries, liveTitle } from "./breadthLive";
+export { BROAD_GROUP, MARKET_GROUP, groupRegion, savePick, savedPick } from "./breadthPick";
 export type { LiveSeries, LiveView } from "./breadthLive";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Counts and shares from the server,
  * worked out after each close; facts, never a call on the market. */
 
-export type GroupId = "nse_all" | "nifty50" | "nifty500" | "midcap150" | "smallcap250" | "us_large";
+export type GroupId = "nse_all" | "nifty50" | "nifty500" | "midcap150" | "smallcap250" | "us_large" | "sp500";
 export type RangeId = "3m" | "6m" | "1y" | "2y" | "all";
 export type Group = { id: GroupId; name: string; region: "IN" | "US"; index_name: string };
 export type Figure = { value: number | null; prev: number | null; change: number | null };
@@ -29,7 +29,6 @@ export type BreadthView = {
 };
 
 export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
-const DEFAULT_GROUP: GroupId = "nifty500";
 
 export type BreadthAlert = { id: string; group: GroupId; level: number; side: "above" | "below" | null; created_at: string; fired_at: string | null };
 export type BreadthAlerts = { items: BreadthAlert[]; limit: number; channels: string[] };
@@ -42,17 +41,7 @@ export const breadthApi = {
   deleteAlert: (id: string) => api<BreadthAlerts>(`/invest/breadth/alerts/${id}`, { method: "DELETE" }),
 };
 
-const KEY = "stratlab.breadth";
-/** The group and range last picked on this device. */
-export function savedPick(): { group: GroupId; range: string } {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) || "{}");
-    return { group: v.group || DEFAULT_GROUP, range: isPeriod(v.range) ? v.range : "1y" };
-  } catch { return { group: DEFAULT_GROUP, range: "1y" }; }
-}
-export function savePick(group: GroupId, range: string) {
-  try { localStorage.setItem(KEY, JSON.stringify({ group, range })); } catch { /* storage off */ }
-}
+
 
 /** "1,234" for counts, "62.5%" for shares, signed changes ("+3", "−1.2 pts"). */
 export const count = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
