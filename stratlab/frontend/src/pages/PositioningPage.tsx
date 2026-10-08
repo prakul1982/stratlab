@@ -7,11 +7,12 @@ import {
   type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
+import { signTone } from "../lib/format";
 import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { useMoreColumns } from "../components/MoreColumns";
 import { VixPanel } from "../components/VixPanel";
-import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, PageHeader, Seg, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { PosTabs } from "./trade/StockFuturesPage";
 import "./trade/trade.css";
 import "./trade/positioning.css";
@@ -32,9 +33,13 @@ export function PosBar({ long }: { long: number }) {
 
 const n = (r: PRow, k: string) => (r[k] as number | null | undefined) ?? null;
 
-/** A change under a number, in plain words: no colour, since a rise in a position is neither good nor bad news. */
+/** A signed contracts figure: green when positive, red when negative, the sign printed either way. A raw count of
+ * contracts has a direction (net long or short, more or fewer than the day before), and that direction is the fact. */
+const Sgn = ({ v }: { v: number | null }) => <Signed value={v} fmt={signed} />;
+
+/** A change under a number: the same colour as any other change. */
 function Chg({ v }: { v: number | null }) {
-  return v == null ? null : <span className="k-sub-line">{signed(v)}</span>;
+  return v == null ? null : <span className="k-sub-line"><Sgn v={v} /></span>;
 }
 
 type Segment = "idx" | "stk";
@@ -67,7 +72,7 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
   const what = `${SEG_WORD[seg]} futures and options ${kind === "oi" ? "open interest" : "traded"}`;
   const cell = ([k, l]: [string, string]): Column<PRow> => ({
     key: k, header: l, numeric: true,
-    cell: (r) => <>{k.endsWith("_net") ? signed(n(r, k)) : contracts(n(r, k))}<Chg v={n(r, `${k}_chg`)} /></>,
+    cell: (r) => <>{k.endsWith("_net") ? <Sgn v={n(r, k)} /> : contracts(n(r, k))}<Chg v={n(r, `${k}_chg`)} /></>,
   });
   const columns: Column<PRow>[] = [
     { key: "who", header: `${seg === "idx" ? "Index" : "Stock"} F&O`, rowHeader: true, cell: (r) => <b>{r.label}</b> },
@@ -84,7 +89,7 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
 }
 
 /** "+1.2 pts from the day before" for a change in a share. */
-const pts = (v: number) => `Long share ${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)} pts from the day before`;
+const pts = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)} pts`;
 
 /** A figure with both sides written out, one to a line ("19.3% long", "80.7% short"), the bar under them. */
 function SidesFig({ label, long, short, words, chg }: { label: string; long: number | null; short: number | null; words: [string, string]; chg: number | null }) {
@@ -95,7 +100,7 @@ function SidesFig({ label, long, short, words, chg }: { label: string; long: num
         <span className="k-stat-v pos-sides"><span>{pct(long)} {words[0]}</span><span>{pct(short)} {words[1]}</span>
           <PosBar long={long} /></span>
       )}
-      {chg != null && <span className="k-stat-d">{pts(chg)}</span>}
+      {chg != null && <span className="k-stat-d">Long share <Signed value={chg}>{pts(chg)}</Signed> from the day before</span>}
     </div>
   );
 }
@@ -128,12 +133,13 @@ function Participants({ s }: { s: Summary }) {
       {fii && (
         <div data-testid="part-figs">
           <StatRow label="FII figures">
-            <Stat label={`FII ${segWord} futures, net`} value={signed(n(fii, `fut_${seg}_net`))} note={`${signed(n(fii, `fut_${seg}_net_chg`))} from the day before`} />
+            <Stat label={`FII ${segWord} futures, net`} value={signed(n(fii, `fut_${seg}_net`))} tone={signTone(n(fii, `fut_${seg}_net`))}
+              note={<><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the day before</>} />
             <SidesFig label={`FII ${segWord} futures, ${words.join(" · ")}`} long={n(fii, `fut_${seg}_long_pct`)} short={n(fii, `fut_${seg}_short_pct`)} words={words}
               chg={kind === "oi" ? n(fii, `fut_${seg}_long_pct_chg`) : null} />
-            <Stat label={`FII ${segWord} calls, net`} value={signed(n(fii, `opt_${seg}_call_net`))}
+            <Stat label={`FII ${segWord} calls, net`} value={signed(n(fii, `opt_${seg}_call_net`))} tone={signTone(n(fii, `opt_${seg}_call_net`))}
               note={`${sides(n(fii, `opt_${seg}_call_long_pct`), n(fii, `opt_${seg}_call_short_pct`), words)}`} />
-            <Stat label={`FII ${segWord} puts, net`} value={signed(n(fii, `opt_${seg}_put_net`))}
+            <Stat label={`FII ${segWord} puts, net`} value={signed(n(fii, `opt_${seg}_put_net`))} tone={signTone(n(fii, `opt_${seg}_put_net`))}
               note={`${sides(n(fii, `opt_${seg}_put_long_pct`), n(fii, `opt_${seg}_put_short_pct`), words)}`} />
           </StatRow>
         </div>
@@ -177,8 +183,8 @@ function Cash({ s }: { s: Summary }) {
       <p className="k-small k-muted" data-testid="cash-status">{statusLine(c, "cash numbers")}</p>
       {c.fii && c.dii ? (
         <StatRow label="Cash market, net">
-          <Stat label="FII/FPI net" value={crore(c.fii.net, true)} note={`Bought ${crore(c.fii.buy)} · sold ${crore(c.fii.sell)}`} />
-          <Stat label="DII net" value={crore(c.dii.net, true)} note={`Bought ${crore(c.dii.buy)} · sold ${crore(c.dii.sell)}`} />
+          <Stat label="FII/FPI net" value={crore(c.fii.net, true)} tone={signTone(c.fii.net)} note={`Bought ${crore(c.fii.buy)} · sold ${crore(c.fii.sell)}`} />
+          <Stat label="DII net" value={crore(c.dii.net, true)} tone={signTone(c.dii.net)} note={`Bought ${crore(c.dii.buy)} · sold ${crore(c.dii.sell)}`} />
         </StatRow>
       ) : null}
     </Card>
@@ -237,9 +243,9 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
   type CR = ChainFacts["rows"][number];
   const rowCols: Column<CR>[] = c && c !== "error" ? [
     { key: "k", header: "Strike", rowHeader: true, cell: (r) => strike(r.strike) },
-    { key: "co", header: "Call OI", numeric: true, cell: (r) => contracts(r.call_oi) }, { key: "cc", header: "Change", numeric: true, cell: (r) => signed(r.call_chg) },
+    { key: "co", header: "Call OI", numeric: true, cell: (r) => contracts(r.call_oi) }, { key: "cc", header: "Change", numeric: true, cell: (r) => <Sgn v={r.call_chg} /> },
     { key: "cv", header: "Call volume", numeric: true, cell: (r) => contracts(r.call_vol) },
-    { key: "po", header: "Put OI", numeric: true, cell: (r) => contracts(r.put_oi) }, { key: "pc", header: "Change", numeric: true, cell: (r) => signed(r.put_chg) },
+    { key: "po", header: "Put OI", numeric: true, cell: (r) => contracts(r.put_oi) }, { key: "pc", header: "Change", numeric: true, cell: (r) => <Sgn v={r.put_chg} /> },
     { key: "pv", header: "Put volume", numeric: true, cell: (r) => contracts(r.put_vol) },
   ] : [];
   return (
@@ -380,7 +386,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                 <Field label="Measure">{(id) => <Select id={id} value={measure} onChange={setMeasure} options={MEASURES.map(([value, label]) => ({ value, label }))} />}</Field>
                 <ChartBox title={`${whoName}: ${mlabel.toLowerCase()} (contracts)`} empty={parts.length < 2} height={220}>
                   <LineChart lines={[{ values: parts.map((p) => p[who as "fii"]?.[measure] ?? null), color: "var(--pos-call)", width: 2, label: mlabel }]}
-                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={contracts} axisFormat={contractsShort} baseline={0} height={220}
+                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={signed} signedTip axisFormat={contractsShort} baseline={0} height={220}
                     ariaLabel={`${whoName} ${mlabel} by day`} />
                 </ChartBox>
               </div>
@@ -397,7 +403,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
               emptyText={`${cash.length ? "One day" : "No days"} so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
               <LineChart lines={[{ values: cash.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                 { values: cash.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
+                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} signedTip axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
                 ariaLabel="FII and DII net cash market flows by day" />
             </ChartBox>
             <div className="k-stack">

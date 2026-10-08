@@ -9,7 +9,7 @@ import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
-import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
 import { moneyCompact } from "../../lib/chartFormat";
@@ -292,7 +292,7 @@ function Curve({ s }: { s: Summary }) {
   const { m, compact } = useMoney();
   return (
     <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
-      times={s.equity.map((p) => p.t)} format={(v) => m(v)} axisFormat={compact} testId="journal-curve"
+      times={s.equity.map((p) => p.t)} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
       refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${m(s.net)}`} />
   );
 }
@@ -318,7 +318,7 @@ function Stats({ s }: { s: Summary }) {
         <Stat item label={k("Charges", "STT/CTT, exchange and SEBI fees, stamp duty, GST and brokerage in India, as a share of the P&L before charges. For US stocks and crypto, the charges you entered.")}
           value={m(s.charges)} note={s.charges_pct != null ? `${s.charges_pct}% of gross` : undefined} />
       </StatRow>
-      {s.gross <= 0 && s.n > 0 && <p className="k-small k-muted">Before charges the trades came to {signed(s.gross)}; charges of {m(s.charges)} were on top of that.</p>}
+      {s.gross <= 0 && s.n > 0 && <p className="k-small k-muted">Before charges the trades came to <Signed value={s.gross}>{signed(s.gross)}</Signed>; charges of {m(s.charges)} were on top of that.</p>}
     </Card>
   );
 }
@@ -382,7 +382,7 @@ function CheckCard({ c }: { c: Check }) {
         {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
         {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
         {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-mono k-small">Yours {m(-d.yours)} · 95% of reshuffles above {m(-d.p95)} · worst {m(-d.worst)}</p>}
-        {c.id === "costs" && d && <p className="k-mono k-small">Gross {signed(d.gross)} · charges {m(d.charges)} · doubled {signed(d.doubled)}</p>}
+        {c.id === "costs" && d && <p className="k-mono k-small">Gross <Signed value={d.gross}>{signed(d.gross)}</Signed> · charges {m(d.charges)} · doubled <Signed value={d.doubled}>{signed(d.doubled)}</Signed></p>}
         <p className="k-small k-muted">{c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
       </Card>
@@ -517,7 +517,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
         {t.expired && <span className="k-note">Expired: counted at {money(0, t.currency)}</span>}
       </div>) },
     { key: "net", header: "Net", numeric: true, cell: (t) => <span className={upDown(t.net)}>{signed(t.net)}</span> },
-    { key: "r", header: "R", numeric: true, cell: (t) => (t.r == null ? "–" : `${t.r > 0 ? "+" : ""}${t.r}R`) },
+    { key: "r", header: "R", numeric: true, cell: (t) => (t.r == null ? "–" : <Signed value={t.r}>{`${t.r > 0 ? "+" : ""}${t.r}R`}</Signed>) },
     { key: "exit", header: "Exit", numeric: true, cell: (t) => <>{when(t.exit_t)}<span className="k-sub-line">{holdText(t)}</span></> },
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
@@ -600,7 +600,7 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
   return (
     <Modal title={`Journal: ${t.symbol}`} onClose={onClose} wide>
       <div className="k-stack">
-        <p className="k-small k-muted">{when(t.entry_t)} → {when(t.exit_t)} · {qtyText(t.qty)} · {signed(t.net)} after {m(t.charges, 2)} of charges</p>
+        <p className="k-small k-muted">{when(t.entry_t)} → {when(t.exit_t)} · {qtyText(t.qty)} · <Signed value={t.net}>{signed(t.net)}</Signed> after {m(t.charges, 2)} of charges</p>
         <FormGrid>
           <Field label="Setup or strategy" value={tag} maxLength={40} list="j-tags" placeholder="Opening range breakout" onChange={(e) => setTag(e.target.value)} />
           {t.src === "pnl" && (

@@ -10,7 +10,7 @@ import { simulate, type Action, type RBar, type ROrder, type Rates } from "../..
 import { PriceChart, type Tf } from "../../charts/price/lazy";
 import type { PriceLevel } from "../../charts/price/engine";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
-import { Badge, Card, CardHead, ChipBar, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Seg, Select, Skeleton, Stat, StatRow } from "../../components/kit";
+import { Badge, Card, CardHead, ChipBar, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, PageHeader, Seg, Select, Signed, Skeleton, Stat, StatRow } from "../../components/kit";
 import "./trade.css";
 import "./paper.css";
 import { Info } from "../../components/ui";
@@ -301,7 +301,7 @@ export function ReplayPage() {
             )}
             <Setup ov={ov} onStart={(x) => { setS(x); setDone(null); top.current?.scrollIntoView({ block: "start" }); }} />
             {ov.practice.n > 0 ? (
-              <p className="k-small k-muted" data-testid="rp-practice">{ov.practice.n} practice trade{ov.practice.n === 1 ? "" : "s"} in your <Link className="link" to="/trade/journal">journal</Link>, {signed(ov.practice.net, "INR")} after charges{ov.practice.last ? `, the latest closed ${dayText(ov.practice.last)}` : ""}.</p>
+              <p className="k-small k-muted" data-testid="rp-practice">{ov.practice.n} practice trade{ov.practice.n === 1 ? "" : "s"} in your <Link className="link" to="/trade/journal">journal</Link>, <Signed value={ov.practice.net}>{signed(ov.practice.net, "INR")}</Signed> after charges{ov.practice.last ? `, the latest closed ${dayText(ov.practice.last)}` : ""}.</p>
             ) : <EmptyState title="No practice trades yet">Finish a replay and its trades show in your journal, where the verdict's checks can run on them.</EmptyState>}
             <Disclosure summary="How practice orders fill">
               <p className="k-small k-muted">{ov.note} A long's stop fills when a candle's low reaches it (at the open if it opened below), its target when the high does; when one candle reaches both, the stop counts first. What's open when you finish closes at the last candle shown.</p>

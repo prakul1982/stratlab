@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { XYChart, type XYChartProps } from "./chart/XYChart";
 import { ChartTip } from "./chart/parts";
-import { fall } from "../lib/format";
+import { fall, signCls } from "../lib/format";
 
 /* The app's charts. Everything that plots values over time or across prices is drawn by chart/XYChart (crosshair and
  * tooltip, zoom and pan, ranges, legends, linked charts, table view); this file keeps the older entry points and the
@@ -75,7 +75,7 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
       </div>
       {on && v != null && (
         <ChartTip left={((on[1] + 0.5) / cols) * 100} top={(on[0] + 1) * 30} flip={on[1] >= cols / 2} heading={on[0] === yours[0] && on[1] === yours[1] ? "Your settings" : "Nearby setting"}>
-          <div className="ch-tip-row"><b>{fmt(v)}</b><span className="muted">return</span></div>
+          <div className="ch-tip-row"><b className={signCls(v, fmt(v))}>{fmt(v)}</b><span className="muted">return</span></div>
         </ChartTip>
       )}
     </div>
@@ -106,7 +106,7 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
   const bar = (v: number) => (
     <div className="row" style={{ gap: 8 }}>
       <span style={{ height: 14, width: `${Math.max(4, (Math.abs(v) / max) * 150)}px`, borderRadius: "0 4px 4px 0", background: v >= 0 ? "var(--series-1)" : "var(--series-2)" }} />
-      <span className="ch-num" style={{ fontSize: 14, fontWeight: 600 }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v).toFixed(1)}%</span>
+      <span className={`ch-num ${signCls(v, v.toFixed(1))}`} style={{ fontSize: 14, fontWeight: 600 }}>{v > 0 ? "+" : v < 0 ? "−" : ""}{Math.abs(v).toFixed(1)}%</span>
     </div>
   );
   return (

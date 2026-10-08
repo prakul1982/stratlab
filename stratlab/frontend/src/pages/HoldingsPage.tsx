@@ -11,7 +11,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
@@ -177,8 +177,8 @@ export function HoldingsPage() {
     // a missing figure says why, so a dash is never a puzzle (R1-053)
     { key: "pnl", header: "Unrealised P&L", numeric: true, cell: (r) => (r.pnl == null
       ? <>–<span className="k-sub-line">{r.price == null ? "no price today" : "no average price"}</span></>
-      : <span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}<span className="k-sub-line">{pct(r.pnl_pct)}</span></span>) },
-    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <span className={tone(r.day)}>{money(r.day, cur(r), 0)}<span className="k-sub-line">{pct(r.day_pct, 2)}</span></span>) },
+      : <><span className={tone(r.pnl)}>{money(r.pnl, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.pnl}>{pct(r.pnl_pct)}</Signed></span></>) },
+    { key: "day", header: "Today", numeric: true, cell: (r) => (r.day == null ? "–" : <><span className={tone(r.day)}>{money(r.day, cur(r), 0)}</span><span className="k-sub-line"><Signed value={r.day}>{pct(r.day_pct, 2)}</Signed></span></>) },
     { key: "weight", header: "Weight", numeric: true, cell: (r) => (r.weight == null ? "–" : `${r.weight.toFixed(1)}%`) },
     // what a broker's holdings page shows first: the quantity with its average cost and the last price under it
     { key: "qty", header: "Qty · avg → last", numeric: true, cell: (r) => <>{qtyText(r.qty)}<span className="k-sub-line">{price(r.avg, cur(r))} → {price(r.price, cur(r))}</span></> },

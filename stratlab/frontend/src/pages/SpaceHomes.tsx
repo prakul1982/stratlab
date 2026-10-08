@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, money, pct, signClass } from "../lib/format";
+import { ago, money, pct, signCls } from "../lib/format";
 import { homeOf } from "../lib/spaces";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { evWhen, useEvents } from "../lib/marketEvents";
@@ -343,9 +343,9 @@ function HoldingsSummary() {
           <div className="k-stack" data-testid="holdings-summary">
             <div className="k-stats">
               <Fig label={`Value · ${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />
-              <Fig label="Gain or loss" tone={signClass(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
-                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signClass(h.totals.pnl)} missing="Needs the buy prices" />
-              {h.totals.day != null && <Fig label="Today" tone={signClass(h.totals.day)} value={money(h.totals.day, "INR")} />}
+              <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
+                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
+              {h.totals.day != null && <Fig label="Today" tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
               {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")} />}
             </div>
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
@@ -374,8 +374,8 @@ function TaxSummary() {
           <div className="k-stack" data-testid="tax-summary">
             <div className="k-stats">
               <Fig label={`Capital gains tax, ${year?.label ?? "this year"} (estimate)`} value={money(year?.tax_with_cess ?? 0, "INR")} />
-              <Fig label="Short-term gains" tone={signClass(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
-              <Fig label="Long-term gains" tone={signClass(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
+              <Fig label="Short-term gains" tone={signCls(year?.stcg.net)} value={money(year?.stcg.net ?? 0, "INR")} />
+              <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
             <p className="tiny muted">Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge. {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{elsewhere ? ` ${elsewhere.label} has ${elsewhere.count}.` : ""} An estimate to check with your CA.</p>
             <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />

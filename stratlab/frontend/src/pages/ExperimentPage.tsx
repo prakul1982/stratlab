@@ -9,7 +9,7 @@ import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts"
 import { pctTick, moneyCompact } from "../lib/chartFormat";
 import { instrumentLoader, PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
 import { Info, Modal, STATUS_NAME } from "../components/ui";
-import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, Signed, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
@@ -71,7 +71,7 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
             <XYChart ariaLabel="Walk-forward return against your fixed settings" height={220} times={s.t} tz={tzOf(e.instrument)}
               series={[{ id: "wf", values: s.wf, color: "var(--series-1)", label: "Walk-forward (re-tuned each block)" },
                 { id: "fixed", values: s.fixed, color: "var(--muted)", width: 1.5, dash: "5 4", label: "Your settings, never re-tuned" }]}
-              format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
+              format={(v) => pct(v)} signedTip axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
           )}
           <p className="k-note">
             Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.
@@ -121,7 +121,7 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
       {!b && <p className="k-small k-muted">An edge that only works on one chart is often luck. This runs the same rules over the same period on about 10 well-known {peers} and counts how many make money. Counts as one experiment.</p>}
       {b && <>
         <div className="k-row"><Badge tone={checkTone(b.status)}>{STATUS_NAME[b.status]}</Badge><span className="k-sub">{b.headline}</span></div>
-        {b.tested > 0 && <p className="k-small k-muted">Median return {pct(b.median_ret ?? 0)} · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
+        {b.tested > 0 && <p className="k-small k-muted">Median return <Signed value={b.median_ret ?? 0}>{pct(b.median_ret ?? 0)}</Signed> · beat buy and hold on {b.beat_buy_hold} of {b.tested}.</p>}
         <DataTable label="Similar instruments" columns={cols} rows={b.rows} rowKey={(r) => r.id} rowNote={(r) => r.error || undefined} />
       </>}
     </Card>

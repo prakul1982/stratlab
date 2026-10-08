@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, num, pct, price, safeHref } from "../lib/format";
+import { ago, num, pct, price, safeHref, signCls } from "../lib/format";
 import {
   bandPosition, metricText, monthsOld, newsAge, ordinal, researchApi, staleQuarter, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { Star } from "./Icons";
-import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Skeleton } from "./kit";
+import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
 import { track } from "../lib/analytics";
@@ -53,8 +53,8 @@ export function Panel({ title, info, children, right, id }: { title: ReactNode; 
   );
 }
 
-/** The day's price and its change, as one block: the price in the page's sans font and a neutral pill for the change. */
-/** The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
+/** The day's price and its change as one block: the price in the page's sans font and a pill for the change, green or red
+ * with the sign (and ▲/▼) printed. The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
  * is that session's ("on the day"), never "today" for a day that hasn't traded. */
 export function Change({ q, currency, closed = false }: { q: Quote | null; currency: string; closed?: boolean }) {
   if (!q || q.price == null) return null;
@@ -64,7 +64,7 @@ export function Change({ q, currency, closed = false }: { q: Quote | null; curre
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct} tone="neutral">{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {closed ? "on the day" : "today"}
+          <Delta value={q.change_pct}>{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {closed ? "on the day" : "today"}
         </span>
       )}
     </div>
@@ -162,7 +162,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 return (
                   <div key={m.label} className="inv-metric">
                     <span className="k-small k-muted">{m.label}</span>
-                    <span className="inv-metric-v">{metricText(m, currency)}</span>
+                    <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
                         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
@@ -204,7 +204,7 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
     <div className="k-stack">
       <div className="k-spread">
         <b className="k-small">{label} <span className="k-muted inv-plain">({unit})</span></b>
-        {growth != null ? <span className="k-small k-muted">{pct(growth)} a year</span>
+        {growth != null ? <span className="k-small k-muted"><Signed value={growth}>{pct(growth)}</Signed> a year</span>
           : lossYears ? <span className="k-small k-muted">loss years in between, so no yearly rate</span> : null}
       </div>
       <div className="tbars">
@@ -243,7 +243,7 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
           const h = Math.max(2, (Math.abs(r.surprise_pct) / max) * (up ? zero : PLOT - zero) * 0.95);
           return (
             <div key={r.period} className="tbar">
-              <span className={`tbar-num${up ? "" : " neg"}`}>{pct(r.surprise_pct)}</span>
+              <span className={`tbar-num${up ? " up" : " neg"}`}>{pct(r.surprise_pct)}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />
                 <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />
@@ -345,7 +345,7 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
             <span className="inv-tile-top"><b>{s}</b><span className="inv-tile-px">{q == null ? <span className="skel" /> : x?.price != null ? price(x.price, region === "IN" ? "INR" : "USD") : "–"}</span></span>
             {names?.[s] && <span className="k-note inv-clip">{names[s]}</span>}
             <span className="inv-tile-chg">
-              {x?.change_pct != null && <Delta value={x.change_pct} tone="neutral">{pct(x.change_pct, 2)}</Delta>}
+              {x?.change_pct != null && <Delta value={x.change_pct}>{pct(x.change_pct, 2)}</Delta>}
               <SurvBadges region={region} symbol={s} />
               <FoBadges region={region} symbol={s} plain />
             </span>
@@ -367,7 +367,7 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
     <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year.`}
       rows={s.rows.map((r) => ({
         key: r.label, name: r.label, pct: Math.min(100, r.value),
-        value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> {r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)}</span>}</>,
+        value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)}</Signed></span>}</>,
       }))} />
   );
 }

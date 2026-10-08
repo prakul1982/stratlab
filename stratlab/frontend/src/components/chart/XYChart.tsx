@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { distinctTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
-import { tzLabel } from "../../lib/format";
+import { signCls, tzLabel } from "../../lib/format";
 import { linePath, linear, lowerBound, nearest, plotHeight, textWidth, useSync, useTween, useWidth } from "./core";
 import { ChartEmpty, ChartTip, LegendToggles, TipRow } from "./parts";
 
@@ -74,6 +74,7 @@ export interface XYChartProps {
   tableX?: string;                  // the table's first column heading
   onHover?: (i: number | null) => void;
   tipExtra?: (i: number) => ReactNode;
+  signedTip?: boolean;              // the values are changes, gains or nets: the tooltip colours each one green above zero, red below (its sign is printed too)
   testId?: string;
 }
 
@@ -596,7 +597,8 @@ export function XYChart(p: XYChartProps) {
               const v = vals[k][at];
               if (hidden.has(key(s)) || s.inTooltip === false || v == null || !Number.isFinite(v)) return null;
               const raw = s.values[at];
-              return <TipRow key={k} color={s.color} dash={!!s.dash} bar={s.kind === "bar"} value={fmtOf(s)(v)} label={s.tipLabel ?? s.label}
+              const text = fmtOf(s)(v);
+              return <TipRow key={k} color={s.color} dash={!!s.dash} bar={s.kind === "bar"} value={text} label={s.tipLabel ?? s.label} tone={p.signedTip ? signCls(raw ?? v, text) : undefined}
                 note={indexed && canIndex && raw != null ? (s.format ?? format)(raw) : undefined} />;
             })}
             {p.tipExtra?.(at)}

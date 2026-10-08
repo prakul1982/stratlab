@@ -9,7 +9,7 @@ import { AlertButton } from "../../components/AlertForm";
 import { Info } from "../../components/ui";
 import { Search } from "../../components/Icons";
 import { POSITIONING_VIEWS, RouteSeg } from "../../components/RouteSeg";
-import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, Select, Signed, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import "./trade.css";
 import "./positioning.css";
 
@@ -77,8 +77,8 @@ function Detail({ symbol, t, onClose }: { symbol: string; t: FutTable; onClose: 
       {error ? <ErrorState title="That stock couldn't be read" action={{ label: "Close", onClick: onClose }}>{error}</ErrorState> : !r ? <Skeleton label={`Reading ${symbol}`} /> : (
         <>
           <p className="k-small">
-            On {dayText(r.as_of)} the near futures closed at ₹{r.px?.toLocaleString("en-IN")} ({signedPct(r.pc)}) and open interest
-            {r.oc == null ? " was unchanged" : ` ${r.oc >= 0 ? "rose" : "fell"} ${Math.abs(r.oc).toFixed(2)}%`}
+            On {dayText(r.as_of)} the near futures closed at ₹{r.px?.toLocaleString("en-IN")} (<Signed value={r.pc}>{signedPct(r.pc)}</Signed>) and open interest
+            {r.oc == null ? " was unchanged" : <> {r.oc >= 0 ? "rose" : "fell"} <Signed value={r.oc}>{Math.abs(r.oc).toFixed(2)}%</Signed></>}
             {r.b ? `: ${t.labels[r.b].toLowerCase()}${r.streak && r.streak > 1 ? `, ${r.streak} days in a row` : ""}` : ""}.
           </p>
           <StatRow label={`${symbol} figures`}>
@@ -169,8 +169,8 @@ export function StockFuturesPage() {
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <>
       <a className="link" href={`?s=${r.symbol}`} onClick={(e) => { e.preventDefault(); open(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></a>
       <span className="k-sub-line">lot {r.lot?.toLocaleString("en-IN") ?? "–"}</span></> },
-    { key: "px", header: "Futures price", numeric: true, cell: (r) => <>{r.px?.toLocaleString("en-IN", { maximumFractionDigits: 2 }) ?? "–"}<span className="k-sub-line">{signedPct(r.pc)}</span></> },
-    { key: "oi", header: "Open interest", info: t.about.oi, numeric: true, cell: (r) => <>{sharesShort(r.oi)}<span className="k-sub-line">{signedPct(r.oc)}</span></> },
+    { key: "px", header: "Futures price", numeric: true, cell: (r) => <>{r.px?.toLocaleString("en-IN", { maximumFractionDigits: 2 }) ?? "–"}<span className="k-sub-line"><Signed value={r.pc}>{signedPct(r.pc)}</Signed></span></> },
+    { key: "oi", header: "Open interest", info: t.about.oi, numeric: true, cell: (r) => <>{sharesShort(r.oi)}<span className="k-sub-line"><Signed value={r.oc}>{signedPct(r.oc)}</Signed></span></> },
     { key: "b", header: "Buildup", info: BUILDUPS.map((b) => `${t.labels[b]}: ${t.about[b]}`).join(" "), cell: (r) => <BuildupTag b={r.b} labels={t.labels} streak={r.streak} /> },
     { key: "r", header: "Later expiries", info: t.about.rollover, numeric: true, cell: (r) => <>{plainPct(r.r)}<span className="k-sub-line">{r.td != null ? `${r.td}d to expiry` : ""}</span></> },
     { key: "ba", header: "Basis", info: t.about.basis, numeric: true, cell: (r) => <>{signedPct(r.bp)}<span className="k-sub-line">{signedPct(r.ba)} a yr</span></> },

@@ -5,7 +5,7 @@ import { axisInr, CRORE, inr, inrCompact, pct, pctPlain, signed, signedInrCompac
 import { LineChart } from "../components/Charts";
 import { Loading } from "../components/ui";
 import {
-  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, Pager, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
+  Badge, Breadcrumb, Card, CardHead, ChartFrame, ChipBar, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, HealthGrid, HealthTile, LinkCard, Pager, StatusList, StatusRow, PageHeader, ResultBlock, Seg, Signed, Skeleton, Spark, Stat, StatRow, StockPicker, Suggest,
   Range, TilePicker, TimeInput, type TileGroup,
   Coachmark,
 } from "../components/kit";
@@ -67,7 +67,18 @@ function Body() {
         <Card compact><CardHead title="Your holdings and watchlist" /><p className="k-small k-muted">Add Indian stocks to My Holdings or your watchlist, or look one up above.</p></Card>
       </Spec>
 
-      <Spec name="Stat, StatRow and Delta" rule="Big number in the sans font. Delta shows direction; use neutral colour where a rise is not good news.">
+      <Spec name="Signed" rule="Any change, gain or loss, return or net figure with a + / − sign is green above zero and red below it; zero stays plain. The sign or ▲/▼ is always printed too. Levels, prices, totals, counts and sizes stay plain.">
+        <Card compact>
+          <DataTable label="Signed figures" rowKey={(r) => r.name} rows={[
+            { name: "Net futures", level: 3_55_766, chg: 5721 }, { name: "Net calls", level: 1_52_252, chg: -2579 }, { name: "Net puts", level: 0, chg: 0 }]}
+            columns={[{ key: "n", header: "Participant", rowHeader: true, cell: (r) => r.name },
+              { key: "l", header: "Open interest", numeric: true, cell: (r) => <>{r.level.toLocaleString("en-IN")}<span className="k-sub-line"><Signed value={r.chg} fmt={signed} /></span></> },
+              { key: "c", header: "Change", numeric: true, cell: (r) => <Signed value={r.chg} fmt={signed} /> }]} />
+          <p className="k-small">Today <Signed value={1.24}>{pct(1.24, 2)}</Signed>, last month <Signed value={-3.6}>{pct(-3.6)}</Signed>, unchanged <Signed value={0}>{pct(0)}</Signed>.</p>
+        </Card>
+      </Spec>
+
+      <Spec name="Stat, StatRow and Delta" rule="Big number in the sans font. Delta shows direction in green or red with the sign printed; use neutral colour where a rise is not good news (the margin-funded book, volatility, a currency or gold).">
         <Card>
           <StatRow>
             <Stat label="Funded on 30 Sep" value="₹1.51 lakh cr" note="2,192 stocks" />

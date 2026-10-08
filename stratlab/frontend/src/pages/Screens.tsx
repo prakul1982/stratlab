@@ -13,12 +13,12 @@ import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Skeleton,
+  Card, CardHead, ChipSet, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 
 type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
-type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => string; india?: boolean; text?: boolean };
+type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => ReactNode; india?: boolean; text?: boolean };
 
 const num = (v: number | null, dp = 1, unit = "") => (v == null ? "–" : `${v.toFixed(dp)}${unit}`);
 /** A market value in one unit down the whole column, so values compare at a glance: Indian figures (they arrive in
@@ -32,7 +32,7 @@ const COLS: Col[] = [
   { id: "market_cap", label: "Market value", cell: (r, g) => cap(r.market_cap, g) },
   { id: "price", label: "Last price", cell: (r, g) => (r.price == null ? "–" : price(r.price, g === "IN" ? "INR" : "USD")) },
   { id: "from_high", label: "vs 52-week high", cell: (r) => (r.from_high == null ? "–" : pct(r.from_high)) },
-  { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : pct(r.sales_cagr_3y)) },
+  { id: "sales_cagr_3y", label: "Revenue growth, 3y", cell: (r) => (r.sales_cagr_3y == null ? "–" : <Signed value={r.sales_cagr_3y}>{pct(r.sales_cagr_3y)}</Signed>) },
   { id: "net_margin", label: "Net margin", cell: (r) => num(r.net_margin, 1, "%") },
   { id: "opm", label: "Operating margin", cell: (r) => num(r.opm, 1, "%") },
   { id: "debt_equity", label: "Debt to equity", cell: (r) => num(r.debt_equity, 2) },

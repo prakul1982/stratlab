@@ -33,7 +33,7 @@ import { FilingsPanel } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 
@@ -55,7 +55,7 @@ export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
     <StatRow label="Index levels">
       {indices.map((i) => (
         <Stat key={i.name} item label={i.name} value={Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}
-          delta={i.change_pct != null ? <Delta value={i.change_pct} tone="neutral">{pct(i.change_pct, 2)}</Delta> : undefined}
+          delta={i.change_pct != null ? <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta> : undefined}
           note={<>today{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</>} />
       ))}
     </StatRow>
@@ -296,10 +296,10 @@ export function CompanyPage() {
         {c.insider && c.insider.rows.length > 0 && (
           <Card>
             <CardHead title="Insider trades" info="Shares bought or sold by the company's own directors and officers, from filings." />
-            <p className="k-small k-muted">Net {c.insider.net > 0 ? "+" : c.insider.net < 0 ? "−" : ""}{Math.abs(Math.round(c.insider.net)).toLocaleString("en-IN")} shares across recent filings</p>
+            <p className="k-small k-muted">Net <Signed value={c.insider.net} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(Math.round(v)).toLocaleString("en-IN")}`} /> shares across recent filings</p>
             <DataTable label="Insider trades" rows={c.insider.rows} rowKey={(t) => `${t.name}-${t.date}-${t.change}`}
               columns={[{ key: "n", header: "Name", rowHeader: true, wrap: true, cell: (t) => t.name },
-                { key: "c", header: "Shares", numeric: true, cell: (t) => `${t.change > 0 ? "+" : t.change < 0 ? "−" : ""}${Math.abs(t.change).toLocaleString("en-IN")}` },
+                { key: "c", header: "Shares", numeric: true, cell: (t) => <Signed value={t.change} fmt={(v) => `${v > 0 ? "+" : "−"}${Math.abs(v).toLocaleString("en-IN")}`} /> },
                 { key: "d", header: "Date", numeric: true, cell: (t) => t.date }]} />
           </Card>
         )}
@@ -581,7 +581,7 @@ export function ComparePage() {
                   <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
                 <StatRow>
                   <Stat label={c.market_open === false ? "Last close" : "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct} tone="neutral">{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
+                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
               </Card>
@@ -639,7 +639,7 @@ export function WatchlistPage() {
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
               { key: "p", header: "Price", numeric: true, cell: (w) => (quotes == null ? "…" : quotes[w.symbol]?.price != null ? price(quotes[w.symbol]!.price!, region === "IN" ? "INR" : "USD") : "–") },
-              { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x} tone="neutral">{pct(x, 2)}</Delta>; } },
+              { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w).catch(fail)}>Remove</button> },
             ]} />

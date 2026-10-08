@@ -6,7 +6,7 @@ import { ago, dateOnly, inr, pct, price, qty as qtyText, signTone } from "../../
 import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
+import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
 import { pickFy, rememberFy } from "../../lib/fy";
@@ -128,7 +128,7 @@ export function MutualFundsPage() {
     { key: "nav", header: "NAV", numeric: true, cell: (s) => <>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></> },
     { key: "inv", header: "Invested", numeric: true, cell: (s) => inr(s.invested) },
     { key: "val", header: "Value", numeric: true, cell: (s) => inr(s.value) },
-    { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <span className={tone(s.gain)}>{inr(s.gain)}<span className="k-sub-line">{pct(s.gain_pct)}</span></span>) },
+    { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <><span className={tone(s.gain)}>{inr(s.gain)}</span><span className="k-sub-line"><Signed value={s.gain}>{pct(s.gain_pct)}</Signed></span></>) },
     { key: "xirr", header: "XIRR", numeric: true, cell: (s) => <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span> },
     { key: "kind", header: "Taxed as", cell: (s) => (
       <>

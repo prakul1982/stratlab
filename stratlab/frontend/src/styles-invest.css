@@ -68,6 +68,7 @@
 .tbars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--s2); align-items: end; }
 .tbar { display: flex; flex-direction: column; align-items: stretch; text-align: center; gap: var(--s1); min-width: 0; }
 .tbar-num { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbar-num.up { color: var(--up); }
 .tbar-num.neg { color: var(--down); }
 .tbar-plot { display: block; width: 100%; height: 112px; }
 .eq .tbar-plot { height: 100px; }
@@ -75,7 +76,7 @@
 .tbar-bar { fill: var(--dash); }
 .tbar-bar.last.ink { fill: var(--ink); }
 .tbar-bar.last.blue { fill: var(--blue); }
-.tbar-bar.beat { fill: var(--blue); }
+.tbar-bar.beat { fill: var(--up); }
 .tbar-bar.neg { fill: var(--down); }
 .tbar-year { font-size: var(--t-note); color: var(--muted); }
 .tbar-sub { line-height: 1.35; }
