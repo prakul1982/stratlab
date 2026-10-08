@@ -92,6 +92,29 @@ def test_onboarding_is_kept_on_the_account(w):
     assert c.put("/me/onboarding", json={"welcome": True}).status_code == 401                   # signed in only
 
 
+def test_the_welcome_question_is_for_an_empty_account_only(w):
+    """R4-101: an account with holdings, notebooks, a paper session or a watchlist is established, and is never asked
+    "What brings you here?"; a fresh one is; and once the question is answered or closed nothing is looked up."""
+    from app import db, first_steps
+    c = w["client"]
+    h = world.headers("load-12")
+    assert c.get("/me", headers=h).json()["established"] is False                 # nothing yet: the question is asked
+    uid = c.get("/me", headers=h).json()["id"]
+    r = c.put("/holdings", headers=h, json={"items": [{"symbol": "RELIANCE", "qty": 5, "avg": 1200, "market": "IN"}]})
+    assert r.status_code == 200 and first_steps.has_activity(uid)
+    assert c.get("/me", headers=h).json()["established"] is True                  # has a holding: never asked
+    # a watchlist alone counts too, and so does a paper session or a notebook
+    other = "u-activity-check"
+    assert not first_steps.has_activity(other)
+    db.set_setting(f"watchlist:{other}", '{"items": [{"symbol": "TCS", "region": "IN"}]}')
+    assert first_steps.has_activity(other)
+    # answered or closed: not looked up (established reads false), the account's own record decides
+    h2 = world.headers("load-13")
+    c.put("/holdings", headers=h2, json={"items": [{"symbol": "RELIANCE", "qty": 5, "avg": 1200, "market": "IN"}]})
+    c.put("/me/onboarding", headers=h2, json={"welcome": True})
+    assert c.get("/me", headers=h2).json()["established"] is False
+
+
 def test_public_company_lookup(w):
     from app import stock_pages
     c = w["client"]

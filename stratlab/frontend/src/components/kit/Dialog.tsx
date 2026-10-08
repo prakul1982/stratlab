@@ -114,15 +114,17 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, active: boole
 
 /** A modal dialog: a title row with a close button, the content, a dimmed page behind it. Esc, the × and a click on the
  * dimmed page close it; focus stays inside while it's open and goes back to what opened it. */
-export function Dialog({ title, onClose, children, wide, fallback, label }: {
+export function Dialog({ title, onClose, children, wide, fallback, label, startOnClose }: {
   title: string; onClose: () => void; children: ReactNode; wide?: boolean;
+  /** Focus starts on the close button, not on a choice inside (a question nobody should answer by accident with Enter). */
+  startOnClose?: boolean;
   /** Where focus goes when the button that opened this is gone after it closes (a removed row's neighbour). */
   fallback?: () => HTMLElement | null | undefined;
   /** The dialog's name for screen readers, when it isn't the title. */
   label?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  useDialogFocus(box, true, { onEscape: onClose, fallback });
+  useDialogFocus(box, true, { onEscape: onClose, fallback, initial: startOnClose ? () => box.current?.querySelector<HTMLElement>("[data-close]") : undefined });
   return (
     <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={label ?? title} ref={box}>

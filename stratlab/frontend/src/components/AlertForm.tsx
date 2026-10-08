@@ -128,7 +128,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="5" error={errs.value} />}
       {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="2" error={errs.value} />}
       {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." error={errs.value} />}
-      {c.kind === "rsi" && <Field label="RSI level" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} hint="1 to 99" error={errs.value} />}
+      {c.kind === "rsi" && <Field label="RSI level" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder={c.op === "above" ? "70" : "30"} rule="1 to 99" error={errs.value} />}
       {c.kind === "ma" && <Field label="Moving average">{(id) => <Select id={id} value={period} onChange={(v) => setPeriod(Number(v))} options={MA_PERIODS.map((p) => ({ value: p, label: `${p}-day average` }))} />}</Field>}
       {c.kind === "stage" && <Field label="Which change">{(id) => <Select id={id} value={stage} onChange={(v) => setStage(Number(v))}
         options={[{ value: 0, label: "Any change of stage" }, ...[1, 2, 3, 4].map((s) => ({ value: s, label: `Enters Stage ${s}` }))]} />}</Field>}

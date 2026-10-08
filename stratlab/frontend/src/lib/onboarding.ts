@@ -12,11 +12,13 @@ export const TOUR_SEEN = "stratlab.tour.v1";
 export const HOME_PATHS = ["/", "/trade", "/invest", "/money", "/mine"];
 export const isHomePath = (path: string) => HOME_PATHS.includes(path.replace(/(.)\/$/, "$1"));
 
-type MeLike = Pick<Me, "prefs" | "onboarding"> | null | undefined;
+type MeLike = Pick<Me, "prefs" | "onboarding"> & { established?: boolean } | null | undefined;
 
-/** The welcome question is still to be asked: neither answered (level and focus) nor closed on any device. */
+/** The welcome question is still to be asked: neither answered (level and focus) nor closed on any device, and the account
+ * is empty. An established one (holdings, notebooks, a paper session or a watchlist: `me.established`) is never asked,
+ * whatever it answered before. */
 export function welcomePending(me: MeLike): boolean {
-  if (!me) return false;
+  if (!me || me.established) return false;
   const answered = !!me.prefs?.level && !!me.prefs?.focus;
   return !answered && !me.onboarding?.welcome;
 }

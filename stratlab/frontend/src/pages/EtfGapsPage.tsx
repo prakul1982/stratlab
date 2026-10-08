@@ -77,7 +77,7 @@ export function EtfGapsPage() {
                 options={FUNDS.filter((f) => f === "all" || counts[f]).map((f) => ({ value: f, label: `${f === "all" ? "All" : FUND_NAME[f]} ${counts[f] ?? 0}` }))} />
             </FieldGroup>
             <Field label="Order">{(id) => <Select id={id} value={sort} onChange={(v) => setSort(v as Sort)} options={SORTS} />}</Field>
-            <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="Find an ETF, like NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
+            <Field label="Find an ETF">{(id) => <StockPicker id={id} placeholder="e.g. NIFTYBEES" onText={setQ} onPick={(s) => { setQ(""); open(s); }} />}</Field>
           </FormGrid>
           <DataTable label="ETFs by gap to NAV" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} empty="No ETF matches that."
             rowAttrs={(r) => ({ "data-etf": r.symbol, className: pick === r.symbol ? "on" : "" })} columns={columns} />

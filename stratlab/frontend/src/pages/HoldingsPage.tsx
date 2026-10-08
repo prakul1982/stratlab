@@ -289,13 +289,13 @@ export function HoldingsPage() {
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void addOne(); }}>
-            <Field label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
+            <Field wide label={add.market === "IN" ? "NSE symbol or BSE code" : "US ticker"} info="Type a name or a symbol and pick from the suggestions, or type an exact symbol." error={addErr.symbol}>
               {(id) => <StockPicker key={`${add.market}-${boxes}`} id={id} market={add.market} value={picked} placeholder={add.market === "IN" ? "Name or symbol, e.g. Reliance" : "Name or ticker, e.g. Apple"}
                 onText={(text) => { setAdd((x) => ({ ...x, symbol: text })); setAddErr((x) => ({ ...x, symbol: undefined })); }}
                 onPick={(s, region) => { setPicked(s); setAdd((x) => ({ ...x, symbol: s, market: region })); setAddErr((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
             {/* each number is checked as it's typed, with its limit named (lib/validate) */}
-            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} hint="More than 0"
+            <Field label="Quantity" inputMode="decimal" placeholder="10" value={add.qty} error={addErr.qty} rule="More than 0"
               onChange={(e) => { setAdd({ ...add, qty: e.target.value }); setAddErr((x) => ({ ...x, qty: e.target.value.trim() ? numberProblem(e.target.value, QTY) ?? undefined : undefined })); }} />
             <Field label="Average price" optional unit={add.market === "US" ? "$" : "₹"} inputMode="decimal" placeholder={add.market === "US" ? "180" : "2,450"} value={add.avg} error={addErr.avg}
               onChange={(e) => { const v = e.target.value.replace(/,/g, ""); setAdd({ ...add, avg: v }); setAddErr((x) => ({ ...x, avg: numberProblem(v, { ...AVG, unit: add.market === "US" ? "$" : "₹" }) ?? undefined })); }} />
