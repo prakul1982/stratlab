@@ -1845,7 +1845,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-more > summary::after { content: "+"; font-family: var(--mono); color: var(--muted); }
 .lp-more[open] > summary::after { content: "–"; }
 .lp-more[open] > summary { margin-bottom: var(--s2); }
-.lp-plan-note { display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px dashed var(--line-2); border-radius: var(--r-ctl); }
+.lp-plan-note { display: flex; align-items: center; min-height: 44px; font-weight: 600; }       /* plain words, not a dashed box that looks like a disabled button */
 .lp-btc { display: block; }
 .lp-menu { display: none; position: relative; margin-left: auto; }
 .lp-menu > summary { display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
@@ -1922,7 +1922,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 
 /* the phone menu and the small controls: at least 40px to tap */
 .lp-menu > summary { min-height: 40px; cursor: pointer; }
-.lp-nav .btn.sm, .lp-idea-btn { min-height: 40px; }
+.lp-nav .btn.sm, .btn.sm.lp-idea-btn { min-height: 40px; }
 .lp-demo-tabs button { min-height: 40px; }
 .lp-faq summary { min-height: 44px; }
 .legal-links a, .lp-foot .legal-links a { display: inline-flex; align-items: center; min-height: 40px; }
