@@ -11,6 +11,7 @@ import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
 import { useDialogFocus } from "./kit/Dialog";
+import { asksContract, namesFeature, offerIdeas } from "../lib/paletteRank";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
@@ -215,7 +216,9 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         sub: isQuestion(text) ? "Get an answer, or ideas you can test" : words >= 3 ? "StratLab works out what you mean and does it: test, paper trade, research…" : "Research it, test it, or get ideas",
         run: () => { doIt(); } });
       if (words >= 3 && !isQuestion(text)) act.push({ key: "edit", icon: <Book size={18} />, title: "Write it up in a new notebook first", sub: "Check the rules before anything runs", run: () => testIdea(text) });
-      act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
+      // not for a lone word that matched nothing ("zzzzqq"): there is nothing to have ideas about (R5O-024)
+      if (offerIdeas(text, { features: match(text, 5).length, companies: insts.filter(isCompany).length, helps: matchHelp(text, 2).length, intent: !!intent }))
+        act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
         sub: "4 testable ideas, each one click from a verdict", run: () => { if (!thinking) getIdeas(); } });
     }
     if (intent) act.unshift({ key: "intent", icon: <Lens size={18} />, title: intent.title, sub: intent.sub, space: intent.to ? spaceOf(intent.to.split("?")[0]) : "invest", run: () => { runIntent(intent); } });
@@ -246,13 +249,16 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         sub: [named ? i.symbol : null, i.exchange || mk, "Company page"].filter(Boolean).join(" · "), space: "invest" as Space,
         run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) };
     }) });
-    const tradable = [...companies.slice(0, 1), ...insts.filter((i) => !isCompany(i))].slice(0, 4);
+    // futures and options only when the search asks for a contract: "tcs" is the company, not three TCS futures (R5O-024)
+    const tradable = [...companies.slice(0, 1), ...insts.filter((i) => !isCompany(i) && (!i.fno || asksContract(text) || !companies.length))].slice(0, 4);
     if (tradable.length) out.push({ group: "Markets", items: tradable.map((i) => {
       const mk = i.market || "IN";
       return { key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade" as Space, run: () => testIdea("", mk, i.symbol) };
     }) });
     const first = (group: string) => { const n = out.findIndex((g) => g.group === group); if (n > 0) out.unshift(...out.splice(n, 1)); };
-    const exactFeature = feats.some((f) => f.title.toLowerCase() === text.toLowerCase());
+    // a feature named by the words typed ("sip" → Test a SIP, "tax" → Tax report) beats a company that merely has those
+    // letters as its symbol or in its name (SIPL, the TAX ETF) (R5O-024)
+    const exactFeature = feats.some((f) => f.title.toLowerCase() === text.toLowerCase() || namesFeature(f.title, text));
     if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
     // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
     if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");

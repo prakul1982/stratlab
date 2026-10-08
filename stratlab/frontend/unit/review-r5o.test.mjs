@@ -103,6 +103,21 @@ test("the scan page counts what it skipped and words a one-candle rule properly 
   assert.match(p, /skipped, named below/);
 });
 
+test("Ctrl K: a feature's name beats a company's letters, no futures for a plain stock, no ideas for nonsense (R5O-024)", async () => {
+  const { namesFeature, asksContract, offerIdeas } = await import("../src/lib/paletteRank.ts");
+  const { match } = await import("../src/lib/features.ts");
+  assert.ok(match("sip", 5).some((f) => namesFeature(f.title, "sip")), "sip names Test a SIP");
+  assert.ok(match("tax", 5).some((f) => namesFeature(f.title, "tax")), "tax names a tax feature");
+  assert.ok(!namesFeature("Test a SIP", "si"));
+  assert.ok(!asksContract("tcs") && asksContract("tcs fut") && asksContract("TCS26OCTFUT") && asksContract("nifty 22000 ce"));
+  assert.equal(offerIdeas("zzzzqq", { features: 0, companies: 0, helps: 0, intent: false }), false);
+  assert.equal(offerIdeas("momentum ideas for banks", { features: 0, companies: 0, helps: 0, intent: false }), true);
+  assert.equal(offerIdeas("tcs", { features: 0, companies: 1, helps: 0, intent: false }), true);
+  const p = read("src/components/SearchPalette.tsx");
+  assert.match(p, /!isCompany\(i\) && \(!i\.fno \|\| asksContract\(text\) \|\| !companies\.length\)/);
+  assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent\) first\("Companies"\);/);
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);
