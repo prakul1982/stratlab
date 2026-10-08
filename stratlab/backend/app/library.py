@@ -92,10 +92,127 @@ def versus_hold(e: dict) -> dict | None:
     return {"ret": round(r, 2), "hold": round(h, 2), "gap": round(r - h, 2)}
 
 
+CHECK_IDS = ("unseen", "nearby", "shuffle", "sample")
+
+
+def checks_of(e: dict) -> list[dict]:
+    """The four checks with their result: as stored with the verdict, or, for an entry published before the checks were
+    kept, worked out from what it does keep (the unseen years' return, the trade count, how many passed, and that the
+    nearby-settings check is never run on a group). A result that can't be told apart (failed or only a warning) is
+    "not_passed". [{"id", "status"}] in the checks' order."""
+    v, st = e.get("verdict") or {}, e.get("stats") or {}
+    stored = {c.get("id"): c.get("status") for c in v.get("checks") or [] if isinstance(c, dict) and c.get("id") in CHECK_IDS}
+    if len(stored) == len(CHECK_IDS):
+        return [{"id": k, "status": stored[k]} for k in CHECK_IDS]
+    if not isinstance(v.get("passed"), int) or not isinstance(v.get("total"), int):
+        return [{"id": k, "status": stored[k]} for k in CHECK_IDS if k in stored]      # too little kept to tell
+    n, unseen = st.get("trades"), st.get("unseen")
+    got: dict[str, str] = dict(stored)
+    if e.get("group") and "nearby" not in got:
+        got["nearby"] = "skip"                         # never run on a group of instruments (verdict.evaluate_portfolio)
+    if "unseen" not in got:
+        got["unseen"] = "warn" if not isinstance(unseen, (int, float)) else "pass" if unseen > 0 else "fail"
+    if "sample" not in got and isinstance(n, int):
+        got["sample"] = "pass" if n >= 30 else "warn" if n >= 15 else "fail"
+    if "shuffle" not in got and isinstance(n, int) and n < 5:
+        got["shuffle"] = "skip"
+    left = [k for k in CHECK_IDS if k not in got]
+    passes = max(0, int(v.get("passed") or 0) - sum(1 for s in got.values() if s == "pass"))
+    for k in left:                                     # the passes not yet placed go to the checks still unknown
+        if passes:
+            got[k], passes = "pass", passes - 1
+        elif k == "shuffle" and v.get("verdict") == "edge":
+            got[k] = "warn"                            # an edge never has a failed bad-luck check
+        else:
+            got[k] = "not_passed"
+    return [{"id": k, "status": got[k]} for k in CHECK_IDS]
+
+
+def _pc(x: float) -> str:
+    s = f"{abs(x):.1f}"
+    return ("" if float(s) == 0 else "+" if x > 0 else "−") + s + "%"
+
+
+def label(e: dict) -> str:
+    """The verdict as a fact about the checks, the same words on the library card and the strategy's own page (R6V-005):
+    no claim for a check that wasn't run."""
+    v = (e.get("verdict") or {}).get("verdict")
+    if v == "edge":
+        checks = checks_of(e)
+        run = [c for c in checks if c["status"] != "skip"]
+        passed = sum(1 for c in run if c["status"] == "pass")
+        if not run:
+            return "Passed the checks"
+        if passed == len(CHECK_IDS):
+            return "Passed all four checks"
+        return f"Passed {passed} of the {len(run)} checks run" if passed < len(run) else f"Passed all {len(run)} checks run"
+    if v == "luck":
+        by = {c["id"]: c["status"] for c in checks_of(e)}
+        if by.get("unseen") == "fail":
+            return "Lost money on the unseen years"
+        if by.get("nearby") == "fail":
+            return "Failed the nearby-settings check"
+    return {"mixed": "Mixed check results", "luck": "Failed a robustness check", "not_enough": "Too few trades",
+            "no_edge": "Lost money after costs"}.get(v or "", "Not tested")
+
+
+def restated(e: dict) -> dict:
+    """The verdict's headline and summary from its own facts, so a stored entry never claims more than its checks
+    showed (an entry published before this said "doesn't depend on one exact setting" with that check not run):
+    the comparison with buy and hold in the headline as well as the label, then one sentence per check."""
+    v, st = dict(e.get("verdict") or {}), e.get("stats") or {}
+    hold = versus_hold(e)
+    lab = label(e)
+    head = lab
+    if hold:
+        rel = ("about the same as" if abs(hold["gap"]) < 0.05 else "less than" if hold["gap"] < 0 else "more than")
+        head = f"{lab}, and returned {rel} buy and hold"
+    out: list[str] = []
+    if hold:
+        diff = "" if abs(hold["gap"]) < 0.05 else f", {abs(hold['gap']):.1f} points {'more' if hold['gap'] < 0 else 'less'}"
+        out.append(f"It returned {_pc(hold['ret'])} after costs; buying and holding over the same period returned "
+                   f"{_pc(hold['hold'])}{diff}.")
+    n = st.get("trades")
+    kind = v.get("verdict")
+    if kind == "not_enough" or (isinstance(n, int) and n < MIN_TRADES):
+        out.append(reason(e) or "Too few trades to tell skill from luck.")
+    elif kind == "no_edge":
+        out.append("It lost money after costs over the period, so there was no edge to test.")
+    else:
+        unseen = st.get("unseen")
+        for c in checks_of(e):
+            s = c["status"]
+            if c["id"] == "unseen":
+                out.append({"pass": "It kept making money on the years it wasn't tuned on"
+                                    + (f" ({_pc(unseen)})." if isinstance(unseen, (int, float)) else "."),
+                            "fail": "It lost money on the years it wasn't tuned on.",
+                            "warn": "No trades happened in the years it wasn't tuned on, so it couldn't be tested there."}
+                           .get(s, "The unseen-years check didn't pass."))
+            elif c["id"] == "nearby":
+                out.append({"pass": "Settings near the chosen ones made money too.",
+                            "fail": "Most settings near the chosen ones lost money.",
+                            "skip": "The nearby-settings check wasn't run (it isn't run on a group of stocks), so this "
+                                    "doesn't show whether the result depends on the exact settings."}
+                           .get(s, "The nearby-settings check didn't pass."))
+            elif c["id"] == "shuffle":
+                out.append({"pass": "With the trades in a worse order, the worst fall stayed close to the one it had.",
+                            "warn": "With the trades in a worse order, the worst fall could have been much deeper.",
+                            "fail": "With the trades in a worse order, the worst fall could have been deep enough to be hard to sit through.",
+                            "skip": "Too few trades to reshuffle for the bad-luck check."}
+                           .get(s, "The bad-luck fall check didn't pass."))
+            elif c["id"] == "sample" and isinstance(n, int):
+                out.append({"pass": f"{n} trades, enough to judge.", "warn": f"{n} trades, a small sample: a few lucky trades could decide the result."}
+                           .get(s, f"{n} trades, too few to tell skill from luck."))
+    # the engine's own headline and summary stay as they were stored; pages show these instead
+    v.update(label=lab, fact_headline=head + ".", fact_summary=" ".join(out), checks=checks_of(e))
+    return v
+
+
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
     out["ran"], out["reason"], out["vs_hold"] = ran(e), reason(e), versus_hold(e)
+    out["verdict"] = restated(e)
     out["mine"] = bool(viewer and e.get("owner") == viewer)
     out["reported"] = bool(viewer and viewer in (e.get("reports") or {}))
     if out["mine"] and e.get("hidden"):

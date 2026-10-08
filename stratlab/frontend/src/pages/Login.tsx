@@ -630,7 +630,7 @@ function LibraryExamples() {
               <Link key={e.id} to={`/library/${encodeURIComponent(e.id)}`} className="lp-card lp-example">
                 <span className="eyebrow">{e.group ? e.group.name : e.instrument?.symbol ?? e.market}</span>
                 <b className="serif">{plainTerms(e.name)}</b>
-                <span className="small">{e.verdict.headline}</span>
+                <span className="small">{e.verdict.fact_headline ?? e.verdict.headline}</span>
                 <span className="small muted">{checksLine(e.verdict.passed, e.verdict.total)}</span>
                 <span className="small lp-space-go">Open the verdict and rules →</span>
               </Link>

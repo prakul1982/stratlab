@@ -13,7 +13,9 @@ export interface LibEntry {
   id: string; name: string; question: string; description: string; author: string; market: string;
   instrument: { symbol: string; name?: string } | null; group: { name: string; members?: unknown[] } | null;
   tf: string; side: string; range: { from: string; to: string } | null; strategy: Strategy;
-  verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number; checks?: { id: string; status: string }[] };
+  verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number; checks?: { id: string; status: string }[];
+    /** the server's words for the result, from the checks themselves (R6V-005): the same on the card and the page */
+    label?: string; fact_headline?: string; fact_summary?: string };
   /** the return after costs beside buy and hold over the same period, in percent (gap < 0: behind buy and hold) */
   vs_hold?: { ret: number; hold: number; gap: number } | null;
   stats: { ret: number | null; buy_hold: number | null; mdd: number | null; trades: number | null; unseen: number | null };
@@ -31,6 +33,8 @@ export const shownStats = (e: LibEntry) => {
   const ran = e.ran !== false && (e.stats.trades ?? 1) > 0;
   return { ran, ret: ran ? e.stats.ret : null, unseen: ran ? e.stats.unseen : null, mdd: ran ? e.stats.mdd : null, buy_hold: e.stats.buy_hold };
 };
+
+export { CHECK_RESULT, testedRange, whereShown } from "../lib/libraryText";
 
 /** The verdict filter, in the words of the checks rather than a judgement of the strategy (R5O-014). */
 export const VERDICTS: [string, string][] = [["", "Any result"], ...(Object.entries(VERDICT_FACT) as [string, string][])];

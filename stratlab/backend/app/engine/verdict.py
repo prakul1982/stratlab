@@ -353,8 +353,14 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         summary = "It made money overall, but " + " and ".join(bits) + ". The profit looks like a lucky fit."
     elif by["unseen"] == "pass" and by["nearby"] in ("pass", "skip") and by["shuffle"] != "fail":
         verdict = "edge"
-        summary = ("It made money after costs, kept making money on unseen data, and doesn't depend on one exact "
-                   "setting.")
+        # only what the checks showed: a nearby-settings check that wasn't run (a group of stocks) proves nothing about
+        # the settings (R6V-005)
+        summary = ("It made money after costs, kept making money on unseen data, and settings near yours made money too."
+                   if by["nearby"] == "pass" else
+                   "It made money after costs and kept making money on unseen data. The nearby-settings check wasn't "
+                   "run, so this doesn't show whether the result depends on the exact settings.")
+        if by["shuffle"] == "warn":
+            summary += " With the trades in a worse order, the worst fall could have been much deeper."
     else:
         verdict = "mixed"
         summary = "It made money after costs, but some checks pass and some don't."

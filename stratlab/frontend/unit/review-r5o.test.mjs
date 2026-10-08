@@ -162,14 +162,15 @@ test("library cards: facts about the checks, buy and hold beside the return, whi
   assert.equal(checksLine(3, 3, ["nearby settings"]), "3 of 4 checks passed · nearby settings not run");
   assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
   const lib = read("src/pages/LibraryPage.tsx");
-  assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts \/>/);
+  // the facts wording, with the server's own label for the entry when it has one (R6V-005: the card and the page agree)
+  assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} \/>/);
   assert.doesNotMatch(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} \/>/);
   assert.match(lib, /<HoldLine e=\{e\} \/>/);
   // the card pieces live in components/LibraryBits.tsx since the public library shares them; it says the same
   const bits = read("src/components/LibraryBits.tsx");
   assert.match(bits, /\{num\(gap, 1\)\} points \{h\.gap < 0 \? "behind" : "ahead"\}/);
   const pub = read("src/pages/PublicLibrary.tsx");
-  assert.match(pub, /<VerdictBadge v=\{e\.verdict\.verdict\} facts \/>/);
+  assert.match(pub, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} \/>/);
   assert.match(pub, /<HoldLine e=\{e\} \/>/);
   assert.match(lib, /lede=\{onlyOurs \?/);
   const ui = read("src/components/ui.tsx");
