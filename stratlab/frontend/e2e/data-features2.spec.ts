@@ -53,8 +53,8 @@ test("market breadth: live while the market is open, and what it says when live 
   const heading = live.getByRole("heading", { name: /^Today, live as of \d\d:\d\d$/ });
   await expect(heading).toBeVisible();
   const liveAt = (await heading.innerText()).match(/(\d\d):(\d\d)$/)!;
-  const open = `${liveAt[1]}:${liveAt[2]}`;
-  expect(open >= "09:15" && open <= "15:30", "a time in the session").toBeTruthy();
+  const liveTime = `${liveAt[1]}:${liveAt[2]}`;
+  expect(liveTime >= "09:15" && liveTime <= "15:30", "a time in the session").toBeTruthy();
   const points = Math.min(6, 1 + Math.floor((Number(liveAt[1]) * 60 + Number(liveAt[2]) - (9 * 60 + 15)) / 15));
   await expect(live.getByText("Live", { exact: true })).toBeVisible();                       // the pulsing badge, with its word
   await expect(live.getByText("Above 50-day average")).toBeVisible();
