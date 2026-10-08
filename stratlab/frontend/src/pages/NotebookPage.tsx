@@ -13,7 +13,7 @@ import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons"
 import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
-import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, Signed, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
@@ -292,8 +292,8 @@ export function NotebookPage() {
   const cols: Column<Experiment>[] = [
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
     { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
-    { key: "ret", header: "Overall", numeric: true, cell: (e) => pct(e.stats.ret) },
-    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? pct(u.unseen_ret) : "–"; } },
+    { key: "ret", header: "Overall", numeric: true, cell: (e) => <Signed value={e.stats.ret}>{pct(e.stats.ret)}</Signed> },
+    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{pct(u.unseen_ret)}</Signed> : "–"; } },
     { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
   ];
 

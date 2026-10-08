@@ -5,7 +5,7 @@ import type { Cond, Experiment, Strategy } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
-import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 
@@ -44,7 +44,7 @@ function changes(a: Experiment, b: Experiment): string[] {
   return out;
 }
 
-type Line = { label: string; a: string; b: string; winA: boolean; winB: boolean };
+type Line = { label: string; a: string; b: string; winA: boolean; winB: boolean; va: number | null; vb: number | null };
 
 /* /n/:id/compare: two experiments side by side: what changed, the return curves and the numbers. Built from the kit. */
 export function CompareExperiments() {
@@ -80,10 +80,11 @@ export function CompareExperiments() {
   const lbl = dates.map((d) => new Date(d).toLocaleDateString("en-GB", { timeZone: tz, month: "short", year: "2-digit" }));
   const diff = changes(a, b);
   const cur = b.instrument?.currency;
-  const defs: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean][] = [
-    ["Return after costs", (e) => pct(e.stats.ret), (e) => e.stats.ret, true],
-    ["Yearly return", (e) => pct(e.stats.cagr), (e) => e.stats.cagr, true],
-    ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true],
+  // the last flag is true for a gain or loss, which is green or red like everywhere else
+  const defs: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean, boolean?][] = [
+    ["Return after costs", (e) => pct(e.stats.ret), (e) => e.stats.ret, true, true],
+    ["Yearly return", (e) => pct(e.stats.cagr), (e) => e.stats.cagr, true, true],
+    ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true, true],
     ["Trades", (e) => String(e.stats.n), () => null, false],
     ["Win rate", (e) => `${e.stats.win.toFixed(0)}%`, (e) => e.stats.win, true],
     ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
@@ -91,14 +92,15 @@ export function CompareExperiments() {
     ["Checks passed", (e) => `${e.verdict.passed} of ${e.verdict.total}`, (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],
   ];
-  const lines: Line[] = defs.map(([label, show, score, better]) => {
+  const lines: Line[] = defs.map(([label, show, score, better, gain]) => {
     const x = score(a), y = score(b);
-    return { label, a: show(a), b: show(b), winA: better && x != null && y != null && x > y, winB: better && x != null && y != null && y > x };
+    const buyHold = label === "Buy and hold";
+    return { label, a: show(a), b: show(b), va: gain ? x : buyHold ? a.stats.buy_hold_ret : null, vb: gain ? y : buyHold ? b.stats.buy_hold_ret : null, winA: better && x != null && y != null && x > y, winB: better && x != null && y != null && y > x };
   });
   const cols: Column<Line>[] = [
     { key: "m", header: "Measure", rowHeader: true, cell: (l) => l.label },
-    { key: "a", header: `v${a.v}`, numeric: true, cell: (l) => (l.winA ? <b>{l.a}</b> : l.a) },
-    { key: "b", header: `v${b.v}`, numeric: true, cell: (l) => (l.winB ? <b>{l.b}</b> : l.b) },
+    { key: "a", header: `v${a.v}`, numeric: true, cell: (l) => { const t = <Signed value={l.va}>{l.a}</Signed>; return l.winA ? <b>{t}</b> : t; } },
+    { key: "b", header: `v${b.v}`, numeric: true, cell: (l) => { const t = <Signed value={l.vb}>{l.b}</Signed>; return l.winB ? <b>{t}</b> : t; } },
   ];
   const opts = exps.map((e) => ({ value: e.v, label: `v${e.v} · ${e.label}` }));
   return (
