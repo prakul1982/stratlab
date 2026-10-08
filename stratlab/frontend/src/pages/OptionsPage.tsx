@@ -435,7 +435,7 @@ export function OptionsPage() {
   ];
 
   return (
-    <div className="k-page k-narrow">
+    <div className="k-page">
       <PageHeader eyebrow="Trade · Practise" title="Options builder" info={HELP.options} infoLabel="About options"
         lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask."
         actions={<><Badge tone="plain" dot={false}>Backtesting coming soon</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
@@ -457,7 +457,7 @@ export function OptionsPage() {
         <div className="k-struct">
           <FieldGroup label="Underlying" wide>
             <div className="k-row">
-              <ChipBar label="Underlying" value={onPopular ? `${s.exchange}:${s.underlying}` : ""} onChange={(v) => { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); }}
+              <ChipBar wrap label="Underlying" value={onPopular ? `${s.exchange}:${s.underlying}` : ""} onChange={(v) => { const [ex, n] = v.split(":"); pickUnderlying(ex as OptionStrategy["exchange"], n); }}
                 options={popular.map((u) => ({ value: `${u.exchange}:${u.name}`, label: u.name }))} />
               {!!unds?.length && (
                 <Select small label="Other underlyings" value={onPopular ? "" : `${s.exchange}:${s.underlying}`}

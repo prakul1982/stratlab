@@ -1,8 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { rewriteProxy } from "./scripts/rewriteProxy.mjs";
+
+// Production forwards /stocks, /sitemap.xml, /sitemaps, /v and /c to the API (vercel.json); `vite` and `vite preview` do the
+// same, to the API the app is pointed at (scripts/rewriteProxy.mjs).
+const forwarded = rewriteProxy();
 
 export default defineConfig({
   plugins: [react()],
+  server: { proxy: forwarded },
+  preview: { proxy: forwarded },
   build: {
     outDir: "dist",
     sourcemap: false,

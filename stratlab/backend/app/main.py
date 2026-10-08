@@ -652,6 +652,7 @@ def me(profile=Depends(current_profile)):
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
         "offer": offer_state(),
         "onboarding": onboarding_of(profile["id"]),
+        "established": established_of(profile["id"]),
         "is_admin": admin.is_admin(profile),
     })
 
@@ -748,6 +749,18 @@ def onboarding_of(uid: str) -> dict:
     o = o if isinstance(o, dict) else {}
     return {"welcome": o.get("welcome") if isinstance(o.get("welcome"), str) else None,
             "tour": o.get("tour") if o.get("tour") in ("done", "skipped") else None}
+
+
+def established_of(uid: str) -> bool:
+    """The account already has holdings, notebooks, a paper session or a watchlist, so the "What brings you here?" question
+    is not asked of it. Only looked up while the question is still pending (it costs a few reads); otherwise false."""
+    prefs = prefs_of(uid)
+    o = prefs.get("onboarding")
+    if isinstance(o, dict) and o.get("welcome"):
+        return False
+    if prefs.get("level") and prefs.get("focus"):
+        return False
+    return first_steps.has_activity(uid)
 
 
 @app.put("/me/onboarding")

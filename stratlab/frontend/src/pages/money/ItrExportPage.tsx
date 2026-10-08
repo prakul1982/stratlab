@@ -5,7 +5,8 @@ import { useApp } from "../../lib/app";
 import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
-import { rememberFy, savedFy } from "../../lib/fy";
+import { movedYearNote, rememberFy, savedFy } from "../../lib/fy";
+import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
 
 /* /money/itr: the year's figures from the tax report, tax tools and US stocks, laid out as the ITR-2 and ITR-3 schedules,
@@ -18,6 +19,8 @@ type View = {
   sources: string[]; assumptions: string[]; years: number[]; tables: Sheet[];
 };
 type Format = "xlsx" | "zip" | "pdf";
+/** A year with anything in its schedules. */
+const hasLines = (v: View) => v.tables.some((t) => t.count > 0);
 
 const FORMATS: [Format, string, string][] = [
   ["xlsx", "Excel workbook", "Every schedule on its own sheet"], ["zip", "CSV files (ZIP)", "One file per schedule, with the 112A upload layout"],
@@ -40,11 +43,33 @@ export function ItrExportPage() {
   const [getting, setGetting] = useState<Format | null>(null);
   const [open, setOpen] = useState<string | null>("112a");
 
-  const load = useCallback((fy?: number) => {
+  const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
+  const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
+  const one = useCallback((fy?: number) => api<View>(`/money/itr${fy ? `?fy=${fy}` : ""}`), []);
+  /** A year picked by hand opens as it is. */
+  const load = useCallback((fy: number) => {
     setV(null);
-    api<View>(`/money/itr${fy ? `?fy=${fy}` : ""}`).then(setV).catch(fail);
-  }, [fail]);
-  useEffect(() => { load(savedFy() ?? undefined); }, [load]);     // the Money pages' shared year, when one was picked
+    setMovedFrom(null);
+    one(fy).then(setV).catch(fail);
+  }, [one, fail]);
+  /** The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
+   * filed; when that year has no schedule lines and another has, the latest year that has some, said in one line. */
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const first = await one(asked ?? savedFy() ?? undefined);
+      if (!live) return;
+      if (asked != null || hasLines(first)) { setV(first); return; }
+      for (const y of [...first.years].sort((a, b) => b - a)) {
+        if (y === first.fy) continue;
+        const v = await one(y);
+        if (!live) return;
+        if (hasLines(v)) { setMovedFrom(first.fy); setV(v); return; }
+      }
+      setV(first);
+    })().catch((e) => live && fail(e));
+    return () => { live = false; };
+  }, [one, asked, fail]);
 
   const download = async (f: Format) => {
     if (!v) return;
@@ -74,6 +99,7 @@ export function ItrExportPage() {
         )}</Field>
       </FormGrid>
 
+      {v && movedFrom != null && movedFrom !== v.fy && <p className="k-small k-muted" data-testid="itr-moved-year">{movedYearNote(movedFrom, v.fy, v.years[0] ?? v.fy, "figures")}</p>}
       {!v && <Card><Skeleton label="Laying out your schedules" /></Card>}
       {v && (
         <>

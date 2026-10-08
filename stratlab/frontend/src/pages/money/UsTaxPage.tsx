@@ -5,7 +5,8 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { rememberFy, savedFy } from "../../lib/fy";
+import { fyLink, movedYearNote, rememberFy, savedFy } from "../../lib/fy";
+import { useAskedFy } from "../../lib/useFy";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
@@ -58,7 +59,26 @@ export function UsTaxPage() {
     if (cy) q.set("cy", String(cy));
     return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`).then(setV).catch(fail);
   }, [fail]);
-  useEffect(() => { load(savedFy() ?? undefined); }, [load]);     // the Money pages' shared year, when one was picked
+  const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
+  const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
+  // The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
+  // filed; when that year has no sales and another has, the latest year with sales, said in one line.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const want = asked ?? savedFy();
+      const first = await api<View>(`/money/us-tax${want ? `?fy=${want}` : ""}`);
+      if (!live) return;
+      const here = first.years.find((x) => x.fy === first.fy);
+      const busy = asked == null && !here?.count ? [...first.years].sort((a, b) => b.fy - a.fy).find((x) => x.count > 0) : undefined;
+      if (!busy) { setV(first); return; }
+      const v = await api<View>(`/money/us-tax?fy=${busy.fy}`);
+      if (!live) return;
+      setMovedFrom(first.fy);
+      setV(v);
+    })().catch((e) => live && fail(e));
+    return () => { live = false; };
+  }, [asked, fail]);
 
   const add = async () => {
     const body = { d: form.d, side: form.side, sym: form.sym.trim().toUpperCase(), qty: Number(form.qty), price: Number(form.price), fees: Number(form.fees || 0) };
@@ -207,8 +227,9 @@ export function UsTaxPage() {
         <>
           {!v.rates.available && <Notice tone="warn">The rupee rates couldn't be loaded just now, so the rupee figures are missing. Try again in a while.</Notice>}
           <FormGrid label="Choose the year">
-            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { rememberFy(Number(x)); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
+            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { rememberFy(Number(x)); setMovedFrom(null); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
           </FormGrid>
+          {movedFrom != null && movedFrom !== y.fy && <p className="k-small k-muted" data-testid="us-moved-year">{movedYearNote(movedFrom, y.fy, Math.max(...v.years.map((x) => x.fy)), "sales")}</p>}
           <Card>
             <CardHead title={`Sales in ${y.label}`} />
             <StatRow>
@@ -218,7 +239,7 @@ export function UsTaxPage() {
             </StatRow>
             <p className="k-note">Shares listed abroad are taxed like unlisted shares in India: long term when held more than 24 months, at 12.5% without indexation for sales from 23 July 2024 (20% with indexation before), with no ₹1.25 lakh exemption. Short-term gains are added to your income at your slab rate.</p>
             {y.unpriced > 0 && <p className="k-small">{y.unpriced} sale{y.unpriced === 1 ? " has" : "s have"} no rupee rate for its dates yet, so {y.unpriced === 1 ? "it isn't" : "they aren't"} counted.</p>}
-            <p className="k-note">These sales are in your <Link className="link" to="/tax-report">tax report</Link> too, where losses are set off against your other gains, and in the <Link className="link" to="/money/itr">ITR-ready export</Link>.</p>
+            <p className="k-note">These sales are in your <Link className="link" to={fyLink("/tax-report", y.fy)}>tax report</Link> too, where losses are set off against your other gains, and in the <Link className="link" to={fyLink("/money/itr", y.fy)}>ITR-ready export</Link>.</p>
           </Card>
 
           {v.locked ? <PlanNote>Each sale's rupee workings, US dividends with the foreign tax credit, and Schedule FA are on the {v.plan} plan.</PlanNote> : (
@@ -235,8 +256,8 @@ export function UsTaxPage() {
                 {!y.dividends || !y.dividends.stocks.length ? <EmptyState title={`No US dividends in ${y.label}`}>Dividends from your US holdings show here with the US tax withheld.</EmptyState> : (
                   <>
                     <DataTable label="US dividends and credit" columns={divCols} rows={y.dividends.stocks} rowKey={(s) => s.symbol} />
-                    <p className="k-small">Credit for {y.label}: <b>{inr(y.dividends.ftc.credit)}</b> of the {inr(y.dividends.tax_inr)} US tax{y.dividends.ftc.not_credited > 0.5 ? `; ${inr(y.dividends.ftc.not_credited)} can't be credited (more than the Indian tax on the dividends)` : ""}. Indian tax on the dividends at your average rate of {(y.dividends.indian_rate * 100).toFixed(2)}% from the <Link className="link" to="/tax-report">total tax estimate</Link>.</p>
-                    {y.dividends.estimated && <p className="k-note">Estimated: each dividend the company paid × the shares your trades held on its ex-date, dated by the ex-date. Upload your broker's dividend statement in <Link className="link" to="/money/tax-tools">Tax tools</Link> for the actual figures.</p>}
+                    <p className="k-small">Credit for {y.label}: <b>{inr(y.dividends.ftc.credit)}</b> of the {inr(y.dividends.tax_inr)} US tax{y.dividends.ftc.not_credited > 0.5 ? `; ${inr(y.dividends.ftc.not_credited)} can't be credited (more than the Indian tax on the dividends)` : ""}. Indian tax on the dividends at your average rate of {(y.dividends.indian_rate * 100).toFixed(2)}% from the <Link className="link" to={fyLink("/tax-report", y.fy)}>total tax estimate</Link>.</p>
+                    {y.dividends.estimated && <p className="k-note">Estimated: each dividend the company paid × the shares your trades held on its ex-date, dated by the ex-date. Upload your broker's dividend statement in <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>Tax tools</Link> for the actual figures.</p>}
                   </>
                 )}
               </Card>

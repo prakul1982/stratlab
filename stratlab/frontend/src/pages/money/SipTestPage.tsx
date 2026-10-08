@@ -185,7 +185,7 @@ export function SipTestPage() {
             : <Field label="Shares each time" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />}
           <Field label="How often">{(id) => <Select id={id} value={freq} onChange={(v) => setFreq(v as typeof freq)} options={FREQ} />}</Field>
           {freq === "monthly" && <Field label="Day of the month" inputMode="numeric" value={dom} onChange={(e) => setDom(e.target.value)}
-            hint="1 to 28, so every month has it" error={numberProblem(dom, DOM)} />}
+            rule="1 to 28, so every month has it" error={numberProblem(dom, DOM)} />}
           {freq === "weekly" && <Field label="Day of the week">{(id) => <Select id={id} value={weekday} onChange={setWeekday} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />}</Field>}
           <Field label="Step-up a year" unit="%" type="number" min={0} max={50} value={stepUp} onChange={(e) => setStepUp(e.target.value)} info="Raises the amount by this much each year." />
           <Field label="Years">{(id) => <Select id={id} value={years} onChange={setYears} options={YEARS} />}</Field>

@@ -8,6 +8,7 @@ import { openTour } from "../components/Onboarding";
 import { api } from "../lib/api";
 import { describePath } from "../lib/deepLinks";
 import { signIn } from "../lib/signin";
+import { useDocTitle } from "../lib/title";
 
 /* The pages between a person and what they asked for: signed out on an app address ("Sign in to see …"), an address
  * nothing is at ("Page not found"), a page that isn't theirs ("You don't have access"), and Help. Each says what
@@ -73,6 +74,7 @@ export function SignInGate() {
 /** An address nothing is at: say so, show it, and offer search and the homes. Signed out, the landing page and sign-in. */
 export function NotFound({ signedIn }: { signedIn: boolean }) {
   const loc = useLocation();
+  useDocTitle("Page not found");          // its own tab title (signed out, main.tsx titles it the same way)
   const body = (
     <>
       <PageHeader eyebrow="Not found" title="Page not found"
@@ -104,6 +106,7 @@ export function NotFound({ signedIn }: { signedIn: boolean }) {
 
 /** A page this account can't open (Admin for someone who isn't an admin): say so, rather than going home in silence. */
 export function NoAccess({ what, email }: { what: string; email?: string | null }) {
+  useDocTitle("No access");
   return (
     <div className="k-page gate">
       <PageHeader eyebrow="No access" title="You don't have access to this page"

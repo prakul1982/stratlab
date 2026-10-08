@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { inr, price, qty as qtyText } from "../lib/format";
 import { exDay } from "./CorpActions";
+import { fyLink } from "../lib/fy";
 import { Card, CardHead, DataTable, Notice, Stat, StatRow, type Column } from "./kit";
 
 /* My Holdings: bonuses and splits since the holdings were saved (offered, never made silently), and dividend income. */
@@ -79,7 +80,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
           <StatRow>
             <Stat label="Announced, ex-date ahead" value={inr(data.ahead_total)} />
             <Stat label="Last 12 months (estimated)" value={inr(data.received_total)} />
-            {(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => <Stat key={y.fy} label={`${y.label} (estimated)`} value={inr(y.total)} note={`${y.count} payment${y.count === 1 ? "" : "s"} · as in tax tools`} />)}
+            {(data.by_fy ?? []).filter((y) => y.count > 0).map((y) => <Stat key={y.fy} label={`${y.label} (estimated)`} value={inr(y.total)} note={<>{y.count} payment{y.count === 1 ? "" : "s"} · <Link className="link" to={fyLink("/money/tax-tools", y.fy)}>as in tax tools</Link></>} />)}
           </StatRow>
           {data.ahead.length > 0 && <><h3 className="k-sub">Ex-date ahead</h3><DataTable label="Dividends ahead" columns={incomeCols} rows={data.ahead} rowKey={key} stack /></>}
           {received.length > 0 && <><h3 className="k-sub">Last 12 months (estimated)</h3><DataTable label="Dividends in the last 12 months" columns={incomeCols} rows={received} rowKey={key} stack /></>}

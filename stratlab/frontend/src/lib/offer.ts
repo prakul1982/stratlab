@@ -43,8 +43,10 @@ export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMA
 
 /** A paid feature's tag in the app. Locked: "Basic" or "Pro" with a lock. Usable without paying for that plan (the
  * launch offer, free Basic time from invites, a plan the owner granted): "Basic · open now", with why. */
-export function featureTag(plan: PlanId, o: Offer | null | undefined, x: { paid?: PlanId | null; canUse?: boolean }): { label: string; why: string; locked: boolean } {
+export function featureTag(plan: PlanId, o: Offer | null | undefined, x: { paid?: PlanId | null; canUse?: boolean; part?: boolean }): { label: string; why: string; locked: boolean } {
   const name = plan === "pro" ? "Pro" : "Basic";
+  // a page that is free in the main and has a paid part (history, every scheme…) is not locked: its card says which part
+  if (!x.canUse && x.part) return { label: `${name} for part`, why: `Part of this page is on the ${name} plan; the rest is free. ${unlockHint(o)}`, locked: false };
   if (!x.canUse) return { label: `🔒 ${name}`, why: `A ${name} feature. ${unlockHint(o)}`, locked: true };
   const openNow = RANK[x.paid ?? "free"] < RANK[plan];
   if (!openNow) return { label: name, why: `On the ${name} plan`, locked: false };

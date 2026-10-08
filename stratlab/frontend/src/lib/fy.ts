@@ -29,10 +29,13 @@ export function pickFy(years: number[], current: number, hasData: (fy: number) =
   return busy ?? (years.includes(current) ? current : years[0] ?? current);
 }
 
-/** The year a tax page opens on: the shared year (pickFy, normally the year being filed), unless that year has nothing
- * in it and another year has: then the latest year that has something, and `from` the year it was moved from, so the
- * page can say why in one line. A page never opens on a year of zeros when there is a year with data. */
-export function openFy(years: number[], current: number, hasData: (fy: number) => boolean, saved = savedFy()): { fy: number; from: number | null } {
+/** The year a tax page opens on, the one rule for every Money and tax page (tax report, Money home's tax card, tax tools,
+ * ITR export, US stocks, funds): the year a link asked for (`?fy=2025`: "as in tax tools" lands on that very year), else
+ * the year last picked, else the year being filed (pickFy), unless that year has nothing in it and another year has:
+ * then the latest year that has something, and `from` the year it was moved from, so the page can say why in one line
+ * (movedYearNote). A page never opens on a year of zeros when there is a year with data. */
+export function openFy(years: number[], current: number, hasData: (fy: number) => boolean, saved = savedFy(), asked: number | null = null): { fy: number; from: number | null } {
+  if (asked != null && years.includes(asked)) return { fy: asked, from: null };
   const fy = pickFy(years, current, hasData, saved);
   if (hasData(fy)) return { fy, from: null };
   const busy = [...years].sort((a, b) => b - a).find(hasData);
@@ -48,3 +51,20 @@ export function movedYearNote(from: number, to: number, current: number, what: s
 
 /** "FY 2025-26". */
 export const fyLabel = (fy: number) => `FY ${fy}-${String(fy + 1).slice(2)}`;
+
+/** The year a link carries, from a query string's `fy` ("2025" for FY 2025-26), or null. */
+export function askedFy(v: string | null | undefined): number | null {
+  const n = Number(v);
+  return v && Number.isInteger(n) && n > 1990 && n < 2200 ? n : null;
+}
+
+/** A link to a Money page that opens on a given year: `fyLink("/money/tax-tools", 2025)` is "/money/tax-tools?fy=2025". */
+export function fyLink(path: string, fy: number): string {
+  return `${path}${path.includes("?") ? "&" : "?"}fy=${fy}`;
+}
+
+/** A year with anything in the tax report: sales, intraday, F&O business lines or units (the Money home's card and
+ * the tax report must call the same years empty). */
+export function yearHasTrades(y: { count: number; intraday?: { count: number }; business?: { segments: unknown[] }; units?: unknown }): boolean {
+  return y.count > 0 || (y.intraday?.count ?? 0) > 0 || (y.business?.segments.length ?? 0) > 0 || !!y.units;
+}

@@ -23,6 +23,14 @@ export function AlertSettingsCard() {
   }, [me]);
   if (!me) return null;
   const ch = me.alerts.channels ?? { push: true, telegram: true, email: true };
+  // why "Send a test" is off, in words that name only what this page has (the Telegram and email boxes show only where the
+  // server can send by them; the phone is on the Get the app page)
+  const edited = (ch.telegram && alerts.tg.trim() !== (me.alerts.telegram_chat_id || "")) || (ch.email && alerts.email.trim() !== (me.alerts.email || ""));
+  const ways = [ch.telegram && "save a Telegram chat ID", ch.email && "save an email address and confirm it", ch.push && "turn on phone notifications"].filter(Boolean) as string[];
+  const testWhy: string | null = !canReport ? "Send a test is part of the Basic plan, with the reports and messages."
+    : edited ? "Save your changes first; the test goes to what is saved."
+    : routes != null && !routes.length ? `Send a test works once alerts have somewhere to go: ${ways.length > 1 ? `${ways.slice(0, -1).join(", ")} or ${ways[ways.length - 1]}` : ways[0] ?? "turn on phone notifications"}.`
+    : null;
 
   const save = async () => {
     try {
@@ -59,15 +67,13 @@ export function AlertSettingsCard() {
         {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
         <FormActions>
           <button type="submit" className="btn" disabled={!canReport}>Save</button>
-          <button type="button" className="btn outline" disabled={!canReport || (routes != null && !routes.length)} onClick={() => void test()}>Send a test</button>
+          <button type="button" className="btn outline" disabled={!!testWhy} title={testWhy ?? undefined} aria-describedby={testWhy ? "alert-test-why" : undefined} onClick={() => void test()}>Send a test</button>
         </FormActions>
       </FormGrid>
-      {/* a test has nowhere to go until one of them is set up: say what to do instead of failing */}
-      {canReport && routes != null && !routes.length && !testNote && (
-        <p className="k-small k-muted k-hint-line" role="status">Send a test works once alerts have somewhere to go: save a Telegram chat ID or an email above (and confirm the email), or turn on phone notifications under <Link className="link" to="/app">Get the app</Link>.</p>
-      )}
+      {/* a disabled test says why, right under the buttons, and only names what is on this page */}
+      {testWhy && !testNote && <p id="alert-test-why" className="k-small k-muted k-hint-line" role="status">{testWhy}</p>}
       {testNote && <Notice tone="warn" role="status">{testNote}</Notice>}
-      <p className="k-small k-muted k-hint-line">The simplest way is a notification on your phone: turn it on under <Link className="link" to="/app">Get the app</Link>.</p>
+      {ch.push && <p className="k-small k-muted k-hint-line">The simplest way is a notification on your phone: <Link className="link" to="/app">Get the app</Link> and turn them on.</p>}
     </Card>
   );
 }

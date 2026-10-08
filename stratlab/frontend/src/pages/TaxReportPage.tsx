@@ -10,7 +10,8 @@ import { UnitsCard, type Units } from "../components/TaxUnits";
 import { UsTaxCard, type UsYear } from "../components/UsTaxCard";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
-import { movedYearNote, openFy, rememberFy } from "../lib/fy";
+import { fyLink, movedYearNote, openFy, rememberFy, yearHasTrades } from "../lib/fy";
+import { useAskedFy } from "../lib/useFy";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -93,11 +94,11 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
 
 /** The year to open on: the one already open if it has sales, else the Money pages' shared year (the year being filed,
  * lib/fy), or the latest year with trades when that one has none (`from`: the year it moved from, said in one line). */
-const hasTrades = (y: Year) => y.count > 0 || y.intraday.count > 0 || y.business.segments.length > 0 || !!y.units;
-function bestYear(r: Report, cur: number | null): { fy: number; from: number | null } {
+const hasTrades = (y: Year) => yearHasTrades(y);
+function bestYear(r: Report, cur: number | null, asked: number | null): { fy: number; from: number | null } {
   const open = r.years.find((y) => y.fy === cur);
   if (open && hasTrades(open)) return { fy: open.fy, from: null };
-  return openFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)));
+  return openFy(r.years.map((y) => y.fy), r.current_fy, (fy) => r.years.some((y) => y.fy === fy && hasTrades(y)), undefined, cur == null ? asked : null);
 }
 
 export function TaxReportPage() {
@@ -116,11 +117,12 @@ export function TaxReportPage() {
   const lotsMore = useMoreColumns("tax-below", 3);
   const [getting, setGetting] = useState<"csv" | "pdf" | null>(null);
 
+  const asked = useAskedFy();         // a link's year ("?fy=2025", as in tax tools) is the year it opens on
   const open = useCallback((r: Report, cur: number | null) => {
-    const b = bestYear(r, cur);
+    const b = bestYear(r, cur, asked);
     if (b.fy !== cur) setMovedFrom(b.from);
     return b.fy;
-  }, []);
+  }, [asked]);
   const show = useCallback((r: Report) => { setRep(r); setFy((cur) => open(r, cur)); }, [open]);
   const load = useCallback(() => {
     setError(null);
@@ -322,7 +324,7 @@ export function TaxReportPage() {
           <Card label="Tax tools">
             <CardHead title="Dividends, advance tax and the long-term exemption" />
             <p className="k-small k-muted">Dividend income with the TDS on it (and whether it goes into the estimate above), the advance tax due by each date with TDS and payments taken off, and how much of this year's long-term exemption is used.</p>
-            <Link className="btn quiet sm k-btn-end" to="/money/tax-tools">Open tax tools</Link>
+            <Link className="btn quiet sm k-btn-end" to={fyLink("/money/tax-tools", y.fy)}>Open tax tools</Link>
           </Card>
 
           <Card id="tax-gains">

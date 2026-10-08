@@ -4,6 +4,7 @@ import type { NavPage } from "../lib/nav";
 import { NEW_SINCE } from "../lib/nav";
 import { useApp } from "../lib/app";
 import { featureTag } from "../lib/offer";
+import { gateFor } from "../lib/gates";
 
 /** The small tags on a page's card: "New" for what shipped lately and the plan, when the page is on a paid one. A paid
  * page the person can use today without that plan (early access, the launch offer) says "open now", as Pricing does. */
@@ -11,7 +12,8 @@ export function PageTags({ page }: { page: NavPage }) {
   const { me } = useApp();
   const plan = page.flag ? planOf(page.flag) : "free";
   if (!page.isNew && plan === "free") return null;
-  const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(page.flag && me?.plan_info?.features?.[page.flag]) }) : null;
+  const part = gateFor(page.to)?.whole === false;       // lib/gates.ts: the lock is for whole pages only (as in the menu)
+  const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(page.flag && me?.plan_info?.features?.[page.flag]), part }) : null;
   return (
     <span className="page-tags">
       {page.isNew && <span title={`Shipped by ${NEW_SINCE}`}><Badge tone="ok" dot={false}>New</Badge></span>}
