@@ -1,11 +1,24 @@
-"""Where the fake market's best-known instruments trade, shared by the fake broker (fake_kite) and the fake quote site
-(fake_yahoo), so one instrument shows about the same price on every page of the demo world: NIFTY 50 near 25,000 on
-the markets strip, in a backtest and at the closing auction; RELIANCE near the ₹1,408 its fundamentals page was read at.
-Anything not listed keeps the fakes' made-up levels."""
-import time
+"""The demo world's one price table: where each instrument trades, read by every fake source (the fake broker
+fake_kite, the fake quote site fake_yahoo, the fake US company-data source, the fake exchange's closing auction, the
+stored screener index, the fake company pages and the live breadth points), so one instrument shows the same price on
+every page.
+
+How a price is made: each instrument follows a slow wave around a gentle rise, `price(name, when)`. The wave is scaled
+so that the latest session's close is exactly the instrument's level below: NIFTY 50 closed at 25,000.00, RELIANCE at
+₹1,400.00. Out of market hours every price stands still at that close (the sources say "last close"); in hours it
+moves from it, a little. The broad Indian indices move together (NIFTY 500 tracks NIFTY 50 and stays below it, as the
+real ones do). Holidays are the app's own trading calendar's."""
+import functools
+import math
+import zlib
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
+ET = ZoneInfo("America/New_York")
 
 LEVELS = {
-    # indices
+    # indices (the last close). NIFTY 500 sits below NIFTY 50 as the real one does (about 0.92 of it).
     "NIFTY 50": 25000.0, "NIFTY BANK": 55000.0, "SENSEX": 82000.0, "INDIA VIX": 13.0, "NIFTY 500": 23000.0,
     # stocks (round numbers near their real levels)
     "RELIANCE": 1400.0, "TCS": 3050.0, "INFY": 1480.0, "HDFCBANK": 960.0, "ICICIBANK": 1350.0, "SBIN": 820.0,
@@ -14,10 +27,20 @@ LEVELS = {
     "NIFTYBEES": 270.0, "GOLDBEES": 81.5, "SILVERBEES": 104.0, "BANKBEES": 560.0, "LIQUIDBEES": 1000.0,
     "JSWSTEEL": 1050.0, "NESTLEIND": 2400.0, "DABUR": 520.0, "VEDL": 460.0, "SAIL": 130.0, "ULTRACEMCO": 12000.0,
     "AMBUJACEM": 600.0, "TVSMOTOR": 3400.0,
-    # US: Apple near the fake company-data quote ($183.20, 52-week high $195.60), so its chart and header agree
-    "AAPL": 183.0,
+    # US: the companies the screener lists, Apple among them
+    "AAPL": 183.0, "MSFT": 510.0, "XOM": 112.0, "JPM": 300.0, "KO": 68.0, "NUE": 140.0, "NVDA": 183.2,
     # the markets strip's other tiles: the S&P 500, the dollar in rupees and gold in dollars an ounce
     "^GSPC": 6700.0, "USDINR=X": 88.7, "GC=F": 2650.0,
+}
+
+# shares outstanding, in crore (India) or millions (US), so a market value is always shares x the same price
+SHARES = {
+    "RELIANCE": 1353.25, "TCS": 361.81, "INFY": 415.29, "HDFCBANK": 1541.67, "ICICIBANK": 712.0, "SBIN": 892.56,
+    "AXISBANK": 309.5, "ITC": 1251.2, "HINDUNILVR": 234.96, "HCLTECH": 271.36, "WIPRO": 1046.0, "LT": 137.5,
+    "BHARTIARTL": 609.0, "TATASTEEL": 1248.0, "ONGC": 1258.0, "NTPC": 969.67, "COALINDIA": 616.27, "MARUTI": 31.44,
+    "JSWSTEEL": 244.5, "NESTLEIND": 192.8, "DABUR": 177.4, "VEDL": 391.0, "SAIL": 413.05, "ULTRACEMCO": 29.47,
+    "AMBUJACEM": 246.3, "TVSMOTOR": 47.5,
+    "AAPL": 14840.0, "MSFT": 7430.0, "XOM": 4300.0, "JPM": 2760.0, "KO": 4300.0, "NUE": 230.0, "NVDA": 24300.0,
 }
 
 # the exchange's own names and broad sectors (its "macro" sector names for India) for the same companies, so the fake broker's instrument list, the screener's index
@@ -46,6 +69,12 @@ ETF_NAMES = {"NIFTYBEES": "Nippon India ETF Nifty 50 BeES", "GOLDBEES": "Nippon 
              "SILVERBEES": "Nippon India Silver ETF", "BANKBEES": "Nippon India ETF Nifty Bank BeES",
              "LIQUIDBEES": "Nippon India ETF Nifty 1D Rate Liquid BeES"}
 
+# the quote site's tickers for the same instruments
+YAHOO = {"^NSEI": "NIFTY 50", "^NSEBANK": "NIFTY BANK", "^BSESN": "SENSEX", "^INDIAVIX": "INDIA VIX", "^CRSLDX": "NIFTY 500"}
+US_NAMES = {"AAPL", "MSFT", "XOM", "JPM", "KO", "NUE", "NVDA", "^GSPC", "USDINR=X", "GC=F"}
+BROAD = {"NIFTY 50", "NIFTY 500", "SENSEX", "NIFTY 100", "NIFTY NEXT 50"}     # move together, NIFTY 50's wave
+SESSION = {"IN": ((9, 15), (15, 30), IST), "US": ((9, 30), (16, 0), ET)}
+
 
 def name_of(symbol: str) -> str | None:
     """A company's or ETF's listed name, if the demo world knows it."""
@@ -56,18 +85,111 @@ def sector_of(symbol: str) -> str | None:
     hit = COMPANIES.get(symbol)
     return hit[1] if hit else None
 
-# the quote site's tickers for the same instruments
-YAHOO = {"^NSEI": "NIFTY 50", "^NSEBANK": "NIFTY BANK", "^BSESN": "SENSEX", "^INDIAVIX": "INDIA VIX"}
 
-
-def level(name: str, drift_from: float | None = None) -> float | None:
-    """The level a name trades near, by the broker's name or the quote site's ticker (RELIANCE.NS), else None.
-    Both fakes add a slow rise of 0.03% a day since a day of their own (`drift_from`, days since 1970); the base is
-    taken back by that rise, so today's price lands near the level whichever fake draws it."""
+def canonical(name: str) -> str:
+    """The broker's name for a quote-site ticker (^NSEI -> NIFTY 50, RELIANCE.NS -> RELIANCE); others as they are."""
     if name in YAHOO:
-        v = LEVELS[YAHOO[name]]
-    else:
-        v = LEVELS.get(name[:-3] if name.endswith((".NS", ".BO")) else name)
-    if v is None or drift_from is None:
-        return v
-    return v / (1 + 0.0003 * (time.time() / 86400 - drift_from))
+        return YAHOO[name]
+    return name[:-3] if name.endswith((".NS", ".BO")) else name
+
+
+def known(name: str) -> bool:
+    return canonical(name) in LEVELS
+
+
+def market_of(name: str) -> str:
+    return "US" if canonical(name) in US_NAMES else "IN"
+
+
+@functools.lru_cache(maxsize=4096)
+def trading_day(market: str, d: date) -> bool:
+    from app.data.calendar import is_trading_day
+    return is_trading_day(market, d)
+
+
+def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
+    """The time of the market's last trade: now while it is open (09:15 to 15:30 IST on a trading day; 09:30 to 16:00
+    New York time for the US), else the close of the latest session. Out of hours quotes stand still at that close and
+    say when it was, as the real ones do, so a page never claims a price from a moment nobody traded."""
+    (oh, om), (ch, cm), tz = SESSION[market]
+    now = (now or datetime.now(tz)).astimezone(tz)
+    close = now.replace(hour=ch, minute=cm, second=0, microsecond=0)
+    if trading_day(market, now.date()) and now >= now.replace(hour=oh, minute=om, second=0, microsecond=0):
+        return min(now, close)
+    day = close - timedelta(days=1)
+    while not trading_day(market, day.date()):
+        day -= timedelta(days=1)
+    return day
+
+
+def last_close(market: str = "IN", now: datetime | None = None) -> datetime:
+    """The close of the latest session that has ended: today's after the close, else the trading day before's."""
+    (_, _), (ch, cm), tz = SESSION[market]
+    now = (now or datetime.now(tz)).astimezone(tz)
+    day = now.replace(hour=ch, minute=cm, second=0, microsecond=0)
+    if now < day:
+        day -= timedelta(days=1)
+    while not trading_day(market, day.date()):
+        day -= timedelta(days=1)
+    return day
+
+
+def previous_close(market: str = "IN", now: datetime | None = None) -> datetime:
+    """The close before the price now: the last close while the market is open, else the session's before it."""
+    clock = session_clock(now, market)
+    c = last_close(market, now)
+    if clock < c or clock == c:          # out of hours: the price now is that close; the one before it is the day before's
+        day = c - timedelta(days=1)
+        while not trading_day(market, day.date()):
+            day -= timedelta(days=1)
+        return day
+    return c
+
+
+def _phase(name: str) -> float:
+    key = "NIFTY 50" if name in BROAD else name
+    return (100 + zlib.crc32(key.encode()) % 3000) % 7         # each name keeps its own rhythm whatever its level
+
+
+def _shape(name: str, epoch: float) -> float:
+    d = epoch / 86400
+    amp = 0.05 if name in BROAD else 0.08
+    return math.exp(0.0003 * (d - 20000)) * (1 + amp * math.sin(d / 11 + _phase(name)))
+
+
+def base(name: str) -> float:
+    """The level a name closed at last; one the table doesn't know gets a steady made-up level of its own."""
+    name = canonical(name)
+    return LEVELS.get(name) or float(100 + zlib.crc32(name.encode()) % 3000)
+
+
+def level(name: str) -> float | None:
+    """The table's level for a name (the latest close), by the broker's name or the quote site's ticker, else None."""
+    return LEVELS.get(canonical(name))
+
+
+def price(name: str, when: datetime | float, now: datetime | None = None) -> float:
+    """The price of `name` at `when` (a time or seconds since 1970). The latest session's close is the table's level."""
+    name = canonical(name)
+    t = when.timestamp() if isinstance(when, datetime) else float(when)
+    anchor = last_close(market_of(name), now).timestamp()
+    return round(base(name) * _shape(name, t) / _shape(name, anchor), 2)
+
+
+def last(name: str, now: datetime | None = None) -> float:
+    """The price now: still at the last close out of hours."""
+    return price(name, session_clock(now, market_of(name)), now)
+
+
+def prev(name: str, now: datetime | None = None) -> float:
+    """The close before the price now (what "today's change" is measured from)."""
+    return price(name, previous_close(market_of(name), now), now)
+
+
+def market_cap(symbol: str, at_price: float | None = None) -> float | None:
+    """Market value in ₹ crore (India) or $ (US): shares x the price."""
+    sh = SHARES.get(canonical(symbol))
+    if sh is None:
+        return None
+    p = at_price if at_price is not None else last(symbol)
+    return round(sh * p * (1e6 if market_of(symbol) == "US" else 1), 2)

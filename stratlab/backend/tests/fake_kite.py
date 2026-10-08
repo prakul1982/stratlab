@@ -1,8 +1,6 @@
 """A stand-in for the broker's API (KiteConnect): NSE stocks and indices, NFO futures and options, MCX futures, with
 deterministic wavy candles at every interval, last prices and quotes. `online()` returns a KiteService that is
 logged in and serves all of it, so every Indian feature runs in tests."""
-import math
-import zlib
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -10,36 +8,30 @@ from app import rotation, sector_members, universes
 from app.data.mcx import CONTRACTS
 from app.kite_service import KiteService, today_ist
 from tests.fake_names import name_of
-from tests.fake_prices import ETF_NAMES, level
+from tests import fake_prices
+from tests.fake_prices import ETF_NAMES
 
 IST = ZoneInfo("Asia/Kolkata")
 STEP = {"day": 1440, "60minute": 60, "15minute": 15, "5minute": 5, "minute": 1}
 OPTIONS = {"NIFTY": ("NIFTY 50", 50, 75), "BANKNIFTY": ("NIFTY BANK", 100, 35)}
 
 
-def _base(name: str) -> float:
-    return level(name, 20000) or 100 + zlib.crc32(name.encode()) % 3000     # well-known names trade near their real levels (fake_prices)
-
-
 def session_clock(now: datetime | None = None) -> datetime:
-    """The time the exchange's last trade was at: now while the market is open (Mon to Fri, 09:15 to 15:30 IST), else the
-    close of the latest session. Out of hours the broker's quotes stand still at the close and say when it was, as the real
-    ones do, so a page never claims a price from a moment nobody traded."""
-    now = (now or datetime.now(IST)).astimezone(IST)
-    close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-    if now.weekday() < 5 and now >= now.replace(hour=9, minute=15, second=0, microsecond=0):
-        return min(now, close)
-    day = close - timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
+    """The time of the exchange's last trade (fake_prices.session_clock): now while the market is open, else the close of
+    the latest session, so out of hours the broker's quotes stand still at the close and say when it was."""
+    return fake_prices.session_clock(now, "IN")
 
 
 def price_of(name: str, t: datetime) -> float:
-    d = t.timestamp() / 86400
-    b = _base(name)
-    phase = (100 + zlib.crc32(name.encode()) % 3000) % 7          # each name keeps its own rhythm whatever its level
-    return round(b * (1 + 0.0003 * (d - 20000)) + b * 0.08 * math.sin(d / 11 + phase), 2)
+    """The demo world's one price for an instrument at a time (fake_prices), whichever fake reads it."""
+    return fake_prices.price(name, t)
+
+
+def _priced(row: dict) -> str:
+    """The name an instrument is priced by: an index future trades with its index, everything else under its own symbol."""
+    if row.get("instrument_type") == "FUT" and row.get("name") in OPTIONS:
+        return OPTIONS[row["name"]][0]
+    return row["tradingsymbol"]
 
 
 def _expiries(n=3):
@@ -134,14 +126,21 @@ class FakeKiteConnect:
             t = t.replace(hour=0, minute=0)
         else:
             t = t.replace(minute=(t.minute // step) * step)
-        now = session_clock() if t.tzinfo else session_clock().replace(tzinfo=None)
+        now = session_clock()
+        sym = _priced(r)
         while t <= to:
-            day_ok = t.weekday() < 5
-            in_hours = step == 1440 or (t.hour, t.minute) >= (9, 15) and (t.hour, t.minute) < (15, 30)
-            if day_ok and in_hours:
+            at = t if t.tzinfo else t.replace(tzinfo=IST)
+            if step == 1440:     # a day's candle runs from the open to the close
+                start, end = at.replace(hour=9, minute=15), at.replace(hour=15, minute=30)
+            else:
+                start, end = at, at + timedelta(minutes=step)
+            if start > now:      # nothing has traded yet: no candle for a session that hasn't opened
+                break
+            in_hours = step == 1440 or (at.hour, at.minute) >= (9, 15) and (at.hour, at.minute) < (15, 30)
+            if in_hours and fake_prices.trading_day("IN", at.date()):
                 # the candle still forming closes at the price now, so the chart's last candle and the quote agree
-                o, c = price_of(r["tradingsymbol"], t), price_of(r["tradingsymbol"], min(t + timedelta(minutes=step), now))
-                out.append({"date": t.replace(tzinfo=IST), "open": o, "high": max(o, c) * 1.004, "low": min(o, c) * 0.996,
+                o, c = price_of(sym, start), price_of(sym, min(end, now))
+                out.append({"date": at.astimezone(IST), "open": o, "high": round(max(o, c) * 1.004, 2), "low": round(min(o, c) * 0.996, 2),
                             "close": c, "volume": 1000})
             t += timedelta(minutes=step)
             if len(out) > 20000:
@@ -155,7 +154,7 @@ class FakeKiteConnect:
         for k in keys:
             r = self.by_key.get(k)
             if r:
-                out[k] = {"instrument_token": r["instrument_token"], "last_price": price_of(r["tradingsymbol"], now)}
+                out[k] = {"instrument_token": r["instrument_token"], "last_price": price_of(_priced(r), now)}
         return out
 
     def quote(self, keys):
@@ -165,12 +164,12 @@ class FakeKiteConnect:
         for k in keys:
             r = self.by_key.get(k)
             if r:
-                p = price_of(r["tradingsymbol"], now)
-                # the previous close is where today's daily candle opened (midnight), as the broker's own quote has it
-                prev = price_of(r["tradingsymbol"], now.replace(hour=0, minute=0, second=0, microsecond=0))
+                p = price_of(_priced(r), now)
+                # the previous close is the session before's close, the previous daily candle's own close
+                prev = fake_prices.prev(_priced(r))
                 out[k] = {"instrument_token": r["instrument_token"], "last_price": p, "volume": 1000,
                           "last_trade_time": now.replace(tzinfo=None, microsecond=0),
-                          "ohlc": {"open": prev, "high": max(prev, p) * 1.004, "low": min(prev, p) * 0.996, "close": prev},
+                          "ohlc": {"open": prev, "high": round(max(prev, p) * 1.004, 2), "low": round(min(prev, p) * 0.996, 2), "close": prev},
                           "depth": {"buy": [{"price": p - 0.05, "quantity": 100}], "sell": [{"price": p + 0.05, "quantity": 100}]}}
         return out
 

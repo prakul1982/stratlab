@@ -24,31 +24,145 @@ EARN = [{"period": p, "actual": a, "estimate": e, "surprisePercent": s} for p, a
         (("2025-07-31", 1.05, 1.01, 3.9), ("2025-04-30", 0.96, 0.93, 3.2), ("2025-01-31", 0.89, 0.85, 4.7), ("2024-10-31", 0.81, 0.75, 8.0))]
 NEWS = [{"headline": "Nvidia unveils new data centre chips", "url": "https://example.com/1", "source": "Reuters", "datetime": 1790000000},
         {"headline": "Chip stocks rally on AI demand", "url": "https://example.com/2", "source": "CNBC", "datetime": 1789990000}]
-RSS = """<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>
-<item><title>Reliance shares rise after strong Jio numbers - Economic Times</title><link>https://example.com/et</link><pubDate>Wed, 24 Sep 2026 08:00:00 GMT</pubDate><source url="https://economictimes.com">Economic Times</source></item>
-<item><title>Nifty ends higher as banks gain &amp; IT slips - Mint</title><link>https://example.com/mint</link><pubDate>Wed, 24 Sep 2026 10:30:00 GMT</pubDate><source url="https://livemint.com">Mint</source></item>
-</channel></rss>"""
+COMPANY_NEWS = {"reliance": ("Reliance shares rise after strong Jio numbers", "Economic Times", "https://economictimes.com"),
+                "tata consultancy services": ("TCS shares steady ahead of its quarterly results", "Mint", "https://livemint.com"),
+                "infosys": ("Infosys sets a date for its board meeting on results", "Business Standard", "https://business-standard.com")}
+
+
+def _market_line(region: str) -> tuple[str, str, str]:
+    """The day's market headline, in step with the price table: up or down as the index is, at its level."""
+    from tests import fake_prices as P
+    name, short = ("NIFTY 50", "Nifty") if region == "IN" else ("^GSPC", "S&P 500")
+    now, prev = P.last(name), P.prev(name)
+    market = "IN" if region == "IN" else "US"
+    closed = P.session_clock(None, market) == P.last_close(market)
+    verb = ("ends" if closed else "trades") + (" higher" if now >= prev else " lower")
+    src = ("Economic Times", "https://economictimes.com") if region == "IN" else ("Reuters", "https://reuters.com")
+    return f"{short} {verb} at {now:,.0f}", *src
+
+
+def rss(query: str, region: str = "IN") -> str:
+    """The feed for a search, as the news site would answer it: the named company's own headline first (when the demo
+    world has one; a company it has none for gets none), then the day's market headline. Every item is a few hours
+    old whenever the tests run."""
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+    from html import escape
+    q = query.lower()
+    items = [v for k, v in COMPANY_NEWS.items() if k in q]
+    if not items or "market" in q or "reliance" in q:
+        items.append(_market_line(region))
+    if "share price" in q and not any(k in q for k in COMPANY_NEWS):
+        items = []                           # a company the demo world has no news about: none, never another's
+    now = datetime.now(timezone.utc)
+    out = []
+    for i, (title, source, site) in enumerate(items):
+        at = format_datetime(now - timedelta(hours=2 + 3 * i))
+        out.append(f"<item><title>{escape(title)} - {escape(source)}</title><link>https://example.com/news/{i + 1}</link>"
+                   f"<pubDate>{at}</pubDate><source url=\"{site}\">{escape(source)}</source></item>")
+    return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel>' + "".join(out) + "</channel></rss>"
+
+
+# Apple, the US company the browser tests open: its own name, numbers, news and people (made up, in the source's shape).
+# Its price and market value come from the demo world's price table (fake_prices), like its chart's.
+AAPL = {
+    "profile": {"country": "US", "currency": "USD", "exchange": "NASDAQ NMS - GLOBAL MARKET", "finnhubIndustry": "Technology",
+                "ipo": "1980-12-12", "logo": "", "name": "Apple Inc", "ticker": "AAPL", "weburl": "https://www.apple.com/"},
+    "metric": {"metric": {"peTTM": 28.1, "forwardPE": 26.4, "psTTM": 6.6, "pb": 41.5, "evEbitdaTTM": 20.3,
+                          "grossMarginTTM": 46.2, "operatingMarginTTM": 31.5, "netProfitMarginTTM": 24.3, "roeTTM": 151.3,
+                          "roaTTM": 29.6, "revenueGrowthTTMYoy": 6.4, "epsGrowthTTMYoy": 9.1, "revenueGrowth3Y": 1.8,
+                          "revenueGrowth5Y": 8.7, "epsGrowth5Y": 15.4, "currentRatioQuarterly": 0.9,
+                          "longTermDebt/equityQuarterly": 1.2, "epsTTM": 6.51, "beta": 1.2, "dividendYieldIndicatedAnnual": 0.55,
+                          "payoutRatioTTM": 15.2}},
+    "fin": {"data": [{"year": y, "report": {"ic": [{"label": "Revenue", "concept": "us-gaap_Revenues", "value": rev},
+                                                   {"label": "Net income", "concept": "us-gaap_NetIncomeLoss", "value": ni}]}}
+                     for y, rev, ni in ((2025, 416161e6, 112010e6), (2024, 391035e6, 93736e6), (2023, 383285e6, 96995e6),
+                                        (2022, 394328e6, 99803e6))]},
+    "earn": [{"period": p, "actual": a, "estimate": e, "surprisePercent": x} for p, a, e, x in
+             (("2026-06-30", 1.62, 1.55, 4.5), ("2026-03-31", 1.71, 1.66, 3.0), ("2025-12-31", 2.52, 2.41, 4.6), ("2025-09-30", 1.85, 1.77, 4.5))],
+    "peers": ["AAPL", "MSFT", "GOOGL", "DELL", "HPQ"],
+    "rec": [{"period": "2026-09-01", "strongBuy": 14, "buy": 22, "hold": 12, "sell": 2, "strongSell": 0}],
+    "insider": {"data": [{"name": "Cook Timothy D", "change": -108136, "filingDate": "2026-09-04"},
+                         {"name": "O'Brien Deirdre", "change": -34821, "filingDate": "2026-08-12"}]},
+    "news": [("Apple's new iPhones go on sale across its stores", "Reuters", 5), ("Apple shares edge up ahead of its quarterly results", "CNBC", 30)],
+}
+NVDA_NEWS = [("Nvidia unveils new data centre chips", "Reuters", 4), ("Chip stocks rally on AI demand", "CNBC", 7)]
+
+
+def _news(rows) -> list[dict]:
+    """Headlines a few hours old whenever the tests run."""
+    import time
+    now = int(time.time())
+    return [{"headline": h, "url": f"https://example.com/{i + 1}", "source": src, "datetime": now - hours * 3600}
+            for i, (h, src, hours) in enumerate(rows)]
+
+
+def _quote(sym: str) -> dict:
+    """The price table's numbers for a US company, in the source's shape: the last trade (the close, out of hours)."""
+    from tests import fake_prices as P
+    c, pc = P.last(sym), P.prev(sym)
+    clock = P.session_clock(None, "US")
+    return {"c": c, "d": round(c - pc, 2), "dp": round((c / pc - 1) * 100, 2), "h": round(max(c, pc) * 1.004, 2),
+            "l": round(min(c, pc) * 0.996, 2), "o": pc, "pc": pc, "t": int(clock.timestamp())}
+
+
+def _range52(sym: str) -> tuple[float, float]:
+    """The lowest and highest daily close of the last year, from the price table (as the chart draws them)."""
+    from datetime import timedelta
+    from tests import fake_prices as P
+    end = P.session_clock(None, "US")
+    closes = [P.price(sym, end - timedelta(days=d)) for d in range(0, 366)]
+    return round(min(closes), 2), round(max(closes), 2)
+
+
+def _company(sym: str) -> dict | None:
+    """One US company's answers: NVIDIA's fixed ones (the unit tests read them), Apple's own, and for the other
+    companies the price table knows, their name and price only."""
+    from tests import fake_prices as P
+    if sym == "NVDA":
+        return {"profile": PROFILE, "quote": QUOTE, "metric": METRIC, "news": _news(NVDA_NEWS), "peers": ["NVDA", "AMD", "AVGO", "INTC"],
+                "rec": [{"period": "2025-09-01", "strongBuy": 24, "buy": 38, "hold": 7, "sell": 1, "strongSell": 0}],
+                "earn": EARN, "fin": FIN,
+                "insider": {"data": [{"name": "Huang Jen-Hsun", "change": -120000, "filingDate": "2026-09-10"},
+                                     {"name": "Kress Colette", "change": -30000, "filingDate": "2026-09-02"}]},
+                "cal": [{"date": "2099-11-19", "epsEstimate": 1.2, "symbol": "NVDA"}]}
+    if sym == "AAPL":
+        low, high = _range52(sym)
+        q = _quote(sym)
+        prof = dict(AAPL["profile"], marketCapitalization=round(P.market_cap(sym) / 1e6, 1))
+        metric = {"metric": dict(AAPL["metric"]["metric"], **{"52WeekHigh": high, "52WeekLow": low,
+                                                               "52WeekPriceReturnDaily": round((q["c"] / P.price(sym, P.session_clock(None, "US").timestamp() - 365 * 86400) - 1) * 100, 1)})}
+        cal = [r for r in us_calendar() if r["symbol"] == "AAPL"]
+        return {"profile": prof, "quote": q, "metric": metric, "news": _news(AAPL["news"]), "peers": AAPL["peers"], "rec": AAPL["rec"],
+                "earn": AAPL["earn"], "fin": AAPL["fin"], "insider": AAPL["insider"], "cal": cal}
+    name = P.name_of(sym) if P.market_of(sym) == "US" else None
+    if not name:
+        return None
+    prof = {"country": "US", "currency": "USD", "exchange": "NEW YORK STOCK EXCHANGE, INC.", "finnhubIndustry": P.sector_of(sym) or "",
+            "name": name, "ticker": sym, "marketCapitalization": round((P.market_cap(sym) or 0) / 1e6, 1)}
+    return {"profile": prof, "quote": _quote(sym), "metric": {"metric": {}}, "news": [], "peers": [], "rec": [], "earn": [],
+            "fin": {"data": []}, "insider": {"data": []}, "cal": []}
 
 
 def fake_finnhub(reject: bool = False) -> httpx.MockTransport:
     def handler(req: httpx.Request):
         if reject:
             return httpx.Response(401, json={"error": "Invalid API key"})
-        p, sym = req.url.path, req.url.params.get("symbol", "")
-        if sym == "NOPE" and p.endswith("/profile2"):
-            return httpx.Response(200, json={})
-        routes = {"/api/v1/stock/profile2": PROFILE, "/api/v1/quote": QUOTE, "/api/v1/stock/metric": METRIC,
-                  "/api/v1/company-news": NEWS, "/api/v1/stock/peers": ["NVDA", "AMD", "AVGO", "INTC"],
-                  "/api/v1/stock/recommendation": [{"period": "2025-09-01", "strongBuy": 24, "buy": 38, "hold": 7, "sell": 1, "strongSell": 0}],
-                  "/api/v1/stock/earnings": EARN, "/api/v1/stock/financials-reported": FIN,
-                  "/api/v1/stock/insider-transactions": {"data": [{"name": "Huang Jen-Hsun", "change": -120000, "filingDate": "2026-09-10"},
-                                                                  {"name": "Kress Colette", "change": -30000, "filingDate": "2026-09-02"}]},
-                  "/api/v1/calendar/earnings": {"earningsCalendar": [{"date": "2099-11-19", "epsEstimate": 1.2, "symbol": "NVDA"}]},
-                  "/api/v1/search": {"result": [{"symbol": "NVDA", "description": "NVIDIA CORP", "type": "Common Stock"},
-                                                {"symbol": "NVDA.SW", "description": "NVIDIA CORP", "type": "Common Stock"}]},
-                  "/api/v1/news": NEWS}
+        p, sym = req.url.path, req.url.params.get("symbol", "").upper()
         if p == "/api/v1/calendar/earnings" and not sym:
             return httpx.Response(200, json={"earningsCalendar": us_calendar()})
+        if p == "/api/v1/search":
+            return httpx.Response(200, json={"result": [{"symbol": "NVDA", "description": "NVIDIA CORP", "type": "Common Stock"},
+                                                        {"symbol": "NVDA.SW", "description": "NVIDIA CORP", "type": "Common Stock"}]})
+        if p == "/api/v1/news":
+            return httpx.Response(200, json=_news(NVDA_NEWS))
+        co = _company(sym) if sym != "NOPE" else None
+        if co is None:              # a ticker the source doesn't know: an empty profile, like the real one
+            return httpx.Response(200, json={} if p.endswith(("/profile2", "/quote", "/metric")) else [])
+        routes = {"/api/v1/stock/profile2": co["profile"], "/api/v1/quote": co["quote"], "/api/v1/stock/metric": co["metric"],
+                  "/api/v1/company-news": co["news"], "/api/v1/stock/peers": co["peers"], "/api/v1/stock/recommendation": co["rec"],
+                  "/api/v1/stock/earnings": co["earn"], "/api/v1/stock/financials-reported": co["fin"],
+                  "/api/v1/stock/insider-transactions": co["insider"], "/api/v1/calendar/earnings": {"earningsCalendar": co["cal"]}}
         if p in routes:
             return httpx.Response(200, json=routes[p])
         return httpx.Response(404, json={})
@@ -78,7 +192,7 @@ def fake_screener() -> httpx.MockTransport:
 
 
 def fake_news() -> httpx.MockTransport:
-    return httpx.MockTransport(lambda req: httpx.Response(200, text=RSS))
+    return httpx.MockTransport(lambda req: httpx.Response(200, text=rss(req.url.params.get("q", ""), req.url.params.get("gl", "IN"))))
 
 
 WIKI_PAGES = {

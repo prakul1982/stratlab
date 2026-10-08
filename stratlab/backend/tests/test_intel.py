@@ -89,7 +89,11 @@ def test_screener_unknown_company():
 def test_google_news_and_wikipedia():
     items = GoogleNews(transport=fake_news()).search("reliance", "IN")
     assert items[0]["headline"] == "Reliance shares rise after strong Jio numbers" and items[0]["source"] == "Economic Times"
-    assert items[1]["headline"] == "Nifty ends higher as banks gain & IT slips" and items[0]["at"].startswith("2026-09-24")
+    # the day's market headline follows the demo world's index (up or down, at its level), and every item is hours old
+    from datetime import datetime, timedelta, timezone
+    import re
+    assert re.fullmatch(r"Nifty (ends|trades) (higher|lower) at [\d,]+", items[1]["headline"])
+    assert datetime.now(timezone.utc) - datetime.fromisoformat(items[0]["at"]) < timedelta(hours=6)
     w = Wikipedia(transport=fake_wiki()).company("Reliance Industries Ltd")
     assert w["title"] == "Reliance Industries" and w["url"].endswith("Reliance_Industries")
 
