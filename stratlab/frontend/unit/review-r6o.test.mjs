@@ -114,3 +114,10 @@ test("ETF vs NAV: the close the gap uses and the price's day are shown, and a ph
   assert.match(dt, /const cap = stack && phonePage && phone \? phonePage \* pages : Infinity;/);
   assert.match(dt, /Show \{Math\.min\(left, phonePage \?\? left\)\} more/);
 });
+
+test("Rotation's chart is a group with tappable points, not an image holding buttons; phone targets reach 32px (R6O-024)", () => {
+  assert.match(read("src/components/Rotation.tsx"), /<svg width=\{W\} height=\{H\} role="group" aria-label=\{`Rotation of/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-th-sort \{ min-height: 32px; display: inline-flex; align-items: center; \}/);
+  assert.match(css, /\.k-card-head a, \.k-card-head \.btn\.sm, \.inv-head-price a \{ min-height: 32px; \}/);
+});
