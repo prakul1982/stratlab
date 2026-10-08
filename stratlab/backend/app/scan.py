@@ -169,7 +169,7 @@ def watchlist_members(uid: str, region: str) -> list[dict]:
 
 def alert_text(market: str, fresh: list[dict]) -> str:
     names = ", ".join(r["symbol"] for r in fresh[:8]) + (f" and {len(fresh) - 8} more" if len(fresh) > 8 else "")
-    return (f"ST S2 on your {'India' if market == 'IN' else 'US'} watchlist: {names} "
+    return (f"Stage 2 + Supertrend on your {'India' if market == 'IN' else 'US'} watchlist: {names} "
             f"{'is' if len(fresh) == 1 else 'are'} in Stage 2 with the Supertrend turning up. Your rules, not advice.")
 
 
@@ -233,6 +233,6 @@ class Alerts:
                     continue
                 fresh = [r for r in run(self.registry, market, members)["rows"] if r["signal"] == "fresh" and r["st_days"] == 1]
                 if fresh:
-                    self.notify(profile, "StratLab: ST S2 signals", alert_text(market, fresh), url="/research/scan")
+                    self.notify(profile, "StratLab: Stage 2 + Supertrend signals", alert_text(market, fresh), url="/research/scan")
                     sent += 1
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)

@@ -23,6 +23,13 @@ export function promoUntil(o: Offer | null | undefined, now = Date.now()): strin
 export const canBuy = (o: Offer | null | undefined) => !!o?.payments;
 
 
+/** What a lock or a limit offers next: "See plans" once a plan can be bought; while none can, "Tell me when plans open", and
+ * once that is pressed, a note that they are on the list. While the offer can't be read, nothing is promised: "See plans". */
+export function plansCall(o: Offer | null | undefined, joined: boolean): { kind: "see" | "join" | "joined"; label: string } {
+  if (canBuy(o) || offerMode(o) === "unknown") return { kind: "see", label: "See plans" };
+  return joined ? { kind: "joined", label: "You're on the list" } : { kind: "join", label: "Tell me when plans open" };
+}
+
 const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
 
 /** Where people ask for early access while no plan can be bought (config.js CONTACT_EMAIL in the app). */

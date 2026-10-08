@@ -147,7 +147,7 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   await expect(page.getByTestId("mine-home")).toBeVisible({ timeout: 30_000 });
   if (phone) await page.getByRole("button", { name: "Open menu" }).click();
   const side = page.locator("aside.sidebar");
-  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("radio", { name: "My space" })).toHaveAttribute("aria-checked", "true");
   await expect(side.getByRole("link", { name: "My space" })).toHaveClass(/active/);
   await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
@@ -174,7 +174,7 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   await pinned.getByRole("link", { name: "Margin funding" }).click();
   await expect(page).toHaveURL(/\/invest\/margin-funding$/);
   if (phone) await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("radio", { name: "My space" })).toHaveAttribute("aria-checked", "true");
   await expect(side.locator('[data-group="pinned"]').getByRole("link", { name: "Margin funding" })).toHaveClass(/active/);
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
   // kept after a reload; unpin removes it
@@ -224,7 +224,7 @@ test("the AI assistant, Get the app and Invite friends pages drop 'Mine ·' from
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator("main .k-eyebrow").first()).toHaveText(title);
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Mine");
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("My space");
   }
   expect(errors).toEqual([]);
 });

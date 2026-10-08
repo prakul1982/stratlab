@@ -12,7 +12,7 @@ from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num
-from .news import GoogleNews, Wikipedia
+from .news import GoogleNews, Wikipedia, mentions
 from .screener import Screener, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
@@ -311,7 +311,10 @@ class Research:
             "industry": p.get("finnhubIndustry"),
             "market_cap": (p["marketCapitalization"] * 1e6) if p.get("marketCapitalization") else None,
             "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
-                      "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc")} if q.get("c") else None,
+                      "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc"),
+                      # the time of the last trade (the close, out of hours), for the page's "as of", never the moment of asking
+                      "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
+                      } if q.get("c") else None,
             "range52": {"low": num(M.get("52WeekLow")), "high": num(M.get("52WeekHigh"))},
             "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
@@ -483,7 +486,8 @@ class Research:
             "trend": trend, "quarters": quarters, "shareholding": holding,
             "pros": (scr or {}).get("pros") or [], "cons": (scr or {}).get("cons") or [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
-            "news": r2.get("news") or [],
+            # a name search also brings the market's and other companies' headlines: only the ones about this company
+            "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],
             "about": {"wiki": r2.get("wiki"), "profile": (scr or {}).get("about")},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]

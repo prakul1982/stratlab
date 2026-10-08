@@ -9,7 +9,7 @@ import { InstrumentSearch } from "../components/InstrumentSearch";
 import { SurvBadges } from "../components/Surveillance";
 import { Card, CardHead, ChipBar, EmptyState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, TilePicker } from "../components/kit";
 import { HELP } from "../lib/help";
-import { useNotebook } from "./NotebookPage";
+import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 
 /* /n/:id/market: pick the market and instrument a notebook tests on, or a group, or your own CSV. Built from the kit
@@ -112,7 +112,7 @@ export function MarketPage() {
   const { id } = useParams();
   const nav = useNavigate();
   const { markets, notify } = useApp();
-  const { nb, patch, flush } = useNotebook(id);
+  const { nb, patch, flush, problem, reload } = useNotebook(id);
   const [sel, setSel] = useState<string | null>(null);
   const [upload, setUpload] = useState<{ bars: Candle[]; skipped: number; file: string } | null>(null);
   const [upName, setUpName] = useState("");
@@ -127,6 +127,7 @@ export function MarketPage() {
     setSel(asked || current || markets.find((m) => m.status === "live" && m.id !== "CSV")?.id || "CRYPTO");
   }, [nb, markets, sel, loc.state]);
 
+  if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Where do you want to test it?" /><Card><Skeleton label="Opening markets" /></Card></div>;
   const market = markets.find((m) => m.id === sel);
 

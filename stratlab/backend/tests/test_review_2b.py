@@ -32,7 +32,9 @@ def test_the_fake_broker_stands_still_out_of_hours():
     night = datetime(2026, 10, 8, 3, 31, tzinfo=IST)                               # Thursday, before the open
     assert session_clock(night) == datetime(2026, 10, 7, 15, 30, tzinfo=IST)
     assert session_clock(datetime(2026, 10, 10, 12, 0, tzinfo=IST)) == datetime(2026, 10, 9, 15, 30, tzinfo=IST)    # a Saturday: Friday's close
-    assert session_clock(datetime(2026, 10, 5, 8, 0, tzinfo=IST)) == datetime(2026, 10, 2, 15, 30, tzinfo=IST)      # Monday morning: Friday's close
+    # Monday morning: the last session's close, Thursday's (Friday 2 Oct is Gandhi Jayanti, an exchange holiday)
+    assert session_clock(datetime(2026, 10, 5, 8, 0, tzinfo=IST)) == datetime(2026, 10, 1, 15, 30, tzinfo=IST)
+    assert session_clock(datetime(2026, 10, 13, 8, 0, tzinfo=IST)) == datetime(2026, 10, 12, 15, 30, tzinfo=IST)    # a plain Tuesday morning
     mid = datetime(2026, 10, 7, 11, 5, tzinfo=IST)
     assert session_clock(mid) == mid
 

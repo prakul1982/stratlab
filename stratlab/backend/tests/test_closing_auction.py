@@ -141,7 +141,10 @@ def test_routes_and_gate(w, monkeypatch):
     r = c.get("/trade/closing-auction/history", headers=headers("basic-token"))
     assert r.status_code == 200 and len(r.json()["days"]) == 8
     r = c.get("/trade/closing-auction/history?symbol=reliance", headers=headers("basic-token"))
-    assert r.json()["days"][0]["stock"]["ref"] == 1400.0
+    # the stored days are at the demo world's closes (fake_prices): the latest one's final price is RELIANCE's close
+    # that day, 0.1% above its reference price
+    st = r.json()["days"][0]["stock"]
+    assert st["ref"] == pytest.approx(st["final"] / 1.001, abs=0.01)
     assert c.get("/trade/closing-auction/history?symbol=A;B", headers=headers("basic-token")).status_code == 422
     assert c.get(f"/trade/closing-auction/history?symbol={'X' * 40}", headers=headers("basic-token")).status_code == 422
     assert "TCS" in text

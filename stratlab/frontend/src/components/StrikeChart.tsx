@@ -61,7 +61,9 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
               {(["call", "put"] as const).map((s) => {
                 const v = val(r, s);
                 if (v == null || v === 0) return null;
-                return <path key={s} d={barPath(zero[s], reach(s, v), at + (ROW - BAR) / 2, BAR)} fill={`var(--pos-${s})`} opacity={v < 0 ? 0.55 : 1} />;
+                const d = barPath(zero[s], reach(s, v), at + (ROW - BAR) / 2, BAR);
+                if (!d) return null;             // under half a pixel at this width: no empty shape (the tooltip and table have it)
+                return <path key={s} d={d} fill={`var(--pos-${s})`} opacity={v < 0 ? 0.55 : 1} />;
               })}
               <text x={(cx0 + cx1) / 2} y={at + ROW / 2 + 4} textAnchor="middle" fontFamily="var(--sans)" fontSize={11.5}
                 fill={r.strike === nearest ? "var(--ink)" : "var(--muted)"} fontWeight={r.strike === nearest ? 600 : 400}>{strikeText(r.strike)}</text>

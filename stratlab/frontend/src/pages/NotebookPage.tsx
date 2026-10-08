@@ -13,11 +13,12 @@ import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons"
 import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
-import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, PageHeader, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
+import { usePlansToast } from "../components/PlanInterest";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the two-column layout with the lab notes beside it stays. */
@@ -29,13 +30,20 @@ const PERIODS: Record<Tf, number[]> = {
 export function useNotebook(id: string | undefined) {
   const { fail, refreshNotebooks } = useApp();
   const [nb, setNb] = useState<Notebook | null>(null);
+  // why there's no notebook to show: none at this address (deleted, mistyped, another account's), or it couldn't be read
+  const [problem, setProblem] = useState<"missing" | "error" | null>(null);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<number>(undefined);
   const pending = useRef<Record<string, unknown>>({});
 
   const load = useCallback(async () => {
     if (!id) return;
-    try { setNb(await api<Notebook>(`/notebooks/${id}`)); } catch (e) { fail(e); }
+    setProblem(null);
+    try { setNb(await api<Notebook>(`/notebooks/${id}`)); } catch (e) {
+      const status = (e as ApiError).status;
+      if (status === 404 || status === 400 || status === 422) setProblem("missing");      // a page says so; no toast
+      else { setProblem("error"); fail(e); }
+    }
   }, [id, fail]);
   useEffect(() => { setNb(null); load(); }, [load]);
 
@@ -65,7 +73,31 @@ export function useNotebook(id: string | undefined) {
   }, [flush]);
 
   useEffect(() => () => { window.clearTimeout(timer.current); flush(); }, [flush]);
-  return { nb, setNb, patch, saving, reload: load, flush };
+  return { nb, setNb, patch, saving, reload: load, flush, problem };
+}
+
+/** What a notebook page shows instead of skeletons when there's no notebook to open: not found (with the way to your
+ * notebooks, like the site's own not-found page), or couldn't be read (with Try again). Undefined while it loads. */
+export function NotebookProblem({ problem, retry }: { problem: "missing" | "error" | null; retry: () => void }) {
+  if (problem === "missing") return (
+    <div className="k-page">
+      <PageHeader eyebrow="Not found" title="Notebook not found"
+        lede="There's no notebook at this address. It may have been deleted, or the link may be mistyped or from another account." />
+      <div className="gate-actions">
+        <Link className="btn" to="/notebooks">Go to notebooks</Link>
+        <Link className="btn quiet" to="/new">Start a new notebook</Link>
+      </div>
+    </div>
+  );
+  if (problem === "error") return (
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Notebook" />
+      <ErrorState title="The notebook couldn't be opened" action={{ label: "Try again", onClick: retry }}>
+        Nothing in it has changed. Try again in a moment, or go to <Link className="link" to="/notebooks">your notebooks</Link>.
+      </ErrorState>
+    </div>
+  );
+  return null;
 }
 
 function marketName(inst: Instrument | null, markets: { id: string; name: string }[]) {
@@ -76,10 +108,11 @@ function marketName(inst: Instrument | null, markets: { id: string; name: string
 export function NotebookPage() {
   const { id } = useParams();
   const nav = useNavigate();
+  const plansToast = usePlansToast();
   const loc = useLocation();
   const { markets, fail, notify, refreshMe, refreshNotebooks, me, allIndicators, fno } = useApp();
   const canExport = !!me?.plan_info.features?.export;
-  const { nb, patch, saving, setNb, flush } = useNotebook(id);
+  const { nb, patch, saving, setNb, flush, problem, reload } = useNotebook(id);
   const [gaps, setGaps] = useState<GapInfo | null>((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null);
   const [days, setDays] = useState("365");
   const [label, setLabel] = useState("");
@@ -123,6 +156,7 @@ export function NotebookPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Notebook" /><Card><Skeleton label="Opening notebook" /></Card></div>;
   const s = nb.strategy;
   const inst = nb.instrument && "symbol" in nb.instrument ? nb.instrument : null;
@@ -144,8 +178,8 @@ export function NotebookPage() {
   const run = async () => {
     if (running) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
-    if (!fno && inst?.fno) { notify("Indian F&O is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
-    if (!allIndicators && usesPro(s)) { notify("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!fno && inst?.fno) { plansToast("Indian F&O is on the Pro plan."); return; }
+    if (!allIndicators && usesPro(s)) { plansToast("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them."); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -196,7 +230,7 @@ export function NotebookPage() {
   };
 
   const exportStrategy = async () => {
-    if (!canExport) { notify("Strategy export is on the Pro plan.", { label: "See plans", run: () => nav("/plans") }); return; }
+    if (!canExport) { plansToast("Strategy export is on the Pro plan."); return; }
     try {
       const r = await api<Response>("/export/strategy", { method: "POST", body: { strategy: s, instrument: inst?.id ?? null }, raw: true });
       const a = document.createElement("a");
@@ -283,7 +317,7 @@ export function NotebookPage() {
             ]} />
           </>} />
           <FormGrid label="Notebook name and question">
-            <Field label="Notebook name" maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
+            <Field label="Notebook name" wide maxLength={80} value={nb.name} onChange={(e) => patch({ name: e.target.value })}
               onBlur={(e) => { if (!e.target.value.trim()) patch({ name: "Untitled notebook" }, true); }} />
             <Field label="The question this notebook tests" wide>{(fid) => (
               <AutoGrow id={fid} className="k-textarea" aria-label="The question this notebook tests" value={nb.question ?? ""} maxLength={300}

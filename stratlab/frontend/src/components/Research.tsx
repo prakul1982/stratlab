@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { ago, num, pct, price, safeHref } from "../lib/format";
 import {
-  bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
+  bandPosition, metricText, monthsOld, newsAge, ordinal, researchApi, staleQuarter, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -54,14 +54,17 @@ export function Panel({ title, info, children, right, id }: { title: ReactNode; 
 }
 
 /** The day's price and its change, as one block: the price in the page's sans font and a neutral pill for the change. */
-export function Change({ q, currency }: { q: Quote | null; currency: string }) {
+/** The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
+ * is that session's ("on the day"), never "today" for a day that hasn't traded. */
+export function Change({ q, currency, closed = false }: { q: Quote | null; currency: string; closed?: boolean }) {
   if (!q || q.price == null) return null;
   return (
-    <div className="k-stat inv-quote">
+    <div className="k-stat inv-quote" data-testid="company-price">
+      {closed && <span className="k-stat-k">Last close</span>}
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct} tone="neutral">{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> today
+          <Delta value={q.change_pct} tone="neutral">{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {closed ? "on the day" : "today"}
         </span>
       )}
     </div>
@@ -302,14 +305,20 @@ function FactRows({ rows }: { rows: FactRow[] }) {
 /* ---------- lists ---------- */
 export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: number }) {
   if (!items.length) return <p className="k-small k-muted">No recent headlines.</p>;
+  // newest first; an item over a week old says how old it is beside its date, so it never reads as today's news
+  const when = (n: NewsItem) => (n.at ? new Date(n.at).getTime() : -Infinity);
+  const sorted = [...items].sort((a, b) => when(b) - when(a));
   return (
     <div className="inv-news">
-      {items.slice(0, limit).map((n, i) => (
-        <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
-          <span>{n.headline}</span>
-          <span className="k-note">{n.source}{n.at ? ` · ${ago(n.at)}` : ""} ↗</span>
-        </a>
-      ))}
+      {sorted.slice(0, limit).map((n, i) => {
+        const old = newsAge(n.at);
+        return (
+          <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
+            <span>{n.headline}</span>
+            <span className="k-note">{n.source}{n.at ? ` · ${ago(n.at)}` : ""}{old ? ` · ${old}` : ""} ↗</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -347,9 +356,15 @@ export function QuoteGrid({ region, symbols, names, empty }: { region: Region; s
   );
 }
 
+/** " (16 months old)" when a newer quarter's shareholding should have been filed by now (within 21 days of its end). */
+function holdersAge(asOf: string): string {
+  const n = staleQuarter(asOf, 21);
+  return n != null ? ` (${monthsOld(n)})` : "";
+}
+
 export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> }) {
   return (
-    <BarList label="Who owns it" footnote={`As of ${s.as_of}. The change is over the last year.`}
+    <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year.`}
       rows={s.rows.map((r) => ({
         key: r.label, name: r.label, pct: Math.min(100, r.value),
         value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> {r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)}</span>}</>,

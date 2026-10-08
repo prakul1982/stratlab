@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from tests.fake_prices import level
+from tests import fake_prices
 
 CATALOGUE = [
     {"symbol": "AAPL", "shortname": "Apple Inc.", "longname": "Apple Inc.", "exchange": "NMS", "exchDisp": "NASDAQ", "quoteType": "EQUITY"},
@@ -26,7 +26,35 @@ STEP = {"1d": 86400, "60m": 3600, "15m": 900, "5m": 300}
 
 
 def base_price(sym: str) -> float:
-    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1}.get(sym) or level(sym, 19000) or 180.0   # Indian names: fake_prices
+    return {"VOD.L": 7000.0, "7203.T": 2800.0, "EURUSD=X": 1.1}.get(sym) or 180.0   # the demo world's own names: fake_prices
+
+
+def _shared(sym: str, t: int, p2: int, g: int):
+    """Candles from the demo world's price table (fake_prices), the broker's own numbers: in the market's hours only,
+    each closing at the price at its end (or now, for the one still forming), none after the last trade. Daily candles
+    run from the session's open to its close and are stamped at the open, as the real feed stamps them."""
+    from datetime import timezone
+    market = fake_prices.market_of(sym)
+    (oh, om), (ch, cm), zone = fake_prices.SESSION[market]
+    clock = fake_prices.session_clock(None, market)
+    end_at = min(p2, int(clock.timestamp()))
+    ts, o, h, l, c, v = [], [], [], [], [], []
+    while t <= end_at:
+        if g == 86400:
+            day = datetime.fromtimestamp(t, timezone.utc).date()
+            start = datetime(day.year, day.month, day.day, oh, om, tzinfo=zone)
+            end = start.replace(hour=ch, minute=cm)
+        else:
+            start = datetime.fromtimestamp(t, zone)
+            end = datetime.fromtimestamp(t + g, zone)
+            day = start.date()
+        hours_ok = g == 86400 or ((start.hour, start.minute) >= (oh, om) and (start.hour, start.minute) < (ch, cm))
+        if hours_ok and start <= clock and fake_prices.trading_day(market, day):
+            a, b = fake_prices.price(sym, start), fake_prices.price(sym, min(end, clock))
+            ts.append(int(start.timestamp())); o.append(a); h.append(round(max(a, b) * 1.004, 2)); l.append(round(min(a, b) * 0.996, 2)); c.append(b)
+            v.append(0 if sym.endswith("=X") else 1000)
+        t += g
+    return ts, o, h, l, c, v, clock
 
 
 def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTransport:
@@ -41,12 +69,18 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
             if fail and sym in fail or sym.startswith("NOPE"):
                 return httpx.Response(404, json={"chart": {"result": None, "error": {"description": "No data found"}}})
             tz, cur = next((v for k, v in TZ.items() if sym.endswith(k)), ("America/New_York", "USD"))
+            if fake_prices.known(sym) and fake_prices.market_of(sym) == "IN":
+                tz, cur = "Asia/Kolkata", "INR"
             g = STEP[req.url.params["interval"]]
             p1, p2 = int(req.url.params["period1"]), min(int(req.url.params["period2"]), int(time.time()))
             ts, o, h, l, c, v = [], [], [], [], [], []
+            clock = None
             t = p1 - p1 % g
             b = base_price(sym)
             zone = ZoneInfo(tz)
+            if fake_prices.known(sym):       # the demo world's own instruments: the one shared price table (fake_prices)
+                ts, o, h, l, c, v, clock = _shared(sym, t, p2, g)
+                p2 = -1                      # skip the made-up wave below
             while t <= p2:
                 if datetime.fromtimestamp(t, zone).weekday() >= 5:     # like the real feed: these markets close at weekends
                     t += g
@@ -62,6 +96,15 @@ def fake_yahoo(fail: set | None = None, varied: bool = False) -> httpx.MockTrans
                     "fiftyTwoWeekLow": min(c) * 0.98, "regularMarketDayHigh": h[-1], "regularMarketDayLow": l[-1],
                     "regularMarketVolume": 123456, "longName": next((x.get("longname") or x["shortname"] for x in CATALOGUE if x["symbol"] == sym), sym),
                     "instrumentType": "ETF" if sym == "SPY" else "EQUITY", "fullExchangeName": "Test"}
+            if clock is not None:            # the time of the last trade: the close, out of hours
+                meta["regularMarketTime"] = int(clock.timestamp())
+                # the year's range from the same daily closes the chart draws, whatever window was asked for
+                from datetime import timedelta
+                market = fake_prices.market_of(sym)
+                days = [clock - timedelta(days=d) for d in range(0, 366)]
+                year = [fake_prices.price(sym, t) for t in days if fake_prices.trading_day(market, t.date())]
+                meta["fiftyTwoWeekHigh"], meta["fiftyTwoWeekLow"] = max(year), min(year)
+                meta["longName"] = fake_prices.name_of(fake_prices.canonical(sym)) or meta["longName"]
             res = {"meta": meta, "timestamp": ts, "indicators": {"quote": [{"open": o, "high": h, "low": l, "close": c, "volume": v}]}}
             if "div" in req.url.params.get("events", "") and sym == "AAPL" and g == 86400:     # a dividend and a split in its history
                 div, split = ts[-30] if len(ts) > 30 else ts[0], ts[-300] if len(ts) > 300 else ts[0]

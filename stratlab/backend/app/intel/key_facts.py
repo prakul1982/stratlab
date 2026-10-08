@@ -123,7 +123,11 @@ def _cash_vs_profit(nums: dict | None) -> str | None:
     cfo, profit = sum(y["cfo"] for y in rows), sum(y["profit"] for y in rows)
     if profit <= 0:
         return None
-    return f"{cfo / profit * 100:.0f}% of net profit over {len(rows)} years"
+    ratio = cfo / profit
+    # against a profit that small (cash ten times it or more, or negative), a percentage says nothing: left out
+    if ratio >= 10 or ratio <= -10:
+        return None
+    return f"{ratio * 100:.0f}% of net profit over {len(rows)} years"
 
 
 def debt_and_cash(c: dict, reported: dict | None, nums: dict | None, s: dict) -> dict | None:

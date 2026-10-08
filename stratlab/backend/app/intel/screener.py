@@ -121,6 +121,15 @@ def summary(p: dict) -> dict:
     hl = r.get("High / Low", "")
     hi_lo = [num(x) for x in hl.split("/")] if "/" in hl else [None, None]
     net_margin = (profit[-1] / sales[-1] * 100) if sales and profit and sales[-1] else None
+    # "Latest YoY" is the latest reported year against the year before: full years only, never the trailing twelve
+    # months (which overlap the last year by nine months) against the last year
+    years = [str(c).strip().upper() != "TTM" for c in (pl or {}).get("cols") or []]
+
+    def full(*prefixes):
+        vals = _row(pl, *prefixes)
+        keep = [v for v, ok in zip(vals, years + [True] * (len(vals) - len(years))) if ok and v is not None]
+        return keep
+    sales_y, profit_y = full("Sales", "Revenue"), full("Net Profit")
     whole = [v for v in _row(bal, "Equity") if v is not None]       # US filings: one shareholders' equity row
     net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else (whole[-1] if whole else None)
     return {
@@ -130,8 +139,9 @@ def summary(p: dict) -> dict:
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
         "net_margin": net_margin, "opm": opm[-1] if opm else None,
-        "sales_yoy": ((sales[-1] / sales[-2] - 1) * 100) if len(sales) > 1 and sales[-2] else None,
-        "profit_yoy": ((profit[-1] / profit[-2] - 1) * 100) if len(profit) > 1 and profit[-2] else None,
+        "sales_yoy": ((sales_y[-1] / sales_y[-2] - 1) * 100) if len(sales_y) > 1 and sales_y[-2] > 0 else None,
+        # a change from a loss isn't a growth rate: none then
+        "profit_yoy": ((profit_y[-1] / profit_y[-2] - 1) * 100) if len(profit_y) > 1 and profit_y[-2] > 0 else None,
         "debt_cr": borrow[-1] if borrow else None,
         "debt_equity": (borrow[-1] / net_worth) if borrow and net_worth else None,
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,

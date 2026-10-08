@@ -113,7 +113,8 @@
 .pc-row-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-row .pc-btn { border: 0; background: none; }
 .pc-row .pc-btn[aria-pressed="true"] { background: none; color: var(--ink); }
-.pc-info.info-btn { width: 34px; height: 34px; border-radius: 8px; font-size: 14px; }
+.pc-info.info-btn { width: 34px; height: 34px; margin: 0; border: 1.5px solid var(--dash); background: var(--card); border-radius: 8px; font-size: 14px; }
+.pc-info.info-btn:hover, .pc-info.info-btn[aria-expanded="true"] { border-color: var(--ink); }
 .pc-keys { display: grid; gap: 4px; margin: 10px 0; }
 .pc-keys > div { display: flex; align-items: center; gap: 12px; font-size: 14px; }
 .pc-keys dt { min-width: 150px; } .pc-keys dd { margin: 0; color: var(--muted); }

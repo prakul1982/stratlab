@@ -92,3 +92,32 @@ test("plans gate: Pricing and Plans say paid plans open soon, never that paid fe
   await expect(main).not.toContainText(/every feature is (open|unlocked)|open to everyone until/i);
   await expect(main.getByText("Opens soon")).toHaveCount(2);
 });
+
+test("plans gate: while plans can't be bought, a lock offers 'Tell me when plans open', kept per person and counted for Admin", async ({ page }, info) => {
+  const phone = info.project.name === "phone";
+  const n = user("free", phone) + 6;                                   // load-66 / load-69: a Free user of its own
+  const admin = { Authorization: "Bearer admin-token" };
+  const count = async () => (await (await page.request.get(`${API}/admin/overview`, { headers: admin })).json()).stats.plan_interest as number;
+  const errors = await signIn(page, n);
+  await call(page, n, "GET", "/me");
+  await page.request.delete(`${API}/me/plan-interest`, { headers: { Authorization: `Bearer load-${n}` } });
+  await page.goto("/research/scan");
+  const lock = page.locator("main .plan-note").first();
+  await expect(lock).toContainText(HINT, { timeout: 30_000 });
+  await expect(lock.getByRole("link", { name: "See plans" }), "a dead-end link while nothing can be bought").toHaveCount(0);
+  await lock.getByRole("button", { name: "Tell me when plans open" }).click();
+  await expect(lock).toContainText("You're on the list");
+  expect((await (await call(page, n, "GET", "/me/plan-interest")).json()).registered).toBe(true);
+  expect(await count(), "Admin counts the person (the desktop and phone runs share one list, so no exact total)").toBeGreaterThanOrEqual(1);
+  await page.reload();
+  await expect(page.locator("main .plan-note").first()).toContainText("You're on the list", { timeout: 30_000 });
+  // the Plans page shows the same answer, and Undo takes them off
+  await page.goto("/plans");
+  const note = page.getByRole("note", { name: "Paid plans aren't on sale yet" });
+  await expect(note).toContainText("You're on the list", { timeout: 30_000 });
+  await note.getByRole("button", { name: "Undo" }).click();
+  await expect(note.getByRole("button", { name: "Tell me when plans open" })).toBeVisible();
+  const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
+  expect(scroll, "the page scrolls sideways").toBeLessThanOrEqual(width + 1);
+  expect(errors).toEqual([]);
+});

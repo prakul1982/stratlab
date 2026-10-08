@@ -62,6 +62,14 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
   expect((await request.delete(`${API}/trade/journal`, { headers: { Authorization: `Bearer load-${n}` } })).ok()).toBeTruthy();
   const errors = await open(page, "/trade/journal", "No trades yet", who);
   if (phone) await touchable(page);
+  // an empty journal has nothing to delete, and its small print is folded under "How this works"
+  await expect(page.getByRole("button", { name: "Delete my journal" })).toHaveCount(0);
+  const how = page.getByTestId("j-how");
+  await expect(how.locator("summary")).toHaveText("How this works");
+  await expect(how.locator("p").first()).toBeHidden();
+  await how.locator("summary").click();
+  await expect(how).toContainText("Tradewise Exits");
+  await how.locator("summary").click();
 
   await page.getByLabel("Tradebook or tax P&L files").setInputFiles(ZIP);
   await expect(page.getByText("16 trade lines added")).toBeVisible({ timeout: 30_000 });

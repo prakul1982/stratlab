@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
+import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
 import { checksLine } from "../lib/tradeUi";
@@ -123,13 +124,13 @@ export function LibraryPage() {
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
   const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
   const tableCols: Column<LibEntry>[] = [
-    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{e.name}</b><span className="k-sub-line">{e.group ? e.group.name : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
+    { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{plainTerms(e.name)}</b><span className="k-sub-line">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
     { key: "verdict", header: "Verdict", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} /><span className="k-sub-line">{checksLine(e.verdict.passed, e.verdict.total)}</span>{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
     { key: "ret", header: "After costs", numeric: true, cell: (e) => signedPct(shownStats(e).ret) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
     { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
     { key: "mdd", header: "Worst fall", numeric: true, cell: (e) => signedPct(shownStats(e).mdd) },
-    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${e.name}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
+    { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${plainTerms(e.name)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
   ];
   const filtered = !!(q || market || verdict || official);
 
@@ -164,9 +165,9 @@ export function LibraryPage() {
             ) : (
             <div className="k-cards">
               {rows.map((e) => (
-                <Card key={e.id} label={e.name} className={shownStats(e).ran ? undefined : "lib-unrun"}>
+                <Card key={e.id} label={plainTerms(e.name)} className={shownStats(e).ran ? undefined : "lib-unrun"}>
                   {(() => {
-                    const eyebrow = <span className="k-eyebrow">{e.group ? `${e.group.name} (${e.group.members?.length ?? "group"})` : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>;
+                    const eyebrow = <span className="k-eyebrow">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>;
                     const sh = shownStats(e);
                     const stats = ([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], ["Unseen years", sh.unseen], ["Worst fall", sh.mdd]] as [string, number | null][])
                       .filter(([k]) => !phone || k !== "Buy and hold");
@@ -178,13 +179,13 @@ export function LibraryPage() {
                       <>
                         <div className="k-stack k-tight">
                           {!phone && eyebrow}
-                          <CardHead title={e.name} />
+                          <CardHead title={plainTerms(e.name)} />
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
                         <div className="k-row"><VerdictBadge v={e.verdict.verdict} /><span className="k-note">{checksLine(e.verdict.passed, e.verdict.total)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}
-                        {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={e.description}>{e.description}</p>}
+                        {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>}
                         {phone ? (
                           <>
                             {miniStats(stats.filter(([k]) => k !== "Worst fall"))}

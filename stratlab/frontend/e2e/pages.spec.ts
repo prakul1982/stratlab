@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Your research desk"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -115,7 +115,8 @@ test("results calendar: every company's dates, and the company page links to it"
 test("losses hang below the zero line, with exact labels (company page)", async ({ page }) => {
   const errors = await open(page, "/research/IN/TCS", "Sales and profit, by year");
   await barsAroundZero(page);
-  await expect(page.getByText("−133").first()).toBeVisible();      // the real minus, never a hyphen
+  // TCS, the demo world's loss case, at its own scale: a ₹53,360 crore loss in FY22 (tests/fake_fundamentals.py)
+  await expect(page.getByText("−53,360").first()).toBeVisible();      // the real minus, never a hyphen
   await expect(page.getByText("loss years in between, so no yearly rate").first()).toBeVisible();
   await sane(page, errors);
 });
@@ -486,9 +487,10 @@ test("tax report: the tax P&L ZIP as the broker gives it, F&O included, checked 
   await expect(check.getByText(/F&O turnover: ₹3,788 netted per contract/)).toBeVisible();
   // the non-equity file is read now (a gold ETF under its own rules), so nothing is left out
   await expect(page.getByRole("list", { name: "Files left out" })).toHaveCount(0);
-  // every Money page opens on the year being filed (FY 2025-26 here), empty or not; a note offers the year that has the trades
-  await expect(page.getByRole("heading", { name: "Total tax estimate, FY 2025-26" })).toBeVisible();
-  await page.getByRole("button", { name: "Show FY 2024-25" }).click();
+  // the report opens on the year being filed (FY 2025-26 here) unless it has no trades: then on the latest year with trades,
+  // saying why in one line, never a page of zeros first (R3-011)
+  await expect(page.getByTestId("tax-moved-year")).toHaveText("No trades in FY 2025-26, the year being filed, so this is FY 2024-25, the latest year with trades.");
+  await expect(page.getByRole("button", { name: "Show FY 2024-25" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "ETFs and gold bonds" }).getByText("Gold ETF")).toBeVisible();
   // the year with the sales
   await expect(page.getByRole("heading", { name: "How FY 2024-25 adds up" })).toBeVisible();
@@ -610,6 +612,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await edit.getByRole("button", { name: "Save alert" }).click();
   await expect(row).toContainText("Price crosses below its 200-day average");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -619,6 +622,11 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const errors = await open(page, "/alerts", "Your stock alerts");
   await answerLevel(page);
   await page.getByRole("button", { name: "New alert" }).click();
+  // "Where alerts go" is offered once, and the Stock box takes the whole row, not a 190px sliver
+  await expect(page.getByRole("link", { name: /Where alerts go/ }).or(page.getByRole("button", { name: /Where alerts go/ }))).toHaveCount(1);
+  const stock = await page.getByLabel("Stock").evaluate((el) => ({ box: el.getBoundingClientRect().width, form: (el.closest("form") as HTMLElement).getBoundingClientRect().width }));
+  expect(stock.box, "the Stock box is narrow").toBeGreaterThan(stock.form * 0.9);
+  expect(await page.getByLabel("Stock").evaluate((el) => (el as HTMLInputElement).scrollWidth <= (el as HTMLInputElement).clientWidth), "its placeholder is clipped").toBe(true);
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");
@@ -629,7 +637,12 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Moves 4% or more either way in a day");
   await expect(row).toContainText("Repeats");
+  // Delete asks first: Cancel keeps the alert
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Cancel" }).click();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -656,6 +669,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });
 
@@ -696,7 +710,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
+  await expect(space.getByRole("radio")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
   // Invest: its home, then its five groups; the other spaces' groups wait behind the switcher
   await expect(main.locator(".side-group .side-title")).toHaveText(NAV.invest.groups.map((g) => g.label));
@@ -1166,6 +1180,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("A bulk or block deal is reported");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");
@@ -1249,6 +1264,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Enters or leaves an exchange surveillance list");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");

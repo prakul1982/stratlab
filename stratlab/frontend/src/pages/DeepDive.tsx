@@ -208,7 +208,8 @@ export function DeepDivePage() {
   const years = (n?.years ?? []).filter((y) => y.sales != null);
   // each chart and table picks its own unit (see scaleFor): large and exact enough → $ billion / ₹ lakh crore
   const cur = millionsOf(n?.unit);       // a US-listed company reporting in another currency: its figures in that currency
-  const salesS = scaleFor(years.map((y) => y.sales), us, n?.unit), profitS = scaleFor(years.map((y) => y.profit), us, n?.unit);
+  // sales and profit, side by side, share one unit (a profit chart in crore never sits beside sales in lakh crore)
+  const salesS = scaleFor(years.flatMap((y) => [y.sales, y.profit]), us, n?.unit), profitS = salesS;
   const qS = scaleFor((n?.quarters ?? []).slice(-8).flatMap((q) => [q.sales, q.profit]), us, n?.unit);
   const capS = scaleFor([...years].reverse().slice(0, 8).flatMap((y) => [y.sales, y.capex, y.cfo, y.fcf, y.debt]), us, n?.unit);
   const b = v?.reads?.business, p = v?.reads?.plans;

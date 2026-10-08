@@ -8,7 +8,7 @@ import { AlertForm } from "../components/AlertForm";
 import { Bell, Pencil, Trash } from "../components/Icons";
 import { Modal } from "../components/ui";
 import { Earlier, LOCAL_TZ, splitToday } from "../components/Earlier";
-import { Badge, Card, CardHead, EmptyState, ErrorState, PageHeader, PlanNote, Skeleton, Stat, StatRow } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, EmptyState, ErrorState, PageHeader, PlanNote, Skeleton, Stat, StatRow } from "../components/kit";
 
 /** The alerts the user set on stocks: the ones on, the ones that fired, and a form for a new one. */
 export function AlertsPage() {
@@ -18,11 +18,13 @@ export function AlertsPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<StockAlert | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [asking, setAsking] = useState<StockAlert | null>(null);       // the alert waiting for "Delete alert"
 
   const load = useCallback(() => { setError(null); return alertsApi.list().then((p) => { setPage(p); }).catch((e) => setError((e as Error).message)); }, []);
   useEffect(() => { load(); }, [load]);
 
   const remove = async (a: StockAlert) => {
+    setAsking(null);
     setBusy(a.id);
     try { setPage(await alertsApi.remove(a.id)); notify(`Alert on ${a.symbol} deleted.`); } catch (e) { fail(e); } finally { setBusy(null); }
   };
@@ -57,7 +59,7 @@ export function AlertsPage() {
         {adding && (
           <Card>
             <CardHead title="New alert" actions={<button className="btn quiet sm" onClick={() => setAdding(false)}>Cancel</button>} />
-            <AlertForm nowhere={!page.channels.length} onSaved={(r) => { setPage(r); setAdding(false); }} />
+            <AlertForm nowhere={!page.channels.length} link={false} onSaved={(r) => { setPage(r); setAdding(false); }} />
           </Card>
         )}
 
@@ -65,24 +67,29 @@ export function AlertsPage() {
           <CardHead title="Alerts that are on" />
           {page.active.length === 0
             ? <EmptyState title="No alerts on">Set one here, or with Set alert on any company page or your watchlist.</EmptyState>
-            : <div className="inv-rows">{page.active.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}</div>}
+            : <div className="inv-rows">{page.active.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => setAsking(a)} />)}</div>}
         </Card>
 
         {page.triggered.length > 0 && (
           <Card label="Fired today">
             <CardHead title="Fired today" actions={<button className="btn quiet sm" disabled={busy === "clear"} onClick={clear}>Clear the list</button>} />
             {fired.today.length === 0 ? <p className="k-small k-muted">None today.</p>
-              : <div className="inv-rows">{fired.today.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}</div>}
+              : <div className="inv-rows">{fired.today.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => setAsking(a)} />)}</div>}
             <Earlier label="Fired earlier" count={fired.earlier.length}>
-              <div className="inv-rows">{fired.earlier.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => remove(a)} />)}</div>
+              <div className="inv-rows">{fired.earlier.map((a) => <AlertRow key={a.id} a={a} busy={busy === a.id} onEdit={() => setEditing(a)} onDelete={() => setAsking(a)} />)}</div>
             </Earlier>
           </Card>
         )}
       </>}
+      {asking && (
+        <ConfirmDialog title={`Delete the alert on ${asking.symbol}?`} confirmLabel="Delete alert" onConfirm={() => void remove(asking)} onClose={() => setAsking(null)}>
+          {asking.text}. It stops watching the stock and is removed from this list.
+        </ConfirmDialog>
+      )}
       {editing && (
         <Modal title={`Edit alert on ${editing.symbol}`} onClose={() => setEditing(null)}>
           <div className="k-stack">
-            <AlertForm editing={editing} onSaved={(r) => { setPage(r); setEditing(null); }} />
+            <AlertForm editing={editing} link={false} onSaved={(r) => { setPage(r); setEditing(null); }} />
             {editing.status === "triggered" && <p className="k-note">Saving turns it back on.</p>}
           </div>
         </Modal>

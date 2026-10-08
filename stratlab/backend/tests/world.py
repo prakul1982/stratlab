@@ -365,7 +365,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     ticks = TickHub(kite)
     monkeypatch.setattr(ticks, "start", lambda: None)
     clock = (lambda: datetime.now(IST)) if real_clock else (lambda: datetime.now(IST).replace(hour=12, minute=0))
-    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=clock))
+    from tests import fake_prices      # the options desk's India VIX: the demo world's one reading
+    options = OptionsData(FakeOptionsKite(live=True, drift={}, clock=clock, vix=fake_prices.level("INDIA VIX")))
     manager = LiveManager(kite, ticks, markets, options)
     for name, v in (("kite", kite), ("hub", ticks), ("markets", markets), ("options_data", options), ("manager", manager)):
         monkeypatch.setattr(main, name, v)

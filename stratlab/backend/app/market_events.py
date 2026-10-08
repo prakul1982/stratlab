@@ -135,6 +135,18 @@ def ist_time(day: date, hhmm: str, tz: ZoneInfo) -> tuple[date, str]:
     return t.date(), t.strftime("%H:%M")
 
 
+def mark_weekend(e: dict) -> dict:
+    """A dated event that falls on a Saturday or Sunday says so (`weekend`, and a sentence in its detail): the exchanges
+    are shut that day. Holidays and expiries are about the calendar itself, and an event the owner added by hand (a Budget
+    on a Saturday, a special session) is the owner's word, so those are left alone."""
+    d = _day(e.get("date"))
+    if d and d.weekday() >= 5 and e.get("kind") not in ("holiday", "expiry") and not e.get("custom"):
+        name = f"{d:%A}"
+        e["weekend"] = name
+        e["detail"] = ((e.get("detail") or "").rstrip() + f" This day is a {name}, so the exchanges are closed.").strip()
+    return e
+
+
 def _weekday_after(d: date) -> date:
     """A weekend day moved to the Monday after (a data release set for a weekend comes on the next working day)."""
     while d.weekday() >= 5:
@@ -960,7 +972,7 @@ def events(today: date | None = None, listed=None, frm: date | None = None, to: 
     for e in sorted(out, key=lambda e: (e["date"], e.get("time") or "99:99", list(KINDS).index(e["kind"]), e["title"])):
         if e["id"] not in seen and frm.isoformat() <= e["date"] <= to.isoformat():
             seen.add(e["id"])
-            uniq.append(e)
+            uniq.append(mark_weekend(e))
     return uniq
 
 

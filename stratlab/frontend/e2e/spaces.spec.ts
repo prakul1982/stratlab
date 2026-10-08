@@ -77,7 +77,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(page.locator(".space-card-lead")).toContainText("Options");
   let side = await menu(page, phone);
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
+  await expect(space.getByRole("radio")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Trade" })).toHaveAttribute("aria-checked", "true");
   await expect(groups(side)).toHaveText(labelsOf("trade"));
   for (const g of NAV.trade.groups) await expect(side.locator(`[data-group="${g.id}"] > .side-nav > .side-entry > a`)).toHaveText(g.pages.map((p) => p.label));
@@ -109,7 +109,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   // Mine: its own menu, not the groups
   if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);     // the drawer closes after a pick
   side = await menu(page, phone);
-  await side.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "Mine" }).click();
+  await side.getByRole("radiogroup", { name: "Space" }).getByRole("radio", { name: "My space" }).click();
   await expect(page).toHaveURL(/\/mine$/);
   if (phone) await expect(page.locator("aside.sidebar.open")).toHaveCount(0);
   side = await menu(page, phone);
@@ -124,11 +124,11 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   // after a reload, and on a new device (nothing saved in the browser), the menu is still Mine
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("radio", { name: "My space" })).toHaveAttribute("aria-checked", "true");
   await page.evaluate(() => localStorage.removeItem("stratlab.space"));
   await page.reload();
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "Mine" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("radio", { name: "My space" })).toHaveAttribute("aria-checked", "true");
   // in Mine, a page that is neither pinned nor one of its own links opens its own space's menu
   await page.goto("/research/pulse");
   side = await menu(page, phone);
@@ -144,7 +144,7 @@ test("spaces: a deep link opens its own space, without changing the account's ch
   const errors = await signIn(page, u, "/");
   await expect(page).toHaveURL(/\/invest$/, { timeout: 30_000 });
   for (const [path, ready, name] of [["/holdings", "Your stocks, at today", "Money"], ["/tax-report", "Capital gains on your shares", "Money"], ["/options", "Options", "Trade"],
-    ["/library", "librar", "Trade"], ["/research/IN/TCS", "TCS", "Invest"], ["/alerts", "Your stock alerts", "Invest"], ["/account", "Account", "Mine"], ["/settings", "Settings", "Mine"], ["/assistant", "AI assistant", "Mine"], ["/app", "Get the app", "Mine"], ["/invite", "Invite friends", "Mine"]] as const) {
+    ["/library", "librar", "Trade"], ["/research/IN/TCS", "TCS", "Invest"], ["/alerts", "Your stock alerts", "Invest"], ["/account", "Account", "My space"], ["/settings", "Settings", "My space"], ["/assistant", "AI assistant", "My space"], ["/app", "Get the app", "My space"], ["/invite", "Invite friends", "My space"]] as const) {
     await page.goto(path);
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
@@ -214,7 +214,7 @@ test("space homes: Trade with Options first, Invest at a glance, Money with hold
   await sane(page, errors, phone);
 
   await page.goto("/invest");
-  await expect(page.getByRole("heading", { name: "Which company do you want to look into?" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Your research desk" })).toBeVisible({ timeout: 30_000 });
   for (const t of ["Your watchlist", "Results today", "Red flags in your holdings and watchlist"]) await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
   await expect(page.locator(".panel-skel")).toHaveCount(0, { timeout: 30_000 });
   await sane(page, errors, phone);

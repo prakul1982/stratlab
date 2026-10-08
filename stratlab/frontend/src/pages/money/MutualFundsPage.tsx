@@ -10,6 +10,7 @@ import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, E
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
 import { pickFy, rememberFy } from "../../lib/fy";
+import { PlanInline } from "../../components/PlanInterest";
 
 /* /money/mutual-funds: the Consolidated Account Statement read into every scheme's value at the latest NAV, what went in,
  * the gain and XIRR, the mix by category, and capital gains for each financial year. Built from the kit (components/kit). */
@@ -189,7 +190,7 @@ export function MutualFundsPage() {
               {result.duplicates > 0 && `, ${result.duplicates} already saved (skipped)`}, from {result.schemes} scheme{result.schemes === 1 ? "" : "s"}.
             </p>
             {result.over_limit.length > 0 && (
-              <p className="k-small">Your plan keeps {result.limit} schemes, so {result.over_limit.length} {result.over_limit.length === 1 ? "was" : "were"} left out: {result.over_limit.slice(0, 8).join(", ")}{result.over_limit.length > 8 ? "…" : ""}. {result.upgrade} <Link className="link" to="/plans">See plans</Link></p>
+              <p className="k-small">Your plan keeps {result.limit} schemes, so {result.over_limit.length} {result.over_limit.length === 1 ? "was" : "were"} left out: {result.over_limit.slice(0, 8).join(", ")}{result.over_limit.length > 8 ? "…" : ""}. {result.upgrade} <PlanInline /></p>
             )}
             {result.problems.length > 0 && (
               <ul className="k-list muted" aria-label="Lines left out">

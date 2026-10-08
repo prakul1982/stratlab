@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, sourceWords } from "../lib/format";
+import { aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
 import { viewForFocus } from "../lib/spaces";
 import type { Focus, Level } from "../lib/types";
@@ -139,15 +140,13 @@ function ConnectionCheck() {
       const { data } = await supabase.auth.getSession();
       add({ t: "Signed in", s: data.session ? "pass" : "fail", d: data.session?.user.email || "Not signed in. Sign out and in again." });
       let health: { data_online: boolean; ai_configured: boolean } | null = null;
-      try { health = await (await fetch(CFG.API_BASE + "/health")).json(); add({ t: "StratLab server", s: "pass", d: CFG.API_BASE.replace("https://", "") }); }
-      catch { add({ t: "StratLab server", s: "fail", d: me.is_admin ? "Can't reach the server. Check the Railway service is running and FRONTEND_ORIGIN lists this site." : "Can't reach the server. Check your connection and try again in a minute." }); return; }
+      try { health = await (await fetch(CFG.API_BASE + "/health")).json(); add({ t: "StratLab server", ...serverRow(true, !!me.is_admin, CFG.API_BASE) }); }
+      catch { add({ t: "StratLab server", ...serverRow(false, !!me.is_admin, CFG.API_BASE) }); return; }
       const markets = await api<{ name: string; status: string }[]>("/markets");
       for (const m of markets.filter((x) => x.status !== "soon")) {
         add({ t: /data$/i.test(m.name) ? m.name : `${m.name} data`, s: m.status === "live" ? "pass" : "warn", d: m.status === "live" ? "Online" : "Offline right now" });
       }
-      if (!health?.ai_configured) add({ t: "AI strategy builder", s: me.is_admin ? "fail" : "warn",
-        d: me.is_admin ? "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy."
-          : "Using the simple converter right now. Describing ideas still works." });
+      if (!health?.ai_configured) add({ t: "AI strategy builder", ...aiMissingRow(!!me.is_admin) });
       else if (!me.is_admin) add({ t: "AI strategy builder", s: "pass", d: "Online" });
       else {
         // only the owner tests every provider: each test spends the shared free AI allowance

@@ -64,7 +64,7 @@ from .engine import walkforward
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
-from .intel.company import Research
+from .intel.company import Research, at_live_price
 from .intel.net import TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
@@ -80,6 +80,7 @@ from .options.engine import fill_price
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
+from . import plan_interest
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -98,7 +99,7 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq)
 from .plans import holdings_limit
 from . import money_networth
@@ -720,6 +721,23 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
     db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
     return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
+
+
+@app.get("/me/plan-interest")
+def my_plan_interest(profile=Depends(current_profile)):
+    """Whether this person asked to be told when paid plans open."""
+    return plan_interest.get(profile["id"])
+
+
+@app.put("/me/plan-interest")
+def ask_plan_interest(req: PlanInterestReq, profile=Depends(current_profile)):
+    """"Tell me when plans open": put the person on the list (asking twice changes nothing)."""
+    return plan_interest.add(profile["id"], req.source)
+
+
+@app.delete("/me/plan-interest")
+def drop_plan_interest(profile=Depends(current_profile)):
+    return plan_interest.remove(profile["id"])
 
 
 def onboarding_of(uid: str) -> dict:
@@ -1941,6 +1959,8 @@ def deep_view(sym: str, base: dict) -> dict:
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
+    if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
+        snap = at_live_price(snap, (base.get("trend") or {}).get("price"))
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -3015,7 +3035,12 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
     except Exception:                     # no prices: the page goes without the price facts
         pass
     nums = deepdive.numbers(p)
-    return stock_pages.facts(region, sym, p, nums, screener_summary(p), trend, prices, items, exchange, red)
+    snap = screener_summary(p)
+    if region == "IN":
+        # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
+        # company page does), so the screens' market value and P/E agree with the price beside them
+        snap = at_live_price(snap, (prices or {}).get("price"))
+    return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red)
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
@@ -3994,7 +4019,7 @@ def parse_holidays(text: str) -> list[str]:
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
 @app.get("/admin/overview")
 def admin_overview(_=Depends(admin.admin_profile)):
-    return {"server": server_status(), "stats": admin.stats(month_start_iso())}
+    return {"server": server_status(), "stats": {**admin.stats(month_start_iso()), "plan_interest": plan_interest.count()}}
 
 
 @app.get("/admin/users")

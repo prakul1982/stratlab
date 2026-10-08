@@ -12,6 +12,7 @@ import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+import { PlanInline } from "../components/PlanInterest";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -217,7 +218,7 @@ export function HoldingsPage() {
               {result.unmatched_count > 0 && ` ${result.unmatched_count} line${result.unmatched_count === 1 ? "" : "s"} couldn't be matched (below).`}
             </p>
             {result.over_limit.length > 0 && (
-              <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.slice(0, 12).join(", ")}{result.over_limit.length > 12 ? "…" : ""}. <Link className="link" to="/plans">See plans</Link></p>
+              <p className="k-small">Your plan keeps {result.limit} stocks, so {result.over_limit.length} were left out: {result.over_limit.slice(0, 12).join(", ")}{result.over_limit.length > 12 ? "…" : ""}. <PlanInline /></p>
             )}
             {result.unmatched.length > 0 && <DataTable label="Lines that couldn't be matched" columns={unmatchedCols} rows={result.unmatched.map((u, i) => ({ ...u, i }))} rowKey={(u) => String(u.i)} />}
             {result.unmatched.length > 0 && <p className="k-note">Add any of these by hand below with its NSE symbol or BSE code.</p>}

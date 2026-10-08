@@ -56,6 +56,15 @@ def test_screener_parser_reads_every_section():
     assert s["pb"] == pytest.approx(1408 / 630)
     assert s["net_margin"] == pytest.approx(94470 / 976541 * 100)
     assert s["debt_equity"] == pytest.approx(369575 / (829668 + 13532))
+    # "Latest YoY" is the last full year against the one before (Mar 2025 vs Mar 2024), never TTM against the last year
+    assert s["sales_yoy"] == pytest.approx((964693 / 901064 - 1) * 100)
+    assert s["profit_yoy"] == pytest.approx((81309 / 79020 - 1) * 100)
+
+
+def test_latest_yoy_has_no_rate_from_a_loss():
+    p = {"pl": {"cols": ["Mar 2024", "Mar 2025", "TTM"], "rows": {"Sales": [100.0, 120.0, 130.0], "Net Profit": [-5.0, 8.0, 9.0]}}}
+    s = scr.summary(p)
+    assert s["sales_yoy"] == pytest.approx(20.0) and s["profit_yoy"] is None
 
 
 def test_screener_survives_a_layout_change():
@@ -89,7 +98,11 @@ def test_screener_unknown_company():
 def test_google_news_and_wikipedia():
     items = GoogleNews(transport=fake_news()).search("reliance", "IN")
     assert items[0]["headline"] == "Reliance shares rise after strong Jio numbers" and items[0]["source"] == "Economic Times"
-    assert items[1]["headline"] == "Nifty ends higher as banks gain & IT slips" and items[0]["at"].startswith("2026-09-24")
+    # the day's market headline follows the demo world's index (up or down, at its level), and every item is hours old
+    from datetime import datetime, timedelta, timezone
+    import re
+    assert re.fullmatch(r"Nifty (ends|trades) (higher|lower) at [\d,]+", items[1]["headline"])
+    assert datetime.now(timezone.utc) - datetime.fromisoformat(items[0]["at"]) < timedelta(hours=6)
     w = Wikipedia(transport=fake_wiki()).company("Reliance Industries Ltd")
     assert w["title"] == "Reliance Industries" and w["url"].endswith("Reliance_Industries")
 

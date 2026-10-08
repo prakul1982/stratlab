@@ -161,6 +161,11 @@ export function fmtDate(v: DateInput, o: DateOpts = {}): string {
     day: "numeric", month: "short", ...(o.year === false ? {} : { year: "numeric" }) }).replace(/\bSept\b/, "Sep");
 }
 
+/** A market event's day, "Wed 7 Oct"; a weekend one adds "(exchanges closed)" so it is not read as a trading day. */
+export function eventWhen(e: { date: string; weekend?: string }, year = false): string {
+  return fmtDate(e.date, { weekday: true, year }) + (e.weekend ? " (exchanges closed)" : "");
+}
+
 /** A clock time, 24-hour: "14:05"; `seconds` gives "14:05:07", `zone` "14:05 IST". */
 export function fmtTime(v: DateInput, o: { tz?: string; zone?: boolean; seconds?: boolean } = {}): string {
   const d = toDate(v);

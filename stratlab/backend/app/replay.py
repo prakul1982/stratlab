@@ -58,17 +58,23 @@ def qty_step(inst: dict) -> float:
     return float(inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1) or 1)
 
 
+def _calendar_days(candles: int, tf: str) -> int:
+    """Calendar days that hold `candles` sessions' candles: five trading days a week, less the exchange's holidays
+    (India closes on about 15 weekdays a year, the US on about 10: one weekday in seventeen, allowed for)."""
+    return math.ceil(candles / PER_DAY[tf] * 7 / 5 * 17 / 16)
+
+
 def days_back(tf: str, start: date, today: date) -> int:
     """Calendar days of history to read so the window holds the context candles before `start` and the candles to play."""
-    ctx_days = math.ceil(CONTEXT[tf] / PER_DAY[tf] * 7 / 5) + 10
+    ctx_days = _calendar_days(CONTEXT[tf], tf) + 10
     return (today - start).days + ctx_days
 
 
 def random_start(tf: str, max_days: int, today: date, rng: random.Random) -> date:
     """A day far enough back that the candles to play are all in the past, and near enough that the history the market
     keeps for this candle size still covers the context before it."""
-    play_days = math.ceil(PLAY[tf] / PER_DAY[tf] * 7 / 5) + 3
-    ctx_days = math.ceil(CONTEXT[tf] / PER_DAY[tf] * 7 / 5) + 10
+    play_days = _calendar_days(PLAY[tf], tf) + 3
+    ctx_days = _calendar_days(CONTEXT[tf], tf) + 10
     latest = play_days
     earliest = max(latest + 1, min(max_days - ctx_days - 5, 3 * 365 if tf == "1d" else max_days))
     return today - timedelta(days=rng.randint(latest, earliest))

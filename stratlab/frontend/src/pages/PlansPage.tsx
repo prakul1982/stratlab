@@ -7,6 +7,7 @@ import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
 import { money, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { canBuy, finePrint, pricingIntro } from "../lib/offer";
@@ -106,6 +107,11 @@ export function PlansPage() {
         lede={intro.lede}
         actions={<Link to="/account" className="btn quiet sm">← Account</Link>} />
       <PromoCountdown plansLink={false} />
+      {!billing && me && (
+        <Notice label="Paid plans aren't on sale yet" actions={<PlanInterestButton source="plans" />}>
+          Basic and Pro aren't on sale yet. Press the button and we'll tell you the day they open.
+        </Notice>
+      )}
       {(pricing || (billing && yearlyOk)) && (
         <FormGrid label="Price options">
           {pricing && (

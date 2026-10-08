@@ -1,10 +1,11 @@
-"""The app on the fake world, for the browser tests in stratlab/frontend/e2e: every source faked, plus a company with
-loss years (TCS stands in for one, as only listed symbols open) so the charts' handling of losses can be checked.
+"""The app on the fake world, for the browser tests in stratlab/frontend/e2e: every source faked, with one price table
+for every source (tests/fake_prices.py) and a fundamentals page for each Indian company in it (tests/fake_fundamentals.py),
+TCS among them with loss years (it stands in for one, as only listed symbols open) so the charts' handling of losses
+can be checked.
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
 """
 import base64
-import copy
 import os
 import sys
 from pathlib import Path
@@ -19,18 +20,7 @@ from app import main  # noqa: E402
 from tests import world  # noqa: E402
 
 PORT = int(os.environ.get("E2E_API_PORT", "8765"))     # another port lets two test runs share a machine
-LOSS = "TCS"
-
-
-def loss_company(p: dict) -> dict:
-    """RELIANCE's page under TCS's name, with SML-like numbers: losses for three years, then profits."""
-    p = copy.deepcopy(p)
-    pl = p["pl"]
-    n = len(pl["cols"])
-    shape = [-21.3, -133.4, -100.2, 20.05, 108.6, 122.4, 160.3]
-    pl["rows"]["Net Profit"] = ([None] * max(0, n - len(shape)) + shape)[-n:]
-    p["name"] = "Tata Consultancy Services Ltd"
-    return p
+LOSS = "TCS"      # the company with loss years (tests/fake_fundamentals.py)
 
 
 def build():
@@ -39,9 +29,10 @@ def build():
     from app import guard
     for limit in ("PER_MINUTE_USER", "PER_MINUTE_ANON", "PER_MINUTE_ADDRESS"):   # the sweep opens hundreds of pages a minute as one user
         mp.setattr(guard, limit, 100_000)
-    scr = main.research_hub.screener
-    real = scr.company
-    mp.setattr(scr, "company", lambda sym: loss_company(real("RELIANCE")) if sym.upper() == LOSS else real(sym))
+    # every Indian company in the price table has its own fundamentals page (tests/fake_fundamentals.py), priced at the
+    # same last close as the broker's quotes: TCS stands in for a company with loss years
+    from tests import fake_fundamentals
+    fake_fundamentals.install(mp, main.research_hub.screener)
     from datetime import datetime, timezone
     from app import db
     # brand-new accounts, for the first-steps checklist on Home (u-load-201 and 204: the new-user walkthrough's own)
@@ -214,15 +205,20 @@ def live_breadth(mp, sizes):
     mp.setattr(BL, "is_open", lambda region, now: region == "IN")
     mp.setattr(BL, "STALE_AFTER", 10**9)
     mp.setattr(main.breadth_live_job, "start", lambda: None)
-    day = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    from tests import fake_prices as P
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    day = now.date().isoformat()
     times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
+    # each group's index at each time, from the demo world's price table (NIFTY 500 below NIFTY 50, moving with it)
+    level = {g: [P.price(name, now.replace(hour=int(t[:2]), minute=int(t[3:]), second=0, microsecond=0)) for t in times]
+             for g, name in (("nifty500", "NIFTY 500"), ("nifty50", "NIFTY 50"))}
     for g in ("nifty500", "nifty50"):
         n = sizes[g]            # the live counts are out of the same stocks the last close counts: never more rose and fell than there are
         pts = []
         for i, t in enumerate(times):
             adv, dec = round(n * (0.55 + 0.04 * i)), round(n * (0.38 - 0.04 * i))
             pts.append([t, adv, dec, n - adv - dec, round(n * (0.52 + 0.01 * i)), n, round(n * (0.47 + 0.0125 * i)), n, round(n * (0.40 + 0.005 * i)), n,
-                        24000.5 + 22 * i if g == "nifty500" else 25100.0 + 15 * i])
+                        level[g][i]])
         db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
 
 
@@ -323,8 +319,9 @@ def positioning_history():
     from tests import fake_positioning as fp
     today = date.today()
     days = fp.weekdays_before(today, 30)
-    fp.record_days(db.add_option_snapshot, "NIFTY", days)
-    fp.record_days(db.add_option_snapshot, "BANKNIFTY", days, spot=55000.0, gap=100)
+    from tests import fake_prices as P            # each day's spot: the index's level then, in the demo world's price table
+    fp.record_days(db.add_option_snapshot, "NIFTY", days, spot_of=lambda at: P.price("NIFTY 50", at))
+    fp.record_days(db.add_option_snapshot, "BANKNIFTY", days, gap=100, spot_of=lambda at: P.price("NIFTY BANK", at))
     day = positioning.expected_day(positioning.ist_now())
     if day:
         main.positioning_runner.run_day(day)
@@ -343,12 +340,16 @@ def stock_desks_history(mp):
 
 def screen_index():
     """The stock screens' index, as the background job would gather it from stored company pages (written straight to
-    the index, so the public company pages still build from the fake sources)."""
+    the index, so the public company pages still build from the fake sources): each company's price, market value and
+    ratios are the ones its company page shows (the price table's last close, and its fundamentals page at that price),
+    its 52-week range from the same daily prices."""
     import json
     import random
     from datetime import date, timedelta
     from app import db, screens
-    from tests.fake_prices import level, name_of, sector_of
+    from app.intel.company import at_live_price
+    from app.intel.screener import summary
+    from tests import fake_prices as P
     rng = random.Random(5)
     today = date.today().isoformat()
     names = {"IN": ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "ONGC", "ITC", "HINDUNILVR", "TATASTEEL", "JSWSTEEL",
@@ -357,16 +358,28 @@ def screen_index():
     for region, syms in names.items():
         rows = []
         for i, sym in enumerate(syms):
-            # the same names, sectors and price levels as the rest of the demo world (fake_prices), read today
-            price = round((level(sym) or rng.uniform(50, 3000)) * rng.uniform(0.97, 1.03), 2)
-            f = {"region": region, "symbol": sym, "name": name_of(sym) or f"{sym.title()} {'Ltd' if region == 'IN' else 'Inc.'}",
-                 "industry": [sector_of(sym) or "Diversified"], "price": price, "high52": round(price * rng.uniform(1, 1.6), 2),
-                 "low52": round(price * 0.7, 2), "price_at": today, "market_cap": round(rng.uniform(200, 900000)),
-                 "pe": None if i % 7 == 3 else round(rng.uniform(6, 60), 1), "roe": round(rng.uniform(-5, 35), 1),
-                 "roce": round(rng.uniform(0, 40), 1), "div_yield": round(rng.uniform(0, 4), 2), "net_margin": round(rng.uniform(-5, 30), 1),
-                 "opm": round(rng.uniform(5, 40), 1), "debt_equity": round(rng.uniform(0, 2), 2), "bank": False,
-                 "growth": {"sales_cagr_3y": round(rng.uniform(-10, 30), 1)}, "stage": 1 + i % 4,
-                 "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [], "built_at": f"{today}T12:00:00+00:00"}
+            market = "IN" if region == "IN" else "US"
+            price = P.last(sym)
+            end = P.session_clock(None, market)
+            closes = [P.price(sym, end - timedelta(days=d)) for d in range(0, 366)]
+            f = {"region": region, "symbol": sym, "name": P.name_of(sym) or sym, "industry": [P.sector_of(sym) or "Diversified"],
+                 "price": price, "high52": max(closes), "low52": min(closes), "price_at": end.date().isoformat(),
+                 "stage": 1 + i % 4, "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [],
+                 "built_at": f"{today}T12:00:00+00:00"}
+            page = main.research_hub.screener.company(sym) if region == "IN" else None
+            if page:                 # the company page's own numbers, at the same price
+                s = at_live_price(summary(page), price)
+                from app import deepdive
+                g = deepdive.numbers(page).get("growth") or {}
+                f.update(market_cap=s["market_cap_cr"], pe=s["pe"], roe=s["roe"], roce=s["roce"], div_yield=s["div_yield"],
+                         net_margin=s["net_margin"], opm=s["opm"], debt_equity=s["debt_equity"],
+                         bank=bool(deepdive.numbers(page).get("bank")), growth={"sales_cagr_3y": g.get("sales_cagr_3y")})
+            else:                    # US: the market value from the price table ($ million); the ratios made up
+                f.update(market_cap=round(P.market_cap(sym, price) / 1e6) if P.market_cap(sym, price) else None,
+                         pe=None if i % 7 == 3 else round(rng.uniform(6, 60), 1), roe=round(rng.uniform(-5, 35), 1),
+                         roce=round(rng.uniform(0, 40), 1), div_yield=round(rng.uniform(0, 4), 2), net_margin=round(rng.uniform(-5, 30), 1),
+                         opm=round(rng.uniform(5, 40), 1), debt_equity=round(rng.uniform(0, 2), 2), bank=False,
+                         growth={"sales_cagr_3y": round(rng.uniform(-10, 30), 1)})
             r = screens.row(region, sym, f)
             if region == "IN":          # a promoter or insider bought on the open market: 10 days ago for every fourth
                 r["insider_buy_at"] = (date.today() - timedelta(days=10 if i % 4 == 1 else 200)).isoformat() if i % 2 else None
