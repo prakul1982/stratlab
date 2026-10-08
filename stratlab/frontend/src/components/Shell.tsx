@@ -24,7 +24,7 @@ const SIDE_NOTEBOOKS = 6;
 /** Icons a menu entry can name (NavPage.icon). */
 const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book, receipt: Receipt, bell: Bell, lens: Lens, news: News, pin: Pin, pulse: Pulse, layers: Layers, library: Library, upload: Upload, search: Search, compass: Compass, wallet: Wallet, calendar: Calendar };
 /** Which menu groups are open, remembered on this device. */
-const OPEN_KEY = "stratlab.side.groups";
+const OPEN_KEY = "stratlab.side.groups";     // per person: "stratlab.side.groups.<id>", so two people on one browser keep their own menus
 const NO_GROUPS: Record<string, boolean> = {};
 /** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
 const MINE_LINKS = ["/news"];
@@ -34,7 +34,7 @@ const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 export function Shell({ children }: { children: ReactNode }) {
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
-  const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(OPEN_KEY, NO_GROUPS);
+  const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_GROUPS);
   const pins = usePins();
   // on a laptop the menu can fold away for wide tables, remembered on this device (R1-082); a phone has its drawer
   const [slim, setSlim] = usePersisted<boolean>("stratlab.side.slim", false);
@@ -85,16 +85,18 @@ export function Shell({ children }: { children: ReactNode }) {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
     const gate = gateFor(p.to);
-    const locked = gate?.whole && me?.plan_info?.features?.[gate.feature] === false;
+    // a page that is only partly paid (the Options builder: building and pricing for everyone, starting paper trading on Basic)
+    // carries the same lock, so the menu agrees with the Plans page
+    const locked = !!gate && me?.plan_info?.features?.[gate.feature] === false;
     // drawn by CSS from data-plan, so the link's name stays the page's own; the plan is in its title
     const label = locked ? <>{p.label}<span className="side-lock" data-plan={PLAN_NAME[gatePlan(gate!)]} aria-hidden="true" /></> : p.label;
-    return item(p.to, <Icon />, label, at?.page.to === p.to, locked ? `${p.line} (on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
+    return item(p.to, <Icon />, label, at?.page.to === p.to, locked ? `${p.line} (${gate!.whole ? "" : "part of it "}on the ${PLAN_NAME[gatePlan(gate!)]} plan)` : p.line);
   };
-  // the group holding the page showing is open and stays open; the others are as the person left them
+  // the group holding the page showing is open (and stays as the person leaves it, so the menu only ever grows toward what they use); the others are as they left them
   const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
   const isOpen = (g: string) => openGroups[g] ?? false;
   const toggle = (g: string) => setOpenGroups((cur) => ({ ...cur, [g]: !(cur[g] ?? false) }));
-  useEffect(() => { if (activeGroup && !isOpen(activeGroup)) setOpenGroups((cur) => ({ ...cur, [activeGroup]: true })); }, [activeGroup]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeGroup) setOpenGroups((cur) => (cur[activeGroup] ? cur : { ...cur, [activeGroup]: true })); }, [activeGroup, me?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const allNotebooks = "/notebooks";
   const notebookList = (
     <div className="side-list side-nbs">
@@ -146,7 +148,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="side-head"><span className="side-title plain">Pinned</span></div>
         <div className="side-list side-nav" id="side-pinned">
           {pins.pins.map((l) => pageLink(l.page))}
-          {!pins.pins.length && <span className="small muted side-note-wrap">Pin a page from the menu in its breadcrumb at the top of the page.</span>}
+          {!pins.pins.length && <span className="small muted side-note-wrap" title="Open the menu in a page's breadcrumb to pin it here">Nothing pinned yet. Pin a page from its breadcrumb menu.</span>}
         </div>
       </section>
       <section className="side-group" data-group="mine-more">

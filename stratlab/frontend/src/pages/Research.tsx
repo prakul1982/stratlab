@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, marketTz, pct, price, safeHref } from "../lib/format";
+import { ago, asOf, marketTz, num, pct, price, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
@@ -33,7 +33,7 @@ import { FilingsPanel } from "../components/Filings";
 import { CompanyActions } from "../components/CorpActions";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
 import {
-  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, Skeleton, Stat, StatRow, StockPicker,
+  Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Skeleton, Stat, StatRow, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
 
@@ -250,7 +250,11 @@ export function CompanyPage() {
         </div>
       </Card>
       <SourcesNote sources={c.sources} />
-      <Card><PriceChart region={region} symbol={c.symbol} currency={ccy} /></Card>
+      <PageNav items={[{ id: "co-chart", label: "Price chart" }, { id: "co-numbers", label: "Key numbers" },
+        ...(c.shareholding && c.shareholding.rows.length > 0 ? [{ id: "co-owners", label: "Who owns it" }] : []),
+        ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
+        { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
+      <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} /></Card>
       {region === "IN" && <EtfGapDetailView symbol={c.symbol} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
@@ -268,7 +272,7 @@ export function CompanyPage() {
       </div>
 
       {c.metrics.length > 0 && (
-        <Card>
+        <Card id="co-numbers">
           <CardHead title="Key numbers" info={HELP.researchMetrics} actions={<Link className="btn quiet sm" to={deepTo}>10 years in the deep dive →</Link>} />
           <MetricsGrid groups={c.metrics} currency={ccy} industry={c.industry} />
         </Card>
@@ -278,8 +282,8 @@ export function CompanyPage() {
         <ChartFrame title="Sales and profit, by year"
           table={{ label: "Sales and profit by year", rows: trend.rev.points.map((p, i) => ({ y: p.y, sales: p.v, profit: trend.prof.points[i]?.v ?? null })), rowKey: (x) => x.y,
             columns: [{ key: "y", header: "Year", rowHeader: true, cell: (x) => x.y },
-              { key: "s", header: `${trend.t.revenue_label} (${trend.rev.unit})`, numeric: true, cell: (x) => x.sales.toLocaleString("en-IN", { maximumFractionDigits: 2 }) },
-              { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : x.profit.toLocaleString("en-IN", { maximumFractionDigits: 2 })) }] }}>
+              { key: "s", header: `${trend.t.revenue_label} (${trend.rev.unit})`, numeric: true, cell: (x) => num(x.sales, 0) },
+              { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : num(x.profit, 0)) }] }}>
           <div className="k-cols">
             <TrendBars points={trend.rev.points} label={trend.t.revenue_label} unit={trend.rev.unit} />
             <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit} tone="blue" />
@@ -289,7 +293,7 @@ export function CompanyPage() {
 
       <div className="k-cols">
         {c.earnings.length > 1 && <Card><CardHead title="Results versus expectations" info={HELP.researchEarnings} /><EarningsBars rows={c.earnings} /></Card>}
-        {c.shareholding && c.shareholding.rows.length > 0 && <Card><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
+        {c.shareholding && c.shareholding.rows.length > 0 && <Card id="co-owners"><CardHead title="Who owns it" info={HELP.researchHolding} /><Shareholding s={c.shareholding} /></Card>}
         {((c.pros?.length ?? 0) > 0 || (c.cons?.length ?? 0) > 0) && (
           <Card>
             <CardHead title="Strengths and concerns" info="Automatic checks on the company's reported numbers." />
@@ -330,7 +334,7 @@ export function CompanyPage() {
 
       <div className="k-cols">
         {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteGrid region={region} symbols={c.peers} /></Card>}
-        <Card><CardHead title="Latest news" /><NewsList items={c.news} /></Card>
+        <Card id="co-news"><CardHead title="Latest news" /><NewsList items={c.news} /></Card>
       </div>
       <p className="k-note">AI text is written from the numbers above and may contain mistakes. Facts, not advice.</p>
     </div>
@@ -467,7 +471,7 @@ export function PulsePage() {
         {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
         {aiErr || (ai && !ai.tone) ? (
           <div className="k-row ai-read-off" role="status">
-            <span className="k-small k-muted">No AI read of the mood right now ({aiErr ? aiReason(aiErr) : "the AI's reply had none"}). The index levels and headlines don't depend on it.</span>
+            <span className="k-small k-muted">No AI read of the mood right now{aiReason(aiErr)} The index levels and headlines don't depend on it.</span>
             <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>
           </div>
         ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : <p className="inv-summary">{ai.tone}</p>}
@@ -534,7 +538,7 @@ export function ComparePage() {
   const labels = res ? Array.from(new Set([...res.a.metrics, ...res.b.metrics].flatMap((g) => g.items.map((i) => i.label)))) : [];
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
   const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) =>
-    (m ? (m.unit.startsWith("%") ? `${m.value.toFixed(1)}%` : m.unit === "money" ? price(m.value, c.currency) : m.value.toFixed(2)) : "–");
+    (m ? (m.unit.startsWith("%") ? `${num(m.value, 1)}%` : m.unit === "money" ? price(m.value, c.currency) : num(m.value, 2)) : "–");
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/compare")} title="Two companies, side by side" lede="Pick two companies to line up their numbers, with an AI summary of where they differ." />

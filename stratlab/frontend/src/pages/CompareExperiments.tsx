@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { money, pct, TF_NAME, tzOf } from "../lib/format";
+import { money, num, pct, TF_NAME, tzOf } from "../lib/format";
 import { refName, opSay } from "../lib/rules";
 import type { Cond, Experiment, Strategy } from "../lib/types";
 import { XYChart } from "../components/Charts";
@@ -85,7 +85,7 @@ export function CompareExperiments() {
     ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true],
     ["Trades", (e) => String(e.stats.n), () => null, false],
     ["Win rate", (e) => `${e.stats.win.toFixed(0)}%`, (e) => e.stats.win, true],
-    ["Sharpe", (e) => e.stats.sharpe.toFixed(2), (e) => e.stats.sharpe, true],
+    ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
     ["Costs paid", (e) => money(e.costs.total, cur), (e) => -e.costs.total, true],
     ["Checks passed", (e) => `${e.verdict.passed} of ${e.verdict.total}`, (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],

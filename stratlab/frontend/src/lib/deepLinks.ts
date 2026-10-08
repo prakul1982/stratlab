@@ -23,7 +23,7 @@ export const APP_ROUTES = [
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
 
 /** The landing page and its sections: shown to a visitor as the landing page, scrolled to the section. */
-export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/upgrade": "pricing", "/help": "faq", "/features": "trade" };
+export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/features": "trade" };
 
 const clean = (path: string) => path.split(/[?#]/)[0] || "/";
 

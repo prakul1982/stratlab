@@ -24,6 +24,7 @@ export function writePersisted<T>(key: string, value: T) {
 export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => read(key, fallback));
   useEffect(() => {
+    setValue(read(key, fallback));      // a new key (another person signed in) reads its own value
     const set = listeners.get(key) ?? new Set();
     const f = () => setValue(read(key, fallback));
     set.add(f);

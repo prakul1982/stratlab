@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, pct, price, safeHref } from "../lib/format";
+import { ago, num, pct, price, safeHref } from "../lib/format";
 import {
   bandPosition, metricText, ordinal, researchApi, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -246,7 +246,7 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
                 <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />
               </svg>
               <span className="tbar-year">{r.period.slice(0, 7)}</span>
-              <span className="k-note tbar-sub">{r.actual.toFixed(2)}<br />vs {r.estimate.toFixed(2)}</span>
+              <span className="k-note tbar-sub">{num(r.actual, 2)}<br />vs {num(r.estimate, 2)}</span>
             </div>
           );
         })}
@@ -358,7 +358,7 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
 }
 
 export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
-  const f = (v: number | null) => (v == null ? "–" : Math.round(v).toLocaleString("en-IN"));
+  const f = (v: number | null) => (v == null ? "–" : num(Math.round(v), 0));
   const rows = [
     { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
     { name: "Operating margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
@@ -371,12 +371,13 @@ export function QuarterTable({ q }: { q: NonNullable<Company["quarters"]> }) {
 }
 
 /* ---------- AI read ---------- */
-/** Why an AI read is missing, in a few words (the full message can be long, or name an internal step). */
-export function aiReason(message: string): string {
-  if (/busy|overloaded|try again in/i.test(message)) return "the AI service is busy";
-  if (/used \d+|limit|allowance|tomorrow/i.test(message)) return "today's fresh AI reads are used up";
-  if (/plan|upgrade/i.test(message)) return "not on your plan";
-  return "the AI's reply couldn't be used";
+/** Why an AI read is missing, as the words that follow "No AI read right now": a few plain words, never the message
+ * itself, which can be long or name an internal step. When the cause isn't one worth naming, nothing is said of it. */
+export function aiReason(message: string | null): string {
+  if (message && /busy|overloaded|try again in/i.test(message)) return ": the AI service is busy. Ask again in a minute.";
+  if (message && /used \d+|limit|allowance|tomorrow/i.test(message)) return ": today's fresh AI reads are used up.";
+  if (message && /plan|upgrade/i.test(message)) return ": it isn't on your plan.";
+  return ". Ask again in a moment.";
 }
 
 export function AIRead({ region, symbol, onTest }: { region: Region; symbol: string; onTest: (idea: Idea) => void }) {
@@ -399,7 +400,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
         {/* a missing AI read is not a fault with the company's numbers: one calm line and one way to ask again */}
         {error ? (
           <div className="k-row ai-read-off" role="status">
-            <span className="k-small k-muted">No AI read right now ({aiReason(error)}). The numbers on this page don't depend on it.</span>
+            <span className="k-small k-muted">No AI read right now{aiReason(error)} The numbers on this page don't depend on it.</span>
             <button type="button" className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Asking…" : "Ask again"}</button>
           </div>
         )

@@ -93,7 +93,10 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
             ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
           </FieldGroup>
           <DateField label="Start date" value={start} max={new Date(Date.now() - 86400_000).toISOString().slice(0, 10)} onChange={setStart} />
-          <FormActions><button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button></FormActions>
+          <FormActions>
+            <button type="submit" className="btn" disabled={busy || !inst || !start}>{busy ? "Loading candles…" : "Start replay"}</button>
+            {!busy && (!inst || !start) && <span className="k-note">{!inst ? "Pick an instrument first." : "Choose a start date first."}</span>}
+          </FormActions>
         </FormGrid>
         <p className="k-note">Daily candles go back years; smaller candles only a few months (5-minute about four).</p>
       </div>

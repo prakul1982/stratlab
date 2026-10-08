@@ -17,6 +17,7 @@ import { AppProvider, useApp } from "./lib/app";
 import { SESSION_KEY } from "./lib/api";
 import { takeNext } from "./lib/returnTo";
 import { isAppPath, landingSection } from "./lib/deepLinks";
+import { signedOutTitle } from "./lib/title";
 import { registerPwa } from "./lib/pwa";
 import { captureRef } from "./lib/share";
 import { pageview } from "./lib/analytics";
@@ -203,6 +204,7 @@ function Routed() {
   const loc = useLocation();
   const nav = useNavigate();
   useEffect(() => { pageview(loc.pathname); }, [loc.pathname]);    // usage analytics: off without a key
+  useEffect(() => { if (ready && !session) document.title = signedOutTitle(loc.pathname); }, [ready, session, loc.pathname]);     // "Sign in · Options builder · StratLab": a tab says what it waits for
   // back from Google sign-in: open the page the visitor started on (lib/returnTo.ts keeps it to StratLab's own pages)
   const signedIn = !!session;
   useEffect(() => {

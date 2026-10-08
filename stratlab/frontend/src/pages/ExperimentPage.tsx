@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { charge, fall, money, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { charge, fall, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { CHECKS, checkTone, checksLine, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
@@ -294,7 +294,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     ["Worst fall", fall(st.mdd), st.mdd, HELP.worstFall],
     ["Win rate", st.n ? `${st.win.toFixed(0)}%` : "–", null, HELP.winRate],
     ["Profit factor", st.pf == null ? "∞" : !st.n ? "–" : st.pf > 100 ? "> 100" : st.pf.toFixed(2), null, HELP.profitFactor],
-    ["Sharpe ratio", st.sharpe.toFixed(2), null, HELP.sharpe],
+    ["Sharpe ratio", num(st.sharpe, 2), null, HELP.sharpe],
     ["Average trade", money(st.avg, cur), st.avg, HELP.avgTrade],
     ["Period", `${periodName(e.days)}, ${e.candles.toLocaleString("en-IN")} candles`, null, HELP.period],
   ];

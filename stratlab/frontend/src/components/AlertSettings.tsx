@@ -68,9 +68,6 @@ export function AlertSettingsCard() {
       )}
       {testNote && <Notice tone="warn" role="status">{testNote}</Notice>}
       <p className="k-small k-muted k-hint-line">The simplest way is a notification on your phone: turn it on under <Link className="link" to="/app">Get the app</Link>.</p>
-      {me.is_admin && (!ch.telegram || !ch.email) && (
-        <Notice tone="warn">Admin: {[!ch.telegram && "Telegram", !ch.email && "email"].filter(Boolean).join(" and ")} {!ch.telegram && !ch.email ? "aren't" : "isn't"} set up on the server, so {!ch.telegram && !ch.email ? "they're" : "it's"} hidden here. The System section of Admin says what is missing.</Notice>
-      )}
     </Card>
   );
 }

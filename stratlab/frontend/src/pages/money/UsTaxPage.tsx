@@ -5,6 +5,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { rememberFy, savedFy } from "../../lib/fy";
 import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
@@ -57,7 +58,7 @@ export function UsTaxPage() {
     if (cy) q.set("cy", String(cy));
     return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`).then(setV).catch(fail);
   }, [fail]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(savedFy() ?? undefined); }, [load]);     // the Money pages' shared year, when one was picked
 
   const add = async () => {
     const body = { d: form.d, side: form.side, sym: form.sym.trim().toUpperCase(), qty: Number(form.qty), price: Number(form.price), fees: Number(form.fees || 0) };
@@ -206,7 +207,7 @@ export function UsTaxPage() {
         <>
           {!v.rates.available && <Notice tone="warn">The rupee rates couldn't be loaded just now, so the rupee figures are missing. Try again in a while.</Notice>}
           <FormGrid label="Choose the year">
-            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => load(Number(x), v.cy)} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
+            <Field label="Financial year">{(id) => <Select id={id} value={y.fy} onChange={(x) => { rememberFy(Number(x)); load(Number(x), v.cy); }} options={v.years.map((x) => ({ value: x.fy, label: x.label }))} />}</Field>
           </FormGrid>
           <Card>
             <CardHead title={`Sales in ${y.label}`} />

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { blankStrategy, detectInstrument, detectTf, nameFor, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
+import { blankStrategy, detectInstrument, detectTf, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
 import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
 import { Notice } from "./kit";
@@ -60,9 +60,10 @@ export async function findInstrument(name: string, market?: string | null): Prom
   }
 }
 
-/** Turn a sentence into rules: the AI builder, or the simple converter when the AI can't run.
- * Returns the built strategy, or a note saying what's missing. Throws only on errors worth showing as-is. */
-export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean }> {
+/** Turn a sentence into rules: the AI builder, or the simple converter when the AI can't run (or hands back no rule).
+ * Returns the built strategy, or a note saying what's missing (`system`: the fault is ours, not the wording's).
+ * Throws only on errors worth showing as-is. */
+export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean }> {
   let out: AIOut, usedAI = true, fallback = "";
   try {
     out = await api<AIOut>("/ai/strategy", { method: "POST", body: { text: idea } });
@@ -72,7 +73,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     usedAI = false;
     fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
       ? `${err.message} We used the simple converter instead.`
-      : `The AI builder couldn't run just now, so we used the simple converter (it understands SMA, EMA, RSI and price rules). Account → Connection check shows why.`;
+      : "The AI builder isn't available right now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
     const p = parseStrategyText(idea);
     const mentioned = Object.keys(p.risk);
     const tf = detectTf(idea), inst = detectInstrument(idea);
@@ -81,9 +82,22 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     if (inst) mentioned.push("instrument");
     out = { entry: p.entry, exit: p.exit, entryJoin: "all", tf, name: null, instrument: inst, risk: p.risk, mentioned, notes: [], side: p.side };
   }
+  if (!out.entry?.length && usedAI) {
+    // the AI answered with no rule: the simple converter gets a go before anyone is told their wording is the problem
+    const p = parseStrategyText(idea);
+    if (p.entry.length) {
+      const mentioned = Object.keys(p.risk);
+      const tf = detectTf(idea), inst = detectInstrument(idea);
+      if (p.exit.length) mentioned.push("exit");
+      if (tf) mentioned.push("tf");
+      if (inst) mentioned.push("instrument");
+      fallback = "The AI builder gave back no rules for this, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
+      out = { ...out, entry: p.entry, exit: p.exit, entryJoin: "all", tf: out.tf ?? tf, instrument: out.instrument ?? inst, risk: { ...out.risk, ...p.risk }, mentioned, side: p.side };
+    }
+  }
   if (!out.entry?.length) {
-    return { built: null, usedAI, note: (fallback ? fallback + " " : "") + "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." +
-      (out.notes?.length ? " " + out.notes.join(" ") : "") };
+    const r = noRuleNote(idea, out.notes);
+    return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
   }
   const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
   const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
@@ -100,8 +114,10 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
   };
 }
 
-export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "", market, symbol }: {
+export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "", market, symbol, byHand = true }: {
   onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
+  /** Offer "Build the rules by hand" when a build finds no rule (off where that would wipe rules already written). */
+  byHand?: boolean;
   /** The market and instrument already chosen: the examples use them, and names in the idea are looked up there. */
   market?: string; symbol?: string | null;
 }) {
@@ -110,16 +126,18 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [stuck, setStuck] = useState(false);     // a build found no rule: offer another go, the classic ideas, the manual builder
 
   const build = async (idea = text) => {
     idea = idea.trim();
+    setStuck(false);
     if (idea.length < 5) { setNote("Describe your idea first, for example: \"Buy NIFTY 50 when it's above the 50-day average\"."); return; }
     setBusy(true);
     setNote(null);
     try {
       const r = await buildIdea(idea, market);
       if (r.usedAI) refreshMe();
-      if (!r.built) { setNote(r.note); return; }
+      if (!r.built) { setNote(r.note); setStuck(true); return; }
       await onBuilt(r.built);
       setText("");
     } catch (e) {
@@ -127,6 +145,18 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     } finally {
       setBusy(false);
     }
+  };
+
+  const classic = typeof document !== "undefined" ? document.getElementById("classic-ideas") : null;
+  const buildByHand = async () => {
+    const idea = text.trim();
+    const p = parseStrategyText(idea), s = blankStrategy(nameFor(blankStrategy(), symbol ?? undefined));
+    setBusy(true);
+    try {
+      await onBuilt({ strategy: { ...s, text: idea, risk: { ...s.risk, ...p.risk } }, instrument: null, question: questionFrom(idea, symbol),
+        gaps: { mentioned: Object.keys(p.risk), notes: [], instName: null, usedAI: false, fallback: "" } });
+      setText("");
+    } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
   const u = me?.usage;
@@ -142,7 +172,13 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
         {u && <span className="k-small k-muted k-row">{u.ai_limit == null ? "Unlimited AI builds" : `${Math.max(0, u.ai_limit - u.ai_used)} of ${u.ai_limit} AI builds left this month`}
           <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
-      {note && <Notice tone="warn" role="status">{note}</Notice>}
+      {note && (
+        <Notice tone="warn" role="status" actions={stuck ? <>
+          <button type="button" className="btn sm" disabled={busy} onClick={() => build()}>Try again</button>
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
+          {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}
+        </> : undefined}>{note}</Notice>
+      )}
       <div className="k-stack k-tight">
         <span className="k-small k-muted">Not sure what to write? Try one of these:</span>
         <div className="examples">

@@ -36,7 +36,7 @@ function intentFor(q: string): Intent | null {
   if (/market breadth|advances?.{0,3}declines?|\ba\/?d line\b|mcclellan|new (52.week )?highs (and|vs\.?) lows|stocks above (the |their )?(20|50|200)/i.test(t))
     return { title: "Market breadth", sub: "How many stocks rose, fell, sit above their averages or made new highs and lows", to: "/invest/breadth" };
   if (/red flags?|\bqip\b|pledge|fund ?raise|auditor resign/i.test(t))
-    return { title: "Red flags in your watchlist", sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
+    return { title: "Red flags in your holdings and watchlist", sub: "Fund raises, pledges, resignations and defaults filed in the last 3 months", to: "/research/filings" };
   if (/stage ?(2|two)|supertrend|\bst ?s2\b/i.test(t))
     return { title: "Stage 2 + Supertrend scan", sub: "Which stocks are in Stage 2 with the Supertrend up",
              to: /nifty ?50/i.test(t) ? "/research/scan?set=nifty50" : /bank ?nifty/i.test(t) ? "/research/scan?set=banknifty" : "/research/scan" };

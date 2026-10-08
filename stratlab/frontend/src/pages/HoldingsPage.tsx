@@ -11,7 +11,7 @@ import { HoldingsActionsPanel } from "../components/HoldingsActions";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
-import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
+import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -234,7 +234,8 @@ export function HoldingsPage() {
 
       {view && t && rows.length > 0 && (
         <>
-          <Card>
+          <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
+          <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
             <StatRow>
               <Stat label="Current value" value={inr(t.value)} />
@@ -268,43 +269,21 @@ export function HoldingsPage() {
               rows={view.allocation.map((a) => ({ key: a.sector, name: a.sector, note: `${a.count} stock${a.count === 1 ? "" : "s"}`, value: a.pct == null ? "–" : `${a.pct.toFixed(1)}%`, pct: a.pct }))} />
           </Card>
 
-          <Card label="Positions">
+          <Card id="h-positions" label="Positions">
             <CardHead title="Positions" actions={<>
               {!facts && <span className="k-note">Checking each stock's trend and filings…</span>}
               {more.toggle}
             </>} />
-            <DataTable label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} />
+            <DataTable label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} stack />
             {facts && facts.count > facts.checked && <p className="k-note">Trend and filings are shown for the {facts.checked} largest positions.</p>}
             {facts && !facts.filings && <PlanNote>Red flags, recent filings and results dates come from the filings feature on the {facts.filings_plan} plan.</PlanNote>}
           </Card>
 
-          {withFilings.length > 0 && (
-            <Card>
-              <CardHead title="Recent filings" info={<>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</>} />
-              <div className="k-stack">
-                {withFilings.map((r) => {
-                  const f = facts!.rows[r.symbol];
-                  return (
-                    <div key={r.symbol} className="k-stack">
-                      <div className="k-row"><b>{r.symbol}</b>{f.flags.length > 0 && <span className="k-note">Last 3 months: {f.flags.join(" · ")}</span>}</div>
-                      {f.recent.map((x, i) => (
-                        <div key={i} className="k-row top k-small">
-                          <span className="k-note">{dateOnly(x.at)}</span>
-                          <Badge dot={false}>{x.label}</Badge>
-                          {x.url ? <a className="link k-any" href={safeHref(x.url)} target="_blank" rel="noreferrer">{x.subject || "Filing"}</a> : <span className="k-any">{x.subject}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
         </>
       )}
 
       {view && actionsReady && (
-        <Card>
+        <Card id="h-add">
           <CardHead title="Add a stock by hand" actions={
             <Seg label="Where it's listed" options={[{ value: "IN", label: "India (NSE/BSE)" }, { value: "US", label: "United States" }]} value={add.market}
               onChange={(m) => { setAdd({ ...add, market: m as Mkt, symbol: add.market === m ? add.symbol : "" }); if (add.market !== m) { setPicked(""); setBoxes((n) => n + 1); } }} />} />
@@ -323,6 +302,35 @@ export function HoldingsPage() {
           </FormGrid>
           {add.market === "US" && <p className="k-note">US stocks are valued in dollars, and added to your totals in rupees at the day's exchange rate. They aren't part of the tax report.</p>}
         </Card>
+      )}
+
+      {view && t && rows.length > 0 && actionsReady && (
+        <>
+          {withFilings.length > 0 && (
+            <Card id="h-filings">
+              <CardHead title="Recent filings" info={<>From the companies' own exchange filings, sorted by fixed rules you can read on the <Link className="link" to="/research/filings">Red flags</Link> page.</>} />
+              <Disclosure summary={`Show the filings of ${withFilings.length} stock${withFilings.length === 1 ? "" : "s"}`}>
+              <div className="k-stack">
+                {withFilings.map((r) => {
+                  const f = facts!.rows[r.symbol];
+                  return (
+                    <div key={r.symbol} className="k-stack">
+                      <div className="k-row"><b>{r.symbol}</b>{f.flags.length > 0 && <span className="k-note">Last 3 months: {f.flags.join(" · ")}</span>}</div>
+                      {f.recent.map((x, i) => (
+                        <div key={i} className="k-row top k-small">
+                          <span className="k-note">{dateOnly(x.at)}</span>
+                          <Badge dot={false}>{x.label}</Badge>
+                          {x.url ? <a className="link k-any" href={safeHref(x.url)} target="_blank" rel="noreferrer">{x.subject || "Filing"}</a> : <span className="k-any">{x.subject}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+              </Disclosure>
+            </Card>
+          )}
+        </>
       )}
 
       {view && rows.length > 0 && actionsReady && (

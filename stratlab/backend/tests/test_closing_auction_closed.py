@@ -57,3 +57,13 @@ def test_with_no_stored_day_either_the_page_still_names_the_next_window(w):
     CA.forget()
     v = CA.view(PRO, ist(2026, 10, 5, 20, 0).astimezone(timezone.utc))
     assert v["stocks"] == [] and v["from_stored"] is False and v["next"]["day"] == "2026-10-06"
+
+
+def test_before_the_market_opens_is_not_continuous_trading(w):
+    def phase(h, mi):
+        return CA.view(PRO, ist(2026, 10, 5, h, mi).astimezone(timezone.utc))["phase"]
+    assert phase(3, 30) == "preopen" and phase(9, 14) == "preopen"                          # a trading day, before 09:15
+    assert phase(9, 15) == "before" and phase(15, 14) == "before"                           # continuous trading
+    assert phase(16, 0) == "closed"
+    v = CA.view(PRO, ist(2026, 10, 5, 3, 30).astimezone(timezone.utc))
+    assert v["next"] == {"day": "2026-10-05", "today": True, "from": "15:15", "to": "15:35"}  # the auction later today
