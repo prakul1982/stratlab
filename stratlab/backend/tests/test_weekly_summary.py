@@ -51,7 +51,8 @@ def test_the_summary_has_the_weeks_numbers(monkeypatch):
         subject, text = main.weekly_summary(MONDAY)
         assert "2 new users" in subject and "3 things to look at" in subject
         assert "- 2 new this week, 3 in all" in text
-        assert "- Paid: Pro 1" in text
+        # b is on Pro with no subscription: given by the owner, not paying (R6V-010: the email said "Paid: Pro 6")
+        assert "- Paying: none" in text and "- Given by the owner, not paying: Pro 1" in text and "Paid:" not in text
         assert "- 3 experiments run, 1 AI build" in text
         assert "- 6 runs, 1 with failures: Prices: IN" in text and "Old" not in text
         assert "- India: 2 checked this week, 1 with problems: NEWCO (2 mismatches, 1 error)" in text

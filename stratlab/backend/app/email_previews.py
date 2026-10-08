@@ -225,8 +225,8 @@ def _lifecycle(kind: str):
 
 
 def _confirm() -> tuple[str, str, str]:
-    from .config import settings
-    return confirm_email("you@example.com", f"{settings.PUBLIC_API_URL}/email/confirm?t=sample")      # as alerts.confirm_url makes it
+    from . import alerts
+    return confirm_email("you@example.com", f"{alerts.email_link_base()}/email/confirm?t=sample")      # as alerts.confirm_url makes it
 
 
 # kind: (name, group, builder, one-click unsubscribe, can't be turned off)

@@ -490,10 +490,14 @@ def finish(html: str, text: str, uid: str | None, what: str | None) -> tuple[str
     return html.replace(UNSUBSCRIBE, escape(unsub)), text.replace(UNSUBSCRIBE, unsub), alerts.list_unsubscribe_headers(uid, what)
 
 
+PREVIEW_TOKEN = "preview"                 # the unsubscribe page says what the real link does, and changes nothing
+
+
 def preview_links(html: str, text: str) -> tuple[str, str]:
-    """For previews: the unsubscribe link just opens the email's own Manage emails page."""
-    m = re.search(r"^Manage emails: (\S+)$", text, re.M)
-    to = m.group(1) if m else manage_url()
+    """For previews: the unsubscribe link is the real one-click page on the site, as readers get it (no sign-in), with a
+    token that only explains itself (R6V-016: it opened the sign-in-gated settings page)."""
+    from . import alerts
+    to = f"{alerts.email_link_base()}/unsubscribe?t={PREVIEW_TOKEN}"
     return html.replace(UNSUBSCRIBE, escape(to)), text.replace(UNSUBSCRIBE, to)
 
 

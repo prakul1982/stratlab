@@ -31,11 +31,16 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
     """(subject, text) from the week's facts: users, checks, audits, errors and the admin link."""
     since = now - timedelta(days=7)
     st = facts["stats"]
-    paid = ", ".join(f"{PLANS[p]['name']} {k}" for p, k in st["paid"].items()) or "none"
+    words = lambda counts: ", ".join(f"{PLANS[p]['name']} {k}" for p, k in (counts or {}).items() if k) or "none"   # noqa: E731
+    if "paying" in st:
+        # paying (a subscription) apart from a plan the owner gave by hand, as Admin → Overview tells them apart (R6V-010)
+        plan_lines = [f"- Paying: {words(st['paying'])}", f"- Given by the owner, not paying: {words(st.get('given'))}"]
+    else:
+        plan_lines = [f"- Paid: {words(st['paid'])}"]
     lines = [f"StratLab, {since:%d %b} to {now:%d %b %Y}", "",
              "Users",
              f"- {st['new']} new this week, {st['users']} in all",
-             f"- Paid: {paid}",
+             *plan_lines,
              f"- {_n(st['experiments'], 'experiment')} run, {_n(st['ai'], 'AI build')}", ""]
 
     checks = facts["checks"]
@@ -63,7 +68,10 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         else:
             line += ", no mismatches or errors"
         lines.append(line)
-    lines += ["", "Server errors", f"- {_n(facts['errors'], 'error')} this week"]
+    listed = facts.get("errors_listed")
+    # the same count Admin → System shows beside it, so the two never seem to disagree (R6V-010)
+    lines += ["", "Server errors", f"- {_n(facts['errors'], 'error')} this week"
+              + (f" ({listed} listed on Admin → System since the last restart)" if listed is not None and listed != facts["errors"] else "")]
     if facts.get("admin_url"):
         lines += ["", f"Admin page: {facts['admin_url']}"]
 

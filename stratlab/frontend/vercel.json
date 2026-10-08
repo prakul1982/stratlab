@@ -137,6 +137,14 @@
       "destination": "https://stratlab-production-ca25.up.railway.app/sitemaps/:path*"
     },
     {
+      "source": "/unsubscribe",
+      "destination": "https://stratlab-production-ca25.up.railway.app/unsubscribe"
+    },
+    {
+      "source": "/email/confirm",
+      "destination": "https://stratlab-production-ca25.up.railway.app/email/confirm"
+    },
+    {
       "source": "/((?:mine|all|features|trade|invest|money|notebooks|new|n|import|library|options|paper|plans|pricing|upgrade|help|faq|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|scans|watchlist|dev|login|signup|about|terms|privacy|refunds|contact|verdict)(?:/.*)?)",
       "destination": "/index.html"
     }

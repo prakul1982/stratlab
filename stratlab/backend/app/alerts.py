@@ -72,6 +72,9 @@ def _brevo_sender() -> str:
 
 
 def _send_brevo(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
+    # Brevo's open and click tracking (links rewritten to its own sendibt3.com domain, R6V-016) is an account setting:
+    # its transactional API has no per-message switch for it, so it is turned off in Brevo's own settings (or by asking
+    # Brevo's support), not here. The links in the text version are always the site's own.
     msg = {"sender": {"name": "StratLab", "email": _brevo_sender()}, "to": [{"email": to}], "subject": subject,
            "textContent": body}
     if settings.REPLY_TO_EMAIL:
@@ -197,10 +200,19 @@ def email_confirmed(profile: dict) -> bool:
         return False
 
 
+EMAIL_PATHS = ("/unsubscribe", "/email/confirm")      # the site forwards these to the API (frontend/vercel.json)
+
+
+def email_link_base() -> str:
+    """Where links the server answers itself (unsubscribe, confirm an address) point: the public site, which forwards
+    them to the API, so a reader sees stratlab.studio, never the API's own host (R6V-016)."""
+    return settings.PUBLIC_SITE_URL.rstrip("/")
+
+
 def unsubscribe_url(uid: str, what: str) -> str:
     """A link that turns off one newsletter (or "all") without signing in."""
     from . import mail_tokens
-    return f"{settings.PUBLIC_API_URL}/unsubscribe?t={mail_tokens.make(uid, 'unsubscribe', what)}"
+    return f"{email_link_base()}/unsubscribe?t={mail_tokens.make(uid, 'unsubscribe', what)}"
 
 
 def list_unsubscribe_headers(uid: str, what: str) -> dict:
@@ -211,7 +223,11 @@ def list_unsubscribe_headers(uid: str, what: str) -> dict:
 def confirm_url(uid: str, address: str) -> str:
     """A link (good for 3 days) that confirms this address for the user's newsletters."""
     from . import mail_tokens
-    return f"{settings.PUBLIC_API_URL}/email/confirm?t={mail_tokens.make(uid, 'confirm', address)}"
+    return f"{email_link_base()}/email/confirm?t={mail_tokens.make(uid, 'confirm', address)}"
+
+
+# an admin email says why the admin gets it, not "you turned on notifications" (R6V-010)
+ADMIN_WHY = "You get this because you are a StratLab admin. It goes to every admin address."
 
 
 def tell_admins(subject: str, text: str) -> int:
@@ -227,17 +243,18 @@ def tell_admins(subject: str, text: str) -> int:
             rows = []
         try:
             if rows:
-                if notify(rows[0], subject, text, background=False, url="/admin"):
+                if notify(rows[0], subject, text, background=False, url="/admin", why=ADMIN_WHY, label="Admin alert"):
                     reached += 1
             elif email_ready():
-                send_message(email, subject, text, "/admin", "Admin alert", "You get this because you are a StratLab admin.")
+                send_message(email, subject, text, "/admin", "Admin alert", ADMIN_WHY)
                 reached += 1
         except Exception as e:
             print("admin alert failed:", e)
     return reached
 
 
-def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> list[tuple[str, object]]:
+def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: str | None = None,
+             label: str = "Alert") -> list[tuple[str, object]]:
     """(channel, send) for every channel the user set up that the server can use."""
     from . import push
     jobs = []
@@ -247,13 +264,14 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper") -> lis
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
     if to and email_ready() and email_confirmed(profile):      # only an address its owner confirmed from a link
-        jobs.append(("email", lambda: send_message(to, subject, text, url, "Alert")))
+        jobs.append(("email", lambda: send_message(to, subject, text, url, label, **({"why": why} if why else {}))))
     return jobs
 
 
-def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper") -> list[str]:
+def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper", why: str | None = None,
+           label: str = "Alert") -> list[str]:
     """Send to every usable channel the user set up. Returns the channels attempted."""
-    pairs = jobs_for(profile, subject, text, url)
+    pairs = jobs_for(profile, subject, text, url, why, label)
     channels = [c for c, _ in pairs]
     jobs = [j for _, j in pairs]
 

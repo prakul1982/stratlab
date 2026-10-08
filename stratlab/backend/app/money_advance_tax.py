@@ -239,7 +239,9 @@ def reminder_email(d: dict, days: int) -> tuple[str, str, str]:
             kit.para(f"By {d['label']}, {d['pct'] * 100:g}% of the year's tax (less TDS) is due, counting what was paid before."),
         ], kit.Footer(why="You get this because you turned on advance tax reminders.", unsubscribe="Stop advance tax reminders",
                       legal="Dates as the Income-tax Act sets them. Facts, not tax advice; check with a chartered accountant."),
-        label="Advance tax", date=f"{due:%a} {due.day} {due:%b}", summary=f"The {d['label']} instalment is due {when}.",
+        # the header's date is the day the email goes out, as on every other email; the due date is in the tiles (R6V-016)
+        label="Advance tax", date=kit.fmt_date(due - timedelta(days=days), year=False, weekday=True),
+        summary=f"The {d['label']} instalment is due {when}.",
         cta=("Open your advance tax figures", "/money/tax-tools?tab=advance"), subject=subject)
     return subject, html, text
 

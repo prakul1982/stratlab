@@ -87,13 +87,17 @@ def stats(month_start: str) -> dict:
 
 def week_stats(since: datetime) -> dict:
     """Users joined since a time, everyone so far, paid users by plan, and experiments and AI builds since then."""
-    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at").limit(100000).execute().data
+    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at,razorpay_subscription_id").limit(100000).execute().data
     plans = Counter(effective_plan(r) for r in rows)
+    # paying (a subscription) apart from given by the owner, as Overview counts them (R6V-010)
+    paying = Counter(effective_plan(r) for r in rows if r.get("razorpay_subscription_id"))
     new = sum(1 for r in rows if r.get("created_at") and datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")) >= since)
     usage = Counter()
     for c in _usage_since(since.astimezone(timezone.utc).isoformat()).values():
         usage.update(c)
-    return {"users": len(rows), "new": new, "paid": {p: plans[p] for p in PLANS if p != "free" and plans[p]},
+    paid = [p for p in PLANS if p != "free"]
+    return {"users": len(rows), "new": new, "paid": {p: plans[p] for p in paid if plans[p]},
+            "paying": {p: paying[p] for p in paid if paying[p]}, "given": {p: plans[p] - paying[p] for p in paid if plans[p] - paying[p]},
             "experiments": usage["backtest"], "ai": usage["ai"]}
 
 
