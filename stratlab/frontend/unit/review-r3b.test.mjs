@@ -54,6 +54,21 @@ test("one name for the person's own space, and the company lookup and the Invest
   assert.doesNotMatch(lookup, /title="Your watchlist"/);
 });
 
+test("library groups say what they hold, and ST S2 is spelled out (R3-014)", async () => {
+  const { groupLabel, plainTerms } = await import("../src/lib/plainTerms.ts");
+  assert.equal(groupLabel("NIFTY 50 stocks", 5), "5 of the NIFTY 50 stocks");
+  assert.equal(groupLabel("20 US large caps", 5), "5 of the 20 US large caps");
+  assert.equal(groupLabel("NIFTY 50 stocks", 50), "NIFTY 50 stocks");
+  assert.equal(groupLabel("My banks", 3), "My banks · 3 in the test");
+  assert.equal(groupLabel("NIFTY 50 stocks", undefined), "NIFTY 50 stocks");
+  assert.equal(plainTerms("ST S2: Stage 2 + Supertrend · NIFTY 50 stocks"), "Stage 2 + Supertrend · NIFTY 50 stocks");
+  assert.equal(plainTerms("Fresh ST S2"), "Fresh Stage 2 + Supertrend");
+  assert.equal(plainTerms(null), "");
+  for (const f of ["pages/ResearchScans.tsx", "pages/InvestorHome.tsx", "components/IdeaComposer.tsx", "pages/LibraryPage.tsx"]) {
+    assert.doesNotMatch(src(f).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""), /["'`>]ST S2\b|\bST S2["'`<]/, f);
+  }
+});
+
 test("options premiums and what is left after charges are rounded alike (R3-020)", async () => {
   const { optMoney } = await import("../src/lib/options.ts");
   assert.equal(optMoney(22455), "₹22,455");

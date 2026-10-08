@@ -17,7 +17,7 @@ type Row = {
 };
 
 const QUAD: Record<string, string> = { leading: "Leading", improving: "Improving", weakening: "Weakening", lagging: "Lagging" };   // one neutral style: a quadrant is a fact, not good or bad
-const SIGNAL: Record<string, string> = { fresh: "Fresh ST S2", st_s2: "ST S2", stage2: "Stage 2" };
+const SIGNAL: Record<string, string> = { fresh: "Fresh Stage 2 + Supertrend", st_s2: "Stage 2 + Supertrend", stage2: "Stage 2" };
 const attention = (r: Row) => (r.red ?? 0) * 3 + (r.checks?.fail ?? 0) + (r.fund_raise ? 1 : 0) + (r.card && r.card.score < 40 ? 1 : 0);
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {

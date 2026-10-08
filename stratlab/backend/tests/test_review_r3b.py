@@ -30,3 +30,10 @@ def test_the_dated_list_marks_a_weekend_minutes_due_date():
     due = next(e for e in out if e["title"].endswith("(due)"))
     assert due["date"] == "2026-10-11"                    # the 14th day after a Sunday decision
     assert M.mark_weekend(dict(due))["weekend"] == "Sunday"
+
+
+def test_the_scan_alert_spells_out_stage_2_plus_supertrend():
+    from app import scan
+    text = scan.alert_text("IN", [{"symbol": "TCS"}])
+    assert text.startswith("Stage 2 + Supertrend on your India watchlist: TCS is in Stage 2")
+    assert "ST S2" not in text
