@@ -135,8 +135,9 @@ test("landing: facts only, no data sources, fits the screen", async ({ page }) =
 
 test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and a menu on a phone", async ({ page }, info) => {
   const errors = await open(page);
-  // the NVIDIA sample's button is a real button: it signs in and opens the idea builder on NVDA
-  const idea = page.locator(".lp-rmock").getByRole("button", { name: /Test an idea on NVDA/ });
+  // the research sample's button is a real button: it signs in and opens the idea builder (the sample is a made-up
+  // company, so the button names none)
+  const idea = page.locator(".lp-rmock").getByRole("button", { name: /Test an idea like this/ });
   await expect(idea).toBeVisible();
   expect(await page.locator(".lp-fake-btn").count()).toBe(0);
   // tags under the Money cards and the options card read as labels, not links: not blue, not bold
@@ -162,6 +163,26 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
     await expect(menu).toBeHidden();
     await expect(page.locator("#pricing")).toBeInViewport();
   } else await expect(page.getByLabel("Sections menu")).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test("landing: the sample cards are labelled illustrations of made-up companies, never a real company with invented numbers", async ({ page }) => {
+  const errors = await open(page);
+  const cards = page.locator(".lp-space .lp-space-art, .lp-rmock");
+  await expect(cards).toHaveCount(4);
+  for (const card of await cards.all()) {
+    // the label is in the card, readable: body-sized ink, not 12px grey
+    const label = card.locator(".lp-illus");
+    await expect(label).toHaveText(/^Illustration: (a )?made-up/);
+    const [size, color, muted] = await label.evaluate((el) => [parseFloat(getComputedStyle(el).fontSize), getComputedStyle(el).color,
+      getComputedStyle(document.querySelector(".muted")!).color]);
+    expect(size, "the illustration label's size").toBeGreaterThanOrEqual(13);
+    expect(color, "the illustration label isn't the grey of fine print").not.toBe(muted);
+    // no real company, ticker or exchange beside the made-up figures, and no "today" on a made-up price
+    const text = await card.innerText();
+    for (const bad of [/RELIANCE/i, /NVIDIA/i, /\bNVDA\b/, /\bNASDAQ\b/, /\bNSE\b/, /BTC/, /\btoday\b/i, /\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/])
+      expect(text, `${bad} in a sample card`).not.toMatch(bad);
+  }
   expect(errors).toEqual([]);
 });
 
