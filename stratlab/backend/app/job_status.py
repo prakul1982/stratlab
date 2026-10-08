@@ -9,7 +9,7 @@ import threading
 
 from . import db
 
-RUN_KEYS = ("last_run", "read", "recorded")
+RUN_KEYS = ("last_run", "read", "recorded", "last_at")
 _written: dict[str, str] = {}          # what was last written for each job, so an unchanged status isn't written again
 _lock = threading.Lock()
 
@@ -47,3 +47,29 @@ def keep(key: str, job) -> None:
     except Exception as e:
         print("job status:", key, str(e)[:120])
 
+
+
+class Status(dict):
+    """A job's status that stores itself whenever a run is written into it (R6O-003): a job marked as done for the
+    day before its run finished (ETF closes, India VIX, the news readers) was stored without its run, and after a
+    restart Admin said "Not run yet" beside fresh data. `key` None: kept in memory only."""
+
+    def __init__(self, key: str | None, *a, **kw):
+        super().__init__(*a, **kw)
+        self.key = key
+
+    def _changed(self, keys) -> None:
+        if self.key and any(k in RUN_KEYS and self.get(k) for k in keys):
+            try:
+                kept(self.key, dict(self))
+            except Exception as e:                  # never breaks the job
+                print("job status:", self.key, str(e)[:120])
+
+    def __setitem__(self, k, v):
+        super().__setitem__(k, v)
+        self._changed([k])
+
+    def update(self, *a, **kw):
+        before = set(self)
+        super().update(*a, **kw)
+        self._changed(set(kw) | (set(dict(*a)) if a else set()) | (set(self) - before))

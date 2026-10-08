@@ -248,3 +248,36 @@ def test_red_flags_on_the_filings_the_owner_saw(desc, text, cat, sev):
 def test_stored_flags_are_read_again_with_the_new_rules():
     from app.intel import filings as F
     assert F.RULES_VERSION >= 3
+
+
+# ---------- R6O-003: a job's run is kept, and a fresh feed is never "Not run yet" ----------
+def test_a_jobs_run_is_stored_when_it_is_written(monkeypatch):
+    from app import db, job_status
+    saved = {}
+    monkeypatch.setattr(db, "set_setting", lambda k, v: saved.__setitem__(k, v))
+    monkeypatch.setattr(db, "get_setting", lambda k: saved.get(k))
+    st = job_status.Status("etf-r6o", {"read": None, "last_error": None})
+    st["last_error"] = None
+    assert "jobstatus:etf-r6o" not in saved                     # nothing has run yet
+    st.update(read="2026-10-08T15:46")
+    assert "2026-10-08T15:46" in saved["jobstatus:etf-r6o"]
+    # after a restart the job's memory is empty: the stored run shows, marked as from before the restart
+    got = job_status.kept("etf-r6o", {"read": None})
+    assert got["read"] == "2026-10-08T15:46" and got["before_restart"]
+
+
+def test_the_feeds_that_said_not_run_yet_keep_their_runs():
+    from app import job_status, main
+    from app import market_events_routes, fo_changes_routes
+    for job, key in ((main.etf_job, "etf"), (main.vix_job, "vix"), (main.positioning_job, "positioning"), (main.surv_job, "surveillance"),
+                     (market_events_routes.job, "events"), (fo_changes_routes.job, "fo"), (main.closing_auction_job, "closing-auction"),
+                     (main.recorder, "option-chains")):
+        assert isinstance(job.status, job_status.Status) and job.status.key == key
+
+
+def test_a_feed_without_a_run_on_this_server_shows_its_datas_own_time():
+    from app.admin_jobs import _ran
+    at, why = _ran({"last_run": None}, "last_run", data=lambda: "2026-10-08T18:45")
+    assert at == "2026-10-08T18:45" and "stored data" in why[0]
+    assert _ran({"last_run": "2026-10-08T19:00"}, "last_run", data=lambda: "x") == ("2026-10-08T19:00", [])
+    assert _ran({}, "last_run", data=lambda: (_ for _ in ()).throw(ValueError("down"))) == (None, [])

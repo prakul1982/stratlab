@@ -271,8 +271,10 @@ class Job:
     """Checks every five minutes what is due; each run is marked in the database before sending, so it runs once."""
 
     def __init__(self):
+        from .. import job_status
         self.last: dict[str, str] = {}
-        self.status = {"last_run": None, "sent": 0, "last_error": None}
+        # stores itself whenever a run is written into it, so Admin has it after a restart (R6O-003)
+        self.status = job_status.Status(self.status_key, {"last_run": None, "sent": 0, "last_error": None})
 
     def record(self, now: datetime, problems: list[str], parts: int | None = None, **extra) -> None:
         """How a read went, run by its own clock or by Admin's Run now (so Admin never shows an older run's problem
