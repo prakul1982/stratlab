@@ -41,11 +41,11 @@ export function ChartTip({ left, top = 0, flip, heading, live, children }: { lef
 }
 
 /** One tooltip row: a short line key in the series colour, the value (strong), then the series name. */
-export function TipRow({ color, value, label, dash, bar, note }: { color: string; value: string; label: string; dash?: boolean; bar?: boolean; note?: string }) {
+export function TipRow({ color, value, label, dash, bar, note, tone }: { color: string; value: string; label: string; dash?: boolean; bar?: boolean; note?: string; tone?: string }) {
   return (
     <div className="ch-tip-row">
       <Key color={color} dash={dash} bar={bar} />
-      <b>{value}</b><span className="muted">{label}{note ? ` (${note})` : ""}</span>
+      <b className={tone || undefined}>{value}</b><span className="muted">{label}{note ? ` (${note})` : ""}</span>
     </div>
   );
 }

@@ -71,7 +71,7 @@ function WalkForwardInner({ nb, e }: { nb: Notebook; e: Experiment }) {
             <XYChart ariaLabel="Walk-forward return against your fixed settings" height={220} times={s.t} tz={tzOf(e.instrument)}
               series={[{ id: "wf", values: s.wf, color: "var(--series-1)", label: "Walk-forward (re-tuned each block)" },
                 { id: "fixed", values: s.fixed, color: "var(--muted)", width: 1.5, dash: "5 4", label: "Your settings, never re-tuned" }]}
-              format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
+              format={(v) => pct(v)} signedTip axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
           )}
           <p className="k-note">
             Each step tried {w.grid_size} nearby settings around your {w.tuned?.join(" and ")} on the past and kept the best.

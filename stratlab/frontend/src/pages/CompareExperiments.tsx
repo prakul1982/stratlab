@@ -133,7 +133,7 @@ export function CompareExperiments() {
         <XYChart ariaLabel="Both experiments' return over time" height={260} times={dates} labels={lbl}
           series={[{ id: "a", values: dates.map((d) => ra.get(d) ?? null), color: "var(--muted)", width: 1.5, dash: "5 4", label: `v${a.v} · ${a.label}` },
             { id: "b", values: dates.map((d) => rb.get(d) ?? null), color: "var(--series-1)", label: `v${b.v} · ${b.label}` }]}
-          format={(v) => pct(v)} axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
+          format={(v) => pct(v)} signedTip axisFormat={(v) => pctTick(v, true, 0)} refs={[{ v: 0, strong: true }]} />
       </Card>
       <Card label="The numbers">
         <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About the numbers" />

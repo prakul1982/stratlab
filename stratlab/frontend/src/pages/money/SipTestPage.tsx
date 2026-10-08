@@ -261,7 +261,7 @@ export function SipTestPage() {
               )}>
               <LineChart lines={[{ values: res.spread.runs.map((x) => x.xirr * 100), color: "var(--series-1)", width: 2, label: "XIRR" },
                 ...(res.spread.dip ? [{ values: res.spread.runs.map((x) => (x.plain_xirr == null ? null : x.plain_xirr * 100)), color: "var(--series-2)", width: 2, dash: "4 3", label: "No dip rule" }] : [])]}
-                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => pct(v)} baseline={0}
+                labels={res.spread.runs.map((x) => `Started ${month(x.start)}`)} times={res.spread.runs.map((x) => `${x.start}-01`)} format={(v) => pct(v)} signedTip baseline={0}
                 height={200} legend={!!res.spread.dip} ranges={false} table={false} ariaLabel="XIRR by start month" />
             </ChartFrame>
           )}

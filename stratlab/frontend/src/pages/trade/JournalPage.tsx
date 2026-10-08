@@ -292,7 +292,7 @@ function Curve({ s }: { s: Summary }) {
   const { m, compact } = useMoney();
   return (
     <XYChart series={[{ values: s.equity.map((p) => p.v), color: "var(--series-1)", label: "P&L after charges", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]}
-      times={s.equity.map((p) => p.t)} format={(v) => m(v)} axisFormat={compact} testId="journal-curve"
+      times={s.equity.map((p) => p.t)} format={(v) => m(v)} signedTip axisFormat={compact} testId="journal-curve"
       refs={[{ v: 0, strong: true }]} ariaLabel={`Running P&L after charges over ${s.n} trades, ending at ${m(s.net)}`} />
   );
 }

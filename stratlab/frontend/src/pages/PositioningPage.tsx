@@ -386,7 +386,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
                 <Field label="Measure">{(id) => <Select id={id} value={measure} onChange={setMeasure} options={MEASURES.map(([value, label]) => ({ value, label }))} />}</Field>
                 <ChartBox title={`${whoName}: ${mlabel.toLowerCase()} (contracts)`} empty={parts.length < 2} height={220}>
                   <LineChart lines={[{ values: parts.map((p) => p[who as "fii"]?.[measure] ?? null), color: "var(--pos-call)", width: 2, label: mlabel }]}
-                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={contracts} axisFormat={contractsShort} baseline={0} height={220}
+                    labels={label(parts)} times={days(parts)} sync="pos-history" ranges={false} format={signed} signedTip axisFormat={contractsShort} baseline={0} height={220}
                     ariaLabel={`${whoName} ${mlabel} by day`} />
                 </ChartBox>
               </div>
@@ -403,7 +403,7 @@ function History({ names, coverage }: { names: string[]; coverage?: Coverage }) 
               emptyText={`${cash.length ? "One day" : "No days"} so far: the exchange shows only its latest day, so this chart grows a day at a time from when StratLab started reading the numbers.`}>
               <LineChart lines={[{ values: cash.map((p) => p.fii), color: "var(--pos-call)", width: 2, label: "FII/FPI" },
                 { values: cash.map((p) => p.dii), color: "var(--pos-put)", width: 2, label: "DII" }]}
-                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
+                labels={label(cash)} times={days(cash)} sync="pos-history" ranges={false} legend format={(v) => crore(v, true)} signedTip axisFormat={(v) => contractsShort(v)} baseline={0} height={200}
                 ariaLabel="FII and DII net cash market flows by day" />
             </ChartBox>
             <div className="k-stack">
