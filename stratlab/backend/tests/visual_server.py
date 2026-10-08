@@ -205,15 +205,20 @@ def live_breadth(mp, sizes):
     mp.setattr(BL, "is_open", lambda region, now: region == "IN")
     mp.setattr(BL, "STALE_AFTER", 10**9)
     mp.setattr(main.breadth_live_job, "start", lambda: None)
-    day = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    from tests import fake_prices as P
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    day = now.date().isoformat()
     times = ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45"]
+    # each group's index at each time, from the demo world's price table (NIFTY 500 below NIFTY 50, moving with it)
+    level = {g: [P.price(name, now.replace(hour=int(t[:2]), minute=int(t[3:]), second=0, microsecond=0)) for t in times]
+             for g, name in (("nifty500", "NIFTY 500"), ("nifty50", "NIFTY 50"))}
     for g in ("nifty500", "nifty50"):
         n = sizes[g]            # the live counts are out of the same stocks the last close counts: never more rose and fell than there are
         pts = []
         for i, t in enumerate(times):
             adv, dec = round(n * (0.55 + 0.04 * i)), round(n * (0.38 - 0.04 * i))
             pts.append([t, adv, dec, n - adv - dec, round(n * (0.52 + 0.01 * i)), n, round(n * (0.47 + 0.0125 * i)), n, round(n * (0.40 + 0.005 * i)), n,
-                        24000.5 + 22 * i if g == "nifty500" else 25100.0 + 15 * i])
+                        level[g][i]])
         db.set_setting(BL.LIVE_KEY + g, json.dumps({"day": day, "fields": list(BL.FIELDS), "points": pts}))
 
 
@@ -314,8 +319,9 @@ def positioning_history():
     from tests import fake_positioning as fp
     today = date.today()
     days = fp.weekdays_before(today, 30)
-    fp.record_days(db.add_option_snapshot, "NIFTY", days)
-    fp.record_days(db.add_option_snapshot, "BANKNIFTY", days, spot=55000.0, gap=100)
+    from tests import fake_prices as P            # each day's spot: the index's level then, in the demo world's price table
+    fp.record_days(db.add_option_snapshot, "NIFTY", days, spot_of=lambda at: P.price("NIFTY 50", at))
+    fp.record_days(db.add_option_snapshot, "BANKNIFTY", days, gap=100, spot_of=lambda at: P.price("NIFTY BANK", at))
     day = positioning.expected_day(positioning.ist_now())
     if day:
         main.positioning_runner.run_day(day)

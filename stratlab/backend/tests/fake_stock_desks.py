@@ -64,13 +64,17 @@ def expiries(d: date) -> list[date]:
 
 
 def price(sym: str, d: date) -> tuple[float, float]:
-    """(close, previous close): a drift seeded by the stock and the day; RELIANCE rises every day."""
-    base = STOCKS.get(sym, (CASH_ONLY.get(sym, (100.0,))[0],))[0]
+    """(close, previous close): a drift seeded by the stock and the day; RELIANCE rises every day. Around the level the
+    demo world's price table (fake_prices) gives the stock, so the desks show the price every other page shows;
+    RELIANCE's rise reaches that level on the latest trading day."""
+    from tests import fake_prices
+    base = fake_prices.level(sym) or STOCKS.get(sym, (CASH_ONLY.get(sym, (100.0,))[0],))[0]
     n = _n(d)
+    latest = _n(fake_prices.last_close("IN").date())
 
     def at(k):
         if sym == "RELIANCE":
-            return round(base * (1 + 0.0004 * (k - 400)), 2)
+            return round(base * (1 + 0.0004 * (k - latest)), 2)
         r = random.Random(f"{sym}:{k}")
         return round(base * (1 + 0.04 * r.uniform(-1, 1)), 2)
     return at(n), at(n - 1)

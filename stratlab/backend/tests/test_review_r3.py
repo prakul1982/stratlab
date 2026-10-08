@@ -68,6 +68,83 @@ def test_company_news_keeps_only_its_own_headlines():
     assert [n["headline"] for n in r["news"]] == ["Reliance shares rise after strong Jio numbers"]
 
 
+@pytest.fixture
+def w(monkeypatch):
+    from tests import world as W
+    world = W.build(monkeypatch)
+    yield world
+    world["close"]()
+
+
+def H(token="pro-token"):
+    from tests.fake_db import headers
+    return headers(token)
+
+
+# ---------- R3-005: no nonsense ratios ----------
+def test_cash_against_a_tiny_profit_is_left_out():
+    from app.intel import key_facts as K
+    years = [{"year": f"Mar {2021 + i}", "cfo": 150000.0, "profit": p} for i, p in enumerate([20.0, 108.0, 122.0])]
+    assert K._cash_vs_profit({"years": years}) is None                       # 1,46,000% of net profit says nothing
+    years = [{"year": f"Mar {2021 + i}", "cfo": 110.0, "profit": 100.0} for i in range(3)]
+    assert K._cash_vs_profit({"years": years}) == "110% of net profit over 3 years"
+
+
+# ---------- R3-004 and R3-010: an AI read with nothing in it is "unavailable", never a blank or a failed request ----------
+def test_an_empty_comparison_is_unavailable_not_blank(w):
+    w["ai"].i = 2                                    # the fake AI's next answer is {} (no verdict)
+    r = w["client"].get("/research/compare?region=IN&a=TCS&b=INFY", headers=H())
+    assert r.status_code == 200
+    got = r.json()
+    assert got["ai"].get("error") and not got["ai"].get("verdict")
+    assert got["b"]["name"] and got["b"]["quote"]["price"] > 0                # the numbers don't depend on it
+
+
+def test_the_market_read_answers_unavailable_instead_of_failing(w):
+    w["ai"].mode = "garbage"
+    for path in ("/research/pulse/ai?region=IN", "/research/pulse/ai?region=IN&focus="):
+        r = w["client"].get(path, headers=H())
+        assert r.status_code == 200 and r.json()["unavailable"] is True and r.json()["message"]
+    w["ai"].mode = "ok"
+    w["ai"].i = 2                                    # {}: no tone
+    r = w["client"].get("/research/pulse/ai?region=IN&refresh=true", headers=H())
+    assert r.status_code == 200 and r.json()["unavailable"] is True
+
+
+# ---------- R3-003: out of hours the price is the last close, and the page is told so ----------
+def test_market_open_follows_the_markets_hours():
+    from datetime import datetime, timezone
+    from app.intel.routes import market_open
+    assert market_open("IN", datetime(2026, 10, 8, 6, 0, tzinfo=timezone.utc))          # Thursday 11:30 IST
+    assert not market_open("IN", datetime(2026, 10, 8, 2, 0, tzinfo=timezone.utc))      # 07:30 IST, before the open
+    assert not market_open("IN", datetime(2026, 10, 2, 6, 0, tzinfo=timezone.utc))      # Gandhi Jayanti
+    assert market_open("US", datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc))         # 11:00 in New York
+    assert not market_open("US", datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc))    # a Saturday
+
+
+def test_company_page_says_whether_its_market_is_open(w):
+    from app.intel.routes import market_open
+    c = w["client"].get("/research/company/IN/RELIANCE", headers=H()).json()
+    assert c["market_open"] is market_open("IN")
+
+
+# ---------- R3-002: one price and one market value for a company everywhere (the real app's part) ----------
+def test_screens_and_deep_dive_are_priced_at_the_last_close(w, monkeypatch):
+    """The fundamentals source prices its ratios once a day; the public page (and so the screens) and the deep dive
+    re-price them at the last close shown with them, as the company page does."""
+    from app import main
+    from app.intel.screener import summary
+    co = {"sym": "RELIANCE", "bse": None}
+    f = main.stock_page_facts("IN", co)
+    page = main.research_hub.screener.company("RELIANCE")
+    s = summary(page)
+    assert f["price"] and f["price"] != s["price"]
+    assert f["market_cap"] == pytest.approx(s["market_cap_cr"] * f["price"] / s["price"])
+    assert f["pe"] == pytest.approx(s["pe"] * f["price"] / s["price"])
+    live = w["client"].get("/research/company/IN/RELIANCE", headers=H()).json()
+    assert live["market_cap"] / 1e7 == pytest.approx(f["market_cap"], rel=1e-6)    # the same market value
+
+
 def test_replay_reads_enough_history_for_its_context_across_holidays():
     """The context before a replay's start is counted in sessions: the calendar days read allow for the exchange's
     holidays, so a start after a holiday-heavy stretch still has its 200 daily candles before it."""
