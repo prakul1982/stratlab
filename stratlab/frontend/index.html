@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>StratLab: test it, research it, track it</title>
-<meta name="description" content="Your money in one place, for Indian and US stocks. Trade: test trading ideas and options on real prices with an honest verdict, then paper trade them. Invest: research companies from their own filings, with results dates, corporate actions, deals, surveillance lists and red flags. Money: your holdings, mutual funds, net worth and tax. Facts, not tips.">
+<meta name="description" content="Test trading ideas on years of real prices and paper trade them, options included. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://stratlab.studio/">
 <meta name="theme-color" content="#F5F1E8">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -16,20 +18,47 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="StratLab: test it, research it, track it">
-<meta property="og:description" content="Test it, research it, track it: honest backtests, options paper trading, company research, holdings, funds and tax for Indian and US stocks. Facts, not tips.">
+<meta property="og:description" content="Test trading ideas on years of real prices and paper trade them, options included. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.">
 <meta name="twitter:title" content="StratLab: test it, research it, track it">
-<meta name="twitter:description" content="Test it, research it, track it: backtests and options paper trading, company research, holdings and tax for Indian and US stocks. Facts, not tips.">
+<meta name="twitter:description" content="Test trading ideas on years of real prices and paper trade them, options included. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.">
 <meta property="og:url" content="https://stratlab.studio/">
 <meta property="og:image" content="https://stratlab.studio/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://stratlab.studio/og-image.png">
+<!--jsonld-->
+<style>
+/* the plain page: shown while the app starts, and if it never does (a script that failed to download, JavaScript turned off) */
+.boot { max-width: 520px; margin: 18vh auto 0; padding: 0 16px; display: flex; flex-direction: column; gap: 12px; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1d1b17; }
+.boot h1 { font: 600 28px/1.2 Georgia, serif; margin: 0; }
+.boot p { margin: 0; }
+.boot a { color: inherit; }
+.boot-btn { align-self: flex-start; min-height: 44px; padding: 0 24px; border: 0; border-radius: 10px; background: #1d1b17; color: #fff; font: 600 15px system-ui, sans-serif; cursor: pointer; }
+.boot-wait { opacity: 0; animation: boot-in .2s ease .6s forwards; }
+@keyframes boot-in { to { opacity: 1; } }
+@media (prefers-color-scheme: dark) { .boot { color: #eee; } .boot-btn { background: #eee; color: #1d1b17; } }
+</style>
+<noscript><style>[data-boot] { display: none; }</style></noscript>
+<script src="/boot.js"></script>
 <script src="/theme.js"></script>
 <script src="/config.js"></script>
 </head>
 <body>
-<div id="root"></div>
-<script type="module" src="/src/main.tsx"></script>
+<div id="root">
+<div class="boot boot-wait" data-boot>
+<h1>StratLab: test it, research it, track it</h1>
+<p>Test trading ideas on years of real prices and paper trade them, options included. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.</p>
+<p><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/refunds">Refunds</a> · <a href="/contact">Contact</a></p>
+</div>
+</div>
+<noscript>
+<div class="boot">
+<h1>StratLab needs JavaScript</h1>
+<p>StratLab runs in your browser, and JavaScript is turned off here. Turn it on for this site and reload to test ideas, research companies and track your money.</p>
+<p>Questions: <a href="mailto:support@stratlab.studio">support@stratlab.studio</a></p>
+</div>
+</noscript>
+<script type="module" src="/src/entry.tsx"></script>
 </body>
 </html>

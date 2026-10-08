@@ -2950,6 +2950,28 @@ def unshare_experiment(nid: str, version: int, profile=Depends(current_profile))
     return {"shared": False}
 
 
+PUBLIC_LIBRARY_HEADERS = {"Cache-Control": "public, max-age=300"}
+
+
+@app.get("/public/library")
+def public_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", limit: int = 100):
+    """StratLab's own library strategies, readable without an account: the rules that were tested and the verdict each
+    earned, as the app's own backtest gave it. Only entries StratLab published itself and that are not hidden; a user's
+    published strategy is never listed here (signed-in people see those in /library)."""
+    rows = library.search(library.public_entries(), market.upper()[:10], verdict[:12], q[:80], sort)
+    cap = max(1, min(limit, 200))
+    return JSONResponse({"entries": [library.public_view(e) for e in rows[:cap]], "total": len(rows), "reasons": library.REASONS},
+                        headers=PUBLIC_LIBRARY_HEADERS)
+
+
+@app.get("/public/library/{eid}")
+def public_library_entry(eid: str):
+    e = next((x for x in library.public_entries() if x.get("id") == eid), None)
+    if not e:
+        err(404, "not_found", "That strategy isn't in StratLab's public library.")
+    return JSONResponse(library.public_view(e), headers=PUBLIC_LIBRARY_HEADERS)
+
+
 @app.get("/public/v/{token}")
 def public_verdict(token: str):
     snap = public.load(token)

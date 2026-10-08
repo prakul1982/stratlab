@@ -671,7 +671,7 @@ td.num, .num { font-family: var(--sans); }
 .lp-space-rows > span { display: flex; justify-content: space-between; gap: 10px; }
 .lp-space-rows b { font-size: 13.5px; font-weight: 600; letter-spacing: 0; }
 .lp-space-go { margin-top: auto; padding-top: 4px; color: var(--blue-ink); font-weight: 600; }
-.lp-space .lp-space-art .badge { font-size: 11px; }
+
 .lp-sec .lp-markets { display: flex; flex-wrap: wrap; gap: 8px; }
 .lp-markets .lp-market { padding: 6px 14px 6px 6px; gap: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
 .lp-markets .lp-sym { width: 32px; height: 32px; border-radius: 50%; font-size: 13px; }
@@ -680,7 +680,6 @@ td.num, .num { font-family: var(--sans); }
 .lp-money .lp-fix { margin-top: auto; font-size: 13px; }
 @media (max-width: 1000px) { .lp-money { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
-  .lp-hero .lp-demo { display: none; }
   .lp-tools, .lp-steps, .lp-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 14px; }
   .lp-steps, .lp-checks { gap: 10px; }
   .lp-steps .lp-card, .lp-checks .lp-card { padding: 14px; }
@@ -1850,7 +1849,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-more > summary::after { content: "+"; font-family: var(--mono); color: var(--muted); }
 .lp-more[open] > summary::after { content: "–"; }
 .lp-more[open] > summary { margin-bottom: var(--s2); }
-.lp-plan-note { display: flex; align-items: center; justify-content: center; min-height: 44px; border: 1px dashed var(--line-2); border-radius: var(--r-ctl); }
+.lp-plan-note { display: flex; align-items: center; min-height: 44px; font-weight: 600; }       /* plain words, not a dashed box that looks like a disabled button */
 .lp-btc { display: block; }
 .lp-menu { display: none; position: relative; margin-left: auto; }
 .lp-menu > summary { display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--s3); border: 1px solid var(--line-2); border-radius: var(--r-ctl);
@@ -1884,3 +1883,57 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-pagenav-a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .k-card[id] { scroll-margin-top: 72px; }
 .k-card[tabindex="-1"]:focus { outline: none; }
+
+/* ---------- round 5 (a visitor's review): skip link, the landing's demo, plans while they load, phone menu ---------- */
+#main:focus { outline: none; }
+.legal-head { position: relative; }
+
+/* the hero demo: the three examples sit on top of one another, so the card is always as tall as the tallest and nothing around it moves */
+.lp-demo-stack { display: grid; }
+.lp-demo-stack > .lp-demo-body { grid-area: 1 / 1; }
+.lp-demo-body.off { visibility: hidden; pointer-events: none; animation: none; }
+@keyframes lp-in { from { transform: translateY(8px); } to { transform: none; } }
+.lp-demo-tabs button[aria-selected="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.lp-demo-tabs button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.lp-sample { flex: none; padding: 1px 10px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--ink-2); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.lp-space .lp-space-art .badge { font-size: 12.5px; }
+.lp-art { position: relative; }
+.lp-art-tag { position: absolute; top: 10px; right: 10px; font: 600 12.5px var(--sans); color: var(--orange-ink); }
+
+/* plans: amounts are held back until the prices have come, so nothing flashes and nothing moves */
+@keyframes lp-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.lp-skel { display: block; border-radius: 8px; background: linear-gradient(90deg, var(--chip), var(--paper-2), var(--chip)); background-size: 200% 100%; animation: lp-skel 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .lp-skel { animation: none; } }
+.lp-head-skel { gap: 12px; }
+.lp-skel-h { height: calc(clamp(32px, 4vw, 50px) * 2.1); width: min(20ch, 100%); max-width: 520px; }
+.lp-skel-p { height: calc(17px * 1.6 * 2); width: min(56ch, 100%); }
+.lp-period { min-height: 44px; display: flex; align-items: center; }
+.lp-skel-seg { height: 44px; width: 280px; max-width: 100%; }
+.lp-skel-amount { height: 46px; width: 60%; }
+.lp-skel-note { height: 1.2em; width: 80%; }
+.lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
+.lp-price-note { display: block; min-height: calc(1.4em * 2); line-height: 1.4; color: var(--ink-2); }
+.lp-save { display: block; color: var(--ink-2); font-weight: 600; }
+.lp-price > .btn:disabled { opacity: .6; }
+
+/* real verdicts on the landing page */
+.lp-examples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.lp-example { display: flex; flex-direction: column; gap: 6px; padding: var(--s4); text-decoration: none; color: inherit; }
+.lp-example:hover { border-color: var(--ink-2); }
+.lp-example .lp-space-go { margin-top: auto; }
+.lp-skel-card { height: 148px; border-radius: var(--r-card); }
+@media (max-width: 800px) { .lp-examples { grid-template-columns: minmax(0, 1fr); } .lp-skel-card { height: 110px; } }
+
+/* the phone menu and the small controls: at least 40px to tap */
+.lp-menu > summary { min-height: 40px; cursor: pointer; }
+.lp-nav .btn.sm, .btn.sm.lp-idea-btn { min-height: 40px; }
+.lp-demo-tabs button { min-height: 40px; }
+.lp-faq summary { min-height: 44px; }
+.legal-links a, .lp-foot .legal-links a { display: inline-flex; align-items: center; min-height: 40px; }
+@media (max-width: 600px) {
+  .lp-hero .lp-demo { display: flex; }
+  .lp-hero { padding-top: 28px; }
+  .lp-demo-rule, .lp-cta-2 { display: none; }
+  .lp-demo-tabs { align-self: stretch; }
+  .lp-demo-tabs button { flex: 1; }
+}

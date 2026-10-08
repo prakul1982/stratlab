@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useApp } from "../lib/app";
 import type { CheckStatus, VerdictKind } from "../lib/types";
 import { usePopover } from "./kit/Dialog";
 import { asOf } from "../lib/format";
@@ -11,17 +10,6 @@ export const STATUS_NAME: Record<CheckStatus, string> = { pass: "Passed", warn: 
 
 export const VerdictBadge = ({ v }: { v: VerdictKind | null | undefined }) =>
   v ? <span className={`badge ${v}`}>{VERDICT_NAME[v]}</span> : <span className="badge skip">No experiments yet</span>;
-
-export function Toast() {
-  const { toast } = useApp();
-  if (!toast) return null;
-  return (
-    <div className="toast" role="status">
-      <span>{toast.msg}</span>
-      {toast.action && <button onClick={toast.action.run}>{toast.action.label}</button>}
-    </div>
-  );
-}
 
 /** The kit's modal dialog (components/kit/Dialog), under its old name. */
 export { Dialog as Modal } from "./kit/Dialog";

@@ -38,7 +38,7 @@ test("the public company pages' fonts are built to fixed addresses, and every on
   const asked = [...page.matchAll(/url\(\/fonts\/([^)]+)\)/g)].map((m) => m[1]).sort();
   assert.deepEqual(asked, PUBLIC_FONTS.map(([f]) => f).sort());
   for (const [file, pkg] of PUBLIC_FONTS) assert.ok(existsSync(fontSource(file, pkg)), `${pkg}/files/${file}`);
-  assert.match(read("vite.config.ts"), /plugins: \[react\(\), publicFonts\(\)\]/);
+  assert.match(read("vite.config.ts"), /plugins: \[react\(\), publicFonts\(\)/);
 });
 
 test("one address per page: a trailing slash redirects, and the fonts are cached (R5V-013, R5V-023)", () => {

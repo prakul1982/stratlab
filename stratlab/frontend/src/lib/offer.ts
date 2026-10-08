@@ -81,14 +81,27 @@ export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, u
       ? "Every market and every space is on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time."
       : "Cancel any time; your plan stays active until the paid period ends.",
   };
-  return { title: where === "landing" ? "Free to start." : "Plans", lede: "Every market and every space is on the Free plan. Paid plans raise the limits and add the deeper tools." };
+  // the offer couldn't be read (the server didn't answer): the same cards, with what is on them and no promise about what is on sale
+  return { title: "Plans", lede: "Every market and every space is on the Free plan. Paid plans raise the limits and add the deeper tools. Today's offer couldn't be loaded, so reload the page to see what is on sale." };
 }
 
-/** What a plan card's button does on the landing page: sign in, or nothing to sell yet (a note, not a button). */
+/** What a plan card's button does on the landing page: sign in (every button says it goes to Google), or nothing to sell yet (a note). */
 export function landingAction(o: Offer | null | undefined, plan: PlanId): { label: string; buy: boolean } | { note: string } {
-  if (plan === "free") return { label: offerMode(o) === "promo" ? "Start free, with every Pro feature" : "Start free", buy: false };
-  if (!canBuy(o)) return { note: offerMode(o) === "unknown" ? "Choose a plan after you sign in" : "Opens soon" };
-  return { label: `Start with ${plan === "pro" ? "Pro" : "Basic"}`, buy: true };
+  if (plan === "free") return { label: "Continue with Google", buy: false };
+  if (offerMode(o) === "unknown") return { label: "Continue with Google to see plans", buy: true };
+  if (!canBuy(o)) return { note: "Opens soon" };
+  return { label: `Continue with Google to get ${plan === "pro" ? "Pro" : "Basic"}`, buy: true };
+}
+
+/** The yearly choice's label. Basic's year is exactly ten months; Pro's is ₹9 over (19,999 against 1,999 × 10), so the
+ * label says "about" and each yearly card states its own exact saving (`yearlySaving`). */
+export const YEARLY_LABEL = "Yearly · about 2 months free";
+
+/** What paying for a year saves against twelve monthly payments, as an amount in the price's own units (null when a
+ * year isn't cheaper). */
+export function yearlySaving(month: number, year: number): number | null {
+  const save = Math.round((month * 12 - year) * 100) / 100;
+  return save > 0 ? save : null;
 }
 
 /** The small print under the plans, for the currency shown. `year` is written in that currency ("₹6,999", "$80");

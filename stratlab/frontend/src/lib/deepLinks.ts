@@ -10,7 +10,7 @@ export const APP_ROUTES = [
   "/notebooks", "/new", "/n/:id", "/n/:id/market", "/n/:id/compare", "/n/:id/e/:v", "/import", "/library", "/options",
   "/trade/positioning", "/trade/positioning/stocks", "/options/s/:sid", "/paper", "/paper/:sid", "/trade/journal",
   "/trade/fo-changes", "/trade/closing-auction", "/trade/replay", "/trade/signals", "/trade/signals/:sid", "/trade/events",
-  "/plans", "/pricing", "/upgrade", "/help", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
+  "/plans", "/pricing", "/upgrade", "/help", "/faq", "/account", "/settings", "/assistant", "/app", "/invite", "/admin/*", "/news",
   "/holdings", "/tax-report", "/money/net-worth", "/money/mutual-funds", "/money/tax-tools", "/money/calendar",
   "/money/us-tax", "/money/itr", "/money/sip-test", "/money/rates", "/alerts", "/research", "/research/themes",
   "/research/pulse", "/research/compare", "/research/watchlist", "/research/scan", "/research/scans", "/scans",
@@ -23,7 +23,7 @@ export const APP_ROUTES = [
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
 
 /** The landing page and its sections: shown to a visitor as the landing page, scrolled to the section. */
-export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/features": "trade",
+export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/faq": "faq", "/features": "trade",
   "/login": null, "/signup": null, "/about": "about" };
 
 const clean = (path: string) => path.split(/[?#]/)[0] || "/";
@@ -72,4 +72,33 @@ export function describePath(path: string): Described | null {
   if (g) return { what: g.group.label };
   const at = locate(p);
   return { what: at ? at.page.label : "this page" };
+}
+
+/** What a visitor (no account) gets at an address. The landing page and its sections, the policies, a shared verdict
+ * and StratLab's own library are open to everyone; an address inside the app asks for sign-in; anything else is not found. */
+export type VisitorView =
+  | { kind: "landing"; section: string | null; panel?: "login" | "signup" }
+  | { kind: "legal" } | { kind: "verdict"; token: string } | { kind: "library" } | { kind: "libraryEntry"; id: string }
+  | { kind: "gate" } | { kind: "notfound" };
+
+const LEGAL = /^\/(terms|privacy|refunds|contact)$/;
+
+export function visitorView(path: string): VisitorView {
+  const p = clean(path).replace(/(.)\/$/, "$1");
+  if (LEGAL.test(p)) return { kind: "legal" };
+  const v = p.match(/^\/verdict\/([^/]+)$/);
+  if (v) return { kind: "verdict", token: safeDecode(v[1]) };
+  if (p === "/library") return { kind: "library" };
+  const lib = p.match(/^\/library\/([^/]+)$/);
+  if (lib) return { kind: "libraryEntry", id: safeDecode(lib[1]) };
+  const section = landingSection(p);
+  if (section !== undefined) return { kind: "landing", section, panel: p === "/login" ? "login" : p === "/signup" ? "signup" : undefined };
+  // /research/XX/TCS: only India and the US have company pages, so another "market" is a mistyped address, not a page to sign in for
+  const co = p.match(/^\/research\/([^/]+)\/([^/]+)(\/deep)?$/);
+  if (co && !/^(IN|US)$/i.test(co[1])) return { kind: "notfound" };
+  return isAppPath(p) ? { kind: "gate" } : { kind: "notfound" };
+}
+
+function safeDecode(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
 }

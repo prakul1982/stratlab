@@ -133,6 +133,7 @@ test("the search palette fits a landscape phone, and drops the keyboard hints", 
   await ctx.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
   const page = await ctx.newPage();
   await page.goto(WEB + "/");
+  await expect(page.getByRole("button", { name: /^Search or ask anything/ })).toBeVisible({ timeout: 30_000 });      // the app is drawn (a missing box would count as hidden)
   await expect(page.locator(".search-btn kbd").first()).toBeHidden({ timeout: 30_000 });
   await page.keyboard.press("Control+k");
   await expect(page.locator(".palette")).toBeVisible();

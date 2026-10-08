@@ -24,7 +24,7 @@ from html import escape as e
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from . import db, instrument_kinds, sector_members, universes
+from . import db, instrument_kinds, sector_members, site_pages, universes
 from .branding import public_text
 from .config import settings
 from .intel.net import TTLCache
@@ -285,6 +285,33 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
     return ts >= last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + SETTLE
 
 
+_thin: set[tuple[str, str]] = set()          # companies already marked in this process
+
+
+def _mark_thin(region: str, symbol: str, thin: bool):
+    """Remember which companies' pages had nothing to show (the page says so and is kept out of search results), so the
+    sitemap doesn't list them. One tiny setting per company; written once, cleared when facts turn up."""
+    key = f"stocks:thin:{region}:{symbol}"
+    try:
+        if thin and (region, symbol) not in _thin:
+            _thin.add((region, symbol))
+            _put(key, 1)
+        elif not thin:
+            _thin.discard((region, symbol))
+            if _setting(key):
+                db.delete_setting(key)
+    except Exception as ex:
+        print("stock pages: could not mark", key, str(ex)[:120])
+
+
+def thin_symbols(region: str) -> set[str]:
+    """The companies whose last build had nothing to show."""
+    try:
+        return {k.rsplit(":", 1)[1] for k, _ in db.all_settings_with_prefix(f"stocks:thin:{region}:")}
+    except Exception:
+        return set()
+
+
 class Pages:
     """Built pages: in memory for a few minutes, stored until the market's next close, and rebuilt at most `per_minute`
     times a minute. `gather(region, company)` builds one company's facts from the sources, or returns None when they
@@ -317,6 +344,8 @@ class Pages:
         stored = _setting(key)
         if fresh(stored, region):
             self.mem.set(key, stored.get("facts") or {}, 600)
+            if not stored.get("facts"):
+                _mark_thin(region, symbol, True)       # a page stored before the sitemap kept track of these
             return stored.get("facts")
         with self.lock:
             one = self.building.setdefault(key, threading.Lock())
@@ -339,6 +368,7 @@ class Pages:
             if got:
                 got["symbol"] = symbol
             _put(key, {"ts": time.time(), "facts": got})
+            _mark_thin(region, symbol, not got)
             self.mem.set(key, got or {}, 600)
             return got
 
@@ -874,25 +904,41 @@ def robots() -> str:
 def sitemap_index() -> str:
     site = settings.PUBLIC_SITE_URL
     names = ["pages"] + [f"stocks-{r}-{i + 1}" for r, R in REGIONS.items() for i in range(max(1, -(-len(companies(R)) // CHUNK)))]
-    items = "".join(f"<sitemap><loc>{site}/sitemaps/{n}.xml</loc></sitemap>" for n in names)
+    def day(n: str) -> str:
+        if n == "pages":
+            return max(d for _, d in site_pages.PAGES)
+        return str(((_setting(f"stocks:list:{REGIONS[n.split('-')[1]]}") or {}).get("at")) or "")[:10]
+    items = "".join(f"<sitemap><loc>{site}/sitemaps/{n}.xml</loc>" + (f"<lastmod>{d}</lastmod>" if (d := day(n)) else "") + "</sitemap>" for n in names)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</sitemapindex>\n'
 
 
-def _urlset(locs: list[str]) -> str:
-    items = "".join(f"<url><loc>{e(u)}</loc></url>" for u in locs)
+def _urlset(rows: list) -> str:
+    """A sitemap file. A row is an address, or (address, last-changed day) for a page whose date is known."""
+    items = ""
+    for r in rows:
+        loc, mod = (r, None) if isinstance(r, str) else r
+        items += f"<url><loc>{e(loc)}</loc>" + (f"<lastmod>{e(mod)}</lastmod>" if mod else "") + "</url>"
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{items}</urlset>\n'
 
 
 def sitemap(name: str) -> str | None:
-    """One sitemap file: "pages" (the public site pages) or "stocks-in-1", "stocks-us-2"…; None for any other name."""
+    """One sitemap file: "pages" (the public site pages, with the day each last changed, and StratLab's own library
+    strategies) or "stocks-in-1", "stocks-us-2"… (companies whose page has facts to show; the day is when the list of
+    listed companies was last refreshed); None for any other name."""
     site = settings.PUBLIC_SITE_URL
     if name == "pages":
-        return _urlset([site + p for p in ("/", "/stocks", "/terms", "/privacy", "/refunds", "/contact")])
+        # /stocks is the API's own list of company pages, not one of the site's pages: it changes with the companies list
+        listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
+        return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + "/stocks", listed or max(d for _, d in site_pages.PAGES))]
+                       + [(site + p, d) for p, d in site_pages.library_pages()])
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
         return None
-    syms = sorted(companies(REGIONS[bits[1]]))
+    region = REGIONS[bits[1]]
+    syms = sorted(companies(region))
     i = int(bits[2]) - 1
     if i < 0 or (i * CHUNK >= len(syms) and i > 0):
         return None
-    return _urlset([site + path(bits[1], s) for s in syms[i * CHUNK:(i + 1) * CHUNK]])
+    thin = thin_symbols(region)          # pages with nothing to show are marked noindex, so they aren't listed
+    day = str(((_setting(f"stocks:list:{region}") or {}).get("at")) or "")[:10] or None
+    return _urlset([(site + path(bits[1], s), day) for s in syms[i * CHUNK:(i + 1) * CHUNK] if s not in thin])

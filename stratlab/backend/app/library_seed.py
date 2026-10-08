@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from . import library, research, universes
 from .models import Strategy
 
-OWNER = "stratlab"
+OWNER = library.OFFICIAL_OWNER
 AUTHOR = "StratLab"
 BADGE = "StratLab"
 SEED_VERSION = 1

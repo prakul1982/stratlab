@@ -92,6 +92,27 @@ def public(e: dict, viewer: str | None = None) -> dict:
     return out
 
 
+OFFICIAL_OWNER = "stratlab"        # the owner id of the entries StratLab publishes itself (library_seed.py)
+PUBLIC_HIDDEN = ("seed",)          # StratLab's own bookkeeping on its entries, not for visitors
+
+
+def is_public(e: dict) -> bool:
+    """Whether a visitor without an account may read this entry: only StratLab's own (made by the app's own backtest and
+    verdict, published as StratLab), and not hidden. A user's entry is never public here, however it was published."""
+    return bool(e.get("official")) and e.get("owner") == OFFICIAL_OWNER and not e.get("hidden")
+
+
+def public_view(e: dict) -> dict:
+    """An official entry as a visitor sees it: what `public` shows signed-in people, read only, nothing about a viewer."""
+    out = public(e)
+    for k in PUBLIC_HIDDEN:
+        out.pop(k, None)
+    out.pop("mine", None)
+    out.pop("reported", None)
+    out.pop("hidden", None)
+    return out
+
+
 def visible(e: dict, viewer: str | None = None) -> bool:
     return not e.get("hidden") or bool(viewer and e.get("owner") == viewer)
 
@@ -120,8 +141,13 @@ def carry_moderation(old: dict | None, new: dict) -> dict:
     return new
 
 
+_official_cache: list = [0.0, []]
+OFFICIAL_TTL = 60.0          # seconds a visitor's list is reused: the public routes need no account, so a crowd can't each read the store
+
+
 def save(e: dict):
     db.set_setting(PREFIX + e["id"], json.dumps(e))
+    _official_cache[0] = 0.0
 
 
 def load(eid: str) -> dict | None:
@@ -134,6 +160,15 @@ def load(eid: str) -> dict | None:
 def remove(eid: str):
     if ID.match(eid or ""):
         db.delete_setting(PREFIX + eid)
+        _official_cache[0] = 0.0
+
+
+def public_entries() -> list[dict]:
+    """StratLab's own visible entries, for the routes that need no sign-in (kept for a minute)."""
+    import time
+    if time.time() - _official_cache[0] >= OFFICIAL_TTL:
+        _official_cache[:] = [time.time(), [e for e in all_entries() if is_public(e)]]
+    return _official_cache[1]
 
 
 def all_entries() -> list[dict]:

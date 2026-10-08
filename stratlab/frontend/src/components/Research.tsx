@@ -447,8 +447,8 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
               {r.ideas.length > 0 && (
                 <div className="k-inset">
                   <div className="k-stack">
-                    <b className="k-sub">Ideas to test on {symbol}</b>
-                    <span className="k-small k-muted">Pick one and StratLab will test it on years of real prices, after costs.</span>
+                    <b className="k-sub">Rule templates to test on {symbol}</b>
+                    <span className="k-small k-muted">Each is a test setup, not a suggestion. Pick one and StratLab shows how it would have done on years of real prices, after costs.</span>
                   </div>
                   <div className="inv-ideas">
                     {r.ideas.map((i) => (

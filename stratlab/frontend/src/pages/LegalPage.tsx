@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { api, CFG } from "../lib/api";
+import { CFG } from "../lib/config";
+import { publicGet } from "../lib/http";
 import { Logo } from "../components/Logo";
 import { LEGAL_PAGES } from "../components/LegalLinks";
+import { SkipLink } from "../components/SkipLink";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
 const BUSINESS = {
@@ -11,8 +13,11 @@ const BUSINESS = {
   billing: CFG.BILLING_EMAIL || "billing@stratlab.studio",
   privacy: CFG.PRIVACY_EMAIL || "privacy@stratlab.studio",
   address: CFG.BUSINESS_ADDRESS || "",
-  updated: "26 September 2026",
+  gstin: CFG.BUSINESS_GSTIN || "",
 };
+
+/** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
+const UPDATED: Record<string, string> = { "/terms": "26 September 2026", "/privacy": "8 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
 
 const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
 const BillingMail = () => <a className="link" href={`mailto:${BUSINESS.billing}`}>{BUSINESS.billing}</a>;
@@ -64,7 +69,7 @@ function Privacy() {
         <li><b>Usage counts</b>, such as experiments and AI builds this month, to apply plan limits.</li>
         <li><b>Alert contacts you choose to add:</b> an email address, a Telegram chat ID, and each device's notification address if you turn on phone notifications.</li>
         <li><b>Billing records:</b> your plan and Razorpay subscription ID. Card, UPI and bank details go to Razorpay only.</li>
-        <li><b>Usage analytics:</b> which pages you open and which features you use (such as running a backtest or saving a screen), linked to your account's internal ID, never your email or name, and without your holdings, symbols you search or amounts. No screen recordings or typed text. Skipped if your browser sends Do Not Track.</li>
+        <li><b>Usage analytics:</b> which pages you open and which features you use (such as running a backtest or saving a screen), without your holdings, symbols you search or amounts. No screen recordings or typed text. Before you sign in, this is tied only to a random ID made in your browser, not to any account. Once you sign in, it is linked to your account's internal ID, never your email or name. Not collected at all if your browser sends Do Not Track or Global Privacy Control.</li>
         <li><b>Technical logs:</b> request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.</li>
       </ul>
       <h2 className="h3">How it's used</h2>
@@ -73,13 +78,20 @@ function Privacy() {
       <ul>
         <li>Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.</li>
         <li>Razorpay processes payments.</li>
-        <li>AI providers (such as Groq, Google Gemini, Cerebras, Mistral, OpenRouter or Anthropic) receive the text you type into AI features, like an idea to turn into rules, but not your email.</li>
+        <li>AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these thirteen: Anthropic, Cerebras, Cloudflare Workers AI, GitHub Models, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova, Vercel AI Gateway and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.</li>
         <li>Telegram and our email provider deliver alerts you turn on. Sentry receives error reports without personal details.</li>
         <li>PostHog (hosted in the US) receives the usage analytics described above.</li>
       </ul>
       <p>Some of these providers store data outside India, under their own security and privacy commitments.</p>
       <h2 className="h3">Cookies and storage</h2>
-      <p>Your browser keeps your sign-in session and a few preferences (like light or dark mode). Nothing is used for advertising.</p>
+      <p>StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing is used for advertising.</p>
+      <ul>
+        <li><b>Before you sign in</b>, on your first visit: a preference for light or dark mode and for the currency prices are shown in, a note that the page reloaded once if a file failed to load, and, when usage analytics are on, one entry from PostHog (its name starts with <code>ph_</code>) holding a random anonymous ID and session details. That PostHog entry is not made, and no analytics request is sent, if your browser sends Do Not Track or Global Privacy Control.</li>
+        <li><b>While Google sign-in runs:</b> the page to come back to, and an invite code if you arrived by a friend's link.</li>
+        <li><b>After you sign in:</b> your sign-in session, which the sign-in service refreshes, and a few choices such as which menu is open and whether you have seen the tour.</li>
+        <li><b>To pay:</b> Razorpay's payment window can set its own cookies and storage on its own pages and windows.</li>
+      </ul>
+      <p>You can clear all of this from your browser's settings; you will be signed out and the choices above reset.</p>
       <h2 className="h3">Keeping and deleting</h2>
       <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email <PrivacyMail />; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
       <h2 className="h3">Security</h2>
@@ -123,6 +135,7 @@ function Contact() {
         <li><b>Privacy and your data:</b> <PrivacyMail /></li>
         <li><b>Business:</b> {BUSINESS.name}</li>
         {BUSINESS.address && <li><b>Address:</b> {BUSINESS.address}</li>}
+        {BUSINESS.gstin && <li><b>GSTIN:</b> {BUSINESS.gstin}</li>}
       </ul>
       <p className="small muted">For billing questions, write to <BillingMail /> with your account's email and the payment date so we can find it quickly.</p>
     </>
@@ -138,7 +151,7 @@ export function LegalPage() {
   const [, seen] = useState(0);
   useEffect(() => {
     let live = true;
-    api<{ legal_name?: string; address?: string; email?: string }>("/public/business").then((b) => {
+    publicGet<{ legal_name?: string; address?: string; email?: string }>("/public/business").then((b) => {
       if (!live || !b) return;
       if (b.legal_name) BUSINESS.name = b.legal_name;
       if (b.address && !CFG.BUSINESS_ADDRESS) BUSINESS.address = b.address;
@@ -151,6 +164,7 @@ export function LegalPage() {
   const Body = BODY[page.path];
   return (
     <div className="legal">
+      <SkipLink />
       <header className="legal-head">
         <Link to="/" aria-label="StratLab home"><Logo size={30} /></Link>
         <nav className="row wrap legal-links" aria-label="Policies">
@@ -158,11 +172,13 @@ export function LegalPage() {
             aria-current={p.path === page.path ? "page" : undefined}>{p.title}</Link>)}
         </nav>
       </header>
-      <article className="legal-body stack">
-        <h1 className="page-title">{page.title}</h1>
-        <p className="small muted">Last updated {BUSINESS.updated}</p>
-        <Body />
-      </article>
+      <main id="main" tabIndex={-1}>
+        <article className="legal-body stack">
+          <h1 className="page-title">{page.title}</h1>
+          <p className="small muted">Last updated {UPDATED[page.path]}</p>
+          <Body />
+        </article>
+      </main>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
-import { canBuy, finePrint, pricingIntro } from "../lib/offer";
+import { canBuy, finePrint, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
@@ -72,6 +72,14 @@ export function PlansPage() {
     // the admin table's price ($8 and $20 for dollars); "Charged as ₹…" under it while that currency is charged in rupees
     return { shown: money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
   };
+  /** What a year saves against twelve months, in the price's own currency (Pro's year is ₹9 over ten months, so each card says its own number). */
+  const savingOf = (p: "basic" | "pro") => {
+    const foreign = !!row && currency !== "INR";
+    const month = foreign ? (row as unknown as Record<string, number>)[p] : rupees(p, "month");
+    const year = foreign ? (row as unknown as Record<string, number>)[`${p}_year`] : rupees(p, "year");
+    const save = yearlySaving(month, year);
+    return save == null ? null : money(foreign ? row : inr, save, foreign ? currency : "INR");
+  };
   const anyRupees = currency !== "INR" && !!row && (period === "year" ? row.yearly_charged_in : row.charged_in) === "INR";
 
   const subscribe = async (plan: "basic" | "pro") => {
@@ -122,7 +130,7 @@ export function PlansPage() {
           {billing && yearlyOk && (
             <FieldGroup label="Billed">
               <Seg label="Billing period" value={yearly ? "year" : "month"} onChange={(v) => setYearly(v === "year")}
-                options={[{ value: "month", label: "Monthly" }, { value: "year", label: "Yearly · 2 months free" }]} />
+                options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
             </FieldGroup>
           )}
         </FormGrid>
@@ -141,6 +149,7 @@ export function PlansPage() {
               <div className="k-stack tight">
                 <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
                 {price.inr && <span className="k-note">incl. GST</span>}
+                {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
                 {price.charged && <span className="k-note">{billing ? `Charged as ${price.charged} incl. GST / ${period}` : `${price.charged} a ${period} in India, incl. GST`}</span>}
               </div>
               <ul className="k-plan-list">
