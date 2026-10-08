@@ -530,3 +530,14 @@ def test_the_pulse_after_the_close_says_closed(monkeypatch):
     import inspect
     from app.intel import routes
     assert "closed=not market_open(r)" in inspect.getsource(routes.pulse_ai)
+
+
+def test_a_us_companys_dividends_in_cents_are_not_looked_up_abroad():
+    from app import corp_actions as CA
+
+    class NoCalls:
+        def __getattr__(self, name):
+            raise AssertionError(f"no read expected: {name}")
+    rows = [CA.row("US", "AAPL", {"kind": "dividend", "sub": "dividend", "label": "Dividend", "text": "x", "amount": a}, date.fromisoformat(d))
+            for d, a in (("2026-02-09", 0.26), ("2026-05-11", 0.26), ("2026-08-10", 0.27))]
+    assert CA._home_missing("AAPL", rows, NoCalls(), date(2026, 10, 8)) == []

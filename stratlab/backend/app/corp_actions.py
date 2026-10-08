@@ -875,6 +875,11 @@ def _home_missing(symbol: str, rows: list[dict], yahoo, today: date) -> list[dic
     us = sorted((r for r in rows if r.get("kind") == "dividend" and r.get("amount")), key=lambda r: r["ex_date"])
     if len(us) < 2:
         return []
+    # a depositary share's dividends are a home payment converted at the day's rate, so they change by fractions of a
+    # cent from one to the next (Eni: 0.543, 0.52, 0.571, 0.614); a US company's are set in cents (Apple: 0.25, 0.26).
+    # Only the first kind is looked up abroad, so a US company's page costs no extra reads.
+    if not any(abs(r["amount"] * 100 - round(r["amount"] * 100)) > 0.05 for r in us[-4:]):
+        return []
     name = (yahoo.meta(symbol) or {}).get("name")
     if not name:
         return []
