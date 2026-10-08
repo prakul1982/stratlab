@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { ago, num, pct, price, safeHref } from "../lib/format";
+import { ago, num, pct, price, safeHref, signCls } from "../lib/format";
 import {
   bandPosition, metricText, monthsOld, newsAge, ordinal, researchApi, staleQuarter, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -162,7 +162,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                 return (
                   <div key={m.label} className="inv-metric">
                     <span className="k-small k-muted">{m.label}</span>
-                    <span className="inv-metric-v">{metricText(m, currency)}</span>
+                    <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
                       <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
                         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />

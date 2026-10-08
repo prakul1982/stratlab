@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, fmtDate } from "../lib/format";
+import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { millionsOf, scaleFor } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
-import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow } from "../components/kit";
+import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { track } from "../lib/analytics";
@@ -64,7 +64,7 @@ const KIND: Record<string, string> = { transcript: "Call transcript", presentati
   quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 
 function Growth({ label, v, why }: { label: string; v: number | null; why?: string }) {
-  return <Stat label={label} value={v == null ? "–" : pct(v)} note={v == null ? why : undefined} />;
+  return <Stat label={label} value={v == null ? "–" : pct(v)} tone={signTone(v)} note={v == null ? why : undefined} />;
 }
 
 /** Why a growth rate is blank: a loss (or zero) at the start of the period or along the way makes a yearly rate meaningless. */
@@ -258,7 +258,7 @@ export function DeepDivePage() {
               <DataTable label="The last eight quarters" rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
-                  { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : pct(q.sales_yoy)) },
+                  { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
                   { key: "o", header: n.bank ? "Financing margin" : "Operating margin", numeric: true, cell: (q) => pc(q.opm) },
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
