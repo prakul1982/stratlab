@@ -338,7 +338,7 @@ export function RotationPage() {
 interface FilingsOverview {
   rows: { symbol: string; summary: FilingSummary; flags: FilingItem[] }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
 }
-interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null }
+interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null; copies?: number }
 interface FlagType { id: string; label: string; severity: "red" | "amber"; count: number }
 interface AllOut {
   region: Region; scope: "all" | "mine"; items: AllItem[]; total: number; page: number; pages: number; size: number; from: string; to: string; flag: string;
@@ -482,7 +482,7 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
                     {r.company && r.company !== r.symbol && <span className="k-sub-line">{r.company}</span>}</>) },
                 { key: "f", header: "Flag", wrap: true, cell: (r) => <Badge tone={r.severity === "red" ? "warn" : "plain"} dot={false}>{r.severity === "red" ? "⚑ " : ""}{r.label}</Badge> },
                 { key: "s", header: "The filing", wrap: true, cell: (r) => (
-                  <>{r.subject}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
+                  <>{r.subject}{(r.copies ?? 1) > 1 && <span className="k-note"> · listed {r.copies} times by the exchange</span>}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
               ]} />
             <Pager page={data.page} pages={data.pages} total={data.total} noun="filings" onPage={(n) => setParam({ page: n > 1 ? String(n) : null }, true)} />
           </Card>

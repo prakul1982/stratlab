@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { asOf, num, pct, price, fmtDate } from "../lib/format";
+import { asOf, dayIn, num, pct, price, fmtDate } from "../lib/format";
 import { etfGapApi, gapAtPrice, gapShort, gapWords, useEtfGaps, type EtfGapDetail } from "../lib/etfGaps";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
@@ -10,13 +10,15 @@ import { ChartFrame, ErrorState, Skeleton, Stat, StatRow } from "./kit";
 /** An Indian ETF's gap to its last NAV as a small factual badge ("4.2% above last NAV"; "iNAV" only when a source
  * gives a real indicative NAV) that opens the ETF's page. Nothing for a stock, or for an ETF with neither value. With `price`
  * (the price the page shows beside it) the gap is worked out from that price, not the list's own, so the two never disagree. */
-export function EtfGapBadge({ symbol, price: shown }: { symbol: string; price?: number | null }) {
+export function EtfGapBadge({ symbol, price: shown, day }: { symbol: string; price?: number | null; day?: string | null }) {
   const v = useEtfGaps();
   const listed = v?.rows.find((x) => x.symbol === symbol);
-  const r = listed && gapAtPrice(listed, shown);
+  const r = listed && gapAtPrice(listed, shown, day);
   if (!r || r.gap == null || !r.basis) return null;
-  const basis = r.basis === "iNAV" ? "iNAV" : "last NAV";
-  const label = Math.abs(r.gap) < 0.005 ? `At ${basis}` : `${gapShort(r.gap)} ${basis}`;
+  // a gap of an earlier day's close says which day: never the day's move against yesterday's NAV
+  const closed = r.basis === "NAV" && r.nav_price_day && r.price_at !== null && dayIn(r.price_at ?? "") !== r.nav_price_day ? r.nav_price_day : null;
+  const basis = r.basis === "iNAV" ? "iNAV" : closed ? "NAV" : "last NAV";
+  const label = (Math.abs(r.gap) < 0.005 ? `At ${basis}` : `${gapShort(r.gap)} ${basis}`) + (closed ? `, ${fmtDate(closed, { year: false })} close` : "");
   const of = r.basis === "NAV" && r.nav_date ? ` of ${asOf(r.nav_date)}` : "";
   return (
     <Link className="etf-gap-badge" data-etf-gap={symbol} to={`/invest/etf-gaps?etf=${encodeURIComponent(symbol)}`}
@@ -28,7 +30,7 @@ export function EtfGapBadge({ symbol, price: shown }: { symbol: string; price?: 
 
 /** "Price against NAV" for one ETF: the price against its last published NAV (and its iNAV, only when a source gives
  * one), and each day's close against that day's NAV over the last 30 trading days. `quiet` leaves the panel out when the symbol isn't an ETF (a company page). */
-export function EtfGapDetailView({ symbol, quiet, price: shown }: { symbol: string; quiet?: boolean; price?: number | null }) {
+export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }: { symbol: string; quiet?: boolean; price?: number | null; day?: string | null }) {
   const list = useEtfGaps();
   const known = !!list?.rows.some((x) => x.symbol === symbol);
   const [d, setD] = useState<EtfGapDetail | null>(null);
@@ -43,7 +45,7 @@ export function EtfGapDetailView({ symbol, quiet, price: shown }: { symbol: stri
   if (quiet && !known) return null;
   if (error) return quiet ? null : <ErrorState title={`${symbol} couldn't be read`}>{error}</ErrorState>;
   if (!d) return quiet ? null : <Skeleton label={`Reading ${symbol}`} lines={3} />;
-  const r = gapAtPrice(d.row, shown);
+  const r = gapAtPrice(d.row, shown, shownDay);
   const hist = d.history.filter((h) => h.gap != null);
   const day = (iso: string) => fmtDate(iso, { year: false });
   return (
@@ -56,7 +58,9 @@ export function EtfGapDetailView({ symbol, quiet, price: shown }: { symbol: stri
           <Stat item label="Price" value={price(r.price, "INR")} note={r.price_at ? `As of ${asOf(r.price_at)}` : "Last traded"} />
           {r.inav != null && <Stat item label="Indicative NAV" value={price(r.inav, "INR")} note={r.inav_gap != null ? `Price ${gapWords(r.inav_gap, "iNAV").replace(/^trades /, "")}` : undefined} />}
           <Stat item label="Last NAV" value={r.nav == null ? "–" : price(r.nav, "INR")}
-            note={<>{r.nav_gap == null ? "No published NAV found" : `Price ${gapWords(r.nav_gap, "last NAV").replace(/^trades /, "")}`}{r.nav_date && <><br />NAV of {day(r.nav_date)}</>}</>} />
+            note={<>{r.nav_gap != null ? `${r.nav_price_day ? `${day(r.nav_price_day)} close` : "Price"} ${gapWords(r.nav_gap, "NAV").replace(/^trades /, "")}`
+              : r.nav_waiting && r.nav_date ? `No gap yet: today's price is not set against the NAV of ${day(r.nav_date)}` : "No published NAV found"}
+              {r.nav_date && <><br />NAV of {day(r.nav_date)}</>}</>} />
         </StatRow>
       }
       table={hist.length >= 2 ? { label: `${r.symbol}'s gap to NAV by day`, rows: [...hist].reverse(), rowKey: (h) => h.day,

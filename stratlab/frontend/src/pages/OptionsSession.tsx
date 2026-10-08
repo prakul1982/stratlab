@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, price, tzLabel, when } from "../lib/format";
+import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
@@ -81,7 +81,7 @@ export function OptionsSession() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Practise" title={snap.name}
-        lede={<><Link to="/options" className="link">← Options builder</Link> · {snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${snap.expiry}` : ""} · started {when(snap.started_at, TZ, true, true)}</>}
+        lede={<><Link to="/options" className="link">← Options builder</Link> · {snap.instrument.underlying} options · {snap.instrument.exchange}{snap.expiry ? ` · expiry ${fmtDate(snap.expiry, { weekday: true })}` : ""} · started {when(snap.started_at, TZ, true, true)}</>}
         actions={<>
           {running && <span className="k-row"><Badge tone={feed.tone}>{feed.text}</Badge><Info>{HELP.optFeed}</Info></span>}
           {running ? <button type="button" className="btn danger" onClick={() => setAsk("stop")}>Stop session</button>

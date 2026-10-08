@@ -82,16 +82,6 @@
 .tbar-sub { line-height: 1.35; }
 @media (max-width: 560px) { .tbar-num { font-size: 11px; } }
 
-/* a pie of segments */
-.inv-donut { display: flex; flex-wrap: wrap; gap: var(--s5); align-items: center; }
-.inv-donut .d-track { stroke: var(--chip); }
-.inv-donut circle.d0 { stroke: var(--ink); } .inv-donut circle.d1 { stroke: var(--blue); } .inv-donut circle.d2 { stroke: var(--orange); } .inv-donut circle.d3 { stroke: var(--dash); }
-.inv-donut circle.d4 { stroke: var(--blue-ink); } .inv-donut circle.d5 { stroke: var(--orange-ink); } .inv-donut circle.d6 { stroke: var(--muted); } .inv-donut circle.d7 { stroke: var(--line-2); }
-.inv-legend { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-label); }
-.inv-legend .fill.d0 { fill: var(--ink); } .inv-legend .fill.d1 { fill: var(--blue); } .inv-legend .fill.d2 { fill: var(--orange); } .inv-legend .fill.d3 { fill: var(--dash); }
-.inv-legend .fill.d4 { fill: var(--blue-ink); } .inv-legend .fill.d5 { fill: var(--orange-ink); } .inv-legend .fill.d6 { fill: var(--muted); } .inv-legend .fill.d7 { fill: var(--line-2); }
-.inv-legend svg { flex: none; }
-
 /* the AI read */
 .inv-summary { font-family: var(--serif); font-size: 19px; line-height: 1.45; }
 .inv-ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: var(--s3); }

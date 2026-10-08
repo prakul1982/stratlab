@@ -46,7 +46,12 @@ def inr(v: float) -> str:
 
 
 def _item(label, value, unit="x"):
-    return {"label": label, "value": num(value), "unit": unit}
+    """One Key numbers figure. A percentage the source gives in whole numbers ("-12%": its compounded growth rates
+    and price returns) says so with `dp` 0, so it is never shown as a precise "-12.0%"."""
+    out = {"label": label, "value": num(value), "unit": unit}
+    if unit in ("%", "%±") and isinstance(value, str) and re.fullmatch(r"\s*[-+−]?\d+\s*%?\s*", value):
+        out["dp"] = 0
+    return out
 
 
 def _groups(*groups) -> list[dict]:
@@ -78,6 +83,43 @@ def at_live_price(s: dict, live: float | None) -> dict:
     return out
 
 
+def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
+    """The page's dividend yield as the dividends a share with an ex-date in the last twelve months (the corporate
+    actions on the same page) over the price, saying what it includes: a special dividend is counted and named, with
+    the yield without it beside (TCS, 8 Oct 2026: 3.1% shown beside "Rs111 a share in the last 12 months", the Rs46
+    special left out without a word). Without those dividends the source's figure stays, labelled as its own."""
+    price = num(((c.get("quote") or {}).get("price")))
+    from datetime import date, timedelta
+    try:
+        year_ago = (date.fromisoformat(today) - timedelta(days=365)).isoformat()
+    except ValueError:
+        return c
+    rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago <= str(d.get("ex_date")) < today]
+    if not rows or not price:
+        note = "From the last reported year's dividends" if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
+        return _set_metric(c, "Div yield", None, note) if note else c
+    total = sum(num(d["amount"]) for d in rows)
+    special = sum(num(d["amount"]) for d in rows if d.get("sub") == "special")
+    y = round(total / price * 100, 2)
+    note = f"₹{total:,.2f} a share in the last 12 months".replace(".00 ", " ")
+    if special:
+        note += f", including a ₹{special:,.2f} special dividend; {(total - special) / price * 100:.1f}% without it".replace(".00 ", " ")
+    out = _set_metric(c, "Div yield", y, note)
+    if isinstance(out.get("summary"), dict):
+        out["summary"] = {**out["summary"], "div_yield": y}
+    return out
+
+
+def _set_metric(c: dict, label: str, value: float | None, note: str | None) -> dict:
+    """A copy of the page with one Key numbers item given a new value (None keeps it) and a note."""
+    groups = []
+    for g in c.get("metrics") or []:
+        items = [{**i, **({"value": value} if value is not None else {}), **({"note": note} if note else {})} if i["label"] == label else i
+                 for i in g["items"]]
+        groups.append({**g, "items": items})
+    return {**c, "metrics": groups}
+
+
 def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
     """Sales and profit compounded over the last 3 and 5 reported years (the deep dive's and the AI read facts' own
     sums), and the price's change over a year of daily candles. Empty for what can't be worked out."""
@@ -94,6 +136,56 @@ def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
         if then and last:
             out["price_1y"] = (last / then - 1) * 100
     return out
+
+
+US_VENUE = re.compile(r"NASDAQ|NYSE|NEW YORK|AMEX|ARCA|BATS|CBOE|OTC|\bUS\b", re.I)
+FOREIGN_TICKER = re.compile(r"\.(MI|L|PA|DE|F|AS|BR|SW|TO|V|AX|HK|T|KS|SS|SZ|NS|BO|MC|LS|VI|ST|OL|CO|HE|IR|SA|MX|JO|TA|SI|KL|BK|JK|NZ|TW)$")   # a home-market ticker (ENI.MI)
+
+
+def _fx(frm: str, to: str) -> float | None:
+    """Units of `to` per unit of `frm`, from the day's stored rates (rupees per unit of each); None when either is
+    missing."""
+    if frm == to:
+        return 1.0
+    try:
+        from ..pricing import rates
+        got = rates()
+        a, b = got.get(frm) if frm != "INR" else 1.0, got.get(to) if to != "INR" else 1.0
+        return float(a) / float(b) if a and b else None
+    except Exception:
+        return None
+
+
+def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> dict:
+    """One listing per US symbol: the US one the page's price, chart and dividends are of. A foreign company's US
+    ticker (an ADR: Eni's E) has a profile of its home listing (AIM Italia, in euros), so its exchange, currency and
+    52-week range come from the US listing instead, its market value is converted at the day's rate (left out without
+    one), and `foreign` says the results are in another currency (Eni, 8 Oct 2026: "Last close EUR53.96", the ADR's
+    dollars, with a 52-week range of EUR14.54 to EUR25.02 from Milan)."""
+    lst = listing or {}
+    home = (profile.get("currency") or "USD").upper()
+    cur = (lst.get("currency") or "USD").upper()
+    foreign = home != cur
+    ex = profile.get("exchange")
+    if lst.get("exchange") and (foreign or not US_VENUE.search(ex or "")):
+        ex = lst["exchange"]
+    lo, hi = num(metrics.get("52WeekLow")), num(metrics.get("52WeekHigh"))
+    if foreign or lo is None or hi is None:
+        lo, hi = num(lst.get("low52")), num(lst.get("high52"))
+    cap = profile.get("marketCapitalization")
+    rate = fx(home, cur) if cap else None
+    return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
+            "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
+
+
+def insider_view(ins: list[dict], n: int = 8) -> dict | None:
+    """The latest insider trades and their net: the net is the sum of exactly the rows shown, so the header and the
+    table agree (AAPL, 8 Oct 2026: "Net +2,08,772 shares" over 40 filings above 8 rows that all sold, -1,39,005)."""
+    rows = [{"name": t.get("name"), "change": num(t.get("change")), "date": t.get("filingDate") or t.get("transactionDate")}
+            for t in ins if num(t.get("change"))][:n]
+    if not rows:
+        return None
+    return {"net": sum(r["change"] for r in rows), "count": len(rows), "rows": rows}
 
 
 def _public(row: dict) -> dict:
@@ -290,6 +382,7 @@ class Research:
         if not p.get("name"):
             raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         r, sources = self._run({
+            "listing": ("Yahoo Finance", lambda: self.yahoo.meta(sym)),
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
@@ -303,19 +396,22 @@ class Research:
         today = ist_date().isoformat()
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
+        one = us_listing(p, r.get("listing"), M)
         return {
-            "region": "US", "symbol": sym, "name": p.get("name"), "exchange": p.get("exchange"),
-            "currency": p.get("currency") or "USD", "logo": p.get("logo") or None, "website": p.get("weburl") or None,
+            "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
+            "currency": one["currency"], "reporting_currency": one["reporting_currency"],
+            "logo": p.get("logo") or None, "website": p.get("weburl") or None,
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
-                                                            ("Listed since", p.get("ipo")), ("Exchange", p.get("exchange"))) if v],
+                                                            ("Listed since", p.get("ipo")), ("Exchange", one["exchange"]),
+                                                            ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
             "industry": p.get("finnhubIndustry"),
-            "market_cap": (p["marketCapitalization"] * 1e6) if p.get("marketCapitalization") else None,
+            "market_cap": one["market_cap"],
             "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
                       "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc"),
                       # the time of the last trade (the close, out of hours), for the page's "as of", never the moment of asking
                       "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
                       } if q.get("c") else None,
-            "range52": {"low": num(M.get("52WeekLow")), "high": num(M.get("52WeekHigh"))},
+            "range52": one["range52"],
             "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
@@ -335,7 +431,8 @@ class Research:
                                       _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
                                       _item("Interest coverage", M.get("netInterestCoverageTTM")),
                                       _item("Asset turnover", M.get("assetTurnoverTTM"))]),
-                ("Per share and returns", [_item("EPS TTM", M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
+                # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
+                ("Per share and returns", [_item("EPS TTM", None if one["foreign"] else M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
                                            _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
                                            _item("Div yield", M.get("dividendYieldIndicatedAnnual"), "%"),
                                            _item("Payout ratio", M.get("payoutRatioTTM"), "%")]),
@@ -346,10 +443,8 @@ class Research:
                           ((e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100 if e["estimate"] else 0)} for e in earn],
             "next_earnings": {"date": nxt[0]["date"], "eps_estimate": nxt[0].get("epsEstimate")} if nxt else None,
             "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
-            "insider": {"net": sum(num(t.get("change")) or 0 for t in ins[:40]),
-                        "rows": [{"name": t.get("name"), "change": t.get("change"), "date": t.get("filingDate") or t.get("transactionDate")}
-                                 for t in ins[:8]]} if ins else None,
-            "peers": [x for x in (r["peers"] or []) if x and x != sym][:8],
+            "insider": insider_view(ins),
+            "peers": [x for x in (r["peers"] or []) if x and x != sym and not FOREIGN_TICKER.search(x)][:8],   # US listings only: ENI.MI is in euros
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
                      for n in (r["news"] or [])[:8] if n.get("headline")],
@@ -484,7 +579,9 @@ class Research:
                                       _item("5Y", gpr.get("5 Years"), "%±"), _item("10Y", gpr.get("10 Years"), "%±")]),
             ),
             "trend": trend, "quarters": quarters, "shareholding": holding,
-            "pros": (scr or {}).get("pros") or [], "cons": (scr or {}).get("cons") or [],
+            # no "strengths and concerns" from the fundamentals source: its lines judge ("poor sales growth of 10.2%")
+            # and work figures out again at their own price ("7.20 times its book value" beside a P/B of 7.01)
+            "pros": [], "cons": [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
             "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],

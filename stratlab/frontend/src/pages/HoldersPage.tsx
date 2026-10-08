@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
-import { ChangeText, quarterEnd, shares, type HolderChange } from "../components/NamedHolders";
+import { ChangeText, isQuarterEnd, quarterEnd, shares, type HolderChange } from "../components/NamedHolders";
 import { useRegion, type Region } from "../lib/research";
 import { RegionSwitch } from "../components/Research";
 import { asOf, ET, safeHref } from "../lib/format";
@@ -187,7 +187,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                       { key: "s", header: "Shares", numeric: true, cell: (r) => (r.shares == null ? "–" : shares(r.shares)) },
                       { key: "p", header: "Stake", numeric: true, cell: (r) => (r.pct == null ? "–" : `${r.pct.toFixed(2)}%`) },
                       { key: "ch", header: "Since last quarter", numeric: true, cell: (r) => <><ChangeText c={r.change} d={r.pct_change} />{r.prev_pct != null && r.change !== "same" && <span className="k-sub-line">was {r.prev_pct.toFixed(2)}%</span>}</> },
-                      { key: "q", header: "Quarter", cell: (r) => <>{quarterEnd(r.quarter)}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></span>}</> },
+                      { key: "q", header: "Quarter", cell: (r) => <>{isQuarterEnd(r.quarter) ? quarterEnd(r.quarter) : `As of ${quarterEnd(r.quarter)}`}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Filing ↗</a></span>}</> },
                     ]} />
                   <p className="k-note">Companies in alphabetical order. Holdings above 1% only, at each quarter's end, as the company filed them; a holder below 1% isn't named.</p>
                 </>

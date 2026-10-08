@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from .tax_lots import DISCLAIMER, SETOFF_RULES, money
 from .tax_total import AGE_NAMES
+from .email_kit import fmt_date as _day
 
 
 def _name(names: dict, key: str) -> str:
@@ -166,7 +167,7 @@ def to_pdf(y: dict, names: dict, below: dict | None = None) -> bytes:
         story += [Paragraph("Open lots below cost today", h2),
                   Paragraph(f"Short-term: {money(below['st'] or 0)} · Long-term: {money(below['lt'] or 0)} "
                             f"across {len(below['rows'])} lot(s), at today's prices.", body)]
-    story += [Spacer(1, 10), Paragraph(f"Made by StratLab on {datetime.now(timezone.utc):%d %b %Y} from your uploaded files. "
+    story += [Spacer(1, 10), Paragraph(f"Made by StratLab on {_day(datetime.now(timezone.utc))} from your uploaded files. "
                                         + escape(DISCLAIMER), small)]
     doc.build(story)
     return buf.getvalue()

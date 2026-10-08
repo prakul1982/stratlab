@@ -13,12 +13,23 @@ def sector_of(market: str, symbol: str) -> str | None:
     return (core or hits or [None])[0]
 
 
+def price_of(quote: dict | None, trend: dict | None) -> dict:
+    """The price, the day's change and when that price was traded, from the same quote the watchlist's List tab shows
+    (so the two tabs never disagree). Only when there is no quote does the daily candle stand in, dated by its day: a
+    cached candle is not passed off as the price of the moment."""
+    q = quote or {}
+    if q.get("price") is not None:
+        return {"price": q["price"], "chg": q.get("change_pct"), "price_at": q.get("at")}
+    t = trend or {}
+    return {"price": t.get("price"), "chg": t.get("chg"), "price_at": str(t["t"])[:10] if t.get("price") is not None and t.get("t") else None}
+
+
 def row(symbol: str, name: str | None, trend: dict | None, sector: dict | None, fsum: dict | None,
-        checks: dict | None, card: dict | None, has_read: bool, problem: str | None = None) -> dict:
+        checks: dict | None, card: dict | None, has_read: bool, problem: str | None = None, quote: dict | None = None) -> dict:
     fails = [c["label"] for c in (checks or {}).get("checks", []) if c["state"] == "fail"]
     return {
         "symbol": symbol, "name": name or symbol, "problem": problem,
-        "price": (trend or {}).get("price"), "chg": (trend or {}).get("chg"), "stage": (trend or {}).get("stage"),
+        **price_of(quote, trend), "stage": (trend or {}).get("stage"),
         "st_up": (trend or {}).get("st_up"), "signal": (trend or {}).get("signal"),
         "sector": sector,
         "red": None if fsum is None else fsum.get("red", 0), "amber": None if fsum is None else fsum.get("amber", 0),

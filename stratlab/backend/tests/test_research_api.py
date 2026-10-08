@@ -89,7 +89,9 @@ def test_company_ai_is_cleaned_cached_and_counted(api, monkeypatch):
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
     monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
     r = api.get("/research/company/US/NVDA/ai").json()
-    assert r["segments"][1] == {"label": "Gaming", "share": 9}
+    # R5O-007: the model's revenue split is not sourced, so none is shown even when it sends one (this read
+    # r["segments"][1] == Gaming 9%; the live AAPL read was "iPhone 100%, Services 0%, Mac 0%")
+    assert r["segments"] == []
     assert not {"scores", "composite", "valuation"} & set(r)          # the AI's scores are ignored: no ratings
     assert [i["title"] for i in r["ideas"]] == ["Trend rider"]          # blank and malformed ideas dropped
     assert "generated_at" in r and api.usage == ["research_ai"]

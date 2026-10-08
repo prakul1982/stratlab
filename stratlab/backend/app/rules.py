@@ -11,6 +11,7 @@ Reviewing: check each rule of an area against its source, change any value that 
 test), then move that area's date in REVIEWED. Tax-law changes are never
 applied by themselves; rules_watch.py only alerts and shows them in Admin."""
 from datetime import date
+from .email_kit import inr as _inr
 
 # the day each area was last checked against its official sources
 REVIEWED = {
@@ -49,7 +50,7 @@ def _pct(v: float) -> str:
 
 
 def _crore(v: float) -> str:
-    return f"₹{v * 1e7:,.2f} a crore"
+    return f"{_inr(v * 1e7, 2)} a crore"
 
 
 def registry() -> list[dict]:
@@ -109,7 +110,7 @@ def registry() -> list[dict]:
     add("cg_rates", "tax", "Listed share gains (111A / 112A; 196 / 198 of the 2025 Act)",
         f"short term {_pct(C.IN_STCG)}, long term {_pct(C.IN_LTCG)} above ₹{C.IN_LTCG_EXEMPT:,} a year (sales from {L.RATE_CHANGE})",
         "engine/costs.py, tax_lots.py", "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2036604", L.RATE_CHANGE)
-    add("slabs", "tax", "New regime slabs, FY 2025-26 on", ", ".join(f"{_pct(r)} to ₹{t:,.0f}" if t != float("inf") else f"{_pct(r)} above"
+    add("slabs", "tax", "New regime slabs, FY 2025-26 on", ", ".join(f"{_pct(r)} to {_inr(t)}" if t != float("inf") else f"{_pct(r)} above"
                                                                     for t, r in T.NEW_2025), "tax_total.py NEW_2025",
         T.YEAR_SOURCES.get(2026, ""), "2025-04-01")
     new = T.rules(2026, "new")
@@ -125,9 +126,9 @@ def registry() -> list[dict]:
     add("itr_dates", "tax", "Return due dates", "31 Jul (no business income), 31 Aug (business, no audit, from FY 2025-26), 31 Oct (audit); "
         "belated 31 Dec; revised by 31 Mar (from FY 2025-26)", "money_calendar.py tax_dates, tax_total.py filing_facts, money_advance_tax.py",
         "https://cleartax.in/s/due-date-tax-filing (Finance Act 2026 amendment of section 139)", "2026-04-01")
-    add("advance_tax", "tax", "Advance tax", f"due at ₹{A.THRESHOLD:,.0f} or more; 15/45/75/100% by 15 Jun, Sep, Dec, Mar; 234B/234C {_pct(A.RATE)} a month",
+    add("advance_tax", "tax", "Advance tax", f"due at {_inr(A.THRESHOLD)} or more; 15/45/75/100% by 15 Jun, Sep, Dec, Mar; 234B/234C {_pct(A.RATE)} a month",
         "money_advance_tax.py", "Income-tax Act 1961 sections 208-211, 234B, 234C (404, 424, 425 of the 2025 Act)")
-    add("dividend_tds", "tax", "Dividend TDS", f"{_pct(D.TDS_RATE)} once a company's dividends pass ₹{D.tds_threshold(2026):,.0f} a year",
+    add("dividend_tds", "tax", "Dividend TDS", f"{_pct(D.TDS_RATE)} once a company's dividends pass {_inr(D.tds_threshold(2026))} a year",
         "money_dividends.py", "Finance Act 2025 (section 194; 393 of the 2025 Act)", "2025-04-01")
     add("us_withholding", "tax", "US dividend withholding", _pct(D.US_WITHHOLDING) + " (India-US treaty, Article 10, with a W-8BEN)",
         "money_dividends.py", "https://www.irs.gov/individuals/international-taxpayers/tax-treaty-tables")

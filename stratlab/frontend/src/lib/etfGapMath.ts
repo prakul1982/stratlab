@@ -26,9 +26,14 @@ export function gapWords(g: number | null | undefined, basis: string): string {
  * the exchange list's own price from its last read: the gap is that price against the iNAV (when a source gave one) or
  * the last NAV, to two places, the list's own arithmetic, so a badge never contradicts the price beside it. A gap of
  * more than 50% is a NAV of another unit, not a real gap (as in the list). With no usable price, the row stays as the
- * list has it. */
-export function gapAtPrice(r: EtfGap, p: number | null | undefined): EtfGap {
+ * list has it.
+ *
+ * A NAV is of one day, so the shown price is set against it only when `day` (the price's day) is the NAV's own day;
+ * any other price (today's, against yesterday's NAV) would make the day's market move read as a gap (R5O-005), and the
+ * row keeps the list's same-day figure (that day's close against that day's NAV). An iNAV moves with the price. */
+export function gapAtPrice(r: EtfGap, p: number | null | undefined, day?: string | null): EtfGap {
   if (p == null || !Number.isFinite(p) || p <= 0) return r;
+  if (r.inav == null && (!day || day !== r.nav_date)) return r;
   const gapTo = (ref: number | null): number | null => {
     if (ref == null || !(ref > 0)) return null;
     const g = (p / ref - 1) * 100;

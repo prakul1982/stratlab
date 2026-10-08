@@ -31,6 +31,7 @@ RUN_AT = {"IN": ("Asia/Kolkata", "21:00"), "US": ("America/New_York", "19:30")} 
 FIRST_DAYS = {"IN": 45, "US": 90}     # how far back the first run reads
 OVERLAP = 2                           # days read again each run (late filings, corrected rows)
 KEEP_DAYS = 400                       # the stored months a query can reach
+REBUILD_DAYS = 90                     # read again when the rules change: the page's default range
 PAGE = 25
 MAX_PAGE = 100
 GIVE_UP = 8                           # this many failed calls in a row: the source is down, the run stops and keeps the old
@@ -97,6 +98,17 @@ class Months:
                                              separators=(",", ":")))
                 _mem.set(k, None, 0)
         return new
+
+    def replace_day(self, region: str, day: str, items: list[dict]) -> int:
+        """A day's rows read again under new rules: that day's stored rows give way to `items`. Returns how many."""
+        month = day[:7]
+        with _lock:
+            kept = [i for i in self.load(region, month) if i["at"][:10] != day]
+            rows = kept + [i for i in items if i["at"][:10] == day]
+            k = self.key(region, month)
+            db.set_setting(k, json.dumps({"items": sorted(rows, key=lambda x: (x["at"], x["id"]), reverse=True)}, separators=(",", ":")))
+            _mem.set(k, None, 0)
+        return len(items)
 
     def between(self, region: str, frm: date, to: date) -> list[dict]:
         out, m = [], date(frm.year, frm.month, 1)
@@ -176,10 +188,14 @@ class Runner:
         feed = self.feeds()["in"]
         today = today or datetime.now(ZoneInfo("Asia/Kolkata")).date()
         st = state("IN")
+        # rules changed since the list was stored: the page's default 90 days are read again, each day's rows replaced
+        rebuild = bool(st.get("through")) and st.get("rules") != filings.RULES_VERSION
         try:
             start = date.fromisoformat(st["through"]) - timedelta(days=OVERLAP)
         except (KeyError, ValueError, TypeError):
             start = today - timedelta(days=FIRST_DAYS["IN"])
+        if rebuild:
+            start = min(start, today - timedelta(days=REBUILD_DAYS))
         start = max(start, today - timedelta(days=KEEP_DAYS))
         day, through, new, got, fails, last_error = start, st.get("through"), 0, 0, 0, None
         while day <= today:
@@ -193,7 +209,10 @@ class Runner:
                     day += timedelta(days=1)
                     continue
                 fails = 0
-                new += flags.add("IN", items)
+                if rebuild:
+                    flags.replace_day("IN", day.isoformat(), items)
+                else:
+                    new += flags.add("IN", items)
                 got += 1
                 through = day.isoformat()
                 if self.pause:
@@ -202,7 +221,8 @@ class Runner:
         if not got:
             _set_state("IN", last_error=last_error or "no day could be read", failed_at=_now())
             raise RuntimeError(f"The exchange's announcements couldn't be read ({last_error or 'no data'}).")
-        _set_state("IN", through=through, at=_now(), last_error=last_error, days_read=got, new=new)
+        done = {"rules": filings.RULES_VERSION} if not rebuild or day > today else {}
+        _set_state("IN", through=through, at=_now(), last_error=last_error, days_read=got, new=new, **done)
         return {"ok": True, "region": "IN", "through": through, "days": got, "new": new, "error": last_error}
 
     def run_us(self, today: date | None = None) -> dict:
@@ -303,6 +323,22 @@ def types(region: str) -> list[dict]:
     return [{"id": cid, "label": label, "severity": sev} for cid, label, sev, _ in filings.RULES if sev != "info"]
 
 
+def current(region: str, rows: list[dict]) -> list[dict]:
+    """Stored rows as today's rules read them: a row kept with its summary is classified again (and left out when it
+    is now routine), and a filing the exchange listed more than once shows once."""
+    if region != "IN":
+        return rows
+    out = []
+    for i in rows:
+        if "text" in i:
+            cid, sev = filings.classify(i.get("subject") or "", i.get("text") or "")
+            if sev == "info":
+                continue
+            i = {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
+        out.append(i)
+    return filings.one_per_filing(out)
+
+
 def _day(v, default: date) -> date:
     try:
         return date.fromisoformat(str(v)[:10])
@@ -322,7 +358,7 @@ def listing(region: str, flag: str = "", frm: str | None = None, to: str | None 
         frm_d = to_d
     q = "".join(ch for ch in (q or "").upper() if ch.isalnum() or ch in "&-. ").strip()[:30]
     ids = {x for x in (flag or "").split(",") if x}
-    rows = [i for i in flags.between(region, frm_d, to_d)
+    rows = [i for i in current(region, flags.between(region, frm_d, to_d))
             if (symbols is None or i["symbol"] in symbols) and (not q or q in i["symbol"] or q in str(i.get("company") or "").upper())]
     counts: dict[str, int] = {}
     for i in rows:

@@ -273,7 +273,8 @@ def cost(req: CostReq) -> dict:
     need = req.buy + costs / req.qty
     out = {"value": round(value, 2), "funded": round(funded, 2), "own": round(own, 2), "interest": round(interest, 2),
            "interest_day": round(funded * req.rate_pct / 100 / 365, 2), "costs": round(costs, 2),
-           "breakeven": round(need, 2), "breakeven_pct": round(100 * (need / req.buy - 1), 3),
+           # six places: rounding to three first made 0.92466 read "0.925" and then "+0.93%" on the page (R5O-033)
+           "breakeven": round(need, 2), "breakeven_pct": round(100 * (need / req.buy - 1), 6),
            "cost_pct_own": round(100 * costs / own, 2) if own else None}
     owed = funded + interest
     if req.maint_pct:
