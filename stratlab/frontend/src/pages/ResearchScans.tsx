@@ -391,7 +391,7 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
                   actions={<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>} />
-                <SummaryLine s={r.summary} />
+                <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>

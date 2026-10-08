@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
 import { Badge, CheckField, EmptyState, ErrorState, Skeleton } from "./kit";
@@ -21,12 +22,13 @@ function SevBadge({ s, label }: { s: Severity; label: string }) {
   return <span title={SEV_NAME[s]}><Badge tone={s === "red" ? "warn" : "plain"} dot={false}>{s === "red" ? "⚑ " : ""}{label}</Badge></span>;
 }
 
-/** The last-3-months verdict in one line: what was found, stated as facts. */
-export function SummaryLine({ s }: { s: FilingSummary }) {
+/** The last-3-months verdict in one line: what was found, stated as facts. A list that shows only the flagged filings passes
+ * `to` (the company's own filings), so "N filings in all" is a link to the rest whenever there are more than the ones listed. */
+export function SummaryLine({ s, to }: { s: FilingSummary; to?: string }) {
   if (!s.total) return <span className="k-small k-muted">No filings in the last {s.days} days.</span>;
   return (
     <span className="k-small">
-      Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, {s.total} filings in all.{" "}
+      Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, {to && s.total > s.red + s.amber ? <Link className="link" to={to}>{s.total} filings in all</Link> : `${s.total} filing${s.total === 1 ? "" : "s"} in all`}.{" "}
       {s.fund_raise ? <b>Fund raise filed on {day(s.fund_raise_last!)}.</b> : <span className="k-muted">No fund raise filed.</span>}
     </span>
   );

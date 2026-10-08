@@ -175,7 +175,8 @@ def us_calendar(today=None) -> list[dict]:
     from datetime import date, timedelta
     from tests.fake_prices import on_trading_day
     t = today or date.today()
-    day = lambda n: on_trading_day(t + timedelta(days=n), "US", n < 0).isoformat()      # companies report on trading days
+    # the demo world (no date given) has companies report on trading days; a test that names its date gets exactly that date
+    day = lambda n: (on_trading_day(t + timedelta(days=n), "US", n < 0) if today is None else t + timedelta(days=n)).isoformat()
     return [{"symbol": "AAPL", "date": day(1), "hour": "amc", "quarter": 4, "year": 2026, "epsEstimate": 1.6},
             {"symbol": "NVDA", "date": day(8), "hour": "amc", "quarter": 3, "year": 2026},
             {"symbol": "MSFT", "date": day(-2), "hour": "amc", "quarter": 1, "year": 2027,

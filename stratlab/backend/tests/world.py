@@ -84,6 +84,48 @@ class Switch(httpx.BaseTransport):
         return self.inner.handle_request(request)
 
 
+# What each company has filed with the exchange in the last months, in the exchange's own subjects (days ago, subject, text).
+# Each company has its own: the demo's red flags are not one QIP repeated under every name. RELIANCE's three are in _nse.
+_FILED = {
+    "TCS": [(9, "Analysts/Institutional Investor Meet/Con. Call Updates", "Audio recording of the earnings call for the quarter ended September 30, 2026"),
+            (11, "Outcome of Board Meeting", "Financial results for the quarter ended September 30, 2026 and interim dividend of Rs 11 per share"),
+            (58, "Annual General Meeting", "Proceedings of the 31st Annual General Meeting")],
+    "INFY": [(6, "Investor Presentation", "Investor presentation for the quarter ended September 30, 2026"),
+             (30, "Change in Directorate", "Resignation of Mr Ramesh as Independent Director with effect from the close of business today"),
+             (75, "Dividend", "Intimation of record date for the interim dividend")],
+    "HDFCBANK": [(4, "Allotment of Securities", "Allotment of non-convertible debentures of Rs 3,000 crore on a private placement basis"),
+                 (14, "Outcome of Board Meeting", "Financial results for the quarter ended September 30, 2026"),
+                 (40, "Credit Rating", "Rating reaffirmed at the highest safety level by the rating agency")],
+    "ITC": [(16, "Dividend", "Intimation of record date for the interim dividend"),
+            (35, "Analysts/Institutional Investor Meet/Con. Call Updates", "Schedule of meetings with analysts and investors")],
+    "TINYCO": [],           # listed on BSE only: its filings are BSE's (fake_intel)
+    "SLOWCO": [(18, "Disclosure under SEBI Takeover Regulations", "Disclosure of creation of pledge by promoter, Regulation 31"),
+               (47, "Outcome of Board Meeting", "Financial results for the quarter ended June 30, 2026")],
+}
+# a pool for every other company: each takes its own two or three (none for some), by a stable hash of its symbol
+_POOL = [(5, "Outcome of Board Meeting", "Financial results for the quarter ended September 30, 2026"),
+         (21, "Investor Presentation", "Investor presentation for the quarter ended September 30, 2026"),
+         (33, "Dividend", "Intimation of record date for the interim dividend"),
+         (52, "Analysts/Institutional Investor Meet/Con. Call Updates", "Transcript of the earnings call"),
+         (66, "Annual General Meeting", "Notice of the Annual General Meeting"),
+         (27, "Receipt of an order", "Receipt of an order worth Rs 450 crore")]
+
+
+def company_filings(sym: str, today: date | None = None) -> list[dict]:
+    """The exchange's announcements for one company: its own list, never another's. SLOWCO-BE files like SLOWCO."""
+    from tests.fake_prices import on_trading_day
+    t = today or date.today()
+    base = sym.split("-")[0]
+    got = _FILED.get(base)
+    if got is None:
+        k = zlib.crc32(sym.encode())
+        picks = [] if k % 5 == 0 else [_POOL[(k + j * 2) % len(_POOL)] for j in range(1 + k % 3)]
+        got = sorted(set(picks))
+    return [{"symbol": sym, "desc": desc, "attchmntText": text, "seq_id": f"{sym}-{n}",
+             "sort_date": on_trading_day(t - timedelta(days=ago), back=True).strftime("%Y-%m-%d 18:10:05"),
+             "attchmntFile": f"https://nsearchives.nseindia.com/corporate/{sym}_{n}.pdf"} for n, (ago, desc, text) in enumerate(got, 1)]
+
+
 def board_meetings(today=None) -> list[dict]:
     """The exchange's board-meeting list, relative to today: RELIANCE's results in two days, TCS's next week, and an
     INFY meeting about a dividend (not results)."""
@@ -223,11 +265,9 @@ def _nse(sw=None):
             if not r.url.params.get("symbol"):          # the whole market's announcements for one day (the red-flag list)
                 return httpx.Response(200, json=market_announcements(r.url.params.get("from_date")))
             sym = r.url.params.get("symbol", "").upper()
-            if sym in ("RELIANCE", "INFY", "TCS", "ITC", "HDFCBANK", "TINYCO", "SLOWCO") or not sym.isalpha():
+            if sym == "RELIANCE" or sym.isdigit():
                 return httpx.Response(200, json=rows)
-            # every other company has its own one filing, not the same three: a holdings page doesn't repeat them under each stock
-            one = dict(rows[zlib.crc32(sym.encode()) % len(rows)], symbol=sym)
-            return httpx.Response(200, json=[one] if zlib.crc32(sym.encode()) % 3 else [])
+            return httpx.Response(200, json=company_filings(sym))
         if r.url.path in ("/api/corporates-pit", "/api/corporate-sast-reg29", "/api/historicalOR/bulk-block-short-deals"):
             return _deals_answer(r)
         surv = surveillance_answers().get(r.url.path)

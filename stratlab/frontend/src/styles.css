@@ -926,6 +926,8 @@ label.btn.disabled { opacity: .5; }
    live status, its placeholder, or where it goes), so every card is the same height before and after loading. */
 .space-home { container-type: inline-size; }
 
+/* side-by-side panels keep their own height: a short card is not stretched to the taller one beside it, leaving an empty block */
+.space-panels { align-items: start; }
 .space-next { display: flex; flex-direction: column; gap: 14px; }
 .space-next .how li { background: var(--paper); }
 .space-recent { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
