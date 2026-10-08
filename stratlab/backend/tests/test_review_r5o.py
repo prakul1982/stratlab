@@ -332,6 +332,52 @@ def test_us_company_news_is_about_the_company():
     assert 'mentions(p["name"], sym, n["headline"])' in src
 
 
+# ---------- R5O-031: the owner's Zerodha holdings, on the data login's token ----------
+from tests.test_connect import ADMIN, FakeKite, kite, kite_login, on   # noqa: E402,F401  (fixtures)
+
+
+def _data_login(monkeypatch, user="AB1234"):
+    from app.kite_service import today_ist
+    monkeypatch.setattr(db.settings, "KITE_USER_ID", user)
+    db.set_setting("kite_access_token", "DATA-TOKEN-TODAY")
+    db.set_setting("kite_token_day", today_ist())
+
+
+def test_the_owners_holdings_follow_the_data_login_without_a_daily_login(w, kite, monkeypatch):
+    from app.connect import jobs, kite_user, state, vault
+    c = w["client"]
+    kite_login(c)                                       # connected yesterday, as Zerodha user AB1234
+    state.update("u-admin", "kite", day="2020-01-01", refreshed_at="2020-01-01T09:00:00+00:00")
+    assert c.post("/connect/kite/refresh", headers=ADMIN).status_code == 409        # no data login today: log in again
+    _data_login(monkeypatch)
+    v = c.get("/connect", headers=ADMIN).json()["kite"]
+    assert v["live"] and not v["expired"]
+    from datetime import datetime
+    from app.kite_service import IST
+    assert jobs.kite_user.run_daily(datetime.now(IST).replace(hour=10, minute=0)) == 1
+    box = state.section("u-admin", "kite")
+    assert vault.unseal(box["token"]) == "DATA-TOKEN-TODAY" and box["status"] == "ok"
+    assert kite_user.run_daily(datetime.now(IST).replace(hour=11)) == 0          # once a day
+
+
+def test_another_zerodha_account_still_logs_in_itself(w, kite, monkeypatch):
+    from app.connect import state
+    c = w["client"]
+    kite_login(c)
+    state.update("u-admin", "kite", day="2020-01-01")
+    _data_login(monkeypatch, user="ZZ9999")             # the data login is a different Zerodha account
+    assert c.post("/connect/kite/refresh", headers=ADMIN).status_code == 409
+
+
+def test_the_owner_connecting_shares_the_data_login_instead_of_cancelling_it(w, kite, monkeypatch):
+    from app.connect import state
+    _data_login(monkeypatch)
+    r = w["client"].get("/connect/kite/login", headers=ADMIN).json()
+    assert r["shared"] is True and r["url"] == "https://site.example/settings?kite=ok#accounts"
+    assert not [x for x in FakeKite.log if x[0] == "session"]                        # no second Zerodha login
+    assert state.section("u-admin", "kite")["status"] == "ok"
+
+
 # ---------- R5O-016: a job's last run survives a restart ----------
 def test_a_jobs_last_run_is_shown_after_a_restart(monkeypatch):
     from app import job_status

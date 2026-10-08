@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 
 from .. import alerts
-from . import ibkr, state, sync
+from . import ibkr, kite_user, state, sync
 from .redact import mask
 
 REMIND_AFTER_DAYS = 40
@@ -75,6 +75,11 @@ class Job:
         if part in ("all", "ibkr"):
             self.status["ibkr"] = ibkr.run_daily(now)
             self.status["ibkr_at"] = stamp
+        if part in ("all", "kite"):
+            try:                                      # the owner's Zerodha holdings, on the data login's token (R5O-031)
+                self.status["kite"] = kite_user.run_daily(now)
+            except Exception as e:
+                print("connect-once job: zerodha:", mask(type(e).__name__))
         if part in ("all", "reminders"):
             self.status["reminders"] = run_reminders(now)
             self.status["reminders_at"] = stamp
@@ -82,7 +87,7 @@ class Job:
 
     def run_now(self, part: str = "all") -> bool:
         """For the admin's Run now: in the background, one at a time. False when a pass is already running."""
-        if part not in ("all", "ibkr", "reminders") or not self.lock.acquire(blocking=False):
+        if part not in ("all", "ibkr", "reminders", "kite") or not self.lock.acquire(blocking=False):
             return False
 
         def work():

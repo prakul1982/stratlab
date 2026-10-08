@@ -118,6 +118,18 @@ test("Ctrl K: a feature's name beats a company's letters, no futures for a plain
   assert.match(p, /if \(companies\.length && \(companies\[0\]\.match \?\? 9\) <= STRONG && !exactFeature && !intent\) first\("Companies"\);/);
 });
 
+test("My space greets in India's time for the Indian market, or the person's own zone (R5O-031)", async () => {
+  const { greetingZone, hourIn, greetingAt } = await import("../src/lib/greeting.ts");
+  assert.equal(greetingZone("IN", "UTC"), "Asia/Kolkata");
+  assert.equal(greetingZone("IN", "Europe/London"), "Asia/Kolkata");
+  assert.equal(greetingZone("US", "America/New_York"), "America/New_York");
+  assert.equal(greetingZone("US", "Etc/UTC"), "Asia/Kolkata");
+  const at = new Date("2026-10-08T08:57:00Z");                    // 14:27 IST, the review's "Good morning"
+  assert.equal(greetingAt(hourIn("Asia/Kolkata", at)), "Good afternoon");
+  assert.equal(greetingAt(hourIn("UTC", at)), "Good morning");
+  assert.doesNotMatch(read("src/pages/MineHome.tsx"), /new Date\(\)\.getHours\(\)/);
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);

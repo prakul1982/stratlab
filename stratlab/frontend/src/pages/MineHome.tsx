@@ -8,7 +8,8 @@ import { inWords, marketState } from "../lib/marketHours";
 import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
-import { researchApi, useWatchlist, type Quote, type Region } from "../lib/research";
+import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
+import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
 import type { LiveRow } from "../lib/types";
 import { Badge, Card, CardHead, Delta, EmptyState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
@@ -21,8 +22,10 @@ import { PlanInline } from "../components/PlanInterest";
 
 const LAYOUT_KEY = "stratlab.mine.cards";
 
-const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
-const dateLine = () => { const d = new Date(); return `${d.toLocaleDateString("en-GB", { weekday: "long" })}, ${d.getDate()} ${d.toLocaleDateString("en-GB", { month: "long" })}`; };
+// in India's time for someone who follows the Indian market, else their own (lib/greeting) (R5O-031)
+const zone = () => { let z: string | undefined; try { z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* old browser */ } return greetingZone(savedRegion(), z); };
+const greeting = () => greetingAt(hourIn(zone()));
+const dateLine = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: zone() }).replace(/^(\w+) /, "$1, ");
 const dayNum = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d); return { d: t.getDate(), m: t.toLocaleDateString("en-GB", { month: "short" }), w: t.toLocaleDateString("en-GB", { weekday: "short" }) }; };
 
 export function MineHome() {
