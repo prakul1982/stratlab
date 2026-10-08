@@ -78,3 +78,16 @@ test("Notebook: the question keeps the person's casing, the rule line never says
   assert.match(page, /openFrom=\{e\.series\.t\[0\] \?\? null\}/);
   assert.match(page, /<UnadjustedNote e=\{e\} \/>/);
 });
+
+test("View as chips fit the menu, paper-trade messages say Basic, and locks and limits read as Plans does (R6O-011, 012, 013)", async () => {
+  const css = read("src/styles.css");
+  assert.match(css, /\.acct-viewas \{ display: flex; flex-wrap: wrap;/);
+  assert.match(css, /\.acct-pop \[role="menuitemradio"\] \{ flex: 1 1 0; min-width: 0;/);
+  assert.match(read("src/components/AlertSettings.tsx"), /every paper trade\{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic<\/Badge>/);
+  const plans = read("src/lib/plans.ts");
+  assert.match(plans, /every trend scan \(the Stage 2 scan/);
+  assert.match(plans, /every Market Brief on News/);
+  assert.match(plans, /daily Market Brief and My Stocks by email/);
+  assert.match(read("src/pages/money/ItrExportPage.tsx"), /Part of this page is on \{v\.plan\}\. \{featureName\("itr_export"\)\}: on the \{v\.plan\} plan\. You're on \{yours\}/);
+  assert.match(read("src/pages/AccountPage.tsx"), /me\.view_as && <p[^>]*>Your own use this month, against the \{me\.plan_info\.name\} plan's limits/);
+});

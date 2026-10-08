@@ -265,9 +265,10 @@ a.link { margin-inline: -2px; }
 .acct-pop [role="menuitem"]:hover, .acct-pop [role="menuitem"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
 .acct-pop [role="menuitem"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .acct-pop .plan-tag { margin-left: auto; }
-.acct-viewas { display: flex; align-items: center; gap: 4px; padding: 2px 8px 4px; }
-.acct-viewas-t { flex: none; margin-right: 4px; color: var(--muted); font-size: 13px; }
-.acct-pop [role="menuitemradio"] { flex: 1 1 auto; height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink-2);
+/* the label on its own line and the four chips sharing the menu's width, so none is cut at its edge (R6O-011: "Off" read "Of") */
+.acct-viewas { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 4px; }
+.acct-viewas-t { flex: 1 0 100%; color: var(--muted); font-size: 13px; }
+.acct-pop [role="menuitemradio"] { flex: 1 1 0; min-width: 0; height: 28px; padding: 0 6px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink-2);
   font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 .acct-pop [role="menuitemradio"]:hover, .acct-pop [role="menuitemradio"]:focus { background: var(--side-hover); color: var(--ink); outline: none; }
 .acct-pop [role="menuitemradio"]:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
