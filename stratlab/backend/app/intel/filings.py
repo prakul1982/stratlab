@@ -798,12 +798,49 @@ class NSEFilings:
         self.cache.set(key, path, 7 * 86400)
         return path
 
+    # each index's constituent file in the exchange's archive (the same host as the list of companies). The live
+    # index API sits behind the website's bot checks and turned the server away, so NIFTY 500, Midcap 150 and Smallcap
+    # 250 never had a list of stocks and their breadth was never counted (R5O-013); the file is read first.
+    INDEX_FILES = {"NIFTY 50": "ind_nifty50list.csv", "NIFTY 500": "ind_nifty500list.csv",
+                   "NIFTY MIDCAP 150": "ind_niftymidcap150list.csv", "NIFTY SMALLCAP 250": "ind_niftysmallcap250list.csv",
+                   "NIFTY NEXT 50": "ind_niftynext50list.csv", "NIFTY 100": "ind_nifty100list.csv", "NIFTY 200": "ind_nifty200list.csv"}
+    INDEX_URL = "https://nsearchives.nseindia.com/content/indices/"
+
+    def index_file(self, index: str) -> list[str]:
+        """An index's stocks from its constituent file in the exchange's archive ("Company Name,Industry,Symbol,...")."""
+        import csv
+        import io
+        name = self.INDEX_FILES.get(index.upper())
+        if not name:
+            raise SourceError(self.name, f"No constituent file is known for {index}.")
+        try:
+            r = self.http.get(self.INDEX_URL + name, headers={"Accept": "text/csv,*/*"})
+        except httpx.HTTPError as e:
+            raise SourceError(self.name, f"Couldn't reach the exchange's list for {index} ({e.__class__.__name__}).", busy=True) from None
+        if r.status_code >= 400:
+            raise SourceError(self.name, f"The exchange's list for {index} was refused ({r.status_code}).")
+        out = []
+        for row in csv.DictReader(io.StringIO(r.text)):
+            row = {str(k or "").strip().upper(): str(v or "").strip() for k, v in row.items()}
+            sym = row.get("SYMBOL", "").upper()
+            if sym and re.fullmatch(r"[A-Z0-9&\-]{1,20}", sym):
+                out.append(sym)
+        return list(dict.fromkeys(out))
+
     def index_members(self, index: str) -> list[str]:
-        """The stocks in an NSE index (e.g. "NIFTY 500"), from the exchange's own list, cached for a day."""
+        """The stocks in an NSE index (e.g. "NIFTY 500"): the constituent file in the exchange's archive, else its live
+        index list; cached for a day."""
         key = ("index", index)
         hit = self.cache.get(key)
         if hit is not None:
             return hit
+        try:
+            got = self.index_file(index)
+        except SourceError:
+            got = []
+        if len(got) >= 20:
+            self.cache.set(key, got, 86400)
+            return got
         data = self._get("/api/equity-stockIndices", {"index": index},
                          referer="https://www.nseindia.com/market-data/live-equity-market")
         rows = (data or {}).get("data") if isinstance(data, dict) else None

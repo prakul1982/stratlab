@@ -309,3 +309,49 @@ def test_size_bands_are_ranks_as_sebi_defines_them_and_the_default_is_the_larges
     assert "cap_rank" not in got["rows"][0]
     from app.models import ScreenRunReq
     assert (ScreenRunReq().sort, ScreenRunReq().desc) == ("market_cap", True)
+
+
+# ---------- R5O-013: NIFTY 500, Midcap 150 and Smallcap 250 had no list of stocks ----------
+def test_index_members_come_from_the_archive_file_when_the_live_api_turns_us_away():
+    import httpx
+    from app.intel.filings import NSEFilings
+    head = "Company Name,Industry,Symbol,Series,ISIN Code\n"
+    files = {"/content/indices/ind_nifty500list.csv": head + "360 ONE WAM Ltd.,Financial Services,360ONE,EQ,INE466L01038\n"
+             + "".join(f"Co {i} Ltd.,Industrials,CO{i},EQ,INE00000{i:04d}\n" for i in range(499))}
+    asked = []
+
+    def handler(req: httpx.Request):
+        asked.append(req.url.host + req.url.path)
+        if req.url.host == "nsearchives.nseindia.com" and req.url.path in files:
+            return httpx.Response(200, text=files[req.url.path])
+        return httpx.Response(403, text="Access Denied")               # the live site's bot check
+    feed = NSEFilings(transport=httpx.MockTransport(handler), sleep=lambda s: None)
+    got = feed.index_members("NIFTY 500")
+    assert len(got) == 500 and got[0] == "360ONE"
+    assert asked == ["nsearchives.nseindia.com/content/indices/ind_nifty500list.csv"]   # the live API wasn't needed
+    assert feed.INDEX_FILES["NIFTY MIDCAP 150"] == "ind_niftymidcap150list.csv"
+    assert feed.INDEX_FILES["NIFTY SMALLCAP 250"] == "ind_niftysmallcap250list.csv"
+
+
+def test_a_group_without_a_list_neither_blanks_its_history_nor_forces_a_two_year_run(monkeypatch):
+    from datetime import datetime, timezone
+    from app import breadth as B
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    from datetime import date as _d, timedelta as _td
+    # the NIFTY 50 has two years of counts stored; the other groups have no list of stocks (the live API refuses)
+    days = [(_d(2026, 10, 7) - _td(days=n)).isoformat() for n in range(400)]
+    B.save_hist("nifty50", {d: [1] * len(B.COLS) for d in days})
+    asked = []
+
+    def load(region, sym, n):
+        asked.append(n)
+        raise LookupError("no prices here")
+    runner = B.Runner(load, None, lambda name: (_ for _ in ()).throw(RuntimeError("refused")), lambda: [], sectors=lambda r: {}, gap=0)
+    try:
+        runner.run("IN", datetime(2026, 10, 8, 14, 0, tzinfo=timezone.utc))
+    except RuntimeError:
+        pass
+    # before, the empty groups' missing history made every run read two years for every stock
+    assert asked and set(asked) == {B.RECENT_DAYS}

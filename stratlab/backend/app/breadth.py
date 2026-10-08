@@ -406,12 +406,14 @@ class Runner:
         stored = {g: load_hist(g) for g in groups}
         through = last_complete(region, now)
         recent_from = (date.fromisoformat(through) - timedelta(days=RECENT_DAYS - LOOKBACK_DAYS)).isoformat()
+        who = {g: members(g, self.index_members, self.all_equities) for g in groups}
+        empty = [g for g in groups if not who[g]]
         if full is None:                # short of a year and a half of history, or a gap since the last run: the whole span
-            full = any(len(stored[g]) < 380 or max(stored[g]) < recent_from for g in groups)
+            # (a group with no list of stocks can't be counted, so it doesn't make every run read two years again)
+            full = any(len(stored[g]) < 380 or max(stored[g]) < recent_from for g in groups if who[g])
         days = BACKFILL_DAYS if full else RECENT_DAYS
         keep_from = (date.fromisoformat(through) - timedelta(days=days - LOOKBACK_DAYS)).isoformat()
         sector_from = (date.fromisoformat(through) - timedelta(days=SECTOR_KEEP * 7 // 5 + 10)).isoformat()
-        who = {g: members(g, self.index_members, self.all_equities) for g in groups}
         by_stock: dict[str, list[str]] = {}
         for g in groups:
             for s in who[g]:
@@ -461,6 +463,9 @@ class Runner:
             raise RuntimeError(f"No stock's prices could be read ({last_error or 'no data'}).")
         out = {}
         for g in groups:
+            if not who[g]:              # nothing to count: the stored history stays as it is
+                out[g] = {"days": len(stored[g]), "stocks": 0, "members": 0, "as_of": max(stored[g]) if stored[g] else None}
+                continue
             index = self._index(region, GROUPS[g]["index"], days, through)
             rows = merge(stored[g], rows_of(tally.groups.get(g), index), None if not stored[g] else keep_from)
             if not stored[g]:           # the first run: only days with a full year behind them
@@ -483,8 +488,11 @@ class Runner:
                 scan_presets.save(g, scan_presets.build(found))
             except Exception as e:
                 print("breadth scans save:", g, str(e)[:120])
+        # a group without its list of stocks is named in the run's status (the admin page), not passed over in silence
+        if empty and not last_error:
+            last_error = "No list of stocks for " + ", ".join(GROUPS[g]["name"] for g in empty)
         _set_status(region, ran_at=_now(), as_of=as_of, stocks=len(by_stock), loaded=loaded, failed=failed,
-                    last_error=last_error, full=full, scan_seconds=round(scan_secs, 2),
+                    last_error=last_error, full=full, scan_seconds=round(scan_secs, 2), no_members=[GROUPS[g]["name"] for g in empty],
                     scan_stocks=sum(len(v) for v in scans.values()))
         if self.after:                  # the alerts on these groups, now their new day is stored
             try:
