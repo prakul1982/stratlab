@@ -91,3 +91,16 @@ test("View as chips fit the menu, paper-trade messages say Basic, and locks and 
   assert.match(read("src/pages/money/ItrExportPage.tsx"), /Part of this page is on \{v\.plan\}\. \{featureName\("itr_export"\)\}: on the \{v\.plan\} plan\. You're on \{yours\}/);
   assert.match(read("src/pages/AccountPage.tsx"), /me\.view_as && <p[^>]*>Your own use this month, against the \{me\.plan_info\.name\} plan's limits/);
 });
+
+test("Money: the tax card shows the F&O income the tax is on; Today names its US part, live or at the close (R6O-014, R6O-015)", async () => {
+  const homes = read("src/pages/SpaceHomes.tsx");
+  assert.match(homes, /label="F&O and other business income"/);
+  const { usTodayNote } = await import("../src/lib/marketHours.ts");
+  const us = { id: "US", name: "US", venues: "", currency: "USD", symbol: "", tz: "America/New_York", hours: { open: "09:30", close: "16:00", days: "Mon-Fri" },
+    what: "", costs: "", brokerage: 0, status: "live", max_days: null };
+  const live = new Date("2026-10-08T18:00:00Z");          // 14:00 in New York, 23:30 in India
+  assert.equal(usTodayNote([us], { day: 5.28, in_total: true }, 96.77, live), "Today includes US stocks, US, live: it moves until the US close: +$5.28 (₹511 at ₹96.77 a dollar).");
+  assert.match(usTodayNote([us], { day: -2, in_total: true }, 96.77, new Date("2026-10-09T03:00:00Z")), /US, at their last close: −\$2\.00/);
+  assert.equal(usTodayNote([us], { day: 5.28, in_total: false }, 96.77, live), null);       // not in the rupee Today: nothing to name
+  assert.match(read("src/pages/HoldingsPage.tsx"), /usTodayNote\(markets, view\.us, view\.usd_inr\)/);
+});

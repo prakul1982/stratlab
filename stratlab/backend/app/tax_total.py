@@ -449,7 +449,9 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
             "surcharge": round(sc - relief, 2), "surcharge_rate": rate, "cess": round(cess, 2),
             "income": {"normal": round(normal, 2), "special": round(special_income, 2), "total": round(total, 2),
                        "salary": round(salary, 2), "standard_deduction": round(std, 2), "deductions": round(ded, 2),
-                       "dividends": round(div, 2)},
+                       "dividends": round(div, 2),
+                       # the F&O and intraday lines the Money home shows beside the total (R6O-014)
+                       "business": round(business, 2), "intraday": round(intraday, 2)},
             "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)},
             "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
 
