@@ -95,3 +95,28 @@ def test_etf_gap_through_the_day_is_the_last_close_against_its_nav(monkeypatch):
     monkeypatch.setattr(E, "navs", lambda: no_file)
     assert E.gap_now("NIFTYBEES", 254.15) is None
     assert "the day's market move is never read as a gap" in E.NOTE
+
+
+# ---------- R5O-006: one listing per US symbol ----------
+ENI_PROFILE = {"name": "Eni SpA", "exchange": "AIM ITALIA - MERCATO ALTERNATIVO DEL CAPITALE", "currency": "EUR",
+               "marketCapitalization": 70600.0, "country": "IT"}
+ENI_ADR = {"symbol": "E", "currency": "USD", "exchange": "NYSE", "price": 53.96, "high52": 55.10, "low52": 31.20}
+ENI_METRICS = {"52WeekLow": 14.54, "52WeekHigh": 25.02, "epsTTM": 1.75}      # Milan's euros
+
+
+def test_an_adr_page_is_its_us_listing_in_dollars():
+    from app.intel.company import us_listing
+    one = us_listing(ENI_PROFILE, ENI_ADR, ENI_METRICS, fx=lambda a, b: 1.17 if (a, b) == ("EUR", "USD") else None)
+    assert (one["exchange"], one["currency"], one["reporting_currency"], one["foreign"]) == ("NYSE", "USD", "EUR", True)
+    assert one["range52"] == {"low": 31.20, "high": 55.10}             # the ADR's own range: 53.96 sits inside it
+    assert one["market_cap"] == 70600.0 * 1e6 * 1.17                   # in dollars, at the day's rate
+    # no rate: no market value, rather than euros labelled as dollars
+    assert us_listing(ENI_PROFILE, ENI_ADR, ENI_METRICS, fx=lambda a, b: None)["market_cap"] is None
+    # an ordinary US company is unchanged
+    nvda = us_listing({"exchange": "NASDAQ NMS - GLOBAL MARKET", "currency": "USD", "marketCapitalization": 4312000.5},
+                      {"currency": "USD", "exchange": "NasdaqGS", "high52": 1, "low52": 1}, {"52WeekLow": 86.6, "52WeekHigh": 195.6})
+    assert (nvda["exchange"], nvda["currency"], nvda["foreign"], nvda["range52"]) == ("NASDAQ NMS - GLOBAL MARKET", "USD", False, {"low": 86.6, "high": 195.6})
+    assert nvda["market_cap"] == 4312000.5e6
+    # its "similar companies" were ENI.MI and GSP.MI, Milan's euro prices shown with a dollar sign: US listings only
+    from app.intel.company import FOREIGN_TICKER
+    assert [x for x in ("ENI.MI", "GSP.MI", "BRK.B", "XOM", "SHEL.L", "BP") if not FOREIGN_TICKER.search(x)] == ["BRK.B", "XOM", "BP"]

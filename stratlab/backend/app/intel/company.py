@@ -96,6 +96,46 @@ def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
     return out
 
 
+US_VENUE = re.compile(r"NASDAQ|NYSE|NEW YORK|AMEX|ARCA|BATS|CBOE|OTC|\bUS\b", re.I)
+FOREIGN_TICKER = re.compile(r"\.(MI|L|PA|DE|F|AS|BR|SW|TO|V|AX|HK|T|KS|SS|SZ|NS|BO|MC|LS|VI|ST|OL|CO|HE|IR|SA|MX|JO|TA|SI|KL|BK|JK|NZ|TW)$")   # a home-market ticker (ENI.MI)
+
+
+def _fx(frm: str, to: str) -> float | None:
+    """Units of `to` per unit of `frm`, from the day's stored rates (rupees per unit of each); None when either is
+    missing."""
+    if frm == to:
+        return 1.0
+    try:
+        from ..pricing import rates
+        got = rates()
+        a, b = got.get(frm) if frm != "INR" else 1.0, got.get(to) if to != "INR" else 1.0
+        return float(a) / float(b) if a and b else None
+    except Exception:
+        return None
+
+
+def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> dict:
+    """One listing per US symbol: the US one the page's price, chart and dividends are of. A foreign company's US
+    ticker (an ADR: Eni's E) has a profile of its home listing (AIM Italia, in euros), so its exchange, currency and
+    52-week range come from the US listing instead, its market value is converted at the day's rate (left out without
+    one), and `foreign` says the results are in another currency (Eni, 8 Oct 2026: "Last close EUR53.96", the ADR's
+    dollars, with a 52-week range of EUR14.54 to EUR25.02 from Milan)."""
+    lst = listing or {}
+    home = (profile.get("currency") or "USD").upper()
+    cur = (lst.get("currency") or "USD").upper()
+    foreign = home != cur
+    ex = profile.get("exchange")
+    if lst.get("exchange") and (foreign or not US_VENUE.search(ex or "")):
+        ex = lst["exchange"]
+    lo, hi = num(metrics.get("52WeekLow")), num(metrics.get("52WeekHigh"))
+    if foreign or lo is None or hi is None:
+        lo, hi = num(lst.get("low52")), num(lst.get("high52"))
+    cap = profile.get("marketCapitalization")
+    rate = fx(home, cur) if cap else None
+    return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
+            "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
+
+
 def _public(row: dict) -> dict:
     return {k: v for k, v in row.items() if k != "_t"}
 
@@ -290,6 +330,7 @@ class Research:
         if not p.get("name"):
             raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         r, sources = self._run({
+            "listing": ("Yahoo Finance", lambda: self.yahoo.meta(sym)),
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
@@ -303,19 +344,22 @@ class Research:
         today = ist_date().isoformat()
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
+        one = us_listing(p, r.get("listing"), M)
         return {
-            "region": "US", "symbol": sym, "name": p.get("name"), "exchange": p.get("exchange"),
-            "currency": p.get("currency") or "USD", "logo": p.get("logo") or None, "website": p.get("weburl") or None,
+            "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
+            "currency": one["currency"], "reporting_currency": one["reporting_currency"],
+            "logo": p.get("logo") or None, "website": p.get("weburl") or None,
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
-                                                            ("Listed since", p.get("ipo")), ("Exchange", p.get("exchange"))) if v],
+                                                            ("Listed since", p.get("ipo")), ("Exchange", one["exchange"]),
+                                                            ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
             "industry": p.get("finnhubIndustry"),
-            "market_cap": (p["marketCapitalization"] * 1e6) if p.get("marketCapitalization") else None,
+            "market_cap": one["market_cap"],
             "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
                       "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc"),
                       # the time of the last trade (the close, out of hours), for the page's "as of", never the moment of asking
                       "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
                       } if q.get("c") else None,
-            "range52": {"low": num(M.get("52WeekLow")), "high": num(M.get("52WeekHigh"))},
+            "range52": one["range52"],
             "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
@@ -335,7 +379,8 @@ class Research:
                                       _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
                                       _item("Interest coverage", M.get("netInterestCoverageTTM")),
                                       _item("Asset turnover", M.get("assetTurnoverTTM"))]),
-                ("Per share and returns", [_item("EPS TTM", M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
+                # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
+                ("Per share and returns", [_item("EPS TTM", None if one["foreign"] else M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
                                            _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
                                            _item("Div yield", M.get("dividendYieldIndicatedAnnual"), "%"),
                                            _item("Payout ratio", M.get("payoutRatioTTM"), "%")]),
@@ -349,7 +394,7 @@ class Research:
             "insider": {"net": sum(num(t.get("change")) or 0 for t in ins[:40]),
                         "rows": [{"name": t.get("name"), "change": t.get("change"), "date": t.get("filingDate") or t.get("transactionDate")}
                                  for t in ins[:8]]} if ins else None,
-            "peers": [x for x in (r["peers"] or []) if x and x != sym][:8],
+            "peers": [x for x in (r["peers"] or []) if x and x != sym and not FOREIGN_TICKER.search(x)][:8],   # US listings only: ENI.MI is in euros
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
                      for n in (r["news"] or [])[:8] if n.get("headline")],
