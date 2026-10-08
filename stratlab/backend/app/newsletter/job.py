@@ -151,6 +151,68 @@ def repair_index_moves(region: str, days: int = 60) -> int:
     return fixed
 
 
+_ASCII_MINUS = re.compile(r"(^|[\s(:;,])-(?=\d)")
+_PADDED_DAY = re.compile(r"\b(week to |\w{3} )0(\d)\b")
+_QUADRANTS = re.compile(r"\b(leading|lagging|improving|weakening)\b", re.I)
+
+
+def _house_style(text: str) -> str:
+    """A stored brief's text in the app's style: a real minus sign and an unpadded day ("week to 3 Oct", "-3.11%"
+    becomes "−3.11%")."""
+    return _PADDED_DAY.sub(r"\1\2", _ASCII_MINUS.sub("\\1\u2212", text or ""))
+
+
+def repair_briefs(region: str, days: int = 60, shifts=None) -> int:
+    """The Market Briefs stored in the last `days` days, daily and weekly, in one style and with one rotation: dates
+    and minus signs as the daily briefs write them (the weekly ones kept "week to 03 Oct" and "-3.11%"), and the
+    Sector rotation section worked out again as the rotation page draws it (weekly candles; the 8 Oct brief said
+    "Nifty IT moving from weakening to leading" from daily ones while the page showed Weakening). When the rotation
+    can't be worked out again, the section is dropped rather than left to disagree with the page; an AI summary
+    that spoke of the rotation becomes the plain template. Returns how many issues changed."""
+    from datetime import timedelta
+    shifts = shifts or content.rotation_shifts
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    for iid in ids("market", region):
+        issue = load(iid)
+        if not issue or issue.get("day", "") < cutoff:
+            continue
+        before = json.dumps(issue, sort_keys=True)
+        day, weekly = date.fromisoformat(issue["day"]), bool(issue.get("weekly"))
+        try:
+            rotation = shifts(region, weekly, day)
+        except Exception:
+            rotation = []
+        f = {"kind": "market", "region": region, "day": issue["day"], "weekly": weekly,
+             "indices": issue.get("indices") or [], "rotation": rotation}
+        if f["indices"]:
+            issue.update(subject=write.subject(f), title=write.headline(f))
+        else:
+            issue.update(subject=_house_style(issue.get("subject", "")), title=_house_style(issue.get("title", "")))
+        new_rot = write.market_sections({**f, "indices": []})
+        new_rot = [s for s in new_rot if s.get("title") == "Sector rotation"]
+        sections = []
+        for s in issue.get("sections") or []:
+            if s.get("title") == "Sector rotation":
+                continue
+            if s.get("title") == "Indices" and f["indices"]:
+                sections += write.market_sections({**f, "rotation": []})[:1] + new_rot
+                new_rot = []
+                continue
+            sections.append({**s, "items": [{**i, "text": _house_style(i.get("text", ""))} for i in s.get("items") or []]})
+        issue["sections"] = (sections[:1] + new_rot + sections[1:]) if new_rot else sections
+        if issue.get("ai") and _QUADRANTS.search(issue.get("summary") or ""):
+            issue.update(summary=write.template(f), ai=False)
+        else:
+            issue["summary"] = _house_style(issue.get("summary", ""))
+        if json.dumps(issue, sort_keys=True) == before:
+            continue
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
 # ---------- readers ----------
 def address(profile: dict) -> str | None:
     """Where newsletters go: the alert email set in Account, else the address they sign in with."""
@@ -236,8 +298,22 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: corrected the index moves in {n} stored briefs")
 
+    def restyle_once(self):
+        """Once per database: the stored briefs in one style, with the rotation page's rotation (see repair_briefs)."""
+        flag = "newsfix:style-rotation-1"
+        if db.get_setting(flag):
+            return
+        try:
+            n = sum(repair_briefs(r) for r in SEND_AT)
+        except Exception as e:
+            print("newsletters restyle:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: restyled {n} stored briefs")
+
     def _loop(self):
         self.repair_once()
+        self.restyle_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))

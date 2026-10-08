@@ -188,6 +188,47 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
             "as_of": max((r["points"][-1]["t"] for r in rows), default=None)}
 
 
+PAGE_INTERVAL = "weekly"              # the rotation page's chart, which the briefs describe
+
+
+def shifts(registry, market: str, day: str | None, weekly: bool, load=None) -> list[dict]:
+    """The core sectors whose quadrant on the rotation page's chart (weekly candles, the page's own computation)
+    changed: since the session before `day` (a daily brief) or since the week before (a weekly brief). Each is
+    {"sector", "symbol", "from", "to"}. Prices after `day` are left out, so a brief says what its day showed. (An 8 Oct
+    brief said "Nifty IT moving from weakening to leading" from daily candles while the page, on weekly ones, showed
+    Weakening.)"""
+    load = load or load_daily(registry)
+    items, _ = resolve_sectors(registry, market, "sectors")
+    bid, _bsym = benchmark_id(registry, market)
+    cut = (lambda bars: [b for b in bars if not day or str(b["t"])[:10] <= day])
+    bench = cut(load(bid, 700))
+    if len(bench) < 2:
+        return []
+    last = str(bench[-1]["t"])[:10]
+    before = [b for b in bench if str(b["t"])[:10] < last]
+    b_now, b_prev = closes(bench, PAGE_INTERVAL), closes(before, PAGE_INTERVAL)
+    out = []
+    for iid, sym in items:
+        if market == "IN" and sym not in CORE_IN:
+            continue
+        try:
+            bars = cut(load(iid, 700))
+            if weekly:                  # the week before: the chart's previous weekly point
+                pts = path(closes(bars, PAGE_INTERVAL), b_now, 2)
+                was, now = (pts[0], pts[-1]) if len(pts) == 2 else (None, None)
+            else:                       # the session before: the same chart drawn with the prices up to that session
+                now = (path(closes(bars, PAGE_INTERVAL), b_now, 1) or [None])[-1]
+                was = (path(closes([b for b in bars if str(b["t"])[:10] < last], PAGE_INTERVAL), b_prev, 1) or [None])[-1]
+        except Exception:               # one sector's prices missing leaves it out
+            continue
+        if not now or not was:
+            continue
+        q_was, q_now = quadrant(was["x"], was["y"]), quadrant(now["x"], now["y"])
+        if q_was != q_now:
+            out.append({"sector": _label(market, sym, None), "symbol": sym, "from": q_was, "to": q_now})
+    return out
+
+
 def load_daily(registry):
     def load(iid: str, days: int) -> list[dict]:
         key = (iid, days)

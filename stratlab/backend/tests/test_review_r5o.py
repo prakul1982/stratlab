@@ -1,6 +1,7 @@
 """Round 5, the owner's review on the live site (8 Oct 2026): each test is built on the real example the reviewer saw."""
 import json
 
+from app import main  # noqa: F401, I001  (first: the app loads the newsletter job before the modules built on it)
 from app import db, investor
 from tests.test_deepdive import api  # noqa: F401  (a fixture)
 
@@ -355,3 +356,72 @@ def test_a_group_without_a_list_neither_blanks_its_history_nor_forces_a_two_year
         pass
     # before, the empty groups' missing history made every run read two years for every stock
     assert asked and set(asked) == {B.RECENT_DAYS}
+
+
+# ---------- R5O-019: the brief's rotation is the rotation page's, and one style for every brief ----------
+def test_the_briefs_rotation_is_the_pages_weekly_chart():
+    import numpy as np
+    from app import rotation
+    from tests.test_rotation import bars_from
+    rng = np.random.default_rng(7)
+    series = {s: bars_from(list(100 * np.cumprod(1 + rng.normal(0.0004, 0.012, 700)))) for s in rotation.SECTORS["US"]["members"] + ["SPY"]}
+
+    class Prov:
+        def ready(self): return True
+        def instrument(self, key): return {"symbol": key, "name": key}
+
+    class Reg:
+        def provider(self, m): return Prov()
+        def resolve(self, iid): return Prov(), {"symbol": iid.split(":")[1]}
+    load = (lambda iid, days: series[iid.split(":")[1]])
+    reg = Reg()
+    found = 0
+    days = [b["t"][:10] for b in series["SPY"]][-25:]
+    for day in days:                    # each day's shifts against the page's chart drawn on that day and the one before
+        cut = {k: [b for b in v if b["t"][:10] <= day] for k, v in series.items()}
+        prev_day = [b["t"][:10] for b in cut["SPY"]][-2]
+        page = rotation.compute(reg, "US", [(f"US:{s}", s) for s in rotation.SECTORS["US"]["members"]], "weekly", 1,
+                                lambda iid, n: cut[iid.split(":")[1]])
+        before = rotation.compute(reg, "US", [(f"US:{s}", s) for s in rotation.SECTORS["US"]["members"]], "weekly", 1,
+                                  lambda iid, n: [b for b in cut[iid.split(":")[1]] if b["t"][:10] <= prev_day])
+        now_q = {r["symbol"]: r["quadrant"] for r in page["rows"]}
+        was_q = {r["symbol"]: r["quadrant"] for r in before["rows"]}
+        got = rotation.shifts(reg, "US", day, False, load=load)
+        assert {r["symbol"]: (r["from"], r["to"]) for r in got} == {s: (was_q[s], now_q[s]) for s in now_q if was_q.get(s) != now_q[s]}
+        found += len(got)
+    assert found > 0                    # some day in those weeks had a sector change quadrant
+
+
+def test_stored_briefs_get_one_style_and_the_pages_rotation(monkeypatch):
+    from datetime import date
+    from app.newsletter import job, write
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "all_settings_with_prefix", lambda p: [(k, v) for k, v in store.items() if k.startswith(p)])
+    monkeypatch.setattr(job, "date", type("D", (date,), {"today": classmethod(lambda cls: date(2026, 10, 8))}))
+    weekly = {"id": "market.IN.2026-10-03-weekly", "kind": "market", "region": "IN", "day": "2026-10-03", "weekly": True,
+              "subject": "Market Brief India, week to 03 Oct: NIFTY 50 -3.11%", "title": "NIFTY 50 down 3.11% over the week",
+              "summary": "The NIFTY 50 fell -3.11% over the week.", "ai": True, "indices": [],
+              "sections": [{"title": "Indices", "items": [{"text": "NIFTY 50: 22,421.95, -3.11% over the week", "url": None, "lines": []}]}],
+              "at": "2026-10-03T16:15+05:30"}
+    daily = {"id": "market.IN.2026-10-08", "kind": "market", "region": "IN", "day": "2026-10-08", "weekly": False,
+             "subject": "Market Brief India, Thu 8 Oct: NIFTY 50 −1.64%", "title": "NIFTY 50 down 1.64%",
+             "summary": "Nifty IT moving from weakening to leading stood out.", "ai": True,
+             "indices": [{"name": "NIFTY 50", "price": 22231.8, "change_pct": -1.64}],
+             "sections": [{"title": "Indices", "items": [{"text": "NIFTY 50: 22,231.80, −1.64% on the day", "url": None, "lines": []}]},
+                          {"title": "Sector rotation", "items": [{"text": "Nifty IT moved from Weakening to Leading on the rotation chart", "url": None, "lines": []}]}],
+             "at": "2026-10-08T16:20+05:30"}
+    for i in (weekly, daily):
+        i["html"], i["text"] = write.render(i)
+        job.save(i)
+    # as the page draws it on 8 Oct: Nifty IT is still Weakening, nothing moved
+    n = job.repair_briefs("IN", shifts=lambda region, wk, day: [])
+    assert n == 2
+    w = job.load("market.IN.2026-10-03-weekly")
+    assert w["subject"] == "Market Brief India, week to 3 Oct: NIFTY 50 −3.11%"
+    assert "−3.11% over the week" in w["sections"][0]["items"][0]["text"] and "-3.11" not in w["html"] + w["text"]
+    d = job.load("market.IN.2026-10-08")
+    assert [s["title"] for s in d["sections"]] == ["Indices"] and "Leading" not in d["html"] + d["text"]
+    assert not d["ai"] and "leading" not in d["summary"].lower()
+    assert job.repair_briefs("IN", shifts=lambda region, wk, day: []) == 0          # once is enough

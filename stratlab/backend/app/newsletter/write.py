@@ -69,7 +69,7 @@ def market_sections(f: dict) -> list[dict]:
             for i in f["indices"]]})
     if f.get("rotation"):
         out.append({"title": "Sector rotation", "items": [
-            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart", f"{origin()}/research/rotation")
+            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart (weekly)", f"{origin()}/research/rotation")
             for r in f["rotation"]]})
     scan = f.get("scan") or {}
     if scan.get("st_s2") or scan.get("stage2"):
