@@ -106,6 +106,19 @@ def test_the_index_row_carries_the_checked_value():
     assert good["market_cap"] == 4_000_000.0
 
 
+def test_bradescos_thousandfold_share_count_is_checked_against_an_earlier_years_eps():
+    """Its filings tag 10.6 trillion shares (a thousand times too many) and no EPS for the last two years: the count the
+    latest year with both profit and EPS implies is used (tests/fixtures/sec_live/bbd.json.gz: trimmed SEC data)."""
+    import gzip
+    from app.intel import sec
+    with gzip.open(ROOT / "backend" / "tests" / "fixtures" / "sec_live" / "bbd.json.gz", "rt") as fh:
+        d = json.load(fh)
+    p = sec.build(d["facts"], d["subs"], symbol="BBD")
+    assert 10e9 < p["shares"] < 12e9
+    r = sec.ratios(sec.with_ads({**p, "fx": {"rate": 0.18}}, 1), 4.34)
+    assert 40_000 < r["Market Cap"] < 60_000 and 5 < r["Stock P/E"] < 20           # about $49B, not $45.9T
+
+
 COVER_HEAD = ("ANNUAL REPORT PURSUANT TO SECTION 12(b) OR (g) OF THE SECURITIES EXCHANGE ACT OF 1934 OR ANNUAL REPORT PURSUANT TO "
               "SECTION 13 OR 15(d) For the fiscal year ended December 31, 2025 Commission file number: 001-00000 " + "x " * 200)
 

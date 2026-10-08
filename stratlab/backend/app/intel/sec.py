@@ -686,7 +686,11 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # is checked against the latest year's profit over its earnings per share, which is restated for any split before
     # the report was issued; more than three times apart, the count the earnings imply is used
     eps_basic = flows(facts, ("EarningsPerShareBasic", "BasicEarningsLossPerShare"), "annual", f"{cur}/shares")
-    last = ends[-1]
+    # (the latest year that has both, within two years: Bradesco's last two reports tag no earnings per share, and its
+    # share count is a thousand times its real one, 10.6 trillion, which made a $46 trillion bank, R6V-001)
+    recent = (date.fromisoformat(ends[-1]) - timedelta(days=740)).isoformat()
+    both = [e for e in sorted(eps_basic) if e >= recent and abs(eps_basic.get(e) or 0) >= 0.05 and ni_a.get(e)]
+    last = ends[-1] if ends[-1] in both else (both[-1] if both else ends[-1])
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3:
