@@ -77,14 +77,12 @@ function OpenCompany({ region, label = "Company", autoFocus }: { region: Region;
 /* ================= Companies (home) ================= */
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
-  const { items } = useWatchlist();
   const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[] } | null>(null);
   useEffect(() => { setPulse(null); researchApi.pulse(region).then(setPulse).catch(() => setPulse({ indices: [], headlines: [] })); }, [region]);
-  const mine = (items ?? []).filter((w) => w.region === region);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title="Look up a company"
-        lede="Price, valuation, growth, news and an AI read for any Indian or US company. When an idea looks promising, test it on years of real prices in one click." />
+        lede="Search any Indian or US company for its price, valuation, growth, news and an AI read. Your watchlist, results days and red flags are on the Invest home." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
         <CardHead title="Find a company" />
@@ -98,19 +96,12 @@ export function ResearchHome() {
         <CardHead title={`${REGION_NAME[region]} today`} info={HELP.researchPulse} actions={<Link to={`/research/pulse?region=${region}`} className="btn quiet sm">Full market pulse →</Link>} />
         <IndexStrip indices={pulse?.indices ?? null} />
       </Card>
-      <div className="k-cols">
-        <Card>
-          <CardHead title="Your watchlist" actions={<Link to="/research/watchlist" className="btn quiet sm">All →</Link>} />
-          <QuoteGrid region={region} symbols={mine.slice(0, 6).map((w) => w.symbol)} names={Object.fromEntries(mine.map((w) => [w.symbol, w.name]))}
-            empty={<p className="k-small k-muted">Press Watch on any company to keep it here, with live prices.</p>} />
-        </Card>
-        <Card>
-          <CardHead title="Explore a theme" info={HELP.researchThemes} actions={<Link to={`/research/themes?region=${region}`} className="btn quiet sm">Themes →</Link>} />
-          <div className="k-row">
-            {THEME_IDEAS[region].map((t) => <Link key={t} to={`/research/themes?region=${region}&q=${encodeURIComponent(t)}`} className="btn quiet sm">{t}</Link>)}
-          </div>
-        </Card>
-      </div>
+      <Card>
+        <CardHead title="Explore a theme" info={HELP.researchThemes} actions={<Link to={`/research/themes?region=${region}`} className="btn quiet sm">Themes →</Link>} />
+        <div className="k-row">
+          {THEME_IDEAS[region].map((t) => <Link key={t} to={`/research/themes?region=${region}&q=${encodeURIComponent(t)}`} className="btn quiet sm">{t}</Link>)}
+        </div>
+      </Card>
       {pulse && pulse.headlines.length > 0 && <Card><CardHead title="Market headlines" /><NewsList items={pulse.headlines} limit={6} /></Card>}
     </div>
   );

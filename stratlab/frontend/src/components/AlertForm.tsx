@@ -13,11 +13,14 @@ import { numberProblem } from "../lib/validate";
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
 
 /** Create or edit one alert. A stock passed in is fixed; `choices` offers a list (the watchlist) instead. */
-export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere }: {
+export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere, link = true }: {
   region?: Region; symbol?: string; editing?: StockAlert; choices?: { region: Region; symbol: string }[]; onSaved: (r: Saved) => void;
   condition?: string;
   /** Nothing is set up to send an alert yet (no phone, Telegram or confirmed email): said before it's set. */
   nowhere?: boolean;
+  /** Offer "Where alerts go" (once: in the notice when nothing is set up, else beside the button). A page that already
+   * has that link on it passes false. */
+  link?: boolean;
 }) {
   const { fail, notify } = useApp();
   const fixed = !editing && !!s0 && !choices;
@@ -94,7 +97,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
     <FormGrid onSubmit={save} label="Alert">
       {nowhere && !editing && (
         <div className="k-form-wide">
-          <Notice role="status" action={{ label: "Where alerts go", to: "/settings#notifications" }}>
+          <Notice role="status" action={link ? { label: "Where alerts go", to: "/settings#notifications" } : undefined}>
             Nothing is set up to send alerts yet, so this one will only show on the Alerts page when it fires.
           </Notice>
         </div>
@@ -103,14 +106,14 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
       ) : (
         <>
-          <Field label="Market">{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
+          <Field label="Market" wide>{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
           {choices ? (
-            <Field label="Stock">
+            <Field label="Stock" wide>
               {(id) => <Select id={id} value={`${region}:${symbol}`} onChange={(v) => { const [rg, s] = v.split(":"); setRegion(rg as Region); setSymbol(s); }}
                 options={choices.map((x) => ({ value: `${x.region}:${x.symbol}`, label: x.symbol }))} />}
             </Field>
           ) : (
-            <Field label="Stock" error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
+            <Field label="Stock" wide error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
               {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
                 onText={(t) => { setSymbol(t); setErrs((x) => ({ ...x, symbol: undefined })); }} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); setErrs((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
@@ -137,7 +140,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       </div>
       <FormActions>
         <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
-        <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>
+        {link && !(nowhere && !editing) && <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>}
       </FormActions>
     </FormGrid>
   );

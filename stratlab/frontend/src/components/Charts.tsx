@@ -58,6 +58,7 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
           const mine = r === yours[0] && c === yours[1];
           return (
             <span key={`${r}-${c}`} role="gridcell" tabIndex={0} aria-label={`${fmt(val)}${mine ? ", your settings" : ""}`}
+              title={`${fmt(val)}${val > 0 ? ", made money" : val < 0 ? ", lost money" : ""}${mine ? " · your settings" : ""}`}
               onPointerEnter={() => setOn([r, c])} onFocus={() => setOn([r, c])} onBlur={() => setOn(null)} style={{
                 height: 28, borderRadius: 4, cursor: "default",
                 background: val > 0 ? `color-mix(in srgb, var(--series-1) ${+a * 100}%, transparent)` : `color-mix(in srgb, var(--series-2) ${+a * 100}%, transparent)`,
@@ -65,6 +66,12 @@ export function Heatmap({ grid, yours, label }: { grid: number[][]; yours: [numb
               }} />
           );
         }))}
+      </div>
+      <div className="ch-legend static" aria-label="Colour key">
+        <span><i className="ch-key-bar" style={{ background: "var(--series-1)" }} />Made money</span>
+        <span><i className="ch-key-bar" style={{ background: "var(--series-2)" }} />Lost money</span>
+        <span><i className="ch-key-bar" style={{ outline: "2px solid var(--ink)", outlineOffset: 1 }} />Your settings</span>
+        <span className="muted">A stronger colour is a bigger move. Hover or tap a square for its return.</span>
       </div>
       {on && v != null && (
         <ChartTip left={((on[1] + 0.5) / cols) * 100} top={(on[0] + 1) * 30} flip={on[1] >= cols / 2} heading={on[0] === yours[0] && on[1] === yours[1] ? "Your settings" : "Nearby setting"}>

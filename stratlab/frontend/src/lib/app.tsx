@@ -4,6 +4,8 @@ import { api, ApiError, setApiHandlers, supabase } from "./api";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
+import { plansCall } from "./offer";
+import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
@@ -71,9 +73,15 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   // pages that load data with it don't load again each time the address changes
   const plans = useRef(goToPlans);
   plans.current = goToPlans;
+  const offer = useRef<Me["offer"]>(undefined);
+  offer.current = me?.offer;
   const fail = useCallback((e: unknown) => {
     const err = e as ApiError;
-    if (err?.status === 402) notify(err.message, { label: "See plans", run: () => { track("upgrade clicked", { source: "limit" }); plans.current(); } });
+    if (err?.status === 402) {
+      // while no plan can be bought, "See plans" leads nowhere: offer to tell them when plans open instead
+      if (plansCall(offer.current, false).kind === "see") notify(err.message, { label: "See plans", run: () => { track("upgrade clicked", { source: "limit" }); plans.current(); } });
+      else notify(err.message, { label: JOIN_LABEL, run: () => void joinInterest("limit").then(() => notify(JOINED)).catch(() => notify("Something went wrong. Try again.")) });
+    }
     else notify(err?.message || "Something went wrong. Try again.");
   }, [notify]);
 
@@ -103,7 +111,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   }, []);
 
   useEffect(() => {
-    if (!session) { setMe(null); setNotebooks(null); resetAnalytics(); return; }
+    if (!session) { setMe(null); setNotebooks(null); resetAnalytics(); resetInterest(); return; }
     const ref = takeRef();          // arrived by a friend's invite link: say so once (the server counts new accounts only)
     if (ref) api("/me/referral", { method: "POST", body: { code: ref } }).catch(() => undefined);
     refreshMe();

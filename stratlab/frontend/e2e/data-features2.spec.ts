@@ -137,7 +137,7 @@ test("strategy library: StratLab's own strategies, badged, each with the verdict
   const cards = page.locator(".k-cards > section");
   await expect(cards.first()).toBeVisible({ timeout: 20_000 });
   expect(await cards.count()).toBeGreaterThanOrEqual(10);
-  for (const name of ["ST S2: Stage 2 + Supertrend", "20/50 EMA cross", "RSI(2) mean reversion", "52-week breakout with ATR stop", "Bollinger squeeze breakout",
+  for (const name of ["Stage 2 + Supertrend", "20/50 EMA cross", "RSI(2) mean reversion", "52-week breakout with ATR stop", "Bollinger squeeze breakout",
     "Opening-range breakout (intraday)", "Golden cross", "Donchian 20/10 (turtle-style)"]) {
     await expect(page.getByRole("heading", { name: new RegExp(`^${name.replace(/[()+/]/g, "\\$&")}`) }).first()).toBeVisible();
   }

@@ -183,7 +183,7 @@ def template(f: dict) -> str:
         scan = f.get("scan") or {}
         if scan.get("st_s2"):
             n = len(scan["st_s2"])
-            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the ST S2 rule.")
+            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the Stage 2 + Supertrend rule.")
         return " ".join(parts) or f"Here is the {REGION_NAME[f['region']]} market {span}."
     n = len(f.get("stocks") or [])
     flags = sum(len(r.get("filings") or []) for r in f.get("stocks") or [])

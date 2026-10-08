@@ -1,4 +1,13 @@
+import { inr } from "./format";
 import type { OptLeg, OptionStrategy, OptPreview, StrikePick } from "./types";
+
+/** A premium, a profit or a loss in the options builder: whole rupees, the same everywhere (the premium collected, the
+ * most it can make, and what is left after charges); paise only for a figure under ₹100, where they are the answer
+ * (a spread that keeps -₹92.68 after charges). The charges themselves are small and keep their paise. */
+export function optMoney(v: number | null | undefined): string {
+  if (v == null) return inr(v);
+  return inr(v, Math.abs(v) < 100 ? 2 : 0);
+}
 
 /** The ways a leg's strike can be picked (strike rules beyond the distance are Pro). */
 export const PICKS: [StrikePick, string][] = [["offset", "Distance from ATM"], ["delta", "Closest delta"], ["delta_range", "Delta range"],

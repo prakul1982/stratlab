@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
-import { evDay } from "../lib/marketEvents";
+import { evWhen } from "../lib/marketEvents";
 import { inWords, marketState } from "../lib/marketHours";
 import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
@@ -13,6 +13,7 @@ import type { LiveRow } from "../lib/types";
 import { Badge, Card, CardHead, Delta, EmptyState, PageHeader, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { PlanInline } from "../components/PlanInterest";
 
 /* /mine: "My space", the person's own home. Every figure is read from what the app already has (net worth, holdings, paper
  * sessions, the markets, the calendars, the watchlist); a card with nothing to show says so and offers the next step.
@@ -47,7 +48,7 @@ export function MineHome() {
     }
     if (coming && coming.length) {
       const [a, b] = coming;
-      parts.push(`Next up: ${a.title} on ${evDay(a.date)}${b ? `, then ${b.title} on ${evDay(b.date)}` : ""}.`);
+      parts.push(`Next up: ${a.title} on ${evWhen(a)}${b ? `, then ${b.title} on ${evWhen(b)}` : ""}.`);
     } else if (coming) parts.push("Nothing dated is coming up yet.");
     return parts.join(" ") || "Your money, the markets and what is coming up, in one place.";
   }, [markets, coming]);
@@ -146,7 +147,7 @@ function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
         <path className="base" d="M2 12H96" />
         <circle cx="97" cy="12" r="2.2" />
       </svg>
-      <span className="k-note k-muted">{allowed ? "History starts after your first month" : <>The history chart is on the Basic plan. <Link className="link" to="/plans">See plans</Link></>}</span>
+      <span className="k-note k-muted">{allowed ? "History starts after your first month" : <>The history chart is on the Basic plan. <PlanInline /></>}</span>
     </div>
   );
 }

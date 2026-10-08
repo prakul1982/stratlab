@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, fmtDate } from "../lib/format";
@@ -10,6 +9,7 @@ import { PayoffChart, type PayoffCurve, type PayoffMarker } from "./Charts";
 import { DataTable, Field, FormActions, FormGrid, Select, Stat, StatRow, type Column } from "./kit";
 import "../pages/trade/trade.css";
 import "../pages/trade/options.css";
+import { PlanInline } from "./PlanInterest";
 
 /* The pricing model's view of an options position, shared by the builder and the session page:
  *  - each leg's IV and Greeks, and the net Greeks of the whole position (every plan);
@@ -154,7 +154,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
         </div>
       ) : (
         <p className="k-small k-muted" data-testid="whatif-locked">What-if sliders (move the underlying, shift IV, pass days) and the roll preview are on the {plan} plan.{" "}
-          <Link to="/plans">See plans</Link></p>
+          <PlanInline /></p>
       )}
       {sc && complete && (
         <div data-testid="whatif-pnl">

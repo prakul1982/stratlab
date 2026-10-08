@@ -5,6 +5,7 @@ import { bizChange, bizValue, periodName } from "../lib/biz";
 import { LineChart } from "./Charts";
 import { AlertButton } from "./AlertForm";
 import { DataTable, EmptyState, Notice, Skeleton } from "./kit";
+import { PlanActions } from "./PlanInterest";
 
 /* Monthly and quarterly business updates read into numbers (biz_updates.py): the company's filed figures with the line
  * and page each comes from, the change on the previous month or quarter and on the year, and a 24-month chart. Filed
@@ -102,7 +103,7 @@ export function BizUpdatesPanel({ symbol, wrap }: { symbol: string; wrap: (body:
           {chosen && <BizChart m={chosen} />}
         </>
       )}
-      {!v.allowed && <Notice action={{ label: "See plans", to: "/plans" }}>The figures in these updates, read into a table and a 24-month chart with the change on the month and the year, are on the Basic plan.</Notice>}
+      {!v.allowed && <Notice actions={<PlanActions source="lock" />}>The figures in these updates, read into a table and a 24-month chart with the change on the month and the year, are on the Basic plan.</Notice>}
       {v.allowed && v.unread > 0 && (
         <div className="k-row">
           <span className="k-small k-muted">{v.unread} update{v.unread > 1 ? "s" : ""} not read into numbers yet.</span>

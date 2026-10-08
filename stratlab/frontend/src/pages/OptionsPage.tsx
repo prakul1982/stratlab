@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, isAutoName, legName, legRule, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, isAutoName, legName, legRule, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -23,6 +23,7 @@ import {
 import "./trade/trade.css";
 import "./trade/options.css";
 import "./trade/paper.css";
+import { usePlansToast } from "../components/PlanInterest";
 
 /* /options: build an option structure (straddle, strangle, condor, any legs), see its numbers at the live bid and ask, and
  * paper trade it. Built from the kit (components/kit): a picker for what to trade, settings written as sentences, a
@@ -154,8 +155,8 @@ function Charges({ c }: { c: OptCharges }) {
             <Stat label="Share of the most it can make" value={c.max_profit == null ? "No ceiling" : share(c.pct_of_max_profit)} />
           </>}
         {c.credit
-          ? <Stat label="Premium kept after charges" value={inr(c.premium_after, 2)} />
-          : <Stat label="Most it can make after charges" value={c.max_profit_after == null ? "Unlimited" : inr(c.max_profit_after, 2)} />}
+          ? <Stat label="Premium kept after charges" value={optMoney(c.premium_after)} />
+          : <Stat label="Most it can make after charges" value={c.max_profit_after == null ? "Unlimited" : optMoney(c.max_profit_after)} />}
       </StatRow>
       <Disclosure className="opt-charge-lines" summary="Charges line by line">
         <DataTable label="Charges line by line" columns={cols} rows={c.items} rowKey={(r) => r.key} foot={{ label: "Total", amount: inr(c.total, 2) }} />
@@ -208,11 +209,11 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
       <Card label="Summary">
         <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." />
         <StatRow label="Priced structure">
-          <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={inr(Math.abs(f.credit))} />
-          <Stat testId="opt-max-profit" label="Most it can make" value={best == null ? "Unlimited" : inr(best)} tone={best == null ? undefined : "up"}
-            note={c && c.max_profit_after != null ? `${inr(c.max_profit_after)} after charges` : undefined} />
-          <Stat testId="opt-max-loss" label="Most it can lose" value={worst == null ? "Unlimited" : inr(worst)} tone={worst == null ? undefined : "down"}
-            note={c && c.max_loss_after != null ? `${inr(c.max_loss_after)} after charges` : undefined} />
+          <Stat label={f.credit >= 0 ? "Premium collected" : "Premium paid"} value={optMoney(Math.abs(f.credit))} />
+          <Stat testId="opt-max-profit" label="Most it can make" value={best == null ? "Unlimited" : optMoney(best)} tone={best == null ? undefined : "up"}
+            note={c && c.max_profit_after != null ? `${optMoney(c.max_profit_after)} after charges` : undefined} />
+          <Stat testId="opt-max-loss" label="Most it can lose" value={worst == null ? "Unlimited" : optMoney(worst)} tone={worst == null ? undefined : "down"}
+            note={c && c.max_loss_after != null ? `${optMoney(c.max_loss_after)} after charges` : undefined} />
           <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before) : "None"}
             note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after)} after charges` : "none after charges") : undefined} />
           <Stat testId="opt-margin" label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"}
@@ -315,6 +316,7 @@ export function OptionsPage() {
   const feats = me?.plan_info?.features;
   const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
   const nav = useNavigate();
+  const plansToast = usePlansToast();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
@@ -376,7 +378,7 @@ export function OptionsPage() {
       nav(`/options/s/${snap.id}`);
     } catch (e) {
       const err = e as ApiError;
-      if (err.code === "live_limit" || err.code === "trial_ended") notify(err.message, { label: "See plans", run: () => nav("/plans") });
+      if (err.code === "live_limit" || err.code === "trial_ended") plansToast(err.message);
       else fail(e);
     } finally { setStarting(false); }
   };

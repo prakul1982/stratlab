@@ -31,7 +31,7 @@ interface ScanSets { sets: SetInfo[]; alerts: boolean; template: unknown; fresh_
 
 const STAGE_NAME: Record<number, string> = { 1: "Stage 1 · basing", 2: "Stage 2 · advancing", 3: "Stage 3 · topping", 4: "Stage 4 · declining" };
 const SIGNAL: Record<string, ["ok" | "plain", string]> = {
-  fresh: ["ok", "Fresh ST S2"], st_s2: ["ok", "In ST S2"], stage2: ["plain", "Stage 2, Supertrend down"],
+  fresh: ["ok", "Fresh Stage 2 + Supertrend"], st_s2: ["ok", "In Stage 2 + Supertrend"], stage2: ["plain", "Stage 2, Supertrend down"],
 };
 const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 const FIRST_SCAN: ScanInfo = { id: "st_s2", name: "Stage 2 + Supertrend", text: "", rules: [], within: 1 };
@@ -75,7 +75,7 @@ export function ScanPage() {
     try {
       const r = await api<{ alerts: boolean }>("/research/scan/alerts", { method: "PUT", body: { on: !sets.alerts } });
       setSets({ ...sets, alerts: r.alerts });
-      notify(r.alerts ? "You'll get a message after each close when a watchlist stock gives an ST S2 signal." : "ST S2 alerts off.");
+      notify(r.alerts ? "You'll get a message after each close when a watchlist stock gives a Stage 2 + Supertrend signal." : "Stage 2 + Supertrend alerts off.");
     } catch (e) { fail(e); }
   };
   const testIt = async () => {
@@ -84,7 +84,7 @@ export function ScanPage() {
     if (members.length < 2) { notify("A group test needs at least two stocks."); return; }
     try {
       const nb = await api<{ id: string }>("/notebooks", { method: "POST", body: {
-        name: `ST S2 on ${out.name}`.slice(0, 80), question: "Does Stage 2 + Supertrend work on this group?",
+        name: `Stage 2 + Supertrend on ${out.name}`.slice(0, 80), question: "Does Stage 2 + Supertrend work on this group?",
         strategy: sets.template, group: { id: setId, name: out.name.slice(0, 60), market: region, members: members.slice(0, 50), maxOpen: 5 } } });
       await refreshNotebooks();
       nav(`/n/${nb.id}`);
@@ -124,7 +124,7 @@ export function ScanPage() {
           <FormActions>
             <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? "Scanning…" : "Scan"}</button>
             {sets && scan.id === "st_s2" && <CheckField checked={sets.alerts} disabled={!pro} onChange={toggleAlerts}
-              label={<>Alert me after each close when a watchlist stock newly meets both (ST S2)
+              label={<>Alert me after each close when a watchlist stock newly meets both (Stage 2 + Supertrend)
                 <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />}
           </FormActions>
         </FormGrid>
@@ -160,11 +160,11 @@ export function ScanPage() {
       {st2 && !busy && (
         <Card>
           <CardHead title={st2.name} actions={<>
-            <CheckField label="Only ST S2" checked={only} onChange={setOnly} />
-            <button className="btn quiet sm" onClick={testIt}>Backtest ST S2 on this group</button></>} />
+            <CheckField label="Only Stage 2 + Supertrend" checked={only} onChange={setOnly} />
+            <button className="btn quiet sm" onClick={testIt}>Backtest Stage 2 + Supertrend on this group</button></>} />
           <StatRow>
-            <Stat label="Fresh ST S2" value={String(st2.counts.fresh)} note={`Supertrend turned up in the last ${sets?.fresh_days ?? 5} days`} />
-            <Stat label="Already in ST S2" value={String(st2.counts.st_s2)} />
+            <Stat label="Fresh Stage 2 + Supertrend" value={String(st2.counts.fresh)} note={`Supertrend turned up in the last ${sets?.fresh_days ?? 5} days`} />
+            <Stat label="Already in Stage 2 + Supertrend" value={String(st2.counts.st_s2)} />
             <Stat label="In Stage 2 only" value={String(st2.counts.stage2)} />
           </StatRow>
           <DataTable label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
@@ -312,7 +312,7 @@ export function RotationPage() {
             <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button></>} />
           <DataTable label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             columns={[
-              { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /> },
+              { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, cell: (r) => (isIndex
                 ? <span className="k-row">{isOn(r) ? <button className="link" onClick={() => setFocus(focus === r.id ? null : r.id)}>{r.name}</button> : r.name}
                     {(r.stocks ?? 0) > 0 && <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span>

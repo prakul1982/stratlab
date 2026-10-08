@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { fmtDate } from "./format";
+import { eventWhen, fmtDate } from "./format";
 
 /** The market events calendar (RBI policy, India's data releases, the US Fed and data, index changes, expiries and
  * holidays): one answer for the Events page, the Invest home's next events and the index badges on company pages, read
@@ -9,6 +9,8 @@ export type EvKind = "rbi" | "india" | "us" | "budget" | "index" | "expiry" | "h
 export interface MarketEvent {
   id: string; kind: EvKind; date: string; time: string | null; title: string; detail: string; figure: string | null;
   previous: string | null; url: string | null; status: "scheduled" | "released" | "awaiting"; symbols?: string[]; change?: string; custom?: string;
+  /** "Saturday" or "Sunday" when the date is a weekend (the exchanges are shut); the detail says so too. */
+  weekend?: string;
 }
 export interface IndexSection { index: string; in: [string, string][]; out: [string, string][] }
 export interface IndexChange { id: string; url: string; title: string; announced: string; effective: string | null; sections: IndexSection[] }
@@ -49,3 +51,6 @@ export function useEvents(on = true): EventsView | null {
 export function evDay(iso: string, year = false): string {
   return fmtDate(iso, { weekday: true, year });
 }
+
+/** "Wed 7 Oct", and "(exchanges closed)" after it when the event falls on a weekend. */
+export const evWhen = eventWhen;

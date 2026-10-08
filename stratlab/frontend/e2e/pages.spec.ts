@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Which company do you want to look into?"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Your research desk"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -612,6 +612,7 @@ test("alerts: set one on a company page, then edit and delete it on the Alerts p
   await edit.getByRole("button", { name: "Save alert" }).click();
   await expect(row).toContainText("Price crosses below its 200-day average");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -621,6 +622,11 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const errors = await open(page, "/alerts", "Your stock alerts");
   await answerLevel(page);
   await page.getByRole("button", { name: "New alert" }).click();
+  // "Where alerts go" is offered once, and the Stock box takes the whole row, not a 190px sliver
+  await expect(page.getByRole("link", { name: /Where alerts go/ }).or(page.getByRole("button", { name: /Where alerts go/ }))).toHaveCount(1);
+  const stock = await page.getByLabel("Stock").evaluate((el) => ({ box: el.getBoundingClientRect().width, form: (el.closest("form") as HTMLElement).getBoundingClientRect().width }));
+  expect(stock.box, "the Stock box is narrow").toBeGreaterThan(stock.form * 0.9);
+  expect(await page.getByLabel("Stock").evaluate((el) => (el as HTMLInputElement).scrollWidth <= (el as HTMLInputElement).clientWidth), "its placeholder is clipped").toBe(true);
   await page.getByLabel("Stock").fill("TCS");
   await page.getByLabel("Alert me when").selectOption("move_either");
   await page.getByLabel("Move in a day (%)").fill("4");
@@ -631,7 +637,12 @@ test("alerts: a new one from the Alerts page, for any stock", async ({ page }, i
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Moves 4% or more either way in a day");
   await expect(row).toContainText("Repeats");
+  // Delete asks first: Cancel keeps the alert
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Cancel" }).click();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await sane(page, errors);
 });
@@ -658,6 +669,7 @@ test("alerts: Set alert on the watchlist offers its stocks", async ({ page }, in
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Makes a new 52-week high");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
 });
 
@@ -698,7 +710,7 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
   const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["Mine", "Trade", "Invest", "Money"]);
+  await expect(space.getByRole("radio")).toHaveText(["My space", "Trade", "Invest", "Money"]);
   await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
   // Invest: its home, then its five groups; the other spaces' groups wait behind the switcher
   await expect(main.locator(".side-group .side-title")).toHaveText(NAV.invest.groups.map((g) => g.label));
@@ -1168,6 +1180,7 @@ test("alerts: one on bulk or block deals, India only", async ({ page }, info) =>
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("A bulk or block deal is reported");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");
@@ -1251,6 +1264,7 @@ test("alerts: one on a stock entering or leaving a surveillance list, India only
   const row = page.locator(".alert-row", { hasText: tag });
   await expect(row).toContainText("Enters or leaves an exchange surveillance list");
   await row.getByRole("button", { name: /Delete/ }).click();
+  await page.getByRole("dialog", { name: /Delete the alert on/ }).getByRole("button", { name: "Delete alert" }).click();
   await expect(page.locator(".alert-row", { hasText: tag })).toHaveCount(0);
   await page.getByRole("button", { name: "New alert" }).click();
   await page.getByLabel("Market").selectOption("US");

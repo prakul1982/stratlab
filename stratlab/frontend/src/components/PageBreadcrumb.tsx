@@ -1,10 +1,10 @@
 import { useLocation } from "react-router-dom";
 import { Breadcrumb } from "./kit";
-import { MINE_HOME } from "../lib/spaces";
+import { MINE_HOME, MINE_NAME } from "../lib/spaces";
 import { NAV, groupPath, locate, locateGroup } from "../lib/nav";
 import { usePins } from "../lib/pins";
 
-/** The personal pages that are not in a space: "Mine › Settings". */
+/** The personal pages that are not in a space: "My space › Settings". */
 const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "Connect an AI assistant", "/app": "Get the app", "/invite": "Invite friends" };
 
 /** The breadcrumb for the page showing, drawn from the one map of pages (lib/nav.ts): "Space › Group › Page ▾". It sits
@@ -12,13 +12,13 @@ const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "
 export function PageBreadcrumb() {
   const { pathname } = useLocation();
   const pins = usePins();
-  if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} />;
+  if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} />;
   // every space's home starts the same way as My space: its one-word name (R1-028)
   const home = (Object.keys(NAV) as (keyof typeof NAV)[]).find((k) => NAV[k].home === pathname);
   if (home) return <Breadcrumb trail={[{ label: NAV[home].label, to: NAV[home].home }]} />;
   if (pathname === "/features") return <Breadcrumb trail={[{ label: "StratLab", to: "/" }]} page="All features" />;
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page="Admin" />;
-  if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: "Mine", to: MINE_HOME }]} page={PERSONAL[pathname]} />;
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} page="Admin" />;
+  if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} page={PERSONAL[pathname]} />;
   const g = locateGroup(pathname);
   if (g) return <Breadcrumb trail={[{ label: NAV[g.space].label, to: NAV[g.space].home }, { label: g.group.label, to: groupPath(g.space, g.group) }]} />;
   const at = locate(pathname);

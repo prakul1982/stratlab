@@ -85,8 +85,8 @@ def _alerts(uid: str) -> int:
 
 
 def _prefs(uid: str) -> int:
-    from . import alerts, daily_report, first_steps, lifecycle, push
-    return _setting_keys(daily_report.PREFS, lifecycle.PREFS, alerts.CONFIRMED, push.PREFIX, first_steps.KEY)(uid)
+    from . import alerts, daily_report, first_steps, lifecycle, plan_interest, push
+    return _setting_keys(daily_report.PREFS, lifecycle.PREFS, alerts.CONFIRMED, push.PREFIX, first_steps.KEY, plan_interest.KEY)(uid)
 
 
 def _journal(uid: str) -> None:
@@ -172,8 +172,8 @@ def _x_alerts(uid: str) -> dict:
 
 
 def _x_prefs(uid: str) -> dict:
-    from . import daily_report, first_steps, lifecycle
-    return _settings_of(daily_report.PREFS, lifecycle.PREFS, first_steps.KEY)(uid)
+    from . import daily_report, first_steps, lifecycle, plan_interest
+    return _settings_of(daily_report.PREFS, lifecycle.PREFS, first_steps.KEY, plan_interest.KEY)(uid)
 
 
 def _x_connect(uid: str) -> dict:

@@ -6,7 +6,7 @@ import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, M
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
-import { MINE_HOME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
+import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
 import { usePersisted } from "../lib/persist";
 import { usePins } from "../lib/pins";
@@ -165,7 +165,7 @@ export function Shell({ children }: { children: ReactNode }) {
     if (s !== space) setSpace(s);
     nav(homeOf(s, focus));
   };
-  const homeLabel = space === "mine" ? "My space" : `${SPACES[space].label} home`;
+  const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
   const sidebar = (
     <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
       {...(open ? { role: "dialog", "aria-modal": true } : {})}>
@@ -227,7 +227,7 @@ export function Shell({ children }: { children: ReactNode }) {
 /** Mine · Trade · Invest · Money at the top of the menu: which space's menu shows. A click goes to that space's home (the
  * active one too). Every page stays reachable from any of them (search, links, the breadcrumb). */
 function SpaceSwitch({ space, onPick }: { space: SpaceView; onPick: (s: SpaceView) => void }) {
-  const views: [SpaceView, string, string][] = [["mine", "Mine", "Your own space: your money, the markets and what is coming up"],
+  const views: [SpaceView, string, string][] = [["mine", MINE_NAME, "Your own space: your money, the markets and what is coming up"],
     ...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string])];
   return (
     <div className="space-switch" role="radiogroup" aria-label="Space">
