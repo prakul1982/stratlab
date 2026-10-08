@@ -95,6 +95,14 @@ test("no data provider's name on the company and lending pages (R5O-020)", () =>
   assert.match(read("src/components/Research.tsx"), /\{\[n\.source, n\.at \? ago\(n\.at\) : null, old\]\.filter\(Boolean\)\.join\(" · "\)\} ↗/);
 });
 
+test("the scan page counts what it skipped and words a one-candle rule properly (R5O-023)", () => {
+  const p = read("src/pages/ResearchScans.tsx");
+  assert.doesNotMatch(p, /any of the last \{scan\.within\} candle\{/);
+  assert.match(p, /"Counts as a match when it held on the latest candle\."/);
+  assert.match(p, /`\$\{preset\.checked\} of \$\{preset\.asked\}`/);
+  assert.match(p, /skipped, named below/);
+});
+
 test("the theme map says a company without a checked ticker isn't listed, not 'private' (R5O-008)", () => {
   const r = read("src/pages/Research.tsx");
   assert.match(r, /\{co\.name\} \(not listed\)/);

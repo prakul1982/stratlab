@@ -274,6 +274,42 @@ def test_company_profiles_lose_scrape_residue():
     assert clean_profile(raw) == "Tata Consultancy Services is an IT services, consulting and business solutions company."
 
 
+# ---------- R5O-023: the scan page ----------
+def test_a_live_scan_says_last_price_not_closed_at():
+    import numpy as np
+    from app import scan_presets
+    from tests.test_scan_presets import bars
+    closes = list(np.concatenate([np.linspace(150, 100, 260), [100.0] * 5]))
+    b = bars(closes + [min(closes[-253:]) * 1.03])
+    live = scan_presets.evaluate(b, only=["near_low52"], live=True)["matches"]["near_low52"]["detail"]
+    stored = scan_presets.evaluate(b, only=["near_low52"])["matches"]["near_low52"]["detail"]
+    assert live.startswith("Last price ") and stored.startswith("Closed at ")
+
+
+def test_a_skipped_stock_is_named_by_its_symbol_and_counted():
+    from app import scan
+
+    class Prov:
+        def instrument(self, token):
+            return {"symbol": "SIMPLXREA", "name": "Simplex Realty"} if token == "195818241" else None
+
+    class Reg:
+        def provider(self, market):
+            return Prov()
+
+        def resolve(self, iid):
+            return Prov(), {"id": iid}
+    import app.universes as U
+    orig_resolve, orig_bars = U.resolve, scan._bars
+    try:
+        U.resolve = lambda reg, market, members: (["IN:195818241"], [])
+        scan._bars = lambda reg, iid: [{"t": "2026-10-08", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}] * 3
+        out = scan.run_preset(Reg(), "IN", [{"symbol": "SIMPLXREA"}], "near_low52")
+    finally:
+        U.resolve, scan._bars = orig_resolve, orig_bars
+    assert out["problems"] == ["SIMPLXREA: not enough daily prices yet"] and out["checked"] == 0 and out["asked"] == 1
+
+
 # ---------- R5O-020: no provider names; a US company's own news and peers ----------
 def test_us_peers_start_with_companies_of_its_size_in_its_sector():
     from app.intel.company import us_peers

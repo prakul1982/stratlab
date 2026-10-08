@@ -22,7 +22,7 @@ interface ScanRow {
 interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number> }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
 interface PresetOut {
-  kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; as_of: string | null;
+  kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
   updated_at?: string | null; stored: boolean; missing: string[]; problems: string[];
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
@@ -114,7 +114,7 @@ export function ScanPage() {
           {scan.text && (
             <div className="k-field wide" data-testid="scan-rule">
               <p className="k-small">{scan.text}</p>
-              {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. Counts as a match when it held on any of the last {scan.within} candle{scan.within === 1 ? "" : "s"}.</p>}
+              {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. {scan.within === 1 ? "Counts as a match when it held on the latest candle." : `Counts as a match when it held on any of the last ${scan.within} candles.`}</p>}
             </div>
           )}
           <Field label="Group to scan">
@@ -140,7 +140,8 @@ export function ScanPage() {
             : "Read now from each stock's daily candles."} />
           <StatRow>
             <Stat label="Match the rule" value={String(preset.matches)} note={preset.as_of ? `as of ${asOf(preset.as_of, { tz: marketTz(region) })}` : undefined} />
-            <Stat label="Stocks checked" value={String(preset.checked)} note={preset.stored ? "read after the close" : "read just now"} />
+            <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
+              note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
           <DataTable label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[

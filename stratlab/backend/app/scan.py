@@ -83,6 +83,21 @@ def _bars(registry, iid: str) -> list[dict]:
     return bars
 
 
+def _label(prov, iid: str) -> str:
+    """How a skipped stock is named: its symbol, never the broker's numeric instrument id ("195818241") (R5O-023)."""
+    try:
+        inst = prov.instrument(iid.split(":", 1)[1]) if prov else None
+    except Exception:
+        inst = None
+    sym = (inst or {}).get("symbol")
+    return str(sym) if sym else iid.split(":", 1)[-1]
+
+
+def _why(e: Exception) -> str:
+    text = str(e)[:80]
+    return "not enough daily prices yet" if not text or "history" in text.lower() or isinstance(e, (IndexError, TypeError)) else text
+
+
 def run(registry, market: str, members: list[dict]) -> dict:
     """Scan a group: members are {"symbol"} or {"id"}. Rows sorted with fresh ST S2 signals first."""
     ids, missing = universes.resolve(registry, market, members[:MAX])
@@ -96,12 +111,12 @@ def run(registry, market: str, members: list[dict]) -> dict:
             names[iid] = inst or {}
             return iid, res, None
         except Exception as e:     # one member's data problem mustn't sink the rest
-            return iid, None, f"{iid.split(':', 1)[-1]}: {str(e)[:80] or e.__class__.__name__}"
+            return iid, None, f"{_label(prov, iid)}: {_why(e)}"
 
     rows, problems = [], []
     for iid, res, problem in _pool.map(one, ids):
         if res is None:
-            problems.append(problem or f"{iid.split(':', 1)[-1]}: not enough history")
+            problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
             continue
         inst = names.get(iid) or {}
         rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"),
@@ -121,16 +136,16 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
 
     def one(iid):
         try:
-            res = scan_presets.evaluate(_bars(registry, iid), only=[preset])
+            res = scan_presets.evaluate(_bars(registry, iid), only=[preset], live=True)
             inst = (prov.instrument(iid.split(":", 1)[1]) if prov else None) or {}
             return iid, res, inst, None
         except Exception as e:     # one member's data problem mustn't sink the rest
-            return iid, None, {}, f"{iid.split(':', 1)[-1]}: {str(e)[:80] or e.__class__.__name__}"
+            return iid, None, {}, f"{_label(prov, iid)}: {_why(e)}"
 
     rows, problems, checked, days = [], [], 0, []
     for iid, res, inst, problem in _pool.map(one, ids):
         if res is None:
-            problems.append(problem or f"{iid.split(':', 1)[-1]}: not enough history")
+            problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
             continue
         checked += 1
         days.append(res["as_of"])
@@ -140,7 +155,8 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
                          "price": res["price"], "chg": res["chg"], "as_of": res["as_of"], "days_ago": m["days_ago"], "day": m["day"],
                          "detail": m["detail"]})
     rows.sort(key=lambda r: (r["days_ago"], r["symbol"]))
-    return {"rows": rows, "checked": checked, "as_of": max(days, default=None), "missing": missing, "problems": problems}
+    return {"rows": rows, "checked": checked, "asked": len(ids) + len(missing), "as_of": max(days, default=None), "missing": missing,
+            "problems": problems}
 
 
 # ---------- the daily watchlist alert ----------
