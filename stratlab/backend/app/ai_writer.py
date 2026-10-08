@@ -1,9 +1,25 @@
 """AI strategy builder (all plans, monthly limits in plans.py).
 Plain English -> validated rules, plus what the user did and didn't specify,
 so the app can ask follow-up questions for the missing parts."""
+import re
+
 from pydantic import ValidationError
 
 from .models import Cond, Risk, Session
+
+# the AI's notes are shown to the person: one about the reply's own workings ("No timeframe specified, left as null.")
+# or about something the person simply didn't say (the app asks about that itself) is left out (R5O-010)
+_INTERNAL = re.compile(r"\b(null|json|schema|entryjoin|tgttype|stoptype|minscore|defaulted)\b|\bleft as\b|\bset to (0|zero|false)\b", re.I)
+_UNSAID = re.compile(r"\b(no|not|wasn.t|was not|isn.t|without)\b[^.]*\b(specif|give|stat|provid|mention|defin|set)\w*", re.I)
+_ASKED = re.compile(r"\b(time ?frame|candle|interval|stop|target|take[- ]profit|exit|sell rule|instrument|symbol|stock|"
+                    r"capital|risk|position size|sizing)\b", re.I)
+
+
+def user_note(note: str) -> bool:
+    """Whether one of the AI's notes is for the person: not internal wording, not about what the app asks anyway."""
+    if _INTERNAL.search(note):
+        return False
+    return not (_UNSAID.search(note) and _ASKED.search(note))
 
 BASIC_TYPES = '"price", "num", "sma", "ema", "rsi"'
 PRO_TYPES = ('"price", "num", "sma", "ema", "rsi", "macd", "macd_signal", "macd_hist", '
@@ -50,7 +66,8 @@ Schema:
           (include ONLY what the user actually stated),
   "mentioned": list of what the user explicitly specified, from:
                "instrument", "tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital",
-  "notes": short plain-English notes on anything you could not express or had to assume
+  "notes": short plain-English notes, shown to the user, on anything you could not express (never mention null,
+           JSON or field names, and never note what the user left out: the app asks about that itself)
 }
 Cond = {"l": Ref, "op": "xa" | "xb" | "gt" | "lt" | "eq", "r": Ref, "w": weight (only with entryJoin "score")}
   xa = crosses above (true only on the crossing candle), xb = crosses below,
@@ -127,7 +144,7 @@ def write_strategy(text: str, pro: bool) -> dict:
         raw_notes = [raw_notes]
     elif not isinstance(raw_notes, list):
         raw_notes = []
-    out = {"notes": [str(n).strip() for n in raw_notes if str(n).strip()][:8]}
+    out = {"notes": [n for n in (str(x).strip() for x in raw_notes) if n and user_note(n)][:8]}
     allowed = None if pro else {"price", "num", "sma", "ema", "rsi"}
 
     def conds(items):

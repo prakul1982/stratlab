@@ -182,3 +182,62 @@ def test_when_the_list_is_down_nothing_passes_as_checked():
     out = ground_sector({"screen": [{"name": "Hindustan Aeronautics", "ticker": "HAL"}], "etfs": [{"ticker": "X", "name": "Y"}]},
                         "IN", down)
     assert out["screen"] == [] and out["etfs"] == []
+
+
+# ---------- R5O-010: notebook defaults ----------
+@pytest.fixture
+def w(monkeypatch):
+    from tests import world
+    built = world.build(monkeypatch)
+    yield built
+    built["close"]()
+
+
+def test_the_questions_about_an_idea_stay_with_the_notebook(w):
+    c, h = w["client"], w["headers"]("pro-token")
+    gaps = {"mentioned": ["sl"], "notes": [], "instName": None, "usedAI": True, "fallback": ""}
+    strat = {"name": "EMA", "entry": [{"l": {"t": "ema", "p": 20}, "op": "xa", "r": {"t": "ema", "p": 50}}], "risk": {"sl": 2, "tgt": 0}}
+    nb = c.post("/notebooks", headers=h, json={"name": "EMA", "strategy": strat, "gaps": gaps}).json()
+    assert c.get(f"/notebooks/{nb['id']}", headers=h).json()["gaps"]["mentioned"] == ["sl"]
+    # an answer is kept: the person leaves and comes back to the same place
+    r = c.put(f"/notebooks/{nb['id']}", headers=h, json={"gaps": {**gaps, "answered": {"exit": "Sell when EMA 20 drops below EMA 50"}}})
+    assert r.status_code == 200
+    back = c.get(f"/notebooks/{nb['id']}", headers=h).json()
+    assert back["gaps"]["answered"] == {"exit": "Sell when EMA 20 drops below EMA 50"}
+    assert back["strategy"]["risk"]["tgt"] == 0          # no target was asked for, none is stored
+    # an unrelated save keeps them; "Close" clears them
+    c.put(f"/notebooks/{nb['id']}", headers=h, json={"notes": "x"})
+    assert c.get(f"/notebooks/{nb['id']}", headers=h).json()["gaps"]["mentioned"] == ["sl"]
+    c.put(f"/notebooks/{nb['id']}", headers=h, json={"clearGaps": True})
+    assert not c.get(f"/notebooks/{nb['id']}", headers=h).json().get("gaps")
+
+
+def test_gaps_are_bounded(w):
+    c, h = w["client"], w["headers"]("pro-token")
+    nb = c.post("/notebooks", headers=h, json={"name": "X"}).json()
+    r = c.put(f"/notebooks/{nb['id']}", headers=h, json={"gaps": {"mentioned": ["x" * 50]}})
+    assert r.status_code == 422
+
+
+def test_the_ai_builders_internal_notes_are_not_shown():
+    from app.ai_writer import user_note
+    assert not user_note("No timeframe specified, left as null.")
+    assert not user_note("Timeframe not specified; defaulted to daily.")
+    assert not user_note("No stop loss was given.")
+    assert not user_note("The user did not mention an exit.")
+    assert user_note("Option legs can't be tested here, so the straddle part was left out.")
+    assert user_note("Advanced indicators need the Basic plan, so MACD was left out.")
+    assert user_note("The volume filter you mentioned isn't available, so it was skipped.")
+
+
+def test_write_strategy_drops_internal_notes(monkeypatch):
+    import json as _json
+    from app import ai_writer
+    reply = {"entry": [{"l": {"t": "ema", "p": 20}, "op": "xa", "r": {"t": "ema", "p": 50}}], "exit": [], "tf": None,
+             "risk": {"sl": 2}, "mentioned": ["sl"],
+             "notes": ["No timeframe specified, left as null.", "Short selling on delivery isn't possible, so only longs are tested."]}
+    monkeypatch.setattr(ai_writer, "complete", lambda *a, **k: _json.dumps(reply))
+    out = ai_writer.write_strategy("Buy when EMA 20 crosses above EMA 50, stop loss 2%", False)
+    assert out["notes"] == ["Short selling on delivery isn't possible, so only longs are tested."]
+    assert "tgt" not in out.get("risk", {})
+    assert "Never invent exits, stops or targets" in ai_writer.SYSTEM

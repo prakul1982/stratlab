@@ -13,7 +13,7 @@ import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons"
 import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
-import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, Signed, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Signed, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
@@ -23,6 +23,7 @@ import { usePlansToast } from "../components/PlanInterest";
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the two-column layout with the lab notes beside it stays. */
 
+const DEFAULT_DAILY_DAYS = 1825;
 const PERIODS: Record<Tf, number[]> = {
   "1d": [182, 365, 730, 1095, 1825, 3650], "1h": [30, 90, 180, 365, 730], "15m": [30, 60, 90, 180, 365], "5m": [15, 30, 60, 120],
 };
@@ -114,7 +115,7 @@ export function NotebookPage() {
   const canExport = !!me?.plan_info.features?.export;
   const { nb, patch, saving, setNb, flush, problem, reload } = useNotebook(id);
   const [gaps, setGaps] = useState<GapInfo | null>((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null);
-  const [days, setDays] = useState("365");
+  const [days, setDays] = useState("");
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
   const [rewrite, setRewrite] = useState(false);
@@ -135,7 +136,19 @@ export function NotebookPage() {
   const [fast, setFast] = useState({ ticks: false, maxSpreadPct: 0, minPrice: 0 });
   const notesRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => { setGaps((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null); }, [id, loc.state]);
+  // the questions about the idea are kept with the notebook: the ones a new notebook arrives with are saved, and a
+  // notebook opened again shows the ones still open (R5O-010)
+  const saveGaps = useCallback((g: GapInfo) => {
+    setGaps(g);
+    if (id) void api(`/notebooks/${id}`, { method: "PUT", body: { gaps: g } }).catch(() => undefined);
+  }, [id]);
+  const arrived = (loc.state as { gaps?: GapInfo } | null)?.gaps ?? null;
+  const loadedId = nb?.id;
+  useEffect(() => {
+    if (!loadedId) { setGaps(arrived); return; }
+    if (arrived) { if (!nb?.gaps) saveGaps(arrived); else setGaps(nb.gaps); }
+    else setGaps(nb?.gaps ?? null);
+  }, [id, loc.state, loadedId]);    // eslint-disable-line react-hooks/exhaustive-deps
   const applyRef = useRef<(action: string) => void>(undefined);
   const runRef = useRef<() => void>(undefined);
   const pendingAction = useRef<string | null>(null);
@@ -166,7 +179,10 @@ export function NotebookPage() {
   const maxDays = market?.max_days?.[s.tf] ?? 3650;
   const periods = PERIODS[s.tf].filter((d) => d <= maxDays);
   const picked = spanDays(days) ?? Number(days);
-  const period = periods.includes(picked) || spanDays(days) != null ? picked : periods[Math.min(1, periods.length - 1)] ?? 365;
+  // the first test covers years of prices, as the page promises: 5 years of daily candles (or all there is), a
+  // shorter span of intraday ones (R5O-010)
+  const fallbackPeriod = s.tf === "1d" ? [...periods].reverse().find((d) => d <= DEFAULT_DAILY_DAYS) : periods[Math.min(1, periods.length - 1)];
+  const period = periods.includes(picked) || spanDays(days) != null ? picked : fallbackPeriod ?? 365;
   const periodValue = periods.includes(period) ? String(period) : days;
   const isUpload = inst?.market === "CSV";
   const experiments = [...(nb.experiments || [])].reverse();
@@ -355,7 +371,11 @@ export function NotebookPage() {
           <GapsCard s={s} gaps={gaps} hasInstrument={!!inst} currency={currency}
             onStrategy={setStrategy}
             onInstrument={(i) => patch({ instrument: i, instrumentId: i.id, strategy: { ...s, risk: riskForCurrency(s.risk, i.currency) } }, true)}
-            onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => setGaps(null)} />
+            onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); void api(`/notebooks/${nb.id}`, { method: "PUT", body: { clearGaps: true } }).catch(() => undefined); }}
+            onAnswered={(answered) => saveGaps({ ...gaps, answered })} />
+        )}
+        {!gaps && s.entry.length > 0 && !s.exit.length && !(s.shortExit ?? []).length && (
+          <Notice tone="warn" role="status">No sell rule is set: {s.risk.sl > 0 || s.risk.tgt > 0 ? `a trade closes only at the ${[s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target"].filter(Boolean).join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test."} Add one under The rules.</Notice>
         )}
 
         <RulesCard s={s} currency={currency} onChange={setStrategy} />
@@ -437,7 +457,7 @@ export function NotebookPage() {
           <p className="k-small k-muted">This replaces the rules in this notebook. Your experiments stay as they are.</p>
           <IdeaComposer busyLabel="Replace the rules" autoFocus byHand={false} onBuilt={async (b) => {
             patch({ strategy: { ...b.strategy, name: nb.name }, ...(b.instrument && !inst ? { instrument: b.instrument, instrumentId: b.instrument.id } : {}) }, true);
-            setGaps(b.gaps);
+            saveGaps(b.gaps);
             setRewrite(false);
           }} />
         </Modal>

@@ -1,26 +1,34 @@
 import type { Cond, Op, Ref, RefType, Risk, Strategy, Tf } from "./types";
 
-export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean; group?: "candle" | "day" | "market" | "fo" }[] = [
-  { t: "price", name: "Price", friendly: "the price" },
-  { t: "sma", name: "SMA", friendly: "average price" },
-  { t: "ema", name: "EMA", friendly: "fast average" },
-  { t: "rsi", name: "RSI", friendly: "momentum (RSI)" },
-  { t: "macd", name: "MACD", friendly: "MACD line", pro: true },
-  { t: "macd_signal", name: "MACD signal", friendly: "MACD signal", pro: true },
-  { t: "macd_hist", name: "MACD histogram", friendly: "MACD histogram", pro: true },
-  { t: "bb_upper", name: "Bollinger upper", friendly: "upper Bollinger band", pro: true },
-  { t: "bb_mid", name: "Bollinger mid", friendly: "middle Bollinger band", pro: true },
-  { t: "bb_lower", name: "Bollinger lower", friendly: "lower Bollinger band", pro: true },
-  { t: "vwap", name: "VWAP", friendly: "VWAP", pro: true },
-  { t: "supertrend", name: "Supertrend", friendly: "Supertrend", pro: true },
-  { t: "stage", name: "Stage (1–4, Weinstein)", friendly: "the market stage", pro: true },
-  { t: "adx", name: "ADX (trend strength)", friendly: "trend strength", pro: true },
-  { t: "stoch_k", name: "Stochastic %K", friendly: "stochastic", pro: true },
-  { t: "atr_pct", name: "ATR % (volatility)", friendly: "volatility", pro: true },
-  { t: "dc_upper", name: "Donchian high (breakout)", friendly: "recent high", pro: true },
-  { t: "dc_lower", name: "Donchian low (breakdown)", friendly: "recent low", pro: true },
-  { t: "volume", name: "Volume", friendly: "volume", pro: true },
-  { t: "vol_sma", name: "Volume average", friendly: "average volume", pro: true },
+/** What a rule can compare, in the groups the rule editor shows (R5O-040): plain names, and `friendly` is the short
+ * explanation shown under the list for the one picked. */
+export type IndicatorGroup = "avg" | "momentum" | "trend" | "range" | "volume" | "candle" | "day" | "market" | "fo";
+export const INDICATOR_GROUPS: [IndicatorGroup, string][] = [
+  ["avg", "Price and averages"], ["momentum", "Momentum"], ["trend", "Trend"], ["range", "Swings and breakouts"],
+  ["volume", "Volume"], ["candle", "The candle"], ["day", "The trading day"],
+  ["market", "The market (India VIX; intraday candles see the previous close)"], ["fo", "F&O stock data (India, daily candles)"],
+];
+export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boolean; group: IndicatorGroup }[] = [
+  { t: "price", name: "Price", friendly: "The closing price of each candle.", group: "avg" },
+  { t: "sma", name: "Average (SMA)", friendly: "The plain average of the last N closing prices.", group: "avg" },
+  { t: "ema", name: "Fast average (EMA)", friendly: "An average of the last N closes that leans on the newest ones, so it turns sooner.", group: "avg" },
+  { t: "vwap", name: "Volume-weighted average (VWAP)", friendly: "The average price weighted by how much traded at each price.", pro: true, group: "avg" },
+  { t: "bb_upper", name: "Upper band (Bollinger)", friendly: "The average plus a few standard deviations: a band above the price.", pro: true, group: "avg" },
+  { t: "bb_mid", name: "Middle band (Bollinger)", friendly: "The average the Bollinger bands sit around.", pro: true, group: "avg" },
+  { t: "bb_lower", name: "Lower band (Bollinger)", friendly: "The average minus a few standard deviations: a band below the price.", pro: true, group: "avg" },
+  { t: "rsi", name: "RSI (0–100)", friendly: "Momentum from 0 to 100: high after a run of gains, low after a run of losses.", group: "momentum" },
+  { t: "macd", name: "MACD line", friendly: "The gap between a fast and a slow average.", pro: true, group: "momentum" },
+  { t: "macd_signal", name: "MACD signal line", friendly: "A smoothed MACD line; crossings of the two are the usual signal.", pro: true, group: "momentum" },
+  { t: "macd_hist", name: "MACD histogram", friendly: "MACD line minus its signal line: above 0 when the line is above.", pro: true, group: "momentum" },
+  { t: "stoch_k", name: "Stochastic (0–100)", friendly: "Where the close sits in the recent high-low range, from 0 (at the low) to 100 (at the high).", pro: true, group: "momentum" },
+  { t: "supertrend", name: "Supertrend", friendly: "A trailing line below the price in an uptrend and above it in a downtrend.", pro: true, group: "trend" },
+  { t: "stage", name: "Stage (1–4)", friendly: "Where the price is in its cycle, from the long average and its slope: 1 basing, 2 rising, 3 topping, 4 falling.", pro: true, group: "trend" },
+  { t: "adx", name: "Trend strength (ADX)", friendly: "How strong the trend is, from 0 to 100, whichever way it runs.", pro: true, group: "trend" },
+  { t: "atr_pct", name: "Volatility % (ATR)", friendly: "The average candle range as a % of the price.", pro: true, group: "range" },
+  { t: "dc_upper", name: "Highest high of N candles", friendly: "The highest high of the previous N candles: crossing above it is a breakout.", pro: true, group: "range" },
+  { t: "dc_lower", name: "Lowest low of N candles", friendly: "The lowest low of the previous N candles: crossing below it is a breakdown.", pro: true, group: "range" },
+  { t: "volume", name: "Volume", friendly: "How much traded in the candle.", pro: true, group: "volume" },
+  { t: "vol_sma", name: "Average volume", friendly: "The average volume of the last N candles.", pro: true, group: "volume" },
   { t: "atr", name: "ATR (points)", friendly: "average range", pro: true, group: "candle" },
   { t: "open", name: "Open", friendly: "the open", pro: true, group: "candle" },
   { t: "high", name: "High", friendly: "the high", pro: true, group: "candle" },
@@ -110,7 +118,26 @@ const allConds = (s: Strategy) => [...s.entry, ...s.exit, ...(s.shortEntry ?? []
 export const usesPro = (s: Strategy) => allConds(s).some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
 
 export const NO_SESSION = { start: "", end: "", squareoff: "", maxTradesDay: 0, cooldown: 0, dailyLossPct: 0 };
-const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 6, brokerage: 20, slippage: 0.05 };
+// no target unless the person asks for one (R5O-010): "Stop loss 2%" must not come back as "2% stop or a 6% target"
+const DEFAULT_RISK: Risk = { capital: 500000, riskPct: 1, maxAlloc: 100, sl: 2, tgt: 0, brokerage: 20, slippage: 0.05 };
+
+/** The sell rule a notebook starts with when its idea says when to buy but not when to sell: the entry condition
+ * turning back ("Sell when EMA 20 drops below EMA 50"), or RSI back above 55 after an RSI dip. Empty when nothing
+ * follows from the entry; the notebook then says plainly that no sell rule is set. */
+export function defaultExit(s: Pick<Strategy, "entry">): Cond[] {
+  const first = s.entry[0];
+  if (!first) return [];
+  if (first.r.t !== "num" && (first.op === "gt" || first.op === "xa")) return [{ l: { ...first.l }, op: "xb", r: { ...first.r } }];
+  if (first.l.t === "rsi" && (first.op === "lt" || first.op === "xb")) return [{ l: { ...first.l }, op: "xa", r: { t: "num", v: 55 } }];
+  return [];
+}
+
+/** A built strategy with the default sell rule filled in when the idea didn't give one, so what the question card
+ * shows as the default is what runs. */
+export function withDefaultExit<S extends Strategy>(s: S, mentioned: string[]): S {
+  if (mentioned.includes("exit") || s.exit.length || (s.side ?? "long") !== "long") return s;
+  return { ...s, exit: defaultExit(s) };
+}
 
 export function blankStrategy(name = "Untitled notebook"): Strategy {
   return { name, tf: "1d", text: "", entry: [], exit: [], entryJoin: "all", risk: { ...DEFAULT_RISK }, side: "long", shortEntry: [], shortExit: [],

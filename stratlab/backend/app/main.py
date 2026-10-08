@@ -1159,7 +1159,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -1224,6 +1224,8 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
     return save_notebook(profile, nb)
 
 
@@ -1251,6 +1253,10 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb.pop("group", None)                 # picking one instrument replaces a group
     if req.group is not None:
         nb["group"] = group_body(req.group)
+    if req.gaps is not None:
+        nb["gaps"] = req.gaps.model_dump()
+    if req.clearGaps:
+        nb.pop("gaps", None)
     return ok(save_notebook(profile, nb))
 
 

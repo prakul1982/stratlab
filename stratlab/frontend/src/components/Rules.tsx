@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
-import { DEFAULTS, INDICATORS, mkRef, NO_SESSION, OPS, opSay, refName } from "../lib/rules";
+import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, mkRef, NO_SESSION, OPS, opSay, refName } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/intervals";
 import { Info } from "./ui";
@@ -13,7 +13,9 @@ import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } fr
 import "../pages/trade/trade.css";
 
 /* A highlighted word in a rule sentence that opens a small editor when clicked. */
-function Pop({ label, cls = "", children, title }: { label: ReactNode; cls?: string; children: (close: () => void) => ReactNode; title: string }) {
+function Pop({ label, cls = "", children, title, plain }: { label: ReactNode; cls?: string; children: (close: () => void) => ReactNode; title: string;
+  /** a link-like button (an "+ Add …" line) instead of a highlighted word, named by its own text */
+  plain?: boolean }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -22,7 +24,8 @@ function Pop({ label, cls = "", children, title }: { label: ReactNode; cls?: str
   usePopover(open, setOpen, btn, panel, { outside: wrap });
   return (
     <span ref={wrap} className="k-pop-wrap">
-      <button ref={btn} type="button" className={`token ${cls}`} aria-label={`${title}: ${typeof label === "string" ? label : ""}`} aria-expanded={open}
+      <button ref={btn} type="button" className={plain ? cls : `token ${cls}`} aria-label={plain ? undefined : `${title}: ${typeof label === "string" ? label : ""}`} aria-expanded={open}
+        aria-haspopup={plain ? "dialog" : undefined}
         onClick={() => setOpen((o) => !o)}>{label}</button>
       {open && <div ref={panel} className="popover k-popover">{children(() => setOpen(false))}</div>}
     </span>
@@ -42,7 +45,8 @@ function NumField({ label, value, min, max, step, hint, onValid }: { label: stri
 
 function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Ref; onChange: (r: Ref) => void; allowNum: boolean; allIndicators: boolean; tf: Tf }) {
   const def = DEFAULTS[value.t];
-  const opt = (i: (typeof INDICATORS)[number]) => (
+  const about = INDICATORS.find((i) => i.t === value.t)?.friendly;
+  const opt =(i: (typeof INDICATORS)[number]) => (
     <option key={i.t} value={i.t} disabled={i.pro && !allIndicators && i.t !== value.t}>{i.name}{i.pro && !allIndicators ? " (Basic)" : ""}</option>
   );
   const higher = (["15m", "1h", "1d"] as HigherTf[]).filter((h) => TF_ORDER.indexOf(h) > TF_ORDER.indexOf(tf));
@@ -53,14 +57,11 @@ function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Re
           const t = e.target.value as RefType;
           onChange(t === "num" ? { t, v: value.t === "num" ? value.v : 50 } : { ...mkRef(t), ago: value.ago, k: value.k, tf: value.tf });
         }}>
-          <optgroup label="Price and indicators">{INDICATORS.filter((i) => !i.group).map(opt)}</optgroup>
-          <optgroup label="The candle">{INDICATORS.filter((i) => i.group === "candle").map(opt)}</optgroup>
-          <optgroup label="The trading day">{INDICATORS.filter((i) => i.group === "day").map(opt)}</optgroup>
-          <optgroup label="The market (India VIX; intraday candles see the previous close)">{INDICATORS.filter((i) => i.group === "market").map(opt)}</optgroup>
-          <optgroup label="F&amp;O stock data (India, daily candles)">{INDICATORS.filter((i) => i.group === "fo").map(opt)}</optgroup>
+          {INDICATOR_GROUPS.map(([g, label]) => <optgroup key={g} label={label}>{INDICATORS.filter((i) => i.group === g).map(opt)}</optgroup>)}
           {allowNum && <option value="num">A number</option>}
         </select>
       )}</Field>
+      {about?.endsWith(".") && <p className="k-note">{about}</p>}
       {value.t === "num" && <NumField label="Value" step="any" value={value.v ?? ""} onValid={(v) => onChange({ ...value, v })} />}
       {def && (
         <NumField label={value.t.startsWith("macd") ? "Fast length" : value.t === "supertrend" ? "ATR length" : value.t === "stage" ? "Average length" : "Length (candles)"}
@@ -249,6 +250,34 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
   const addBtn = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond, label: string) => (
     <button type="button" className="add-rule" onClick={() => addRule(key, c)}>+ {label}</button>
   );
+  // "+ Add an exit rule" opens a short list of common sell rules to start from, instead of adding one on its own (R5O-010)
+  const exitPick = (key: "exit" | "shortExit", label: string) => {
+    const closesShort = key === "shortExit" || short;
+    const turn = closesShort ? [] : defaultExit(s);
+    const common: Cond[] = [
+      ...turn,
+      { l: { t: "price" }, op: closesShort ? "xa" : "xb", r: { t: "sma", p: 20 } },
+      { l: { t: "ema", p: 20 }, op: closesShort ? "xa" : "xb", r: { t: "ema", p: 50 } },
+      { l: { t: "rsi", p: 14 }, op: closesShort ? "xb" : "xa", r: { t: "num", v: closesShort ? 30 : 70 } },
+    ];
+    const choices = common.filter((c, i, all) => all.findIndex((x) => JSON.stringify(x) === JSON.stringify(c)) === i);
+    const say = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${c.r.t === "num" ? c.r.v : refName(c.r)}`;
+    return (
+      <Pop title={label} label={`+ ${label}`} cls="add-rule" plain>
+        {(close) => (
+          <div className="k-stack">
+            <b className="k-small">{closesShort ? "Buy back when…" : "Sell when…"}</b>
+            {choices.map((c, i) => (
+              <button key={say(c)} type="button" className="btn quiet sm" onClick={() => { addRule(key, c); close(); }}>
+                {say(c)}{i === 0 && turn.length ? " (the entry turning back)" : ""}
+              </button>
+            ))}
+            <p className="k-note">Tap any word of the rule afterwards to change it.</p>
+          </div>
+        )}
+      </Pop>
+    );
+  };
   const candlePick = (
     <Pop title="Candle size" label={`${TF_NAME[s.tf].toLowerCase()} candles`} cls="plain">
       {(close) => (
@@ -299,10 +328,7 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
       <Block title="Exit" info={s.entry.length > 0 ? <Info label="Crosses or is above?">{HELP.crosses}</Info> : undefined}>
         {list("exit", s.exit, (i) => i === 0 ? <b>{short ? "Buy back" : "Sell"} when</b> : <b>or when</b>, false)}
         {both && list("shortExit", shortExit, (i) => i === 0 ? <b>Buy back a short when</b> : <b>or when</b>, false)}
-        <div className="k-row">
-          {addBtn("exit", { l: { t: "rsi", p: 14 }, op: short ? "lt" : "gt", r: { t: "num", v: short ? 30 : 70 } }, both ? "Add a sell rule" : "Add an exit rule")}
-          {both && addBtn("shortExit", { l: { t: "rsi", p: 14 }, op: "lt", r: { t: "num", v: 30 } }, "Add a buy-back rule")}
-        </div>
+        {!s.exit.length && !shortExit.length && <p className="sentence k-muted">No sell rule yet.</p>}
         <p className="sentence">
           {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>} at a{" "}
           <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
@@ -313,6 +339,9 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
           {r.tgt > 0 && <>{" "}{unitTok("tgt")}</>}.
           <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
         </p>
+        {/* below the block's rules, like the entry's add button */}
+        {exitPick("exit", both ? "Add a sell rule" : "Add an exit rule")}
+        {both && exitPick("shortExit", "Add a buy-back rule")}
       </Block>
 
       <Block title="Size and candles">

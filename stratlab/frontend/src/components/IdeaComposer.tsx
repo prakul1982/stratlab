@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { blankStrategy, detectInstrument, detectTf, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency } from "../lib/rules";
+import { blankStrategy, detectInstrument, detectTf, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, withDefaultExit } from "../lib/rules";
 import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
 import { Notice } from "./kit";
@@ -109,7 +109,8 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
   };
   return {
     usedAI, note: fallback,
-    built: { strategy, instrument, question: questionFrom(idea, instrument?.symbol),
+    // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
+    built: { strategy: withDefaultExit(strategy, out.mentioned || []), instrument, question: questionFrom(idea, instrument?.symbol),
       gaps: { mentioned: out.mentioned || [], notes: out.notes || [], instName: out.instrument, usedAI, fallback } },
   };
 }
