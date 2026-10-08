@@ -6,7 +6,8 @@ made up but consistent with each other and with the price table:
 - P/E, book value, dividend yield and returns are worked out from the page's own tables at that price;
 - the latest results are the June 2026 quarter and the year to March 2026, as a company would have reported them by
   October 2026 (the September quarter's results are due later in the month);
-- TCS stands in for a company with three loss years (the charts' handling of losses), at its own scale.
+- ORIONPOLY, a made-up commodity maker, stands in for a company with three loss years (the charts' handling of losses); the
+  real, well-known companies all show profits, and sales that don't fall in a year the source's company happened to have.
 
 The pages are built from the real (trimmed) RELIANCE page in fixtures, read by the app's own parser: its shape, rows
 and columns, rescaled for each company. RELIANCE keeps its own numbers, a year on."""
@@ -19,7 +20,7 @@ from tests import fake_prices as P
 # symbol: (sales in the latest year, ₹ crore; net margin %; borrowings / net worth; dividend yield %; promoters %;
 #          face value ₹; return on equity %; bank)
 PROFILE = {
-    "TCS": (255000, None, 0.05, 1.9, 71.8, 1, 50.0, False),
+    "TCS": (255000, 19.0, 0.05, 1.9, 71.8, 1, 50.0, False),
     "INFY": (165000, 17.5, 0.08, 2.7, 14.6, 5, 29.0, False),
     "HDFCBANK": (336000, 21.0, 6.0, 1.2, 0.0, 1, 14.5, True),
     "ICICIBANK": (186000, 25.0, 5.0, 0.8, 0.0, 2, 17.0, True),
@@ -44,14 +45,16 @@ PROFILE = {
     "ULTRACEMCO": (76000, 8.0, 0.2, 0.6, 59.2, 10, 9.5, False),
     "AMBUJACEM": (35000, 12.0, 0.0, 0.3, 67.5, 2, 9.0, False),
     "TVSMOTOR": (45000, 5.7, 0.4, 0.3, 50.3, 1, 28.0, False),
+    "ORIONPOLY": (12000, None, 1.2, 1.0, 38.0, 10, 6.0, False),         # the loss-years case (LOSS_SHAPE)
 }
 ABOUT = {
+    "ORIONPOLY": "Orion Polymers makes plastics and resins for packaging and pipes; its profits swing with raw-material prices.",
     "TCS": "Tata Consultancy Services provides IT services, consulting and business solutions to companies around the world.",
     "INFY": "Infosys provides consulting, technology, outsourcing and digital services to companies around the world.",
 }
 WEBSITE = {"TCS": "https://www.tcs.com", "INFY": "https://www.infosys.com"}
-# a company with three loss years, then profits (SML-like), at TCS's scale (₹ crore): the years to March 2021 to 2026
-LOSS_SHAPE = [-8520, -53360, -40080, 8020, 43440, 48960]
+# a company with three loss years, then profits (a commodity maker's cycle), at its own scale (₹ crore): the years to March 2021 to 2026
+LOSS_SHAPE = [-640, -1250, -980, 310, 760, 540]
 
 
 def install(mp, screener) -> None:
@@ -142,6 +145,8 @@ def company(sym: str, rel: dict) -> dict | None:
     rel_sales = pl["rows"]["Sales"]
     k = sales_now / rel_sales[full[-1]]
     sales = [round(v * k) for v in rel_sales]
+    if margin is not None:                   # the source company's one year of falling sales is not every company's: a profitable one grows
+        sales[1] = round((sales[0] * sales[2]) ** 0.5)
     if margin is None:                       # the loss case
         profit = [None] * (len(full) - len(LOSS_SHAPE)) + LOSS_SHAPE
         profit = profit[-len(full):]

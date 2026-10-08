@@ -47,7 +47,7 @@ NAMES = {
     "NAZARA": "Nazara Technologies", "NESTLEIND": "Nestle India", "NETWORK18": "Network18 Media & Investments",
     "NHPC": "NHPC", "NLCINDIA": "NLC India", "NMDC": "NMDC", "NTPC": "NTPC", "NUVAMA": "Nuvama Wealth Management",
     "OBEROIRLTY": "Oberoi Realty", "OFSS": "Oracle Financial Services Software", "OIL": "Oil India",
-    "ONGC": "Oil & Natural Gas Corporation", "PATANJALI": "Patanjali Foods", "PERSISTENT": "Persistent Systems",
+    "ONGC": "Oil & Natural Gas Corporation", "ORIONPOLY": "Orion Polymers", "PATANJALI": "Patanjali Foods", "PERSISTENT": "Persistent Systems",
     "PETRONET": "Petronet LNG", "PFC": "Power Finance Corporation", "PHOENIXLTD": "The Phoenix Mills",
     "PIDILITIND": "Pidilite Industries", "PIIND": "PI Industries", "PNB": "Punjab National Bank",
     "POWERGRID": "Power Grid Corporation of India", "PRESTIGE": "Prestige Estates Projects", "PSB": "Punjab & Sind Bank",

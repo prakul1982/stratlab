@@ -1,6 +1,6 @@
 """The app on the fake world, for the browser tests in stratlab/frontend/e2e: every source faked, with one price table
 for every source (tests/fake_prices.py) and a fundamentals page for each Indian company in it (tests/fake_fundamentals.py),
-TCS among them with loss years (it stands in for one, as only listed symbols open) so the charts' handling of losses
+ORIONPOLY among them, a made-up commodity maker with loss years (it stands in for one, as only listed symbols open) so the charts' handling of losses
 can be checked.
 
     python -m tests.visual_server            # serves on 127.0.0.1:8765
@@ -20,7 +20,7 @@ from app import main  # noqa: E402
 from tests import world  # noqa: E402
 
 PORT = int(os.environ.get("E2E_API_PORT", "8765"))     # another port lets two test runs share a machine
-LOSS = "TCS"      # the company with loss years (tests/fake_fundamentals.py)
+LOSS = "ORIONPOLY"      # the made-up company with loss years (tests/fake_fundamentals.py)
 
 
 def build():
@@ -30,7 +30,7 @@ def build():
     for limit in ("PER_MINUTE_USER", "PER_MINUTE_ANON", "PER_MINUTE_ADDRESS"):   # the sweep opens hundreds of pages a minute as one user
         mp.setattr(guard, limit, 100_000)
     # every Indian company in the price table has its own fundamentals page (tests/fake_fundamentals.py), priced at the
-    # same last close as the broker's quotes: TCS stands in for a company with loss years
+    # same last close as the broker's quotes: ORIONPOLY (made up) stands in for a company with loss years
     from tests import fake_fundamentals
     fake_fundamentals.install(mp, main.research_hub.screener)
     from datetime import datetime, timezone
@@ -374,11 +374,13 @@ def screen_index():
         rows = []
         for i, sym in enumerate(syms):
             market = "IN" if region == "IN" else "US"
-            price = P.last(sym)
+            # the price and the 52-week range are the company page's own, read from the same sources the page reads (the broker's
+            # quote and its last 252 daily candles for India), so "vs 52-week high" is that page's price over that page's high
+            co = main.research_hub.company(region, sym)
+            price = co["quote"]["price"]
             end = P.session_clock(None, market)
-            closes = [P.price(sym, end - timedelta(days=d)) for d in range(0, 366)]
             f = {"region": region, "symbol": sym, "name": P.name_of(sym) or sym, "industry": [P.sector_of(sym) or "Diversified"],
-                 "price": price, "high52": max(closes), "low52": min(closes), "price_at": end.date().isoformat(),
+                 "price": price, "high52": co["range52"]["high"], "low52": co["range52"]["low"], "price_at": end.date().isoformat(),
                  "stage": 1 + i % 4, "red_flags": (i % 5 == 0) * 2 if region == "IN" else None, "filings": [],
                  "built_at": f"{today}T12:00:00+00:00"}
             page = main.research_hub.screener.company(sym) if region == "IN" else None

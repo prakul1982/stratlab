@@ -48,6 +48,7 @@ class FakeKiteConnect:
             stocks |= set(p["symbols"])
         for syms in sector_members.IN.values():
             stocks |= set(syms)
+        stocks |= {s for s in fake_prices.COMPANIES if fake_prices.market_of(s) == "IN"}      # every Indian company the demo world has a page for
         indices = {"NIFTY 50", "NIFTY BANK", "INDIA VIX", "NIFTY 500"}
         for g in rotation.SECTORS.values():
             for v in (g.values() if isinstance(g, dict) else [g]):
