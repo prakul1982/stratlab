@@ -192,6 +192,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     facts = {"today": ist_date().isoformat(), "indices": indices,
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
+    if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
+        raise AIError("The AI didn't send a read of the market this time.")
 
     def rows(x, keys, n=4):
         return [{k: str(i.get(k) or "")[:400] for k in keys} for i in (x or []) if isinstance(i, dict)][:n]
@@ -209,7 +211,10 @@ Return ONLY this JSON:
  "differences": ["3 short, specific contrasts in numbers"]}}
 {RULES}"""
     r = _ask(system, {"A": company_facts(a), "B": company_facts(b)}, ai, 1500)
+    verdict = str(r.get("verdict") or "").strip() if isinstance(r, dict) else ""
+    if not verdict:                 # never cache (or show) a comparison with nothing in it
+        raise AIError("The AI didn't send a comparison this time.")
 
     none = {"composite": None, "valuation": None}             # no scores or cheap/rich labels: that's advice
-    return {"verdict": str(r.get("verdict") or "")[:700], "winner": "SPLIT",
+    return {"verdict": verdict[:700], "winner": "SPLIT",
             "differences": _clip(r.get("differences"), 4), "a": dict(none), "b": dict(none)}

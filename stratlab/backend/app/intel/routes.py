@@ -97,11 +97,26 @@ def prices_as_of(c: dict) -> str:
     return min(t if t.tzinfo else t.replace(tzinfo=IST), now).isoformat(timespec="minutes")
 
 
+def market_open(region: str, now: datetime | None = None) -> bool:
+    """Whether the company's market is trading now (its hours, on one of its trading days): out of hours the price is
+    the last close and the page says so, instead of calling a standing price "today's"."""
+    from zoneinfo import ZoneInfo
+    from ..data.calendar import is_trading_day
+    from ..data.markets import BY_ID
+    m = BY_ID.get(region)
+    if not m or not m.get("hours"):
+        return False
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(m["tz"]))
+    return is_trading_day(region, local.date()) and m["hours"]["open"] <= local.strftime("%H:%M") < m["hours"]["close"]
+
+
 @router.get("/company/{region}/{symbol}")
 def company(region: str, symbol: str, profile=Depends(current_profile)):
-    """One company's page. `as_of` is when its prices were read, for the page's "as of" line."""
-    c = source_call(lambda: hub.company(region_of(region), symbol_of(symbol)))
-    return ok({**c, "as_of": prices_as_of(c)})
+    """One company's page. `as_of` is when its prices were read, for the page's "as of" line; `market_open` whether
+    its market is trading now (else the price is the last close)."""
+    r = region_of(region)
+    c = source_call(lambda: hub.company(r, symbol_of(symbol)))
+    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r)})
 
 
 @router.get("/chart/{region}/{symbol}")
@@ -180,7 +195,15 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         except SourceError:
             news = []
         return A.pulse(r, f, indices, news, _ai)
-    return ok(ai_call(profile, "pulse", (r, f.lower(), hour), 3600, refresh, build))
+    try:
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour), 3600, refresh, build))
+    except HTTPException as e:
+        # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
+        # every opening of the page; the levels and headlines don't depend on it
+        d = e.detail if isinstance(e.detail, dict) else {}
+        if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
+            return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
+        raise
 
 
 @router.get("/sector")

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
-import { CRORE, currencySymbol, inrCompact, minus } from "./format";
+import { focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
@@ -31,6 +31,7 @@ export interface Company {
   sources: SourceStatus[]; links: { label: string; url: string }[];
   testable: boolean; instrument_id: string | null;
   as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
+  market_open?: boolean;                                   // false: the price is the last close (the market is shut)
 }
 
 export interface Idea { title: string; text: string; why: string }
@@ -76,10 +77,15 @@ export const researchApi = {
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),
-  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[] }>(`/research/pulse?region=${r}&focus=${encodeURIComponent(focus)}`),
-  pulseAI: (r: Region, focus = "", refresh = false) => api<PulseAI>(`/research/pulse/ai?region=${r}&focus=${encodeURIComponent(focus)}${refresh ? "&refresh=true" : ""}`),
+  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[] }>(`/research/pulse?region=${r}${focusParam(focus)}`),
+  /** The market read, or an Error saying why there is none (like companyAI: "unavailable" is a 200 on the wire). */
+  pulseAI: async (r: Region, focus = "", refresh = false): Promise<PulseAI> => {
+    const got = await api<PulseAI | { unavailable: true; message: string }>(`/research/pulse/ai?region=${r}${focusParam(focus)}${refresh ? "&refresh=true" : ""}`);
+    if ("unavailable" in got) throw new Error(got.message);
+    return got;
+  },
   sector: (r: Region, q: string, refresh = false) => api<SectorAI>(`/research/sector?region=${r}&q=${encodeURIComponent(q)}${refresh ? "&refresh=true" : ""}`),
-  compare: (r: Region, a: string, b: string) => api<{ a: Company; b: Company; ai: CompareAI }>(`/research/compare?region=${r}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  compare: (r: Region, a: string, b: string, refresh = false) => api<{ a: Company; b: Company; ai: CompareAI }>(`/research/compare?region=${r}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}${refresh ? "&refresh=true" : ""}`),
 };
 
 /* ---------- region preference ---------- */
@@ -128,56 +134,10 @@ export function useWatchlist() {
 }
 
 /* ---------- formatting ---------- */
-/* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. */
+/* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
+ * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-
-/** The currency a US filing's amounts are in: "$", or a foreign filer's own ("CAD million" → "CAD"). */
-export function millionsOf(unit: string | null | undefined): string {
-  const m = /^([A-Z]{3}) million$/.exec(unit ?? "");
-  return m ? m[1] : "$";
-}
-
-/** The unit a group of amounts (one chart, one table) reads best in. US filings are in $ million and Indian figures in
- * ₹ crore; a group switches to $ billion or ₹ lakh crore only when it's large AND every number in it still shows to
- * within 1% (so a small loss is never printed as 0.00). Only the display unit changes, never the amount. `unit`: a
- * US-listed foreign filer's own ("CAD million"), labelled "CAD million" / "CAD billion". */
-export type Scale = { k: number; unit: string; fmt: (x: number | null | undefined) => string };
-export function scaleFor(values: (number | null | undefined)[], us: boolean, unit?: string | null): Scale {
-  const nz = values.filter((x): x is number => x != null && Number.isFinite(x) && x !== 0).map(Math.abs);
-  const max = nz.length ? Math.max(...nz) : 0, min = nz.length ? Math.min(...nz) : 0;
-  const make = (k: number, unit: string, dp: number, locale: string): Scale =>
-    ({ k, unit, fmt: (x) => (x == null ? "–" : minus((x / k).toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp }))) });
-  if (us) {
-    const cur = millionsOf(unit);
-    if (max >= 10000 && min >= 5000) return make(1000, `${cur} billion`, 1, "en-US");
-    if (max >= 10000 && min >= 500) return make(1000, `${cur} billion`, 2, "en-US");
-    return { k: 1, unit: `${cur} million`, fmt: (x) => (x == null ? "–" : minus(x.toLocaleString("en-US", { maximumFractionDigits: 2 }))) };
-  }
-  if (max >= 100000 && min >= 50000) return make(100000, "₹ lakh cr", 2, "en-IN");
-  return { k: 1, unit: "₹ cr", fmt: (x) => (x == null ? "–" : minus(x.toLocaleString("en-IN", { maximumFractionDigits: 2 }))) };
-}
-
-/** A trend value in its unit: "₹ Cr" values are already crores, "USD" values are dollars. */
-export function trendValue(v: number, unit: string): string {
-  // Indian figures are in crore: show them whole (₹2,812 Cr), with a decimal only for small ones (₹4.6 Cr)
-  if (/billion/i.test(unit)) return minus(v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: Math.abs(v) < 10 ? 2 : 1 }));
-  if (/lakh/i.test(unit)) return minus(v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  if (/cr/i.test(unit)) {
-    const a = Math.abs(v);
-    return a < 10 ? minus(v.toFixed(1)) : minus(Math.round(v).toLocaleString("en-IN"));
-  }
-  const a = Math.abs(v);      // other markets report in whole currency units
-  return minus(a >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.round(v).toLocaleString("en-US"));
-}
-
-export function metricText(m: MetricItem, currency: string): string {
-  const v = m.value;
-  if (m.unit === "%") return minus(`${v.toFixed(1)}%`);
-  if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
-  if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;
-  if (m.unit === "cr") return inrCompact(v * CRORE);        // the figure is in crore: ₹925 cr, ₹1.51 lakh cr
-  return minus(v.toFixed(Math.abs(v) >= 100 ? 0 : 2));
-}
+export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, scaleFor, staleQuarter, trendValue, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

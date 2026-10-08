@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, marketTz, num, pct, price, safeHref } from "../lib/format";
+import { ago, asOf, marketTz, pct, price, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, researchApi, scaleFor, useRegion, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -203,16 +203,16 @@ export function CompanyPage() {
   );
   const trend = c.trend ? (() => {   // Indian figures are in crore; large, exact-enough charts read in lakh crore (see scaleFor)
     const t = c.trend, inr = /cr/i.test(t.unit);
-    const pick = (ps: typeof t.revenue) => {
-      const s = inr ? scaleFor(ps.map((p) => p.v), false) : null;
-      return s && s.k > 1 ? { points: ps.map((p) => ({ ...p, v: p.v / s.k })), unit: s.unit } : { points: ps, unit: t.unit };
-    };
+    // one unit for the two charts side by side (sales and profit), so their labels never read in different units
+    const s = inr ? scaleFor([...t.revenue, ...t.profit].map((p) => p.v), false) : null;
+    const pick = (ps: typeof t.revenue) =>
+      (s && s.k > 1 ? { points: ps.map((p) => ({ ...p, v: p.v / s.k })), unit: s.unit } : { points: ps, unit: t.unit });
     return { t, rev: pick(t.revenue), prof: pick(t.profit) };
   })() : null;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
-        asOf={c.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
+        asOf={c.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
         <div className="inv-head">
           <div className="k-stack">
@@ -225,7 +225,7 @@ export function CompanyPage() {
             </div>
           </div>
           <div className="k-stack inv-head-price">
-            <Change q={c.quote} currency={ccy} />
+            <Change q={c.quote} currency={ccy} closed={c.market_open === false} />
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -280,10 +280,10 @@ export function CompanyPage() {
 
       {trend && (
         <ChartFrame title="Sales and profit, by year"
-          table={{ label: "Sales and profit by year", rows: trend.rev.points.map((p, i) => ({ y: p.y, sales: p.v, profit: trend.prof.points[i]?.v ?? null })), rowKey: (x) => x.y,
+          table={{ label: "Sales and profit by year", rows: trend.rev.points.map((p) => ({ y: p.y, sales: p.v, profit: trend.prof.points.find((q) => q.y === p.y)?.v ?? null })), rowKey: (x) => x.y,
             columns: [{ key: "y", header: "Year", rowHeader: true, cell: (x) => x.y },
-              { key: "s", header: `${trend.t.revenue_label} (${trend.rev.unit})`, numeric: true, cell: (x) => num(x.sales, 0) },
-              { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : num(x.profit, 0)) }] }}>
+              { key: "s", header: `${trend.t.revenue_label} (${trend.rev.unit})`, numeric: true, cell: (x) => trendValue(x.sales, trend.rev.unit) },
+              { key: "p", header: `${trend.t.profit_label} (${trend.prof.unit})`, numeric: true, cell: (x) => (x.profit == null ? "–" : trendValue(x.profit, trend.prof.unit)) }] }}>
           <div className="k-cols">
             <TrendBars points={trend.rev.points} label={trend.t.revenue_label} unit={trend.rev.unit} />
             <TrendBars points={trend.prof.points} label={trend.t.profit_label} unit={trend.prof.unit} tone="blue" />
@@ -519,6 +519,12 @@ export function PulsePage() {
   );
 }
 
+/** " · 16 months old" when a newer quarter's results should be out by now (filed within 60 days of a quarter's end). */
+function resultsAge(quarter: string): string {
+  const n = staleQuarter(quarter, 60);
+  return n != null ? ` · ${monthsOld(n)}` : "";
+}
+
 /* ================= Compare ================= */
 export function ComparePage() {
   const [region, setRegion] = useRegion();
@@ -526,6 +532,7 @@ export function ComparePage() {
   const a = params.get("a") ?? "", b = params.get("b") ?? "";
   const [res, setRes] = useState<{ a: Company; b: Company; ai: CompareAI } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const setSide = (k: "a" | "b", v: string) => { const p = new URLSearchParams(params); p.set(k, v); p.set("region", region); setParams(p); };
   useEffect(() => {
     if (!a || !b) { setRes(null); return; }
@@ -534,11 +541,16 @@ export function ComparePage() {
     researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
   }, [a, b, region]);
+  // only the AI's part is asked again; the numbers already on the page stay
+  const askAgain = () => {
+    setAsking(true);
+    researchApi.compare(region, a, b, true).then((x) => setRes((r) => (r ? { ...r, ai: x.ai } : x))).catch(() => {}).finally(() => setAsking(false));
+  };
   const rows = (c: Company) => Object.fromEntries(c.metrics.flatMap((g) => g.items.map((i) => [i.label, i])));
   const labels = res ? Array.from(new Set([...res.a.metrics, ...res.b.metrics].flatMap((g) => g.items.map((i) => i.label)))) : [];
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
-  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) =>
-    (m ? (m.unit.startsWith("%") ? `${num(m.value, 1)}%` : m.unit === "money" ? price(m.value, c.currency) : num(m.value, 2)) : "–");
+  // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
+  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m ? metricText(m, c.currency) : "–");
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/compare")} title="Two companies, side by side" lede="Pick two companies to line up their numbers, with an AI summary of where they differ." />
@@ -554,14 +566,21 @@ export function ComparePage() {
       {a && b && !res && !error && <Card><Skeleton label={`Comparing ${a} and ${b}`} lines={4} /></Card>}
       {res && (
         <>
-          {res.ai && !res.ai.error && res.ai.verdict && (
-            <Card>
-              <CardHead title="AI comparison" />
-              <p className="inv-summary">{res.ai.verdict}</p>
-              {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
-            </Card>
-          )}
-          {res.ai?.error && <p className="k-small k-muted">AI comparison unavailable: {res.ai.error}</p>}
+          <Card>
+            <CardHead title="AI comparison" />
+            {res.ai && !res.ai.error && res.ai.verdict ? (
+              <>
+                <p className="inv-summary">{res.ai.verdict}</p>
+                {res.ai.differences.length > 0 && <ul className="k-list">{res.ai.differences.map((d) => <li key={d}>{d}</li>)}</ul>}
+              </>
+            ) : (
+              // no comparison is one calm line and one button, like the company page's AI read
+              <div className="k-row ai-read-off" role="status" data-testid="compare-ai-off">
+                <span className="k-small k-muted">No AI comparison right now{aiReason(res.ai?.error ?? null)} The numbers below don't depend on it.</span>
+                <button type="button" className="btn quiet sm" disabled={asking} onClick={askAgain}>{asking ? "Asking…" : "Ask again"}</button>
+              </div>
+            )}
+          </Card>
           <div className="k-cols">
             {([["a", res.a], ["b", res.b]] as const).map(([k, c]) => (
               <Card key={k}>
@@ -569,8 +588,8 @@ export function ComparePage() {
                   <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open →</Link>
                   <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
                 <StatRow>
-                  <Stat label="Price" value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct} tone="neutral">{pct(c.quote.change_pct, 2)}</Delta> : undefined} note="today" />
+                  <Stat label={c.market_open === false ? "Last close" : "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
+                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct} tone="neutral">{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
               </Card>
