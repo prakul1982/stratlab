@@ -867,3 +867,184 @@ class PageFacts:
         if growth and subj == "eps":
             return self.metric(r"eps") or None
         return None
+
+
+# ---------- every AI read, as the page writes it (R7O-001, R7O-002) ----------
+# ICICIBANK, 9 Oct 2026: "decreased by 0.6261510128913406% on the day", "a P/B ratio of 2.55977229601518", "a net profit
+# of ₹57936.0 crore". Every number was in the facts, so the number check passed it. The facts now go to the model as the
+# page shows them, and whatever the model writes is written the page's way before it is shown or served again.
+_LONG = re.compile(r"(?<![\w.])([-−+]?\d[\d,]*)\.(\d{3,})(?![\d.])")
+_CUR_NUM = re.compile(r"(₹|Rs\.?\s?|INR\s|US\$|\$)\s?(\d[\d,]*(?:\.\d+)?)(\s*(?:lakh\s+crore|lakh\s+cr\b|crore|cr\b|lakh|billion|bn\b|million|mn\b|trillion|tn\b))?", re.I)
+_UNIT_NUM = re.compile(r"(?<![\w.₹$,])(\d{4,}(?:\.\d+)?)(\s*(?:lakh\s+crore|crore|cr\b))", re.I)
+
+
+def indian(n: int) -> str:
+    """1,95,218: India's grouping."""
+    s = str(abs(int(n)))
+    head, tail = s[:-3], s[-3:]
+    if head:
+        s = ",".join(re.findall(r"\d{1,2}(?=(?:\d{2})*$)", head)) + "," + tail
+    return ("-" if n < 0 else "") + s
+
+
+def _grouped(v: float, dp: int, inr: bool) -> str:
+    text = f"{v:.{dp}f}"
+    whole, _, frac = text.partition(".")
+    w = int(whole)
+    return (indian(w) if inr else f"{w:,}") + (("." + frac) if frac else "")
+
+
+def tidy_numbers(text, region: str = "IN"):
+    """A read's numbers as the page writes them: never more than two decimals, money grouped the market's way (Indian
+    grouping for rupees), a sum in crore without a stray ".0", a price with its paise."""
+    if not isinstance(text, str) or not text:
+        return text
+
+    def long_dec(m):
+        raw = (m.group(1) + "." + m.group(2)).replace(",", "").replace("−", "-")
+        try:
+            v = float(raw)
+        except ValueError:
+            return m.group(0)
+        out = f"{abs(v):.2f}"
+        sign = m.group(1)[:1] if m.group(1)[:1] in "-−+" else ""
+        return sign + out
+    t = _LONG.sub(long_dec, text)
+
+    def money(m):
+        cur, raw, unit = m.group(1), m.group(2), m.group(3) or ""
+        try:
+            v = float(raw.replace(",", ""))
+        except ValueError:
+            return m.group(0)
+        inr = cur.strip().upper().startswith(("₹", "RS", "INR"))
+        if unit.strip():
+            given = min(2, len(raw.split(".")[1]) if "." in raw else 0)
+            # crore is shown whole on the page (₹57,936 crore); billions keep the decimals given ($416.16 billion)
+            dp = 0 if (v >= 100 and re.match(r"\s*(lakh|crore|cr)\b", unit, re.I) and "lakh crore" not in unit.lower()) \
+                or v == int(v) else given
+        else:
+            dp = 0 if v >= 100000 or "." not in raw else 2
+        return f"{cur}{_grouped(v, dp, inr)}{unit}"
+    t = _CUR_NUM.sub(money, t)
+
+    def bare(m):                                 # "57936.0 crore" without a sign
+        try:
+            v = float(m.group(1))
+        except ValueError:
+            return m.group(0)
+        return f"{_grouped(v, 0, True)}{m.group(2)}"
+    return _UNIT_NUM.sub(bare, t)
+
+
+# filler that states nothing ("debt is not explicitly stated, but its financial health can be affected by various market
+# and economic factors") and suggestions that a style of trading works ("mean reversion strategies can be effective in
+# such cases"), which no read may carry
+FILLER = re.compile(r"\bnot (explicitly |clearly |directly )?(stated|disclosed|available|provided|mentioned|given|known|reported)\b"
+                    r"|\bcan be (affected|impacted|influenced) by\b|\bvarious (market|economic|macro\w*|external) (and \w+ )?factors\b"
+                    r"|\bhighly (competitive|regulated)\b", re.I)
+EFFECTIVE = re.compile(r"\bcan (be )?(effective|useful|profitable|successful|rewarding|helpful)\b|\bcan work\b"
+                       r"|\b(tend|tends) to (work|be effective|perform|pay off)\b|\bworks? well\b|\b(is|are) (well[- ])?suited\b"
+                       r"|\bsuit(s|ed)? (such|this|these|the stock)\b|\beffective (in|when|for|at)\b"
+                       r"|\b(could|may|might|can) (capture|benefit|profit|help)\b|\bopportunit", re.I)
+# a comparison with a figure the page never shows: its own history or usual range, its peers, the sector or the market
+# (R7O-002: "near the lower end of its historical 15-20 range", "high relative to peers", "its multi-year average of
+# roughly 30"). Comparisons with the page's own moving averages and ranges stay.
+UNSOURCED = re.compile(r"\bhistoric(al(ly)?)?\b|\b(its|their) (usual|typical|normal|long[- ]term|own|past) (range|average|level|multiple|valuation)s?\b"
+                       r"|\bmulti[- ]year\b|\b(long[- ]term|five[- ]year|5[- ]year|ten[- ]year|10[- ]year|three[- ]year|3[- ]year) (average|median|mean|range|norm)\b"
+                       r"|\bpeers?\b|\bpeer group\b|\b(sector|industry|market|category) (average|median|multiple|norm)s?\b"
+                       r"|\b(compared|relative) (to|with) (its |the )?(peers|sector|industry|market|competitors|rivals)\b|\belevated\b"
+                       r"|\bwell (above|below)\b|\b(lower|upper|higher|low|high) end\b|\b(above|below) (its|the) (average|norm|usual)\b"
+                       r"|\b(premium|discount) to\b|\bthan (its |the )?(peers|sector|industry|rivals|competitors)\b|\b(high|low) relative\b", re.I)
+# a lender's book has no EBITDA, operating margin or debt-to-equity that means anything (R7O-001: ICICIBANK "EBITDA margin -20.0%")
+LENDER_WORDS = re.compile(r"\bebitda\b|\boperating (profit )?margin\b|\bdebt[- ]to[- ]equity\b|\bd/e\b|\bcapex\b", re.I)
+
+
+def plain_ok(s: str, lender: bool = False) -> bool:
+    """A sentence any read may keep: no filler, no suggestion that a style of trading works, no comparison with a
+    figure the page doesn't show, and for a bank or lender no EBITDA or operating margin."""
+    return not (FILLER.search(s) or EFFECTIVE.search(s) or UNSOURCED.search(s) or (lender and LENDER_WORDS.search(s)))
+
+
+def plain_sentences(text, lender: bool = False, region: str = "IN") -> str:
+    """The sentences of a stored or fresh read that pass plain_ok, with their numbers written the page's way."""
+    if not isinstance(text, str):
+        return ""
+    keep = [s for s in _SENT.split(" ".join(text.split())) if s and plain_ok(s, lender)]
+    return tidy_numbers(" ".join(keep), region)
+
+
+# a trading idea's name says what kind of rule it is: a "Mean Reversion Strategy" that enters on a moving-average
+# crossover is dropped (R7O-001)
+_STYLE_TITLE = [("reversion", re.compile(r"revers|oversold|\bdip\b|pullback|pull-back|bounce|\bfade", re.I)),
+                ("breakout", re.compile(r"break[- ]?out|breaks? out|new high|52[- ]week high", re.I)),
+                ("trend", re.compile(r"trend|momentum|crossover|cross[- ]over|golden cross|moving average cross", re.I))]
+_STYLE_RULE = [("breakout", re.compile(r"\b(52[- ]week|\d+[- ](day|week|month)|n[- ]day|prior|previous|recent) high\b|\bbreaks? (out )?above\b"
+                                      r"|\bchannel\b|\bdonchian\b|\brange high\b|\bresistance\b|\bupper (bollinger )?band\b", re.I)),
+               ("reversion", re.compile(r"\brsi\b[^,.;]{0,40}\b(below|under|drops|falls|less than|crosses below)\b|\boversold\b"
+                                        r"|\blower (bollinger )?band\b|\b(falls|drops|is|trades|closes) [\d.]+% below\b|\bcrosses below\b", re.I)),
+               ("trend", re.compile(r"\bcrosses above\b|\bgolden cross\b|\bcloses? above (its|the) \d+[- ]day\b|\bsupertrend\b|\bmacd\b", re.I))]
+
+
+def idea_style(text: str) -> str | None:
+    """What kind of rule an idea enters on (its part before the exit): breakout, reversion or trend; None when unclear."""
+    entry = re.split(r"\b(exit|sell|close|cover)\b", str(text or ""), maxsplit=1, flags=re.I)[0]
+    for kind, rx in _STYLE_RULE:
+        if rx.search(entry):
+            return kind
+    return None
+
+
+def idea_matches_name(title, text) -> bool:
+    named = next((k for k, rx in _STYLE_TITLE if rx.search(str(title or ""))), None)
+    got = idea_style(text)
+    return named is None or got is None or named == got
+
+
+def polish_company(read: dict, region: str = "IN", lender: bool = False) -> dict:
+    """The checks every company read gets, fresh or stored, at no cost: numbers the page's way, no filler, no
+    "can be effective", no comparison the page can't show, no EBITDA for a lender, and only trading ideas whose rule
+    is the kind their name says (R7O-001, R7O-002). Run again whenever a stored read is served."""
+    out = dict(read)
+    for k in ("summary", "valuation_note", "position"):
+        out[k] = plain_sentences(read.get(k) or "", lender, region)
+    for k in ("bull", "bear", "watch"):
+        out[k] = [x for x in (plain_sentences(str(i), lender, region) for i in read.get(k) or []) if x]
+    ideas = []
+    for i in read.get("ideas") or []:
+        if not isinstance(i, dict) or not idea_matches_name(i.get("title"), i.get("text")):
+            continue
+        ideas.append({**i, "why": plain_sentences(str(i.get("why") or ""), lender, region)})
+    out["ideas"] = ideas
+    return out
+
+
+def page_value(v, unit: str = "x", dp: int | None = None):
+    """A Key numbers figure as the page writes it (lib/researchFormat.ts metricText): "0.9%", "+17.3%", "2.56", "₹527",
+    so the model reads, and copies, the page's own figure (R7O-001)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return v
+    if unit in ("%", "%±"):
+        d = dp if dp is not None else (2 if v != 0 and abs(v) < 0.05 else 1)
+        s = f"{abs(v):.{d}f}%"
+        return (("+" if v > 0 else "-" if v < 0 else "") if unit == "%±" else ("-" if v < 0 else "")) + s
+    if unit == "money":
+        return round(float(v), 2)
+    if unit == "cr":
+        return f"{round(v):,} crore"
+    return round(float(v), 0 if abs(v) >= 100 else 2)
+
+
+def rounded(x):
+    """Every float in the facts to two decimals (a whole number without ".0"): the model is never handed
+    0.6261510128913406 to copy."""
+    if isinstance(x, bool) or x is None:
+        return x
+    if isinstance(x, float):
+        r = round(x, 2)
+        return int(r) if r == int(r) and abs(r) < 1e15 else r
+    if isinstance(x, dict):
+        return {k: rounded(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [rounded(v) for v in x]
+    return x

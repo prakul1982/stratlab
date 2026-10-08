@@ -74,6 +74,34 @@ def rates() -> dict:
     return got
 
 
+# units of a currency per US dollar, fixed by its central bank: used only when no market rate can be read
+PEGS = {"SAR": 3.75, "QAR": 3.64, "AED": 3.6725, "HKD": 7.80}
+
+
+def cross_rate(code: str, quote) -> float:
+    """Rupees per unit of `code`. `quote(pair)` gives a market price for a pair such as "EURINR=X" (rupees per euro),
+    "USDINR=X" or "SAR=X" (riyals per dollar), or None. The rupee pair first; else rupees per dollar over the
+    currency's units per dollar; else, for a pegged currency, rupees per dollar over the peg (R7O-008)."""
+    def read(pair):
+        try:
+            v = quote(pair)
+            return float(v) if v and float(v) > 0 else None
+        except Exception:
+            return None
+    direct = read(f"{code}INR=X")
+    if direct:
+        return direct
+    usd_inr = read("USDINR=X") or read("INR=X")
+    if not usd_inr:
+        raise ValueError("no rupee rate for the dollar")
+    if code == "USD":
+        return usd_inr
+    per_usd = read(f"{code}=X") or read(f"USD{code}=X") or PEGS.get(code)
+    if not per_usd:
+        raise ValueError("no rate")
+    return usd_inr / per_usd
+
+
 def refresh_rates(fetch) -> dict:
     """Read every currency's rate (rupees per unit) with `fetch(code)`; keep the last good one for any that fails."""
     from datetime import datetime, timezone
@@ -100,7 +128,10 @@ def refresh_rates(fetch) -> dict:
 def defaults() -> dict:
     """Default prices: the rupee price at today's rate, tidied; the built-in amounts for FIXED currencies, and for the
     rest until a rate has been read."""
-    out, fx = {}, rates()
+    out, fx = {}, dict(rates())
+    for code, per_usd in PEGS.items():          # a pegged currency the daily read missed: the dollar's rate over the peg
+        if not fx.get(code) and fx.get("USD"):
+            fx[code] = fx["USD"] / per_usd
     inr = {f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS}
     for code, (_, _, basic, pro) in CURRENCIES.items():
         if code == "INR":
@@ -150,6 +181,9 @@ def table() -> dict:
             row.update({f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS})
         symbol, name = CURRENCIES[code][:2]
         own = code == "INR" or (row.get("plan_basic") and row.get("plan_pro"))
+        # `converted`: the amount is the rupee charge (GST included) at today's rate, rounded, so Plans can say so; a
+        # fixed price (dollars, euros, pounds) or one the admin typed in isn't (R7O-008)
+        row["converted"] = bool(code != "INR" and code not in FIXED and row["auto"] and row.get("rate"))
         out[code] = {**row, "symbol": symbol, "name": name, "charged_in": code if own else "INR",
                      "yearly_charged_in": code if code == "INR" or (row.get("plan_basic_year") and row.get("plan_pro_year")) else "INR"}
     return out

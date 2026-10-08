@@ -42,7 +42,7 @@ SETTLE = 45 * 60               # a market's closing prices are taken as final th
 # India's official closing prices (the last half hour's average, not the last trade) reach the daily candles some time
 # after the bell; until then the day's candle can carry a last-traded price, so the page keeps the day before (R6V-002)
 SETTLE_BY = {"IN": 3 * 3600}
-FACTS_VERSION = 2              # pages built before market values were checked are rebuilt when next opened
+FACTS_VERSION = 3              # pages built before market values (and depositary shares, R7O-004) were checked are rebuilt when next opened
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
 PEERS = 12
 # browsers keep a page five minutes and the site's cache fifteen: a page follows its market's close within minutes, never
@@ -244,7 +244,8 @@ def price_facts(bars: list[dict], region: str | None = None, now: datetime | Non
     highs = [x for x in (_num(b.get("h")) for b in year) if x is not None]
     lows = [x for x in (_num(b.get("l")) for b in year) if x is not None]
     return {"price": _num(bars[-1].get("c")), "price_at": str(bars[-1].get("t") or "")[:10], "price_basis": "close",
-            "high52": max(highs) if highs else None, "low52": min(lows) if lows else None}
+            "high52": max(highs) if highs else None, "low52": min(lows) if lows else None,
+            "price_official": bool(bars[-1].get("official"))}
 
 
 def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
@@ -255,7 +256,7 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     old_p, new_p = _num(f.get("price")), _num(new.get("price"))
     if not new_p or new_p <= 0 or str(new.get("price_at") or "") <= str(f.get("price_at") or ""):
         return f
-    out = {**f, **{k: new[k] for k in ("price", "price_at", "price_basis", "high52", "low52") if new.get(k) is not None}}
+    out = {**f, **{k: new[k] for k in ("price", "price_at", "price_basis", "high52", "low52", "price_official") if new.get(k) is not None}}
     if old_p and old_p > 0:
         k = new_p / old_p
         for key in ("market_cap", "pe"):
@@ -269,6 +270,29 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
             out.update({k: t.get(k) for k in ("stage", "stage_days", "st_up", "st_days")})
         except Exception:                 # too few candles for the trend: the old one stays
             pass
+    return out
+
+
+def with_official_close(f: dict, close) -> dict:
+    """A page's facts with the exchange's official close of the same day in place of the candle's last trade
+    (R7O-004): the market value and P/E move with it, the dividend yield against it, the year's range takes it in."""
+    old, new = _num(f.get("price")), _num(close)
+    if not new or new <= 0:
+        return f
+    out = {**f, "price_official": True}
+    if not old or old <= 0 or old == new:
+        return out
+    k = new / old
+    out["price"] = new
+    for key in ("market_cap", "pe"):
+        if _num(f.get(key)) is not None:
+            out[key] = round(_num(f[key]) * k, 2)
+    if _num(f.get("div_yield")) is not None:
+        out["div_yield"] = round(_num(f["div_yield"]) / k, 2)
+    if _num(f.get("high52")) is not None and new > _num(f["high52"]):
+        out["high52"] = new
+    if _num(f.get("low52")) is not None and new < _num(f["low52"]):
+        out["low52"] = new
     return out
 
 
@@ -475,6 +499,19 @@ class Pages:
             self.recent.append(now)
             return True
 
+    def peek(self, region: str, symbol: str) -> dict | None:
+        """A company's stored facts as they are, however old, without building anything: for the app's company page to
+        use the same reported earnings as the public page (R7O-004). None when nothing is stored."""
+        key = f"stocks:page:{region}:{symbol}"
+        hit = self.mem.get(key)
+        if hit is not None:
+            return hit or None
+        try:
+            stored = _setting(key)
+        except Exception:
+            return None
+        return (stored or {}).get("facts") or None
+
     def get(self, region: str, symbol: str, co: dict) -> dict | None:
         """The company's facts; None when the sources have nothing on it. Raises Busy when a fresh build is due,
         none is allowed right now and nothing is stored."""
@@ -514,7 +551,7 @@ class Pages:
             return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,
-                       now: datetime | None = None) -> dict:
+                       now: datetime | None = None, official=None, official_ready=None) -> dict:
         """After a market's close: re-read the price of stored pages whose last close is older than the market's, the
         largest companies first, at most `limit` a run with `gap` seconds between reads (so people's pages and
         backtests keep the price sources' room). `bars_of(region, symbol)` gives a company's daily candles, read after
@@ -533,12 +570,24 @@ class Pages:
         except Exception as ex:                       # storage down: next run
             print("stock pages: price refresh could not read", region, str(ex)[:120])
             return {"refreshed": 0, "left": 0, "failed": 0}
+        swapped = 0
         for key, raw in rows:
             stored = db.json_value(raw, {}) if not isinstance(raw, dict) else raw
             f = stored.get("facts") or {}
+            symbol = key[len(prefix):]
+            # a page read at today's close before the exchange's official close was known: that close now, with no read
+            # of prices (R7O-004)
+            if f and official and str(f.get("price_at") or "") == day.isoformat() and not f.get("price_official"):
+                c = official(symbol, day.isoformat())
+                if c is not None:
+                    _put(key, {**stored, "facts": with_official_close(f, c)})
+                    self.mem.pop(key)
+                    self.mem.pop(f"html:{region}:{symbol}")
+                    swapped += 1
+                    continue
             if not f or str(f.get("price_at") or "") >= day.isoformat() or (stored.get("price_ts") or 0) >= settled:
                 continue
-            due.append((key[len(prefix):], stored))
+            due.append((symbol, stored))
         due.sort(key=lambda x: -(shown_cap(x[1]["facts"]) or 0))
         done = failed = 0
         for i, (symbol, stored) in enumerate(due[:limit]):
@@ -555,9 +604,9 @@ class Pages:
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
             done += 1
-        if len(due) <= limit:
+        if len(due) <= limit and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page that failed is tried again at its next build
-        return {"refreshed": done, "left": max(0, len(due) - limit), "failed": failed}
+        return {"refreshed": done, "left": max(0, len(due) - limit), "failed": failed, **({"official": swapped} if official else {})}
 
     def html(self, region: str, symbol: str, co: dict) -> str:
         """The rendered page, kept in memory for ten minutes (the sector links read the screens' index)."""
@@ -715,10 +764,11 @@ def cap_text(f: dict) -> str:
             return f"${v / 1e6:,.2f}T"
         if v >= 1e3:
             return f"${v / 1e3:,.1f}B"
-        return f"${v:,.0f}M" if v >= 0.5 else "<$1M"
+        # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
+        return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
     if v >= 1e5:                                          # stored in ₹ crore
         return f"₹{v / 1e5:,.2f} lakh crore"
-    return f"₹{_inr_group(v)} crore" if v >= 0.5 else "<₹1 crore"
+    return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
 
 
 def _date(iso: str | None) -> str:
@@ -1133,6 +1183,26 @@ def not_found(region: str | None, symbol: str) -> str:
     body = (f"<h1>No company page for {e(s)}</h1>"
             '<p class="muted">Check the symbol, or find the company by its name.</p>' + _find_form(region))
     return _page(_head(title, "No listed company has that symbol.", site + "/stocks", robots="noindex,follow"), None, body)
+
+
+BUSY_REFRESH = 30          # seconds before a "being prepared" page asks again by itself
+
+
+def busy_page(region: str | None, symbol: str, name: str | None = None) -> str:
+    """A company page that is still being built: a page a visitor from a search engine can read, which loads itself
+    again shortly (R7O-009: a cold page answered with raw JSON). Sent with 503 and Retry-After, and kept out of
+    search results."""
+    site = settings.PUBLIC_SITE_URL
+    s = (symbol or "")[:40].upper()
+    who = f"{e(name)} ({e(s)})" if name else e(s)
+    path = f"/stocks/{(region or 'IN').lower()}/{quote(s, safe='')}"
+    head = _head(f"{s}: being prepared · StratLab", "This company's page is being prepared.", site + path,
+                 extra=f'<meta http-equiv="refresh" content="{BUSY_REFRESH}">', robots="noindex,follow")
+    body = (f"<h1>{who}: this page is being prepared</h1>"
+            f'<p class="muted">StratLab is gathering this company\'s reported numbers and prices. The page loads by itself '
+            f'in about {BUSY_REFRESH} seconds; if it doesn\'t, <a href="{e(path)}">open it again</a> in a minute or two.</p>'
+            + _find_form(region))
+    return _page(head, None, body)
 
 
 def _not_company_page(region: str | None, symbol: str, kind: str) -> str:

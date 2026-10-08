@@ -44,6 +44,7 @@ from .connect import routes as connect_routes, sync as connect_sync, jobs as con
 from . import chart_routes
 from . import drawings_routes
 from . import market_store, storage
+from . import official_close
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
@@ -226,6 +227,15 @@ invite_job = invite_rewards.Job()
 positioning_runner = positioning.Runner(lambda: filings_feed)
 positioning_job = positioning.Job(positioning_runner)
 etf_nav.setup(lambda: filings_feed)              # ETF prices against their NAV: the exchange's ETF list
+
+
+def _exchange_files():
+    from . import exchange_days            # imported here: it loads the newsletter job, which main loads first
+    return exchange_days.files_of(lambda: filings_feed, pace=0)
+
+
+# one official close per Indian symbol across the public pages, the screens and ETF vs NAV (R7O-004, R7O-007)
+official_close.setup(_exchange_files, lambda syms: kite.quote(syms) if kite.ready() else {})
 etf_job = etf_nav.Job(lambda: filings_feed)
 closing_auction.setup(lambda: filings_feed)      # the closing auction desk: the exchange's CAS data
 closing_auction_job = closing_auction.Job(lambda: filings_feed)
@@ -353,6 +363,8 @@ app.include_router(mcp_server.router)          # /mcp and /me/assistant: StratLa
 
 
 RECENT_ERRORS: list[dict] = []   # the last crashes, shown on the admin page
+# when this server started, in India time like each error's "at": errors kept from before it are told apart (R7O-006)
+SERVER_STARTED_AT = datetime.now(IST).isoformat()
 
 
 @app.middleware("http")
@@ -574,11 +586,10 @@ def prices():
 
 
 def fx_rate(code: str) -> float:
-    """Rupees per unit of a currency, from the market data source (e.g. EURINR=X)."""
-    price = research_hub.yahoo.meta(f"{code}INR=X").get("price")
-    if not price:
-        raise ValueError("no rate")
-    return float(price)
+    """Rupees per unit of a currency, from the market data source (e.g. EURINR=X). A currency the source has no rupee
+    pair for (SAR, NOK, QAR: "Couldn't read" in Admin, R7O-008) goes through the dollar: rupees per dollar over its
+    units per dollar ("SAR=X"); for a currency pegged to the dollar, the peg when that read fails too."""
+    return pricing.cross_rate(code, lambda pair: research_hub.yahoo.meta(pair).get("price"))
 
 
 def rates_job():
@@ -3163,11 +3174,14 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # from the dividends the price history lists for the year to that close: none in the year is a real 0%, a
         # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
         p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
-        try:
-            divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
-            dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
-        except Exception:
-            dy = None
+        # the app's own dividends list first (its Corporate actions card), so both pages have one yield (R7O-004)
+        dy = page_dividend_yield("US", sym, close, prices.get("price_at"))
+        if dy is None:
+            try:
+                divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
+                dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
+            except Exception:
+                dy = None
         if dy is None:
             p["ratios"].pop("Dividend Yield", None)
         else:
@@ -3180,7 +3194,28 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
         snap = at_live_price(snap, close)
+        # the dividend yield as the company page in the app works it out: dividends with an ex-date in the year to the
+        # close, over the close (R7O-004: TCS 3.08% here, the last reported year's, against 5.3% in the app)
+        dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"))
+        if dy is not None:
+            snap = {**snap, "div_yield": dy}
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
+
+
+def page_dividend_yield(region: str, sym: str, close, as_of: str | None) -> float | None:
+    """A public page's dividend yield from the same dividends list the app's company page uses (its Corporate actions
+    card); None when that list has none to go on (then the page's older way stands)."""
+    if not close or not as_of:
+        return None
+    try:
+        rows = research_routes.stored_dividends(region, sym)
+    except Exception:
+        return None
+    divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
+            if d.get("kind") == "dividend" and d.get("amount")]
+    if not divs:
+        return None
+    return stock_pages.dividend_yield(divs, close, as_of)
 
 
 def us_cap_checks(p: dict, sym: str) -> dict:
@@ -3212,12 +3247,18 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
     _, at = stock_pages.last_close(region)
     age = time.time() - (at.timestamp() + stock_pages.settle(region))     # how old a copy may be and still be after it
     try:
-        return prov.history(inst, "1d", scan.DAYS, ttl=max(60.0, age))
+        bars = prov.history(inst, "1d", scan.DAYS, ttl=max(60.0, age))
     except TypeError:                     # a source without its own cache control: the scan's copy
-        return scan._bars(markets, ids[0])
+        bars = scan._bars(markets, ids[0])
+    if region == "IN" and bars:
+        # the day's close as the exchange states it, not the candle's last trade: the same figure as the company page
+        # and the screens (R7O-004: TCS 2,077.00 here against 2,076.00 in the app)
+        bars = official_close.overlay_bars(list(bars), co["sym"] if not co.get("bse") else co["bse"])
+    return bars
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
+research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)     # the app's US P/E on the public page's EPS (R7O-004)
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 
@@ -3278,8 +3319,10 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
     try:
         page = stock_page_store.html(r, sym, co)
     except stock_pages.Busy:
-        return JSONResponse(status_code=503, headers={"Retry-After": "600"},
-                            content={"detail": {"code": "busy", "message": "This page is being prepared. Try again in a few minutes."}})
+        # a page a visitor can read, which loads itself again, never raw JSON (R7O-009); still 503 with Retry-After for
+        # crawlers, and never cached
+        return HTMLResponse(stock_pages.busy_page(r, sym, co.get("name")), status_code=503,
+                            headers={"Retry-After": "600", "Cache-Control": "no-store"})
     if (stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}).get("not_company"):
         return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
@@ -3346,8 +3389,11 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
         co = stock_pages.companies(region).get(symbol)
         return stock_page_bars(region, co) if co else []
     for region, (limit, gap) in PRICE_REFRESH.items():
+        # India: a page read at the close before the exchange's official close was out takes it once it is (R7O-004)
+        extra = {"official": lambda s, d: official_close.official(s, d, use_quote=False),
+                 "official_ready": official_close.settled} if region == "IN" else {}
         try:
-            price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep)
+            price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
         except Exception as e:                        # a source or storage down: the next pass tries again
             price_refresh_status[region] = {"error": str(e)[:160]}
     price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -4179,7 +4225,7 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)),
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)), "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 

@@ -123,10 +123,35 @@ def page_figures(region: str, c: dict) -> dict:
     """The company page's own figures, as the page and its AI read both use them: the dividend yield from the
     dividends listed on the page (R6O-008: Eni's 6.1% beside $1.87 of listed payments, TCS's AI read on another
     yield than the page's)."""
-    return with_dividend_yield(c, stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    out = with_dividend_yield(c, stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    return with_public_eps(region, out)
 
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
+public_facts = None      # (region, symbol) -> the stored public page's facts or None (set by main), never building one
+
+
+def with_public_eps(region: str, c: dict) -> dict:
+    """A US company's P/E and EPS on the same reported earnings as its public page (R7O-004: AAPL 39.02 in the app
+    against 38.1 on /stocks): earnings per share over the last four reported quarters from the company's filings, the
+    public page's figure, set against this page's price. Unchanged without a stored public page, or one with no P/E
+    (a loss, or a market value that failed its checks), or for depositary shares (the app shows no EPS for them)."""
+    if region != "US" or not callable(public_facts):
+        return c
+    try:
+        f = public_facts("US", c["symbol"]) or {}
+    except Exception:
+        return c
+    from .company import _set_metric
+    from .net import num
+    pe0, p0, live = num(f.get("pe")), num(f.get("price")), num((c.get("quote") or {}).get("price"))
+    has_eps = any(i["label"] == "EPS TTM" for g in c.get("metrics") or [] for i in g["items"])
+    if not pe0 or pe0 <= 0 or not p0 or not live or not has_eps:
+        return c
+    eps = p0 / pe0
+    note = "Net profit over the last four reported quarters per share, from the company's filings (as on its public page)"
+    out = _set_metric(c, "EPS TTM", round(eps, 2), note)
+    return _set_metric(out, "P/E", round(live / eps, 2), "The price over EPS TTM")
 
 
 def stored_dividends(region: str, symbol: str) -> list[dict]:
@@ -244,8 +269,10 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
-    return ok(ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
-                      lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r))))
+    got = ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
+                  lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
+    # no unsourced market size or growth rate, even on a map kept from before (R7O-012)
+    return ok({**got, "market_size": "", "cagr": None, "cagr_note": ""})
 
 
 def industry_lookup(region: str):

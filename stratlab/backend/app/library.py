@@ -167,6 +167,10 @@ def restated(e: dict) -> dict:
     if hold:
         rel = ("about the same as" if abs(hold["gap"]) < 0.05 else "less than" if hold["gap"] < 0 else "more than")
         head = f"{lab}, and returned {rel} buy and hold"
+        if hold["gap"] <= -1:
+            # behind buy and hold: the shortfall leads, before any check it passed (R6V-005: "Passed all 3 checks run"
+            # above "+55.8% vs +172.9%, 117.1 points behind")
+            head = f"{abs(hold['gap']):.1f} points behind buy and hold after costs; {lab[:1].lower() + lab[1:]}"
     out: list[str] = []
     if hold:
         diff = "" if abs(hold["gap"]) < 0.05 else f", {abs(hold['gap']):.1f} points {'more' if hold['gap'] < 0 else 'less'}"

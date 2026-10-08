@@ -120,7 +120,7 @@ MARKET_WORDS = {
                      r"rupee|rbi|repo|inflation|cpi|gdp|economy|economic|fii|fiis|dii|diis|fpi|fpis|ipo|ipos|sebi|"
                      r"smallcap|midcap|small-cap|mid-cap|crude|bond yields?|m-cap|market cap|lakh crore|trade deficit)\b", re.I),
     "US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|stock markets?|stocks?|shares?|equit\w*|markets?|investors?|"
-                     r"fed|federal reserve|powell|treasur\w*|yields?|inflation|cpi|pce|jobs report|payrolls|unemployment|gdp|"
+                     r"fed(?!\s+up)|federal reserve|powell|treasur\w*|yields?|inflation|cpi|pce|jobs report|payrolls|unemployment|gdp|"
                      r"economy|economic|earnings|ipo|ipos|dollar|oil prices?|crude|tariffs?|recession|rate cuts?|rate hikes?)\b", re.I),
 }
 # a title the source cut off in the middle of a word ("... 7 key factors behind Rs 10 l")
@@ -152,17 +152,105 @@ def _local_day(iso: str | None, region: str) -> str | None:
     return at.astimezone(ZoneInfo(CLOSE[region][0])).date().isoformat()
 
 
-def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES) -> list[dict]:
-    """The brief's headlines (R6O-004): about the region's market, an index or its economy; published on the brief's
-    day (from `frm`, the week's start for a weekly one, to `to`) in the market's own time zone; each title once and
-    not one an earlier brief already carried (`seen`); and never cut mid-word."""
+# not a market story whatever market word it carries (R7O-005: "'I'm getting fed up': voters line up before dawn as
+# early voting begins in Ohio")
+OFF_TOPIC = re.compile(r"\b(voters?|early voting|ballots?|polling (station|booth)s?|campaign trail|spy chief|arrested|murder|"
+                       r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football)\b", re.I)
+_MON = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+_TITLE_DATE = re.compile(r"\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?"
+                         r"|(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?)(?![\d,])", re.I)
+# an index named with a move: "Sensex settles 685 pts higher", "Nifty 50 rises 220 pts", "Dow falls 300 points"
+_IDX_WORDS = {"IN": [("NIFTY BANK", r"bank\s*nifty|nifty\s*bank"), ("SENSEX", r"sensex"), ("NIFTY 50", r"nifty(?:\s*50)?(?!\s*bank)")],
+              "US": [("S&P 500", r"s&p(?:\s*500)?"), ("NASDAQ", r"nasdaq"), ("DOW JONES", r"\bdow(?:\s+jones)?")]}
+_UP = r"(gains?|gained|rises?|rose|rising|soaring|jumps?|jumped|rall(?:y|ies|ied)|surges?|surged|climbs?|climbed|soars?|soared|settles?[^,;]{0,25}higher|ends?[^,;]{0,25}higher|up|higher|advances?|extends? gains)"
+_DOWN = r"(falls?|fell|falling|drops?|dropped|tanks?|tanked|slumps?|slumped|crash(?:es|ed|ing)?|sinks?|sinking|sank|plunges?|plunged|slides?|slid|declines?|declined|tumbles?|tumbled|down|lower|sheds?|slips?|slipped|settles?[^,;]{0,25}lower|ends?[^,;]{0,25}lower)"
+
+
+def title_dates(title: str, year: int) -> list[str]:
+    """The days a headline names in its own words ("Stock Market Highlights, Sept 28", "Oct 6:"), in `year`."""
+    out = []
+    for m in _TITLE_DATE.finditer(title or ""):
+        d, mon = (m.group(1), m.group(2)) if m.group(1) else (m.group(4), m.group(3))
+        if mon.lower() == "may" and not mon.startswith("May"):
+            continue                                  # "markets may 3x", not the month
+        try:
+            out.append(date(year, _MON[mon[:3].lower()], int(d)).isoformat())
+        except (ValueError, KeyError):
+            continue
+    return out
+
+
+def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
+    """A headline whose index move disagrees with the brief's own close: the other way ("Sensex settles 685 pts higher"
+    in a brief where it closed 0.59% lower), or by a number of points far from the day's. Such a headline is from
+    another day or an earlier part of the session, not the day the brief reports."""
+    if not indices:
+        return False
+    by = {i["name"].upper(): i for i in indices if i.get("name") and i.get("change_pct") is not None and i.get("price")}
+    for name, rx in _IDX_WORDS.get(region, []):
+        i = by.get(name)
+        if not i:
+            continue
+        m = re.search(r"\b(?:" + rx + r")\b[^,;:|]{0,40}?\b" + "(?:" + _UP + "|" + _DOWN + r")\b", title, re.I)
+        if not m:
+            continue
+        said = m.group(0)
+        up = bool(re.search(r"\b" + _UP + r"\b", said, re.I)) and not re.search(r"\b" + _DOWN + r"\b", said, re.I)
+        down = bool(re.search(r"\b" + _DOWN + r"\b", said, re.I)) and not up
+        ch = float(i["change_pct"])
+        if (up and ch < -0.05) or (down and ch > 0.05):
+            return True
+        pts = re.search(r"\b(?:" + rx + r")\b[^,;:|]{0,40}?\b([\d,]{2,6})\s*(?:pts|points)\b", title, re.I)
+        if pts:
+            try:
+                n = float(pts.group(1).replace(",", ""))
+            except ValueError:
+                continue
+            p = float(i["price"])
+            actual = abs(p - p / (1 + ch / 100))
+            if abs(n - actual) > max(60.0, 0.35 * actual):
+                return True
+    # the market as a whole: "India's stock market is sinking" in a brief where every index rose (6 Oct 2026, +0.98%)
+    m = re.search(r"\b(stock markets?|markets?|stocks|shares|equities|dalal street|wall street)\b[^,;:|]{0,30}?\b(?:" + _UP + "|" + _DOWN + r")\b",
+                  title, re.I)
+    if m and by:
+        said = m.group(0)
+        up = bool(re.search(r"\b" + _UP + r"\b", said, re.I)) and not re.search(r"\b" + _DOWN + r"\b", said, re.I)
+        down = bool(re.search(r"\b" + _DOWN + r"\b", said, re.I)) and not up
+        moves = [float(i["change_pct"]) for i in by.values()]
+        if (up and all(c < -0.3 for c in moves)) or (down and all(c > 0.3 for c in moves)):
+            return True
+    return False
+
+
+def headline_ok(region: str, title: str, frm: str | None = None, to: str | None = None, indices: list[dict] | None = None) -> bool:
+    """A headline a Market Brief may carry: a story about the region's market (not a site's own title, a third party's
+    trades worded as advice, or politics that only mentions the Fed), naming no day outside the brief's, and not
+    contradicting the brief's own index moves (R6O-004, R7O-005)."""
+    from ..intel.news import plain_headline
+    if not title or not MARKET_WORDS[region].search(title) or OFF_TOPIC.search(title) or not plain_headline(title):
+        return False
+    if frm and to:
+        year = int(to[:4])
+        if any(not (frm <= d <= to) for d in title_dates(title, year)):
+            return False
+    return not contradicts(title, region, indices)
+
+
+def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES,
+                   indices: list[dict] | None = None) -> list[dict]:
+    """The brief's headlines (R6O-004, R7O-005): stories about the region's market, an index or its economy, never
+    advice-style or a site's title; dated within the brief's day (from `frm`, the week's start for a weekly one, to
+    `to`) in the market's own time zone, so an undated one is left out; naming no other day and agreeing with the
+    brief's index moves; each title once and not one an earlier brief already carried (`seen`); never cut mid-word."""
     out, keys = [], set(seen or ())
+    dated = frm > "0000-00-00" or to < "9999-99-99"
     for h in rows or []:
         title = tidy_title(h.get("headline"))
-        if not title or not MARKET_WORDS[region].search(title):
+        if not headline_ok(region, title, frm if dated else None, to if dated else None, indices):
             continue
         day = _local_day(h.get("at"), region)
-        if day and not (frm <= day <= to):
+        if dated and (not day or not (frm <= day <= to)):
             continue
         k = title_key(title)
         if k in keys:
@@ -179,9 +267,11 @@ def earlier_titles(region: str, day: date) -> set[str]:
     except ImportError:
         return set()
     out: set[str] = set()
-    for iid in ids("market", region)[:8]:
+    for iid in ids("market", region)[:10]:
         issue = load(iid) or {}
-        if issue.get("weekly") or not (day - timedelta(days=4)).isoformat() <= str(issue.get("day") or "") < day.isoformat():
+        # the week's brief too: a story it already carried is older than this day (R7O-005: the 1 Oct "Sensex drops 571
+        # points" in the 3 Oct weekly and again in the 7 Oct daily)
+        if not (day - timedelta(days=7 if issue.get("weekly") else 4)).isoformat() <= str(issue.get("day") or "") < day.isoformat():
             continue
         for s in issue.get("sections") or []:
             if s.get("title") == "Headlines":
@@ -189,12 +279,13 @@ def earlier_titles(region: str, day: date) -> set[str]:
     return out
 
 
-def market_headlines(region: str, day: date | None = None, weekly: bool = False) -> list[dict]:
+def market_headlines(region: str, day: date | None = None, weekly: bool = False, indices: list[dict] | None = None) -> list[dict]:
     rows = [h for h in _main().research_hub.headlines(region) if h.get("headline")]
     if day is None:
         return pick_headlines(region, rows, "0000-00-00", "9999-99-99")
     frm = reference_day(region, day, True).isoformat() if weekly else day.isoformat()
-    return pick_headlines(region, rows, frm, day.isoformat(), set() if weekly else _safe(lambda: earlier_titles(region, day), set()) or set())
+    return pick_headlines(region, rows, frm, day.isoformat(), set() if weekly else _safe(lambda: earlier_titles(region, day), set()) or set(),
+                          indices=None if weekly else indices)
 
 
 def market_facts(region: str, day: date, weekly: bool = False) -> dict:
@@ -206,7 +297,8 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
     facts = {"kind": "market", "region": region, "day": day.isoformat(), "weekly": weekly,
              "since": reference_day(region, day, weekly).isoformat()}
     for name, fn in (("indices", lambda: index_moves(region, day, weekly)), ("rotation", lambda: rotation_shifts(region, weekly, day)),
-                     ("scan", lambda: stage2_names(region, weekly)), ("headlines", lambda: market_headlines(region, day, weekly))):
+                     ("scan", lambda: stage2_names(region, weekly)),
+                     ("headlines", lambda: market_headlines(region, day, weekly, facts.get("indices")))):
         got = _safe(fn)
         if got and (name != "scan" or got["st_s2"] or got["stage2"]):
             facts[name] = got

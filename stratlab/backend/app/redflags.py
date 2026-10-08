@@ -188,14 +188,19 @@ class Runner:
         feed = self.feeds()["in"]
         today = today or datetime.now(ZoneInfo("Asia/Kolkata")).date()
         st = state("IN")
-        # rules changed since the list was stored: the page's default 90 days are read again, each day's rows replaced
+        # rules changed since the list was stored: the page's default 90 days are read again, each day's rows replaced.
+        # A read cut short (the exchange busy) carries on from the day it reached, not from the start (R7O-003)
         rebuild = bool(st.get("through")) and st.get("rules") != filings.RULES_VERSION
         try:
             start = date.fromisoformat(st["through"]) - timedelta(days=OVERLAP)
         except (KeyError, ValueError, TypeError):
             start = today - timedelta(days=FIRST_DAYS["IN"])
         if rebuild:
-            start = min(start, today - timedelta(days=REBUILD_DAYS))
+            resume = st.get("rebuild_at") if st.get("rebuild_rules") == filings.RULES_VERSION else None
+            try:
+                start = date.fromisoformat(resume) if resume else min(start, today - timedelta(days=REBUILD_DAYS))
+            except ValueError:
+                start = min(start, today - timedelta(days=REBUILD_DAYS))
         start = max(start, today - timedelta(days=KEEP_DAYS))
         day, through, new, got, fails, last_error = start, st.get("through"), 0, 0, 0, None
         while day <= today:
@@ -212,7 +217,7 @@ class Runner:
                 if rebuild:
                     flags.replace_day("IN", day.isoformat(), items)
                 else:
-                    new += flags.add("IN", items)
+                    new += flags.add("IN", items, replace=True)       # a row read again keeps today's label and summary
                 got += 1
                 through = day.isoformat()
                 if self.pause:
@@ -221,7 +226,8 @@ class Runner:
         if not got:
             _set_state("IN", last_error=last_error or "no day could be read", failed_at=_now())
             raise RuntimeError(f"The exchange's announcements couldn't be read ({last_error or 'no data'}).")
-        done = {"rules": filings.RULES_VERSION} if not rebuild or day > today else {}
+        done = {"rules": filings.RULES_VERSION} if not rebuild or day > today else \
+            {"rebuild_at": day.isoformat(), "rebuild_rules": filings.RULES_VERSION}
         _set_state("IN", through=through, at=_now(), last_error=last_error, days_read=got, new=new, **done)
         return {"ok": True, "region": "IN", "through": through, "days": got, "new": new, "error": last_error}
 
@@ -286,6 +292,12 @@ class Job(news_job.Job):
         threading.Thread(target=self._loop, daemon=True, name="redflags").start()
 
     def _loop(self):
+        # the stored list under today's rules at once, with no source read (R7O-003: a deploy's new rules waited for the
+        # evening's run, so the page kept the old labels); then the day's read, after startup traffic
+        try:
+            reclassify_stored("IN")
+        except Exception as e:
+            self.status["last_error"] = f"IN: reclassify: {str(e)[:160]}"
         time.sleep(900)                 # after startup traffic and the other morning jobs
         super()._loop()
 
@@ -297,8 +309,13 @@ class Job(news_job.Job):
                 continue
             tz, at = RUN_AT[region]
             day = self.due(name, now, tz, at, region=region)
-            if not day and (self.last.get(f"{name}-filled") or state(region).get("through")):
+            st = state(region)
+            # the rules changed since the list was read (a deploy): read it again now, not at the evening's run (R7O-003)
+            stale = region == "IN" and bool(st.get("through")) and "rules" in st and st["rules"] != filings.RULES_VERSION
+            if not day and not stale and (self.last.get(f"{name}-filled") or st.get("through")):
                 continue
+            if stale and not day:
+                self.retry[name] = time.time() + 1800        # a rebuild cut short carries on in half an hour, never sooner
             try:
                 out = self.runner.run(region)
             except Exception as e:
@@ -324,19 +341,63 @@ def types(region: str) -> list[dict]:
 
 
 def current(region: str, rows: list[dict]) -> list[dict]:
-    """Stored rows as today's rules read them: a row kept with its summary is classified again (and left out when it
-    is now routine), and a filing the exchange listed more than once shows once."""
+    """Stored rows as today's rules read them: every row is classified again, from its subject and the summary kept
+    with it (a row stored without one, from its subject alone), and left out when it is now routine; a filing the
+    exchange listed more than once shows once (R7O-003: rows kept without a summary kept their old labels, so
+    ICICIBANK's depositories certificate still read "Debt raise" after the rules changed)."""
     if region != "IN":
         return rows
-    out = []
-    for i in rows:
-        if "text" in i:
-            cid, sev = filings.classify(i.get("subject") or "", i.get("text") or "")
-            if sev == "info":
-                continue
-            i = {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
-        out.append(i)
+    out = [x for x in (reread(i) for i in rows) if x]
     return filings.one_per_filing(out)
+
+
+def reread(i: dict) -> dict | None:
+    """One stored row under today's rules, or None when it is now routine. With its summary it is classified again in
+    full. Without one (rows kept before summaries were): a subject today's rules read as a flag takes that label; a
+    subject they read as routine (a depositories certificate, a merger, another company's insolvency) or one that names
+    nothing ("Updates", "General Updates") goes; a subject no rule reads keeps its stored label."""
+    subject = i.get("subject") or ""
+    if "text" in i:
+        cid, sev = filings.classify(subject, i.get("text") or "")
+        return None if sev == "info" else {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
+    cid, sev = filings.classify(subject, "")
+    if sev != "info":
+        return {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
+    if cid != "other" or filings.ROUTINE_SUBJECT.search(subject) or filings.GENERIC_SUBJECT.match(subject):
+        return None
+    return i
+
+
+def reclassify_stored(region: str = "IN", today: date | None = None) -> int:
+    """Every stored month of a region's list rewritten under today's rules, with no source read: a row that is now
+    routine goes, the rest carry today's label. Done once per rules version (state "classified"). Returns how many
+    rows changed or went."""
+    if region != "IN":
+        return 0
+    st = state(region)
+    if st.get("classified") == filings.RULES_VERSION:
+        return 0
+    today = today or datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    changed, m = 0, date(today.year, today.month, 1)
+    first = today - timedelta(days=KEEP_DAYS)
+    with _lock:
+        while m >= date(first.year, first.month, 1):
+            month = m.strftime("%Y-%m")
+            rows = flags.load(region, month)
+            kept = []
+            for i in rows:
+                x = reread(i)
+                if x is None or x.get("category") != i.get("category") or x.get("severity") != i.get("severity"):
+                    changed += 1
+                if x is not None:
+                    kept.append(x)
+            if len(kept) != len(rows) or any(a != b for a, b in zip(kept, rows)):
+                k = flags.key(region, month)
+                db.set_setting(k, json.dumps({"items": kept}, separators=(",", ":")))
+                _mem.set(k, None, 0)
+            m = date(m.year - (m.month == 1), (m.month - 2) % 12 + 1, 1)
+    _set_state(region, classified=filings.RULES_VERSION, classified_at=_now(), classified_changed=changed)
+    return changed
 
 
 def _day(v, default: date) -> date:

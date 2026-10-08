@@ -47,6 +47,30 @@ class GoogleNews(Source):
         return out
 
 
+# ---------- headlines a page may carry (R7O-005) ----------
+# a third party's own trades or picks, worded as advice to whoever reads them: "We're adding to our position in a
+# hard-hit stock", "We're buying the dip in a stock…", "What … means for our AI chip stocks", "Which bank stock wins
+# the race? Target price", "ICICI Bank prediction for tomorrow"
+ADVICE_TITLE = re.compile(
+    r"\b(we're|we are|we've|we have|i'm|i am|we)\s+(buying|selling|adding|trimming|starting|initiating|taking|booking|loading|"
+    r"doubling|exiting|cutting|dumping|scooping)\b|\bour (position|portfolio|holdings?|stake|club)\b|\bour\b[^.]{0,30}\bstocks?\b"
+    r"|\b(buy|sell|accumulate) (the dip|now|these|this|it)\b|\bstocks? to (buy|sell|avoid|accumulate|own)\b|\btop picks?\b"
+    r"|\bshould you (buy|sell|hold)\b|\b(buy|sell|hold)\?|\bwhich\b[^?]{0,60}\bwins?\b|\btarget price\b|\bprice target\b"
+    r"|\bprediction for (tomorrow|today|next)\b|\bprice prediction\b|\bmultibagger\b|\bbuy or sell\b|\bstock recommendations?\b"
+    r"|\btrading (calls?|ideas?|picks?)\b|\bbrokerages? (recommend|suggest)\b", re.I)
+# a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
+# News & Updates, Quotes- Nseindia.com")
+SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"
+                        r"|^\s*(nse|bse)\s*-\s*(national|bombay) stock exchange\b|\bofficial (website|site)\b|\bhome\s*page\b", re.I)
+
+
+def plain_headline(title: str | None) -> bool:
+    """A headline a page may show: a story, not a site's name for itself, and not a third party's buying or selling
+    worded as advice."""
+    t = " ".join(str(title or "").split())
+    return bool(t) and not ADVICE_TITLE.search(t) and not SITE_TITLE.search(t)
+
+
 _SUFFIX = re.compile(r"\s+(Inc|Corp|Corporation|Co|Company|Ltd|Limited|PLC|Group|Holdings?|SA|AG|NV|SE)\.?$", re.I)
 
 

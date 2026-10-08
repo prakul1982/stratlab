@@ -75,7 +75,7 @@ _COMPILED = [(i, label, sev, [re.compile(p, re.I) for p in pats]) for i, label, 
 FUND_RAISE = {"qip", "preferential", "rights", "warrants", "fund_raise"}
 LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change",
                                                   "insolvency_other": "Insolvency filing, the company not shown as the debtor"}
-RULES_VERSION = 3              # raised when the rules change, so the stored whole-market list is read again
+RULES_VERSION = 4              # raised when the rules change, so the stored whole-market list is read again
 
 # R6O-002: the filing's subject says what it is about. A routine certificate is routine whatever its body names
 # (ICICIBANK's "Certificate under SEBI (Depositories and Participants) Regulations, 2018" read as a debt raise).

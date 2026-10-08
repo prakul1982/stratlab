@@ -115,7 +115,9 @@ def test_crawlers_never_reach_the_ai_and_fresh_builds_are_rationed(w, monkeypatc
     assert c.get("/stocks/in/RELIANCE").status_code == 200 and calls == ["RELIANCE"]   # then from storage
     assert c.get("/stocks/us/AAPL").status_code == 200
     r = c.get("/stocks/in/INFY")                        # the minute's ration is used up and nothing is stored
-    assert r.status_code == 503 and r.headers["retry-after"] and r.json()["detail"]["code"] == "busy"
+    # R7O-009: a page a visitor can read and that loads itself again, not raw JSON; still 503 with Retry-After
+    assert r.status_code == 503 and r.headers["retry-after"] and r.headers["content-type"].startswith("text/html")
+    assert "being prepared" in r.text and 'http-equiv="refresh"' in r.text
     assert calls == ["RELIANCE", "AAPL"] and w["ai"].calls == 0
 
 

@@ -3,6 +3,7 @@ import sys
 
 os.environ.setdefault("BACKTEST_PROCESSES", "0")      # backtests in the test process, where fakes are patched in
 os.environ["AI_AUTO_PROBE"] = "0"                     # no background AI model measuring (it would use the network)
+os.environ["OFFICIAL_CLOSE_FETCH"] = "0"               # no exchange file or broker read for official closes (app/official_close.py)
 
 import pytest
 
@@ -22,6 +23,21 @@ def fresh_rate_limit():
         if isinstance(node, Guard):
             node.window._d.clear()
         node = getattr(node, "app", None)
+
+
+@pytest.fixture(autouse=True)
+def no_official_close_reads():
+    """The official-close store (app/official_close.py) never reads the exchange's file or the broker from a test: a
+    test that wants it sets its own sources. Its memory doesn't carry over from one test to the next."""
+    oc = sys.modules.get("app.official_close")
+    if oc is not None:
+        oc.setup(None, None)
+        oc.forget()
+    yield
+    oc = sys.modules.get("app.official_close")
+    if oc is not None:
+        oc.setup(None, None)
+        oc.forget()
 
 
 @pytest.fixture(autouse=True)

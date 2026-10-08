@@ -256,6 +256,81 @@ def repair_headlines(region: str, days: int = 60) -> int:
     return fixed
 
 
+_INDEX_LINE = re.compile(r"^(.+?):\s*([\d,]+(?:\.\d+)?)(?:,\s*([+−-]?[\d.]+)%)?")
+
+
+def _indices_of(issue: dict) -> list[dict]:
+    """The index moves a stored brief shows in its Indices section ("NIFTY 50: 22,231.80, −1.64% on the day")."""
+    out = []
+    for s in issue.get("sections") or []:
+        if s.get("title") != "Indices":
+            continue
+        for i in s.get("items") or []:
+            m = _INDEX_LINE.match(str(i.get("text") or ""))
+            if not m:
+                continue
+            try:
+                out.append({"name": m.group(1).strip(), "price": float(m.group(2).replace(",", "")),
+                            "change_pct": float(m.group(3).replace("−", "-")) if m.group(3) else None})
+            except ValueError:
+                continue
+    return out
+
+
+def repair_r7(region: str, days: int = 60) -> int:
+    """The stored Market Briefs by the R7O-005 rules: a headline that is a site's own title, a third party's trades
+    worded as advice, politics, a story naming another day or contradicting the brief's own index moves, or one an
+    earlier brief (the week's too) already carried, goes; a daily brief's AI summary names its own weekday, and a
+    weekly one names none. Returns how many issues changed."""
+    from datetime import timedelta
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    issues = sorted((x for x in (load(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
+                    key=lambda x: (x.get("day", ""), bool(x.get("weekly"))))
+    carried: list[tuple[str, set[str]]] = []          # (day, titles) of the briefs before, the weekly ones too
+    for issue in issues:
+        before = json.dumps(issue, sort_keys=True)
+        day = str(issue.get("day") or "")
+        weekly = bool(issue.get("weekly"))
+        try:
+            frm = (date.fromisoformat(day) - timedelta(days=6)).isoformat() if weekly else day
+        except ValueError:
+            continue
+        seen = set().union(*[t for d, t in carried if (date.fromisoformat(day) - timedelta(days=7)).isoformat() <= d < day]) \
+            if carried and not weekly else set()
+        moves = [] if weekly else _indices_of(issue)
+        sections, mine = [], set()
+        for s in issue.get("sections") or []:
+            if s.get("title") != "Headlines":
+                sections.append(s)
+                continue
+            keep = []
+            for i in s.get("items") or []:
+                title = content.tidy_title(i.get("text"))
+                k = content.title_key(title)
+                if k in mine or k in seen or not content.headline_ok(region, title, frm, day, moves):
+                    continue
+                mine.add(k)
+                keep.append({**i, "text": title})
+            if keep:
+                sections.append({**s, "items": keep})
+        carried.append((day, mine))
+        issue["sections"] = sections
+        if issue.get("ai"):
+            text = write.own_weekday(issue.get("summary") or "", issue)
+            if not text:                               # every sentence named a weekday: the moves alone, as the template says them
+                got = [m for m in _indices_of(issue) if m["change_pct"] is not None]
+                text = "; ".join(f"{m['name']} {kit.pct(m['change_pct'])}" for m in got) + (" over the week." if weekly else " today.") if got else ""
+                issue["ai"] = False
+            issue["summary"] = text
+        if json.dumps(issue, sort_keys=True) == before:
+            continue
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(issue["id"])
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
 # ---------- readers ----------
 def address(profile: dict) -> str | None:
     """Where newsletters go: the alert email set in Account, else the address they sign in with."""
@@ -369,10 +444,24 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: tidied the headlines and counts of {n} stored briefs")
 
+    def r7_once(self):
+        """Once per database: the stored briefs' headlines and weekdays by the R7O-005 rules (see repair_r7)."""
+        flag = "newsfix:headlines-weekday-r7"
+        if db.get_setting(flag):
+            return
+        try:
+            n = sum(repair_r7(r) for r in SEND_AT)
+        except Exception as e:
+            print("newsletters r7:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: checked the headlines and weekdays of {n} stored briefs")
+
     def _loop(self):
         self.repair_once()
         self.restyle_once()
         self.headlines_once()
+        self.r7_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))

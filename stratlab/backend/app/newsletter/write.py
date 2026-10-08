@@ -226,14 +226,36 @@ def fix_counts(text: str, sections: list[dict]) -> str:
 
 
 def grounded(text: str, f: dict) -> bool:
-    """Every ticker-like word in the text is in the facts, and no advice, forecast or hype words."""
+    """Every ticker-like word in the text is in the facts, every number is one of the facts' (R7O-001: the same number
+    check as every AI read), and no advice, forecast or hype words."""
     if not text or banned(text):
         return False
     hay = json.dumps(f, ensure_ascii=False, default=str).upper()
     for word in re.findall(r"\b[A-Z][A-Z0-9&\-]{1,14}\b", text):
         if word not in ALLOWED_CAPS and word not in hay:
             return False
-    return True
+    from ..intel import grounding
+    pool = grounding.fact_numbers(f)
+    return all(grounding.number_backed(v, after, pool) for v, after in grounding._numbers(text))
+
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_WEEKDAY = re.compile(r"\b(" + "|".join(WEEKDAYS) + r")\b", re.I)
+
+
+def own_weekday(text: str, f: dict) -> str:
+    """The day of the week a brief names, from the brief's date, never the model's (R7O-005: the Thursday 8 Oct US brief
+    said "mixed on Tuesday"). A daily brief's weekday is its own day's; a weekly brief names none, so a sentence that
+    does is dropped."""
+    if not text:
+        return text
+    try:
+        day = datetime.fromisoformat(str(f.get("day"))[:10])
+    except (TypeError, ValueError):
+        return text
+    if f.get("weekly"):
+        return " ".join(x for x in re.split(r"(?<=[.!?])\s+", text) if x and not _WEEKDAY.search(x)).strip()
+    return _WEEKDAY.sub(WEEKDAYS[day.weekday()], text)
 
 
 SYSTEM = """You write the two-to-three sentence summary at the top of a market newsletter for retail readers.
@@ -252,7 +274,7 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = re.sub(r"\s+", " ", text)[:700]
+    text = own_weekday(re.sub(r"\s+", " ", text)[:700], f)
     return text if grounded(text, f) else None
 
 

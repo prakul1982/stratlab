@@ -28,18 +28,20 @@ from .plans import allows
 from .responses import err, ok
 
 LIVE_KEY = "etfnav:live"           # {"read", "as_of", "rows": {symbol: [name, isin, price, inav, underlying, nav, nav date, volume]}}
-DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None]}
+DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, that day's NAV or None, 1 when the close is the exchange's official one]}
 KEEP_DAYS = 30                     # trading days of history kept
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
 IST = timezone(timedelta(hours=5, minutes=30))
 MAX_GAP = 50.0                     # a bigger gap means a mismatched NAV (another plan, a split), not a real one
+DOUBT_MOVE = 2.0                   # %: a close this far from the latest price, while the latest price sits near the NAV, is doubted
 LIVE_EVERY = 240                   # seconds between reads of the exchange's list while the market is open
 RETRY = 1800                       # with nothing stored, wait this long between tries outside market hours
 CLOSE_AT = "15:45"                 # India time: the day's closing prices are recorded after this
 SYMBOL = re.compile(r"^[A-Z0-9&\-]{1,20}$")
 NOTE = ("Price is the last traded price on the exchange. The NAV is the fund house's own figure for what one unit "
-        "holds, published each evening for that day. A gap compares a price and a NAV of the same day: the day's close "
-        "against that day's NAV. Through the day, before that day's NAV is out, the gap shown is the last close's "
+        "holds, published each evening for that day. A gap compares a price and a NAV of the same day: the day's official "
+        "closing price on the exchange against that day's NAV. A gap is left out when that close and the latest price are "
+        "too far apart to both be right. Through the day, before that day's NAV is out, the gap shown is the last close's "
         "against its NAV, so the day's market move is never read as a gap. Figures as of the times shown.")
 # said only when a source gave a real indicative NAV (the exchange's list gives none)
 INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
@@ -244,15 +246,31 @@ def _days() -> dict[str, dict]:
     return out
 
 
+def official_closes(day: str) -> dict:
+    """The exchange's official closes of a day (the cash bhavcopy, via official_close), {} while they aren't out."""
+    try:
+        from . import official_close
+        return official_close.closes(day) or {}
+    except Exception:
+        return {}
+
+
 def record_close(day: date | str, live: dict, data: dict) -> int:
     """Store the day's closing price of every ETF with that day's NAV when the NAV file already has it (else None, to
-    be filled later). Keeps the last KEEP_DAYS days. Returns how many ETFs were stored."""
+    be filled later). The close is the exchange's official one when it is out, else the list's last trade until it is
+    (fill_navs swaps it in: R7O-007, MOGSEC's last trade 62.50 against an official close of 64.87). Keeps the last
+    KEEP_DAYS days. Returns how many ETFs were stored."""
     day = str(day)[:10]
+    official = official_closes(day)
     rows = {}
     for s, r in live["rows"].items():
         sch = nav_of(r, data)
+        nav = sch["nav"] if sch and sch.get("date") == day else None
+        if official.get(s):
+            rows[s] = [official[s], nav, 1]
+            continue
         # no units traded that day: its last price is an older day's, so there's no close of this day to keep (R6O-018)
-        rows[s] = [None if r.get("volume") == 0 else r["price"], sch["nav"] if sch and sch.get("date") == day else None]
+        rows[s] = [None if r.get("volume") == 0 else r["price"], nav]
     if not rows:
         return 0
     db.set_setting(DAY_KEY + day, json.dumps(rows, separators=(",", ":")))
@@ -262,7 +280,8 @@ def record_close(day: date | str, live: dict, data: dict) -> int:
 
 
 def fill_navs(data: dict, today: date) -> int:
-    """Fill in the NAVs the evening file has published since a day's close was stored. Returns how many."""
+    """Fill in the NAVs the evening file has published since a day's close was stored, and the exchange's official
+    close in place of a last trade once the day's bhavcopy is out (R7O-007). Returns how many NAVs were filled."""
     live = load_live()["rows"]
     cut = (today - timedelta(days=FILL_DAYS)).isoformat()
     filled = 0
@@ -270,6 +289,13 @@ def fill_navs(data: dict, today: date) -> int:
         if day < cut:
             continue
         changed = False
+        if any(isinstance(v, list) and len(v) < 3 for v in rows.values()):
+            official = official_closes(day)
+            for s, v in rows.items():
+                if isinstance(v, list) and len(v) >= 2 and len(v) < 3 and official.get(s):
+                    v[0] = official[s]
+                    v.append(1)
+                    changed = True
         for s, v in rows.items():
             if not isinstance(v, list) or len(v) < 2 or v[1] is not None or s not in live:
                 continue
@@ -295,14 +321,14 @@ def prune():
 
 
 def history(symbol: str) -> list[dict]:
-    """One ETF's stored days, oldest first: {"day", "close", "nav", "gap"} (gap and nav None until that day's NAV is
-    out)."""
+    """One ETF's stored days, oldest first: {"day", "close", "nav", "gap", "official"} (gap and nav None until that
+    day's NAV is out; `official` when the close is the exchange's own)."""
     out = []
     for day, rows in sorted(_days().items())[-KEEP_DAYS:]:
         v = rows.get(symbol)
         if not isinstance(v, list) or len(v) < 2:
             continue
-        out.append({"day": day, "close": num(v[0]), "nav": num(v[1]), "gap": gap(v[0], v[1])})
+        out.append({"day": day, "close": num(v[0]), "nav": num(v[1]), "gap": gap(v[0], v[1]), **({"official": True} if len(v) > 2 and v[2] else {})})
     return out
 
 
@@ -334,12 +360,27 @@ def same_day(sym: str, price, price_day: str | None, nav_day: str | None, volume
     7 Oct NAV of 257.80 read "1.4% below" with the market down 1.7%)."""
     if not nav_day:
         return None, None
+    close = (_days().get(nav_day) or {}).get(sym)
+    if isinstance(close, list) and len(close) > 2 and close[2] and num(close[0]) is not None:
+        return num(close[0]), nav_day                 # the exchange's official close of that day comes first (R7O-007)
     if price_day == nav_day and volume != 0:
         return num(price), nav_day
-    close = (_days().get(nav_day) or {}).get(sym)
     if isinstance(close, list) and close and num(close[0]) is not None:
         return num(close[0]), nav_day
     return None, None
+
+
+def doubtful(close, latest, nav) -> bool:
+    """A close that can't be right beside the latest price: more than DOUBT_MOVE% from it while the latest price sits
+    much nearer the NAV (R7O-007: MOGSEC's 62.50 "close", 3.4% below a NAV of 64.68, with the latest price at 64.77).
+    Such a gap is left out rather than shown."""
+    c, p, n = num(close), num(latest), num(nav)
+    if not c or not p or not n or c == p:
+        return False
+    g_close, g_latest = gap(c, n), gap(p, n)
+    if g_close is None or g_latest is None:
+        return False
+    return abs(c / p - 1) * 100 > DOUBT_MOVE and abs(g_latest) < abs(g_close) / 2
 
 
 def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
@@ -350,7 +391,8 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
     sch = nav_of(r, data)
     nav, nav_day = (sch["nav"], sch.get("date")) if sch else (None, None)
     vs, vs_day = same_day(sym, r["price"], day_of(as_of), nav_day, r.get("volume"))
-    inav_gap, nav_gap = gap(r["price"], r.get("inav")), gap(vs, nav)
+    doubt = doubtful(vs, r["price"], nav)
+    inav_gap, nav_gap = gap(r["price"], r.get("inav")), (None if doubt else gap(vs, nav))
     basis = "iNAV" if inav_gap is not None else "NAV" if nav_gap is not None else None
     g = inav_gap if basis == "iNAV" else nav_gap
     fund = instrument_kinds.fund_of(f"{sym} {r.get('name') or ''} {r.get('underlying') or ''}")
@@ -360,7 +402,7 @@ def row_view(sym: str, r: dict, data: dict, as_of: str | None) -> dict:
             "fund_label": instrument_kinds.FUND_LABELS.get(fund, "ETF"), "price": r["price"], "price_at": as_of,
             "inav": r.get("inav"), "inav_gap": inav_gap, "nav": nav, "nav_date": nav_day, "nav_gap": nav_gap,
             "nav_price": vs if nav_gap is not None else None, "nav_price_day": vs_day if nav_gap is not None else None,
-            "nav_waiting": bool(nav_day and vs is None),
+            "nav_waiting": bool(nav_day and vs is None), "nav_doubtful": doubt,
             "gap": g, "basis": basis, "text": _text(sym, g, basis, vs_day, day_of(as_of)) if basis else None}
 
 
