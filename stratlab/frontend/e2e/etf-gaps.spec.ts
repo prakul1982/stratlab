@@ -68,7 +68,7 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   await expect(rows.first()).toHaveAttribute("data-etf", "SILVERBEES");
   await expect(rows.first()).toContainText("6.9% above");
   const head = table.locator("thead tr").first();
-  await expect(head).toContainText("Price vs last NAV");
+  await expect(head).toContainText("Close vs NAV");                                       // one day's close against that day's NAV (R5O-005)
   await expect(head).not.toContainText("iNAV");                                          // none published: no empty columns
   await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
   // the page sits in Invest › Market view, in the breadcrumb at the top

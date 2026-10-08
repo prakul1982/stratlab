@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, marketTz, pct, price, quoteAt, safeHref } from "../lib/format";
+import { ago, asOf, dayIn, marketTz, pct, price, quoteAt, safeHref } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
@@ -210,7 +210,7 @@ export function CompanyPage() {
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
             <div className="inv-badges">
               <SurvBadges region={region} symbol={c.symbol} />
-              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} />}
+              {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}
               <FoBadges region={region} symbol={c.symbol} />
               <IndexBadges region={region} symbol={c.symbol} />
             </div>
@@ -247,7 +247,7 @@ export function CompanyPage() {
         ...(region === "IN" ? [{ id: "filings", label: "Filings" }, { id: "deals", label: "Deals" }] : []),
         { id: "corporate-actions", label: "Corporate actions" }, { id: "co-news", label: "News" }]} />
       <Card id="co-chart"><PriceChart region={region} symbol={c.symbol} currency={ccy} price={c.quote?.price} asOf={c.as_of} /></Card>
-      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} quiet />}
+      {region === "IN" && <EtfGapDetailView symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} quiet />}
 
       <div className={c.margins && c.margins.gross != null && (wiki || c.about.profile) ? "k-cols" : "k-stack"}>
         {(wiki || c.about.profile) && (

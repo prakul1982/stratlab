@@ -19,6 +19,21 @@ test("each watchlist price carries the time it was traded, in the market's zone 
   assert.match(read("src/pages/InvestorHome.tsx"), /quoteAt\(r\.price_at, marketTz\(region\)\)/);
 });
 
+test("an ETF badge never sets today's price against yesterday's NAV (R5O-005)", async () => {
+  const { gapAtPrice } = await import("../src/lib/etfGapMath.ts");
+  // 8 Oct 14:25 IST, Nifty -1.7%: NIFTYBEES at 254.15 against the 7 Oct NAV of 257.80 read "1.4% below"
+  const row = { symbol: "NIFTYBEES", name: "Nippon India ETF Nifty 50 BeES", underlying: null, fund: "equity", fund_label: "Equity ETF",
+    price: 254.15, price_at: "2026-10-08T14:25+05:30", inav: null, inav_gap: null, nav: 257.8026, nav_date: "2026-10-07",
+    nav_gap: -0.08, nav_price: 257.60, nav_price_day: "2026-10-07", gap: -0.08, basis: "NAV", text: "NIFTYBEES closed 0.08% below its NAV on 7 Oct" };
+  const today = gapAtPrice(row, 254.15, "2026-10-08");
+  assert.equal(today.gap, -0.08);                      // the 7 Oct close's gap stands, not -1.42
+  assert.equal(gapAtPrice(row, 254.15).gap, -0.08);    // a price of unknown day is never set against the NAV either
+  assert.equal(gapAtPrice(row, 257.0, "2026-10-07").gap, -0.31);   // a 7 Oct price is
+  const badge = read("src/components/EtfGap.tsx");
+  assert.match(badge, /close` : ""\)/);
+  assert.match(read("src/pages/EtfGapsPage.tsx"), /header: "Close vs NAV"/);
+});
+
 test("holdings name what is left out of the totals and of Today (R5O-004)", () => {
   const page = read("src/pages/HoldingsPage.tsx");
   assert.match(page, /Not in these totals: \{t\.no_cost\.symbols\.join/);

@@ -69,3 +69,29 @@ def test_holdings_totals_add_up_with_a_us_stock_without_a_buy_price():
     t = holdings.view(items, quotes, us, 96.77)["totals"]
     assert t["other_session"] == [] and t["day"] == round(-100 - 21.5 + 40 + 3 * 3.04 * 96.77, 2)
     assert holdings.us_sector("XLK") == "Information Technology"
+
+
+# ---------- R5O-005: an ETF's gap is one day's close against that day's NAV ----------
+def test_etf_gap_through_the_day_is_the_last_close_against_its_nav(monkeypatch):
+    from app import etf_nav as E
+    # 8 Oct 14:25 IST, Nifty -1.7%: NIFTYBEES 254.15 against the 7 Oct NAV 257.8026 read "1.4% below"
+    live = {"name": "Nifty 50", "isin": "INF204KB14I2", "price": 254.15, "inav": None, "underlying": "Nifty 50",
+            "nav": 257.8026, "nav_date": "2026-10-07"}
+    no_file = {"schemes": {}, "isin": {}}
+    monkeypatch.setattr(E, "_days", lambda: {})
+    v = E.row_view("NIFTYBEES", live, no_file, "2026-10-08T14:25+05:30")
+    assert v["gap"] is None and v["basis"] is None and v["nav_waiting"] is True       # not -1.42: that's the day's move
+    # 7 Oct's close stored after that day's close: the gap is of 7 Oct, and the words say so
+    monkeypatch.setattr(E, "_days", lambda: {"2026-10-07": {"NIFTYBEES": [257.60, 257.8026]}})
+    v = E.row_view("NIFTYBEES", live, no_file, "2026-10-08T14:25+05:30")
+    assert (v["gap"], v["nav_price"], v["nav_price_day"]) == (-0.08, 257.60, "2026-10-07")
+    assert v["text"] == "NIFTYBEES closed 0.08% below its NAV on 7 Oct"
+    # in the evening, with the 8 Oct NAV out, the 8 Oct price stands against it
+    tonight = {**live, "nav": 254.30, "nav_date": "2026-10-08"}
+    v = E.row_view("NIFTYBEES", tonight, no_file, "2026-10-08T15:30+05:30")
+    assert v["gap"] == E.gap(254.15, 254.30) and v["text"] == "NIFTYBEES trades 0.06% below its last NAV"
+    # the alert never fires on the day's move either
+    monkeypatch.setattr(E, "load_live", lambda: {"read": None, "as_of": "2026-10-08T14:25+05:30", "rows": {"NIFTYBEES": live}})
+    monkeypatch.setattr(E, "navs", lambda: no_file)
+    assert E.gap_now("NIFTYBEES", 254.15) is None
+    assert "the day's market move is never read as a gap" in E.NOTE

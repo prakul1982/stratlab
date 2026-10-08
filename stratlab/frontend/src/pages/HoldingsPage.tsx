@@ -172,7 +172,7 @@ export function HoldingsPage() {
         {r.exchange === "BSE" && <span className="k-note"> BSE</span>}{isUS(r) && <span className="k-note"> US</span>}
         {r.kind_label && <> <span className={`badge kind-${r.kind}`} title="Instrument type">{r.kind_label}</span></>}
         <div className="k-note k-clip">{r.name}</div>
-        {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} price={r.price} />}
+        {!isUS(r) && (!r.kind || r.kind === "stock") && <SurvBadges region="IN" symbol={r.symbol} />}{!isUS(r) && r.kind === "etf" && <EtfGapBadge symbol={r.symbol} price={r.price} day={r.session} />}
       </>) },
     { key: "value", header: "Value", numeric: true, cell: (r) => money(r.value ?? r.invested, cur(r), 0) },
     // a missing figure says why, so a dash is never a puzzle (R1-053)

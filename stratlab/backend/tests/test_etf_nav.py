@@ -211,8 +211,12 @@ def test_admin_etf_read_says_so_when_the_exchange_is_down(w, monkeypatch):
 
 
 # ---------- the pages ----------
-def test_routes(w):
+def test_routes(w, monkeypatch):
     c = w["client"]
+    # the world's list is stamped with the latest close, so the NAV file is of that day too (R5O-005: the fixture's
+    # 2 Oct NAVs against a later day's price were a gap of two different days, which is no longer shown)
+    from tests.fake_prices import last_close
+    monkeypatch.setattr(E, "navs", lambda: FE.navs(last_close("IN").date()))
     r = c.get("/invest/etf-gaps", headers=headers("free-token"))
     assert r.status_code == 200
     body = r.json()

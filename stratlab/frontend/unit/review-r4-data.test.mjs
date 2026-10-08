@@ -14,7 +14,7 @@ const etf = (over = {}) => ({ symbol: "NIFTYBEES", name: "Nifty BeES", underlyin
 
 test("an ETF's badge is worked out from the price shown in the same row (R4-005)", async () => {
   const { gapAtPrice } = await import("../src/lib/etfGapMath.ts");
-  const row = gapAtPrice(etf(), 270.06);
+  const row = gapAtPrice(etf(), 270.06, "2026-10-07");     // a price of the NAV's own day (R5O-005)
   assert.equal(row.price, 270.06);
   assert.equal(row.nav_gap, 0.1);                       // 270.06 / 269.80 - 1, not the list's 270.50
   assert.equal(row.gap, 0.1);
@@ -22,7 +22,7 @@ test("an ETF's badge is worked out from the price shown in the same row (R4-005)
   assert.equal(row.price_at, null);                     // not "as of" the list's read
   assert.match(row.text, /^NIFTYBEES trades 0\.10% above its last NAV$/);
   // the same row and the same price: the list's own figure
-  assert.equal(gapAtPrice(etf(), 270.5).gap, 0.26);
+  assert.equal(gapAtPrice(etf(), 270.5, "2026-10-07").gap, 0.26);
   // an indicative NAV, when a source gives one, is the basis (as in the list)
   const withInav = gapAtPrice(etf({ inav: 270.0 }), 270.06);
   assert.equal(withInav.basis, "iNAV");
@@ -30,7 +30,7 @@ test("an ETF's badge is worked out from the price shown in the same row (R4-005)
   // no usable price: the row as the list has it; a NAV of another unit is no gap
   assert.equal(gapAtPrice(etf(), null).gap, 0.26);
   assert.equal(gapAtPrice(etf(), 0).gap, 0.26);
-  const far = gapAtPrice(etf(), 900);
+  const far = gapAtPrice(etf(), 900, "2026-10-07");
   assert.equal(far.gap, null);
   assert.equal(far.basis, null);
 });
