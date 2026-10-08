@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, money, pct, signClass } from "../lib/format";
 import { homeOf } from "../lib/spaces";
 import { NAV_GROUPS } from "../lib/navGroups";
-import { evDay, useEvents } from "../lib/marketEvents";
+import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
 import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
@@ -202,7 +202,7 @@ function NextEvents({ limit = 3, testId = "invest-events" }: { limit?: number; t
       <CardHead title="Coming up" actions={<Link to="/trade/events" className="link small">Market events →</Link>} />
       {next === null ? <PanelSkel label="Reading the market events" lines={1} /> : (
         <div className="space-events">
-          {next.map((e) => <span key={e.id} className="small"><span className="muted">{evDay(e.date)}</span> {e.title}</span>)}
+          {next.map((e) => <span key={e.id} className="small"><span className="muted">{evWhen(e)}</span> {e.title}</span>)}
         </div>
       )}
     </Card>

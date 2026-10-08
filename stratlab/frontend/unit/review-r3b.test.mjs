@@ -20,3 +20,9 @@ test("Connection check: the server's address and the hosting steps are for admin
   assert.match(serverRow(false, true, "x").d, /Railway/);
   assert.match(aiMissingRow(true).d, /GROQ_API_KEY/);
 });
+
+test("an event on a weekend says the exchanges are closed (R3-007)", async () => {
+  const { eventWhen: evWhen } = await import("../src/lib/format.ts");
+  assert.equal(evWhen({ date: "2026-10-11", weekend: "Sunday" }), "Sun 11 Oct (exchanges closed)");
+  assert.equal(evWhen({ date: "2026-10-12" }), "Mon 12 Oct");
+});

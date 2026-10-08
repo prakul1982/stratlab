@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { asOf } from "../../lib/format";
-import { evDay, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
+import { evDay, evWhen, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
 import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
 import "./trade.css";
@@ -169,7 +169,7 @@ export function EventsPage() {
                   <ul className="k-list plain ev-week" data-testid="ev-week">
                     {week.slice(0, 10).map((e) => (
                       <li key={e.id} data-kind={e.kind}>
-                        <span className="k-note">{evDay(e.date)}{e.time ? ` · ${e.time} IST` : ""}</span>{" "}
+                        <span className="k-note">{evWhen(e)}{e.time ? ` · ${e.time} IST` : ""}</span>{" "}
                         <span className="k-small"><b>{e.title}</b>{e.figure ? ` · ${e.figure}` : ""}</span>
                       </li>
                     ))}
