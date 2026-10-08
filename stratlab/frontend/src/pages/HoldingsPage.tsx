@@ -234,7 +234,7 @@ export function HoldingsPage() {
 
       {view && t && rows.length > 0 && (
         <>
-          <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Recent filings" }] : [])]} />
+          <PageNav items={[{ id: "h-summary", label: "Where you stand" }, { id: "h-positions", label: "Positions" }, { id: "h-add", label: "Add a stock" }, ...(withFilings.length > 0 ? [{ id: "h-filings", label: "Filings" }] : [])]} />
           <Card id="h-summary">
             <CardHead title="Where your stocks stand" />
             <StatRow>

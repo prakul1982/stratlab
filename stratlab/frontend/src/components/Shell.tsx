@@ -96,7 +96,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const activeGroup = space !== "mine" ? (onGroup?.space === space ? onGroup.group.id : at?.space === space ? at.group.id : null) : null;
   const isOpen = (g: string) => openGroups[g] ?? false;
   const toggle = (g: string) => setOpenGroups((cur) => ({ ...cur, [g]: !(cur[g] ?? false) }));
-  useEffect(() => { if (activeGroup && !isOpen(activeGroup)) setOpenGroups((cur) => ({ ...cur, [activeGroup]: true })); }, [activeGroup]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (activeGroup) setOpenGroups((cur) => (cur[activeGroup] ? cur : { ...cur, [activeGroup]: true })); }, [activeGroup, me?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
   const allNotebooks = "/notebooks";
   const notebookList = (
     <div className="side-list side-nbs">

@@ -290,8 +290,9 @@ test("space homes line up: one content width, four equal tool cards without hole
       expect(l.offLine, `${at}: numbers in a row of figures share a line`).toEqual([]);
       expect(l.dashes, `${at}: a missing figure says why instead of a dash`).toBe(0);
       // every space: four tools, one row of four or two rows of two, every card the same size
-      expect(l.cards, `${at}: four tools on the strip`).toBe(4);
-      expect([1, 2], `${at}: the strip is one row, or two by two`).toContain(l.rows.length);
+      if (path === "/money") expect(l.cards, `${at}: Money has no strip: its two summaries stand for Holdings and Tax, the cards below are the rest`).toBe(0);
+      else expect(l.cards, `${at}: four tools on the strip`).toBe(4);
+      if (path !== "/money") expect([1, 2], `${at}: the strip is one row, or two by two`).toContain(l.rows.length);
       const heights = l.rows.flatMap((r) => r.heights), widths = l.rows.flatMap((r) => r.widths);
       expect(Math.max(...heights) - Math.min(...heights), `${at}: tool cards are the same height`).toBeLessThanOrEqual(1);
       expect(Math.max(...widths) - Math.min(...widths), `${at}: tool cards are the same width`).toBeLessThanOrEqual(1);
