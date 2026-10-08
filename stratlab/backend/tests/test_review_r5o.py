@@ -492,6 +492,20 @@ def test_margin_funding_break_even_is_rounded_once():
 
 
 # ---------- R5O-039: a stop hit never costs more than the stated risk ----------
+def test_rupees_are_grouped_the_indian_way_and_dates_unpadded():
+    import json as _json
+    from datetime import date
+    from app import money_networth as N
+    # the owner's "R5 test FD": "Rs100,000 at 7% ... from 01 Apr 2026" beside "Rs1,03,670" and "1 Apr 2027"
+    v = N.build([{"id": "a", "kind": "fd", "name": "R5 test FD", "principal": 100000, "rate": 7, "compounding": "quarterly",
+                  "start": "2026-04-01", "maturity": "2027-04-01"}], None, None, N.Prices(), date(2026, 10, 8))
+    text = _json.dumps(v, ensure_ascii=False)
+    assert "₹1,00,000 at 7% a year, compounded quarterly, from 1 Apr 2026" in text and "₹100,000" not in text and "01 Apr" not in text
+    from app import sip_test as SIP
+    from tests.test_sip_test import leg, plan
+    assert "invest ₹1,00,000" in SIP.words(plan(amount=100000), [leg({}, "NIFTYBEES")])
+
+
 def test_risk_sizing_never_exceeds_the_stated_risk():
     from app.engine.core import backtest
     from app.models import Strategy
