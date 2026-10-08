@@ -17,13 +17,14 @@ export const APP_ROUTES = [
   "/watchlist", "/research/screens", "/research/rotation", "/invest/breadth", "/invest/etf-gaps", "/invest/holders",
   "/invest/business-updates", "/invest/stock-lending", "/invest/margin-funding", "/dev/kit", "/research/filings",
   "/research/results", "/research/corporate-actions", "/research/IN/:symbol/deep", "/research/US/:symbol/deep",
-  "/research/investor", "/research/:region/:symbol",
+  "/research/investor", "/research/:region/:symbol", "/login", "/signup", "/about",
 ];
 
 const PATTERNS = APP_ROUTES.map((r) => new RegExp("^" + r.replace(/\/\*$/, "(/.*)?").replace(/:[A-Za-z]+/g, "[^/]+") + "/?$"));
 
 /** The landing page and its sections: shown to a visitor as the landing page, scrolled to the section. */
-export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/features": "trade" };
+export const LANDING_SECTIONS: Record<string, string | null> = { "/": null, "/pricing": "pricing", "/plans": "pricing", "/upgrade": "pricing", "/help": "faq", "/features": "trade",
+  "/login": null, "/signup": null, "/about": "about" };
 
 const clean = (path: string) => path.split(/[?#]/)[0] || "/";
 

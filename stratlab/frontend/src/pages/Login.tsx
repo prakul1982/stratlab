@@ -240,7 +240,7 @@ export function Login({ section = null }: { section?: string | null } = {}) {
         </div>
       </section>
 
-      <section className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
+      <section id="about" className="lp-sec lp-spaces-sec" aria-labelledby="spaces-h">
         <div className="lp-wrap stack g24">
           <h2 id="spaces-h" className="serif lp-h3">Three spaces, one place.</h2>
           <div className="lp-spaces">

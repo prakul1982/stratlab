@@ -57,6 +57,9 @@ export function Shell({ children }: { children: ReactNode }) {
   // on a phone (or zoomed in) the menu is a drawer: a modal while it's open. Focus moves in and stays in, Esc closes it
   // (a pop-up inside it closes first, on its own), and focus goes back to the menu button.
   const aside = useRef<HTMLElement>(null);
+  // the menu scrolls inside its own box: the edge with more behind it fades out, so a half-hidden row reads as "more below"
+  const sideScroll = useRef<HTMLElement>(null);
+  const fade = useScrollFade(sideScroll);
   useDialogFocus(aside, open, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
   const path = loc.pathname;
   const at = locate(path);
@@ -189,7 +192,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       </div>
-      <nav className="side-groups" aria-label="Main">
+      <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>
         <div className="side-list">
           <NavLink to={homeOf(space)} end><Compass size={16} />{homeLabel}</NavLink>
         </div>
@@ -225,6 +228,28 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+
+/** Which edges of a scrolling box have more behind them ("top", "bottom", "both" or "none"): kept as the box scrolls, resizes
+ * or its content changes (a group opens). The CSS fades those edges. */
+function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" | "both" | "none" {
+  const [fade, setFade] = useState<"top" | "bottom" | "both" | "none">("none");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const look = () => {
+      const above = el.scrollTop > 2, below = el.scrollHeight - el.clientHeight - el.scrollTop > 2;
+      setFade(above && below ? "both" : above ? "top" : below ? "bottom" : "none");
+    };
+    look();
+    el.addEventListener("scroll", look, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(look);
+    ro?.observe(el);
+    const mo = new MutationObserver(look);
+    mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    return () => { el.removeEventListener("scroll", look); ro?.disconnect(); mo.disconnect(); };
+  }, [ref]);
+  return fade;
+}
 
 /** Mine · Trade · Invest · Money at the top of the menu: which space's menu shows. A click goes to that space's home (the
  * active one too). Every page stays reachable from any of them (search, links, the breadcrumb). */
