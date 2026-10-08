@@ -178,9 +178,10 @@ test.describe("the hero demo (R5V-017, R5V-018)", () => {
   test("the verdict lines are facts about the test, the Trade and Money pictures say they are samples", async ({ page }) => {
     await open(page);
     await expect(page.locator("body")).not.toContainText("Likely a real edge");
-    await expect(page.locator(".lp-sample")).toHaveCount(5);           // each of the three demo results, the Trade picture and the Money picture
-    await expect(page.locator(".lp-space[data-space=trade]")).toContainText("Sample");
-    await expect(page.locator(".lp-space[data-space=money]")).toContainText("Sample");
+    await expect(page.locator(".lp-sample")).toHaveCount(3);           // each of the three demo results
+    // the Trade and Money pictures (a made-up company) say so in readable type
+    await expect(page.locator(".lp-space[data-space=trade] .lp-illus")).toHaveText("Illustration: made-up figures");
+    await expect(page.locator(".lp-space[data-space=money] .lp-illus")).toHaveText("Illustration: made-up figures");
     await expect(page.locator(".lp-ridea")).toContainText("A template for a test, not a suggestion");
     await expect(page.locator(".lp-ridea")).not.toContainText(/Buy NVDA/);
     // nothing on the landing page is drawn smaller than 12px
