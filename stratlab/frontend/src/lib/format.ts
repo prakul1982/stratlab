@@ -348,7 +348,7 @@ export function signTone(v: number | null | undefined): "up" | "down" | undefine
  * always agrees with the sign that is printed. The sign or ▲/▼ stays in the text: colour is never the only signal. */
 export function signCls(v: number | null | undefined, text?: string): "k-up" | "k-down" | "" {
   const t = signTone(v);
-  if (!t || (text !== undefined && !/[1-9]/.test(text))) return "";
+  if (!t || (text !== undefined && /\d/.test(text) && !/[1-9]/.test(text))) return "";
   return `k-${t}`;
 }
 

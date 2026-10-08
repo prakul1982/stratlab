@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { safeHref, fmtDate } from "../lib/format";
-import { DataTable, ErrorState, Skeleton } from "./kit";
+import { DataTable, ErrorState, Signed, Skeleton } from "./kit";
 
 /* Named holders above 1% from the quarterly shareholding pattern (shareholders.py): the promoter group's members and
  * every public holder above 1%, by stake size, with the change since the quarter before. Names and numbers as filed. */
@@ -30,7 +30,7 @@ export function shares(n: number | null | undefined) {
   return n == null ? "–" : Math.round(n).toLocaleString("en-IN");
 }
 
-/** "New", "+0.81 pts", "−0.21 pts", "No change": the change since the quarter before, in plain words, no colour. */
+/** "New", "+0.81 pts", "−0.21 pts", "No change": the change since the quarter before, in plain words. */
 export function changeText(c: HolderChange, d: number | null) {
   if (c === "new") return "New above 1%";
   if (c === "dropped") return "Below 1% or out";
@@ -39,6 +39,12 @@ export function changeText(c: HolderChange, d: number | null) {
   if (c === "up") return "More shares";
   if (c === "down") return "Fewer shares";
   return "–";
+}
+
+/** The same change, in the kit's colours: a bigger stake green, a smaller one red, the words unchanged. */
+export function ChangeText({ c, d }: { c: HolderChange; d: number | null }) {
+  const dir = c === "up" ? 1 : c === "down" ? -1 : 0;
+  return <Signed value={d != null && d !== 0 ? d : dir}>{changeText(c, d)}</Signed>;
 }
 
 export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (body: React.ReactNode, right?: React.ReactNode) => React.ReactNode }) {
@@ -71,7 +77,7 @@ export function NamedHoldersPanel({ symbol, wrap }: { symbol: string; wrap: (bod
             { key: "n", header: "Holder", rowHeader: true, wrap: true, cell: (h) => <>{h.name}<span className="k-sub-line">{h.group === "promoter" ? "Promoter group · " : ""}{h.kind}</span></> },
             { key: "s", header: "Shares", numeric: true, cell: (h) => shares(h.shares) },
             { key: "p", header: "Stake", numeric: true, cell: (h) => `${h.pct.toFixed(2)}%` },
-            { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <>{changeText(h.change, h.pct_change)}{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },
+            { key: "c", header: "Since last quarter", numeric: true, cell: (h) => <><ChangeText c={h.change} d={h.pct_change} />{h.prev_pct != null && h.change !== "same" && <span className="k-sub-line">was {h.prev_pct.toFixed(2)}%</span>}</> },
           ]} />
       )}
       {v.holders.length > list.length && <button className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {v.holders.length}</button>}
