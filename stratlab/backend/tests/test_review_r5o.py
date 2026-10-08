@@ -462,3 +462,21 @@ def test_named_holders_coverage_is_a_quarter_end(monkeypatch):
     monkeypatch.setattr(db, "get_setting", lambda k: None)
     assert S.coverage()["latest_quarter"] == "2026-09-30"
     assert S.quarter_end("2026-12-31") and not S.quarter_end("2026-10-05")
+
+
+# ---------- R5O-028: the SIP test's "lowest" includes the run above it ----------
+def test_the_lowest_xirr_is_never_above_the_run_shown():
+    from app import sip_test as SIP
+    from tests.test_sip_test import leg, plan, weekdays
+    # five years to 8 Oct 2026 ending in a fall after 1 Oct: the latest start does worst, as NIFTYBEES's did (3.7% from Nov 2021
+    # against "Lowest XIRR 4.2% from Oct 2021", the month starts stopping a month short of it)
+    days = [d for d in weekdays("2019-01-01", 2100) if d <= "2026-10-08"]
+    prices = {d: 100 * (1 + 0.0002 * i) * (0.9 if d > "2026-10-01" else 1.0) for i, d in enumerate(days)}   # the last week falls
+    legs = [leg(prices)]
+    start, end = SIP._add_years("2026-10-08", -5), "2026-10-08"
+    shown = SIP.simulate(legs, plan(), start, end)
+    s = SIP.spread(legs, plan(), 5, days[0], days[-1], also=(start,))
+    assert shown["start"][:7] == "2021-11" and any(r["start"] == "2021-11" for r in s["runs"])
+    assert s["worst"]["xirr"] <= shown["xirr"]
+    old = SIP.spread(legs, plan(), 5, days[0], days[-1])
+    assert old["worst"]["xirr"] > shown["xirr"]                     # what the page said before
