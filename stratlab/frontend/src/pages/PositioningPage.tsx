@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
   chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
-  type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
+  pcrNote, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { signTone } from "../lib/format";
@@ -220,7 +220,7 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
         <DataTable label="Put-call ratio for each index's nearest expiry" columns={cols} rows={rows} rowKey={(r) => r.name} rowAttrs={(r) => ({ "data-pcr": r.name })}
           rowNote={(r) => (r.source ? undefined : coverage?.chains[r.name]?.days ? `No live chain now; recorded since ${dayName(coverage.chains[r.name].first)}` : "No live chain now, and not recorded yet")} />
       </div>
-      <p className="k-note">{rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.</p>
+      <p className="k-note" data-testid="pcr-note">{pcrNote(rows)}</p>
       </>
         )}
     </Card>

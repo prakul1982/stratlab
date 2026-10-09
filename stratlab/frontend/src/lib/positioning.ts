@@ -14,6 +14,13 @@ export type Flow = { buy: number | null; sell: number | null; net: number | null
 export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
   pcr_all?: number | null; strikes_read?: number; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
 
+/** The line under the PCR table, in words that fit the hour (R10O-008: with the market shut the rows are the recording of
+ * the last close, not live chains read just then). */
+export function pcrNote(rows: PcrRow[]): string {
+  if (rows.some((r) => r.at_close)) return "The market is shut, so each index shows StratLab's recording of its last close. Live chains are read while the market trades, at most once a minute.";
+  return `${rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
+}
+
 /** The strikes either side of the money the recordings keep, and the headline PCR counts. */
 export const NEAR_STRIKES = 15;
 

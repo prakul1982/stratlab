@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -158,8 +158,14 @@ export function CompanyPage() {
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
-    researchApi.company(region, sym).then((x) => live && setC(x))
-      .catch((e) => live && setError({ message: (e as Error).message, missing: (e as ApiError).status === 404 }));
+    // the price, header and tables first (lean); the news, the encyclopedia entry and the peers come from slower sources and
+    // fill in behind them, so a slow one holds up only its own card (R10O-009: company pages settled in 9 to 30 s)
+    researchApi.company(region, sym, true).then((x) => {
+      if (!live) return;
+      setC(x);
+      if (x.lazy?.length) researchApi.companyMore(region, sym).then((m) => live && setC((cur) => (cur && cur.symbol === x.symbol ? withMore(cur, m) : cur)))
+        .catch(() => live && setC((cur) => (cur ? { ...cur, lazy: undefined } : cur)));       // no news this time: the card says so
+    }).catch((e) => live && setError({ message: (e as Error).message, missing: (e as ApiError).status === 404 }));
     // what the page shows under the company's name loads alongside it, not after it
     preloadPriceChart();
     if (region === "IN") { void loadSurveillance(); void loadEtfGaps(); void loadFoChanges(); }
@@ -330,7 +336,7 @@ export function CompanyPage() {
 
       <div className="k-cols">
         {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteGrid region={region} symbols={c.peers} /></Card>}
-        <Card id="co-news"><CardHead title="Latest news" /><NewsList items={c.news} /></Card>
+        <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} /> : <NewsList items={c.news} />}</Card>
       </div>
       <p className="k-note">AI text is written from the numbers above and may contain mistakes. Facts, not advice.</p>
     </div>

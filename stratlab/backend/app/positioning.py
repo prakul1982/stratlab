@@ -723,7 +723,7 @@ _refreshing: set[tuple] = set()
 _refreshing_lock = threading.Lock()
 
 
-def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | None]:
+def live_chains(options_data, names: tuple, choice: str, quick: bool = False) -> dict[str, dict | None]:
     """Today's chains for several indices from the live feed, compacted like a recording and kept a minute; None for an
     index when the feed is offline. Every index's quotes go out together (one request for the spots, then the
     contracts in as few requests as the feed allows), since the feed takes about one request a second for everyone.
@@ -742,7 +742,8 @@ def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | Non
     # a chain the recorder saved in the last few minutes answers at once while the live one is read behind it: the
     # first visitor after a quiet spell waited 6 to 16 s for the feed's one-request-a-second reads (R5O-025)
     for name in list(need):
-        rec = _fresh_recording(name, choice)
+        # `quick` (the PCR table): today's newest recording of any age answers at once, the live read running behind it
+        rec = _fresh_recording(name, choice, None if quick else RECORDED_FRESH)
         if rec:
             out[name] = rec
             need.remove(name)
@@ -767,8 +768,9 @@ def live_chains(options_data, names: tuple, choice: str) -> dict[str, dict | Non
 RECORDED_FRESH = 300          # seconds a recording stands in for the live chain while that one is read
 
 
-def _fresh_recording(name: str, choice: str) -> dict | None:
-    """The recorder's chain for this index and expiry, when it was taken in the last RECORDED_FRESH seconds; else None."""
+def _fresh_recording(name: str, choice: str, max_age: float | None = RECORDED_FRESH) -> dict | None:
+    """The recorder's chain for this index and expiry, when it was taken in the last `max_age` seconds (any time today
+    when None); else None."""
     try:
         today = ist_now().date()
         if not recorded_last(name, today):          # nothing recorded today: don't walk back through older days
@@ -779,7 +781,7 @@ def _fresh_recording(name: str, choice: str) -> dict | None:
         return None
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
-    return got if 0 <= time.time() - at.timestamp() <= RECORDED_FRESH else None
+    return got if 0 <= time.time() - at.timestamp() <= (max_age if max_age is not None else 86400) else None
 
 
 def _keep_live(name: str, choice: str, chain: dict | None):
@@ -999,10 +1001,24 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
     history give one PCR for one chain; `pcr_all` over every strike read."""
     now = now or ist_now()
     out = []
-    live_chains(options_data, tuple(names), "current")          # every index's quotes in one go; chain_now reads them back
+    # The table answers at once (R10O-008: "Reading each index's chain…" took 7 s with the market shut, five live reads at a
+    # request a second). Out of hours the newest recording is the close's chain and needs no feed; in hours the last
+    # live chain, else today's newest recording, answers while the live read runs behind it. Only an index with neither
+    # waits for a live read.
+    chains: dict[str, dict | None] = {}
+    if chain_time(now)[1] == "live":
+        chains = live_chains(options_data, tuple(names), "current", quick=True)
+    else:
+        for name in names:
+            rec = recorded_chain(name, "current", now.date())
+            if rec and str(rec["expiry"])[:10] >= now.astimezone(IST).date().isoformat():     # not an expiry that has passed
+                chains[name] = {**rec, "at_close": True}
+        left = tuple(n for n in names if not chains.get(n))
+        if left:
+            chains.update(live_chains(options_data, left, "current"))
     for name in names:
         ex = NAMES[name]
-        got, _, _ = chain_now(options_data, name, "current", now)
+        got = chains.get(name) or recorded_chain(name, "current", now.date())
         if not got:
             out.append({"name": name, "exchange": ex, "source": None})
             continue

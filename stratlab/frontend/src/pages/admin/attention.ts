@@ -5,7 +5,16 @@ import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminCo
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
 
-export type Attention = { text: string; to: string; label: string; bad: boolean };
+export type Attention = { text: string; to: string; label: string; bad: boolean; /** the whole text, when `text` was cut to one line */ full?: string };
+
+/** A provider's own error on one line: its first sentence, cut at `max` characters, so a long message with an
+ * unbreakable link in it can't push a phone's page sideways (R10O-001). The whole text stays in `full` for a tooltip. */
+export function oneLine(text: string, max = 120): { text: string; full?: string } {
+  const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+  const first = flat.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? flat;
+  const cut = first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
+  return cut === flat ? { text: flat } : { text: cut, full: flat };
+}
 export type Light = { key: string; label: string; state: HealthState; detail: string; to?: string };
 /** A service: its light, and `fix`, the longer words for the page where it's set up (System, Data and jobs). */
 export type Service = Light & { fix?: string };
@@ -120,7 +129,10 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (!aiKeys.length) out.push({ text: "No AI keys are set, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   // one line per provider that can't answer, with the provider's own reason (status code and message), so a rejected
   // key reads differently from a fault on our side (R5O-016)
-  for (const a of aiDown) out.push({ text: `AI, ${a.label}: ${a.state_text || a.last_error || "not answering"}`, to: "/admin/system", label: "System", bad: false });
+  for (const a of aiDown) {
+    const why = oneLine(a.state_text || a.last_error || "not answering");
+    out.push({ text: `AI, ${a.label}: ${why.text}`, ...(why.full ? { full: `AI, ${a.label}: ${why.full}` } : {}), to: "/admin/system", label: "System", bad: false });
+  }
   if (aiDown.length && aiDown.length === aiKeys.length) out.push({ text: "No AI provider is answering, so the idea builder and research reads are off.", to: "/admin/system", label: "System", bad: true });
   if (s.mail?.state === "bad") out.push({ text: "Alert emails can't be sent yet: no email service (Resend, Brevo or SMTP) is set up on the server.", to: "/admin/system", label: "System", bad: true });
   // only the errors since this server started are "since the last restart"; ones kept from before it aren't news (R7O-006)

@@ -178,7 +178,9 @@ numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
 (trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
-"Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below, 5% stop loss". Write each as a rule
+"Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below, 5% stop loss". A rule is made of indicators, moving averages, highs and lows over a number of days, and
+percentages: never a price level typed into it (not "above 8255", not the current price, which stops being current
+tomorrow), and a title that names an indicator (an SMA, an RSI, a 5-day low) names one the rule uses. Write each as a rule
 to test ("Enter long when …" or "Enter short when …"), never as an instruction to buy or sell the stock. Use only numbers
 that are in the FACTS, copied as they are (a growth rate, yield or return is the FACTS' own figure, never your own
 sum); label Indian fiscal quarters as the FACTS' fiscal_now does. Describe the present with latest_fiscal_year and the
@@ -281,7 +283,10 @@ companies with the most direct link to the theme, in value-chain order, not rank
 
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,
-          sectors: dict | None = None) -> dict:
+          sectors: dict | None = None, cash: dict | None = None) -> dict:
+    """`cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
+    sold (R10O-004)."""
+    cash_facts = grounding.flow_facts(cash)
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
     system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
@@ -290,6 +295,11 @@ Never say the market is at record highs unless an index's from_high_pct is above
 from the FACTS. Mention a central bank, economic data, money flows or a sector only when a headline given names it.
 Say how many sectors rose or fell, or that all of them did, only as the FACTS' "sectors" counts give it (and never without
 them), whatever a headline says.
+Never work out who is buying or selling from how the market or a sector moved: a rise does not mean money flowed in, and
+a "reversal" or "stabilization" of flows, or "institutional interest", is not something prices show. Say what foreign
+institutions (FIIs) or domestic institutions (DIIs) bought or sold only from the FACTS' "institutional_flows" (the day's
+figures, in rupees crore, with their date), with their direction exactly as the net figure has it; with no
+"institutional_flows", say nothing about who is buying or selling beyond what a headline reports.
 Return ONLY this JSON:
 {{"tone": "3-4 sentences on how the market moved today and what the headlines say is driving it, citing the live levels",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
@@ -303,6 +313,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
              **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
              # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)
              **({"sectors": {k: sectors[k] for k in ("up", "down", "unchanged", "of")}} if sectors else {}),
+             # the FII and DII figures StratLab's Positioning page shows for the day, in ₹ crore (R10O-004)
+             **({"institutional_flows": cash_facts} if cash_facts else {}),
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
     if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
@@ -316,7 +328,7 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
-    out = grounding.ground_pulse(read, indices, headlines, sectors)
+    out = grounding.ground_pulse(read, indices, headlines, sectors, cash_facts)
     out = grounding.closed_words(out) if closed else out
     tidy = lambda t: grounding.tidy_numbers(t, region)          # noqa: E731  (numbers the page's way, R7O-001)
     return {**out, "tone": tidy(out.get("tone")),

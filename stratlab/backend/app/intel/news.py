@@ -74,7 +74,14 @@ ADVICE_TITLE = re.compile(
     r"|\bwhat (should|must|can|do)\b[^?.]{0,60}\b(investors?|shareholders?|holders?|traders?|you)\b[^?.]{0,20}\bdo\b"
     r"|\bwhat (could|can|will|might|would|may) (drive|push|take|send|lift|power|fuel)\b[^.]{0,80}\b(higher|up|lower|down|rally|gains?)\b"
     r"|\bcheaper way (to|of) (buy|own|invest|get|play)\w*\b|\btarget prices\b|\bprice targets\b"
-    r"|\bwhat (investors?|you|shareholders?|traders?) (should|need to|must|ought to) know\b", re.I)
+    r"|\bwhat (investors?|you|shareholders?|traders?) (should|need to|must|ought to) know\b"
+    # R10O-006: an entry point sold as a reason to buy ("correction offers 'attractive entry point'"), a broker's target
+    # kept or moved ("stock gains 1.13 percent as target stays high", "target raised to"), "bullish calls", and "Where
+    # Could Titan Share Price Potentially Be in the Next 5 Years?"
+    r"|\bentry (point|level|zone|price|range)s?\b|\btargets? (stays?|remains?|kept|maintained|unchanged|raised|cut|lowered|hiked|slashed|revised|trimmed|upgraded)\b"
+    r"|\b(bullish|bearish|buy|sell|upbeat)\s+(calls?|view|stance|ratings?|outlook on)\b|\b(retain|retains|retained|maintain|maintains|keep|keeps)\s+(a\s+)?(bullish|bearish)\b"
+    r"|\bwhere (could|can|will|might|would|may|should)\b[^?.]{0,80}\bbe\s+(in|by|at|after|over|within)\b"
+    r"|\b(share|stock) price (potentially|could|may|might|likely to)\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

@@ -259,7 +259,7 @@ export function DeepDivePage() {
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
-                  { key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q) => pc(q.opm) },
+                  ...(n.bank && n.quarters.slice(-8).every((q) => q.opm == null) ? [] : [{ key: "o", header: n.bank ? "Financing margin" : "EBITDA margin", numeric: true, cell: (q: (typeof n.quarters)[number]) => pc(q.opm) }]),
                   { key: "p", header: "Net profit", numeric: true, cell: (q) => qS.fmt(q.profit) }]} />
             )}
           </Panel>
