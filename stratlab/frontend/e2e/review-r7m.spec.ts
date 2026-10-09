@@ -173,9 +173,12 @@ test("Admin: a currency with no exchange rate is flagged, not shown at a default
   await expect(note).not.toContainText("NOK (last rate kept)");
   await expect(page.getByText("No rate: not shown to visitors")).toHaveCount(1);
   expect(errors).toEqual([]);
-  // the server's own price list, with no rate read in the fake world, offers only the prices that need none
+  // the server's own price list always offers the prices that need no rate; which others it offers depends on whether the
+  // fake world's rate job has run yet (it starts 2 minutes after the server, so a long suite sees both), and the exact
+  // rule (no rate read: only these four) is pinned by the backend tests in test_review_r7m.py
   const pricing = await (await request.get(`${API}/pricing`)).json();
-  expect(Object.keys(pricing.currencies).sort()).toEqual(["EUR", "GBP", "INR", "USD"]);
+  expect(Object.keys(pricing.currencies)).toEqual(expect.arrayContaining(["EUR", "GBP", "INR", "USD"]));
+  for (const [code, c] of Object.entries(pricing.currencies as Record<string, Record<string, unknown>>)) expect(c, code).not.toHaveProperty("no_rate");
   expect(pricing.invoice).toEqual({ gst: true });
 });
 
