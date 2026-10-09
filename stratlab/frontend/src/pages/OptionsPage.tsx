@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, staleQuoteLine, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -109,7 +109,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
       onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /> },
     ...(preview ? [
       { key: "strike", header: "Strike", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.strike ?? (p?.pick ? "none fits" : "not listed"); } },
-      { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? `${price(p.fill, "INR", preview.tick && preview.tick < 0.01 ? 4 : undefined)}${p.from_last ? " (last trade)" : ""}` : "no quote"; } },
+      { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? `${price(p.fill, "INR", preview.tick && preview.tick < 0.01 ? 4 : undefined)}${p.from_last ? " (last trade)" : ""}` : p?.no_live ? "no live quote" : "no quote"; } },
     ] : []),
     { key: "x", header: <span className="sr-only">Remove</span>, action: true, cell: ({ i }) => (s.legs.length > 1 ? <button type="button" className="chip-x" aria-label={`Remove leg ${i + 1}`} onClick={() => set(s.legs.filter((_, j) => j !== i))}>×</button> : null) },
   ];
@@ -195,7 +195,7 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
   const best = c ? c.max_profit : f.maxProfit, worst = c ? c.max_loss : f.maxLoss;
   // the chart spans 10% either side of today's price; say where a bound lies when it's outside that
   const lo = f.xs[0], hi = f.xs[f.xs.length - 1];
-  const outside = (v: number | null, x: number) => v != null && (x < lo || x > hi) ? Math.round(x).toLocaleString("en-IN") : null;
+  const outside = (v: number | null, x: number) => v != null && (x < lo || x > hi) ? levelText(x, p.tick) : null;
   const bestOut = outside(best, f.bestAt), worstOut = outside(worst, f.worstAt);
   const curves: PayoffCurve[] = [{ id: "expiry", label: "At expiry", values: f.ys },
     ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])];
@@ -291,7 +291,7 @@ function Chain({ s }: { s: OptionStrategy }) {
         {chain && (
           <div className="k-stack">
             <div className="k-spread k-small">
-              <span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
+              <span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""}{chain.spot_from === "spot" ? " (spot rate: the future has no live quote)" : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
               <span className="k-row">
                 {chain.model && <Seg label="Chain columns" value={view} options={[{ value: "quotes", label: "Bid / ask" }, { value: "greeks", label: "IV and Greeks" }]} onChange={(v) => setView(v as "quotes" | "greeks")} />}
                 <button type="button" className="btn quiet sm" onClick={load}>Refresh</button>
@@ -594,11 +594,13 @@ export function OptionsPage() {
           </FormActions>
         </FormGrid>
         {preview && (
-          <p className="k-note">{s.underlying} {price(preview.spot, "INR")} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</p>
+          <p className="k-note" data-testid="opt-spot-line">{spotText(s.underlying, preview.spot, preview.tick, preview.spot_from)} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</p>
         )}
         {preview && preview.units === 0 && <Notice tone="warn">Not enough capital for one unit at today's margin.</Notice>}
       </Card>
-      {preview && preview.units !== 0 && <Payoff p={preview} s={s} />}
+      {/* no live quote at all (no bid, no ask, nothing traded): said, and nothing priced from a last trade weeks old (R13-002) */}
+      {preview && !!preview.no_live && <Notice tone="warn" role="status" className="opt-no-live">{preview.no_live_text || "No live quote, so the structure isn't priced."}</Notice>}
+      {preview && preview.units !== 0 && !preview.no_live && <Payoff p={preview} s={s} />}
 
       <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
 

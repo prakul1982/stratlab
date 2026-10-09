@@ -59,7 +59,8 @@ test("R12-011: Pulse's opening line names only the sections the page shows", asy
   assert.equal(pulseLede({ hot: [1], flows: [1], themes: [1] }),
     "Live index levels and headlines, with an AI read of the mood, the companies in today's headlines, where money is flowing and the themes in play.");
   const page = read("src/pages/Research.tsx");
-  assert.match(page, /lede=\{pulseLede\(ai\)\}/);
+  // R13-007 changed this on purpose: the lede also takes the day of the close once no index is live ("Last close, 9 Oct")
+  assert.match(page, /lede=\{pulseLede\(ai, /);
   assert.doesNotMatch(page, /what's moving and where money is flowing/);
 });
 

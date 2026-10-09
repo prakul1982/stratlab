@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
 import { inWords, marketState, usTodayNote } from "../lib/marketHours";
-import { MARKET_TILES, goldInr10g, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { MARKET_TILES, goldInr10g, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
@@ -217,6 +217,8 @@ function PaperCard() {
 /* ---------- the markets ---------- */
 function MarketsCard({ later }: { later: boolean }) {
   const series = useMarketStrip(later);
+  const { markets } = useApp();
+  const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   return (
     <Card testId="mine-markets" label="Markets">
       <CardHead title="Markets" info="Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today." actions={<Link className="btn quiet sm" to="/research/pulse">Market pulse</Link>} />
@@ -234,7 +236,7 @@ function MarketsCard({ later }: { later: boolean }) {
                     {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
-                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false })); return w && <span className="k-note" data-testid="mine-mkt-when"> {w}</span>; })()}</span>
+                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t))); return w && <span className="k-note" data-testid="mine-mkt-when"> {w}</span>; })()}</span>
                     <Spark values={s.values} tone={t.neutral ? "neutral" : s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>
                 )}

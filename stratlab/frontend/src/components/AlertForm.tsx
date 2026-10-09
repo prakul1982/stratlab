@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { price } from "../lib/format";
+import { alertPriceHint, type Shut } from "../lib/alerts";
+import { marketState } from "../lib/marketHours";
 import { researchApi, type Region } from "../lib/research";
 import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
@@ -22,7 +24,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
    * has that link on it passes false. */
   link?: boolean;
 }) {
-  const { fail, notify } = useApp();
+  const { fail, notify, markets } = useApp();
   const fixed = !editing && !!s0 && !choices;
   const [region, setRegion] = useState<Region>(editing?.region ?? r0);
   const [symbol, setSymbol] = useState(editing?.symbol ?? (s0 || choices?.[0]?.symbol || ""));
@@ -34,19 +36,27 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const [repeat, setRepeat] = useState(editing?.repeat ?? false);
   const [note, setNote] = useState(editing?.note ?? "");
   const [now, setNow] = useState<number | null>(null);
+  const [nowAt, setNowAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // what's wrong, under the box it belongs to (not a toast that outlives the fix)
   const [errs, setErrs] = useState<{ symbol?: string; value?: string }>({});
   const c = CONDITIONS.find((x) => x.key === cond && (!x.india || region === "IN")) ?? CONDITIONS[0];
   const sym = symbol.trim().toUpperCase();
   const ccy = region === "IN" ? "INR" : "USD";
+  // out of hours the price is the last close, and the alert waits for the next open: said beside the price (R13-007)
+  const mkt = markets.find((m) => m.id === region);
+  const st = mkt ? marketState(mkt) : null;
+  const shut: Shut | null = st && !st.open && !st.offline ? {
+    day: nowAt ? new Date(nowAt).toLocaleDateString("en-GB", { timeZone: mkt!.tz, day: "numeric", month: "short" }).replace("Sept", "Sep") : null,
+    next: st.change ? st.change.toLocaleDateString("en-GB", { timeZone: mkt!.tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace("Sept", "Sep") : null,
+  } : null;
 
   // the price now, so the level can be set against it
   useEffect(() => {
-    setNow(null);
+    setNow(null); setNowAt(null);
     if (!/^[A-Z0-9&._-]{1,20}$/.test(sym)) return;
     let live = true;
-    const t = window.setTimeout(() => researchApi.quotes(region, [sym]).then((q) => { if (live) setNow(q[sym]?.price ?? null); }).catch(() => undefined), 350);
+    const t = window.setTimeout(() => researchApi.quotes(region, [sym]).then((q) => { if (live) { setNow(q[sym]?.price ?? null); setNowAt(q[sym]?.at ?? null); } }).catch(() => undefined), 350);
     return () => { live = false; window.clearTimeout(t); };
   }, [region, sym]);
 
@@ -103,7 +113,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         </div>
       )}
       {fixed ? (
-        <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · now ${price(now, ccy)}` : ""}</span></p>
+        <p className="k-small k-form-wide"><b>{sym}</b> <span className="k-muted">· {region === "IN" ? "India" : "US"}{now != null ? ` · ${alertPriceHint(null, price(now, ccy), shut, true)}` : ""}</span></p>
       ) : (
         <>
           <Field label="Market" wide>{(id) => <Select id={id} value={region} disabled={!!choices} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "India" }, { value: "US", label: "United States" }]} />}</Field>
@@ -113,7 +123,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
                 options={choices.map((x) => ({ value: `${x.region}:${x.symbol}`, label: x.symbol }))} />}
             </Field>
           ) : (
-            <Field label="Stock" wide error={errs.symbol} hint={now != null ? `${sym} is at ${price(now, ccy)} now` : undefined}>
+            <Field label="Stock" wide error={errs.symbol} hint={now != null ? alertPriceHint(sym, price(now, ccy), shut) : undefined}>
               {(id) => <StockPicker id={id} market={region} value={picked} placeholder={region === "IN" ? "Name or symbol, like RELIANCE" : "Name or ticker, like AAPL"}
                 onText={(t) => { setSymbol(t); setErrs((x) => ({ ...x, symbol: undefined })); }} onPick={(s, r) => { setRegion(r); setSymbol(s); setPicked(s); setErrs((x) => ({ ...x, symbol: undefined })); }} />}
             </Field>
@@ -124,7 +134,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         {(id) => <Select id={id} value={cond} onChange={setCond} options={CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => ({ value: x.key, label: x.label }))} />}
       </Field>
       {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)}
-        placeholder={now != null ? String(Math.round(now)) : ""} error={errs.value} hint={now != null ? `Now ${price(now, ccy)}` : undefined} />}
+        placeholder={now != null ? String(Math.round(now)) : ""} error={errs.value} hint={now != null ? alertPriceHint(null, price(now, ccy), shut) : undefined} />}
       {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="5" error={errs.value} />}
       {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="2" error={errs.value} />}
       {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." error={errs.value} />}

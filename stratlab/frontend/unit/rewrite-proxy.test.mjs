@@ -11,8 +11,9 @@ const config = fs.readFileSync(new URL("../vite.config.ts", import.meta.url), "u
 const external = (r) => /^https?:\/\//.test(r.destination);
 
 test("the forwarded paths are exactly vercel.json's rewrites to the API", () => {
-  // /unsubscribe and /email/confirm: email links on the site's own domain, answered by the API (R6V-016)
-  assert.deepEqual(forwardedPaths().sort(), ["/c/:token", "/email/confirm", "/sitemap.xml", "/sitemaps/:path*", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
+  // /unsubscribe and /email/confirm: email links on the site's own domain, answered by the API (R6V-016); /news-link: a
+  // brief's headline in the plain-text email, a short address that forwards to the story (R13-003, added on purpose)
+  assert.deepEqual(forwardedPaths().sort(), ["/c/:token", "/email/confirm", "/news-link/:issue/:n", "/sitemap.xml", "/sitemaps/:path*", "/stocks/:path*", "/unsubscribe", "/v/:token"]);
   assert.deepEqual(forwardedPaths(), vercel.rewrites.filter(external).map((r) => r.source));
   // the only other rewrite is the app's own catch-all
   assert.deepEqual(vercel.rewrites.filter((r) => !external(r)).map((r) => r.destination), ["/index.html"]);

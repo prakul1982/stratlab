@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, count, delta, liveSeries, liveTitle, savePick, savedPick, share, shortDay,
-  type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type SectorTable, type Today,
+  BROAD_GROUP, breadthApi, count, delta, liveSeries, liveTitle, revisionLines, savePick, savedPick, share, shortDay,
+  type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -116,7 +116,7 @@ export function BreadthPage() {
             ) : (
               <>
                 {data.live && <LiveCard live={data.live} group={data.group} />}
-                <Headline t={data.today} help={help} lastClose={!!data.live} pending={data.pending} />
+                <Headline t={data.today} help={help} lastClose={!!data.live} pending={data.pending} revised={data.revised} />
                 {data.locked ? (
                   <div data-testid="breadth-locked"><PlanNote>Today's numbers are on every plan. The history, charts and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
                 ) : shown && <>
@@ -188,7 +188,8 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   );
 }
 
-function Headline({ t, help, lastClose, pending }: { t: Today; help: Record<string, string>; lastClose?: boolean; pending?: Pending }) {
+function Headline({ t, help, lastClose, pending, revised }: { t: Today; help: Record<string, string>; lastClose?: boolean; pending?: Pending; revised?: Revision[] }) {
+  const changed = revisionLines(revised, shortDay);
   const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
   const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
   // a change in a share or an oscillator is up or down in colour; TRIN is the one inverted figure (a rise in it is selling pressure), so its change keeps the direction without judging
@@ -219,6 +220,7 @@ function Headline({ t, help, lastClose, pending }: { t: Today; help: Record<stri
           delta={chg(t.mcclellan.change, "", 1)} note={t.summation.value == null ? undefined : `Summation ${fmt1(t.summation.value)}`} />
         <Stat label={lab("TRIN", help.trin)} value={t.trin.value == null ? "–" : t.trin.value.toFixed(2)} delta={chg(t.trin.change, "", 2, true)} />
       </StatRow>
+      {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.join(". ")}. A stock's price was corrected after the day was first counted.</p>}
     </Card>
   );
 }
