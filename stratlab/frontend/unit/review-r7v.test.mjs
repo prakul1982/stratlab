@@ -24,9 +24,11 @@ const ld = (html) => [...html.matchAll(/<script type="application\/ld\+json">(.*
 test("a library strategy's tab title leads with the result, and its description names the universe once (R7V-006)", () => {
   const name = "Supertrend flip · 20 US large caps";
   const fact = "117.1 points behind buy and hold after costs; passed all 3 checks run.";
-  assert.equal(libraryTitle(name, fact, "Passed all 3 checks run"), "117.1 points behind buy and hold after costs: Supertrend flip · 20 US large caps · StratLab");
+  // changed on purpose in R10V-005: the title is the shortfall, a short strategy name and StratLab in about 60 characters
+  // (it was "…after costs: Supertrend flip · 20 US large caps · StratLab", 91 characters, cut off in search results)
+  assert.equal(libraryTitle(name, fact, "Passed all 3 checks run"), "117.1 points behind buy and hold: Supertrend flip · StratLab");
   // an older entry without the fact headline: its label leads
-  assert.equal(libraryTitle(name, null, "Probably luck."), "Probably luck: Supertrend flip · 20 US large caps · StratLab");
+  assert.equal(libraryTitle(name, null, "Probably luck."), "Probably luck: Supertrend flip · StratLab");
   const desc = libraryDescription({ name, where: "20 US large caps", group: "20 US large caps", factHeadline: fact, headline: "Likely a real edge.", reason: null });
   assert.ok(desc.startsWith("117.1 points behind buy and hold after costs;"), desc);
   assert.equal(desc.match(/20 US large caps/g).length, 1, desc);

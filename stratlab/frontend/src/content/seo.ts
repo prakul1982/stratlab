@@ -16,7 +16,8 @@ export type PageMeta = {
   description: string;
   /** false: the page is for people, not for search results (sign-in pages, a 404) */
   index: boolean;
-  /** the address search engines should treat as the page's own (an alias names the page it repeats) */
+  /** the address search engines should treat as the page's own, for an indexed page that repeats another. A page with
+   * `index: false` names none (R10V-005: /about said "do not index" and "the canonical page is /" at once). */
   canonical?: string;
   /** when the page's words last changed, for the sitemap (YYYY-MM-DD) */
   updated?: string;
@@ -60,12 +61,15 @@ export const PAGES: PageMeta[] = [
     heading: "Contact us",
     summary: ["How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.",
       "Help: support@stratlab.studio. Billing and refunds: billing@stratlab.studio. Privacy requests: privacy@stratlab.studio."] },
-  // addresses that open the landing page at a place, or ask for sign-in: not pages of their own
-  { path: "/about", title: "About · StratLab", description: "What StratLab is: three spaces, Trade, Invest and Money, for Indian and US stocks.", index: false, canonical: "/",
+  // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (R10V-005
+  // checked /about: the app sends it to /features signed in, scrolls the landing page to its About place signed out, and
+  // vercel.json and unit/seo.test.mjs both list it with the pages kept out of search results; the landing page and the
+  // features page are what search engines list). Not indexed, so no canonical address either.
+  { path: "/about", title: "About · StratLab", description: "What StratLab is: three spaces, Trade, Invest and Money, for Indian and US stocks.", index: false,
     heading: "About StratLab",
     summary: ["StratLab has three spaces for Indian and US stocks. Trade: test trading ideas on years of real prices after costs, put them through four checks and paper trade them. Invest: research companies from their own filings. Money: track your holdings, funds and tax.",
       "Facts, not tips: StratLab never says what to buy or sell, and no real orders are placed."] },
-  { path: "/help", title: "Help · StratLab", description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, canonical: "/faq", heading: "Help" },
+  { path: "/help", title: "Help · StratLab", description: "Help with StratLab: the questions people ask first, and how to reach a person.", index: false, heading: "Help" },
   { path: "/login", title: "Sign in · StratLab", description: "Sign in to StratLab with your Google account.", index: false, heading: "Sign in to StratLab" },
   { path: "/signup", title: "Sign up · StratLab", description: "Create a free StratLab account with Google. No card needed.", index: false, heading: "Sign up for StratLab" },
 ];
@@ -125,20 +129,66 @@ export const whereShown = (name: string, where: string | null | undefined, group
 const lead = (factHeadline?: string | null, label?: string | null) =>
   ((factHeadline ?? "").split(";")[0].trim() || (label ?? "").trim()).replace(/\.\s*$/, "");
 
-/** A library strategy's tab title, the result first, as the page's headline leads with it (R7V-006: the title said
- * "Passed all 3 checks run" over a page that leads with "117.1 points behind buy and hold"). */
-export const libraryTitle = (name: string, factHeadline?: string | null, label?: string | null) => {
-  const l = lead(factHeadline, label);
-  return l ? `${l}: ${name} · StratLab` : `${name} · StratLab`;
+/** The longest title and description a search result shows whole: about 60 characters of title, 160 of description
+ * (R10V-005: the verdict pages' titles ran to 117 characters and their descriptions to 293, which cut off the strategy's
+ * name and StratLab). */
+export const TITLE_MAX = 64;
+export const DESCRIPTION_MAX = 160;
+
+/** A strategy's short name for a title: "Stage 2 + Supertrend · NIFTY 50 stocks" is "Stage 2 + Supertrend" (the page and
+ * the description say where it was tested). */
+export const shortName = (name: string) => plainTerms(name).split(" · ")[0].trim();
+
+/** `text` cut at a word to at most `max` characters, with "…" when it was cut. */
+const cut = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  const head = text.slice(0, Math.max(0, max - 1));
+  return head.replace(/\s+\S*$/, "").replace(/[\s,;:·(+-]+$/, "") + "…";
 };
 
-/** A library strategy's description for search results and link previews: the headline first, then the strategy, with
- * where it was tested only when its name doesn't already say it (R7V-006: "… 20 US large caps on 20 US large caps"). */
+/** A library strategy's tab title, the result first, as the page's headline leads with it (R7V-006: the title said
+ * "Passed all 3 checks run" over a page that leads with "117.1 points behind buy and hold"), then a short strategy name and
+ * StratLab, in at most TITLE_MAX characters: "117.1 points behind buy and hold: Supertrend flip · StratLab". Too long, the
+ * lead says "pts", then the name loses its bracket, then its tail (R10V-005). */
+export const libraryTitle = (name: string, factHeadline?: string | null, label?: string | null) => {
+  const l = lead(factHeadline, label).replace(/\s+after costs$/i, "");
+  const short = shortName(name);
+  const make = (a: string, n: string) => (a ? `${a}: ${n} · StratLab` : `${n} · StratLab`);
+  const abbreviated = l.replace(/\bpoints\b/, "pts");
+  const bare = short.replace(/\s*\([^)]*\)/g, "").trim() || short;
+  const clause = abbreviated.split(/;|,(?!\d)/)[0].trim();           // a long label ("Passed all 3 checks run, and returned…") to its first clause
+  for (const [a, n] of [[l, short], [abbreviated, short], [abbreviated, bare], [clause, short], [clause, bare]]) {
+    const t = make(a, n);
+    if (t.length <= TITLE_MAX) return t;
+  }
+  return make(clause, cut(bare, TITLE_MAX - make(clause, "").length));
+};
+
+/** The sentences, in order, that fit in `max` characters: the first is always kept (cut if it alone is too long), each
+ * later required one only whole, then each optional one that still fits, then the first closer that fits. */
+const sentences = (required: string[], optional: string[], closers: string[], max: number) => {
+  let out = "";
+  const add = (t: string) => { const next = out ? `${out} ${t}` : t; if (next.length <= max) { out = next; return true; } return false; };
+  required.forEach((t, i) => { if (!add(t) && i === 0) out = cut(t, max); });
+  optional.forEach(add);
+  closers.some(add);
+  return out;
+};
+
+/** A library strategy's description for search results and link previews, in at most DESCRIPTION_MAX characters: the
+ * headline first, then the strategy, with where it was tested only when its name doesn't already say it (R7V-006: "… 20 US
+ * large caps on 20 US large caps"), then the entry's own reason and a closing line when they fit (R10V-005). */
 export const libraryDescription = (e: { name: string; where?: string | null; group?: string | null; factHeadline?: string | null;
   headline?: string | null; reason?: string | null }) => {
   const on = whereShown(e.name, e.where, e.group);
-  return `${e.factHeadline ?? e.headline ?? ""} ${e.name}${on ? ` on ${on}` : ""}. ${e.reason ?? ""} The rules, results after costs and the four checks, as StratLab tested them on past prices.`
-    .replace(/\.\s*\./g, ".").replace(/\s+/g, " ").trim();
+  const one = (t?: string | null) => (t ?? "").replace(/\s+/g, " ").trim();
+  const end = (t: string) => (t && !/[.!?]$/.test(t) ? `${t}.` : t);
+  return sentences(
+    [end(one(e.factHeadline ?? e.headline)), `${e.name}${on ? ` on ${on}` : ""}.`].filter(Boolean),
+    [end(one(e.reason))].filter(Boolean),
+    ["The rules, results after costs and the four checks, on past prices.", "The rules, results after costs and four checks.", "Rules and results after costs."],
+    DESCRIPTION_MAX,
+  ).replace(/\.\s*\./g, ".");
 };
 
 /** The scan's internal short name, spelled out: "ST S2: Stage 2 + Supertrend · NIFTY 50 stocks" becomes
@@ -186,9 +236,14 @@ export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | nu
       summary: [shown, ...((v.fact_summary ?? v.summary) ? [String(v.fact_summary ?? v.summary)] : []), ...rules, about],
     };
   }
+  // no entry from the server at build time: the strategy's own words, in the same lengths
+  const plainTitle = (n: string) => `${n}: rules and verdict · StratLab`;
+  const bare = shortName(name).replace(/\s*\([^)]*\)/g, "").trim();
   return {
-    path: `/library/${id}`, title: `${name}: rules and verdict · StratLab`, index: true,
-    description: `${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks, as they came out on past prices. Facts about the past, not advice.`,
+    path: `/library/${id}`, index: true,
+    title: [name, shortName(name), bare].map(plainTitle).find((t) => t.length <= TITLE_MAX) ?? plainTitle(cut(bare, TITLE_MAX - plainTitle("").length)),
+    description: sentences([`${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks.`],
+      [], ["Facts about the past, not advice.", "Facts, not advice."], DESCRIPTION_MAX),
     heading: name,
     summary: [...rules, about],
   };

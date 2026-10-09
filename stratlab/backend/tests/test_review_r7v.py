@@ -464,8 +464,10 @@ def test_apples_peers_include_companies_of_its_size(mem, monkeypatch):
     secs = stock_pages.peer_sections("US", "AAPL", ["Manufacturing", "Electronic Computers"], 4_968_000.0)
     assert secs[0]["title"] == "Same sector" and "(Information Technology)" in secs[0]["caption"]
     first = [s for s, _ in secs[0]["rows"]]
-    assert first[:4] == ["NVDA", "MSFT", "ORCL", "DELL"] and "LLY" not in first and "HPQ" in first
-    assert secs[1]["title"] == "Same industry" and [s for s, _ in secs[1]["rows"]][:2] == ["DELL", "SMCI"]
+    # changed on purpose in R10V-007: a company shows once, under the closer list. Dell and HP Inc. are the industry's, so
+    # the sector's list (it listed Dell first) has the rest of the sector
+    assert first[:3] == ["NVDA", "MSFT", "ORCL"] and "LLY" not in first and not {"DELL", "HPQ", "SMCI"} & set(first)
+    assert secs[1]["title"] == "Same industry" and [s for s, _ in secs[1]["rows"]][:2] == ["DELL", "SMCI"] and "HPQ" in [s for s, _ in secs[1]["rows"]]
     # a small company in the same industry keeps its own industry first
     small = stock_pages.peer_sections("US", "OMCL", ["Manufacturing", "Electronic Computers"], 1_600.0)
     assert small[0]["title"] == "Same industry"

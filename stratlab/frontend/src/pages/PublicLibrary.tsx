@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { publicGet, type ApiError } from "../lib/http";
 import { applySeo, seoFor } from "../lib/seo";
+import { absolute } from "../content/seo";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
 import { signIn } from "../lib/signin";
@@ -121,7 +122,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
     document.title = title;
     const desc = libraryDescription({ name: plainTerms(e.name), where: where(e), group: e.group?.name, factHeadline: e.verdict.fact_headline,
       headline: e.verdict.headline, reason: e.reason });
-    applySeo({ ...seoFor(`/library/${id}`, "public"), description: desc, canonical: seoFor(`/library/${id}`).canonical, index: true }, title);
+    applySeo({ ...seoFor(`/library/${id}`, "public"), description: desc, canonical: absolute(`/library/${id}`), index: true }, title);
   }, [e, id]);
   const sh = e ? shownStats(e) : null;
   return (

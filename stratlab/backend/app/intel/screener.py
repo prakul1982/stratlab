@@ -235,7 +235,6 @@ def summary(p: dict) -> dict:
     sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
     profit = [v for v in _row(pl, "Net Profit") if v is not None]
     opm = [v for v in _row(pl, "OPM", "Financing Margin") if v is not None]
-    borrow = [v for v in _row(bal, "Borrowings") if v is not None]
     reserves = [v for v in _row(bal, "Reserves") if v is not None]
     equity = [v for v in _row(bal, "Equity Capital") if v is not None]
     price = num(r.get("Current Price"))
@@ -245,18 +244,25 @@ def summary(p: dict) -> dict:
     # "Latest YoY" is the latest reported year against the year before: full years only, never the trailing twelve
     # months (which overlap the last year by nine months) against the last year
     years = [str(c).strip().upper() != "TTM" for c in (pl or {}).get("cols") or []]
-
-    def full(*prefixes):
-        vals = _row(pl, *prefixes)
-        keep = [v for v, ok in zip(vals, years + [True] * (len(vals) - len(years))) if ok and v is not None]
-        return keep
-    sales_y, profit_y = full("Sales", "Revenue"), full("Net Profit")
+    sales_all, profit_all = _row(pl, "Sales", "Revenue"), _row(pl, "Net Profit")
+    n_cols = max(len(years), len(sales_all), len(profit_all))
+    year_at = [i for i in range(n_cols) if (years[i] if i < len(years) else True)]      # the full years' columns, in order
+    cell = lambda vals, i: vals[i] if i is not None and 0 <= i < len(vals) else None     # noqa: E731
+    latest, before = (year_at[-1] if year_at else None), (year_at[-2] if len(year_at) > 1 else None)
+    s_now, s_prev, p_now, p_prev = cell(sales_all, latest), cell(sales_all, before), cell(profit_all, latest), cell(profit_all, before)
     # the last reported year's, as its definition says and as the year table beside it shows (TCS FY26: 49,454 of
-    # 2,67,021 = 18.5%; the trailing twelve months' 18.1% sat next to the FY26 figures)
-    net_margin = (profit_y[-1] / sales_y[-1] * 100) if sales_y and profit_y and sales_y[-1] else None
+    # 2,67,021 = 18.5%; the trailing twelve months' 18.1% sat next to the FY26 figures). Both from that year's own column:
+    # a blank profit there is a blank margin, never the profit of an earlier year over this year's revenue (R10V-001:
+    # Deutsche Bank's 20.1% was 2023's profit over 2025's revenue)
+    net_margin = (p_now / s_now * 100) if p_now is not None and s_now else None
     face = num(r.get("Face Value"))
-    whole = [v for v in _row(bal, "Equity") if v is not None]       # US filings: one shareholders' equity row
-    net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else (whole[-1] if whole else None)
+    # debt to equity: the balance sheet's latest column for both, never the debt of one year over the equity of another
+    last = lambda label: (lambda row: row[-1] if row and row[-1] is not None else None)(_row(bal, label))      # noqa: E731
+    borrow_now, reserves_now, capital_now, whole_now = last("Borrowings"), last("Reserves"), last("Equity Capital"), last("Equity")
+    if _row(bal, "Reserves"):             # Indian pages: reserves and share capital together (none for the newest year: no net worth)
+        net_worth = (reserves_now + (capital_now or 0)) if reserves_now is not None else None
+    else:
+        net_worth = whole_now             # US filings: one shareholders' equity row
     return {
         "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
@@ -264,11 +270,11 @@ def summary(p: dict) -> dict:
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
         "net_margin": net_margin, "opm": opm[-1] if opm else None,
-        "sales_yoy": ((sales_y[-1] / sales_y[-2] - 1) * 100) if len(sales_y) > 1 and sales_y[-2] > 0 else None,
+        "sales_yoy": ((s_now / s_prev - 1) * 100) if s_now is not None and s_prev is not None and s_prev > 0 else None,
         # a change from a loss isn't a growth rate: none then
-        "profit_yoy": ((profit_y[-1] / profit_y[-2] - 1) * 100) if len(profit_y) > 1 and profit_y[-2] > 0 else None,
-        "debt_cr": borrow[-1] if borrow else None,
-        "debt_equity": (borrow[-1] / net_worth) if borrow and net_worth else None,
+        "profit_yoy": ((p_now / p_prev - 1) * 100) if p_now is not None and p_prev is not None and p_prev > 0 else None,
+        "debt_cr": borrow_now,
+        "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth else None,
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
     }
 

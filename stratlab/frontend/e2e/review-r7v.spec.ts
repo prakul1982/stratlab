@@ -25,9 +25,16 @@ test("a library strategy's tab title and description lead with its result and na
   const v = entry.verdict;
   await expect(h1(page)).toHaveText(v.fact_headline ?? v.headline, { timeout: 30_000 });
   const lead = String(v.fact_headline ?? v.label ?? v.headline).split(";")[0].replace(/\.\s*$/, "").trim();
-  await expect(page).toHaveTitle(`${lead}: ${entry.name} · StratLab`);
+  // changed on purpose in R10V-005: the title is the result, a short strategy name and StratLab in about 60 characters (it was
+  // "<result>: <full name with its universe> · StratLab", up to 117), and the description at most 160
+  await expect.poll(() => page.title()).toMatch(/ · StratLab$/);
+  const title = await page.title();
+  expect(title.length).toBeLessThanOrEqual(64);
+  expect(title.startsWith(lead.replace(/\bpoints\b/, "pts").slice(0, 14)) || title.startsWith(lead.slice(0, 14)), `${title} | ${lead}`).toBe(true);
+  expect(title).toContain(entry.name.split(" · ")[0]);
   const desc = await page.locator('meta[name="description"]').getAttribute("content");
-  expect(desc?.startsWith(String(v.fact_headline ?? v.headline))).toBe(true);
+  expect(desc!.length).toBeLessThanOrEqual(160);
+  expect(desc?.startsWith(String(v.fact_headline ?? v.headline).slice(0, 60))).toBe(true);
   expect((desc ?? "").toLowerCase().split("20 us large caps").length - 1, desc ?? "").toBe(1);
   expect(desc).not.toMatch(/ on 20 US large caps/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");

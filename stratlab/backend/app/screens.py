@@ -24,6 +24,7 @@ from . import db, deals, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
+BEHIND_FIRST = 1e12                   # added to a page's market value to build it before every other old page (stock_pages.annual_behind)
 KEY = "screens:user:"                 # screens:user:<uid> = {"uid", "items": [...], "sent": [...]}
 KNOWN_KEY = "screens:known:"          # screens:known:IN = the symbols in the index at the last weekly run
 REGIONS = ("IN", "US")
@@ -181,6 +182,8 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
            "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": None if stale_adr else stock_pages.shown_yield(f), "pe": None if stale_adr else stock_pages.shown_pe(f),
            "stage": int(f["stage"]) if _num(f.get("stage")) in STAGES else None,
            "red_flags": _red_count(f) if region == "IN" else None,
+           # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)
+           "foreign": bool(f["foreign"]) if region == "US" and f.get("foreign") is not None else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
     return out
 
@@ -251,12 +254,15 @@ def build_index(region: str, store: bool = True) -> dict:
         # built again first when a large company's (see Indexer._due): nothing stored, or a page from before the facts
         # it shows now (every class of shares counted, one P/E: R7V-001, R7V-002; India's yield from its own dividends
         # list: R8O-001)
-        if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION:
+        # ...or a page whose table is a year behind the company's newest annual report (R10V-002: Dr. Reddy's and Caledonia
+        # kept a table to the report before the last one, as long as nobody opened the page)
+        if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or stock_pages.annual_behind(facts):
             empty.add(sym)
             if stock_pages.has_content(facts):
                 # every other company's page from before: rebuilt next, the largest first (R8V-003: Toyota's, Infosys's
                 # and Itaú's pages were a year behind hours after the fix went live, rebuilt only when the ration allowed)
-                old[sym] = _num(facts.get("market_cap")) or 0.0
+                # (a table a year behind its company's newest report goes before them all: its numbers are the stale ones)
+                old[sym] = (_num(facts.get("market_cap")) or 0.0) + (BEHIND_FIRST if stock_pages.annual_behind(facts) else 0.0)
         if stock_pages.has_content(facts):
             shown.append(sym)
         r = row(region, sym, stored.get("facts") or {})
