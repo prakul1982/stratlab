@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from . import db
 from .intel.filings import ist_now
+from .http_retry import real_transport
 from .intel.net import BROWSER_UA, SourceError, TTLCache
 from .newsletter import job as news_job
 
@@ -637,7 +638,7 @@ class Web:
 
     def __init__(self, transport=None, pause: float | None = None, sleep=time.sleep):
         import httpx
-        self.http = httpx.Client(timeout=40, follow_redirects=True, transport=transport,
+        self.http = httpx.Client(timeout=40, follow_redirects=True, transport=transport or real_transport(),
                                  headers={"User-Agent": BROWSER_UA, "Accept-Language": "en-IN,en;q=0.9",
                                           "Accept": "text/html,application/xhtml+xml,application/json,application/pdf,*/*;q=0.8"})
         self.pause = PAUSE if pause is None else pause

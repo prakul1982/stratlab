@@ -8,7 +8,8 @@ import httpx
 from supabase import create_client, Client
 from supabase.lib.client_options import SyncClientOptions
 from .config import settings
-from . import market_store
+from . import http_retry, market_store
+from .flight import Flights
 
 _client: Client | None = None
 _client_lock = threading.Lock()
@@ -17,46 +18,25 @@ _client_lock = threading.Lock()
 # when the server closes it (an idle timeout, a restart) every request in flight fails with "Server disconnected",
 # and two threads using one HTTP/2 stream table at once fail with a bare KeyError (the stream number). HTTP/1.1 keeps a
 # pool of connections instead (one request each, safe across threads), and a dropped connection is simply left out.
-READ_METHODS = ("GET", "HEAD", "OPTIONS")
-RETRY_PAUSE = 0.25            # seconds before the one retry, so a server that is restarting has a moment
+READ_METHODS = http_retry.READ_METHODS
+RETRY_PAUSE = http_retry.RETRY_PAUSE   # seconds before the one retry, so a server that is restarting has a moment
 
 
-class RetryReads(httpx.BaseTransport):
-    """A read that fails because the connection broke is sent once more, on a new connection. A write is sent again
-    only when it never left (the connection couldn't be opened), so nothing is ever saved twice."""
+class RetryReads(http_retry.RetryReads):
+    """A read that fails because the connection broke is sent once more, on a new connection (app/http_retry.py). A
+    write is sent again only when it never left, so nothing is ever saved twice."""
 
-    def __init__(self, inner: httpx.BaseTransport):
-        self.inner = inner
-
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        try:
-            return self._send(request)
-        except (httpx.ConnectError, httpx.ConnectTimeout) as e:
-            print("database: connect failed, trying again:", type(e).__name__)
-        except (httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError, httpx.ReadTimeout, httpx.PoolTimeout) as e:
-            if request.method not in READ_METHODS:
-                raise
-            print("database: connection dropped during a read, trying again:", type(e).__name__)
-        time.sleep(RETRY_PAUSE)
-        return self._send(request)
-
-    def _send(self, request: httpx.Request) -> httpx.Response:
-        resp = self.inner.handle_request(request)
-        try:
-            resp.read()             # read the body here, so a connection that drops halfway is also caught above
-        except BaseException:
-            resp.close()
-            raise
-        return resp
-
-    def close(self) -> None:
-        self.inner.close()
+    def _pause(self) -> float:
+        return RETRY_PAUSE
 
 
 def _http() -> httpx.Client:
+    # the connection limits belong to the transport: a client given a transport ignores its own `limits`, which is why the
+    # 30 s keep-alive once written here never applied (R9R-009); a short one keeps a pooled connection inside the idle timeout
+    # of the server at the other end
     return httpx.Client(http2=False, follow_redirects=True, timeout=httpx.Timeout(30.0, connect=10.0),
-                        limits=httpx.Limits(max_connections=40, max_keepalive_connections=20, keepalive_expiry=30.0),
-                        transport=RetryReads(httpx.HTTPTransport(http2=False)))
+                        transport=RetryReads(httpx.HTTPTransport(http2=False, limits=httpx.Limits(
+                            max_connections=40, max_keepalive_connections=20, keepalive_expiry=http_retry.KEEPALIVE_EXPIRY))))
 
 
 def sb() -> Client:
@@ -86,6 +66,7 @@ def get_profile(user_id: str, email: str | None = None) -> dict:
 PROFILE_TTL = 10.0
 _profiles: dict[str, tuple[float, dict]] = {}
 _profiles_lock = threading.Lock()
+_profile_flights = Flights()
 
 
 def cached_profile(user_id: str, email: str | None = None) -> dict:
@@ -94,11 +75,17 @@ def cached_profile(user_id: str, email: str | None = None) -> dict:
         hit = _profiles.get(user_id)
     if hit and hit[0] > now:
         return dict(hit[1])
-    row = get_profile(user_id, email)
-    with _profiles_lock:
-        if len(_profiles) > 5000:
-            _profiles.clear()
-        _profiles[user_id] = (now + PROFILE_TTL, dict(row))
+    # a page's dozen calls at once each need the profile: the first reads it, the others wait and find it kept (R9R-010)
+    with _profile_flights.hold(user_id):
+        with _profiles_lock:
+            hit = _profiles.get(user_id)
+        if hit and hit[0] > time.monotonic():
+            return dict(hit[1])
+        row = get_profile(user_id, email)
+        with _profiles_lock:
+            if len(_profiles) > 5000:
+                _profiles.clear()
+            _profiles[user_id] = (time.monotonic() + PROFILE_TTL, dict(row))
     return dict(row)
 
 

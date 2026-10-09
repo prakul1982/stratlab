@@ -72,13 +72,14 @@ function loadSeries(t: MarketTile): Promise<Series | null> {
 }
 
 /** Each tile's last month of daily closes: undefined while loading, null when it cannot be read. */
-export function useMarketStrip(): Record<string, Series | null | undefined> {
+export function useMarketStrip(enabled = true): Record<string, Series | null | undefined> {
   const [out, setOut] = useState<Record<string, Series | null | undefined>>({});
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
     MARKET_TILES.forEach((t) => loadSeries(t).then((s) => { if (live) setOut((o) => ({ ...o, [t.id]: s })); }));
     return () => { live = false; };
-  }, []);
+  }, [enabled]);
   return out;
 }
 
@@ -94,9 +95,10 @@ const KINDS: EvKind[] = ["rbi", "india", "us", "budget", "index"];
 
 /** The dates ahead from every calendar the app has: the money calendar (tax, your stocks' results and dividends, your own
  * dates), the market events (RBI, data releases, the Fed, index changes) and results for your watchlist. null while loading. */
-export function useComingUp(limit = 6): Up[] | null {
+export function useComingUp(limit = 6, enabled = true): Up[] | null {
   const [rows, setRows] = useState<Up[] | null>(null);
   useEffect(() => {
+    if (!enabled) return;
     let live = true;
     const today = todayIso(), end = addDaysIso(today, 75);
     Promise.all([
@@ -125,6 +127,6 @@ export function useComingUp(limit = 6): Up[] | null {
       setRows(out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)).filter((u) => (seen.has(u.key) ? false : (seen.add(u.key), true))).slice(0, limit));
     });
     return () => { live = false; };
-  }, [limit]);
+  }, [limit, enabled]);
   return rows;
 }

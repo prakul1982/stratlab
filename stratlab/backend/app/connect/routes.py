@@ -152,12 +152,12 @@ async def upload_statement(req: StatementReq, profile=Depends(current_profile)):
     data = _decode(req.data, statements.MAX_PDF)
     pw = req.password.strip()
     if pw and req.remember and vault.ready():
-        state.update(profile["id"], "inbox", pw=vault.seal(pw))
+        await run_in_threadpool(state.update, profile["id"], "inbox", pw=vault.seal(pw))
     got = await run_in_threadpool(statements.process, profile["id"], data, req.filename, [pw] if pw else [], "upload")
     if not got["ok"]:
         code = "wrong_password" if got["status"] in ("wrong_password", "no_password") else "bad_file"
         err(400, code, got["detail"])
-    return ok({**got, "connect": view(profile)})
+    return ok({**got, "connect": await run_in_threadpool(view, profile)})
 
 
 # ---------- Zerodha ----------
@@ -207,7 +207,7 @@ async def kite_refresh(profile=Depends(current_profile)):
         if e.expired:
             err(409, "login_needed", e.message)
         err(502, "broker_error", e.message)
-    return ok({**got, "connect": view(profile)})
+    return ok({**got, "connect": await run_in_threadpool(view, profile)})
 
 
 @router.delete("/kite")
@@ -234,7 +234,7 @@ async def ibkr_connect(req: IbkrReq, profile=Depends(current_profile)):
         got = await run_in_threadpool(ibkr.connect, profile["id"], req.token, req.query_id, req.expires)
     except ibkr.FlexError as e:
         err(400, e.code, e.message)
-    return ok({**got, "connect": view(profile)})
+    return ok({**got, "connect": await run_in_threadpool(view, profile)})
 
 
 @router.post("/ibkr/refresh")
@@ -244,7 +244,7 @@ async def ibkr_refresh(profile=Depends(current_profile)):
         got = await run_in_threadpool(ibkr.sync_user, profile["id"])
     except ibkr.FlexError as e:
         err(400, e.code, e.message)
-    return ok({**got, "connect": view(profile)})
+    return ok({**got, "connect": await run_in_threadpool(view, profile)})
 
 
 @router.delete("/ibkr")

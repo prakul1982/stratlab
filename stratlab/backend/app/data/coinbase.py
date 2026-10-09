@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 
 import httpx
 
+from ..http_retry import real_transport
+
 BASE = "https://api.exchange.coinbase.com"
 GRANULARITY = {"1d": 86400, "1h": 3600, "15m": 900, "5m": 300}
 PER_DAY = {"1d": 1, "1h": 24, "15m": 96, "5m": 288}
@@ -56,7 +58,7 @@ class CoinbaseProvider:
     max_days = MAX_DAYS
 
     def __init__(self, transport: httpx.BaseTransport | None = None):
-        self._http = httpx.Client(base_url=BASE, timeout=20, transport=transport,
+        self._http = httpx.Client(base_url=BASE, timeout=20, transport=transport or real_transport(),
                                   headers={"User-Agent": "StratLab (+https://stratlab.studio)"})
         self._lock = threading.Lock()
         self._last = 0.0

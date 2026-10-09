@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from .http_retry import real_transport
 from .intel.net import BROWSER_UA, SourceError, TTLCache
 
 ALLOWED_HOSTS = {"nsearchives.nseindia.com", "archives.nseindia.com", "www.nseindia.com", "www.bseindia.com"}
@@ -168,7 +169,7 @@ def _tidy(text: str) -> str:
 class Docs:
     def __init__(self, http: httpx.Client | None = None, transport: httpx.BaseTransport | None = None, check_host=public_host,
                  ocr=None):
-        self.http = http or httpx.Client(timeout=30, transport=transport, follow_redirects=False,
+        self.http = http or httpx.Client(timeout=30, transport=transport or real_transport(), follow_redirects=False,
                                          headers={"User-Agent": BROWSER_UA, "Accept": "application/pdf,*/*",
                                                   "Referer": "https://www.nseindia.com/"})
         self.check_host = check_host
