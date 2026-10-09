@@ -1,8 +1,9 @@
-import { lazy, Suspense, useLayoutEffect, type ComponentType } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, type ComponentType } from "react";
 import { useLocation } from "react-router-dom";
 import { visitorView } from "../lib/deepLinks";
 import { applySeo, seoFor, type SeoKind } from "../lib/seo";
-import { landingHeading } from "../content/seo";
+import { HOME_TITLE, landingHeading } from "../content/seo";
+import { heldStartup } from "../lib/held";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
 
@@ -39,7 +40,13 @@ export function VisitorApp() {
   const view = visitorView(pathname);
   const kind: SeoKind = view.kind === "gate" ? "gate" : view.kind === "notfound" ? "notfound" : view.kind === "verdict" ? "verdict" : "public";
   // the tab's title and what search engines are told, before the page adds anything of its own (a verdict names itself)
+  const first = useRef(true);
   useLayoutEffect(() => {
+    const start = first.current;
+    first.current = false;
+    // a strategy's page arrives with its own title and tags from the build; until its data is here the tab keeps them, not
+    // "Strategy library" for a second and then its name again (R10V-006)
+    if (start && view.kind === "libraryEntry" && document.title && document.title !== HOME_TITLE) return;
     const title = view.kind === "notfound" ? NOT_FOUND_TITLE : view.kind === "verdict" ? "Shared verdict · StratLab"
       : view.kind === "libraryEntry" ? "Strategy library · StratLab" : signedOutTitle(pathname);
     document.title = title;
@@ -48,8 +55,12 @@ export function VisitorApp() {
 
   // while a page's code downloads, the page is still a page: a main landmark with a heading (R6V-013)
   const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Opening label="Opening StratLab" /></main>;
+  // ...and when the page came with its own words (a cold /library, /pricing or /faq), those words stay on screen while its
+  // code downloads, instead of a splash that replaces them for a second (R10V-006); with none, the splash
+  const words = heldStartup();
+  const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
-    <Suspense fallback={wait}>
+    <Suspense fallback={fallback}>
       {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} />
         : view.kind === "legal" ? <LegalPage />
         : view.kind === "verdict" ? <PublicVerdict token={view.token} />

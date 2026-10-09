@@ -3175,6 +3175,16 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             except Exception:
                 items, red = [], None
             exchange = "BSE" if co["bse"] else "NSE"
+    except sec.NoNumbers as e:
+        # a company on the SEC's list whose results can't be shown (a 20-F filed without structured data, a home-country
+        # filer): its price and range still can, on a page that says why there are no numbers (R10V-004: ICICI Bank, IBN)
+        if region != "US":
+            return None
+        p = price_only_company(sym, co, str(e))
+        if p is None:
+            return None
+        checks["no_numbers"] = p["no_numbers"]
+        items, exchange, red = [], "Listed in the US", None
     except SourceError as e:
         if e.busy:
             raise
@@ -3208,6 +3218,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             p["ratios"]["Dividend Yield"] = dy
     if region == "US":
         checks.update(us_cap_checks(p, sym))
+        if p.get("shares") is None and not p.get("no_numbers"):
+            checks["cap_why"] = "shares"            # no market value can be worked out: the page says so (R10V-004)
+        if p.get("annual_filed"):
+            checks["annual_filed"] = p["annual_filed"]      # when its newest annual report was filed (stock_pages.annual_behind)
         if close and not sec.non_common(sym):
             # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
             # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page
@@ -3236,6 +3250,27 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"), co)
         snap = {**snap, "div_yield": dy}
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
+
+
+def price_only_company(sym: str, co: dict, why: str) -> dict | None:
+    """What a public page is built from for a US-listed company with no reported numbers to show (see sec.NoNumbers):
+    its name and nothing else, with `why` for the page to say. None when the ticker isn't a company (a fund, an index,
+    a note: the quote's own type says so) or has no share price."""
+    if why in (sec.NO_RESULTS["fund"], sec.NO_RESULTS["stopped"]):
+        return None                       # a fund has no company page; a company that left SEC reporting has no current numbers or page
+    try:
+        quote = research_hub.yahoo.meta(sec.price_symbol(sym))
+    except Exception:
+        return None
+    if not quote.get("price") or stock_pages.FUND_TYPES.get(str(quote.get("type") or "").upper()) or sec.non_common(sym):
+        return None
+    try:
+        name = sec_feed.listing(sym).get("name")
+    except SourceError:
+        name = None
+    return {"name": name or co.get("name") or sym, "ratios": {}, "pl": None, "balance": None, "cashflow": None, "quarters": None,
+            "industry_path": [], "region": "US", "unit": "$ million", "currency": "USD", "documents": [], "foreign": True,
+            "no_numbers": why}
 
 
 def official_page_close(co: dict) -> dict | None:
@@ -3325,7 +3360,16 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
     if region == "IN" and bars:
         # the day's close as the exchange states it, not the candle's last trade: the same figure as the company page
         # and the screens (R7O-004: TCS 2,077.00 here against 2,076.00 in the app)
-        bars = official_close.overlay_bars(list(bars), co["sym"] if not co.get("bse") else co["bse"])
+        sym = co["sym"] if not co.get("bse") else co["bse"]
+        bars = official_close.overlay_bars(list(bars), sym)
+        # ...and the year's extremes as the exchange's own 52-week report states them (R10V-003): a stray low in the
+        # broker's candles, or a high they clipped, never reaches the page's 1-year range. Public pages only; the app's
+        # own candles are read as before (official_close.widen_to_range)
+        try:
+            rep = official_close.ranges() or {}
+            bars = stock_pages.fit_to_exchange_range(bars, (rep.get("rows") or {}).get(official_close.base_symbol(sym)), rep.get("day"))
+        except Exception as e:                       # the candles as they are rather than none
+            print("52-week report for the public page:", sym, str(e)[:120])
     return bars
 
 

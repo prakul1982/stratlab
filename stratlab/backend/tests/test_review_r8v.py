@@ -292,7 +292,8 @@ def test_a_stored_us_page_from_before_the_yield_definition_takes_the_dividends_l
 def test_pages_say_which_facts_version_built_them():
     f = stock_pages.facts("US", "ACME", {"name": "Acme"}, {"years": []}, {}, None, None, [], "Listed in the US",
                           checks={"foreign": True, "profit_usd": 7_320.0, "annual_unread": "2026-04-30"})
-    assert f["v"] == stock_pages.FACTS_VERSION == 6
+    # changed on purpose in R10V (the consolidated entity's profit, cover-page share counts, one-year ratios, a 365-day range): 6 -> 7
+    assert f["v"] == stock_pages.FACTS_VERSION == 7
     assert f["foreign"] is True and f["profit_usd"] == 7_320.0 and f["annual_unread"] == "2026-04-30"
 
 

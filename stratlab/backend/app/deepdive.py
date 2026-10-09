@@ -95,10 +95,15 @@ def _years(table: dict | None) -> list[str]:
 
 
 def _cagr(vals: list, years: int) -> float | None:
-    v = [x for x in vals if x is not None]
-    if len(v) <= years or v[-1 - years] is None or v[-1 - years] <= 0 or v[-1] is None or v[-1] <= 0:
+    """The yearly growth over `years` years between the latest year's figure and the one `years` columns before it. The
+    columns count as they stand: a blank year is a gap, not a column that isn't there (R10V-001: with Deutsche Bank's
+    two newest profits blank, the filtered list ran from 2021 to 2023 over three "years" and said 135.8% a year)."""
+    if len(vals) <= years:
         return None
-    return ((v[-1] / v[-1 - years]) ** (1 / years) - 1) * 100
+    new, old = vals[-1], vals[-1 - years]
+    if new is None or old is None or old <= 0 or new <= 0:
+        return None
+    return ((new / old) ** (1 / years) - 1) * 100
 
 
 def _year_key(col: str) -> str:

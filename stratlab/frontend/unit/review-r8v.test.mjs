@@ -31,7 +31,8 @@ const supertrend = {
 test("a library strategy's raw HTML leads with its result: title, description, og:title and h1, as the drawn page (R8V-008)", () => {
   const files = Object.fromEntries(libraryFiles(template, { "seed-supertrend-us": supertrend }));
   const page = files["library/seed-supertrend-us/index.html"];
-  const title = "117.1 points behind buy and hold after costs: Supertrend flip · 20 US large caps · StratLab";
+  // changed on purpose in R10V-005: about 60 characters, the shortfall then a short strategy name then StratLab
+  const title = "117.1 points behind buy and hold: Supertrend flip · StratLab";
   assert.equal(tag(page, /<title>([^<]*)<\/title>/), title);
   assert.equal(tag(page, /<meta property="og:title" content="([^"]*)">/), title);
   assert.equal(tag(page, /<meta name="twitter:title" content="([^"]*)">/), title);
@@ -108,7 +109,8 @@ test("the 404 page names no canonical address, in its HTML and once drawn (R8V-0
   assert.match(files["terms/index.html"], /<link rel="canonical" href="https:\/\/stratlab\.studio\/terms">/);
   const { seoFor } = await import("../src/lib/seo.ts");
   assert.equal(seoFor("/nope", "notfound").canonical, null);
-  assert.equal(seoFor("/research/IN/X", "gate").canonical, "https://stratlab.studio/research/IN/X");
+  // changed on purpose in R10V-005: a page kept out of search results (a sign-in gate included) names no canonical address either
+  assert.equal(seoFor("/research/IN/X", "gate").canonical, null);
   assert.match(read("src/lib/seo.ts"), /if \(s\.canonical === null\) \{\s*document\.head\.querySelectorAll\('link\[rel="canonical"\]'\)\.forEach\(\(el\) => el\.remove\(\)\);/);
 });
 

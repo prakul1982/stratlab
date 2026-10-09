@@ -87,7 +87,10 @@ test("a page still loading is already a main landmark with a heading (R6V-013)",
   const held = new Promise<void>((ok) => { release = ok; });
   await page.route(/\/assets\/PublicLibrary-[^/]+\.js$/, async (r) => { await held; await r.fallback(); });
   await open(page, "/library/seed-supertrend-us");
-  await expect(page.getByText("Opening StratLab")).toBeVisible({ timeout: 30_000 });
+  // changed on purpose in R10V-006: the page's own start-up words stay on screen while its code downloads (they are a main
+  // landmark with a heading too), not an "Opening StratLab" splash that replaced them for a second
+  await expect(page.locator("[data-held] h1")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Opening StratLab")).toHaveCount(0);
   await expect(page.locator("main")).toHaveCount(1);
   await expect(page.locator("main h1")).toHaveCount(1);
   release();

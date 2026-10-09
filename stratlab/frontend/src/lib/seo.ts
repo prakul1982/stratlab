@@ -2,8 +2,9 @@ import { absolute, GATE_DESCRIPTION, NOT_FOUND_DESCRIPTION, pageMeta, VERDICT_DE
 
 /* The tags a search engine or a link preview reads, kept right while someone moves between pages (the static page
  * already carries the right ones for its own address: scripts/seoPages.mjs). Every page gets a description of its own, a
- * canonical address, and noindex unless it is a public page worth finding. A page that isn't there has no canonical
- * address at all: naming one (the home page, or itself) tells a search engine there is a page (R8V-008). */
+ * canonical address, and noindex unless it is a public page worth finding. A page that isn't there, or isn't to be
+ * indexed, has no canonical address at all: naming one (the home page, or itself) tells a search engine there is a page
+ * to list (R8V-008, R10V-005). */
 
 export type Seo = { description: string; canonical: string | null; index: boolean; title?: string };
 export type SeoKind = "public" | "gate" | "notfound" | "verdict" | "account";
@@ -15,10 +16,11 @@ export function seoFor(path: string, kind: SeoKind = "public", over: Partial<Seo
   const p = tidy(path);
   const known = kind === "public" ? pageMeta(p) : undefined;
   const base: Seo = known
-    ? { description: known.description, canonical: absolute(known.canonical ?? known.path), index: known.index }
+    ? { description: known.description, canonical: known.index ? absolute(known.canonical ?? known.path) : null, index: known.index }
     : { description: kind === "notfound" ? NOT_FOUND_DESCRIPTION : kind === "verdict" ? VERDICT_DESCRIPTION : GATE_DESCRIPTION,
-      canonical: kind === "notfound" ? null : absolute(p), index: false };
-  return { ...base, ...over };
+      canonical: null, index: false };
+  const out = { ...base, ...over };
+  return out.index ? out : { ...out, canonical: null };      // a page kept out of search results names no canonical address (R10V-005)
 }
 
 function meta(selector: string, make: () => HTMLElement, set: (el: HTMLElement) => void) {

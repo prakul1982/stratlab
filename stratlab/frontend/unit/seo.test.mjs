@@ -81,7 +81,10 @@ test("every public page has its own title, description and one canonical address
   assert.deepEqual(theirs, seo.sitemapPages().map((p) => [p.path, p.updated]));
   // an alias names the page it repeats, and the sign-in addresses stay out of search
   for (const p of seo.PAGES.filter((x) => !x.index)) assert.ok(["/about", "/help", "/login", "/signup"].includes(p.path), p.path);
-  assert.equal(seo.pageMeta("/help").canonical, "/faq");
+  // changed on purpose in R10V-005: a page kept out of search results names no canonical address (/help named /faq, /about named /)
+  assert.equal(seo.pageMeta("/help").canonical, undefined);
+  assert.equal(seo.pageMeta("/about").canonical, undefined);
+  for (const p of seo.PAGES.filter((x) => !x.index)) assert.equal(p.canonical, undefined, p.path);
 });
 
 test("the tags for each kind of page: its own, noindex for a sign-in gate, a missing page and a shared verdict", () => {
@@ -90,12 +93,12 @@ test("the tags for each kind of page: its own, noindex for a sign-in gate, a mis
   assert.equal(seoFor("/terms").description, seo.pageMeta("/terms").description);
   const gate = seoFor("/research/IN/NOPESYMBOL", "gate");
   assert.equal(gate.index, false);
-  assert.equal(gate.canonical, "https://stratlab.studio/research/IN/NOPESYMBOL");
+  assert.equal(gate.canonical, null);              // changed on purpose in R10V-005: noindex, so no canonical
   assert.doesNotMatch(gate.description, /NOPESYMBOL/);
   assert.equal(seoFor("/nope", "notfound").index, false);
   assert.equal(seoFor("/verdict/abc", "verdict").index, false);
   assert.equal(seoFor("/login").index, false);
-  assert.equal(seoFor("/help").canonical, "https://stratlab.studio/faq");
+  assert.equal(seoFor("/help").canonical, null);
   const own = new Set(["/", "/pricing", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"].map((p) => seoFor(p).description));
   assert.equal(own.size, 8);
 });
@@ -107,8 +110,10 @@ test("each page's own HTML is written at build time, with structured data on the
     "login/index.html", "pricing/index.html", "privacy/index.html", "refunds/index.html", "signup/index.html", "terms/index.html"]);
   for (const [file, html] of Object.entries(files)) {
     for (const re of [/<title>/g, /<meta name="description"/g, /<meta name="robots"/g]) assert.equal((html.match(re) ?? []).length, 1, `${file} ${re}`);
-    // changed on purpose in R8V-008: the 404 page names no canonical address (it named the home page); every other one names one
-    assert.equal((html.match(/<link rel="canonical"/g) ?? []).length, file === "404.html" ? 0 : 1, `${file} canonical`);
+    // changed on purpose in R8V-008: the 404 page names no canonical address (it named the home page); every other one names one,
+    // and in R10V-005 so does every page kept out of search results (/about, /help, /login, /signup said "do not index" and named a canonical)
+    const kept = /name="robots" content="noindex/.test(html);
+    assert.equal((html.match(/<link rel="canonical"/g) ?? []).length, file === "404.html" || kept ? 0 : 1, `${file} canonical`);
     assert.doesNotMatch(html, /<!--jsonld-->/);
   }
   const terms = files["terms/index.html"];
@@ -118,7 +123,8 @@ test("each page's own HTML is written at build time, with structured data on the
   assert.doesNotMatch(terms, /ld\+json/);
   assert.match(files["404.html"], /content="noindex, follow"/);
   assert.match(files["login/index.html"], /content="noindex, follow"/);
-  assert.match(files["help/index.html"], /<link rel="canonical" href="https:\/\/stratlab\.studio\/faq">/);
+  assert.doesNotMatch(files["help/index.html"], /rel="canonical"/);     // changed on purpose in R10V-005: noindex, so no canonical
+  assert.doesNotMatch(files["about/index.html"], /rel="canonical"/);
   const ld = JSON.parse(files["index.html"].match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
   assert.deepEqual(ld.map((x) => x["@type"]), ["Organization", "WebSite", "FAQPage"]);
   assert.deepEqual(ld[2].mainEntity.map((q) => q.name), FAQ.map((f) => f.q));
