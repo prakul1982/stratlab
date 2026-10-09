@@ -111,6 +111,7 @@ function IssueView({ id }: { id: string }) {
           <h2 className="k-card-title">{issue.subject}</h2>
           {asOf(issue.at) && <span className="k-note">Prices and numbers as of {asOf(issue.at, { tz: marketTz(issue.region) })}</span>}
           {issue.summary && <p className="k-lede">{issue.summary}</p>}
+          {issue.ai_summary && <p data-testid="news-ai-summary">{issue.ai_summary}</p>}
         </div>
         {(issue.sections ?? []).filter((s) => s.items?.length).map((s, i) => (
           <section key={i} className="k-stack">

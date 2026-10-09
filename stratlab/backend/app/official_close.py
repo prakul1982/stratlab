@@ -92,9 +92,11 @@ def closes(day, now: datetime | None = None) -> dict[str, float] | None:
     evening, India time) and stored. None while it isn't out or can't be read (asked again after RETRY)."""
     d = _day(day)
     got = stored(d)
+    files_fn = _src.get("files")
+    if files_fn and d:
+        fetch_ranges(d, now)            # the same evening's 52-week report, read once beside the closes (R8B-009)
     if got:
         return got
-    files_fn = _src.get("files")
     if not files_fn or not d:
         return None
     now = (now or datetime.now(timezone.utc)).astimezone(IST)
@@ -290,9 +292,98 @@ def day_close(symbol: str, day, kind: str = "cas", exchange: str = "NSE", now: d
     return float(q["price"])
 
 
+# ---------- the exchange's own 52-week high and low (R8B-009) ----------
+# The broker's daily candle can miss the day's extreme the exchange printed: INFY's candle of 3 Feb 2026 reads open
+# 1,690.60 and high 1,691.40, gapping up from 1,594.90, while the exchange's high that day, its 52-week high, was 1,728.00;
+# ITC's of 31 Oct 2025, the session after its results, reads high 406.55 against the exchange's 426.40. Every 52-week
+# figure StratLab shows (the company page, the public pages, the screens, the 52-week alerts) is read from the candles, so
+# both were off. The exchange publishes its 52-week high and low with their days each evening; the candle of that day is
+# widened to them (never narrowed), so the chart, the range and everything built on the candles say the exchange's figure.
+RANGE_KEY = "range52:IN"        # {"day": the report's day, "rows": {symbol: [high, its day, low, its day]}}
+RANGE_SLACK = 1.25              # a report figure this far beyond the candle's is another basis (an unadjusted one): left alone
+
+
+def ranges() -> dict | None:
+    """The newest stored 52-week report ({"day", "rows"}), or None."""
+    hit = _mem.get(("w52",))
+    if hit is not None:
+        return hit or None
+    try:
+        got = db.json_value(db.get_setting(RANGE_KEY), None)
+    except Exception:
+        got = None
+    got = got if isinstance(got, dict) and isinstance(got.get("rows"), dict) else {}
+    _mem.set(("w52",), got, 600)
+    return got or None
+
+
+def save_ranges(day, rows: dict[str, list]) -> int:
+    rows = {str(k).upper(): v for k, v in (rows or {}).items() if isinstance(v, (list, tuple)) and len(v) >= 4}
+    if not rows:
+        return 0
+    got = {"day": _day(day), "rows": rows}
+    db.set_setting(RANGE_KEY, json.dumps(got, separators=(",", ":")))
+    _mem.set(("w52",), got, 600)
+    return len(rows)
+
+
+def fetch_ranges(day, now: datetime | None = None) -> dict | None:
+    """The 52-week report of `day` once it is published (the evening), stored as the newest; asked again after RETRY."""
+    d = _day(day)
+    have = ranges()
+    if have and have.get("day", "") >= d:
+        return have
+    files_fn = _src.get("files")
+    now = (now or datetime.now(timezone.utc)).astimezone(IST)
+    if not files_fn or d > now.date().isoformat() or (d == now.date().isoformat() and now.hour < PUBLISHED_AT):
+        return have
+    if _mem.get(("w52asked", d)) is not None:
+        return have
+    _mem.set(("w52asked", d), 1, RETRY)
+    try:
+        from . import exchange_days
+        rows = exchange_days.week52(files_fn(), date.fromisoformat(d))
+    except Exception as e:
+        print("52-week report:", d, str(e)[:120])
+        return have
+    if rows:
+        save_ranges(d, rows)
+    return ranges()
+
+
+def widen_to_range(bars: list[dict], symbol: str, report: dict | None) -> list[dict]:
+    """Daily candles with the exchange's 52-week high and low taken in, on the days the report gives for them."""
+    row = ((report or {}).get("rows") or {}).get(base_symbol(symbol)) if bars else None
+    if not row:
+        return bars
+    hi, hi_day, lo, lo_day = row[:4]
+    out = None
+    for i, b in enumerate(bars):
+        d = str(b.get("t") or "")[:10]
+        nb = None
+        if d == hi_day and hi and b.get("h") and b["h"] < hi <= b["h"] * RANGE_SLACK:
+            nb = {**b, "h": float(hi)}
+        if d == lo_day and lo and b.get("l") and b["l"] > lo >= b["l"] / RANGE_SLACK:
+            nb = {**(nb or b), "l": float(lo)}
+        if nb:
+            out = out or list(bars)
+            out[i] = nb
+    return out if out is not None else bars
+
+
 def history_close(bars: list[dict], symbol: str, kind: str = "cas", exchange: str = "NSE",
                   now: datetime | None = None) -> list[dict]:
-    """A stock's daily candles with each recent day's close set to the exchange's official close (day_close): the
+    if exchange == "NSE" and bars:
+        try:
+            bars = widen_to_range(bars, symbol, ranges())
+        except Exception as e:                    # the candles as they are rather than none
+            print("52-week report for candles:", symbol, str(e)[:120])
+    return _closes_in(bars, symbol, kind, exchange, now)
+
+
+def _closes_in(bars: list[dict], symbol: str, kind: str = "cas", exchange: str = "NSE",
+               now: datetime | None = None) -> list[dict]:
+    """history_close: a stock's daily candles with each recent day's close set to the exchange's official close (day_close): the
     bhavcopy's for the days it is stored, and the latest day's as soon as it is out. High and low widen to take the close
     in, never narrow. The candles given are never changed in place (they are the broker's cached copy)."""
     if not bars:

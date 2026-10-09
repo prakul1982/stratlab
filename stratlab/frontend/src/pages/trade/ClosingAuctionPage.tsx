@@ -129,12 +129,14 @@ function Stocks({ v }: { v: CasView }) {
   }, [v.stocks, q]);
   const shown = rows.slice(0, 40), rest = rows.slice(40);
   const final = v.phase === "closed" || !!v.from_stored || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
+  // the final price and its gap right after the stock, so a phone shows them without scrolling sideways; the reference
+  // and its band come after (R8B-010: at 400 px only "Stock" and "Reference (band)" fitted on a list sorted by the gap)
   const cols: Column<CasStock>[] = [
     { key: "stock", header: "Stock", rowHeader: true, cell: (r) => <Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link> },
-    { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
-      {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },
     { key: "price", header: final ? "Final price" : "IEP", numeric: true, cell: (r) => <>{r.price == null ? "–" : price(r.price, "INR")}<span className="k-sub-line">{r.final_out ? "final" : "indicative"}</span></> },
     { key: "gap", header: "Gap to reference", numeric: true, cell: (r) => <Gap g={r.gap} /> },
+    { key: "ref", header: "Reference (band)", numeric: true, cell: (r) => <>{r.ref == null ? "–" : price(r.ref, "INR")}
+      {r.lower != null && r.upper != null && <span className="k-sub-line">{price(r.lower, "INR")}–{price(r.upper, "INR")}</span>}</> },
     { key: "qty", header: final ? "Quantity" : "Indicative quantity", numeric: true, cell: (r) => qtyText(r.final_out ? r.final_qty : r.ieq) },
     { key: "bid", header: "Bid / ask quantity", numeric: true, cell: (r) => `${qtyText(r.buy_qty)} / ${qtyText(r.sell_qty)}` },
     { key: "imb", header: "Unmatched", numeric: true, cell: (r) => qtyText(r.imbalance) },

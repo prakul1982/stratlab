@@ -3525,7 +3525,8 @@ def screens_page(profile) -> dict:
 @app.get("/research/screens/meta")
 def screens_meta(region: str = "IN", profile=Depends(current_profile)):
     """The filters a screen offers in a market, with each one's plain-English help, and how fresh the numbers are."""
-    return ok(screens.meta(region))
+    got = screens.meta(region)
+    return ok({**got, "pending": stock_pages.day_due(got.get("region") or region, got.get("as_of"))})
 
 
 @app.post("/research/screens/run")
@@ -3534,6 +3535,8 @@ def screens_run(req: ScreenRunReq, profile=Depends(current_profile)):
     try:
         got = screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset)
         got["rows"] = with_nse_close(got["region"], got["rows"], "price_at")      # the company page's close (R6O-009)
+        # the evening of a session whose closes aren't in the list yet: "Latest 8 Oct · 9 Oct due about 18:30 IST" (R8B-008)
+        got["pending"] = stock_pages.day_due(got["region"], got.get("as_of_newest") or got.get("as_of"))
         return ok(got)
     except screens.ScreenError as e:
         err(400, "bad_screen", str(e))
@@ -3629,6 +3632,8 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         # while the breadth page was live)
         live = {**live, "points": live["points"][-1:]}
     out["live"] = live
+    # after the close, before the evening's count: the page and the card say the newest day and when the next is due (R8B-008)
+    out["pending"] = stock_pages.day_due(out["group"].get("region") or "IN", (out.get("today") or {}).get("day") or out.get("as_of"))
     return ok(out)
 
 
@@ -5229,11 +5234,11 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
 
 
 # ---------- newsletters: the Market Brief and My Stocks ----------
-NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "html", "at")
+NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "ai_summary", "sections", "html", "at")
 
 
 def news_view(issue: dict) -> dict:
-    out = {k: issue.get(k) for k in NEWS_FIELDS}
+    out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out

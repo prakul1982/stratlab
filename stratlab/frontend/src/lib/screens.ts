@@ -38,6 +38,8 @@ export interface ScreenResult {
   indexed: number; as_of: string | null; index_at: string | null;
   /** the newest price day among the rows shown; `as_of` is the oldest, so the header never claims a newer close (R7O-004) */
   as_of_newest?: string | null;
+  /** after the close, the session whose closes aren't in the list yet (R8B-008) */
+  pending?: { day: string; due: string | null } | null;
 }
 
 export interface SavedScreen {

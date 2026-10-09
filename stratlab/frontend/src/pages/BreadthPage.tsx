@@ -8,7 +8,7 @@ import {
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
 import { flatZero } from "../lib/chartFormat";
-import { marketTz } from "../lib/format";
+import { latestDue, marketTz, type Pending } from "../lib/format";
 import { homeRegion } from "../lib/homeMarket";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -116,7 +116,7 @@ export function BreadthPage() {
             ) : (
               <>
                 {data.live && <LiveCard live={data.live} group={data.group} />}
-                <Headline t={data.today} help={help} lastClose={!!data.live} />
+                <Headline t={data.today} help={help} lastClose={!!data.live} pending={data.pending} />
                 {data.locked ? (
                   <div data-testid="breadth-locked"><PlanNote>Today's numbers are on every plan. The history, charts and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
                 ) : shown && <>
@@ -188,7 +188,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   );
 }
 
-function Headline({ t, help, lastClose }: { t: Today; help: Record<string, string>; lastClose?: boolean }) {
+function Headline({ t, help, lastClose, pending }: { t: Today; help: Record<string, string>; lastClose?: boolean; pending?: Pending }) {
   const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
   const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
   // a change in a share or an oscillator is up or down in colour; TRIN is the one inverted figure (a rise in it is selling pressure), so its change keeps the direction without judging
@@ -206,7 +206,7 @@ function Headline({ t, help, lastClose }: { t: Today; help: Record<string, strin
   };
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={lastClose ? `Last close · ${shortDay(t.day)}` : `Today's numbers · ${shortDay(t.day)}`} />
+      <CardHead title={latestDue(t.day, pending) ?? (lastClose ? `Last close · ${shortDay(t.day)}` : `Today's numbers · ${shortDay(t.day)}`)} />
       <StatRow>
         <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />

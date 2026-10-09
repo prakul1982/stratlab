@@ -428,6 +428,28 @@ def _a_raw(url: str, text: str) -> str:
 
 
 # ---------- the whole email ----------
+def short_line(text: str | None, n: int = 140) -> str:
+    """A line for an inbox preview that ends where a sentence ends, never in the middle of one (R8B-007: the brief's
+    preheader stopped at "…and NIFTY BANK at"). Whole sentences up to `n` characters; when even the first is longer,
+    it ends at its last clause or word, with an ellipsis."""
+    t = " ".join(str(text or "").split())
+    if len(t) <= n:
+        return t
+    out = ""
+    for s in re.split(r"(?<=[.!?])\s+", t):
+        if len(out) + len(s) + (1 if out else 0) > n:
+            break
+        out = f"{out} {s}".strip()
+    if out:
+        return out
+    cut = t[:n - 1]
+    for sep in ("; ", ", "):
+        i = cut.rfind(sep)
+        if i > n // 2:
+            return cut[:i] + "."
+    return cut.rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
 def render(title: str, blocks: list[Block], footer: Footer, *, label: str = "", date: str = "", summary: str | None = None,
            cta: tuple[str, str] | None = None, subject: str | None = None, preheader: str | None = None) -> tuple[str, str]:
     """(html, text) for one email. `label` and `date` fill the header's type line ("Market brief · India", "Tue 6 Oct"),
@@ -446,7 +468,7 @@ def render(title: str, blocks: list[Block], footer: Footer, *, label: str = "", 
         '<meta http-equiv="X-UA-Compatible" content="IE=edge">'
         f'<title>{escape(subject or title)}</title><style>{STYLE}</style></head>'
         f'<body class="bg-page" bgcolor="{L["page"]}" style="margin:0;padding:0;background:{L["page"]};-webkit-text-size-adjust:100%">'
-        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:{L["page"]}">{escape(pre[:140])}</div>'
+        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:{L["page"]}">{escape(short_line(pre))}</div>'
         f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="bg-page" bgcolor="{L["page"]}" style="background:{L["page"]}">'
         '<tr><td align="center" style="padding:20px 12px">'
         '<!--[if mso]><table role="presentation" width="600" align="center" cellspacing="0" cellpadding="0"><tr><td><![endif]-->'

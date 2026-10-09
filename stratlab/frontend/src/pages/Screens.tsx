@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { fmtDate, marketTz, pct, price } from "../lib/format";
+import { fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
@@ -166,6 +166,7 @@ export function ScreensPage() {
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
         info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
         lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
+      {latestDue(out?.as_of_newest ?? out?.as_of, out?.pending) && <p className="k-note" data-testid="screens-pending">{latestDue(out?.as_of_newest ?? out?.as_of, out?.pending)}</p>}
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pickRegion} /></div>
 
       {saved && saved.items.length > 0 && (

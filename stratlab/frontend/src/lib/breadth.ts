@@ -1,6 +1,6 @@
 import { api } from "./api";
 import type { LiveView } from "./breadthLive";
-import { fmtDate } from "./format";
+import { fmtDate, latestDue, type Pending } from "./format";
 export { liveSeries, liveTitle } from "./breadthLive";
 export { BROAD_GROUP, MARKET_GROUP, groupRegion, savePick, savedPick } from "./breadthPick";
 export type { LiveSeries, LiveView } from "./breadthLive";
@@ -26,6 +26,8 @@ export type BreadthView = {
   group: Group; groups: Group[]; today: Today | null; as_of: string | null; since: string | null; range: RangeId;
   help: Record<string, string>; status: string | null; locked: boolean; plan_needed: string;
   history: History | null; sectors: SectorTable | null; thrusts: string[] | null; live: LiveView | null;
+  /** after the close, the session whose count isn't in yet (R8B-008) */
+  pending?: Pending;
 };
 
 export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
@@ -61,12 +63,12 @@ export function shortDay(iso: string): string {
 
 /** What the Invest home's breadth card shows: while the market is open, the newest live count (R7T-010: the card showed
  * the 8 Oct close after 9 Oct's open while the breadth page was live); otherwise the last close's, said so. */
-export function cardFigures(d: Pick<BreadthView, "today" | "live">): {
+export function cardFigures(d: Pick<BreadthView, "today" | "live"> & { pending?: Pending }): {
   live: boolean; adv: number | null; dec: number | null; pct50: number | null; highs: number | null; lows: number | null; when: string;
 } | null {
   const l = d.live?.state === "live" ? d.live.latest : null;
   if (l) return { live: true, adv: l.adv, dec: l.dec, pct50: l.pct50, highs: null, lows: null, when: d.live?.as_of ? `Live as of ${d.live.as_of} IST` : "Live" };
   if (!d.today) return null;
   return { live: false, adv: d.today.adv.value, dec: d.today.dec.value, pct50: d.today.pct50.value, highs: d.today.highs.value,
-    lows: d.today.lows.value, when: `Last close, ${shortDay(d.today.day)}` };
+    lows: d.today.lows.value, when: latestDue(d.today.day, d.pending) ?? `Last close, ${shortDay(d.today.day)}` };
 }

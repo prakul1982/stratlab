@@ -364,6 +364,12 @@ def _symbol_data(region: str, sym: str, day: date) -> dict:
     return data
 
 
+def _plain_title(t: str) -> bool:
+    """A stock's headline My Stocks may carry: the same advice-worded titles left out as on the company page (R8B-012)."""
+    from ..intel.news import plain_headline
+    return plain_headline(t)
+
+
 def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dict | None:
     """What changed for one stock since `since` (an ISO date): price, stage, a fresh ST S2 signal, red or amber
     filings and a couple of headlines. None when there's no price data."""
@@ -381,7 +387,7 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     flags = [{"label": i["label"], "severity": i["severity"], "subject": i["subject"], "at": i["at"], "url": i.get("url")}
              for i in data["filings"] or [] if i["severity"] in ("red", "amber") and i["at"] > since][:4]
     news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at")} for n in data["news"] or []
-            if n.get("headline") and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
+            if n.get("headline") and _plain_title(n["headline"]) and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
     trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]
     surv = _safe(lambda: surveillance_lines(sym, since)) if region == "IN" else None

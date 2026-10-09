@@ -351,7 +351,7 @@ def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
     out = []
     for i in indices[:3]:
         sub = "over the week" if weekly and i.get("change_pct") is not None else (
-            f"{kit.pct_plain(i['from_high_pct'], 1)} below its high" if i.get("from_high_pct") else None)
+            f"{kit.pct_plain(i['from_high_pct'], 1)} below its 52-week high" if i.get("from_high_pct") else None)
         out.append(kit.Tile(i["name"], kit.num(i["price"]), i.get("change_pct"), sub=sub, tone=_tone(i["name"])))
     return out
 
@@ -383,6 +383,9 @@ def render(issue: dict) -> tuple[str, str]:
             blocks.append(kit.card("Other indices", [kit.Row(i["name"], value=kit.num(i["price"]), change=i.get("change_pct"),
                                                              tone=_tone(i["name"]), since="over the week" if weekly else None)
                                                      for i in indices[3:]]))
+    if issue.get("ai_summary"):
+        # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007)
+        blocks.insert(0, kit.para(issue["ai_summary"]))
     for sec in issue.get("sections") or []:
         if tiles and sec["title"] == "Indices":
             continue                                         # already shown as tiles
@@ -398,4 +401,4 @@ def render(issue: dict) -> tuple[str, str]:
         unsubscribe=f"Unsubscribe from {name}", legal=FOOTER, manage=kit.MANAGE_NEWSLETTERS)
     cta = (("Read the full brief" if kind == "market" else "See what changed"), view) if view else None
     return kit.render(title, blocks, footer, label=label, date=day, summary=issue.get("summary") or None, cta=cta,
-                      subject=issue["subject"])
+                      subject=issue["subject"], preheader=kit.short_line(issue.get("summary") or title))

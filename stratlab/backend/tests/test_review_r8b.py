@@ -312,3 +312,161 @@ def test_the_closing_chain_is_read_after_the_derivatives_close():
     assert rec.run_once(_ist("2026-10-09", "15:46")) == 0                    # once a day
     assert rec.run_once(_ist("2026-10-09", "16:30")) == 0
     assert not R.close_window(_ist("2026-10-10", "15:41"))                   # a Saturday
+
+
+# ---------- R8B-007: the brief's preheader, one structure every day, "52-week high" ----------
+def test_the_inbox_preview_line_never_ends_mid_sentence():
+    from app import email_kit as kit
+    long = ("On October 9, 2026, the NIFTY 50 closed at 22,520.45, up 1.30%, while the SENSEX ended at 72,472.33, up 1.23%, "
+            "and NIFTY BANK at 55,256.65, up 1.36%. Nifty IT moved from Weakening to Leading.")
+    line = kit.short_line(long)
+    assert len(line) <= 140 and not line.endswith(" at") and line.endswith((".", "…"))
+    assert kit.short_line("NIFTY 50 +1.30%; SENSEX +1.23% today. One sector moved.") == "NIFTY 50 +1.30%; SENSEX +1.23% today. One sector moved."
+    html, _ = kit.render("T", [], kit.Footer(why="w"), summary=long)
+    assert "and NIFTY BANK at</div>" not in html
+
+
+def test_every_brief_opens_with_the_facts_line_and_the_ai_words_go_under_it(monkeypatch, mem):
+    from app.newsletter import job, write
+    ai = "On Friday the NIFTY 50 closed at 22,520.45, up 1.30%, led by IT."
+    monkeypatch.setattr(write, "ai_summary", lambda f: ai)
+    write._cache.clear()
+    facts = {"kind": "market", "region": "IN", "day": "2026-10-09", "weekly": False, "since": "2026-10-08",
+             "indices": [{"name": "NIFTY 50", "price": 22520.45, "change_pct": 1.3, "from_high_pct": -14.6},
+                         {"name": "SENSEX", "price": 72472.33, "change_pct": 1.23}],
+             "rotation": [{"sector": "Nifty IT", "from": "Weakening", "to": "Leading"}]}
+    issue = job.make_issue(facts, "IN")
+    assert issue["summary"].startswith("NIFTY 50 +1.30%; SENSEX +1.23% today.") and issue["ai_summary"] == ai and issue["ai"]
+    html, text = write.render(issue)
+    assert text.index("NIFTY 50 +1.30%; SENSEX +1.23% today.") < text.index(ai)
+    assert ">NIFTY 50 +1.30%; SENSEX +1.23% today. 1 sector moved to another quadrant on the rotation chart.</div>" in html
+    assert "14.6% below its 52-week high" in html and "below its high" not in html
+    # a day whose AI words didn't pass has the same first line and nothing under it
+    monkeypatch.setattr(write, "ai_summary", lambda f: None)
+    write._cache.clear()
+    plain = job.make_issue({**facts, "day": "2026-10-08"}, "IN")
+    assert plain["summary"].startswith("NIFTY 50 +1.30%; SENSEX +1.23% today.") and not plain.get("ai_summary")
+
+
+def test_stored_briefs_get_the_facts_line_first(mem):
+    from app.newsletter import job
+    issue = {"id": "market.IN.2026-10-09", "kind": "market", "region": "IN", "day": "2026-10-09", "weekly": False,
+             "subject": "Market Brief India, Fri 9 Oct: NIFTY 50 +1.30%", "title": "NIFTY 50 up 1.30%", "ai": True,
+             "summary": "On October 9, 2026, the NIFTY 50 closed at 22,520.45.", "indices": [{"name": "NIFTY 50", "price": 22520.45, "change_pct": 1.3}],
+             "sections": [], "at": "2026-10-09T16:19+05:30"}
+    job.save(issue)
+    assert job.repair_facts_line("IN", days=3650) == 1
+    got = job.load("market.IN.2026-10-09")
+    assert got["summary"] == "NIFTY 50 +1.30% today." and got["ai_summary"].startswith("On October 9, 2026")
+    assert job.repair_facts_line("IN", days=3650) == 0
+
+
+def test_the_newsletters_row_says_the_skipped_count_even_when_none(monkeypatch, mem):
+    from app import admin_jobs
+    st = {"last_run": "2026-10-09T10:48:45+00:00", "sent": 2, "last_error": None, "regions": {
+        "IN": {"issue": "market.IN.2026-10-09", "day": "2026-10-09", "readers": 1, "sent": 1, "other_edition": 0, "skipped": {}},
+        "stocks": {"day": "2026-10-09", "readers": 2, "sent": 1, "other_edition": 0, "skipped": {"email address not confirmed": 1}}}}
+    monkeypatch.setattr(main.newsletter_job, "status", st)
+    row = next(r for r in admin_jobs.rows() if r["id"] == "newsletters")
+    assert "India, 2026-10-09: sent to 1 of 1 reader; skipped 0" in row["log"]
+    assert "My stocks, 2026-10-09: sent to 1 of 2 readers; skipped 1: 1 email address not confirmed" in row["log"]
+
+
+# ---------- R8B-008: "Latest: 8 Oct · 9 Oct due about 18:30 IST" ----------
+def test_numbers_of_yesterday_on_the_evening_of_today_say_when_todays_are_due():
+    from app import stock_pages
+    assert stock_pages.day_due("IN", "2026-10-08", _ist("2026-10-09", "19:05")) == {"day": "2026-10-09", "due": "18:30 IST"}
+    assert stock_pages.day_due("IN", "2026-10-09", _ist("2026-10-09", "19:05")) is None       # in already
+    assert stock_pages.day_due("IN", "2026-10-08", _ist("2026-10-09", "14:00")) is None       # the session is still on
+    assert stock_pages.day_due("IN", "2026-10-09", _ist("2026-10-10", "11:00")) is None       # a Saturday
+    assert stock_pages.day_due("IN", None, _ist("2026-10-09", "19:05")) is None
+
+
+# ---------- R8B-009: the exchange's own 52-week high and low ----------
+W52 = ('"Disclaimer - The Data provided in the adjusted 52 week high and adjusted 52 week low columns are adjusted for corporate '
+       'actions (bonus, splits & rights)."\n"Effective for 09-Oct-2026"\n'
+       '"SYMBOL","SERIES","Adjusted 52_Week_High","52_Week_High_Date","Adjusted 52_Week_Low","52_Week_Low_DT"\n'
+       '"INFY","EQ","1728.00","03-FEB-2026","980.40","29-SEP-2026"\n'
+       '"ITC","EQ","426.40","31-OCT-2025","244.10","25-SEP-2026"\n'
+       '"ITC","BL","999.00","31-OCT-2025","1.00","25-SEP-2026"\n')
+
+
+def test_the_exchanges_52_week_report_is_read():
+    from app import exchange_days as E
+    assert E.week52_rows(W52) == {"INFY": [1728.0, "2026-02-03", 980.4, "2026-09-29"], "ITC": [426.4, "2025-10-31", 244.1, "2026-09-25"]}
+    with pytest.raises(ValueError):
+        E.week52_rows("SYMBOL,CLOSE\nINFY,1000\n")
+
+
+def test_the_candle_of_the_exchanges_52_week_high_day_takes_its_high(mem):
+    """INFY's candle of 3 Feb 2026 (open 1,690.60, high 1,691.40) and ITC's of 31 Oct 2025 (high 406.55) are below the
+    exchange's day highs of 1,728.00 and 426.40: the 52-week high on every page was off."""
+    from app import exchange_days as E, stock_pages
+    official_close.save_ranges("2026-10-09", E.week52_rows(W52))
+    infy = [{"t": "2026-02-02T00:00:00+05:30", "o": 1626.8, "h": 1626.8, "l": 1583.7, "c": 1594.9, "v": 1.0},
+            {"t": "2026-02-03T00:00:00+05:30", "o": 1690.6, "h": 1691.4, "l": 1618.0, "c": 1620.9, "v": 1.0},
+            {"t": "2026-09-29T00:00:00+05:30", "o": 990.0, "h": 995.0, "l": 981.0, "c": 985.0, "v": 1.0},
+            {"t": "2026-10-08T00:00:00+05:30", "o": 990.0, "h": 1001.0, "l": 985.0, "c": 997.0, "v": 1.0}]
+    out = official_close.history_close(infy, "INFY", "cas", "NSE", now=_ist("2026-10-09", "11:00"))
+    assert out[1]["h"] == 1728.0 and out[1]["o"] == 1690.6 and out[2]["l"] == 980.4 and infy[1]["h"] == 1691.4
+    assert stock_pages.price_facts(out)["high52"] == 1728.0 and stock_pages.price_facts(out)["low52"] == 980.4
+    itc = [{"t": "2025-10-31T00:00:00+05:30", "o": 400.95, "h": 406.55, "l": 398.75, "c": 400.8, "v": 1.0}]
+    assert official_close.history_close(itc, "ITC", now=_ist("2026-10-09", "11:00"))[0]["h"] == 426.4
+    # a figure on another basis (far beyond the candle) is left alone; a BSE-only stock isn't in the exchange's report
+    far = [{"t": "2026-02-03T00:00:00+05:30", "o": 800.0, "h": 845.7, "l": 800.0, "c": 810.0, "v": 1.0}]
+    assert official_close.history_close(far, "INFY", now=_ist("2026-10-09", "11:00"))[0]["h"] == 845.7
+    assert official_close.history_close(itc, "ITC", exchange="BSE", now=_ist("2026-10-09", "11:00"))[0]["h"] == 406.55
+
+
+def test_the_52_week_report_is_read_in_the_evening_with_the_closes(mem):
+    from app import exchange_days as E
+    asked = []
+
+    class Files:
+        def text(self, url, want=".csv"):
+            asked.append(url)
+            return W52 if "52_wk" in url else None
+    official_close.setup(lambda: Files(), None, force=True)
+    assert official_close.fetch_ranges("2026-10-09", _ist("2026-10-09", "17:00")) is None and asked == []
+    got = official_close.fetch_ranges("2026-10-09", _ist("2026-10-09", "18:40"))
+    assert got["day"] == "2026-10-09" and got["rows"]["INFY"][0] == 1728.0
+    assert asked == [E.WEEK52.format(dmy="09102026")]
+
+
+# ---------- R8B-012: more advice-worded headlines left out ----------
+ADVICE = ["What should RIL investors do?", "Reliance shares: What should investors do now?",
+          "What Could Drive Reliance Industries Stock Higher by 15%", "Owning Reliance may be a cheaper way to buy Jio Platforms",
+          "TCS Q2 preview: Check Goldman Sachs, Morgan Stanley Target Prices",
+          "Sensex jumps 879 points, Nifty above 22,500: What Investors Should Know", "Infosys: price targets raised after results"]
+FACTUAL = ["Sensex jumps 879 points as IT stocks rally; Nifty ends at 22,520", "TCS Q2 results: net profit rises 6% to Rs 12,000 crore",
+           "Reliance Jio adds 3 million subscribers in September", "What drove the Nifty 1.3% higher on Friday",
+           "Infosys sets record date for its buyback", "Investors pull Rs 12,944 crore from Indian shares"]
+
+
+def test_advice_worded_headlines_are_left_out_and_factual_ones_kept():
+    from app.intel.news import plain_headline
+    for t in ADVICE:
+        assert not plain_headline(t), t
+    for t in FACTUAL:
+        assert plain_headline(t), t
+
+
+def test_the_brief_and_my_stocks_leave_them_out(monkeypatch, mem):
+    from app.newsletter import content, job
+    assert not content.headline_ok("IN", "Sensex jumps 879 points, Nifty above 22,500: What Investors Should Know")
+    monkeypatch.setattr(content, "_symbol_data", lambda r, s, d: {"bars": _bars(), "filings": [], "news": [
+        {"headline": "What should RIL investors do?", "at": "2026-10-09T08:00:00+00:00"},
+        {"headline": "Reliance Jio adds 3 million subscribers in September", "at": "2026-10-09T08:00:00+00:00"}]})
+    monkeypatch.setattr(content, "surveillance_lines", lambda s, since: None)
+    monkeypatch.setattr(content.deals, "recent_for", lambda s, since: [])
+    row = content.stock_row("IN", "RELIANCE", date(2026, 10, 9), False, "2026-10-08T16:19")
+    assert [n["headline"] for n in row["headlines"]] == ["Reliance Jio adds 3 million subscribers in September"]
+    # a stored brief that carried one has it taken out
+    job.save({"id": "market.IN.2026-10-09", "kind": "market", "region": "IN", "day": "2026-10-09", "weekly": False, "ai": False,
+              "subject": "Market Brief India, Fri 9 Oct: NIFTY 50 +1.30%", "title": "NIFTY 50 up 1.30%", "summary": "NIFTY 50 +1.30% today.",
+              "indices": [], "at": "2026-10-09T16:19+05:30", "sections": [{"title": "Headlines", "items": [
+                  {"text": "Sensex jumps 879 points, Nifty above 22,500: What Investors Should Know"},
+                  {"text": "Sensex jumps 879 points as IT stocks rally; Nifty ends at 22,520"}]}]})
+    assert job.repair_facts_line("IN", days=3650) == 1
+    items = job.load("market.IN.2026-10-09")["sections"][0]["items"]
+    assert [i["text"] for i in items] == ["Sensex jumps 879 points as IT stocks rally; Nifty ends at 22,520"]

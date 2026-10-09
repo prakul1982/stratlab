@@ -234,6 +234,27 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
     return d, datetime.combine(d, dtime(int(hh), int(mm)), tz)
 
 
+DUE_AT = {"IN": "18:30 IST"}     # when the evening's stored numbers (breadth, screens, public pages) are usually in
+
+
+def day_due(region: str, have: str | None, now: datetime | None = None) -> dict | None:
+    """When numbers stored once a day are still of an older session than the one that closed today: {"day" (today's
+    session), "due" (about when its numbers come, or None)}; else None. A page then says "Latest: 8 Oct · 9 Oct due
+    about 18:30 IST" instead of "Today's numbers · 8 Oct" on the evening of 9 Oct (R8B-008)."""
+    from .data.calendar import is_trading_day
+    from .data.markets import BY_ID
+    if not have:
+        return None
+    m = BY_ID.get(region) or {}
+    tz = ZoneInfo(m.get("tz") or "UTC")
+    hh, mm = ((m.get("hours") or {}).get("close") or "23:59").split(":")
+    local = (now or datetime.now(timezone.utc)).astimezone(tz)
+    d = local.date()
+    if not is_trading_day(region, d) or local < datetime.combine(d, dtime(int(hh), int(mm)), tz) or str(have)[:10] >= d.isoformat():
+        return None
+    return {"day": d.isoformat(), "due": DUE_AT.get(region)}
+
+
 def session_day(region: str, now: datetime | None = None) -> date:
     """The trading session a price read now belongs to: today once the market has opened, else the latest trading day
     before (R7V-004: a price read at 07:15 in India on 9 Oct is 8 Oct's, not 9 Oct's)."""

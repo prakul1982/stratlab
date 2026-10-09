@@ -90,7 +90,20 @@ def make_issue(facts: dict, scope: str) -> dict:
              "at": datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(timespec="minutes")}
     if facts["kind"] == "my_stocks":
         issue["uid"] = facts["uid"]
+    else:
+        facts_line(issue, facts, sections)
     issue["html"], issue["text"] = write.render(issue)
+    return issue
+
+
+def facts_line(issue: dict, facts: dict, sections: list[dict]) -> dict:
+    """A Market Brief in one structure every day (R8B-007: 8 Oct's opened with the facts line, 9 Oct's with the AI's
+    prose): the summary is always the facts line, and the AI's words, when they passed the checks, go under it."""
+    if issue.get("ai"):
+        issue["ai_summary"] = issue["summary"]
+        issue["summary"] = write.fix_counts(write.template(facts), sections)
+    else:
+        issue.pop("ai_summary", None)
     return issue
 
 
@@ -146,6 +159,7 @@ def repair_index_moves(region: str, days: int = 60) -> int:
         rotation = next((s["items"] for s in issue.get("sections") or [] if s.get("title") == "Sector rotation"), [])
         f = {"kind": "market", "region": region, "day": issue["day"], "weekly": False, "indices": indices, "rotation": rotation}
         issue.update(indices=indices, subject=write.subject(f), title=write.headline(f), summary=write.template(f), ai=False)
+        issue.pop("ai_summary", None)                 # the AI's words restated the wrong changes
         issue["sections"] = write.market_sections({**f, "rotation": []})[:1] + [s for s in issue.get("sections") or [] if s.get("title") != "Indices"]
         issue["html"], issue["text"] = write.render(issue)
         kind, scope, dkey = parse_id(iid)
@@ -203,8 +217,9 @@ def repair_briefs(region: str, days: int = 60, shifts=None) -> int:
                 continue
             sections.append({**s, "items": [{**i, "text": _house_style(i.get("text", ""))} for i in s.get("items") or []]})
         issue["sections"] = (sections[:1] + new_rot + sections[1:]) if new_rot else sections
-        if issue.get("ai") and _QUADRANTS.search(issue.get("summary") or ""):
+        if issue.get("ai") and _QUADRANTS.search(issue.get("ai_summary") or issue.get("summary") or ""):
             issue.update(summary=write.template(f), ai=False)
+            issue.pop("ai_summary", None)
         else:
             issue["summary"] = _house_style(issue.get("summary", ""))
         if json.dumps(issue, sort_keys=True) == before:
@@ -316,7 +331,11 @@ def repair_r7(region: str, days: int = 60) -> int:
                 sections.append({**s, "items": keep})
         carried.append((day, mine))
         issue["sections"] = sections
-        if issue.get("ai"):
+        if issue.get("ai") and issue.get("ai_summary"):            # the AI's words under the facts line (R8B-007)
+            text = write.own_weekday(issue["ai_summary"], issue)
+            issue["ai_summary"] = text or None
+            issue["ai"] = bool(text)
+        elif issue.get("ai"):
             text = write.own_weekday(issue.get("summary") or "", issue)
             if not text:                               # every sentence named a weekday: the moves alone, as the template says them
                 got = [m for m in _indices_of(issue) if m["change_pct"] is not None]
@@ -327,6 +346,41 @@ def repair_r7(region: str, days: int = 60) -> int:
             continue
         issue["html"], issue["text"] = write.render(issue)
         kind, scope, dkey = parse_id(issue["id"])
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
+def repair_facts_line(region: str, days: int = 60) -> int:
+    """The Market Briefs stored in the last `days` days by the R8B rules: one that opens with the AI's prose gets the facts
+    line (the index moves and the rotation count, from the issue's own sections) first and the AI's words under it
+    (R8B-007), and a headline worded as advice ("What Investors Should Know") goes (R8B-012). Returns how many changed."""
+    from datetime import timedelta
+    from ..intel.news import plain_headline
+    fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
+    for iid in ids("market", region):
+        issue = load(iid)
+        if not issue or issue.get("day", "") < cutoff:
+            continue
+        before = json.dumps(issue, sort_keys=True)
+        sections = []
+        for sec in issue.get("sections") or []:
+            if sec.get("title") == "Headlines":
+                sec = {**sec, "items": [i for i in sec.get("items") or [] if plain_headline(i.get("text"))]}
+                if not sec["items"]:
+                    continue
+            sections.append(sec)
+        issue["sections"] = sections
+        if issue.get("ai") and not issue.get("ai_summary"):
+            rotation = next((sec["items"] for sec in sections if sec.get("title") == "Sector rotation"), [])
+            f = {"kind": "market", "region": region, "day": issue["day"], "weekly": bool(issue.get("weekly")),
+                 "indices": issue.get("indices") or _indices_of(issue), "rotation": rotation}
+            if any(i.get("change_pct") is not None for i in f["indices"]):    # else no facts line to give
+                facts_line(issue, f, sections)
+        if json.dumps(issue, sort_keys=True) == before:
+            continue
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
         db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
         fixed += 1
     return fixed
@@ -541,6 +595,19 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: checked the headlines and weekdays of {n} stored briefs")
 
+    def facts_once(self):
+        """Once per database: the stored Market Briefs in the one structure (see repair_facts_line)."""
+        flag = "newsfix:facts-line-r8b"
+        if db.get_setting(flag):
+            return
+        try:
+            n = sum(repair_facts_line(r) for r in SEND_AT)
+        except Exception as e:
+            print("newsletters facts line:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: put the facts line first in {n} stored briefs")
+
     def et_once(self):
         """Once per database: the stored US briefs' email in New York's time (see repair_us_stamp)."""
         flag = "newsfix:us-stamp-et"
@@ -560,6 +627,7 @@ class Job:
         self.headlines_once()
         self.r7_once()
         self.et_once()
+        self.facts_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))
