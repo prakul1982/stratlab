@@ -145,7 +145,8 @@ def corporate_actions(today=None) -> list[dict]:
     days, a RELIANCE dividend, an INFY split, an ITC buyback just gone, an AGM (not an action), and past dividends."""
     from tests.fake_prices import on_trading_day
     t = today or datetime.now(IST).date()
-    f = lambda d: on_trading_day(t + timedelta(days=d), back=d < 0).strftime("%d-%b-%Y")        # ex-dates fall on trading days
+    # ex-dates fall on trading days; the bonus "going ex today" is on the latest session (Friday on a weekend), not Monday's
+    f = lambda d: on_trading_day(t + timedelta(days=d), back=d <= 0).strftime("%d-%b-%Y")
     rows = [("TCS", "Tata Consultancy Services Limited", "Bonus 1:1", 0), ("TCS", "Tata Consultancy Services Limited", "Interim Dividend - Rs 11 Per Share", 3),
             ("RELIANCE", "Reliance Industries Limited", "Dividend - Rs 5.50 Per Share", 5),
             ("INFY", "Infosys Limited", "Face Value Split (Sub-Division) - From Rs 5/- Per Share To Re 1/- Per Share", 12),

@@ -27,9 +27,10 @@ def last_session(market: str, today: date) -> date:
     return d
 
 
-def market_today(market: str) -> date:
-    """Today where the market trades: in India after midnight, New York's session may still be running."""
-    return datetime.now(ZoneInfo((BY_ID.get(market) or {}).get("tz") or "UTC")).date()
+def market_today(market: str, now: datetime | None = None) -> date:
+    """Today where the market trades (at `now`, else now): in India after midnight, New York's session may still be running."""
+    tz = ZoneInfo((BY_ID.get(market) or {}).get("tz") or "UTC")
+    return (now or datetime.now(tz)).astimezone(tz).date()
 
 
 # How long after a market's close its day's candle is expected: a broker's feed has it within minutes, the global
@@ -59,7 +60,7 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
     (by the market's own date unless `today` is given). A warning when the latest candle is the session before the
     last one to have closed: the market closed (CDS at 17:00 IST) and its candle isn't here yet (R9R-005)."""
     explicit = today is not None
-    today = today or market_today(market)
+    today = today or market_today(market, now)
     prov = registry.provider(market)
     if prov is None:
         return _result(f"Prices: {market}", "Prices", "fail", "Market not connected.")
