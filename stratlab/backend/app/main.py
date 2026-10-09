@@ -63,6 +63,7 @@ from .responses import err, ok
 from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
+from .engine.verdict import restated as verdict_restated
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -1264,7 +1265,10 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
 
 @app.get("/notebooks/{nid}")
 def read_notebook(nid: str, profile=Depends(current_profile)):
-    return ok(get_notebook(profile, nid))
+    nb = get_notebook(profile, nid)
+    # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
+    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in nb.get("experiments") or []]
+    return ok(nb)
 
 
 @app.put("/notebooks/{nid}")

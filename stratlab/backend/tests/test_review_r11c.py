@@ -149,6 +149,18 @@ def test_the_headline_is_facts_like_the_library_card():
         assert not any(x in words for x in ("Likely", "real edge", "Probably", "luck"))
 
 
+def test_a_verdict_stored_with_a_claim_is_shown_with_its_facts(monkeypatch):
+    v = {"verdict": "edge", "headline": "Likely a real edge.", "checks": [{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "skip"},
+                                                                         {"id": "shuffle", "status": "pass"}, {"id": "sample", "status": "pass"}]}
+    got = V.restated(v, {"n": 250, "ret": 55.8, "buy_hold_ret": 172.9})
+    assert got["headline"] == "117.1 points behind buy and hold after costs; passed all 3 checks run."
+    assert V.restated({**v, "headline": "Something new."}, {})["headline"] == "Something new."     # only the old claims
+    monkeypatch.setattr(public.db, "get_setting", lambda k: json.dumps({"question": "", "verdict": v, "stats": {"n": 250, "ret": 55.8, "buy_hold_ret": 172.9}}))
+    assert public.load("NlpCFMRAhSA")["verdict"]["headline"].startswith("117.1 points behind")
+    import inspect
+    assert "verdict_restated(e.get(\"verdict\"), e.get(\"stats\"))" in inspect.getsource(main.read_notebook)
+
+
 def test_no_trades_is_said_plainly_with_no_comparison_or_lucky_fit():
     checks = [{"id": "unseen", "status": "warn"}, {"id": "nearby", "status": "skip"}, {"id": "shuffle", "status": "skip"},
               {"id": "sample", "status": "fail"}]
@@ -172,7 +184,9 @@ def test_no_check_text_predicts_or_instructs():
     for mod in (V, walkforward, basket, journal, library):
         tree = ast.parse(inspect.getsource(mod))
         docs = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)}
-        shown = " ".join(n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs)
+        # (the old claims are listed once, in OLD_HEADLINES, to be worded again from the facts: never shown)
+        shown = " ".join(n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                         and id(n) not in docs and n.value not in V.OLD_HEADLINES)
         for phrase in ("Treat the backtest return as optimistic", "lucky fit", "hard to sit through", "Likely a real edge",
                        "Probably luck", "doesn't rescue it", "survives without hindsight", "could still be chance",
                        "Treat it as a maybe", "It travels", "Even with worse luck"):

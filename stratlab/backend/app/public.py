@@ -97,6 +97,9 @@ def load(token: str) -> dict | None:
     snap = json.loads(raw) if raw else None
     if isinstance(snap, dict) and snap.get("question"):
         snap["question"] = own_question(snap["question"])        # a link shared before the rules were kept out of it
+    if isinstance(snap, dict) and isinstance(snap.get("verdict"), dict):
+        from .engine.verdict import restated                     # a link shared with a claim for a headline (R11C-009)
+        snap["verdict"] = restated(snap["verdict"], snap.get("stats"))
     return snap
 
 

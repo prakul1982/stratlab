@@ -410,6 +410,22 @@ def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: fl
     return f"Within a point of buy and hold after costs; {low}."
 
 
+# the headlines verdicts were stored with before they stated facts: shown again, they are worded from the verdict's own
+# facts instead (R11C-009)
+OLD_HEADLINES = {"Likely a real edge.", "Mixed evidence.", "Probably luck.", "Not enough evidence.", "No edge here."}
+
+
+def restated(v: dict | None, stats: dict | None) -> dict | None:
+    """A stored verdict with a claim for a headline ("Likely a real edge.") given its facts instead; any other as it is."""
+    if not isinstance(v, dict) or v.get("headline") not in OLD_HEADLINES:
+        return v
+    st = stats or {}
+    n, ret = int(st.get("n") or 0), float(st.get("ret") or 0.0)
+    hold = st.get("buy_hold_ret")
+    return {**v, "headline": fact_headline(v.get("verdict") or "", list(v.get("checks") or []), n, ret,
+                                           float(hold) if isinstance(hold, (int, float)) else None, n == 0 and abs(ret) < 1e-9)}
+
+
 def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None) -> dict:
     """The verdict from the checks, the trade count and the return after costs. `hold` is buy and hold's return over
     the same period: the summary always states how the two compare."""
