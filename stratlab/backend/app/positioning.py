@@ -870,7 +870,9 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
         return out
     rows = sorted(got["chain"], key=lambda r: r[0])
     expiry = got["expiry"]
-    at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" else now
+    # a chain's own time: a recording's, or the close a live read before the open stands for (its change is then against
+    # the day before that close, not against the close itself, which made every change zero before 9:15 IST)
+    at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" or got.get("at_close") else now
     stats = chain_stats(rows, got.get("spot"), expiry, at)
     taken_day = at.astimezone(IST).date()
     prev = recorded_before(name, expiry, taken_day)
