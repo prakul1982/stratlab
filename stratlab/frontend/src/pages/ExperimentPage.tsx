@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { charge, fall, fmtDate, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, upDown } from "../lib/tradeUi";
+import { candleSpan, charge, fall, fmtDate, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { CHECKS, checkTone, checksLine, tradeListFacts, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -164,7 +164,9 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
       <p className="k-small k-muted">{c.detail}</p>
       {c.id === "sample" && <span className="k-note">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
-      {c.id === "shuffle" && d && <span className="k-note">From {d.runs.toLocaleString("en-IN")} reshuffles of your trades{cur ? ", after costs" : ""}{d.daily ? ", falls measured day by day as in Worst fall" : ""}.</span>}
+      {c.id === "shuffle" && d && <span className="k-note">{d.by === "days"
+        ? `From ${d.runs.toLocaleString("en-IN")} reshuffles of the group's day-by-day changes in value (its trades overlap, so their order can't be shuffled)${cur ? ", after costs" : ""}.`
+        : `From ${d.runs.toLocaleString("en-IN")} reshuffles of your trades${cur ? ", after costs" : ""}${d.daily ? ", falls measured day by day as in Worst fall" : ""}.`}</span>}
     </Card>
   );
 }
@@ -172,11 +174,16 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
 /** How each member of a group did, best first. */
 function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
   const g = e.group!;
+  // a position still open at the end is in its stock's P&L, valued at the last close and marked, so the column adds up to
+  // the total (R11C-014); an older experiment that left it out says how much is missing in the last line
+  const sum = g.members.reduce((n, m) => n + m.pnl, 0);
+  const missing = Math.round((e.stats.pnl - sum) * 100) / 100;
   const cols: Column<(typeof g.members)[number]>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
-    { key: "n", header: "Trades", numeric: true, cell: (m) => m.trades },
+    { key: "n", header: "Trades", numeric: true, cell: (m) => <>{m.trades}{m.open ? <span className="k-sub-line">+ 1 still open</span> : null}</> },
     { key: "win", header: "Win rate", numeric: true, cell: (m) => (m.win == null ? "–" : `${m.win.toFixed(0)}%`) },
-    { key: "pnl", header: "P&L after costs", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
+    { key: "pnl", header: "P&L after costs", numeric: true, cell: (m) => <><span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span>
+      {m.open ? <span className="k-sub-line">{money(m.open_pnl ?? 0, cur)} still open</span> : null}</> },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (m) => (m.buy_hold == null ? "–" : <span className={upDown(m.buy_hold)}>{pct(m.buy_hold)}</span>) },
   ];
   return (
@@ -184,7 +191,10 @@ function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
       <CardHead title={`${g.name}: one by one`} info={HELP.group} infoLabel="About the group"
         actions={<span className="k-note">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>} />
       {g.skipped.length > 0 && <p className="k-note">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
-      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id} />
+      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id}
+        foot={Math.abs(missing) >= 0.5
+          ? { sym: "Still open at the end, not in the rows above", pnl: <span className={upDown(missing)}>{money(missing, cur)}</span> }
+          : { sym: "Total", pnl: <span className={upDown(sum)}>{money(sum, cur)}</span> }} />
     </Card>
   );
 }
@@ -278,7 +288,7 @@ function NextSteps({ nb, e, onDelete }: { nb: Notebook; e: Experiment; onDelete:
 
 function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
-  const { fail, refreshNotebooks } = useApp();
+  const { fail, refreshNotebooks, markets } = useApp();
   const [removing, setRemoving] = useState(false);
   const remove = async () => {
     setRemoving(false);
@@ -298,14 +308,20 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const allTrades = [...e.trades].reverse();
   const open = e.trades.filter((t) => !t.exit_t).length;
   const closed = e.trades.length - open;
+  // the closed trades kept as rows are the newest ones: how many more there were and their P&L, so the caption agrees with
+  // the header and the rows plus that line add up to the total (R11C-003)
+  const list = tradeListFacts(e);
+  // an intraday trade's times are its candles, start to close: the order fills at the close (R11C-011)
+  const close = markets.find((m) => m.id === e.instrument.market)?.hours?.close ?? null;
+  const at = (iso: string | null | undefined) => (intraday ? candleSpan(iso, e.tf, tz, close) : when(iso, tz, false));
   const twoWay = e.strategy.side === "both" || e.strategy.side === "short" || e.trades.some((t) => t.side === "short");
   const dp = priceDp(e.instrument);
   const step = e.instrument.step;
 
   const tradeCols: Column<Trade>[] = [
     ...(e.group ? [{ key: "sym", header: "Symbol", rowHeader: true, cell: (t: Trade) => <b>{t.symbol}</b> }] : []),
-    { key: "open", header: "Opened", cell: (t) => <>{when(t.entry_t, tz, intraday)}{t.spans_split ? <span className="k-sub-line">Spans the split: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
-    { key: "close", header: "Closed", cell: (t) => (t.exit_t ? when(t.exit_t, tz, intraday) : "Still open") },
+    { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Spans the split: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
+    { key: "close", header: intraday ? "Closed (candle)" : "Closed", cell: (t) => (t.exit_t ? at(t.exit_t) : "Still open") },
     ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qty(t.qty, step) },
     { key: "in", header: "In", numeric: true, cell: (t) => price(t.entry, cur, dp) },
@@ -394,12 +410,17 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
             <Stat key={k} item label={<>{k}<Info label={`What is ${k}?`}>{help}</Info></>} value={val} tone={sign == null || sign === 0 ? undefined : sign > 0 ? "up" : "down"} />
           ))}
         </StatRow>
+        {/* R11C-017: said where the number is, not only behind the info button */}
+        <p className="k-note" data-testid="buy-hold-note">Buy and hold is worked out from prices alone: dividends are not added{e.instrument.market === "US" ? ", so a US stock's dividends are left out" : ""}.</p>
       </Card>
 
       <Card label="Every trade">
         <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
-          actions={<span className="k-note">{closed} closed{open ? ` + ${open} still open` : ""} · P&L and Return after costs{e.trades_trimmed ? ` (the ${e.trades_trimmed} earlier ones were cleared to save space; run it again to see every trade)` : ""}</span>} />
-        <DataTable label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period." />
+          actions={<span className="k-note" data-testid="trades-caption">{list.caption} · P&L and Return after costs</span>} />
+        <DataTable label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period."
+          foot={list.hidden ? { [tradeCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
+        {list.hidden > 0 && <p className="k-note" data-testid="trades-reconcile">Only the newest {closed.toLocaleString("en-IN")} closed trades are kept as rows{e.trades_trimmed ? " (an older experiment keeps fewer, to save space)" : ""}. The rows and the line for the {list.hidden.toLocaleString("en-IN")} not listed add up to the total P&L, {money(list.total, cur)}.</p>}
+        {intraday && allTrades.length > 0 && <p className="k-note">Each time is the candle the order filled in: a rule's order fills at the candle's close, the end of the span; a stop or a target fills inside it.</p>}
       </Card>
 
       <WalkForwardCheck key={`wf${e.v}`} nb={nb} e={e} />

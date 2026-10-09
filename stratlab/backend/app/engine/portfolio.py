@@ -107,8 +107,13 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
     members = []
     for b in books:
         ts = b["eng"].trades
+        # a position still open at the end counts in its stock's P&L at its value on the last close, as in the trade list,
+        # so the members add up to the total (R11C-014: KOTAKBANK's open +25,549 was left out); `open_pnl` says how much
+        still = _open_pnl(b)
         members.append({"symbol": b["inst"].get("symbol"), "id": b["inst"].get("id"), "trades": len(ts),
-                        "pnl": round(sum(t["pnl"] for t in ts), 2), "win": round(sum(t["pnl"] > 0 for t in ts) / len(ts) * 100, 1) if ts else None,
+                        "pnl": round(sum(t["pnl"] for t in ts) + still, 2),
+                        "win": round(sum(t["pnl"] > 0 for t in ts) / len(ts) * 100, 1) if ts else None,
+                        "open": 1 if b["eng"].qty > 0 and b["last"] is not None else 0, "open_pnl": round(still, 2),
                         "buy_hold": round((b["bars"][b["last"]]["c"] / b["bars"][b["first"]]["c"] - 1) * 100, 2) if b["first"] is not None else None})
     members.sort(key=lambda m: -m["pnl"])
     return {

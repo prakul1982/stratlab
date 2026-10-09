@@ -20,6 +20,7 @@ import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
 import { moneyCompact } from "../lib/chartFormat";
+import { STOP_DIALOG, stoppedOpenLine } from "../lib/paperText";
 import "./trade/trade.css";
 import "./trade/paper.css";
 
@@ -90,6 +91,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const intraday = snap.strategy.tf !== "1d";
   const a = snap.account;
   const alwaysOpen = snap.instrument.market === "CRYPTO";
+  const marketClose = markets.find((m) => m.id === snap.instrument.market)?.hours?.close ?? null;
   // orders: today's in view, the earlier ones open under them
   const orders: PaperOrder[] = snap.events.map((e) => ({ ...e, sym: snap.instrument.symbol }));
   const { today, earlier } = splitToday(orders, (e) => e.t, tz);
@@ -136,6 +138,11 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
         </div>
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {!running && a.qty > 0 && (
+        <Notice className="stopped-open">
+          {stoppedOpenLine(a.side, a.qty, price(a.entry ?? 0, cur), a.valued_at != null ? price(a.valued_at, cur) : null)}
+        </Notice>
+      )}
 
       <div className="nb-grid">
         <div className="k-page">
@@ -161,17 +168,17 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
           </Card>
           <Card label="Orders today">
             <CardHead level={3} title="Orders today" />
-            {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
+            {today.length ? <OrderList events={today} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
               : <p className="k-small k-muted">{!snap.events.length ? "No orders yet. They appear when your rules fire on a closed candle." : "No orders today."}</p>}
             <Earlier label="Earlier orders" count={earlier.length} className="in-card" open
               note={<><span className={upDown(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
-              <OrderList events={earlier} cur={cur} tz={tz} newest />
+              <OrderList events={earlier} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
             </Earlier>
           </Card>
         </div>
       </div>
       {ask === "stop" && <ConfirmDialog title="Stop this session?" confirmLabel="Stop session" onConfirm={stop} onClose={() => setAsk(null)}>
-        Open paper positions are left as they are, and it can't be restarted.</ConfirmDialog>}
+        {STOP_DIALOG}</ConfirmDialog>}
       {ask === "delete" && <ConfirmDialog title={`Delete "${snap.name}"?`} confirmLabel="Delete session" onConfirm={remove} onClose={() => setAsk(null)}>
         Its orders go with it. This can't be undone.</ConfirmDialog>}
     </div>

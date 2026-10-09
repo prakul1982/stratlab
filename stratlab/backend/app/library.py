@@ -200,9 +200,9 @@ def restated(e: dict) -> dict:
                            .get(s, "The nearby-settings check didn't pass."))
             elif c["id"] == "shuffle":
                 out.append({"pass": "With the trades in a worse order, the worst fall stayed close to the one it had.",
-                            "warn": "With the trades in a worse order, the worst fall could have been much deeper.",
-                            "fail": "With the trades in a worse order, the worst fall could have been deep enough to be hard to sit through.",
-                            "skip": "Too few trades to reshuffle for the bad-luck check."}
+                            "warn": "With the trades in a worse order, the worst fall was much deeper.",
+                            "fail": "With the trades in a worse order, the worst fall was 35% or more in 1 of 20 reshuffles.",
+                            "skip": "The bad-luck check couldn't reshuffle these trades."}
                            .get(s, "The bad-luck fall check didn't pass."))
             elif c["id"] == "sample" and isinstance(n, int):
                 out.append({"pass": f"{n} trades, enough to judge.", "warn": f"{n} trades, a small sample: a few lucky trades could decide the result."}

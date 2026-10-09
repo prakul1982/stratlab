@@ -10,7 +10,7 @@ import re
 
 from pydantic import ValidationError
 
-from .models import Cond, Strategy
+from .models import Cond, GroupReq, Strategy
 
 FORMATS = {
     "stratlab": "StratLab export",
@@ -57,7 +57,19 @@ def from_json(text: str) -> dict:
     if not s.entry:
         raise ValueError("That strategy has no entry rules.")
     inst = obj.get("instrument") if isinstance(obj.get("instrument"), dict) else None
-    return {"strategy": s.model_dump(), "instrument_id": (inst or {}).get("id"), "notes": []}
+    group, notes = None, []
+    if isinstance(obj.get("group"), dict):
+        try:
+            g = GroupReq(**obj["group"])
+            group = {"id": g.id, "name": g.name, "market": g.market.upper(), "maxOpen": min(g.maxOpen, len(g.members)),
+                     "members": [m.model_dump(exclude_none=True) for m in g.members]}
+        except ValidationError:
+            notes.append("The group in the file couldn't be read, so pick what to test it on.")
+    # an export holds every setting: the timeframe, the sell rule, the stop, the target and the risk per trade are all
+    # given, so none of them is asked again (R11C-013: the import asked the risk per trade the file holds)
+    given = ["tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital"] + (["instrument"] if inst or group else [])
+    return {"strategy": s.model_dump(), "instrument_id": None if group else (inst or {}).get("id"), "group": group,
+            "mentioned": given, "notes": notes}
 
 
 def ai_prompt(fmt: str, text: str) -> str:

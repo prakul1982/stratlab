@@ -71,10 +71,13 @@ export interface GroupMember { id?: string; symbol: string }
 export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
 export interface GroupResult {
   name: string; max_open: number; most_open: number; skipped: string[];
-  members: { symbol: string; id: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[];
+  members: { symbol: string; id: string; trades: number; pnl: number; win: number | null; buy_hold: number | null; open?: number; open_pnl?: number }[];
 }
 export interface Experiment {
   trades_trimmed?: number;           // older experiments keep only their last few trades
+  trimmed_pnl?: number;              // ...and the P&L of the ones cleared
+  trades_omitted?: number;           // closed trades beyond the newest 200, never kept as rows
+  omitted_pnl?: number;              // ...and their P&L
   v: number; label: string; created_at: string; strategy: Strategy; instrument: Instrument; days: number; tf: Tf;
   candles: number; range: { from: string; to: string }; stats: Stats; costs: Costs; verdict: Verdict;
   series: { t: string[]; close: number[]; equity: (number | null)[]; buy_hold: (number | null)[];
@@ -176,7 +179,8 @@ export interface LiveSnapshot {
   bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; c: number } | null;
   overlays: Record<string, (number | null)[]>; events: LiveEvent[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; qty: number; entry?: number | null; stop?: number | null;
-    target?: number | null; unrealised: number; realised: number; trades: number; wins: number };
+    target?: number | null; unrealised: number; realised: number; trades: number; wins: number;
+    side?: "long" | "short"; valued_at?: number | null };
   orders: LiveOrder[];
 }
 export interface LiveRow {
@@ -214,7 +218,11 @@ export interface OptPreview {
   spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
   margin_one: number | null; margin: number | null; strikes: number[]; expiries?: string[];
   legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null;
-    rule?: string; pick?: string | null }[];     // the leg's rule in words, and why a strike rule picked its strike (or why none)
+    rule?: string; pick?: string | null;     // the leg's rule in words, and why a strike rule picked its strike (or why none)
+    from_last?: boolean }[];                 // priced from the last trade: no bid or ask on the side it fills on (R11C-007)
+  tick?: number;                       // the contract's price step (0.0025 for USDINR)
+  from_last?: number;                  // how many legs were priced from the last trade
+  impossible?: string | null;          // why these fills can't be real (a profit at every price)
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
   model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
 }

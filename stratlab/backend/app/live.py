@@ -171,7 +171,23 @@ class CandleBuilder:
 
     def _close(self) -> dict:
         c, self.cur = self.cur, None
-        return {"t": c["start"].isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"], "v": c["v"]}
+        # "t" names the candle by its start, as the engine and the backtest do; "end" is when it closed, the moment its
+        # close (the price a rule's order fills at) was the price (R11C-011)
+        return {"t": c["start"].isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"], "v": c["v"],
+                "end": c["end"].isoformat()}
+
+
+def candle_end(c: dict, tf: str) -> str:
+    """When a closed candle closed: its own end when it has one (a candle built from ticks: the last one of a session ends
+    at the session's close), else its start plus its length. A daily candle keeps its day."""
+    if c.get("end"):
+        return str(c["end"])
+    if tf not in MINUTES:
+        return c["t"]
+    try:
+        return (datetime.fromisoformat(str(c["t"])) + timedelta(minutes=MINUTES[tf])).isoformat()
+    except ValueError:
+        return c["t"]
 
 
 class LiveSession:
@@ -267,7 +283,9 @@ class LiveSession:
             self.bars = self.bars[-500:]
         ctx = Ctx(self.bars, intraday=self.tf != "1d")
         new = self.engine.step(self.bars, ctx, len(self.bars) - 1)
-        self.equity_curve.append({"t": c["t"], "eq": round(self.engine.equity(c["c"]), 2)})
+        # the account's value at the candle's close, stamped when the candle closed: the 14:00-14:05 candle's close is the
+        # 14:05 price (R11C-011: the curve said 14:00 and marked the 14:05 price)
+        self.equity_curve.append({"t": candle_end(c, self.tf), "eq": round(self.engine.equity(c["c"]), 2)})
         self.equity_curve = self.equity_curve[-500:]
         self.dirty = True
         for ev in new:
@@ -342,6 +360,20 @@ class LiveSession:
         d = self.engine.dump()
         d["equity_curve"] = self.equity_curve
         d["day_equity"] = self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
+        d["last_price"], d["last_tick_at"] = self.last_price, self.last_tick_at
+        return d
+
+    def final_state(self, now: datetime | None = None) -> dict:
+        """The state kept when the session stops. An open position stays open, as the stop dialog says, valued at the last
+        price: the account's value at that price is the curve's last point, and the newest candles are kept, so the
+        stopped page shows the same account, position and chart as the curve (R11C-002)."""
+        e = self.engine
+        if e.qty > 0 and self.last_price:
+            eq = round(e.equity(float(self.last_price)), 2)
+            if not self.equity_curve or self.equity_curve[-1]["eq"] != eq:
+                self.equity_curve.append({"t": (now or datetime.now(IST)).isoformat(timespec="seconds"), "eq": eq})
+        d = self.state()
+        d["bars"] = [{k: b[k] for k in ("t", "o", "h", "l", "c")} for b in self.bars[-150:]]
         return d
 
     def snapshot(self) -> dict:
@@ -375,6 +407,49 @@ class LiveSession:
                     "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
                 },
             }
+
+
+def stopped_snapshot(row: dict) -> dict:
+    """A stopped session as its page shows it, from the state kept at the stop. A position still open at the stop stays
+    open ("Open paper positions are left as they are"), valued at the last price before the stop, so equity, return,
+    unrealised P&L and the curve's last point agree (R11C-002: the page showed the cash alone, -97%, and no position). A
+    session stopped before the last price was kept values it where the curve ends."""
+    st = row.get("state") or {}
+    strategy = row.get("strategy") or {}
+    cap = (strategy.get("risk") or {}).get("capital") or 0
+    trades = st.get("trades", [])
+    cash = st.get("cash", cap)
+    qty = st.get("qty") or 0
+    d = st.get("dir") or 1
+    entry = st.get("entry") or 0.0
+    curve = st.get("equity_curve", [])
+    px = st.get("last_price")
+    if qty and not px and curve:
+        px = (curve[-1]["eq"] - cash) / (d * qty)          # the price the curve's last point valued the position at
+    held = bool(qty and px)
+    bars = st.get("bars") or []
+    overlays, osc = {}, {}
+    if bars:
+        try:
+            ctx = Ctx(bars, intraday=strategy.get("tf") != "1d")
+            overlays, osc = chart_series(Strategy(**strategy), ctx, 0)
+        except Exception as e:                       # the candles without their lines rather than none
+            print("stopped session lines:", row.get("id"), str(e)[:120])
+    tg = st.get("tg")
+    return {"id": row["id"], "name": row["name"], "status": row["status"], "stop_reason": row.get("stop_reason"),
+            "instrument": row["instrument"], "strategy": strategy, "started_at": row["started_at"],
+            "stopped_at": row.get("stopped_at"), "bars": bars, "overlays": overlays, "oscillators": osc,
+            "last_price": px if held else (bars[-1]["c"] if bars else None),
+            "events": st.get("events", []), "equity_curve": curve,
+            "account": {"capital": cap, "equity": cash + d * qty * px if held else cash, "cash": cash,
+                        "qty": qty if held else 0, "entry": entry if held else None,
+                        "stop": st.get("sl") if held and (st.get("sl") or 0) > 0 else None,
+                        "target": tg if held and tg is not None else None,
+                        "side": "short" if d == -1 else "long",
+                        "unrealised": d * qty * (px - entry) if held else 0.0,
+                        "valued_at": px if held else None,
+                        "realised": sum(t["pnl"] for t in trades), "trades": len(trades),
+                        "wins": sum(1 for t in trades if t["pnl"] > 0)}}
 
 
 class LimitError(Exception):
@@ -456,7 +531,7 @@ class LiveManager:
         elif not s.polled:
             self.hub.remove(sid)
         with s.lock:
-            st = s.state()
+            st = s.final_state() if hasattr(s, "final_state") else s.state()
         db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
 
     # ---------- orders and alerts ----------

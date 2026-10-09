@@ -201,6 +201,25 @@ export function when(iso: string | null | undefined, tz: string, intraday: boole
   return intraday ? fmtDateTime(iso, { tz, year: false, zone }) : fmtDate(iso, { tz });
 }
 
+const TF_MINUTES: Record<string, number> = { "5m": 5, "15m": 15, "1h": 60 };
+
+/** An intraday candle by the time it covers, "8 Oct, 09:30–09:45": a backtest's or a paper session's order fills at the
+ * candle's close, the end of that span, while the candle is named by its start (R11C-011: "Opened 8 Oct 09:30" at the 09:45
+ * close). The span stops at the market's close (`close`, "15:30"): an hour candle from 15:15 ends at 15:30. A daily candle
+ * is its day. */
+export function candleSpan(iso: string | null | undefined, tf: string, tz: string, close?: string | null): string {
+  const mins = TF_MINUTES[tf];
+  if (!iso || !mins) return when(iso, tz, false);
+  const d = toDate(iso);
+  if (!d) return "–";
+  let end = new Date(d.getTime() + mins * 60_000);
+  if (close && /^\d{2}:\d{2}$/.test(close)) {
+    const startT = fmtTime(d, { tz }), endT = fmtTime(end, { tz });
+    if (startT < close && endT > close) end = new Date(d.getTime() + (((+close.slice(0, 2) * 60 + +close.slice(3)) - (+startT.slice(0, 2) * 60 + +startT.slice(3))) * 60_000));
+  }
+  return `${fmtDateTime(d, { tz, year: false })}–${fmtTime(end, { tz })}`;
+}
+
 /** When a quote's price was traded, in its market's zone: "15:01 IST" today, "7 Oct, 15:29 IST" on an earlier day, and
  * "7 Oct" for a daily candle (a plain calendar day). The time beside each price, so a stale one is seen as stale. */
 export function quoteAt(iso: string | null | undefined, tz: string = IST, now: Date = new Date()): string {

@@ -169,6 +169,15 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
     return out
 
 
+def on_last_trade(detail: str, read_px: float, close: float) -> str:
+    """A stored match's numbers when the day's official close differs from the price it was read on: the price named as the
+    last trade it was, and the official close beside it, so the row's price and its numbers agree (R11C-008)."""
+    f = _f(float(read_px))
+    text = detail.replace(f"Closed at {f}", f"Last traded at {f}").replace(f"the close {f}", f"the last trade {f}")
+    return (f"{text}. Read on the last trade; the official close, {_f(float(close))}, came after this list was read, "
+            "and the list is read again once the day's official closes are in.")
+
+
 # ---------- the daily results ----------
 def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:
     """The stored shape for one group from {symbol: evaluate() answer}: only stocks that match something get a row."""

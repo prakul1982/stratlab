@@ -1,4 +1,4 @@
-import { money, price, signCls, when } from "../lib/format";
+import { candleSpan, money, price, signCls, when } from "../lib/format";
 
 /* Paper orders, the same way on every session page: the orders sent at one moment for one reason (an entry, a
  * re-centre, a stop) under one line with their P&L added up, each order a row: side, contract, quantity × price. */
@@ -6,13 +6,24 @@ import { money, price, signCls, when } from "../lib/format";
 export type PaperOrder = { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number | null;
   slices?: number; strike?: number; opt?: "CE" | "PE"; pick?: string };
 
-export function OrderList({ events, cur, tz, newest = false }: { events: PaperOrder[]; cur: string; tz: string; newest?: boolean }) {
+/** The orders a rule sends on a closed candle: they fill at the candle's close, and carry the candle's start as their time. */
+const CANDLE_ORDER = /^(Entry rule|Short entry|Exit rule|Stop loss|Trailing stop|Target|Time exit|Square-off|Daily loss cap)$/;
+
+/** When an order was sent, as the page says it: a rule's order on intraday candles by its candle, "9 Oct, 14:00–14:05"
+ * (it filled at the close, 14:05; R11C-011: "Entry rule · 14:00" read as the price at 14:00); any other order at its time. */
+export function orderWhen(t: string, why: string, tz: string, tf?: string, close?: string | null): string {
+  return tf && tf !== "1d" && CANDLE_ORDER.test(why) ? `${candleSpan(t, tf, tz, close)} candle` : when(t, tz, true, true);
+}
+
+export function OrderList({ events, cur, tz, newest = false, tf, close }: { events: PaperOrder[]; cur: string; tz: string; newest?: boolean;
+  /** The session's candles: a rule's order on intraday candles is shown by its candle, filled at the close. */
+  tf?: string; close?: string | null }) {
   const groups = orderGroups(events);
   if (newest) groups.reverse();
   return (
     <div className="order-list">{groups.map((g) => (
       <div key={g.key} className="order-group">
-        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {when(g.t, tz, true, true)}</span></span>
+        <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {orderWhen(g.t, g.why, tz, tf, close)}</span></span>
           {g.pnl != null && <span className={`order-num ${signCls(g.pnl)}`}>{money(g.pnl, cur)}</span>}</div>
         <ul className="orders order-rows">{g.rows.map((e, i) => (
           <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>

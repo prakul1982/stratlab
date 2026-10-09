@@ -21,13 +21,25 @@ PNG_START = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 PNG_END = b"\x00\x00\x00\x00IEND\xaeB`\x82"
 
 
+# the question a notebook is given from its idea's own words: 'Does "buy TCS when the 20-day SMA crosses above…" work?'
+_RULES_QUESTION = re.compile(r'^Does ".+" work(?: on [^?]+)?\?$', re.S)
+
+
+def own_question(q: str | None) -> str:
+    """The notebook's question as a shared page may show it: one the person wrote, never the one made from the idea's words,
+    which are the rules themselves (R11C-016: "The strategy's rules are private" under the rules, quoted in "The
+    question")."""
+    q = (q or "").strip()
+    return "" if _RULES_QUESTION.match(q) else q
+
+
 def snapshot(nb: dict, exp: dict) -> dict:
     v = exp.get("verdict") or {}
     inst = exp.get("instrument") or {}
     s = exp.get("series") or {}
     g = exp.get("group")
     return {
-        "name": nb.get("name"), "question": nb.get("question") or "",
+        "name": nb.get("name"), "question": own_question(nb.get("question")),
         "instrument": {k: inst.get(k) for k in ("symbol", "name", "market", "currency", "type")},
         "tf": exp.get("tf"), "range": exp.get("range"), "days": exp.get("days"), "v": exp.get("v"),
         "side": (exp.get("strategy") or {}).get("side", "long"), "created_at": exp.get("created_at"),
@@ -82,7 +94,13 @@ def load(token: str) -> dict | None:
     if not TOKEN.match(token or ""):
         return None
     raw = db.get_setting(f"share:{token}")
-    return json.loads(raw) if raw else None
+    snap = json.loads(raw) if raw else None
+    if isinstance(snap, dict) and snap.get("question"):
+        snap["question"] = own_question(snap["question"])        # a link shared before the rules were kept out of it
+    if isinstance(snap, dict) and isinstance(snap.get("verdict"), dict):
+        from .engine.verdict import restated                     # a link shared with a claim for a headline (R11C-009)
+        snap["verdict"] = restated(snap["verdict"], snap.get("stats"))
+    return snap
 
 
 def image(token: str) -> bytes | None:

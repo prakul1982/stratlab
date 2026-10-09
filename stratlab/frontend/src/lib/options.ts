@@ -9,6 +9,26 @@ export function optMoney(v: number | null | undefined): string {
   return inr(v, Math.abs(v) < 100 ? 2 : 0);
 }
 
+/** A price level (a breakeven, the spot) at the contract's own precision: whole points for an index, and a currency
+ * option's quarter paise, "95.1625" (R11C-007: USDINR's breakevens of 95.16 and 97.10 read "95 and 97"). */
+export function levelText(x: number, tick?: number | null): string {
+  if (tick && tick < 0.01) {
+    const v = Math.round(x / tick) * tick;
+    return v.toLocaleString("en-IN", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  }
+  return Math.round(x).toLocaleString("en-IN");
+}
+
+/** The banner over a structure some of whose legs had no bid or ask to fill on (R11C-007: USDINR priced from last trades
+ * hours old, under "Fills use the real bid and ask"). Empty when every leg had one. */
+export function staleQuoteLine(fromLast: number, legs: number): string {
+  if (!fromLast) return "";
+  const lead = fromLast >= legs
+    ? (legs === 1 ? "No live bid or ask: the leg is priced from its last traded price" : "No live bid or ask: every leg is priced from its last traded price")
+    : `No live bid or ask for ${fromLast} of the ${legs} legs: ${fromLast === 1 ? "it is priced from its last traded price" : "they are priced from their last traded prices"}`;
+  return `${lead}, which may be hours old. The numbers below can be far from what an order would fill at now.`;
+}
+
 /** The ways a leg's strike can be picked (strike rules beyond the distance are Pro). */
 export const PICKS: [StrikePick, string][] = [["offset", "Distance from ATM"], ["delta", "Closest delta"], ["delta_range", "Delta range"],
   ["premium", "Premium"], ["straddle_pct", "% of ATM straddle"]];

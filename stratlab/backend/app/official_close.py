@@ -424,3 +424,16 @@ def _closes_in(bars: list[dict], symbol: str, kind: str = "cas", exchange: str =
             out = list(bars)
         out[i] = {**b, "c": c, "h": max(c, b.get("h") or c), "l": min(c, b.get("l") or c), "official": True}
     return out if out is not None else bars
+
+
+def waiting(day, now: datetime | None = None) -> bool:
+    """Whether a day's official closes are still to come and worth waiting for: the exchange's files are read here, and
+    that day's closes are neither stored nor given up on (the next morning). A job that stores numbers read from the day's
+    candles reads them again once the closes are in (R11C-008: a trend scan stored at 18:57 IST matched CPPLUS on its last
+    trade, 4,244.30, above the 52-week high of 4,188.90; the official close, 4,185.20, is below it)."""
+    if not _src.get("files"):
+        return False
+    try:
+        return not settled(day, now)
+    except Exception:                            # can't tell: nothing to wait for
+        return False
