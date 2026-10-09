@@ -184,6 +184,10 @@ def table() -> dict:
         # `converted`: the amount is the rupee charge (GST included) at today's rate, rounded, so Plans can say so; a
         # fixed price (dollars, euros, pounds) or one the admin typed in isn't (R7O-008)
         row["converted"] = bool(code != "INR" and code not in FIXED and row["auto"] and row.get("rate"))
+        # `no_rate`: an automatic price that should follow the rupee price but has no exchange rate to follow, so the amount
+        # is only the built-in default (R7M-003: "SAR 22" for a ₹699 charge that is about SAR 27). Visitors aren't shown
+        # it (public()); Admin flags it. A price the admin typed in, and dollars, euros and pounds, never need a rate.
+        row["no_rate"] = bool(code != "INR" and code not in FIXED and row["auto"] and not row.get("rate"))
         out[code] = {**row, "symbol": symbol, "name": name, "charged_in": code if own else "INR",
                      "yearly_charged_in": code if code == "INR" or (row.get("plan_basic_year") and row.get("plan_pro_year")) else "INR"}
     return out
@@ -193,8 +197,9 @@ def public() -> dict:
     """What the landing page and Plans need: prices, symbols and which currency is charged. Plan IDs stay on the
     server. Each currency shows the admin price table's amount ($8 and $20 for dollars, the owner's choice, 7 Oct);
     `charged_in` says when a card is still charged the rupee price instead."""
-    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto")} for c, r in table().items()},
-            "countries": COUNTRIES}
+    shown = {c: r for c, r in table().items() if not r.get("no_rate")}
+    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate")} for c, r in shown.items()},
+            "countries": {k: c for k, c in COUNTRIES.items() if c in shown}}
 
 
 def save(changes: dict) -> dict:

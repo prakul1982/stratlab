@@ -142,6 +142,7 @@ class Status:
     rank_error: str | None = None
     discovered: int | None = None
     skipped: dict = field(default_factory=dict)     # why listed models were left out: reason -> count
+    aliases: dict = field(default_factory=dict)     # an id the provider lists as a UUID (Cloudflare) -> the model's usable name
     probing: bool = False
     healed_at: float = 0.0
 
@@ -198,6 +199,7 @@ def _ensure_loaded():
             st.ranked_at, st.rank_error = float(d.get("at") or 0), d.get("error")
             st.discovered, st.skipped = d.get("discovered"), d.get("skipped") or {}
             st.order = [m for m in d.get("order") or [] if isinstance(m, str)]
+            st.aliases = {k: v for k, v in (d.get("aliases") or {}).items() if isinstance(k, str) and isinstance(v, str)}
             for mid, md in (d.get("models") or {}).items():
                 if isinstance(md, dict):
                     st.models[mid] = ModelStats.load(name, mid, md)
@@ -211,7 +213,7 @@ def save(name: str):
         keep = set(st.order) | {m for m, s in st.models.items() if s.probe_tries or s.live}
         models = {m: st.models[m].dump() for m in list(keep)[:16] if m in st.models}
         value = json.dumps({"at": st.ranked_at, "error": st.rank_error, "discovered": st.discovered, "skipped": st.skipped,
-                            "order": st.order, "models": models})
+                            "order": st.order, "models": models, "aliases": dict(list(st.aliases.items())[:200])})
     STORE.set(f"ai:rank:{name}", value)
 
 
@@ -584,10 +586,11 @@ def rerank(name: str, transport=None) -> Status:
             return st
         st.probing = True
     try:
-        listed, st.rank_error = None, None
+        listed, st.rank_error, cl = None, None, None
         if PROVIDERS[name].models_url:
             try:
-                listed = client(name, transport).models(time.time() + 20)
+                cl = client(name, transport)
+                listed = cl.models(time.time() + 20)
             except CallError as e:
                 if e.kind == "auth":
                     with _lock:
@@ -596,6 +599,7 @@ def rerank(name: str, transport=None) -> Status:
                     return st
                 st.rank_error = f"couldn't list models, measured the defaults ({e.detail})"
         p = pinned(name)
+        st.aliases.update(getattr(cl, "aliases", None) or {})     # R7M-008: a stored UUID is shown by its model's name
         cands, skipped, ctx = candidates(name, listed)
         if p and p not in cands:
             cands = [p] + cands[:PROVIDERS[name].probe_max - 1]

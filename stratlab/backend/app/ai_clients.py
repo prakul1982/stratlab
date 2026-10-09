@@ -241,7 +241,9 @@ class OpenAIStyle:
             raise CallError("transient", f"couldn't list models ({r.status_code}: moved to {redact(r.headers.get('location', '?'))[:120]})",
                             scope="provider")
         try:
-            return parse_models(r.json())
+            data = r.json()
+            self.aliases = parse_aliases(data)           # R7M-008: a UUID Cloudflare lists beside the model's usable name
+            return parse_models(data)
         except (ValueError, TypeError, AttributeError):
             raise CallError("transient", f"sent something that isn't a model list ({r.status_code}, {not_a_reply(r)})",
                             scope="provider") from None
@@ -268,6 +270,16 @@ def _ctx(item: dict) -> int | None:
 
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def parse_aliases(data) -> dict[str, str]:
+    """{UUID: usable name} for the models a list gives under a UUID `id` with the name beside it (Cloudflare's)."""
+    items = (data.get("data") or data.get("result") or data.get("models") or []) if isinstance(data, dict) else data
+    out = {}
+    for it in items if isinstance(items, list) else []:
+        if isinstance(it, dict) and _UUID.match(str(it.get("id") or "")) and str(it.get("name") or "").startswith(("@cf/", "@hf/")):
+            out[str(it["id"])] = str(it["name"])
+    return out
 
 
 def parse_models(data) -> list[dict]:

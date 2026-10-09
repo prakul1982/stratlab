@@ -47,6 +47,36 @@ def seller() -> dict:
     return {f: (s.get(f) or "") for f in FIELDS} | {"prefix": s.get("prefix") or "SL"}
 
 
+REQUIRED = (("legal_name", "legal name"), ("address", "address"), ("state", "state"), ("gstin", "GSTIN"))
+
+
+def readiness() -> dict:
+    """What the invoices will say about the seller, from what is filled in (R7M-001). With no GSTIN every invoice is a
+    plain one that says the supplier isn't registered under GST, so the pages that talk about GST must not promise one.
+    `missing`: the required details still empty; `gst`: invoices carry GST (a GSTIN is set)."""
+    s = seller()
+    missing = [label for k, label in REQUIRED if not s[k]]
+    return {"complete": not missing, "missing": missing, "gst": bool(s["gstin"])}
+
+
+_gst_cache: list = [None, False]   # (when read, the answer)
+GST_TTL = 30.0
+
+
+def forget_gst() -> None:
+    _gst_cache[0] = None
+
+
+def gst_registered() -> bool:
+    """Whether invoices carry GST (a GSTIN is set), kept for half a minute: the public price list asks on every visit."""
+    import time
+    if _gst_cache[0] is not None and time.monotonic() - _gst_cache[0] < GST_TTL:
+        return bool(_gst_cache[1])
+    got = readiness()["gst"]
+    _gst_cache[:] = [time.monotonic(), got]
+    return got
+
+
 def save_seller(data: dict) -> dict:
     import re
     out = {f: str(data.get(f) or "").strip()[:400] for f in FIELDS}
@@ -59,6 +89,7 @@ def save_seller(data: dict) -> dict:
         raise ValueError(f"The GSTIN starts with {out['gstin'][:2]}, which is {STATES.get(out['gstin'][:2], 'another state')}, not the state chosen.")
     out["prefix"] = re.sub(r"[^A-Z0-9]", "", out["prefix"].upper())[:6] or "SL"
     db.set_setting(SELLER, json.dumps(out))
+    _gst_cache[0] = None
     return seller()
 
 

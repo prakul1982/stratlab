@@ -423,8 +423,10 @@ function Pricing() {
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
   const yearly = (p: PlanId) => price(p, true);
+  // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
+  const gst = pricing?.invoice?.gst === true;
   const small = finePrint(offer, { currency: local ? currency : "INR", inRupees: local?.charged_in === "INR", inRupeesYear: local?.yearly_charged_in === "INR",
-    year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") } });
+    year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") }, gst });
   const showYear = !!(offer?.yearly && offer.payments);
   return (
     <section id="pricing" className="lp-sec" aria-busy={loading}>
@@ -460,8 +462,8 @@ function Pricing() {
                   {p !== "free" && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : chargedInRupees ? `${buy ? "Charged as" : "Will be charged as"} ${rupees(p, year)} / ${per} incl. GST`
-                        : local ? "" : "incl. GST"}
+                        : chargedInRupees ? `${buy ? "Charged as" : "Will be charged as"} ${rupees(p, year)} / ${per}${gst ? " incl. GST" : ""}`
+                        : local || !gst ? "" : "incl. GST"}
                       {!loading && save != null && <span className="lp-save">{`Saves ${money(local, save, currency)} a year against paying monthly`}</span>}
                     </span>
                   )}

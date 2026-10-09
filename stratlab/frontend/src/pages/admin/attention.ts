@@ -1,6 +1,6 @@
 import type { HealthState } from "../../components/kit";
 import { ago, dateOnly } from "../../lib/format";
-import type { AIRow, JobRow, Overview, Reported } from "./AdminContext";
+import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
  * jobs and on System all come from services() below, so two pages can never tell the same fact two ways. */
@@ -20,17 +20,39 @@ export const indiaSessions = (sv: Overview["server"]): number => sv.india_sessio
  * sent only the last error. */
 export const aiUp = (a: AIRow): boolean => (a.answering ?? null) !== null ? !!a.answering : !a.last_error || !!a.quota;
 
-/** The AI providers' light: how many can answer now, and, said plainly, those out of free quota and those with a model
- * paused (R6O-003: "OK, 12 of 12 answering" beside a paused provider and one whose free credit was used up). */
+/** The AI providers' light, from each provider's last real result (R7M-008: "11 of 12 answering" over providers whose free
+ * credit was used up, that needed a card, returned empty replies or had never been tried): how many are working, and, said
+ * plainly, how many are out of credit, failing, paused or not tried yet. */
 export function aiTile(ai: AIRow[]): Service {
   const keys = ai.filter((a) => a.configured);
   const up = keys.filter(aiUp).length;
-  const quota = keys.filter((a) => a.quota_used).length;
-  const paused = keys.filter((a) => aiUp(a) && (a.paused_models ?? 0) > 0).length;
-  const notes = [quota ? `${quota} out of free quota` : "", paused ? `${paused} with a model paused` : ""].filter(Boolean);
-  const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : up < keys.length || paused ? "warn" : "ok";
+  if (!keys.some((a) => a.result !== undefined)) {
+    // an older server sends no last result: what it says about answering is all there is
+    const quota = keys.filter((a) => a.quota_used).length;
+    const paused = keys.filter((a) => aiUp(a) && (a.paused_models ?? 0) > 0).length;
+    const notes = [quota ? `${quota} out of free quota` : "", paused ? `${paused} with a model paused` : ""].filter(Boolean);
+    const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : up < keys.length || paused ? "warn" : "ok";
+    return { key: "ai", label: "AI providers", state, to: "/admin/system",
+      detail: keys.length ? [`${up} of ${keys.length} answering`, ...notes].join(" · ") : "No keys set" };
+  }
+  const count = (r: string) => keys.filter((a) => (a.result ?? "untested") === r).length;
+  const working = count("working"), quota = count("quota"), failing = count("failed"), paused = count("paused"), untested = count("untested");
+  const slow = keys.filter((a) => a.result === "working" && (a.paused_models ?? 0) > 0).length;
+  const notes = [quota ? `${quota} out of credit` : "", failing ? `${failing} failing` : "", paused ? `${paused} paused` : "",
+    untested ? `${untested} not tried yet` : "", slow ? `${slow} with a model paused` : ""].filter(Boolean);
+  const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : working < keys.length || slow ? "warn" : "ok";
   return { key: "ai", label: "AI providers", state, to: "/admin/system",
-    detail: keys.length ? [`${up} of ${keys.length} answering`, ...notes].join(" · ") : "No keys set" };
+    detail: [`${working} of ${keys.length} working`, ...notes].join(" · ") };
+}
+
+/** The invoice seller details still empty, said for Overview and Money (R7M-001): until a GSTIN is set every invoice is a
+ * plain one that says the supplier is not registered under GST, with the Plans page promising otherwise. */
+export function invoiceWarning(s: InvoiceSeller | undefined): string | null {
+  if (!s || s.complete) return null;
+  const all = s.missing.length >= 4;
+  return `${all ? "The invoice seller details are empty" : `The invoice seller details are missing the ${s.missing.join(", ")}`}. `
+    + (s.gst ? "Invoices carry GST, but are incomplete without them."
+      : "Until the GSTIN is set, every invoice is a plain one that says the supplier isn't registered under GST and charges none, and the Plans page says nothing about GST. If you are registered, fill the details in before the first payment.");
 }
 
 /** Every service's light, worded once. */
@@ -100,6 +122,8 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
   if (s.cal && s.cal.state !== "ok") out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
+  const invoice = invoiceWarning(sv.invoice_seller);
+  if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
   return out.sort((x, y) => Number(y.bad) - Number(x.bad));
 }

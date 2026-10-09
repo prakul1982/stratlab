@@ -14,6 +14,7 @@ import { EtfGapBadge } from "../components/EtfGap";
 import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
+import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -32,6 +33,8 @@ type View = {
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
   source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
   us?: UsTotals | null; usd_inr?: number | null; us_prices?: boolean | null;
+  /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
+  zerodha?: ZerodhaRead | null;
 };
 type Mkt = "IN" | "US";
 type Facts = {
@@ -213,7 +216,9 @@ export function HoldingsPage() {
           <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
-        <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>
+        {view?.zerodha
+          ? <p className="k-note">Zerodha is connected. <Link to="/settings#accounts">Refresh it or connect your statement inbox in Settings</Link>, so this stays up to date without uploads.</p>
+          : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>}
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
@@ -233,9 +238,14 @@ export function HoldingsPage() {
       {!view && (error
         ? <ErrorState title="Your holdings couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>
         : <Card><Skeleton label="Opening your holdings" /></Card>)}
-      {view && rows.length === 0 && (
+      {view && rows.length === 0 && (zerodhaEmpty(view.zerodha) ? (
+        // Zerodha was asked and had nothing: say so, instead of "connect Zerodha" to someone who has (R7M-009)
+        <EmptyState title={zerodhaEmpty(view.zerodha) ?? "Zerodha is connected; it returned 0 holdings"}>
+          If you hold shares at Zerodha, check that the right account is connected in <Link className="link" to="/settings#accounts">Settings</Link>. You can also upload your broker's holdings file above, or add stocks one at a time below.
+        </EmptyState>
+      ) : (
         <EmptyState title="No holdings yet">Upload your broker's holdings file above, or add stocks one at a time below.</EmptyState>
-      )}
+      ))}
 
       {view && t && rows.length > 0 && (
         <>

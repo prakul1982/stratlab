@@ -26,7 +26,7 @@ export type PageMeta = {
 export const PAGES: PageMeta[] = [
   { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-08" },
   { path: "/pricing", title: "Plans · StratLab",
-    description: "What the Free, Basic and Pro plans include and cost. Rupee prices include 18% GST; outside India the price is shown in your currency and charged in rupees.", index: true, updated: "2026-10-08" },
+    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, updated: "2026-10-08" },
   { path: "/faq", title: "Questions · StratLab",
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08" },
   { path: "/library", title: "Strategy library · StratLab",

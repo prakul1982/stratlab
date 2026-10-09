@@ -6,7 +6,8 @@ import { Badge, Card, CardHead, Disclosure, Light, Skeleton } from "../../compon
 
 // Admin only: provider names are fine here (never on public pages).
 type Model = {
-  id: string; in_use: boolean; rank: number | null; success: number | null; tries: number; median_ms: number | null;
+  id: string; /** the model's usable name: an id Cloudflare lists as a UUID is shown by its name (R7M-008) */ name?: string;
+  in_use: boolean; rank: number | null; success: number | null; tries: number; median_ms: number | null;
   probe: { ok: number; tries: number; at: number | null; error: string | null };
   last_error: string | null; last_error_at: number | null; open_until: number | null; open_reason: string | null;
   blocked: boolean; pinned: boolean; ctx: number | null; thinks: boolean;
@@ -205,7 +206,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
             <div className="k-stack adm-grow">
               <span className="k-small">
                 {m.in_use ? <b>#{m.rank} </b> : <span className="k-muted">not in use </span>}
-                <span className="adm-mono ai-id">{m.id}</span>
+                <span className="adm-mono ai-id" title={m.name && m.name !== m.id ? m.id : undefined}>{m.name ?? m.id}</span>
                 {m.pinned && <> <Badge tone="ok" dot={false}>Pinned</Badge></>}
                 {m.blocked && <> <Badge tone="warn" dot={false}>Blocked</Badge></>}
               </span>

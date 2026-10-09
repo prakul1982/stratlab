@@ -91,11 +91,15 @@ def recorded_through(targets: list[str]) -> str | None:
     return max(days) if days else None
 
 
+def plural(n: int, one: str) -> str:
+    return f"{n} {one}{'' if n == 1 else 's'}"
+
+
 def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
 
 
-KEPT = ("positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
+KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
 
 
 def rows() -> list[dict]:
@@ -139,6 +143,32 @@ def rows() -> list[dict]:
                     [{"label": "Run India", "path": "/admin/redflags/run?region=IN"}, {"label": "Run US", "path": "/admin/redflags/run?region=US"}],
                     running=bool(m.redflags_runner.running))
     add("Red flags across companies", redflags)
+
+    def newsletters():
+        # who got each brief, per region, and who didn't and why (R7M-005: the 8 Oct India brief never reached its reader and
+        # nothing said so)
+        from .newsletter import job as news
+        st = _plain(m.newsletter_job, "newsletters")
+        label = {"IN": "India", "US": "US", "IN-weekly": "India, weekly", "US-weekly": "US, weekly", "stocks": "My stocks", "stocks-weekly": "My stocks, weekly"}
+        log, failed = [], 0
+        for key in label:
+            rep = (st.get("regions") or {}).get(key)
+            if not rep:
+                continue
+            why = rep.get("skipped") or {}
+            failed += sum(n for w, n in why.items() if w in (news.WHY["error"], news.WHY["profile"]))
+            line = f"{label[key]}, {rep.get('day')}: sent to {rep.get('sent', 0)} of {plural(rep.get('readers', 0), 'reader')}"
+            if rep.get("other_edition"):
+                line += f"; {rep['other_edition']} chose the other edition"
+            if why:
+                line += "; not sent: " + ", ".join(f"{n} {w}" for w, n in why.items())
+            log.append(line)
+        at, extra = _ran(st, "last_run", data=lambda: max((i.get("at") or "" for r in news.SEND_AT for i in news.recent("market", r, 1)), default="") or None)
+        error = st.get("last_error") or (f"{plural(failed, 'reader')} couldn't be sent an issue; it is tried again during the day" if failed else None)
+        return _row("newsletters", "Newsletters", "India 4:15 PM IST and US 4:30 PM New York time on trading days; the weekly digest on Saturday 8 AM IST",
+                    at, error, (_problems(st) if st.get("last_error") else []) + log + extra,
+                    note="Readers whose address isn't confirmed yet, or whose email failed, are tried again through the day they were due.")
+    add("Newsletters", newsletters)
 
     def positioning():
         st = _plain(m.positioning_job, "positioning")

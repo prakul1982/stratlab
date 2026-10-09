@@ -104,17 +104,40 @@ export function yearlySaving(month: number, year: number): number | null {
   return save > 0 ? save : null;
 }
 
+/** What a card is charged in rupees, in words: "₹699 incl. 18% GST" while invoices carry GST, "₹699" while the seller has no
+ * GSTIN set (R7M-001: the page promised GST that the invoice would not have). */
+export function rupeeCharge(amount: number, gst: boolean): string {
+  return `₹${amount.toLocaleString("en-IN")}${gst ? " incl. 18% GST" : ""}`;
+}
+
+/** What the confirm step says about the payment window that opens next: it names the plan and the period (R6V-009, and
+ * the line "shows the amount only" was stale once it did). */
+export function paymentWindowLine(plan: string, period: string): string {
+  return `The payment window that opens next is headed "StratLab · ${plan}, ${period === "year" ? "yearly" : "monthly"}" and shows the amount in rupees.`;
+}
+
+/** Why the Plans page's buy buttons are off while the owner views the app as a plan (R7M-010: they opened a checkout the
+ * server then refused). */
+export function viewingPlansNote(plan: string): string {
+  return `You're viewing as ${plan}. Plan changes and payments are off while View as is on; turn it off to change your billing.`;
+}
+
 /** The small print under the plans, for the currency shown. `year` is written in that currency ("₹6,999", "$80");
  * `charged` is the rupee price a card is charged while the currency isn't charged itself (`inRupees`). */
 export function finePrint(o: Offer | null | undefined, x: {
   currency: string; inRupees: boolean; inRupeesYear: boolean; year?: { basic: string; pro: string } | null; charged?: { basic: string; pro: string } | null;
+  /** invoices carry GST (the seller's GSTIN is set); without it nothing here speaks of GST (R7M-001). Taken as true when not given. */
+  gst?: boolean;
 }): string[] {
   const out: string[] = [];
   const inr = x.currency === "INR";
   const buy = canBuy(o);
-  if (inr) out.push(buy ? "Rupee prices include 18% GST, and every payment gets a GST invoice." : "Rupee prices include 18% GST.");
-  else if (buy && x.inRupees && x.charged) {
-    out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month including GST, and your bank converts it, so the amount in ${x.currency} can differ.`);
+  const gst = x.gst ?? true;
+  if (inr) {
+    if (gst) out.push(buy ? "Rupee prices include 18% GST, and every payment gets a GST invoice." : "Rupee prices include 18% GST.");
+    else if (buy) out.push("Every payment gets an invoice in Account.");
+  } else if (buy && x.inRupees && x.charged) {
+    out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month${gst ? " including GST" : ""}, and your bank converts it, so the amount in ${x.currency} can differ.`);
   }
   if (buy && o?.yearly && x.year) out.push(`Paying yearly: Basic ${x.year.basic}, Pro ${x.year.pro}${x.inRupeesYear && !inr ? ", charged in rupees" : ""}.`);
   if (buy) out.push("Paid plans renew each month or year until you cancel, which you can do any time from Account.");
