@@ -1,12 +1,15 @@
 import { Component, type ReactNode } from "react";
 
 declare global {
-  interface Window { __stratlabRecover?: () => void; __stratlabShowLoadError?: () => void }
+  interface Window { __stratlabRecover?: () => void; __stratlabShowLoadError?: () => void; __stratlabLoadFailed?: boolean }
 }
 
-/** A page's code failed to download (a dropped connection, or a deploy that replaced the files while the tab was open). */
+/** A page's code failed to download (a dropped connection, or a deploy that replaced the files while the tab was open):
+ * the error says so, or the start-up script saw a file fail just before (a lazily loaded page whose download failed then
+ * fails on its empty module, with an error of its own). */
 export const isLoadError = (e: unknown) =>
-  /dynamically imported module|importing a module script|loading chunk|chunkloaderror|failed to fetch|load failed|networkerror/i.test(`${(e as Error)?.name ?? ""} ${(e as Error)?.message ?? ""}`);
+  /dynamically imported module|importing a module script|loading chunk|chunkloaderror|failed to fetch|load failed|networkerror/i.test(`${(e as Error)?.name ?? ""} ${(e as Error)?.message ?? ""}`)
+  || (typeof window !== "undefined" && !!window.__stratlabLoadFailed);
 
 /** What anyone sees instead of a blank page when something fails to load: one plain sentence and a Reload button. */
 export function LoadFailed({ what = "StratLab" }: { what?: string }) {

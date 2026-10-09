@@ -97,6 +97,9 @@ test("R7T-011: an options session's id at /paper opens its own page, and a crash
   assert.match(guard, /failed: isLoadError\(error\) \? "load" : "crash"/);
   assert.match(guard, /This page ran into a problem/);
   assert.match(read("src/main.tsx"), /<PageBoundary at=\{loc\.pathname\}>/);
+  // a page whose download failed then fails on its empty module: still a download failure (boot.js says so)
+  assert.match(read("public/boot.js"), /window\.__stratlabLoadFailed = true;\s*recover\(\);/);
+  assert.match(guard, /window\.__stratlabLoadFailed/);
   const { isLoadError } = await import("../src/components/LoadGuard.tsx").catch(() => ({ isLoadError: null }));
   if (isLoadError) {
     assert.equal(isLoadError(new TypeError("Cannot read properties of undefined (reading 'length')")), false);
