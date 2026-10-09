@@ -536,6 +536,42 @@ def no_results(subs: dict | None, facts: dict | None = None, symbol: str = "") -
     return NO_RESULTS["none"]
 
 
+PROFIT_TOTAL = ("ProfitLoss",)
+MINORITY_PROFIT = ("ProfitLossAttributableToNoncontrollingInterests", "NetIncomeLossAttributableToNoncontrollingInterest")
+
+
+def owner_sign(owners: dict, total: dict, minority: dict) -> None:
+    """The shareholders' profit filed with the wrong sign, put right in place (R7V-003: Santander Chile's reports for
+    2019 to 2021 tag the profit attributable to its shareholders as -842,467 for a year whose total profit was +852,428,
+    so the page showed a bank losing money in a year it made one). A period whose shareholders' profit has the opposite
+    sign to the total profit is a sign error when the minority's share says so (total less minority is the same size
+    with the other sign) or, without the minority's figure, when the two are of about the same size; a real gap between
+    them (a large minority profit beside a shareholders' loss) stands."""
+    for end, v in list(owners.items()):
+        t = total.get(end)
+        if not v or not t or (v > 0) == (t > 0):
+            continue
+        if end in minority:
+            parent = t - minority[end]
+            if abs(parent + v) <= 0.02 * abs(t) and abs(parent - v) > 0.02 * abs(t):
+                owners[end] = parent
+        elif 0.5 <= abs(v) / abs(t) <= 1.5:
+            owners[end] = -v
+
+
+def eps_ttm(facts: dict, cur: str, year_end: str, year: dict) -> dict | None:
+    """Earnings per share over the last four reported quarters (diluted where given, in the reporting currency per
+    ordinary share): {"value", "basis": "ttm", "end"}; else the latest year's (`year`: {year end: EPS}), with "basis":
+    "year"; None without either. The four quarters must run back to back and reach the latest year end or past it."""
+    q = quarterly(facts, EPS, f"{cur}/shares")
+    last = sorted(e for e in q if q[e] is not None)[-4:]
+    if len(last) == 4 and last[-1] >= year_end and all(80 <= _days(a, b) <= 100 for a, b in zip(last, last[1:])):
+        return {"value": round(sum(q[e] for e in last), 4), "basis": "ttm", "end": last[-1]}
+    if year.get(year_end) is not None:
+        return {"value": year[year_end], "basis": "year", "end": year_end}
+    return None
+
+
 def _merge_year_ends(rev: dict, others: list[dict], balances: list[dict] = ()) -> None:
     """One column per fiscal year. A year's end can be filed a few days apart by different concepts or reports (a
     52/53-week year: 29 and 30 Nov, 24 and 31 Dec), and a note can give figures for other 12 months than the fiscal
@@ -579,6 +615,8 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     cur = currency(facts) or "USD"
     rev_a, rev_q = revenue(facts, "annual", cur), revenue(facts, "quarter", cur)
     ni_a, ni_q = flows(facts, NET_INCOME, "annual", cur), quarterly(facts, NET_INCOME, cur)
+    owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur))
+    owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur))
     op_a, op_q = flows(facts, OPERATING, "annual", cur), quarterly(facts, OPERATING, cur)
     # many companies show no operating profit line (Alcoa, HCA): then profit before tax with the interest it paid added
     # back (EBIT, as EBITDA is usually defined), else revenue less total costs
@@ -699,6 +737,8 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
            "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "fiscal_year_end": subs.get("fiscalYearEnd"),
+           # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
+           "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
            "bank": kind is None and lender,
            "kind": kind, "no_revenue": no_revenue,
@@ -935,6 +975,55 @@ class SEC(Source):
         self.cache.set(("ads", url), out, 30 * 86400)
         return out
 
+    def filing_data(self, cik: int, filing: dict) -> dict | None:
+        """{"facts": its figures without dimensions in the company facts' shape, "classes": class_shares} from one
+        filing's own XBRL instance ({"form", "accn", "filed", "doc"}), cached a month by filing; {} when the filing has
+        none, None when it can't be read right now (the rate limit, the SEC down)."""
+        acc, doc = filing["accn"], filing["doc"]
+        key = ("instance", acc)
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        if not doc.lower().endswith((".htm", ".html")) or not self.limit.take():
+            return None
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/{re.sub(r'[.]html?$', '', doc)}_htm.xml"
+        try:
+            with self.http.stream("GET", url) as r:
+                if r.status_code == 404:          # not an inline XBRL filing: nothing to read, not a fault
+                    self.cache.set(key, {}, 30 * 86400)
+                    return {}
+                self.check(r)
+                buf = bytearray()
+                for chunk in r.iter_bytes():
+                    buf += chunk
+                    if len(buf) > 80 * 1024 * 1024:
+                        raise SourceError(self.name, "The filing's data is too large to read here.")
+            inst = instance(bytes(buf).decode("utf-8", "replace"))
+        except (httpx.HTTPError, SourceError, ValueError) as e:
+            print("SEC filing data:", acc, str(e)[:120])
+            return None
+        out = {"facts": instance_facts(inst, filing["form"], filing["filed"], acc), "classes": class_shares(inst)}
+        self.cache.set(key, out, 30 * 86400)
+        return out
+
+    def with_latest_annual(self, cik: int, subs: dict, facts_json: dict) -> dict:
+        """The company facts with the latest annual report's own figures added when the SEC's facts don't have them
+        yet (R7V-003: TSMC's and Ecopetrol's 20-F of April 2026, filed under the 2025 IFRS taxonomy, aren't in them)."""
+        filing = latest_filing(subs, ANNUAL_FORMS)
+        if not filing or has_filing(facts_json, filing["accn"]):
+            return facts_json
+        got = self.filing_data(cik, filing)
+        if not got or not got.get("facts"):
+            return facts_json
+        return merge_facts({"facts": got["facts"]}, facts_json)
+
+    def classes(self, cik: int, subs: dict) -> dict[str, float]:
+        """{ticker: shares counted in that ticker's class} for a company with several classes of common stock, from
+        its latest report's cover page (see class_shares); {} for one class or when it can't be read now."""
+        filing = latest_filing(subs, ANNUAL_FORMS + ("10-Q",))
+        got = self.filing_data(cik, filing) if filing else None
+        return dict((got or {}).get("classes") or {})
+
     def company(self, symbol: str) -> dict:
         """The company's numbers in the deep dive's shape (cached six hours), with its filing list under "filings"."""
         cik = self.cik(symbol)
@@ -943,7 +1032,7 @@ class SEC(Source):
         if hit and time.time() - hit[0] < 6 * 3600:
             if hit[1] is None:             # no results to show, found a moment ago: the same reason again
                 raise SourceError(self.name, hit[2])
-            return {**hit[1], "symbol": symbol.upper()}
+            return for_symbol(hit[1], symbol)
         try:
             try:
                 subs = self.submissions(cik)
@@ -967,6 +1056,7 @@ class SEC(Source):
                         raise
             if facts is None:                     # no figures filed as data at all
                 raise SourceError(self.name, no_results(subs, None, symbol))
+            facts = self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
         except SourceError as e:
             if not e.busy:
@@ -987,11 +1077,55 @@ class SEC(Source):
             p = with_ads(p, dep.get("ratio"))
         elif dep and dep.get("unread"):
             p["ads_unread"] = True          # whether its US shares are depositary shares isn't known this time
+        # several classes of common stock (Berkshire, Visa, Alphabet): every class counted in the listed share's terms,
+        # from the latest report's cover page, so the market value counts the whole company (R7V-001)
+        common = [t for t in subs.get("tickers") or [] if not non_common(t)]
+        if not p.get("ads_ratio") and (p.get("shares") is None or len(common) > 1):
+            classes = self.classes(cik, subs)
+            if classes:
+                p["class_shares"] = classes
         with self._build_lock:
             if len(self._built) > 300:
                 self._built.pop(next(iter(self._built)))
             self._built[str(cik)] = (time.time(), p)
-        return p
+        return for_symbol(p, symbol)
+
+
+ANNUAL_FORMS = ("10-K", "20-F", "40-F")
+
+
+def latest_filing(subs: dict, forms: tuple) -> dict | None:
+    """The newest filing of one of these forms in the filing list: {"form", "accn", "filed", "doc"}, or None."""
+    rec = ((subs or {}).get("filings") or {}).get("recent") or {}
+    names = rec.get("form") or []
+    docs = rec.get("primaryDocument") or [""] * len(names)
+    best = None
+    for form, acc, filed, doc in zip(names, rec.get("accessionNumber") or [], rec.get("filingDate") or [], docs):
+        if form in forms and acc and (best is None or filed > best["filed"]):
+            best = {"form": form, "accn": acc, "filed": filed, "doc": doc or ""}
+    return best
+
+
+def has_filing(facts_json: dict, accn: str) -> bool:
+    """Whether the company facts hold the revenue or profit a filing reported (the SEC adds a filing's figures to
+    them some time after it is filed, and leaves some out)."""
+    facts = (facts_json or {}).get("facts") or {}
+    for ns in ("us-gaap", "ifrs-full"):
+        for concept in TOP_LINE + NET_INCOME:
+            for rows in (((facts.get(ns) or {}).get(concept) or {}).get("units") or {}).values():
+                if any(r.get("accn") == accn for r in rows):
+                    return True
+    return False
+
+
+def for_symbol(p: dict, symbol: str) -> dict:
+    """The company as one of its tickers sees it: with several classes of stock, the share count in that class's
+    terms (BRK-B's in Class B shares, BRK-A's in Class A shares), so price times shares is the whole company's value."""
+    out = {**p, "symbol": symbol.upper()}
+    shares = (p.get("class_shares") or {}).get(price_symbol(symbol))
+    if shares:
+        out["shares"] = shares
+    return out
 
 
 def merge_facts(old: dict, new: dict) -> dict:
@@ -1079,9 +1213,62 @@ def _rate_text(cur: str, rate: float) -> str:
     return f"1 {cur} = {rate:.4f} USD" if rate >= 0.01 else f"1 USD = {1 / rate:,.2f} {cur}"
 
 
+def market_value(p: dict, price: float | None) -> float | None:
+    """Price times shares, in $ million (ADSs counted as ADSs)."""
+    shares = p.get("shares")
+    if shares and p.get("ads_ratio"):
+        shares = shares / p["ads_ratio"]
+    return price * shares / M if price and shares else None
+
+
+def pe_and_basis(p: dict, price: float | None, mcap: float | None = None) -> tuple[float | None, dict | None]:
+    """(P/E, what its earnings cover) with one definition, the app's and the Indian pages' (R7V-002): the price over
+    earnings per share for the last four reported quarters, from the filings. Without quarterly earnings per share,
+    market value over the last four quarters' net profit; a company that reports only yearly (most foreign filers),
+    the latest year's, said so: {"basis": "ttm" or "year", "end": the day those earnings run to}. A loss has no P/E.
+    Earnings per share that don't agree with the market value over profit (several classes of stock, a share count
+    read another way) give way to the market value over profit."""
+    if not price:
+        return None, None
+    mcap = mcap if mcap is not None else market_value(p, price)
+    fx = usd_rate(p)
+    eps = p.get("eps") or {}
+    per_share = (eps.get("value") * fx * (p.get("ads_ratio") or 1)) if eps.get("value") is not None and fx else None
+    pl = p.get("pl") or {}
+    has_ttm = bool(pl.get("cols")) and str(pl["cols"][-1]).upper() == "TTM"
+    profit_ttm = _latest(pl, "Net Profit", last_only=True) if has_ttm else None
+    profit_year = _latest(pl, "Net Profit", skip_ttm=True, last_only=True) if not has_ttm else _year_value(pl, "Net Profit")
+    to_usd = lambda v: v * fx if v is not None and fx else None       # noqa: E731
+    by_cap = lambda profit: (mcap / profit if mcap and profit and profit > 0 else None) if profit is not None else None  # noqa: E731
+    ttm_end, year_end = p.get("ttm_end"), p.get("year_end")
+    for basis, end, eps_ok, profit in (("ttm", ttm_end or eps.get("end"), eps.get("basis") == "ttm", to_usd(profit_ttm)),
+                                       ("year", year_end, eps.get("basis") == "year", to_usd(profit_year))):
+        if not eps_ok and profit is None:
+            continue
+        if eps_ok and per_share is not None:
+            if per_share <= 0 or profit is not None and profit <= 0:
+                return None, {"basis": basis, "end": eps.get("end") or end}
+            pe = price / per_share
+            cap_pe = by_cap(profit)
+            if cap_pe is None or 0.67 <= pe / cap_pe <= 1.5:
+                return pe, {"basis": basis, "end": eps.get("end") or end}
+            return cap_pe, {"basis": basis, "end": end}
+        if profit is not None:
+            return by_cap(profit), {"basis": basis, "end": end}
+    return None, None
+
+
+def _year_value(table: dict, label: str):
+    """The latest full year's figure of a row, the trailing twelve months' column left out."""
+    cols = [str(c).upper() for c in table.get("cols") or []]
+    vals = (table.get("rows") or {}).get(label) or []
+    years = [v for c, v in zip(cols, vals) if c != "TTM"]
+    return years[-1] if years else None
+
+
 def ratios(p: dict, price: float | None, high: float | None = None, low: float | None = None) -> dict:
     """The headline ratios the Indian pages state, worked out from the filings and the share price: market cap
-    ($ million), P/E on the last twelve months' profit, book value per share, ROE, ROCE and dividend yield.
+    ($ million), P/E (see pe_and_basis), book value per share, ROE, ROCE and dividend yield.
     The share price is in dollars: a company reporting in another currency has its profit, book and dividends turned
     into dollars at today's rate for the ratios against the price; without the rate those ratios are left out."""
     shares = p.get("shares")
@@ -1090,7 +1277,6 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
     mcap = price * shares / M if price and shares else None
     fx = usd_rate(p)
     usd = lambda v: v * fx if v is not None and fx else None    # noqa: E731
-    profit = usd(_latest(p.get("pl"), "Net Profit"))              # the trailing twelve months when there are four quarters
     equity = _latest(p.get("balance"), "Equity", last_only=True)
     debt = _latest(p.get("balance"), "Borrowings") or 0
     fy_profit = _latest(p.get("pl"), "Net Profit", skip_ttm=True)
@@ -1098,8 +1284,9 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
     dep = _latest(p.get("pl"), "Depreciation", skip_ttm=True) or 0
     divs = usd(_latest(p.get("cashflow"), "Dividends paid"))
     book = usd(equity)
+    pe, _ = pe_and_basis(p, price, mcap)
     out = {"Current Price": price, "Market Cap": round(mcap, 1) if mcap else None,
-           "Stock P/E": round(mcap / profit, 1) if mcap and profit and profit > 0 else None,
+           "Stock P/E": round(pe, 1) if pe else None,
            "Book Value": round(book * M / shares, 2) if book and shares else None,
            "ROE": round(fy_profit / equity * 100, 1) if fy_profit is not None and equity and equity > 0 else None,
            "ROCE": round((ebitda - dep) / (equity + debt) * 100, 1) if ebitda is not None and equity and equity + debt > 0 else None,
@@ -1217,3 +1404,141 @@ def section(text: str, start: str, end: str, cap: int = 60000) -> str:
         if len(chunk) > len(best):
             best = chunk
     return best[:cap]
+
+
+# ---------- a filing's own XBRL (the data the SEC's company facts are built from) ----------
+# The SEC's company facts can leave a filing out: annual reports filed under the 2025 IFRS taxonomy (TSMC's and
+# Ecopetrol's 20-F of April 2026) aren't in them at all, so their pages stopped at Dec 2024 (R7V-003). And they keep only
+# figures without dimensions, so a company with several classes of shares (Berkshire, Visa) has no share count in them
+# (R7V-001). Both come from the filing's own XBRL instance (<primary document>_htm.xml beside an inline XBRL filing).
+_X_CTX = re.compile(r"<(?:[\w-]+:)?context\b[^>]*?\bid=\"([^\"]+)\"[^>]*>(.*?)</(?:[\w-]+:)?context\s*>", re.S)
+_X_UNIT = re.compile(r"<(?:[\w-]+:)?unit\b[^>]*?\bid=\"([^\"]+)\"[^>]*>(.*?)</(?:[\w-]+:)?unit\s*>", re.S)
+_X_MEASURE = re.compile(r"<(?:[\w-]+:)?measure\s*>\s*([^<\s]+)\s*<", re.S)
+_X_DIVIDE = re.compile(r"<(?:[\w-]+:)?unitNumerator\s*>(.*?)</(?:[\w-]+:)?unitNumerator\s*>\s*<(?:[\w-]+:)?unitDenominator\s*>(.*?)"
+                       r"</(?:[\w-]+:)?unitDenominator\s*>", re.S)
+_X_MEMBER = re.compile(r"<(?:[\w-]+:)?explicitMember\b[^>]*?\bdimension=\"([^\"]+)\"[^>]*>\s*([^<\s]+)\s*<", re.S)
+_X_TYPED = re.compile(r"<(?:[\w-]+:)?typedMember\b", re.S)
+_X_DATE = {k: re.compile(rf"<(?:[\w-]+:)?{k}\s*>\s*([0-9-]{{10}})", re.S) for k in ("startDate", "endDate", "instant")}
+_X_FACT = re.compile(r"<([\w-]+):([A-Za-z][\w.-]*)\b([^>]*?)(?:/>|>([^<]*)</\1:\2\s*>)", re.S)
+_X_ATTR = re.compile(r"([\w:.-]+)\s*=\s*\"([^\"]*)\"")
+_X_NS = re.compile(r"xmlns:([\w-]+)\s*=\s*\"([^\"]+)\"")
+CLASS_AXIS = "StatementClassOfStockAxis"
+EPS_CONCEPTS = ("EarningsPerShareBasic", "EarningsPerShareDiluted", "BasicEarningsLossPerShare", "DilutedEarningsLossPerShare")
+
+
+def _x_namespace(uri: str) -> str | None:
+    """The company facts' name for a taxonomy, from its address (any year's: the IFRS one moved to xbrl.ifrs.org in 2025)."""
+    u = uri.lower()
+    if "ifrs-full" in u:
+        return "ifrs-full"
+    if "fasb.org/us-gaap" in u:
+        return "us-gaap"
+    if "xbrl.sec.gov/dei" in u:
+        return "dei"
+    return None
+
+
+def _x_unit(body: str) -> str | None:
+    """"TWD", "shares" or "TWD/shares", as the company facts name units."""
+    bare = lambda m: m.split(":")[-1]          # noqa: E731
+    div = _X_DIVIDE.search(body)
+    if div:
+        num, den = _X_MEASURE.search(div.group(1)), _X_MEASURE.search(div.group(2))
+        return f"{bare(num.group(1))}/{bare(den.group(1))}" if num and den else None
+    m = _X_MEASURE.search(body)
+    return bare(m.group(1)) if m else None
+
+
+def instance(xml: str) -> dict:
+    """A filing's XBRL instance read plainly: {"contexts": {id: {"start", "end", "dims": {axis: member}}}, "units":
+    {id: unit}, "facts": [(namespace, concept, context id, unit or None, text)]} for the standard taxonomies (IFRS,
+    US GAAP, the SEC's cover page). A document declaring entities is refused (nothing in an instance needs one)."""
+    if re.search(r"<!(?:DOCTYPE|ENTITY)", xml[:5000], re.I):
+        raise ValueError("an XBRL instance with a document type declaration")
+    ns = {p: n for p, uri in _X_NS.findall(xml[:200000]) if (n := _x_namespace(uri))}
+    contexts = {}
+    for cid, body in _X_CTX.findall(xml):
+        d = {k: (m.group(1) if (m := r.search(body)) else None) for k, r in _X_DATE.items()}
+        dims = {a.split(":")[-1]: m.split(":")[-1] for a, m in _X_MEMBER.findall(body)}
+        if _X_TYPED.search(body):
+            dims["typed"] = "typed"
+        contexts[cid] = {"start": d["startDate"], "end": d["endDate"] or d["instant"], "dims": dims}
+    units = {uid: _x_unit(body) for uid, body in _X_UNIT.findall(xml)}
+    facts = []
+    for prefix, concept, attrs, text in _X_FACT.findall(xml):
+        if prefix not in ns:
+            continue
+        a = dict(_X_ATTR.findall(attrs))
+        if a.get("xsi:nil") == "true" or "contextRef" not in a:
+            continue
+        facts.append((ns[prefix], concept, a["contextRef"], units.get(a["unitRef"]) if a.get("unitRef") else None, (text or "").strip()))
+    return {"contexts": contexts, "units": units, "facts": facts}
+
+
+def _x_num(text: str) -> float | None:
+    try:
+        return float(text.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def instance_facts(inst: dict, form: str, filed: str, accn: str) -> dict:
+    """A filing's figures without dimensions in the company facts' shape ({namespace: {concept: {"units": {unit:
+    [rows]}}}}), so they merge with the SEC's own (see merge_facts)."""
+    out: dict = {}
+    seen = set()
+    for ns, concept, cid, unit, text in inst["facts"]:
+        ctx = inst["contexts"].get(cid)
+        val = _x_num(text) if unit else None
+        if not ctx or ctx["dims"] or val is None or not ctx["end"]:
+            continue
+        key = (ns, concept, unit, ctx["start"], ctx["end"])
+        if key in seen:
+            continue
+        seen.add(key)
+        row = {"end": ctx["end"], "val": val, "accn": accn, "form": form, "filed": filed}
+        if ctx["start"]:
+            row["start"] = ctx["start"]
+        out.setdefault(ns, {}).setdefault(concept, {"units": {}})["units"].setdefault(unit, []).append(row)
+    return out
+
+
+def class_shares(inst: dict) -> dict[str, float]:
+    """A company with several classes of common stock, from its report's cover page and earnings per share: {ticker:
+    every class's shares counted in that ticker's class}, each class weighted by its earnings per share against the
+    ticker's (a Berkshire Class A share earns what 1,500 Class B shares do; Alphabet's three classes earn alike).
+    {} for a company with one class, or when a class's earnings per share isn't given (its weight can't be known)."""
+    ctx = inst["contexts"]
+
+    def cls(cid):
+        # one class however the report names it: Berkshire's cover page says CommonClassAMember, its earnings per share
+        # EquivalentClassAMember
+        dims = (ctx.get(cid) or {}).get("dims") or {}
+        m = dims.get(CLASS_AXIS) if len(dims) == 1 else None
+        return re.sub(r"member|equivalent|common|stock|shares?", "", m.lower()) or None if m else None
+    tickers: dict[str, str] = {}
+    shares: dict[str, tuple[str, float]] = {}
+    eps: dict[tuple, dict[str, float]] = {}
+    for ns, concept, cid, unit, text in inst["facts"]:
+        member = cls(cid)
+        if not member:
+            continue
+        if concept == "TradingSymbol" and text:
+            tickers.setdefault(price_symbol(text), member)
+        elif concept == "EntityCommonStockSharesOutstanding" and unit == "shares":
+            v, end = _x_num(text), ctx[cid]["end"] or ""
+            if v and v > 0 and (member not in shares or end > shares[member][0]):
+                shares[member] = (end, v)
+        elif concept in EPS_CONCEPTS and unit and unit.endswith("/shares") and ctx[cid]["start"]:
+            v = _x_num(text)
+            if v is not None:
+                eps.setdefault((ctx[cid]["start"], ctx[cid]["end"], concept), {}).setdefault(member, v)
+    if len(shares) < 2 or not tickers:
+        return {}
+    # one period's earnings per share for every class: the latest, longest one that covers them all
+    full = [(k, v) for k, v in eps.items() if set(shares) <= set(v) and all(v[m] for m in shares)]
+    if not full:
+        return {}
+    _, per = max(full, key=lambda kv: (kv[0][1], _days(kv[0][0], kv[0][1]), kv[0][2] == "EarningsPerShareBasic"))
+    return {t: float(round(sum(n * per[m] / per[member] for m, (_, n) in shares.items())))
+            for t, member in tickers.items() if member in shares}

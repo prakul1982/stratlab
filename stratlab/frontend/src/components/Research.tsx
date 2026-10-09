@@ -135,9 +135,9 @@ export function MarginCascade({ gross, operating, net }: { gross: number | null;
 /* ---------- metrics with context rails ---------- */
 /** The short names in Key numbers, in plain words, for anyone who doesn't read balance sheets for a living. */
 const TERMS: Record<string, string> = {
-  "P/E": "Price to earnings: the share price divided by a year's profit per share.",
+  "P/E": "Price to earnings: the share price divided by earnings per share over the last four reported quarters. A loss has no P/E.",
   "P/B": "Price to book: the share price divided by the company's net assets per share.",
-  "Div yield": "The last year's dividends as a share of today's price.",
+  "Div yield": "Every dividend with an ex-date in the last 12 months, special dividends included, as a share of the price.",
   "Book value": "The company's net assets (what it owns minus what it owes) per share.",
   "Face value": "The nominal value printed on each share; it doesn't change with the price.",
   "ROCE": "Return on capital employed: operating profit as a share of all the money in the business, borrowed or not.",

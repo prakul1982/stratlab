@@ -46,8 +46,8 @@ RANGES = {
     "roe": ("Return on equity (ROE)", "%", "Net profit as a share of shareholders' equity in the last reported year."),
     "roce": ("Return on capital employed (ROCE)", "%",
              "Operating profit as a share of the capital the business uses: equity plus borrowings."),
-    "div_yield": ("Dividend yield", "%", "Dividends paid over the last year as a share of today's share price."),
-    "pe": ("P/E (price to earnings)", "x", "Share price divided by earnings per share over the last twelve months. "
+    "div_yield": ("Dividend yield", "%", "Every dividend with an ex-date in the 12 months to the last close, special dividends included, as a share of that close."),
+    "pe": ("P/E (price to earnings)", "x", "The last close divided by earnings per share over the last four reported quarters. "
                                           "Companies with a loss have no P/E."),
     "from_high": ("Price vs 52-week high", "%", "How far the last price is from the highest price of the last year. "
                                                 "-10 means 10% below the high; 0 means at the high."),
@@ -170,7 +170,7 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
     # a US company reporting in another currency, from a page built before depositary shares were read the way the
     # public page now reads them: its value is left out until the page is built again (R7O-004: Ecopetrol at $697.3 bn
     # here, $34.8 bn on its public page)
-    stale_adr = region == "US" and (f.get("v") or 1) < stock_pages.FACTS_VERSION and not str(f.get("unit") or "$").startswith("$")
+    stale_adr = region == "US" and (f.get("v") or 1) < stock_pages.ADR_CHECKED and not str(f.get("unit") or "$").startswith("$")
     out = {"symbol": symbol, "name": str(f.get("name") or symbol)[:120], "sector": _sector(region, symbol, f),
            "industry": str((f.get("industry") or [None])[-1] or "")[:80] or None,
            # a market value (and P/E) that fails its checks is left out, so it never tops a list by size (R6V-001)
@@ -188,12 +188,20 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
 def build_index(region: str, store: bool = True) -> dict:
     """Every stored company page in a market, gathered into the screens' index (and saved)."""
     prefix = f"stocks:page:{region}:"
-    rows, ages = [], {}
+    rows, ages, empty = [], {}, set()
     bought = deals.buys()["buys"] if region == "IN" else {}
+    shown = []
     for key, raw in db.all_settings_with_prefix(prefix):
         stored = db.json_value(raw, {})
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
+        facts = stored.get("facts") or {}
+        # built again first when a large company's (see Indexer._due): nothing stored, or a US page from before the
+        # facts it shows now (every class of shares counted, one P/E: R7V-001, R7V-002)
+        if not facts or region == "US" and (facts.get("v") or 1) < stock_pages.FACTS_VERSION:
+            empty.add(sym)
+        if stock_pages.has_content(facts):
+            shown.append(sym)
         r = row(region, sym, stored.get("facts") or {})
         if r:
             if region == "IN":
@@ -208,7 +216,13 @@ def build_index(region: str, store: bool = True) -> dict:
     if store:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
         _mem.pop(region, None)
-    index["_ages"] = ages
+        # which stored pages have something to show, for the sitemaps: a page with no price and no numbers is noindex,
+        # so it isn't listed (R7V-007)
+        try:
+            db.set_setting(stock_pages.BUILT_KEY + region, json.dumps({"at": index["at"], "pages": sorted(ages), "shown": sorted(shown)}))
+        except Exception as e:
+            print("screens: could not save the built pages list", region, str(e)[:120])
+    index["_ages"], index["_empty"] = ages, empty
     return index
 
 
@@ -721,13 +735,23 @@ class Indexer:
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
         self.status = {"last_run": None, "rows": {}, "warmed": 0, "last_error": None}
 
-    def _due(self, region: str, ages: dict) -> list[tuple[str, dict]]:
-        """Companies to build next: those with no stored page (the sector lists' first), then the stalest."""
+    def _due(self, region: str, ages: dict, empty: set | None = None) -> list[tuple[str, dict]]:
+        """Companies to build next: those with no stored page (the sector lists' first, then the S&P 500), then the sector
+        lists' and the S&P 500's own companies whose stored page had nothing (a source down when it was built: a large
+        company missing from every list by size until someone opened it, R7V-001) or was built before the facts a page
+        shows now (`empty`), then the stalest."""
         cos = stock_pages.companies(region)
         seeds = stock_pages._seeds(region)
-        missing = sorted((s for s in cos if s not in ages), key=lambda s: (s not in seeds, s))
-        stale = sorted((s for s, t in ages.items() if s in cos and time.time() - t > stock_pages.FRESH), key=lambda s: ages[s])
-        return [(s, cos[s]) for s in (missing + stale)[:self.warm_per_run]]
+        now = time.time()
+        # the S&P 500 right after the sector lists: a large company without a stored page is missing from every list by
+        # size and every peer list (R7V-009: HP Inc. absent from Apple's industry)
+        big = set(stock_pages._sp500_sectors()) if region == "US" else set()
+        missing = sorted((s for s in cos if s not in ages), key=lambda s: (s not in seeds, s not in big, s))
+        hollow = sorted((s for s in empty or () if (s in seeds or s in big) and s in cos and now - ages.get(s, 0) > stock_pages.EMPTY_FOR),
+                        key=lambda s: (s not in seeds, ages.get(s, 0)))
+        first = set(hollow)
+        stale = sorted((s for s, t in ages.items() if s in cos and s not in first and now - t > stock_pages.FRESH), key=lambda s: ages[s])
+        return [(s, cos[s]) for s in (missing + hollow + stale)[:self.warm_per_run]]
 
     def run_once(self, sleep=time.sleep) -> dict:
         warmed = 0
@@ -735,7 +759,7 @@ class Indexer:
             try:
                 index = build_index(region, store=False)
                 if self.warm:
-                    for i, (sym, co) in enumerate(self._due(region, index["_ages"])):
+                    for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"))):
                         if i:
                             sleep(self.gap)              # leave room in the ration for people opening pages
                         try:
