@@ -44,7 +44,7 @@ function Timeline({ v }: { v: CasView }) {
   const s = steps(v.timetable, v.phase);
   return (
     <Card label="Today's timetable">
-      <CardHead level={3} title="Today's timetable" />
+      <CardHead title="Today's timetable" />
       {s.length > 0 && (
         <ol className="cas-steps">
           {s.map((x) => (
@@ -63,7 +63,7 @@ function Timeline({ v }: { v: CasView }) {
 function Coming({ v }: { v: CasView }) {
   return (
     <Card label="Rule changes coming">
-      <CardHead level={3} title="Rule changes coming" info="From SEBI's consultation paper and the exchange's circulars on the closing auction. Facts as published: no date is set for any change, and nothing here changes until a circular sets one." infoLabel="About rule changes" />
+      <CardHead title="Rule changes coming" info="From SEBI's consultation paper and the exchange's circulars on the closing auction. Facts as published: no date is set for any change, and nothing here changes until a circular sets one." infoLabel="About rule changes" />
       <p className="k-small">{v.expiry.proposal}</p>
       <ul className="k-list muted">
         <li>No change to the 15:15–15:35 timetable or to how expiring contracts settle has a date yet. What is in force: {v.expiry.settlement}</li>
@@ -86,7 +86,7 @@ function Expiry({ v }: { v: CasView }) {
   ];
   return (
     <Card label="Expiry today" id="cas-expiry">
-      <CardHead level={3} title={e.series.length ? `Expiry today: ${e.series.join(", ")}` : "Your options expiring today"} />
+      <CardHead title={e.series.length ? `Expiry today: ${e.series.join(", ")}` : "Your options expiring today"} />
       <p className="k-small">{e.settlement}</p>
       {e.positions.map((p) => (
         <div key={p.session} className="k-stack" data-cas-position={p.session}>
@@ -113,7 +113,7 @@ function Indices({ v }: { v: CasView }) {
   ];
   return (
     <Card label="Indices">
-      <CardHead level={3} title="Indices" />
+      <CardHead title="Indices" />
       <DataTable label="Indices during the auction" columns={cols} rows={v.indices} rowKey={(i) => i.name} rowAttrs={(i) => ({ "data-cas-index": i.name })} />
       <p className="k-note">An index isn't auctioned. Through the auction its value uses the constituents' last continuous prices, and the
         indicative close their indicative prices; the close comes from their final prices.</p>
@@ -179,7 +179,7 @@ function History({ v }: { v: CasView }) {
   const attrs = (d: CasDay) => ({ "data-cas-day": d.day });
   return (
     <Card label="Past auctions">
-      <CardHead level={3} title="Past auctions" />
+      <CardHead title="Past auctions" />
       {!v.history.allowed ? (
         <p className="k-small">60 days of auction closes against the reference price, and each index's close against its value at 15:15, are on the {v.history.plan} plan. <Link className="link" to="/plans">See the {v.history.plan} plan</Link></p>
       ) : error ? <ErrorState title="The history couldn't be read">{error}</ErrorState> : !h ? <Skeleton label="Reading past auctions" /> : !h.days.length ? (

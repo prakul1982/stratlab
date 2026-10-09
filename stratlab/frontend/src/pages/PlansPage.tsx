@@ -5,11 +5,12 @@ import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { approx, money, usePricing } from "../lib/currency";
+import { aboutMoney, approx, chargedLine, money, rupeesNote, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { readViewAs } from "../lib/viewAs";
 import { canBuy, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
@@ -48,7 +49,10 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
 export function PlansPage() {
-  const { me, fail, notify, refreshMe, viewAs } = useApp();
+  const { me, fail, notify, refreshMe, viewAs: viewAsMe } = useApp();
+  // "View as" from /me once it has answered, and from this device's own choice before then: the page draws the buy
+  // buttons from the public prices while /me is still on its way, and they must already be off (R7M-010, again in R8)
+  const viewAs = me ? viewAsMe : readViewAs();
   const [busy, setBusy] = useState<string | null>(null);
   const { pricing, currency, pick } = usePricing();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
@@ -70,13 +74,16 @@ export function PlansPage() {
   };
   /** The price shown in the visitor's currency, and the one their card is charged (rupees until that currency's plans exist). */
   const priceOf = (p: PlanId, per: string) => {
-    if (p === "free" && row) return { shown: money(row, 0, currency), charged: null as string | null, inr: false };
-    if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null, inr: p !== "free" };
+    if (p === "free" && row) return { shown: money(row, 0, currency), charged: null as string | null, inr: false, about: null as string | null };
+    if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null, inr: p !== "free", about: null as string | null };
     const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
     const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
     // the admin table's price ($8 and $20 for dollars); "Charged as ₹…" under it while that currency is charged in rupees
-    // a converted amount says so ("≈ SAR 27") beside the rupee charge it comes from (R7O-008)
-    return { shown: approx(row, chargedIn) + money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false };
+    // a converted amount says so ("≈ SAR 27") beside the rupee charge it comes from (R7O-008); a fixed price (dollars,
+    // euros, pounds) says what that rupee charge is in its currency today (R8O-006)
+    const aboutV = chargedIn === "INR" ? row.charge_about?.[(per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year"] : undefined;
+    return { shown: approx(row, chargedIn) + money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false,
+      about: aboutV != null ? aboutMoney(row, aboutV, currency) : null };
   };
   /** What a year saves against twelve months, in the price's own currency (Pro's year is ₹9 over ten months, so each card says its own number). */
   const savingOf = (p: "basic" | "pro") => {
@@ -152,7 +159,8 @@ export function PlansPage() {
         </FormGrid>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
-      {anyRupees && billing && <Notice>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</Notice>}
+      {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
+        ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
       <div className="k-plans">
         {(["free", "basic", "pro"] as const).map((p) => {
           const cur = paid === p;
@@ -167,7 +175,7 @@ export function PlansPage() {
                 <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
-                {price.charged && <span className="k-note">{billing ? `Charged as ${price.charged}${gst ? " incl. GST" : ""} / ${period}` : `${price.charged} a ${period} in India${gst ? ", incl. GST" : ""}`}</span>}
+                {price.charged && <span className="k-note" data-testid={`charged-${p}`}>{billing ? chargedLine(price.charged, gst, period, price.about) : `${price.charged} a ${period} in India${gst ? ", incl. GST" : ""}`}</span>}
               </div>
               <ul className="k-plan-list">
                 {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
@@ -179,7 +187,8 @@ export function PlansPage() {
                     : given && paid && RANK[p] <= RANK[paid as PlanId] ? <span className="k-small k-muted" data-testid="plan-included">Included in the {planName(paid as PlanId)} plan you were given</span>
                     : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy || !!viewAs} onClick={() => ask(p)}
                       title={viewAs ? viewingPlansNote(planName(viewAs)) : undefined} aria-describedby={viewAs ? "plans-viewas" : undefined}>
-                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
+                      {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}
+                      {viewAs && <span className="k-small"> (off while viewing as {planName(viewAs)})</span>}</button>}
             </Card>
           );
         })}

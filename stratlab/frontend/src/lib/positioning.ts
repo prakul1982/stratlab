@@ -105,6 +105,23 @@ export function istTime(iso: string | null | undefined): string {
 }
 export const shortDay = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
 
+/** How old a chain read from the live feed may be and still be called live (R8O-012: a "live chain" of 11:39:59 shown at
+ * 11:49:08). */
+export const LIVE_CHAIN_FOR_MS = 2 * 60 * 1000;
+
+/** What a chain is, in words ("live chain", "chain at 11:39 IST", "chain at the close", "recorded chain"), against the time
+ * `now` (ms). A chain from the live feed older than LIVE_CHAIN_FOR_MS says its time instead of "live". */
+export function chainWords(c: { source?: string | null; at_close?: boolean; as_of?: string | null }, now: number = Date.now()): string {
+  if (c.at_close) return "chain at the close";
+  if (c.source !== "live") return "recorded chain";
+  const at = c.as_of ? Date.parse(c.as_of) : NaN;
+  if (Number.isFinite(at) && now - at > LIVE_CHAIN_FOR_MS) {
+    const hm = new Date(at).toLocaleTimeString("en-GB", { timeZone: IST, hour: "2-digit", minute: "2-digit", hour12: false });
+    return `chain at ${hm} IST`;
+  }
+  return "live chain";
+}
+
 /** The status line for one of the exchange's daily numbers. */
 export function statusLine(s: PartStatus, what: string): string {
   if (s.status === "none") return `No ${what} stored yet. ${s.reason ?? "The exchange publishes them each trading evening, usually between 18:30 and 20:00 IST."}`;

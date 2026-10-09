@@ -136,7 +136,9 @@ export interface Me {
   usage: { backtests_used: number; backtests_limit: number | null; ai_used: number; ai_limit: number | null;
     deepdive_used?: number; deepdive_limit?: number | null; deck_used?: number; deck_limit?: number | null;
     /** The plan's own limits (what the Plans page lists), and what lifts them now ("early access", "the launch offer"). */
-    deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null };
+    deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null;
+    /** Fresh AI reads today (India's day) against the daily cap; a null limit is no cap (Pro, the site's admins). */
+    ai_reads_today?: number; ai_reads_limit?: number | null; ai_reads_cap_for?: "admin" | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };

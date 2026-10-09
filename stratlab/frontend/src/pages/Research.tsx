@@ -10,7 +10,7 @@ import {
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
-  AIRead, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
+  AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
 } from "../components/Research";
 import { preloadPriceChart } from "../charts/price/lazy";
@@ -21,7 +21,7 @@ import { AlertButton } from "../components/AlertForm";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
-import { useDocTitle } from "../lib/title";
+import { rememberName, useDocTitle } from "../lib/title";
 import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
@@ -152,7 +152,9 @@ export function CompanyPage() {
   const [tries, setTries] = useState(0);
   const nav = useNavigate();
   const share = useShareCompany(region, sym);
-  useDocTitle(c ? `${c.name || c.symbol}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : sym);
+  // the name and the symbol, then the price (R8O-009); the name is kept for the next first frame (lib/title titleFor)
+  useDocTitle(c ? `${c.name || c.symbol}${c.name && c.name.toUpperCase() !== c.symbol ? ` (${c.symbol})` : ""}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : null);
+  useEffect(() => { if (c) rememberName(region, c.symbol, c.name); }, [c, region]);
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
@@ -466,7 +468,7 @@ export function PulsePage() {
         {aiErr || (ai && !ai.tone) ? (
           <div className="k-row ai-read-off" role="status">
             <span className="k-small k-muted">No AI read of the mood right now{aiReason(aiErr)} The index levels and headlines don't depend on it.</span>
-            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>
+            {!aiLimited(aiErr) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
         ) : !ai ? <Skeleton label="Reading the tape" lines={2} /> : <p className="inv-summary">{ai.tone}</p>}
       </Card>
@@ -576,7 +578,7 @@ export function ComparePage() {
               // no comparison is one calm line and one button, like the company page's AI read
               <div className="k-row ai-read-off" role="status" data-testid="compare-ai-off">
                 <span className="k-small k-muted">No AI comparison right now{aiReason(res.ai?.error ?? null)} The numbers below don't depend on it.</span>
-                <button type="button" className="btn quiet sm" disabled={asking} onClick={askAgain}>{asking ? "Asking…" : "Ask again"}</button>
+                {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking} onClick={askAgain}>{asking ? "Asking…" : "Ask again"}</button>}
               </div>
             )}
           </Card>

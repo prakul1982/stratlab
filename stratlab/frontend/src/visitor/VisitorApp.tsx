@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { visitorView } from "../lib/deepLinks";
 import { applySeo, seoFor, type SeoKind } from "../lib/seo";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
-import { Loading } from "../components/ui";
+import { Opening } from "../components/LoadGuard";
 
 /* What someone without an account sees, at any address: the landing page (at a section, or with a sign-in panel), the
  * policies, a shared verdict, StratLab's own strategy library, "Sign in to see …" on an address inside the app, or "Page
@@ -46,7 +46,7 @@ export function VisitorApp() {
   }, [pathname, kind, view.kind]);
 
   // while a page's code downloads, the page is still a page: a main landmark with a heading (R6V-013)
-  const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Loading label="Opening StratLab" /></main>;
+  const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Opening label="Opening StratLab" /></main>;
   return (
     <Suspense fallback={wait}>
       {view.kind === "landing" ? <Login section={view.section} panel={view.panel} />

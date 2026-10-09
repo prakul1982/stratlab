@@ -20,7 +20,9 @@ export const indiaSessions = (sv: Overview["server"]): number => sv.india_sessio
  * running NIFTY options session). */
 export function feedTile(sv: Overview["server"]): Service {
   const india = indiaSessions(sv), options = sv.options_sessions ?? 0;
-  const opts = options ? `${plural(options, "options paper session")} running on quotes read every few seconds` : "";
+  // every user's sessions: said when they are more than one person's (R8O-011: "2 options paper sessions" beside the owner's 1)
+  const across = (sv.options_users ?? 0) > 1 ? ` across ${sv.options_users} users` : "";
+  const opts = options ? `${plural(options, "options paper session")} running${across} on quotes read every few seconds` : "";
   const detail = sv.feed_connected ? [`Connected${india ? `, ${plural(india, "India paper session")} running` : ""}`, opts].filter(Boolean).join(" · ")
     : india ? [`Not connected, with ${plural(india, "India paper session")} running`, opts].filter(Boolean).join(" · ")
     : options ? `Not needed: ${opts}` : "Idle: no India paper sessions running";
@@ -53,8 +55,10 @@ export function aiTile(ai: AIRow[]): Service {
   const notes = [quota ? `${quota} out of credit` : "", failing ? `${failing} failing` : "", paused ? `${paused} paused` : "",
     untested ? `${untested} not tried yet` : "", slow ? `${slow} with a model paused` : ""].filter(Boolean);
   const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : working < keys.length || slow ? "warn" : "ok";
+  // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008)
+  const setUp = ai.length > keys.length ? ` (${keys.length} of ${ai.length} set up)` : "";
   return { key: "ai", label: "AI providers", state, to: "/admin/system",
-    detail: [`${working} of ${keys.length} working`, ...notes].join(" · ") };
+    detail: [`${working} of ${keys.length} working${setUp}`, ...notes].join(" · ") };
 }
 
 /** The invoice seller details still empty, said for Overview and Money (R7M-001): until a GSTIN is set every invoice is a

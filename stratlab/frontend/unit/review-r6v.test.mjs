@@ -51,7 +51,9 @@ test("the page and the card use the server's words for the verdict, and show all
 });
 
 test("a page still loading is a main landmark with a heading, and the boot error is too (R6V-013)", () => {
-  assert.match(read("src/visitor/VisitorApp.tsx"), /<main id="main" tabIndex=\{-1\}><h1 className="sr-only">StratLab<\/h1><Loading/);
+  // R8O-007: the spinner is Opening, which shows Loading and, after 15 s, the reload card (components/LoadGuard.tsx)
+  assert.match(read("src/visitor/VisitorApp.tsx"), /<main id="main" tabIndex=\{-1\}><h1 className="sr-only">StratLab<\/h1><Opening/);
+  assert.match(read("src/components/LoadGuard.tsx"), /if \(!slow\) return <Loading label=\{label\} \/>;/);
   const boot = read("public/boot.js");
   assert.match(boot, /createElement\("main"\)/);
   assert.match(boot, /root\.appendChild\(main\)/);

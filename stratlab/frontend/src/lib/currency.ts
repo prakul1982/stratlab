@@ -6,7 +6,10 @@ export type CurrencyRow = { symbol: string; name: string; basic: number; pro: nu
   charged_in: string; yearly_charged_in: string;
   /** the amount is the rupee charge (GST included) at today's rate, rounded: shown with "≈" while the card is charged in
    * rupees (R7O-008: "SAR 22" for a ₹699 charge that is about SAR 27) */
-  converted?: boolean };
+  converted?: boolean;
+  /** a currency's own fixed price still charged in rupees: the rupee charge in this currency at today's rate, per field
+   * ("basic", "pro", "basic_year", "pro_year"), so Plans says what the card is actually charged (R8O-006) */
+  charge_about?: Partial<Record<"basic" | "pro" | "basic_year" | "pro_year", number>> };
 export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer;
   /** whether invoices carry GST (the seller's GSTIN is set in Admin → Money); the pages say "incl. GST" only then (R7M-001) */
   invoice?: { gst: boolean } };
@@ -44,6 +47,23 @@ export function usePricing() {
 }
 
 export { approx } from "./approx";
+
+/** An approximate converted amount with its cents: "€6.40" (whole yen). */
+export function aboutMoney(row: CurrencyRow, v: number, code: string): string {
+  return `${row.symbol}${code === "JPY" ? Math.round(v).toLocaleString("en-US") : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** The note under a plan's price when the card is charged in rupees: "Charged as ₹699 incl. GST (about €6.40 today) / month". */
+export function chargedLine(charged: string, gst: boolean, period: string, about: string | null): string {
+  return `Charged as ${charged}${gst ? " incl. GST" : ""}${about ? ` (about ${about} today)` : ""} / ${period}`;
+}
+
+/** The page's note while a currency is charged in rupees, with the actual amounts when its price is a fixed one
+ * (R8O-006: "can differ slightly" under €8 for a ₹699 charge of about €6.40). */
+export function rupeesNote(code: string, about: { basic: string; pro: string } | null): string {
+  if (about) return `Paid in rupees for now: your card is charged the rupee price under each plan, about ${about.basic} for Basic and ${about.pro} for Pro at today's rate, not the ${code} prices shown. Your bank converts it at its own rate and may add a fee.`;
+  return `Paid in rupees for now: your card is charged the rupee price shown under each plan, and your bank converts it at its own rate and may add a fee, so the amount in ${code} can differ from the one shown.`;
+}
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {
   if (!row) return `₹${v.toLocaleString("en-IN")}`;

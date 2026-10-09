@@ -6,6 +6,8 @@ import { Badge, Card, CardHead, ErrorState, Skeleton, Stat, StatRow } from "./ki
 import "../pages/trade/trade.css";
 import "../pages/trade/positioning.css";
 import { asOf, fmtDate, IST } from "../lib/format";
+import { chainWords } from "../lib/positioning";
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /* India VIX on the Positioning page: the value now and its change, the day's range, where it sits among the past year's
  * closes, NIFTY's ATM IV beside it, the day's line and the year's closes with NIFTY ATM IV drawn on the same chart. A
@@ -52,7 +54,7 @@ export function VixPanel() {
                 <Stat label="Percentile, past year" value={val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet")}
                   note={<span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span>} />
                 <Stat label="NIFTY ATM IV" value={val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet")}
-                  note={ivNow ? `${ivNow.at_close ? "Chain at the close" : ivNow.source === "live" ? "Live chain" : "Recorded chain"}, ${vixTime(ivNow.as_of) ?? ""}` : undefined} />
+                  note={ivNow ? `${upperFirst(chainWords(ivNow))}, ${vixTime(ivNow.as_of) ?? ""}` : undefined} />
               </StatRow>
             </div>
             <div className="k-two">
