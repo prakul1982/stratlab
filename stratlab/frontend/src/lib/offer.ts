@@ -120,11 +120,12 @@ export function chargeAboutNote(inRupeesElsewhere: boolean, shown: string, about
   return m ? ` (about ${m[1]} today)` : "";
 }
 
-/** The line under the plan's name in Razorpay's payment window (its `description`; `notes` are not shown to the payer): the plan,
- * the amount, and that it renews until cancelled, so a payer who goes straight to the window still reads the renewal (R9P-007).
+/** The line under the plan's name in Razorpay's payment window (its `description`; `notes` are not shown to the payer): the plan, the
+ * period and that it renews, short enough to show whole in the window's one line ("Basic, monthly · renews every month", R11P-005; the
+ * earlier "Basic plan, ₹699 / month. Renews every month until you cancel." was cut off there, and the window shows the amount itself).
  * Razorpay's own Esc handling inside its frame is not ours to change. */
-export function checkoutDescription(plan: string, amount: string, period: string): string {
-  return `${plan} plan, ${amount} / ${period}. Renews every ${period} until you cancel.`;
+export function checkoutDescription(plan: string, period: string): string {
+  return `${plan}, ${period === "year" ? "yearly" : "monthly"} · renews every ${period}`;
 }
 
 /** What the confirm step says about the payment window that opens next: it names the plan and the period (R6V-009, and

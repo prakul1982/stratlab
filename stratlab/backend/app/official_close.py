@@ -175,6 +175,25 @@ def overlay_bars(bars: list[dict], symbol: str, use_quote: bool = True, now: dat
     return bars[:-1] + [fixed]
 
 
+def with_reference(bars: list[dict], symbol: str, ref_day, now: datetime | None = None) -> list[dict]:
+    """Daily candles with the close of the last session on or before `ref_day` set to the exchange's official close of
+    that day (the bhavcopy's, stored), so a change since that day is measured between two official closes: the same pair
+    the company page's "Last close ... +3.85%" uses (R11P-002: TCS 2,156.00 against 2,076.00, not 2,171.50 against
+    2,077.00). Only the stored closes are read, never a quote. Candles given are never changed in place."""
+    ref = _day(ref_day)
+    for i in range(len(bars) - 1, -1, -1):
+        d = str(bars[i].get("t") or "")[:10]
+        if d and d <= ref:
+            c = official(symbol, d, use_quote=False, now=now)
+            if c is None or c == bars[i].get("c"):
+                return bars
+            b = bars[i]
+            out = list(bars)
+            out[i] = {**b, "c": c, "h": max(c, b.get("h") or c), "l": min(c, b.get("l") or c), "official": True}
+            return out
+    return bars
+
+
 # ---------- the daily candles every reader gets (R8B-001) ----------
 # The broker's daily candle of an Indian stock keeps the session's last continuous trade until its own end-of-day run,
 # which for a stock with derivatives is the 15:15 price, before the closing auction (TCS, 9 Oct 2026: the candle's

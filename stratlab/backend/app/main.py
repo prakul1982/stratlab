@@ -4464,7 +4464,9 @@ def calendar_status() -> dict:
     covered = trading_calendar.covered_until("IN")
     last = covered.isoformat() if covered else None
     days_left = (covered - today).days if covered else None
-    return {"known_until": until.isoformat() if until else None, "added": added, "covered_until": last, "days_left": days_left,
+    # "added": every saved holiday (the exchange's and the owner's); "by_hand": only the dates the owner pasted that the exchange's list lacks
+    return {"known_until": until.isoformat() if until else None, "added": added, "by_hand": sorted(trading_calendar.hand_added("IN")),
+            "covered_until": last, "days_left": days_left,
             "auto": {"at": auto.get("at"), "tried_at": auto.get("tried_at"), "error": public_text(auto.get("error")),
                      "count": len(auto.get("days") or [])},
             "markets": trading_calendar.all_coverage(today)}

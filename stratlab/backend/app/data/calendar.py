@@ -73,6 +73,20 @@ def _stored(key: str) -> set:
     return days
 
 
+def hand_added(market: str = "IN") -> set:
+    """The holidays the admin pasted in by hand that the exchange's own list does not hold (R11P-006: Admin said "20 added by
+    you" for 20 holidays that all came from the exchange). Read straight from the two settings, never cached."""
+    import json
+    try:
+        from .. import db
+        raw = db.get_setting(SETTING + market)
+        pasted = {str(d)[:10] for d in json.loads(raw)} if raw else set()
+        auto = {str(d)[:10] for d in (json.loads(db.get_setting(AUTO + market) or "{}").get("days") or [])}
+    except Exception:
+        return set()
+    return pasted - auto
+
+
 def auto_status(market: str = "IN") -> dict:
     import json
     try:

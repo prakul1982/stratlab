@@ -106,7 +106,7 @@ export function PlansPage() {
         // the payment window's name carries the plan and the period (R6V-009)
         key: d.key_id, subscription_id: d.subscription_id, name: `StratLab · ${planName(plan)}, ${period === "year" ? "yearly" : "monthly"}`,
         notes: { plan, period },
-        description: checkoutDescription(plan === "pro" ? "Pro" : "Basic", d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}${gst ? " incl. GST" : ""}` : priceOf(plan, period).shown, period),
+        description: checkoutDescription(plan === "pro" ? "Pro" : "Basic", period),
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
           try { await api("/billing/verify", { method: "POST", body: resp }); await refreshMe(); notify(`You're on ${plan === "pro" ? "Pro" : "Basic"} now.`); }

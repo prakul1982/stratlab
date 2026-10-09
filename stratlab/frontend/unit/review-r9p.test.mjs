@@ -54,8 +54,9 @@ test("R9P-006: the confirm step names the rupee charge in the currency shown, fr
 
 test("R9P-007: Razorpay's own window says it renews", async () => {
   const { checkoutDescription } = await import("../src/lib/offer.ts");
-  assert.equal(checkoutDescription("Basic", "₹699", "month"), "Basic plan, ₹699 / month. Renews every month until you cancel.");
-  assert.equal(checkoutDescription("Pro", "$200", "year"), "Pro plan, $200 / year. Renews every year until you cancel.");
+  // R11P-005 shortened the line to the owner's wording so Razorpay's one-line description shows it whole (it also drops the amount, which the window shows itself)
+  assert.equal(checkoutDescription("Basic", "month"), "Basic, monthly · renews every month");
+  assert.equal(checkoutDescription("Pro", "year"), "Pro, yearly · renews every year");
   assert.match(read("src/pages/PlansPage.tsx"), /description: checkoutDescription\(/);
 });
 

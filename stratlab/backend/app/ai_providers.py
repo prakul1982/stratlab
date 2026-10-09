@@ -339,6 +339,12 @@ def last_result(name: str, st, is_on: bool, cooling: bool, all_closed: bool, mod
         # System shows it (R8O-008: Cerebras and SambaNova "not tried yet" on Overview beside System's "stopped measuring:
         # the free credit is used up")
         return measured_result(st) or "untested"
+    # the last measuring of its models stopped on used-up credit (or another answer of the provider's) after the last good
+    # answer: the same reading as the line that tells it, not "working" (R11P-007: Hugging Face "OK, Working" beside
+    # "stopped measuring: the free credit is used up")
+    measured = measured_result(st)
+    if measured and (st.ranked_at or 0) > good:
+        return measured
     if not newer_bad:
         return "working"
     if good and st.last_error_kind == "rate":
@@ -358,6 +364,17 @@ def measured_result(st) -> str | None:
     if not why.startswith("stopped measuring") or re.search(r"rate limit|\b429\b|too many requests", why, re.I):
         return None                   # a short rate limit stops a measuring without saying anything about the key
     return "quota" if _QUOTA_WORDS.search(why) else "failed"
+
+
+def _measured_quota_text(rank_error: str | None) -> str:
+    """The Check line for a provider whose last measuring stopped on used-up credit, in one sentence: the provider's own
+    words are added only when they say more than "the free credit is used up" (R11P-007: "Free credit was used up ...
+    (the free credit is used up)")."""
+    why = str(rank_error or "").split(": ", 1)[-1].strip().rstrip(".")
+    said = re.sub(r"[^a-z]+", " ", why.lower()).strip()
+    if not why or re.fullmatch(r"(the )?(free )?(credit|quota)( is| was)? (used up|exhausted|gone)", said):
+        return "Free credit was used up when its models were last measured; it resets on its own."
+    return f"Free credit was used up when its models were last measured ({why}); it resets on its own."
 
 
 def _provider_view(name: str, now: float) -> dict:
@@ -402,10 +419,10 @@ def _provider_view(name: str, now: float) -> dict:
         state, text = "ok", f"Working; one other model isn't available to this key ({st.last_error})."
     elif st.last_error and (st.last_error_at or 0) >= (st.last_ok or 0):
         state, text = "warn", f"Last try failed: {st.last_error}"
-    elif result == "quota" and not st.last_ok:
-        # the same reading as the overview's tile: the last measuring stopped on used-up free credit (R8O-008)
-        state, text = "warn", f"Free credit was used up when its models were last measured ({st.rank_error.split(': ', 1)[-1]}); it resets on its own."
-    elif result == "failed" and not st.last_ok and not st.last_error:
+    elif result == "quota":
+        # the same reading as the overview's tile: the last measuring stopped on used-up free credit (R8O-008, R11P-007)
+        state, text = "warn", _measured_quota_text(st.rank_error)
+    elif result == "failed" and measured_result(st) == "failed" and (st.ranked_at or 0) > (st.last_ok or 0) and not st.last_error:
         state, text = "warn", f"The last measuring of its models stopped: {st.rank_error.split(': ', 1)[-1]}. Press Test to try it again."
     elif st.last_ok or st.order:
         state, text = "ok", "Working."
@@ -425,7 +442,7 @@ def _provider_view(name: str, now: float) -> dict:
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
             "state": state, "state_text": text, "answering": answering, "result": result, "paused_models": paused_models,
-            "quota": {"limited": bool(st.quota and (cooling or all_closed)) or (result == "quota" and not st.last_ok), "reset_at": reset_at,
+            "quota": {"limited": bool(st.quota and (cooling or all_closed)) or result == "quota", "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
                       "remaining_at": st.remaining.get("at")},
             "last_ok": st.last_ok, "last_error": st.last_error, "last_used_model": st.model,
@@ -439,12 +456,17 @@ def admin_view() -> dict:
     """Everything the Admin page's AI panel shows."""
     now = time.time()
     names = [n for n in DEFAULT_ORDER if configured(n)] + [n for n in DEFAULT_ORDER if not configured(n)]
+    views = [_provider_view(n, now) for n in names]
+    # a provider whose free credit is used up goes after the ones that can answer, and is marked, so "Who is asked" never
+    # leads with one the same page calls out of credit (R11P-007)
+    spent = {v["name"] for v in views if v["configured"] and v["quota"]["limited"]}
     routes = {}
     for task in TASKS:
-        routes[task] = {"label": TASK_LABELS[task], "budget_s": BUDGET[task],
-                        "steps": [{"provider": n, "label": LABELS[n], "model": m, "ready": R.ready(n, m, now) == 0}
-                                  for n, m in plan(task)][:10]}
-    return {"providers": [_provider_view(n, now) for n in names], "routes": routes,
+        steps = [{"provider": n, "label": LABELS[n], "model": m, "ready": R.ready(n, m, now) == 0, "out_of_credit": n in spent}
+                 for n, m in plan(task)]
+        steps.sort(key=lambda x: x["out_of_credit"])              # stable: the order among the rest is the route's
+        routes[task] = {"label": TASK_LABELS[task], "budget_s": BUDGET[task], "steps": steps[:10]}
+    return {"providers": views, "routes": routes,
             "cache": {"entries": len(cache.items), "hits": cache.hits, "misses": cache.misses},
             "rerank_every_hours": R.RERANK_EVERY / 3600, "last_failure": dict(last_failure) or None}
 
