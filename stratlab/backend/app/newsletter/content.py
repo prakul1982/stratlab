@@ -242,6 +242,13 @@ def headline_ok(region: str, title: str, frm: str | None = None, to: str | None 
     return not contradicts(title, region, indices)
 
 
+def publisher(source) -> str | None:
+    """Who published a headline, for the plain-text part of an email; the aggregator a feed came through is not a
+    publisher, so it is left out (R9P-009)."""
+    s = " ".join(str(source or "").split())[:60]
+    return None if not s or s.lower() in ("google news", "google", "yahoo", "yahoo finance", "finnhub", "rss") else s
+
+
 def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES,
                    indices: list[dict] | None = None) -> list[dict]:
     """The brief's headlines (R6O-004, R7O-005): stories about the region's market, an index or its economy, never
@@ -261,7 +268,7 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
         if k in keys:
             continue
         keys.add(k)
-        out.append({"headline": title, "url": h.get("url"), "at": h.get("at")})
+        out.append({"headline": title, "url": h.get("url"), "at": h.get("at"), "source": publisher(h.get("source"))})
     return out[:n]
 
 
@@ -386,7 +393,7 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     change = _pct(now["price"], before_bars[-1]["c"] if before_bars else None)
     flags = [{"label": i["label"], "severity": i["severity"], "subject": i["subject"], "at": i["at"], "url": i.get("url")}
              for i in data["filings"] or [] if i["severity"] in ("red", "amber") and i["at"] > since][:4]
-    news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at")} for n in data["news"] or []
+    news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at"), "source": publisher(n.get("source"))} for n in data["news"] or []
             if n.get("headline") and _plain_title(n["headline"]) and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
     trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]

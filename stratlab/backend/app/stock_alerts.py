@@ -447,10 +447,10 @@ def deliver(profile: dict, subject: str, text: str) -> list[str]:
         except Exception as e:
             print("stock alert failed:", channel, str(e)[:120])
     to = alerts.newsletter_email(profile)
-    if to and alerts.email_ready() and alerts.email_confirmed(profile):
+    if to and alerts.email_ready() and alerts.email_confirmed(profile) and alerts.alert_emails_on(profile.get("id")):
         try:
             alerts.send_message(to, subject, bulleted(text), "/alerts", "Price and stock alerts",
-                                "You get this because you set these alerts on StratLab.")
+                                "You get this because you set these alerts on StratLab.", uid=profile.get("id"))
             sent.append("email")
         except Exception as e:
             print("stock alert failed: email", str(e)[:120])

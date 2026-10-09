@@ -21,11 +21,13 @@ GF_KEY = "mfnav:2018-01-31"        # {"code": {amfi code: nav}, "isin": {isin: n
 MAX_AGE = 6 * 3600                 # the daily file is published each evening; re-read it after this long
 RETRY = 1800                       # after a failed read, wait this long before trying again
 TIMEOUT = 30.0
+COLD_WAIT = 12.0                   # with no copy at all, how long a page waits for the first read (it carries on after)
 MAX_BYTES = 20 * 1024 * 1024
 MIN_SCHEMES = 50                   # fewer in a file means it came back cut short or as an error page
 
 _lock = threading.Lock()
-_daily: dict = {"at": 0.0, "data": None, "tried": 0.0}
+_restore_lock = threading.Lock()
+_daily: dict = {"at": 0.0, "data": None, "tried": 0.0, "thread": None}
 _gf: dict = {"data": None, "tried": 0.0}
 
 CATEGORY_RX = re.compile(r"^\s*(Open Ended|Close Ended|Interval Fund)\s+Schemes?\s*\(\s*(.+?)\s*\)\s*$", re.I)
@@ -44,7 +46,11 @@ def fetch_text(url: str) -> str:
 def forget():
     """Drop the copies in memory (between tests)."""
     with _lock:
-        _daily.update(at=0.0, data=None, tried=0.0)
+        t = _daily.get("thread")
+    if t is not None:
+        t.join(5)                                   # a read still running would write into the next test's copy
+    with _lock:
+        _daily.update(at=0.0, data=None, tried=0.0, thread=None)
         _gf.update(data=None, tried=0.0)
 
 
@@ -162,40 +168,89 @@ def _unpack(raw) -> tuple[dict, float] | None:
     return ({"schemes": schemes, "isin": by_isin}, float(got.get("at") or 0)) if schemes else None
 
 
-def daily() -> dict:
-    """Every scheme's latest NAV: read from the public file when the copy in memory is a few hours old, else the copy.
-    When the file can't be read, the last good copy (saved), or an empty list. Adds "read_at" (unix time)."""
-    now = time.time()
-    with _lock:
-        if _daily["data"] is not None and now - _daily["at"] < MAX_AGE:
-            return _daily["data"]
-        if _daily["data"] is None:
-            try:
-                got = _unpack(db.get_setting(DAILY_KEY))
-            except Exception:
-                got = None
-            if got:
-                _daily["data"], _daily["at"] = {**got[0], "read_at": got[1]}, got[1]
-                if now - got[1] < MAX_AGE:
-                    return _daily["data"]
-        if now - _daily["tried"] < RETRY:
-            return _daily["data"] or {"schemes": {}, "isin": {}, "read_at": None}
-        _daily["tried"] = now
+def _empty() -> dict:
+    return {"schemes": {}, "isin": {}, "read_at": None}
+
+
+def _restore() -> None:
+    """The saved copy into memory (after a restart). Only one reader asks the database; the others wait for it."""
+    with _restore_lock:
+        with _lock:
+            if _daily["data"] is not None:
+                return
+        try:
+            got = _unpack(db.get_setting(DAILY_KEY))
+        except Exception:
+            got = None
+        if got:
+            with _lock:
+                if _daily["data"] is None:
+                    _daily["data"], _daily["at"] = {**got[0], "read_at": got[1]}, got[1]
+
+
+def _refresh() -> None:
+    """Read the public file and keep it, in memory and saved. A failed read keeps the last good copy."""
     try:
         data = parse(fetch_text(DAILY_URL))
         if len(data["schemes"]) < MIN_SCHEMES:
             raise ValueError("too few schemes")
-    except Exception as e:                      # keep the last good copy
+    except Exception as e:
         print("daily NAV file unavailable:", type(e).__name__)
-        with _lock:
-            return _daily["data"] or {"schemes": {}, "isin": {}, "read_at": None}
+        return
+    now = time.time()
     with _lock:
         _daily.update(data={**data, "read_at": now}, at=now)
     try:
         db.set_setting(DAILY_KEY, _pack(data, now))
     except Exception as e:
         print("daily NAV file not saved:", type(e).__name__)
-    return _daily["data"]
+
+
+def _refresh_thread() -> threading.Thread | None:
+    """The thread reading the file now, starting one when it is time (None: one failed lately, so not before RETRY)."""
+    with _lock:
+        t = _daily.get("thread")
+        if t is not None and t.is_alive():
+            return t
+        if time.time() - _daily["tried"] < RETRY:
+            return None
+        _daily["tried"] = time.time()
+        t = threading.Thread(target=_refresh, daemon=True, name="mf-nav-refresh")
+        _daily["thread"] = t
+    t.start()
+    return t
+
+
+def daily() -> dict:
+    """Every scheme's latest NAV. A page never waits on the public file (R9P-008: when it was a few hours old, or the last
+    read failed, the first visitor of each half hour waited 16 to 21 seconds on Net worth and Mutual funds): a copy in
+    memory or the saved one is used as it is, and a copy older than MAX_AGE is read again in the background for the next
+    visitor. Only with no copy at all does a reader wait, up to COLD_WAIT seconds, for the first read; after that, or when
+    the file can't be read, an empty list. Adds "read_at" (unix time)."""
+    with _lock:
+        have, at = _daily["data"], _daily["at"]
+    if have is None:
+        _restore()
+        with _lock:
+            have, at = _daily["data"], _daily["at"]
+    if have is not None and time.time() - at < MAX_AGE:
+        return have
+    t = _refresh_thread()
+    if have is None and t is not None:
+        t.join(COLD_WAIT)
+    with _lock:
+        return _daily["data"] or _empty()
+
+
+def keep_fresh(every: float = 900.0) -> None:
+    """For a thread started with the server: the saved copy in memory right away, and the file read again whenever it is
+    older than MAX_AGE, so no visitor is the one to trigger it."""
+    while True:
+        try:
+            daily()
+        except Exception as e:
+            print("NAV keep-fresh failed:", type(e).__name__)
+        time.sleep(every)
 
 
 def gf_navs() -> dict:

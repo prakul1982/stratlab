@@ -80,7 +80,7 @@ def market_sections(f: dict) -> list[dict]:
         out.append({"title": f"New on the Stage 2 scan ({scan['group']})", "items": items})
     heads = [h for h in f.get("headlines") or [] if not banned(h["headline"])]
     if heads:
-        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url")) for h in heads]})
+        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source")) for h in heads]})
     return out
 
 
@@ -105,7 +105,7 @@ def stock_lines(r: dict, since: str) -> list[dict]:
         lines.append({"text": "On exchange surveillance lists: " + ", ".join(surv["now"]), "url": None})
     for h in r.get("headlines") or []:
         if not banned(h["headline"]):
-            lines.append({"text": h["headline"], "url": h.get("url")})
+            lines.append({"text": h["headline"] + (f" ({h['source']})" if h.get("source") else ""), "url": h.get("url")})
     return lines
 
 
@@ -361,7 +361,7 @@ def _row(it: dict) -> kit.Row:
     if it.get("change_pct") is not None or it.get("price") is not None:
         return kit.Row(it["text"], value=kit.num(it["price"]) if it.get("price") is not None else None, change=it.get("change_pct"),
                        since=it.get("since"), url=it.get("url"), lines=lines)
-    return kit.Row(it["text"], url=it.get("url"), lines=lines)
+    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
 
 
 def render(issue: dict) -> tuple[str, str]:

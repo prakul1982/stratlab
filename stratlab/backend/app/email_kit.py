@@ -211,6 +211,19 @@ def safe_url(url) -> str | None:
     return url if isinstance(url, str) and url.lower().startswith(("https://", "http://")) else None
 
 
+PLAIN_URL_MAX = 160           # a longer address isn't printed in the plain-text part (a news redirect runs to ~500 characters)
+
+
+def plain_url(url) -> str | None:
+    """The address as the plain-text part of an email prints it: a web address that reads as an address. A news
+    aggregator's redirect link (news.google.com/rss/articles/CBMi..., ~500 characters) is the HTML part's link only, so the
+    text part is the headline and its publisher, not a wall of address (R9P-009)."""
+    u = safe_url(url)
+    if not u or len(u) > PLAIN_URL_MAX or re.match(r"https?://news\.google\.com/", u, re.I):
+        return None
+    return u
+
+
 def _a(url, text: str, cls: str = "c-blue", color: str = L["blue"], extra: str = "") -> str:
     u = safe_url(url)
     return (f'<a href="{escape(u)}" class="{cls}" style="color:{color};text-decoration:none;{extra}">{escape(text)}</a>'
@@ -294,6 +307,7 @@ class Row:
     value: str | None = None             # right-hand side: "₹925" or "results Thu 8 Oct"
     change: float | None = None          # ▲ / ▼ beside the value
     sub: str | None = None               # small line under the title
+    source: str | None = None            # who published it (a headline): named in the plain-text part beside the title
     url: str | None = None               # makes the title a link
     lines: tuple = ()                    # more small lines: strings or (text, url)
     tone: str = "updown"
@@ -314,7 +328,7 @@ def _row_html(r: Row, first: bool) -> str:
                  f'color:{L["ink"]};text-align:right;white-space:nowrap">{escape(r.value) if r.value else ""}'
                  + (f'<div style="font:600 13px/1.4 {SANS}">{d_html}</div>' if d_html else "") + since + "</td>")
     subs = ""
-    for item in ([r.sub] if r.sub else []) + list(r.lines):
+    for item in ([r.sub] if r.sub else []) + ([r.source] if r.source else []) + list(r.lines):
         text, url = _line(item)
         subs += f'<div class="c-muted" style="font:13px/1.45 {SANS};color:{L["muted"]};padding-top:2px">{_a(url, text)}</div>'
     weight = 600 if (r.value or r.change is not None) else 500
@@ -339,10 +353,11 @@ def card(title: str | None, rows: list[Row], foot: str | None = None) -> Block:
     text = [f"\n{title.upper()}"] if title else []
     for r in rows:
         right = " ".join(x for x in (r.value or "", delta(r.change, tone=r.tone)[1] if r.change is not None else "", r.since or "") if x)
-        text.append(f"- {_t(r.title)}" + (f"  {_t(right)}" if right else "") + (f" ({r.url})" if safe_url(r.url) else ""))
+        text.append(f"- {_t(r.title)}" + (f"  {_t(right)}" if right else "") + (f" ({_t(r.source)})" if r.source else "")
+                    + (f" ({plain_url(r.url)})" if plain_url(r.url) else ""))
         for item in ([r.sub] if r.sub else []) + list(r.lines):
             t, u = _line(item)
-            text.append(f"    {_t(t)}" + (f" ({u})" if safe_url(u) else ""))
+            text.append(f"    {_t(t)}" + (f" ({plain_url(u)})" if plain_url(u) else ""))
     if foot:
         text.append(foot)
     return Block(html, "\n".join(text))
@@ -373,7 +388,7 @@ def bullets(items: list) -> Block:
         li.append(f'<li class="c-ink2" style="margin:0 0 8px;color:{L["ink2"]}">'
                   f'<b class="c-ink" style="color:{L["ink"]}">{_a(url, title, extra="font-weight:600;")}</b>'
                   + (f" – {escape(line)}" if line else "") + "</li>")
-        text.append(f"- {title}" + (f": {line}" if line else "") + (f" ({url})" if safe_url(url) else ""))
+        text.append(f"- {title}" + (f": {line}" if line else "") + (f" ({plain_url(url)})" if plain_url(url) else ""))
     if not li:
         return Block("", "")
     return Block(f'<ul style="margin:0 0 14px;padding-left:20px;font:15px/1.5 {SANS}">' + "".join(li) + "</ul>", "\n".join(text))
@@ -578,7 +593,7 @@ def _row(line: str) -> Row:
 
 
 def message(subject: str, text: str, path: str, label: str, why: str, *, summary: str | None = None, button_label: str | None = None,
-            date: str = "", footer: Footer | None = None) -> tuple[str, str]:
+            date: str = "", footer: Footer | None = None, unsubscribe: str | None = None) -> tuple[str, str]:
     """(html, text) for an alert, reminder or note given as a subject and plain lines: a line starting "- " is a row
     ("- Revenue: ₹64,259 crore" puts the figure on the right), a line ending in ":" heads the rows after it, a web
     address becomes a link, the rest are paragraphs, and a closing "facts, not advice" sentence becomes the small
@@ -623,7 +638,7 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
         if low.startswith(title.lower()) and first_para[len(title):len(title) + 1] in (":", "."):
             rest = first_para[len(title) + 1:].strip()
             first_para = (rest[:1].upper() + rest[1:]) if rest else first_para
-    f = footer or Footer(why=why, legal=legal or "Facts, not advice.")
+    f = footer or Footer(why=why, unsubscribe=unsubscribe, legal=legal or "Facts, not advice.")
     if legal and not f.legal:
         f.legal = legal
     default = "Open the company page" if re.fullmatch(r"/research/(IN|US)/[^/?#]+", path) else "Open StratLab"

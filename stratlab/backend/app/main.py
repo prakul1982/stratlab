@@ -32,6 +32,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
+from . import money_mf_nav
 from . import money_mf_ter
 from . import money_mf_behaviour
 from . import sip_test
@@ -109,7 +110,7 @@ from . import money_networth
 from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
-from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
+from .plans import access_plan, ai_reads_per_day, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
 
 kite = KiteService()
@@ -275,6 +276,7 @@ async def lifespan(app: FastAPI):
     filing_alerts_job.start()
     deals_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
+    threading.Thread(target=money_mf_nav.keep_fresh, daemon=True, name="mf-nav").start()   # the mutual fund NAV file, read ahead of the pages (R9P-008)
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
@@ -676,11 +678,15 @@ def me(profile=Depends(current_profile)):
                   # fresh AI reads today against the person's daily cap (None: no cap), said on Account (R8O-002)
                   "ai_reads_today": reads_today.result(), "ai_reads_limit": reads_cap,
                   "ai_reads_cap_for": "admin" if admin.is_admin(profile) else None,
+                  # the viewed plan's own cap, so an admin's "View as Free or Basic" can say "35 of 60 (not enforced for you)" (R9P-005)
+                  "ai_reads_plan_limit": ai_reads_per_day(paid),
+                  # the daily safety cap on unlimited AI builds (Pro's), said beside the month's count like the Plans card
+                  "ai_builds_per_day": AI_BUILDS_PER_DAY if info["ai_builds_per_month"] is None else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
-                   "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
+                   "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
         "data_note": data_note(),
@@ -851,6 +857,8 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
+    if req.alert_email and not alerts.alert_emails_on(profile["id"]):
+        alerts.set_alert_emails(profile["id"], True)       # saving an address again turns alert emails back on after an unsubscribe
     if req.daily_report is not None:
         prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
         db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))
@@ -888,7 +896,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         screens.mute(uid)
     if act and what in ("advance_tax", "all"):
         money_advance_tax.set_remind(uid, False)
-    if act and what not in ("tips", "screens", "advance_tax"):
+    if act and what == alerts.ALERT_EMAILS:
+        alerts.set_alert_emails(uid, False)
+    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -4978,6 +4988,20 @@ def daily_platform_check(retry_after: float = 120) -> dict:
     return out
 
 
+def error_counts() -> dict:
+    """The server errors listed, told apart as Admin → System tells them: those since this server started and those kept
+    from before it (the list survives a restart), the same split as the page's own (R9P-004)."""
+    start = datetime.fromisoformat(SERVER_STARTED_AT)
+
+    def since(at) -> bool:
+        try:
+            return datetime.fromisoformat(str(at).replace("Z", "+00:00")) >= start
+        except ValueError:
+            return False
+    n = sum(1 for e in RECENT_ERRORS if since(e.get("at")))
+    return {"errors_since_restart": n, "errors_before_restart": len(RECENT_ERRORS) - n}
+
+
 def weekly_facts(now: datetime) -> dict:
     """What the Monday summary reports, gathered from the last seven days."""
     since = now - timedelta(days=7)
@@ -5002,7 +5026,7 @@ def weekly_facts(now: datetime) -> dict:
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
     origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "errors_listed": len(RECENT_ERRORS),
+            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
             "admin_url": f"{origin}/admin" if origin else None}
 
 

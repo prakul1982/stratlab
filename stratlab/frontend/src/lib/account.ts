@@ -43,6 +43,13 @@ export function monthlyUse(used: number, limit: number | null | undefined, planL
   return `${used} (unlimited)`;
 }
 
+/** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap
+ * the Plans card names (R9P-005); for an admin the cap isn't enforced, and the line says so. */
+export function aiBuildsUse(used: number, limit: number | null | undefined, perDay?: number | null, admin?: boolean): string {
+  if (limit != null || perDay == null) return monthlyUse(used, limit);
+  return `${used} (unlimited; up to ${perDay.toLocaleString("en-IN")} a day${admin ? ", not enforced for you as an admin" : ""})`;
+}
+
 /** The plan's row in "Plan and usage", or null for Free. */
 export function planRow(me: Pick<Me, "plan" | "paid_plan" | "billing">): [string, string] | null {
   const run = planRun(me), end = me.billing.renews_or_ends;

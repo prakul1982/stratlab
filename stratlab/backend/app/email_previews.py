@@ -153,8 +153,9 @@ def _my_stocks() -> tuple[str, str, str]:
 
 
 def _alerts_email(subject: str, text: str, path: str, label: str, why: str, date: str | None = None) -> tuple[str, str, str]:
-    """An alert as alerts.send_message emails it."""
-    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label())
+    """An alert as alerts.send_message emails it (with its one-click unsubscribe, as the previews show every other)."""
+    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label(), unsubscribe="Turn off alert emails")
+    html, plain = kit.preview_links(html, plain)
     return kit.subject_line(subject), html, plain
 
 
@@ -262,13 +263,13 @@ def registry() -> dict:
         "my_stocks": ("My stocks", "Newsletters", _my_stocks, True, False),
         "screens": ("Weekly screens", "Newsletters", _screens, True, False),
         "advance_tax": ("Advance tax reminder", "Reminders", _advance_tax, True, False),
-        "stock_alert": ("Price and stock alerts", "Alerts", _stock_alert, False, False),
-        "scan_alert": ("Scan and filing alerts", "Alerts", _scan, False, False),
-        "result_alert": ("Results alert", "Alerts", _result, False, False),
-        "events": ("Market events reminder", "Reminders", _events, False, False),
-        "fo_changes": ("F&O contract changes", "Alerts", _fo, False, False),
-        "money_calendar": ("Money calendar reminder", "Reminders", _money_calendar, False, False),
-        "admin_alert": ("Admin alert", "Admin", _admin, False, True),
+        "stock_alert": ("Price and stock alerts", "Alerts", _stock_alert, True, False),
+        "scan_alert": ("Scan and filing alerts", "Alerts", _scan, True, False),
+        "result_alert": ("Results alert", "Alerts", _result, True, False),
+        "events": ("Market events reminder", "Reminders", _events, True, False),
+        "fo_changes": ("F&O contract changes", "Alerts", _fo, True, False),
+        "money_calendar": ("Money calendar reminder", "Reminders", _money_calendar, True, False),
+        "admin_alert": ("Admin alert", "Admin", _admin, True, False),
         "confirm": ("Confirm your email", "Account", _confirm, False, True),
         "test": ("Test email", "Admin", test_email, False, True),
     }

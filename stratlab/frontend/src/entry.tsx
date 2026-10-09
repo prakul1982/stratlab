@@ -75,4 +75,7 @@ async function start() {
   if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
 }
 
-void start();
+/* A failed download of the app's own chunk on the first load (a dropped connection; seen once on Safari as an "Unhandled Promise
+ * Rejection ... import(./main-...js)", R9P-008) used to leave the plain start-up text and nothing else. The start-up script
+ * (public/boot.js) then reloads once on its own, and if that does not help it shows the Reload card. */
+start().catch(() => { if (window.__stratlabRecover) window.__stratlabRecover(); else window.__stratlabShowLoadError?.(); });
