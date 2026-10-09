@@ -233,6 +233,16 @@ export function asDate(iso: string): Date {
   return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A sentence with its ISO days written the app's way: "newest 2026-10-07" reads "newest 7 Oct 2026", and a month on its
+ * own ("for 2026-10") "for Oct 2026" (R12-012: Admin → System's probe lines). A time after a day is left alone. */
+export function plainDates(text: string | null | undefined): string {
+  return String(text ?? "")
+    .replace(/\b(\d{4})-(\d{2})-(\d{2})\b(?![T:\d])/g, (m, y, mo, d) => (+mo >= 1 && +mo <= 12 && +d >= 1 && +d <= 31 ? `${+d} ${MONTHS[+mo - 1]} ${y}` : m))
+    .replace(/\b(\d{4})-(\d{2})\b(?![-\d])/g, (m, y, mo) => (+mo >= 1 && +mo <= 12 && +y >= 1990 && +y <= 2100 ? `${MONTHS[+mo - 1]} ${y}` : m));
+}
+
 export function dateOnly(iso: string | null | undefined): string {
   return iso ? fmtDate(iso) : "–";
 }
