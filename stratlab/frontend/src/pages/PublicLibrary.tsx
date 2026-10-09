@@ -123,8 +123,9 @@ export function PublicLibraryEntry({ id }: { id: string }) {
   const sh = e ? shownStats(e) : null;
   return (
     <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
-      {!e && !gone && <Card><Skeleton label="Opening the strategy" /></Card>}
-      {gone && <ErrorState title="This strategy isn't available" action={{ label: "See StratLab's strategies", to: "/library" }}>{gone}</ErrorState>}
+      {!e && !gone && <><h1 className="sr-only">Opening the strategy</h1><Card><Skeleton label="Opening the strategy" /></Card></>}
+      {/* the page's one heading, also when the strategy is gone (R7O-010, axe page-has-heading-one) */}
+      {gone && <><h1 className="k-h1">This strategy isn't available</h1><ErrorState title="Not in the library" action={{ label: "See StratLab's strategies", to: "/library" }}>{gone}</ErrorState></>}
       {e && sh && (
         <>
           <div className="k-stack">

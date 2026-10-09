@@ -167,14 +167,18 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
         return None                              # a fund or a note filed under a company's name isn't screened
     price, high = _num(f.get("price")), _num(f.get("high52"))
     g = f.get("growth") if isinstance(f.get("growth"), dict) else {}
+    # a US company reporting in another currency, from a page built before depositary shares were read the way the
+    # public page now reads them: its value is left out until the page is built again (R7O-004: Ecopetrol at $697.3 bn
+    # here, $34.8 bn on its public page)
+    stale_adr = region == "US" and (f.get("v") or 1) < stock_pages.FACTS_VERSION and not str(f.get("unit") or "$").startswith("$")
     out = {"symbol": symbol, "name": str(f.get("name") or symbol)[:120], "sector": _sector(region, symbol, f),
            "industry": str((f.get("industry") or [None])[-1] or "")[:80] or None,
            # a market value (and P/E) that fails its checks is left out, so it never tops a list by size (R6V-001)
-           "market_cap": stock_pages.shown_cap(f), "cap_checked": True, "price": price,
+           "market_cap": None if stale_adr else stock_pages.shown_cap(f), "cap_checked": True, "price": price,
            "from_high": round((price / high - 1) * 100, 2) if price and high and high > 0 else None,
            "sales_cagr_3y": _num(g.get("sales_cagr_3y")), "net_margin": _num(f.get("net_margin")),
            "opm": None if f.get("bank") else _num(f.get("opm")), "debt_equity": None if f.get("bank") else _num(f.get("debt_equity")),
-           "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": stock_pages.shown_yield(f), "pe": stock_pages.shown_pe(f),
+           "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": None if stale_adr else stock_pages.shown_yield(f), "pe": None if stale_adr else stock_pages.shown_pe(f),
            "stage": int(f["stage"]) if _num(f.get("stage")) in STAGES else None,
            "red_flags": _red_count(f) if region == "IN" else None,
            "price_at": str(f.get("price_at") or "")[:10] or None, "built_at": f.get("built_at")}
@@ -236,6 +240,13 @@ def as_of(index: dict) -> str | None:
     """When the index's prices are from: the latest close any company in it shows, else when it was built."""
     days = [r["price_at"] for r in index.get("rows") or [] if r.get("price_at")]
     return max(days) if days else index.get("at")
+
+
+def rows_as_of(rows: list[dict], fallback: str | None) -> tuple[str | None, str | None]:
+    """(oldest, newest) price day among the rows a screen shows: the header says the oldest, so it never claims a newer
+    close than a row has (R7O-004: "Prices as of 8 Oct" above 7 Oct closes)."""
+    days = sorted({str(r["price_at"])[:10] for r in rows if r.get("price_at")})
+    return (days[0], days[-1]) if days else (fallback, fallback)
 
 
 # ---------- the conditions ----------
@@ -393,9 +404,10 @@ def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None 
     have.sort(key=(lambda r: str(r[sort]).lower()) if text else (lambda r: r[sort]), reverse=bool(desc))
     rows = have + rest
     limit, offset = max(1, min(MAX_ROWS, int(limit or 100))), max(0, int(offset or 0))
+    page = [_shown(region, r, flags) for r in rows[offset:offset + limit]]
+    oldest, newest = rows_as_of(page, as_of(index))
     return {"region": region, "filters": f, "sort": sort, "desc": bool(desc), "total": len(rows), "offset": offset,
-            "rows": [_shown(region, r, flags) for r in rows[offset:offset + limit]],
-            "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}
+            "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "index_at": index.get("at")}
 
 
 def _shown(region: str, r: dict, flags: dict) -> dict:

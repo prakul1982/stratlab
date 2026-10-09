@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
-import { inWords, marketState } from "../lib/marketHours";
+import { inWords, marketState, usTodayNote } from "../lib/marketHours";
 import { MARKET_TILES, goldInr10g, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
@@ -156,9 +156,11 @@ function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
 }
 
 /* ---------- today's P&L ---------- */
-type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; day_pct: number | null; count: number }; prices_at?: string | null; updated_at: string | null };
+type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; day_pct: number | null; count: number }; prices_at?: string | null; updated_at: string | null;
+  us?: { day: number | null; in_total?: boolean } | null; usd_inr?: number | null };
 
 function PnlCard() {
+  const { markets } = useApp();
   const [h, setH] = useState<Holdings | null | "none">(null);
   useEffect(() => { api<Holdings>("/holdings").then(setH).catch(() => setH("none")); }, []);
   if (h === null) return <Card testId="mine-pnl"><Skeleton label="Reading your holdings" lines={5} /></Card>;
@@ -177,6 +179,8 @@ function PnlCard() {
       <CardHead title={fresh ? "Today's P&L" : "Last session's P&L"} actions={<Link className="btn quiet sm" to="/holdings" aria-label="Open holdings">Open</Link>} />
       <Stat label={`${h.totals.count} stock${h.totals.count === 1 ? "" : "s"}`} value={day == null ? "–" : signedInrCompact(day)} tone={day == null || day === 0 ? undefined : day > 0 ? "up" : "down"}
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
+      {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
+      {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}
       {h.prices_at && <div><Badge>Prices as of {asOf(h.prices_at)}</Badge></div>}
     </Card>
   );

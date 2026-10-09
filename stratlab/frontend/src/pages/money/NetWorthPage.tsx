@@ -336,6 +336,13 @@ export function NetWorthPage() {
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     } catch (e) { fail(e); }
   };
+  // one snapshot out of the history (R7O-013: a test's holdings left a snapshot that only "Delete my net worth data"
+  // could clear); the entries and the other days stay
+  const askRemoveSnapshot = (d: string) => setAsk({
+    title: `Remove the snapshot of ${dateOnly(d)}?`, body: "Only that day's net worth leaves the history chart. Your entries and the other days stay.",
+    label: "Remove this snapshot",
+    run: async () => { await api(`/money/net-worth/history/${encodeURIComponent(d)}`, { method: "DELETE" }); await load(); notify("Snapshot removed."); },
+  });
   const removeAll = () => setAsk({
     title: "Delete my net worth data?", body: "Every entry, loan, policy and the history is removed from StratLab. My Holdings isn't touched.", label: "Delete my net worth data",
     run: async () => { await api("/money/net-worth", { method: "DELETE" }); await load(); notify("Your net worth data is deleted."); },
@@ -453,6 +460,22 @@ export function NetWorthPage() {
               <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: Math.min(0, ...shown.map((h) => h.net)) } }]}
                 times={shown.map((h) => h.d)} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
+          )}
+
+          {view.history_allowed && hist.length > 0 && (
+            <details className="k-card nw-snaps" data-testid="nw-snapshots">
+              <summary className="k-small">The history's snapshots ({hist.length}): remove one</summary>
+              <ul className="k-stack k-tight">
+                {[...hist].reverse().map((h) => (
+                  <li key={h.d} className="k-row">
+                    <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}</span>
+                    <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`}>
+                      <Trash size={14} /> Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           {view.assets.length > 0 && (

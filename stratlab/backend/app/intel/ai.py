@@ -68,10 +68,12 @@ def company_facts(c: dict) -> dict:
     q = c.get("quote") or {}
     # each figure under its group's name: India's "3Y CAGR" is in both Sales growth and Profit growth, and one
     # flat label kept only the profit one (R6O-001)
-    metrics = {f"{g['title']}: {i['label']}": i["value"] for g in c.get("metrics") or [] for i in g["items"]}
+    # each figure as the page writes it ("0.9%", "2.56"), never the raw 2.55977229601518 the model then copies (R7O-001)
+    metrics = {f"{g['title']}: {i['label']}": grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
+               for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
              "currency": c.get("currency"), "industry": c.get("industry"), "price": q.get("price"),
-             "day_change_pct": q.get("change_pct"), "range_52w": c.get("range52"), "market_cap": c.get("market_cap"),
+             "day_change_pct": q.get("change_pct"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c),
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
              "shareholding": c.get("shareholding"),
@@ -91,7 +93,23 @@ def company_facts(c: dict) -> dict:
         facts["fiscal_now"] = (f"India's fiscal year runs April to March. The last quarter that ended is Q{fq} FY{fy}; "
                                + (f"its results are already filed and in quarterly_results." if filed
                                   else f"results due now are for Q{fq} FY{fy}."))
-    return {k: v for k, v in facts.items() if v not in (None, [], {}, "")}
+    if c.get("bank"):
+        facts["lender"] = ("A bank or lender: EBITDA, operating margin and debt-to-equity don't describe its business and "
+                           "aren't on its page; don't mention them.")
+    return grounding.rounded({k: v for k, v in facts.items() if v not in (None, [], {}, "")})
+
+
+def market_cap_words(c: dict) -> str | None:
+    """The market value as the page writes it: "₹9.68 lakh crore", "$4.87 trillion"."""
+    v = c.get("market_cap")
+    if not isinstance(v, (int, float)) or v <= 0:
+        return None
+    if c.get("region") == "IN":
+        return f"₹{v / 1e12:.2f} lakh crore" if v >= 1e12 else f"₹{grounding.indian(round(v / 1e7))} crore"
+    for div, word in ((1e12, "trillion"), (1e9, "billion"), (1e6, "million")):
+        if v >= div:
+            return f"${v / div:.2f} {word}"
+    return f"${v:,.0f}"
 
 
 def results_status(c: dict, today) -> dict | None:
@@ -132,6 +150,8 @@ def results_status(c: dict, today) -> dict | None:
     return out or None
 
 
+READ_CHECKS = 7          # the checks a company read went through (stored with it; a kept read gets them again as it is served)
+
 SCORE_FIELDS = ("scores", "composite", "valuation", "rating", "grade")   # never sent, even from an old stored read
 
 
@@ -142,7 +162,7 @@ def company(c: dict, ai, pro: bool, key_facts: list[dict] | None = None) -> dict
     system = f"""You are a careful research writer for StratLab, a tool that tests trading ideas honestly.
 Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
- "valuation_note": "one sentence stating its valuation in numbers against its own history (e.g. P/E now vs its usual range), no judgement",
+ "valuation_note": "one sentence stating its valuation figures exactly as the FACTS give them (P/E, P/B, dividend yield), no judgement and no comparison",
  "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 scheduled things ahead (the next results, a meeting, an ex-date), stated as facts with no view on the price"],
@@ -159,6 +179,11 @@ that are in the FACTS, copied as they are (a growth rate, yield or return is the
 sum); label Indian fiscal quarters as the FACTS' fiscal_now does. Describe the present with latest_fiscal_year and the
 results status in "results": a year or quarter the FACTS report is never "estimated", "upcoming" or "due". "watch"
 lists only dates ahead that the FACTS give; with none, say the next results date isn't announced yet.
+Compare a figure only with another figure in the FACTS: never with its history, its usual range, its peers, the sector
+or the market, which the FACTS don't give. Never say a kind of strategy "can be effective" or "works": an idea's "why"
+states the fact about the stock it is built on. Name each idea for the rule it is: a crossover is trend following, a
+break above a high is a breakout, buying a fall below a level or an oversold RSI is mean reversion. Write numbers as the
+FACTS write them. Leave out anything the FACTS don't state rather than saying it isn't stated.
 {RULES}"""
     facts = company_facts(c)
     if key_facts:
@@ -179,6 +204,10 @@ lists only dates ahead that the FACTS give; with none, say the next results date
     # checked in code against the facts it was given: no advice or forecast, no number that isn't in them, the
     # right fiscal-quarter labels, ideas worded as rules to test (R5O-027)
     out = grounding.ground_company(read, facts, c.get("region") or "IN", ist_date())
+    # numbers the page's way, no filler or "can be effective", no comparison the page can't show, no EBITDA for a
+    # lender, ideas named for their rule (R7O-001, R7O-002)
+    out = {**grounding.polish_company(out, c.get("region") or "IN", bool(c.get("bank"))), "lender": bool(c.get("bank")),
+           "region": c.get("region") or "IN", "checks": READ_CHECKS}
     if not out["summary"] and not out["bull"] and not out["bear"]:
         raise AIError("The AI's read didn't hold up against the company's numbers. Press Refresh to try again.")
     return out
@@ -190,6 +219,10 @@ def clean_company(read: dict) -> dict:
     out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
     out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
     out["segments"] = []                        # a read stored with the model's unsourced revenue split shows none
+    # a read kept from before today's checks gets them as it is served (R7O-001): the same pass a fresh read had
+    out = grounding.polish_company(out, out.get("region") or "IN", bool(out.get("lender")))
+    if out.get("lender"):
+        out["facts"] = [r for r in out["facts"] if not (isinstance(r, dict) and "ebitda" in json.dumps(r).lower())]
     return out
 
 
@@ -201,7 +234,6 @@ def sector(q: str, region: str, ai) -> dict:
 {where}
 Return ONLY this JSON:
 {{"sector": "name", "summary": "3-4 sentences: what's happening, why now, and the key dynamic",
- "market_size": "size with year", "cagr": 0, "cagr_note": "period",
  "etfs": [{{"ticker": "", "name": ""}}],
  "sub_themes": [{{"name": "", "detail": "2 specific sentences"}}],
  "core": "the point everything converges on",
@@ -220,7 +252,9 @@ companies with the most direct link to the theme, in value-chain order, not rank
                 for c in (x or []) if isinstance(c, dict) and c.get("name")][:8]
     return {
         "sector": str(r.get("sector") or q)[:80], "summary": str(r.get("summary") or "")[:900],
-        "market_size": str(r.get("market_size") or "")[:80], "cagr": r.get("cagr"), "cagr_note": str(r.get("cagr_note") or "")[:40],
+        # no market size or growth rate: the model gives no source for them ("₹1.85 trillion (2025), 12.5% a year"), so
+        # none is shown (R7O-012)
+        "market_size": "", "cagr": None, "cagr_note": "",
         "etfs": [{"ticker": str(e.get("ticker") or "")[:20], "name": str(e.get("name") or "")[:80]}
                  for e in (r.get("etfs") or []) if isinstance(e, dict)][:4],
         "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": str(s.get("detail") or "")[:400]}
@@ -269,7 +303,10 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
     out = grounding.ground_pulse(read, indices, headlines)
-    return grounding.closed_words(out) if closed else out
+    out = grounding.closed_words(out) if closed else out
+    tidy = lambda t: grounding.tidy_numbers(t, region)          # noqa: E731  (numbers the page's way, R7O-001)
+    return {**out, "tone": tidy(out.get("tone")),
+            **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
 
 
 def compare(a: dict, b: dict, ai) -> dict:
@@ -283,6 +320,17 @@ Return ONLY this JSON:
     if not verdict:                 # never cache (or show) a comparison with nothing in it
         raise AIError("The AI didn't send a comparison this time.")
 
+    # held to the two pages' figures like a company read (R7O-001): a number in neither page's facts, advice, filler or
+    # a comparison with figures neither page shows is dropped, and numbers are written the page's way
+    pool = grounding.fact_numbers({"a": company_facts(a), "b": company_facts(b)})
+    lender = bool(a.get("bank") or b.get("bank"))
+
+    def keep(t):
+        return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s)),
+                                         lender, a.get("region") or "IN")
+    verdict = keep(verdict)
+    if not verdict:
+        raise AIError("The AI's comparison didn't hold up against the two companies' numbers. Press Refresh to try again.")
     none = {"composite": None, "valuation": None}             # no scores or cheap/rich labels: that's advice
     return {"verdict": verdict[:700], "winner": "SPLIT",
-            "differences": _clip(r.get("differences"), 4), "a": dict(none), "b": dict(none)}
+            "differences": [x for x in (keep(d) for d in _clip(r.get("differences"), 4)) if x], "a": dict(none), "b": dict(none)}

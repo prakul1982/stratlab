@@ -59,6 +59,7 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
           {r.inav != null && <Stat item label="Indicative NAV" value={price(r.inav, "INR")} note={r.inav_gap != null ? `Price ${gapWords(r.inav_gap, "iNAV").replace(/^trades /, "")}` : undefined} />}
           <Stat item label="Last NAV" value={r.nav == null ? "–" : price(r.nav, "INR")}
             note={<>{r.nav_gap != null ? `${r.nav_price_day ? `${day(r.nav_price_day)} close` : "Price"} ${gapWords(r.nav_gap, "NAV").replace(/^trades /, "")}`
+              : r.nav_doubtful ? "Gap left out: the day's close and the latest price are too far apart to both be right"
               : r.nav_waiting && r.nav_date ? `No gap yet: today's price is not set against the NAV of ${day(r.nav_date)}` : "No published NAV found"}
               {r.nav_date && <><br />NAV of {day(r.nav_date)}</>}</>} />
         </StatRow>

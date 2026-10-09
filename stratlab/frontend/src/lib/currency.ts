@@ -3,7 +3,10 @@ import { publicGet } from "./http";
 import type { Offer } from "./types";
 
 export type CurrencyRow = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number;
-  charged_in: string; yearly_charged_in: string };
+  charged_in: string; yearly_charged_in: string;
+  /** the amount is the rupee charge (GST included) at today's rate, rounded: shown with "≈" while the card is charged in
+   * rupees (R7O-008: "SAR 22" for a ₹699 charge that is about SAR 27) */
+  converted?: boolean };
 export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer };
 
 const KEY = "stratlab.currency";
@@ -37,6 +40,8 @@ export function usePricing() {
   const pick = (c: string) => { setCode(c); try { localStorage.setItem(KEY, c); } catch { /* private window */ } };
   return { pricing: p, currency: chosen, pick, status };
 }
+
+export { approx } from "./approx";
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {
   if (!row) return `₹${v.toLocaleString("en-IN")}`;

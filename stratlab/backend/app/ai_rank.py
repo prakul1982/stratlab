@@ -343,10 +343,14 @@ def route(task: str, names: list[str], need_tokens: int = 0, fixed: bool = False
             if need_tokens and ctx and need_tokens > ctx * 0.9:
                 continue                                              # the document wouldn't fit
             rows.append((score(name, m, task), name, m))
+    # a provider or model paused right now (its breaker open, its free quota used up) goes to the end of the chain, so
+    # the chain shown and asked starts with one that can answer (R7O-006: a paused Hugging Face first in every chain)
+    now = time.time()
+    paused = {(n, m): ready(n, m, now) > 0 for _, n, m in rows}
     if fixed:
-        rows.sort(key=lambda r: (names.index(r[1]), -r[0]))
+        rows.sort(key=lambda r: (paused[(r[1], r[2])], names.index(r[1]), -r[0]))
     else:
-        rows.sort(key=lambda r: -r[0])
+        rows.sort(key=lambda r: (paused[(r[1], r[2])], -r[0]))
     return [(n, m) for _, n, m in rows]
 
 

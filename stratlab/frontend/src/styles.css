@@ -1975,3 +1975,24 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   .lp-demo-tabs { align-self: stretch; }
   .lp-demo-tabs button { flex: 1; }
 }
+
+/* ---------- round 7 (R7O-010, R7O-013) ---------- */
+/* a chip row's "+ Custom" beside the row, never clipped at the card's edge */
+.k-chiprow { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.k-chiprow > .k-chipbar { flex: 1 1 auto; }
+.k-chiprow > .k-chip.add { flex: none; }
+/* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
+@media (max-width: 640px) {
+  input[type=checkbox], input[type=radio],
+  .k-check input[type="checkbox"], .k-check input[type="radio"],
+  .k-table td input[type="checkbox"], .k-table th input[type="checkbox"] { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+  .k-table td a, .k-table th a { min-width: 32px; }
+  .k-page a.link { padding-block: 8px; }
+  .k-page button.link { display: inline-flex; align-items: center; min-height: 32px; }
+  a.link.tap, .k-page a.link.tap { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
+  .feat-list li > a, .feat-group-title a, .nav-page .k-card-title a { display: inline-flex; align-items: center; min-height: 32px; min-width: 32px; }
+}
+/* net worth: the history's snapshots, each removable on its own */
+.nw-snaps summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.nw-snaps ul { list-style: none; margin: 0; padding: 0; }
+.nw-snaps li { justify-content: space-between; flex-wrap: wrap; gap: var(--s2); }

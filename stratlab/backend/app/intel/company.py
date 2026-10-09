@@ -12,7 +12,7 @@ from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num
-from .news import GoogleNews, Wikipedia, mentions
+from .news import GoogleNews, Wikipedia, mentions, plain_headline
 from .screener import Screener, clean_profile, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
@@ -181,6 +181,38 @@ def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> di
     rate = fx(home, cur) if cap else None
     return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
             "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
+
+
+US_LENDERS = ("bank", "banking", "financial services", "insurance", "capital markets", "thrift", "credit", "mortgage", "lending")
+
+
+def is_lender(scr: dict | None = None, industry: str | None = None) -> bool:
+    """A bank, lender or insurer: its reported tables have "Financing Profit" or "Financing Margin" lines (India), or
+    its industry says so (the US). EBITDA and debt-to-equity don't describe such a business (R7O-001)."""
+    if scr:
+        if scr.get("bank"):
+            return True
+        for table in ("pl", "quarters"):
+            if any(str(k).lower().startswith("financing") for k in ((scr.get(table) or {}).get("rows") or {})):
+                return True
+    low = str(industry or "").lower()
+    return bool(low) and any(w in low for w in US_LENDERS)
+
+
+def class_move_note(rows: list[dict]) -> str | None:
+    """A note when two holder classes moved by about the same amount in opposite directions over the year (ICICIBANK,
+    Jun 2026: FIIs -13.0 and Public +14.6 points while a depositary bank, 16.03%, appeared among the named holders):
+    that is how a holder reclassified from one class to another shows, not buying or selling of that size (R7O-012)."""
+    moved = [r for r in rows or [] if isinstance(r.get("change"), (int, float)) and abs(r["change"]) >= 5]
+    for i, a in enumerate(moved):
+        for b in moved[i + 1:]:
+            if (a["change"] > 0) != (b["change"] > 0) and abs(a["change"] + b["change"]) <= max(2.5, 0.2 * abs(a["change"])):
+                down, up = (a, b) if a["change"] < 0 else (b, a)
+                return (f"{down['label']} {down['change']:+.1f} and {up['label']} {up['change']:+.1f} points almost offset each other. "
+                        "That is how a holder moved from one class to the other in the company's filings shows (for example a "
+                        "depositary bank holding the shares behind its depositary receipts), not buying or selling of that size. "
+                        "The named holders list shows who.").replace("-", "−")
+    return None
 
 
 def us_pe(price, eps_ttm, source_pe):
@@ -392,15 +424,17 @@ class Research:
         return out
 
     def headlines(self, region: str, focus: str = "") -> list[dict]:
+        """The market's headlines for Pulse and the briefs: stories only, never a site's own title or a third party's
+        buying worded as advice ("We're buying the dip in a stock…", R7O-005)."""
         if region == "US" and self.finnhub.ready() and not focus:
             try:
                 return [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                          "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                        for n in self.finnhub.market_news()[:14] if n.get("headline")]
+                        for n in self.finnhub.market_news()[:20] if n.get("headline") and plain_headline(n["headline"])][:14]
             except SourceError:
                 pass
         q = (focus + " " if focus else "") + ("Nifty Sensex India stock market" if region == "IN" else "US stock market")
-        return self.news.search(q, region, limit=14)
+        return [h for h in self.news.search(q, region, limit=20) if plain_headline(h.get("headline"))][:14]
 
     # ---------- company profiles ----------
     def company(self, region: str, symbol: str) -> dict:
@@ -429,6 +463,7 @@ class Research:
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
         one = us_listing(p, r.get("listing"), M)
+        lender = is_lender(None, p.get("finnhubIndustry"))
         return {
             "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
             "currency": one["currency"], "reporting_currency": one["reporting_currency"],
@@ -436,7 +471,7 @@ class Research:
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
                                                             ("Listed since", p.get("ipo")), ("Exchange", one["exchange"]),
                                                             ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
-            "industry": p.get("finnhubIndustry"),
+            "industry": p.get("finnhubIndustry"), "bank": lender,
             "market_cap": one["market_cap"],
             "quote": {"price": q.get("c"), "change": q.get("d"), "change_pct": q.get("dp"), "open": q.get("o"),
                       "high": q.get("h"), "low": q.get("l"), "prev_close": q.get("pc"),
@@ -449,7 +484,7 @@ class Research:
             "metrics": _groups(
                 ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _item("Fwd P/E", M.get("forwardPE")),
                                _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
-                               _item("EV/EBITDA", M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
+                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
                                _item("PEG (fwd)", M.get("forwardPEG"))]),
                 ("Profitability", [_item("Gross margin", M.get("grossMarginTTM"), "%"),
                                    _item("Operating margin", M.get("operatingMarginTTM"), "%"),
@@ -482,7 +517,7 @@ class Research:
             # files under every big ticker (R5O-020)
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                     for n in (r["news"] or []) if n.get("headline")
+                     for n in (r["news"] or []) if n.get("headline") and plain_headline(n["headline"])
                      and (mentions(p["name"], sym, n["headline"]) or mentions(p["name"], sym, str(n.get("summary") or "")[:400]))][:8],
             "about": {"wiki": r["wiki"], "profile": None},
             "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
@@ -593,6 +628,8 @@ class Research:
                     prev = vals[-5] if len(vals) >= 5 else vals[0]
                     holding["rows"].append({"label": k, "value": vals[-1],
                                             "change": (vals[-1] - prev) if prev is not None else None})
+            holding["note"] = class_move_note(holding["rows"])
+        lender = is_lender(scr)
         return {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
             "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
@@ -604,9 +641,12 @@ class Research:
                 ("Valuation", [_item("P/E", s.get("pe")), _item("P/B", s.get("pb")),
                                _item("Div yield", s.get("div_yield"), "%"), _item("Book value", s.get("book_value"), "money"),
                                _item("Face value", s.get("face_value"), "money")]),
+                # a bank's or lender's "operating profit" is after interest paid, so an EBITDA margin (ICICIBANK -20.0%)
+                # and a debt-to-equity mean nothing for it: left out, as on its public page (R7O-001)
                 ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
-                                         _item("Net margin", s.get("net_margin"), "%"), _item("EBITDA margin", s.get("opm"), "%"),
-                                         _item("Debt", s.get("debt_cr"), "cr"), _item("Debt / equity", s.get("debt_equity"))]),
+                                         _item("Net margin", s.get("net_margin"), "%"),
+                                         _item("EBITDA margin", None if lender else s.get("opm"), "%"),
+                                         _item("Debt", s.get("debt_cr"), "cr"), _item("Debt / equity", None if lender else s.get("debt_equity"))]),
                 ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
                                   _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
                 ("Profit growth", [_item("Latest YoY", s.get("profit_yoy"), "%±"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
@@ -620,12 +660,12 @@ class Research:
             "pros": [], "cons": [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
-            "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "")],
+            "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "") and plain_headline(n.get("headline"))],
             "about": {"wiki": r2.get("wiki"), "profile": clean_profile((scr or {}).get("about"))},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
                      + ([{"label": "BSE", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
-            "summary": s, "numbers_at": (scr or {}).get("fetched_at"),
+            "summary": s, "numbers_at": (scr or {}).get("fetched_at"), "bank": lender,
             "testable": bool(inst) or not kite_ok,
             "instrument_id": inst["id"] if inst else None,
         }

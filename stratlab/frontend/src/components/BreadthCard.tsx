@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BROAD_GROUP, breadthApi, count, savedPick, share, type BreadthView } from "../lib/breadth";
-import { savedRegion } from "../lib/research";
+import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
 import { Stat } from "./kit";
@@ -12,7 +12,8 @@ import { marketTz } from "../lib/format";
 export function BreadthCard() {
   const [d, setD] = useState<BreadthView | null | "error">(null);
   useEffect(() => {
-    const region = savedRegion();
+    // the reader's own market, whatever market a company page was last looked up in (R6O-007 residue, round 7)
+    const region = homeRegion();
     const pick = savedPick(region);
     breadthApi.get(pick.group, "1y", true)
       .then((v) => (!v.today && !pick.picked && BROAD_GROUP[region] !== pick.group ? breadthApi.get(BROAD_GROUP[region], "1y", true) : v))

@@ -300,7 +300,8 @@ def test_a_stored_seed_is_restated_from_its_own_checks():
     v = library.restated(SEED)
     assert [c["status"] for c in v["checks"]] == ["pass", "skip", "pass", "pass"]           # nearby: never run on a group
     assert v["label"] == "Passed all 3 checks run"
-    assert v["fact_headline"] == "Passed all 3 checks run, and returned less than buy and hold."
+    # round 7 (R6V-005 leftover): a strategy behind buy and hold leads with the shortfall, then the checks it passed
+    assert v["fact_headline"] == "117.1 points behind buy and hold after costs; passed all 3 checks run."
     assert "doesn't depend on one exact" not in v["fact_summary"] and "nearby-settings check wasn't run" in v["fact_summary"]
     assert v["fact_summary"].startswith("It returned +55.8% after costs; buying and holding over the same period returned +172.9%, 117.1 points more.")
     assert not re.search(r"\b(buy now|should|recommend)\b", v["fact_summary"], re.I)
@@ -321,7 +322,7 @@ def test_the_public_library_gives_the_card_and_the_page_the_same_words(w):
     card = next(x for x in c.get("/public/library").json()["entries"] if x["id"] == SEED["id"])
     page = c.get(f"/public/library/{SEED['id']}").json()
     assert card["verdict"]["label"] == page["verdict"]["label"] == "Passed all 3 checks run"
-    assert page["verdict"]["fact_headline"].endswith("less than buy and hold.") and len(page["verdict"]["checks"]) == 4
+    assert page["verdict"]["fact_headline"].startswith("117.1 points behind buy and hold") and len(page["verdict"]["checks"]) == 4
 
 
 def test_a_new_verdict_never_claims_the_nearby_check_when_it_wasnt_run():

@@ -76,6 +76,21 @@ def _ran(st: dict, *keys: str, data=None) -> tuple[str | None, list[str]]:
     return at, ["Time from the stored data: this server hasn't run the job since its last restart."] if at else []
 
 
+def recorded_through(targets: list[str]) -> str | None:
+    """The last day any recorded option chain covers (the same summary Positioning shows), or None."""
+    from . import positioning
+    days = []
+    for t in targets:
+        name = str(t).split(":", 1)[-1]
+        try:
+            last = positioning.chain_coverage(name).get("last")
+        except Exception:
+            last = None
+        if last:
+            days.append(str(last))
+    return max(days) if days else None
+
+
 def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
 
@@ -84,8 +99,11 @@ KEPT = ("positioning", "etf", "results", "corp", "events", "fo", "surveillance",
 
 
 def rows() -> list[dict]:
+    """Every job's row. The rows are read side by side (each one's database and file reads), in the order listed, so
+    Overview's data feeds no longer wait for each job in turn (R7O-006: 8 to 23 s)."""
     m = _m()
     out: list[dict] = []
+    builds: list[tuple[str, object]] = []
     # every kept status in one database read, not one per job (R6O-023: Overview still "Loading the data feeds" at 5 s)
     try:
         from . import db
@@ -94,10 +112,7 @@ def rows() -> list[dict]:
         pass
 
     def add(name: str, build):
-        try:
-            out.append(build())
-        except Exception as e:                       # one unreadable job must not hide the others
-            out.append(_row(name.lower().replace(" ", "-"), name, "", None, error=f"Couldn't read its status: {str(e)[:120]}"))
+        builds.append((name, build))
 
     def breadth():
         s = m.breadth.status() or {}
@@ -220,8 +235,11 @@ def rows() -> list[dict]:
         st = _plain(m.recorder, "option-chains")
         if not st.get("enabled"):
             return _row("option-chains", "Option chain recording", "Off", None, None, [], [], note="Off. Set OPTION_SNAPSHOTS to record option chains.")
-        return _row("option-chains", "Option chain recording", f"Every {st.get('every_minutes')} minutes in market hours", st.get("last_at"),
-                    st.get("last_error"), [f"{st.get('today', 0)} saved today"])
+        # the recordings' own last day when this server hasn't recorded yet (R7O-006: "Not yet" beside Positioning's
+        # "StratLab has recorded NIFTY's chain since 28 Sep")
+        at, why = _ran(st, "last_at", data=lambda: recorded_through(st.get("targets") or []))
+        return _row("option-chains", "Option chain recording", f"Every {st.get('every_minutes')} minutes in market hours", at,
+                    st.get("last_error"), [f"{st.get('today', 0)} saved today"] + why)
     add("Option chain recording", recorder)
 
     def ibkr_daily():
@@ -254,6 +272,19 @@ def rows() -> list[dict]:
                     last, res.get("error"), log, [{"label": "Run now", "path": "/admin/library/seed"}],
                     running=m._seeding.locked(), note="Runs StratLab's own strategies through the backtest and verdict, which takes a few minutes.")
     add("Library seed", library_seed)
+
+    import contextvars
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(name, build):
+        try:
+            return build()
+        except Exception as e:                       # one unreadable job must not hide the others
+            return _row(name.lower().replace(" ", "-"), name, "", None, error=f"Couldn't read its status: {str(e)[:120]}")
+    with ThreadPoolExecutor(max_workers=8, thread_name_prefix="admin-jobs") as pool:
+        # each read in a copy of this request's context, so the settings read once above are shared
+        futures = [pool.submit(contextvars.copy_context().run, one, name, build) for name, build in builds]
+        out = [f.result() for f in futures]
     return out
 
 

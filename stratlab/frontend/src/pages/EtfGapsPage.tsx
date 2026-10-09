@@ -63,6 +63,7 @@ export function EtfGapsPage() {
     { key: "ng", header: "Close vs NAV", numeric: true, cell: (r) => (r.nav_gap != null
       // the close the gap is worked out from, with its day: its direction agrees with the close and NAV it names (R6O-018)
       ? <>{gapShort(r.nav_gap)}{r.nav_price_day && <span className="k-sub-line">{r.nav_price != null ? `${price(r.nav_price, "INR")}, ` : ""}{fmtDate(r.nav_price_day, { year: false })} close</span>}</>
+      : r.nav_doubtful ? <>–<span className="k-sub-line">left out: the close and the latest price disagree</span></>
       : r.nav_waiting && r.nav_date ? <>–<span className="k-sub-line">no close of {fmtDate(r.nav_date, { year: false })}</span></> : "–") },
     { key: "d30", header: "30 trading days", numeric: true, wrap: true, cell: (r) => (r.days
       ? <>{r.days.low === r.days.high ? gapShort(r.days.low) : <>{gapShort(r.days.low)} to {gapShort(r.days.high)}</>}<span className="k-sub-line">avg {gapShort(r.days.avg)}</span></> : "–") },

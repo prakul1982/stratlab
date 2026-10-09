@@ -92,7 +92,8 @@ export function TradeHome() {
     { ...TRADE_TOP[1], testId: "paper-summary",
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
     { ...TRADE_TOP[2],
-      status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")}` : "" },
+      // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
+      status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")} net after charges` : "" },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
   ];
   return (

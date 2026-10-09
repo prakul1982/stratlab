@@ -27,6 +27,7 @@ from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and
 IST = timezone(timedelta(hours=5, minutes=30))
 KEY = "networth:"
 LOG = "networthlog:"
+SKIP = "networthskip:"               # networthskip:<uid> = the month whose snapshot the user removed (no automatic one then)
 RUN = "networthrun"                  # the month the last 1st-of-the-month snapshot ran for
 MAX_ITEMS = 300                      # entries one user can keep (a safety cap; plans set the real limit)
 MAX_LOG = 400                        # snapshots kept
@@ -462,10 +463,28 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
     return rows
 
 
+def drop_snapshot(uid: str, day: str) -> list[dict] | None:
+    """Remove one day's snapshot from the history (R7O-013: a test's holdings left a snapshot the owner could only
+    clear by deleting everything). None when there was none that day; else the history left."""
+    rows = history(uid)
+    left = [h for h in rows if h["d"] != day]
+    if len(left) == len(rows):
+        return None
+    if day[:7] == today().strftime("%Y-%m"):
+        # this month's snapshot taken out on purpose: the next visit doesn't take the monthly one again at once
+        db.set_setting(SKIP + uid, day[:7])
+    if left:
+        db.set_setting(LOG + uid, json.dumps(left))
+    else:
+        db.delete_setting(LOG + uid)
+    return left
+
+
 def delete(uid: str):
     """Delete my net worth data: every entry and the history."""
     db.delete_setting(KEY + uid)
     db.delete_setting(LOG + uid)
+    db.delete_setting(SKIP + uid)
 
 
 # ---------- valuing ----------
@@ -894,7 +913,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
         if why and has_any:
             hist = record(uid, v["totals"], why, day)
-        elif has_any and not any(h["d"].startswith(this_month) for h in hist):
+        elif has_any and not any(h["d"].startswith(this_month) for h in hist) and db.get_setting(SKIP + uid) != this_month:
             hist = record(uid, v["totals"], "month", day)   # the 1st-of-the-month run missed this user: taken on the first visit
         plan = profile["_plan"]
         allowed = has_history(plan)
@@ -989,6 +1008,17 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         p = page(profile)
         return Response(to_csv(p, history(profile["id"])), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="stratlab-net-worth-{today().isoformat()}.csv"'})
+
+    @r.delete("/history/{day}")
+    def delete_snapshot(day: str, profile=Depends(current_profile)):
+        """Remove one day's snapshot from the history chart; the entries and the other days stay."""
+        throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
+        if not _date(day):
+            bad(400, "bad_day", "Pick a day from the history.")
+        left = drop_snapshot(profile["id"], day[:10])
+        if left is None:
+            bad(404, "not_found", "There's no snapshot on that day any more.")
+        return {"history": left, "history_count": len(left)}
 
     @r.delete("")
     def delete_all(profile=Depends(current_profile)):
