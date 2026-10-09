@@ -32,6 +32,7 @@
 /* the plain page: shown while the app starts, and if it never does (a script that failed to download, JavaScript turned off) */
 .boot { max-width: 520px; margin: 18vh auto 0; padding: 0 16px; display: flex; flex-direction: column; gap: 12px; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1d1b17; }
 .boot h1 { font: 600 28px/1.2 Georgia, serif; margin: 0; }
+.boot h2 { font: 600 18px/1.3 Georgia, serif; margin: 8px 0 0; }
 .boot p { margin: 0; }
 .boot a { color: inherit; }
 .boot-btn { align-self: flex-start; min-height: 44px; padding: 0 24px; border: 0; border-radius: 10px; background: #1d1b17; color: #fff; font: 600 15px system-ui, sans-serif; cursor: pointer; }
@@ -39,7 +40,7 @@
 @keyframes boot-in { to { opacity: 1; } }
 @media (prefers-color-scheme: dark) { .boot { color: #eee; } .boot-btn { background: #eee; color: #1d1b17; } }
 </style>
-<noscript><style>[data-boot] { display: none; }</style></noscript>
+<noscript><style>.boot-wait { opacity: 1; animation: none; }</style></noscript>
 <script src="/boot.js"></script>
 <script src="/theme.js"></script>
 <script src="/config.js"></script>
@@ -53,8 +54,8 @@
 </div>
 </div>
 <noscript>
-<div class="boot">
-<h1>StratLab needs JavaScript</h1>
+<div class="boot" style="margin-top: 24px">
+<p><b>StratLab needs JavaScript.</b></p>
 <p>StratLab runs in your browser, and JavaScript is turned off here. Turn it on for this site and reload to test ideas, research companies and track your money.</p>
 <p>Questions: <a href="mailto:support@stratlab.studio">support@stratlab.studio</a></p>
 </div>

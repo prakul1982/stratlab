@@ -38,9 +38,12 @@ const sourceRe = (source) => new RegExp("^" + source.replace(/\(\?:/g, "(?:") + 
 test("only the app's own addresses go to index.html; anything else is a real 404, and /config.js is a plain file", () => {
   const rule = vercel.rewrites.find((r) => r.destination === "/index.html");
   const re = sourceRe(rule.source);
-  const mine = [...links.APP_ROUTES.map((r) => r.replace(/:[A-Za-z]+/g, "x").replace(/\/\*$/, "/x")), "/terms", "/privacy", "/refunds", "/contact", "/verdict/abc", "/library/seed-ema-20-50-nifty50", "/faq", "/about", "/help"];
-  for (const p of mine.filter((x) => x !== "/")) assert.ok(re.test(p), `${p} would be a 404`);       // "/" is index.html itself
-  for (const p of ["/nope", "/nowhere-at-all", "/config.js", "/boot.js", "/assets/x.js", "/favicon.ico", "/wp-admin", "/stocks", "/.env", "/termsx", "/research2"]) assert.ok(!re.test(p), `${p} is the app's`);
+  // "/" is index.html itself, and /library and each StratLab strategy's /library/<id> are files of their own (the build writes
+  // them), so they aren't sent to index.html: an unknown strategy's address is a real 404 (R7V-008; until then this list
+  // expected /library/<id> to be rewritten, which made /library/seed-nope a 200 with the home page's tags)
+  const mine = [...links.APP_ROUTES.map((r) => r.replace(/:[A-Za-z]+/g, "x").replace(/\/\*$/, "/x")), "/terms", "/privacy", "/refunds", "/contact", "/verdict/abc", "/faq", "/about", "/help"];
+  for (const p of mine.filter((x) => x !== "/" && x !== "/library")) assert.ok(re.test(p), `${p} would be a 404`);
+  for (const p of ["/nope", "/nowhere-at-all", "/config.js", "/boot.js", "/assets/x.js", "/favicon.ico", "/wp-admin", "/stocks", "/.env", "/termsx", "/research2", "/library/seed-nope"]) assert.ok(!re.test(p), `${p} is the app's`);
   // the forwarded addresses come first, so /stocks/… and the sitemaps still reach the API
   assert.equal(vercel.rewrites.at(-1), rule, "the app's rewrite is the last one");
   // /stocks itself is the API's list of public company pages (R5V-013), forwarded like /stocks/…, not sent home
