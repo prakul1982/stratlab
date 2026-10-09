@@ -517,13 +517,21 @@ def reading() -> bool:
         return bool(_mem["running"]) and not (_mem["latest"] or {}).get("s")
 
 
-def check(now: float | None = None) -> dict:
+def age_words(days: float) -> str:
+    """How long ago a read was, in whole days: "today", "1 day ago", "3 days ago" (R9R-004: "1 days ago")."""
+    n = max(0, round(days))
+    return "today" if n == 0 else f"{n} day{'' if n == 1 else 's'} ago"
+
+
+def check(now: float | None = None, start_read: bool = True) -> dict:
     """Platform check "Fund costs (TER)": pass when the last good read had at least CHECK_SCHEMES schemes and is at
     most CHECK_DAYS old; a warning when it is older or smaller; a failure when nothing has ever been read. Starts a
-    read in the background when the copy is due one, so the next check sees it."""
+    read in the background when the copy is due one, so the next check sees it (not when `start_read` is off: the Admin
+    page asks again on every look, and shows the job's last result, the same one Data and jobs quotes)."""
     from .platform_check import _result
     try:
-        start()
+        if start_read:
+            start()
     except Exception as e:
         print("TER read not started:", type(e).__name__)
     st, now = status(), now or time.time()
@@ -532,7 +540,7 @@ def check(now: float | None = None) -> dict:
     if not st["stored"] or not st.get("last_ok"):
         return _result(name, area, "fail", "Nothing has been read from the TER disclosure yet." + (err or " A first read has started."))
     days = (now - float(st["last_ok"])) / 86400
-    what = (f"{st.get('schemes') or 0} schemes read for {st.get('month')}, {days:.0f} days ago; "
+    what = (f"{st.get('schemes') or 0} schemes read for {st.get('month')}, {age_words(days)}; "
             f"{st['stored']} stored over {st['months']} months.")
     if days > CHECK_DAYS:
         return _result(name, area, "warn", f"Stale: {what}{err}")

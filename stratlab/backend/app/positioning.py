@@ -516,6 +516,31 @@ def trading_today(now: datetime) -> bool:
 WHAT = {"participants": "participant files", "cash": "FII/DII numbers"}
 
 
+def run_sentence(res) -> tuple[str, bool]:
+    """(a sentence, waiting) for an evening run's result {"participants", "cash", "chains"}: "Participant files not out yet;
+    FII/DII numbers in; 5 option chains summarised." `waiting` is True while a file hasn't been published, so Admin shows
+    it as Check rather than a green OK (R9R-006: the raw dict beside OK while participants were missing)."""
+    if not isinstance(res, dict):
+        return (str(res or ""), False)
+    waiting = False
+    parts = []
+    for key, label in (("participants", "Participant files"), ("cash", "FII/DII numbers")):
+        v = res.get(key)
+        if v is None:
+            continue
+        if v == "ok":
+            parts.append(f"{label} in")
+        elif v == "missing":
+            waiting = True
+            parts.append(f"{label} not out yet")
+        else:
+            parts.append(f"{label} couldn't be read ({str(v)[:80]})")
+    n = res.get("chains")
+    if isinstance(n, int) and not isinstance(n, bool):
+        parts.append(f"{n} option chain{'' if n == 1 else 's'} summarised")
+    return ("; ".join(parts) + "." if parts else "", waiting)
+
+
 def _day_words(iso: str | None) -> str:
     try:
         d = date.fromisoformat(str(iso)[:10])

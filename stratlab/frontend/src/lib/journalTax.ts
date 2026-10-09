@@ -13,7 +13,9 @@ export function journalVsTax(fno: boolean): string[] {
       + "The tax report lists every sale line on its own and files each one as short-term or long-term. A share bought in three lots "
       + "and sold in two pieces is one round trip here and several sale lines there, so the counts differ before any rupee does.",
     "The journal's headline is the profit or loss of those round trips after the charges it works out for each trade, with the figure "
-      + "before charges beside it. The tax report totals gains and losses by its own rules for each sale line, so the two are not the same sum.",
+      + "before charges beside it. The tax report totals gains and losses by its own rules for each sale line, so the two are not the same sum. "
+      + "Sale lines that came from the tax report keep its sale values and the charges its file lists, so on those lines the journal's net after charges "
+      + "and the tax report's gain are the same rupees; trades from a tradebook are charged at the published rates.",
     fno
       ? "F&O, commodity and currency trades are business income in the tax report, which keeps them as one total for each financial year "
         + "(the card below the trades). They are not round trips in this journal's stats. Upload the tax P&L's trade-by-trade files to count them here."
