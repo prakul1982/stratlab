@@ -178,7 +178,9 @@ def test_page_carries_the_live_card(w, monkeypatch):
     v = c.get("/invest/breadth?group=nifty500", headers=h).json()
     assert v["live"]["state"] == "unavailable"                         # nothing stored yet today
     brief = c.get("/invest/breadth?group=nifty500&brief=true", headers=h).json()
-    assert brief["live"] is None
+    # R7T-010 (changed on purpose): the Invest home's brief read carries the live card too, its newest point only, so the
+    # home card is live while the market trades instead of showing the last close beside a live breadth page
+    assert brief["live"]["state"] == "unavailable" and len(brief["live"]["points"]) <= 1
     us = c.get("/invest/breadth?group=us_large", headers=h).json()
     assert us["live"] is None
     assert c.get("/admin/breadth", headers=headers("admin-token")).json()["live"] is not None

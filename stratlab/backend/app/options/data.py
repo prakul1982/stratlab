@@ -199,7 +199,8 @@ class OptionsData:
                     ask = next((x["price"] for x in d.get("sell", []) if x.get("price")), None)
                     ts = v.get("timestamp") or v.get("last_trade_time")
                     q = {"ltp": v.get("last_price"), "bid": bid, "ask": ask, "oi": v.get("oi"),
-                         "volume": v.get("volume"), "ts": ts.isoformat() if hasattr(ts, "isoformat") else ts}
+                         "volume": v.get("volume"), "ts": ts.isoformat() if hasattr(ts, "isoformat") else ts,
+                         "close": (v.get("ohlc") or {}).get("close")}         # the previous session's close
                     self._qcache[k] = (self._last_quote, q)
             for k in need:
                 if k in self._qcache:

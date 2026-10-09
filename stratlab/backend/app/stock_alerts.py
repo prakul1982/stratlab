@@ -68,10 +68,11 @@ def _group_in(whole: str) -> str:
     return ",".join(parts) + "," + tail
 
 
-def money(v: float, region: str) -> str:
-    """₹3,000 or $187.25: whole numbers without decimals, others to two places."""
+def money(v: float, region: str, like: float | None = None) -> str:
+    """₹3,000 or $187.25: whole numbers without decimals, others to two places. `like`: a figure written beside this
+    one, so both have the same places (R7T-014: "crossed above ₹258.90 (now ₹259)" is "(now ₹259.00)")."""
     sym = "₹" if region == "IN" else "$"
-    dp = 0 if abs(v - round(v)) < 0.005 else 2
+    dp = 0 if abs(v - round(v)) < 0.005 and (like is None or abs(like - round(like)) < 0.005) else 2
     s = f"{abs(v):,.{dp}f}"
     if region == "IN":
         whole, _, frac = s.replace(",", "").partition(".")
@@ -327,7 +328,7 @@ def evaluate(a: dict, snap: dict) -> tuple[str | None, dict]:
     if k == "price":
         fired, st = _cross(a, st, p, v)
         if fired:
-            text = f"{sym} crossed {op} {money(v, region)} (now {now})"
+            text = f"{sym} crossed {op} {money(v, region, p)} (now {money(p, region, v)})"
     elif k == "move":
         chg = snap.get("change_pct")
         if _finite(chg) and ((op == "up" and chg >= v) or (op == "down" and chg <= -v) or (op == "either" and abs(chg) >= v)):
@@ -348,7 +349,7 @@ def evaluate(a: dict, snap: dict) -> tuple[str | None, dict]:
                 avg = float(c.tail(a["period"]).mean())
                 fired, st = _cross(a, st, p, avg)
                 if fired:
-                    text = f"{sym} crossed {op} its {a['period']}-day average of {money(round(avg, 2), region)} (now {now})"
+                    text = f"{sym} crossed {op} its {a['period']}-day average of {money(round(avg, 2), region, p)} (now {money(p, region, round(avg, 2))})"
             elif k == "rsi":
                 r = rsi(c, RSI_PERIOD).iloc[-1]
                 if pd.isna(r):
@@ -371,11 +372,11 @@ def evaluate(a: dict, snap: dict) -> tuple[str | None, dict]:
             if k == "high52":
                 hi = max(float(b["h"]) for b in year)
                 if p > hi:
-                    text = f"{sym} traded above its 52-week high of {money(hi, region)} (now {now})"
+                    text = f"{sym} traded above its 52-week high of {money(hi, region, p)} (now {money(p, region, hi)})"
             else:
                 lo = min(float(b["l"]) for b in year)
                 if p < lo:
-                    text = f"{sym} traded below its 52-week low of {money(lo, region)} (now {now})"
+                    text = f"{sym} traded below its 52-week low of {money(lo, region, p)} (now {money(p, region, lo)})"
     if text and a.get("repeat") and (a.get("state") or {}).get("day") == today:
         text = None                     # a repeating alert fires at most once a day (its crossings still count)
     if text:

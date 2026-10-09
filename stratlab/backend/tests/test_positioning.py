@@ -413,7 +413,10 @@ def test_chain_view_live_with_change_and_iv_stats(w):
     if prev:                                         # the expiry was recorded the day before: change by strike
         row = next(r for r in v["rows"] if r["strike"] == v["atm"])
         was = next(r for r in prev["chain"] if r[0] == v["atm"])
-        assert row["call_chg"] == row["call_oi"] - was[4]
+        # R7T-002: the chain's figures are contracts (lots), as the exchange counts them; the recordings keep the feed's
+        # shares, so the day before's open interest is its shares over its lot
+        assert v["unit"] == "lots" and v["lot"]
+        assert row["call_chg"] == row["call_oi"] - round(was[4] / (prev.get("lot") or v["lot"]))
     free = P.chain_view(main.options_data, "NIFTY", "current", full=False, now=now)
     assert free["iv"] is None and free["atm_iv"] == v["atm_iv"]
 

@@ -3592,7 +3592,12 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         err(400, "bad_range", "Pick a time range from the list.")
     out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
-    out["live"] = None if brief else breadth_live.view(group, ready=kite.ready())
+    live = breadth_live.view(group, ready=kite.ready())
+    if brief and live:
+        # the Invest home's card: the newest live point only (R7T-010: the card showed the 8 Oct close after the open
+        # while the breadth page was live)
+        live = {**live, "points": live["points"][-1:]}
+    out["live"] = live
     return ok(out)
 
 
@@ -4288,11 +4293,20 @@ def kite_callback(request_token: str = "", status: str = "", state: str = ""):
     return HTMLResponse(f"<p>{html_escape(after_login())}</p><p><a href=\"{html_escape(settings.PUBLIC_SITE_URL)}/admin\">Back to the admin page</a></p>")
 
 
+def session_counts(sessions: list) -> dict:
+    """The running paper sessions Admin's live price feed light counts: the ones that need the broker's streaming feed
+    (India's cash and futures; other markets are polled), and India's options sessions, which read the broker's quotes
+    every few seconds instead of the feed and are running all the same (R7T-012: "Idle: no India paper sessions running"
+    beside a running NIFTY options session)."""
+    return {"india_sessions": sum(1 for x in sessions if not getattr(x, "polled", False)),
+            "options_sessions": sum(1 for x in sessions if getattr(x, "kind", None) == "options")}
+
+
 def server_status() -> dict:
     return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
             "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
             # the sessions that need the broker's live feed (India); other markets are polled and never use it
-            "india_sessions": sum(1 for x in list(manager.sessions.values()) if not getattr(x, "polled", False)),
+            **session_counts(list(manager.sessions.values())),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
@@ -5170,7 +5184,8 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "s
 
 def news_view(issue: dict) -> dict:
     out = {k: issue.get(k) for k in NEWS_FIELDS}
-    out["html"] = (out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
+    # the email as it is sent: written from the stored issue the page shows (R7T-009)
+    out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out
 
 

@@ -77,6 +77,10 @@ class FakeKiteConnect:
             token += 1
             self.rows["BSE"].append({"instrument_token": token, "exchange_token": code, "tradingsymbol": ts, "name": name,
                                      "segment": "BSE", "instrument_type": itype, "lot_size": 1, "expiry": None, "strike": 0})
+        # BSE's own index (its quotes and candles: the broker lists it under BSE's indices, not among BSE-only companies)
+        token += 1
+        self.rows["BSE"].append({"instrument_token": token, "exchange_token": 1, "tradingsymbol": "SENSEX", "name": "SENSEX",
+                                 "segment": "INDICES", "instrument_type": "EQ", "lot_size": 1, "expiry": None, "strike": 0})
         for name, (_, gap, lot) in OPTIONS.items():
             for e in _expiries():
                 token += 1

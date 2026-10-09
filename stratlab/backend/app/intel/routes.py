@@ -100,14 +100,23 @@ def prices_as_of(c: dict) -> str:
 def market_open(region: str, now: datetime | None = None) -> bool:
     """Whether the company's market is trading now (its hours, on one of its trading days): out of hours the price is
     the last close and the page says so, instead of calling a standing price "today's"."""
-    from zoneinfo import ZoneInfo
+    from .company import market_open as is_open
+    return is_open(region, now)
+
+
+def price_phase(region: str, c: dict, now: datetime | None = None) -> str | None:
+    """"pre_open" when an Indian page's price is today's pre-open price, read between 09:00 and 09:15 IST, before the
+    session's first trade: an indicative price, never the last close (R7T-004: "Last close ₹1,179.00 +1.00 on the day"
+    at 09:13 IST beside an 8 Oct close of ₹1,178.00); None otherwise."""
+    from .company import market_today, session_day
     from ..data.calendar import is_trading_day
-    from ..data.markets import BY_ID
-    m = BY_ID.get(region)
-    if not m or not m.get("hours"):
-        return False
-    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(m["tz"]))
-    return is_trading_day(region, local.date()) and m["hours"]["open"] <= local.strftime("%H:%M") < m["hours"]["close"]
+    if region != "IN":
+        return None
+    local = (now or datetime.now(timezone.utc)).astimezone(IST)
+    if not is_trading_day("IN", local.date()) or not ("09:00" <= local.strftime("%H:%M") < "09:15"):
+        return None
+    at = (c.get("quote") or {}).get("at")
+    return "pre_open" if session_day(at, "IN") == market_today("IN", now) else None
 
 
 @router.get("/company/{region}/{symbol}")
@@ -116,44 +125,112 @@ def company(region: str, symbol: str, profile=Depends(current_profile)):
     its market is trading now (else the price is the last close)."""
     r = region_of(region)
     c = page_figures(r, source_call(lambda: hub.company(r, symbol_of(symbol))))
-    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r)})
+    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c)})
 
 
 def page_figures(region: str, c: dict) -> dict:
     """The company page's own figures, as the page and its AI read both use them: the dividend yield from the
     dividends listed on the page (R6O-008: Eni's 6.1% beside $1.87 of listed payments, TCS's AI read on another
-    yield than the page's)."""
+    yield than the page's); a US company's market value, P/E and EPS on its public page's definitions (R7T-008); the
+    52-week range checked against the price and taking in today's high and low (R7T-001, R7T-007)."""
+    from .company import with_today_range
     out = with_dividend_yield(c, stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
-    return with_public_eps(region, out)
+    return with_today_range(per_share_checked(with_public_eps(region, out)))
 
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
 public_facts = None      # (region, symbol) -> the stored public page's facts or None (set by main), never building one
 
 
+def _metric(c: dict, label: str):
+    return next((i for g in c.get("metrics") or [] for i in g["items"] if i["label"] == label), None)
+
+
+def _drop_metric(c: dict, label: str) -> dict:
+    groups = [{**g, "items": [i for i in g["items"] if i["label"] != label]} for g in c.get("metrics") or []]
+    return {**c, "metrics": [g for g in groups if g["items"]]}
+
+
+def _put_metric(c: dict, label: str, value, note: str | None, group: str = "Valuation", unit: str = "x") -> dict:
+    """The page with a Key numbers item set (added to its group when the page had none)."""
+    from .company import _set_metric
+    if _metric(c, label):
+        return _set_metric(c, label, value, note)
+    groups = [dict(g) for g in c.get("metrics") or []]
+    item = {"label": label, "value": value, "unit": unit, **({"note": note} if note else {})}
+    for g in groups:
+        if g["title"] == group:
+            g["items"] = [item, *g["items"]]
+            break
+    else:
+        groups.insert(0, {"title": group, "items": [item]})
+    return {**c, "metrics": groups}
+
+
 def with_public_eps(region: str, c: dict) -> dict:
-    """A US company's P/E and EPS on the same reported earnings as its public page (R7O-004: AAPL 39.02 in the app
-    against 38.1 on /stocks): earnings per share over the last four reported quarters from the company's filings, the
-    public page's figure, set against this page's price. Unchanged without a stored public page, or one with no P/E
-    (a loss, or a market value that failed its checks), or for depositary shares (the app shows no EPS for them)."""
+    """A US company's market value, P/E and EPS on the same definitions and reported figures as its public page, set
+    against this page's price (R7O-004, R7V-002): earnings per share over the last four reported quarters from the
+    company's filings (or the latest year's, said so, for a company that reports yearly), and the market value of every
+    class of its shares in the listed share's terms (R7T-001: BRK-B's P/E was 0.01 on Class A's $59,668 of EPS; R7T-008:
+    Eni's $79.6B and P/E 13.42 against $87.5B and 29.9 on its public page). A public page that shows no P/E (a loss, a
+    market value that failed its checks, earnings too old) gives none here either. Unchanged without a stored public page."""
     if region != "US" or not callable(public_facts):
         return c
     try:
         f = public_facts("US", c["symbol"]) or {}
     except Exception:
         return c
-    from .company import _set_metric
     from .net import num
-    pe0, p0, live = num(f.get("pe")), num(f.get("price")), num((c.get("quote") or {}).get("price"))
-    has_eps = any(i["label"] == "EPS TTM" for g in c.get("metrics") or [] for i in g["items"])
-    if not pe0 or pe0 <= 0 or not p0 or not live or not has_eps or f.get("pe_basis") == "year":
+    from .. import stock_pages
+    p0, live = num(f.get("price")), num((c.get("quote") or {}).get("price"))
+    if not f or not p0 or p0 <= 0 or not live:
         return c
-    # the public page's own earnings per share (R7V-002: one P/E definition, the close over earnings per share for the
-    # last four reported quarters), else what its P/E and price imply
+    k = live / p0
+    out = c
+    cap0 = num(f.get("market_cap"))
+    if cap0 is not None:
+        shown = stock_pages.shown_cap(f)
+        out = {**out, "market_cap": shown * 1e6 * k if shown else None}
+    pe0 = stock_pages.shown_pe(f)
+    if num(f.get("pe")) is None and "pe" not in f:
+        return out
+    if not pe0:
+        # the public page's P/E is n/a: so is the app's, and an EPS from another class of shares goes with it
+        out = _drop_metric(out, "P/E")
+        eps = _metric(out, "EPS TTM")
+        if eps and num(eps.get("value")) and num(eps["value"]) > live:
+            out = _drop_metric(out, "EPS TTM")
+        return out
     eps = num(f.get("eps")) or p0 / pe0
-    note = "Earnings per share over the last four reported quarters, from the company's filings (as on its public page)"
-    out = _set_metric(c, "EPS TTM", round(eps, 2), note)
-    return _set_metric(out, "P/E", round(live / eps, 2), "The price over EPS TTM")
+    year = f.get("pe_basis") == "year" and f.get("pe_end")
+    basis = (f"Earnings per share for the {stock_pages.pe_label(f)[5:-1]}, from the company's filings (it reports yearly), as on its public page"
+             if year else "Earnings per share over the last four reported quarters, from the company's filings (as on its public page)")
+    if _metric(out, "EPS TTM"):
+        out = _put_metric(out, "EPS TTM", round(eps, 2), basis, "Per share and returns", "money")
+    return _put_metric(out, "P/E", round(live / eps, 2), ("The price over earnings per share for the " + stock_pages.pe_label(f)[5:-1]
+                                                          + " (the company reports yearly)") if year else "The price over EPS TTM")
+
+
+def per_share_checked(c: dict) -> dict:
+    """Per-share figures that can't be this share's are left out (R7T-001: BRK-B's page showed Class A's EPS of $59,668
+    and a P/E of 0.01 beside a $511 Class B price): an EPS above the price, a P/E under 1, and quarterly earnings per share
+    above the price, with the next quarter's estimate."""
+    from .net import num
+    px = num((c.get("quote") or {}).get("price"))
+    if not px:
+        return c
+    out = c
+    eps, pe = _metric(c, "EPS TTM"), _metric(c, "P/E")
+    if eps and num(eps.get("value")) is not None and abs(num(eps["value"])) > px:
+        out = _drop_metric(_drop_metric(out, "EPS TTM"), "P/E")
+    elif pe and num(pe.get("value")) is not None and 0 < num(pe["value"]) < 1:
+        out = _drop_metric(out, "P/E")
+    rows = out.get("earnings") or []
+    if any(abs(num(e.get("actual")) or 0) > px or abs(num(e.get("estimate")) or 0) > px for e in rows):
+        out = {**out, "earnings": []}
+        if out.get("next_earnings"):
+            out = {**out, "next_earnings": {**out["next_earnings"], "eps_estimate": None}}
+    return out
 
 
 def stored_dividends(region: str, symbol: str) -> list[dict]:
@@ -244,18 +321,24 @@ def company_key_facts(region: str, c: dict) -> list[dict]:
 
 @router.get("/pulse/ai")
 def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile=Depends(current_profile)):
+    """The AI's read of the market's mood, from the index levels and headlines. It is written for the levels as they are:
+    kept only while they stay in the same session and about the same moves (a read from before the open is written again
+    after it, R7T-003), and never written while an index it would cite is still a previous session's level."""
     r, f = region_of(region), focus.strip()[:60]
+    indices = source_call(lambda: hub.indices(r))
+    stale = [i["name"] for i in indices if i.get("stale")]
+    if stale:
+        return ok({"unavailable": True, "code": "stale", "message": stale_words(stale)})
     hour = datetime.now(IST).strftime("%Y-%m-%d %H")
 
     def build():
-        indices = source_call(lambda: hub.indices(r))
         try:
             news = hub.headlines(r, f)
         except SourceError:
             news = []
         return A.pulse(r, f, indices, news, _ai, closed=not market_open(r))
     try:
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour), 3600, refresh, build))
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r))), 3600, refresh, build))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it
@@ -263,6 +346,20 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+def stale_words(names: list[str]) -> str:
+    """Why there is no mood read: an index is still at a previous session's level while the market trades."""
+    verb = "hasn't" if len(names) == 1 else "haven't"
+    return (f"{', '.join(names)} {verb} updated for today's session yet, so no mood is written on a previous session's "
+            "numbers. Ask again in a minute.")
+
+
+def mood_key(indices: list[dict], is_open: bool) -> tuple:
+    """What a mood read is written for: whether the market is open, and each index's session and its move to the nearest
+    half percent. A read is kept while these stay the same and written again when they change (the open, a turn)."""
+    import math
+    return (is_open, tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
 
 
 @router.get("/sector")
@@ -293,15 +390,17 @@ def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=D
     r, sa, sb = region_of(region), symbol_of(a), symbol_of(b)
     if sa == sb:
         err(400, "same_symbol", "Pick two different companies.")
-    ca = source_call(lambda: hub.company(r, sa))
-    cb = source_call(lambda: hub.company(r, sb))
+    # each side's figures as its own page shows them (market value, P/E, range)
+    ca = page_figures(r, source_call(lambda: hub.company(r, sa)))
+    cb = page_figures(r, source_call(lambda: hub.company(r, sb)))
     try:
         verdict = ai_call(profile, "compare", (r, sa, sb, datetime.now(IST).date().isoformat()), 12 * 3600, refresh,
                           lambda: A.compare(ca, cb, _ai))
     except HTTPException as e:
         verdict = {"error": (e.detail or {}).get("message") if isinstance(e.detail, dict) else str(e.detail)}
     is_open = market_open(r)
-    return ok({"a": {**ca, "market_open": is_open}, "b": {**cb, "market_open": is_open}, "ai": verdict})
+    return ok({"a": {**ca, "market_open": is_open, "phase": price_phase(r, ca)}, "b": {**cb, "market_open": is_open, "phase": price_phase(r, cb)},
+               "ai": verdict})
 
 
 # ---------- watchlist (one row per user in app_settings) ----------

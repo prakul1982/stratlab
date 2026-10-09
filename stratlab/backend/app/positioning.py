@@ -810,10 +810,31 @@ def _read_live(options_data, names: list[str], choice: str) -> dict[str, dict]:
             if spot is None or not any(r["ce"] or r["pe"] for r in rows):
                 continue
             got[n] = {"expiry": c.expiry, "expiries": options_data.expiries(NAMES[n], n)[:6], "spot": spot,
-                      "chain": _compact({"rows": rows}), "taken_at": now, "source": "live", "at_close": source == "close"}
+                      "chain": _compact({"rows": rows}), "taken_at": now, "source": "live", "at_close": source == "close",
+                      "lot": getattr(c, "lot", None)}
+            if source == "close":
+                got[n] = at_the_close(n, got[n], spots.get(sk[n]) if sk[n] else None)
     except Exception as e:
         print("positioning: live chains", ",".join(names), str(e)[:120])
     return got
+
+
+def at_the_close(name: str, live: dict, spot_q: dict | None) -> dict:
+    """A chain read out of hours stands for the last close (chain_time): the recording of that close, with the spot
+    recorded with it, when there is one, so the chain, its ATM IV and PCR are the very figures the day's recorded history
+    keeps (R7T-005: before 9 Oct's open the chain "at the close, 8 Oct" used 9 Oct's pre-open spot, 22,314.95 against an
+    8 Oct close of 22,231.80, and one day carried three IVs). Without a recording, the close's own spot: the index's
+    previous close while the next session hasn't opened, else its last level."""
+    close_at = datetime.fromisoformat(live["taken_at"])
+    for r in recorded_last(name, close_at.date()):
+        if str(r.get("expiry"))[:10] == live["expiry"] and isinstance(r.get("chain"), list) and r.get("spot"):
+            return {**live, "spot": r["spot"], "chain": r["chain"], "at_close": True, "close_recording": True,
+                    "taken_at": _taken(r).astimezone(IST).isoformat(timespec="minutes"), "lot": r.get("lot") or live.get("lot")}
+    today = ist_now().date()
+    prev = (spot_q or {}).get("close")
+    if close_at.date() < today and prev:
+        return {**live, "spot": prev}
+    return live
 
 
 def chain_time(now: datetime) -> tuple[str, str]:
@@ -854,16 +875,55 @@ def recorded_chain(name: str, choice: str, today: date) -> dict | None:
             if pick is None:
                 continue
         return {"expiry": str(pick["expiry"])[:10], "expiries": exps, "spot": pick.get("spot"), "chain": pick["chain"],
-                "taken_at": _taken(pick).astimezone(IST).isoformat(timespec="minutes"), "source": "recorded"}
+                "taken_at": _taken(pick).astimezone(IST).isoformat(timespec="minutes"), "source": "recorded", "lot": pick.get("lot")}
     return None
 
 
+def lot_of(options_data, name: str, expiry: str | None, got: dict | None = None) -> int | None:
+    """Shares in one contract of an index's options: the chain's own (recorded with it, or the day's instrument list's),
+    else the list's for that expiry; None when neither says."""
+    lot = (got or {}).get("lot")
+    if not lot and expiry:
+        try:
+            c = options_data.contracts(NAMES[name], name, expiry) if options_data.ready() else None
+            lot = getattr(c, "lot", None)
+        except Exception:
+            lot = None
+    try:
+        lot = int(lot) if lot else None
+    except (TypeError, ValueError):
+        lot = None
+    return lot if lot and lot > 0 else None
+
+
+def in_lots(v, lot: int | None):
+    """A count of shares as contracts (lots), as the exchange's chain and the participant table count them (R7T-002: 1.4
+    crore "contracts" at NIFTY 23,000 CE were shares, 65 to a lot; the exchange showed 216,713). Unchanged without a lot."""
+    if v is None or not lot:
+        return v
+    return int(round(v / lot))
+
+
+def chain_now(options_data, name: str, choice: str, now: datetime) -> tuple[dict | None, datetime | None, dict | None]:
+    """(the chain, the time it is of, its stats) for an index now: the live chain, else the newest recording. One reading
+    and one computation for every place that shows it (the chain panel, the PCR table and the VIX card's ATM IV): a
+    recording's or a close's own time, never the moment of asking (R7T-005: ATM IV 14.40% on the VIX card, 13.3% in the
+    chain panel and 13.51 recorded for the same 8 Oct close)."""
+    got = live_chain(options_data, NAMES[name], name, choice) or recorded_chain(name, choice, now.date())
+    if not got:
+        return None, None, None
+    at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" or got.get("at_close") else now
+    stats = chain_stats(sorted(got["chain"], key=lambda r: r[0]), got.get("spot"), got["expiry"], at)
+    return got, at, stats
+
+
 def chain_view(options_data, name: str, choice: str = "current", full: bool = False, now: datetime | None = None) -> dict:
-    """One index's option chain as facts: open interest and its change by strike, the PCR, max pain, the strikes with
-    the most open interest and the ATM IV; with `full` (Basic), the IV's percentile and rank over recorded days."""
+    """One index's option chain as facts: open interest and its change by strike, in contracts (lots), the PCR, max pain,
+    the strikes with the most open interest and the ATM IV; with `full` (Basic), the IV's percentile and rank over
+    recorded days. The headline PCR is the one the recorded history keeps: open interest within NEAR strikes of the money."""
     now = now or ist_now()
     ex = NAMES[name]
-    got = live_chain(options_data, ex, name, choice) or recorded_chain(name, choice, now.date())
+    got, at, stats = chain_now(options_data, name, choice, now)
     out = {"name": name, "exchange": ex, "choice": choice, "source": None, "rows": [], "note": NOTE,
            "recorded": chain_coverage(name)}
     if not got:
@@ -872,21 +932,27 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     expiry = got["expiry"]
     # a chain's own time: a recording's, or the close a live read before the open stands for (its change is then against
     # the day before that close, not against the close itself, which made every change zero before 9:15 IST)
-    at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" or got.get("at_close") else now
-    stats = chain_stats(rows, got.get("spot"), expiry, at)
     taken_day = at.astimezone(IST).date()
     prev = recorded_before(name, expiry, taken_day)
+    lot = lot_of(options_data, name, expiry, got)
+    lot_before = lot_of(options_data, name, expiry, prev) or lot if prev else None
     before = {r[0]: r for r in (prev or {}).get("chain") or []}
     strikes = []
     for r in near(rows, got.get("spot"), 20):
         p = before.get(r[0])
-        co, po = _at(r, 4), _at(r, 8)
-        strikes.append({"strike": r[0], "call_oi": co, "put_oi": po, "call_vol": _at(r, 9), "put_vol": _at(r, 10),
-                        "call_chg": co - _at(p, 4) if p and co is not None and _at(p, 4) is not None else None,
-                        "put_chg": po - _at(p, 8) if p and po is not None and _at(p, 8) is not None else None})
+        co, po = in_lots(_at(r, 4), lot), in_lots(_at(r, 8), lot)
+        pco, ppo = (in_lots(_at(p, 4), lot_before), in_lots(_at(p, 8), lot_before)) if p else (None, None)
+        strikes.append({"strike": r[0], "call_oi": co, "put_oi": po, "call_vol": in_lots(_at(r, 9), lot), "put_vol": in_lots(_at(r, 10), lot),
+                        "call_chg": co - pco if co is not None and pco is not None else None,
+                        "put_chg": po - ppo if po is not None and ppo is not None else None})
+    top = {k: ({**v, "oi": in_lots(v["oi"], lot)} if v else None) for k, v in (stats["top"] or {}).items()}
+    near_pcr = pcr(near(rows, got.get("spot")))
     out.update(source=got["source"], at_close=bool(got.get("at_close")), as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
                spot=got.get("spot"), rows=strikes, change_from=_taken(prev).astimezone(IST).isoformat(timespec="minutes") if prev else None,
-               strikes_counted=len(rows), **{k: stats[k] for k in ("pcr", "pcr_near", "pcr_near_vol", "max_pain", "top", "atm_iv", "atm")})
+               strikes_counted=len(rows), lot=lot, unit="lots" if lot else "shares", near_strikes=NEAR, top=top,
+               pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")})
+    out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
+                  **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
     out["iv"] = None
     if full:
         past = [p["atm_iv"] for p in chain_series(name) if p["day"] < taken_day.isoformat()]
@@ -895,19 +961,21 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
 
 
 def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NAMES)) -> list[dict]:
-    """Each index's nearest-expiry PCR now (the live chain, else the newest recording)."""
+    """Each index's nearest-expiry PCR now (the live chain, else the newest recording): the headline figures over the
+    strikes near the money that the recorded history keeps (NEAR each side), so the table, the chain panel and the
+    history give one PCR for one chain; `pcr_all` over every strike read."""
     now = now or ist_now()
     out = []
-    live = live_chains(options_data, tuple(names), "current")
+    live_chains(options_data, tuple(names), "current")          # every index's quotes in one go; chain_now reads them back
     for name in names:
         ex = NAMES[name]
-        got = live.get(name) or recorded_chain(name, "current", now.date())
+        got, _, _ = chain_now(options_data, name, "current", now)
         if not got:
             out.append({"name": name, "exchange": ex, "source": None})
             continue
-        p = pcr(got["chain"])
-        out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": p["oi"], "pcr_vol": p["vol"],
-                    "pcr_near": pcr(near(got["chain"], got.get("spot")))["oi"], "spot": got.get("spot"),
+        p, w = pcr(got["chain"]), pcr(near(got["chain"], got.get("spot")))
+        out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": w["oi"], "pcr_vol": w["vol"],
+                    "pcr_near": w["oi"], "pcr_all": p["oi"], "near_strikes": NEAR, "spot": got.get("spot"),
                     "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
     return out
 

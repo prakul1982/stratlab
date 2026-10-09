@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from ..models import OptionStrategy
 from .data import OptionsData, freeze
-from .engine import VIX_KEY, OptionsEngine
+from .engine import VIX_KEY, OptionsEngine, next_entry
 from . import strikes as SR
 from .signal import SignalFeed
 
@@ -150,6 +150,9 @@ def account(e: OptionsEngine, q: dict | None) -> dict:
     return {"capital": e.s.sizing.capital, "equity": e.equity(q), "cash": e.cash,
             "realised": sum(t["pnl"] for t in e.trades), "today": e.day_realised, "halted": e.halted,
             "entries_today": e.entries_today, "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
+            # the earliest time the gap between trades allows the next entry (None when there's no gap, or it runs past the
+            # day's last entry), for the page's "Next entry from 13:41" (R7T-013)
+            "cool_until": e.cool_until, "next_entry": next_entry(e.cool_until, e.s.timing) if not e.pos else None,
             "unrealised": (e.mtm(q or {}) - e.pos["costs"]) if e.pos else 0.0}
 
 
