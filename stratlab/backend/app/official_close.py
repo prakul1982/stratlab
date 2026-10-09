@@ -273,7 +273,8 @@ def day_close(symbol: str, day, kind: str = "cas", exchange: str = "NSE", now: d
     got = None
     if exchange == "NSE":                             # the exchange's file names NSE's stocks
         got = _stored_quick(d)
-        if not got and fetch and _src.get("files") and (d < now.date().isoformat() or now.hour >= PUBLISHED_AT):
+        if (not got and fetch and _src.get("files") and _mem.get(("asked", d)) is None
+                and (d < now.date().isoformat() or now.hour >= PUBLISHED_AT)):
             got = closes(d, now)
     if got and got.get(sym):
         return got[sym]
@@ -335,7 +336,8 @@ def fetch_ranges(day, now: datetime | None = None) -> dict | None:
         return have
     files_fn = _src.get("files")
     now = (now or datetime.now(timezone.utc)).astimezone(IST)
-    if not files_fn or d > now.date().isoformat() or (d == now.date().isoformat() and now.hour < PUBLISHED_AT):
+    if not files_fn or d > now.date().isoformat() or (d == now.date().isoformat() and now.hour < PUBLISHED_AT) \
+            or d < (now.date() - timedelta(days=5)).isoformat():          # only the newest report is kept
         return have
     if _mem.get(("w52asked", d)) is not None:
         return have
