@@ -66,7 +66,15 @@ ADVICE_TITLE = re.compile(
     r"|\b(maintains?|reiterates?|retains?|upgrades?|downgrades?)\b[^.]{0,40}\b(to |a |an )?['\"]?(buy|sell|accumulate|outperform|underperform|overweight|underweight)\b"
     r"|\bshould you\b|\bbook (some )?profits?\b|\b\d+(\.\d+)?\s?% upside\b|\bupside (of|potential|ahead)\b|\bbiggest bets?\b|\bbets? for investors\b"
     r"|\b(we're|we are|we've|we have|i'm|i am)\s+(putting|deploying|parking|betting|investing)\b|\bputting\b[^.]{0,60}\b(cash|money|capital)\b[^.]{0,40}\bto work\b"
-    r"|\b(stocks?|shares?) (that )?(could|can|may) (rally|surge|jump|double|zoom|soar|gain)\b", re.I)
+    r"|\b(stocks?|shares?) (that )?(could|can|may) (rally|surge|jump|double|zoom|soar|gain)\b"
+    # R8B-012: a question put to the holders ("What should RIL investors do?"), a price move sold as a reason to own it
+    # ("What Could Drive Reliance Industries Stock Higher by 15%"), a cheaper way in ("may be a cheaper way to buy Jio
+    # Platforms"), brokers' targets in the plural ("Check Goldman Sachs, Morgan Stanley Target Prices") and "What
+    # Investors Should Know"
+    r"|\bwhat (should|must|can|do)\b[^?.]{0,60}\b(investors?|shareholders?|holders?|traders?|you)\b[^?.]{0,20}\bdo\b"
+    r"|\bwhat (could|can|will|might|would|may) (drive|push|take|send|lift|power|fuel)\b[^.]{0,80}\b(higher|up|lower|down|rally|gains?)\b"
+    r"|\bcheaper way (to|of) (buy|own|invest|get|play)\w*\b|\btarget prices\b|\bprice targets\b"
+    r"|\bwhat (investors?|you|shareholders?|traders?) (should|need to|must|ought to) know\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

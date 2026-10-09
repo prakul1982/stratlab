@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from . import db
 from . import alerts
+from . import risk
 from .alerts import notify
 from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, cond_text
@@ -54,6 +55,11 @@ def official_close(kite, inst: dict, day: str) -> float | None:
         return None
     for b in reversed(bars or []):
         if str(b["t"])[:10] == day:
+            # a stock's candle is the exchange's close once that is known (official_close.history_close); until then, or
+            # for OFFICIAL_WAIT after the close is due, its last continuous trade is not the auction price (R8B-001)
+            if (getattr(kite, "__dict__", {}).get("day_close") and inst.get("type") == "EQ" and not b.get("official")
+                    and datetime.now(IST) < S.at(day, S.close_known(session_kind(kite, inst), day)) + OFFICIAL_WAIT):
+                return None
             return float(b["c"])
     return None
 
@@ -198,6 +204,7 @@ class LiveSession:
         self.next_poll = 0.0
         self.poll_ok = True
         self.equity_curve: list[dict] = state.get("equity_curve", [])
+        self.day_equity: dict = state.get("day_equity") or {}      # each day's closing equity, beyond the curve (R8B-002)
         self.builder = CandleBuilder(self.tf, self.session_kind, self._official if self.session_kind in ("cas", "index") else None)
         self.last_price = self.bars[-1]["c"]
         self.last_tick_at: str | None = None
@@ -334,6 +341,7 @@ class LiveSession:
     def state(self) -> dict:
         d = self.engine.dump()
         d["equity_curve"] = self.equity_curve
+        d["day_equity"] = self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
         return d
 
     def snapshot(self) -> dict:
@@ -355,6 +363,7 @@ class LiveSession:
                 "overlays": overlays, "oscillators": osc,
                 "events": e.events[-200:],
                 "equity_curve": self.equity_curve,
+                "day_equity": risk.note_days(self.day_equity, self.equity_curve), "closed": risk.closed_list(e.trades),
                 "account": {
                     "capital": self.strategy.risk.capital, "equity": e.equity(px), "cash": e.cash,
                     "qty": e.qty, "entry": e.entry if e.qty else None,

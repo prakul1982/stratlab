@@ -32,6 +32,7 @@ from razorpay.errors import SignatureVerificationError
 
 from . import holdings, holdings_file, instrument_kinds, money_calendar, tax_export, tax_lots, tax_total
 from . import money_mf
+from . import money_mf_nav
 from . import money_mf_ter
 from . import money_mf_behaviour
 from . import sip_test
@@ -109,7 +110,7 @@ from . import money_networth
 from .plans import networth_items
 from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo_until, set_promo, group_size, has_fno, has_indicators, plan_info, public_plans, trial_state
 from .plans import stock_alerts as stock_alert_limit
-from .plans import access_plan, bigger_plan, free_basic_until, screens as screens_limit
+from .plans import access_plan, ai_reads_per_day, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
 
 kite = KiteService()
@@ -236,7 +237,10 @@ def _exchange_files():
 
 
 # one official close per Indian symbol across the public pages, the screens and ETF vs NAV (R7O-004, R7O-007)
-official_close.setup(_exchange_files, lambda syms: kite.quote(syms) if kite.ready() else {})
+official_close.setup(_exchange_files, lambda syms: kite.quote(syms) if kite.ready() else {},
+                     all_quotes_fn=lambda: kite.day_quotes() if kite.ready() else {})
+# ...and in every daily candle read from the broker: charts, scans, briefs, My Stocks, alerts, backtests (R8B-001)
+kite.day_close = official_close.history_close
 etf_job = etf_nav.Job(lambda: filings_feed)
 closing_auction.setup(lambda: filings_feed)      # the closing auction desk: the exchange's CAS data
 closing_auction_job = closing_auction.Job(lambda: filings_feed)
@@ -272,6 +276,7 @@ async def lifespan(app: FastAPI):
     filing_alerts_job.start()
     deals_job.start()
     threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
+    threading.Thread(target=money_mf_nav.keep_fresh, daemon=True, name="mf-nav").start()   # the mutual fund NAV file, read ahead of the pages (R9P-008)
     threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
@@ -673,11 +678,15 @@ def me(profile=Depends(current_profile)):
                   # fresh AI reads today against the person's daily cap (None: no cap), said on Account (R8O-002)
                   "ai_reads_today": reads_today.result(), "ai_reads_limit": reads_cap,
                   "ai_reads_cap_for": "admin" if admin.is_admin(profile) else None,
+                  # the viewed plan's own cap, so an admin's "View as Free or Basic" can say "35 of 60 (not enforced for you)" (R9P-005)
+                  "ai_reads_plan_limit": ai_reads_per_day(paid),
+                  # the daily safety cap on unlimited AI builds (Pro's), said beside the month's count like the Plans card
+                  "ai_builds_per_day": AI_BUILDS_PER_DAY if info["ai_builds_per_month"] is None else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
-                   "email": profile.get("alert_email"), "daily_report": daily_report.wants_report(db, profile["id"])},
+                   "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
         "data_note": data_note(),
@@ -848,6 +857,8 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
+    if req.alert_email and not alerts.alert_emails_on(profile["id"]):
+        alerts.set_alert_emails(profile["id"], True)       # saving an address again turns alert emails back on after an unsubscribe
     if req.daily_report is not None:
         prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
         db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))
@@ -885,7 +896,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         screens.mute(uid)
     if act and what in ("advance_tax", "all"):
         money_advance_tax.set_remind(uid, False)
-    if act and what not in ("tips", "screens", "advance_tax"):
+    if act and what == alerts.ALERT_EMAILS:
+        alerts.set_alert_emails(uid, False)
+    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -3201,6 +3214,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             pe, basis = sec.pe_and_basis(p, close)
             if basis:
                 checks.update(pe_basis=basis["basis"], pe_end=basis["end"])
+                if checks.get("foreign"):
+                    # the profit that P/E is on, in dollars: a foreign filer's market value is checked against it (R8V-001)
+                    checks["profit_usd"] = sec.basis_profit(p, basis["basis"])
             if pe and pe > 0:
                 checks["eps"] = round(close / pe, 4)
     nums = deepdive.numbers(p)
@@ -3284,6 +3300,10 @@ def us_cap_checks(p: dict, sym: str) -> dict:
         out["cap_unverified"] = True        # depositary shares of an unknown ratio, or a report that couldn't be read now
     if sec._latest(p.get("cashflow"), "Dividends paid"):
         out["divs_paid"] = True
+    if p.get("foreign") is not None:
+        out["foreign"] = bool(p["foreign"])
+    if p.get("annual_unread"):
+        out["annual_unread"] = p["annual_unread"]       # built again within the hour (stock_pages.fresh, R8V-003)
     return out
 
 
@@ -3337,14 +3357,30 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
     """A stored page built before the facts a page shows now, served as it is while no rebuild is allowed (a burst of
     crawlers past the build ration, a source down): an Indian page's dividend yield is worked out again from the
     company's stored dividends list (the app's), so it never shows another definition's yield (R8O-001: TCS 3.08%,
-    the last reported year's, against 5.35% on the page's own definition). Anything else waits for the rebuild."""
-    if region != "IN" or not f or (f.get("v") or 1) >= stock_pages.FACTS_VERSION:
+    the last reported year's, against 5.35% on the page's own definition). A US page's likewise, from the company's
+    stored dividends list, and n/a when there is none: a page from before PR 172 kept the filings' dividends paid over
+    the market value, another definition (R8V-011: P&G 2.93% against 2.85% by ex-date). Its P/E is labelled with the
+    year it is on and is n/a past 15 months (stock_pages.pe_period), and a foreign filer's value is checked against its
+    profit (stock_pages.cap_problem), as the page is drawn. Anything else waits for the rebuild."""
+    if not f or (f.get("v") or 1) >= stock_pages.FACTS_VERSION:
         return f
-    try:
-        dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
-    except Exception:
-        dy = None
-    return {**f, "div_yield": dy} if dy is not None else f
+    if region == "IN":
+        try:
+            dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
+        except Exception:
+            dy = None
+        return {**f, "div_yield": dy} if dy is not None else f
+    if region == "US" and (f.get("v") or 1) < 4 and not sec.non_common(symbol):
+        try:
+            rows = corp_actions.actions_for("US", symbol, None, fetch=False)
+            known = bool(corp_actions.hist_load("US", symbol)["at"])
+        except Exception:
+            rows, known = [], False
+        divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
+                if d.get("kind") == "dividend" and d.get("amount")]
+        dy = stock_pages.dividend_yield(divs, f.get("price"), f.get("price_at")) if divs or known else None
+        return {**f, "div_yield": dy}
+    return f
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
@@ -3522,7 +3558,8 @@ def screens_page(profile) -> dict:
 @app.get("/research/screens/meta")
 def screens_meta(region: str = "IN", profile=Depends(current_profile)):
     """The filters a screen offers in a market, with each one's plain-English help, and how fresh the numbers are."""
-    return ok(screens.meta(region))
+    got = screens.meta(region)
+    return ok({**got, "pending": stock_pages.day_due(got.get("region") or region, got.get("as_of"))})
 
 
 @app.post("/research/screens/run")
@@ -3531,6 +3568,8 @@ def screens_run(req: ScreenRunReq, profile=Depends(current_profile)):
     try:
         got = screens.run(req.region, req.filters or {}, req.sort, req.desc, req.limit, req.offset)
         got["rows"] = with_nse_close(got["region"], got["rows"], "price_at")      # the company page's close (R6O-009)
+        # the evening of a session whose closes aren't in the list yet: "Latest 8 Oct · 9 Oct due about 18:30 IST" (R8B-008)
+        got["pending"] = stock_pages.day_due(got["region"], got.get("as_of_newest") or got.get("as_of"))
         return ok(got)
     except screens.ScreenError as e:
         err(400, "bad_screen", str(e))
@@ -3626,6 +3665,8 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         # while the breadth page was live)
         live = {**live, "points": live["points"][-1:]}
     out["live"] = live
+    # after the close, before the evening's count: the page and the card say the newest day and when the next is due (R8B-008)
+    out["pending"] = stock_pages.day_due(out["group"].get("region") or "IN", (out.get("today") or {}).get("day") or out.get("as_of"))
     return ok(out)
 
 
@@ -4947,6 +4988,20 @@ def daily_platform_check(retry_after: float = 120) -> dict:
     return out
 
 
+def error_counts() -> dict:
+    """The server errors listed, told apart as Admin → System tells them: those since this server started and those kept
+    from before it (the list survives a restart), the same split as the page's own (R9P-004)."""
+    start = datetime.fromisoformat(SERVER_STARTED_AT)
+
+    def since(at) -> bool:
+        try:
+            return datetime.fromisoformat(str(at).replace("Z", "+00:00")) >= start
+        except ValueError:
+            return False
+    n = sum(1 for e in RECENT_ERRORS if since(e.get("at")))
+    return {"errors_since_restart": n, "errors_before_restart": len(RECENT_ERRORS) - n}
+
+
 def weekly_facts(now: datetime) -> dict:
     """What the Monday summary reports, gathered from the last seven days."""
     since = now - timedelta(days=7)
@@ -4971,7 +5026,7 @@ def weekly_facts(now: datetime) -> dict:
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
     origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), "errors_listed": len(RECENT_ERRORS),
+            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
             "admin_url": f"{origin}/admin" if origin else None}
 
 
@@ -5226,11 +5281,11 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
 
 
 # ---------- newsletters: the Market Brief and My Stocks ----------
-NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "sections", "html", "at")
+NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "ai_summary", "sections", "html", "at")
 
 
 def news_view(issue: dict) -> dict:
-    out = {k: issue.get(k) for k in NEWS_FIELDS}
+    out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out

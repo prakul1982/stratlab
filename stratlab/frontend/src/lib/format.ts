@@ -161,6 +161,17 @@ export function fmtDate(v: DateInput, o: DateOpts = {}): string {
     day: "numeric", month: "short", ...(o.year === false ? {} : { year: "numeric" }) }).replace(/\bSept\b/, "Sep");
 }
 
+/** The day after the close whose numbers aren't stored yet, as the server says it ({day, due}). */
+export type Pending = { day: string; due: string | null } | null | undefined;
+
+/** Numbers stored once a day, on the evening of a session they don't hold yet: "Latest: 8 Oct · 9 Oct due about
+ * 18:30 IST", never "Today's numbers · 8 Oct" (R8B-008). Null when the stored day is the newest. */
+export function latestDue(have: string | null | undefined, pending: Pending): string | null {
+  if (!have || !pending?.day || have.slice(0, 10) >= pending.day) return null;
+  const d = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
+  return `Latest: ${d(have)} · ${d(pending.day)} due${pending.due ? ` about ${pending.due}` : " this evening"}`;
+}
+
 /** A market event's day, "Wed 7 Oct"; a weekend one adds "(exchanges closed)" so it is not read as a trading day. */
 export function eventWhen(e: { date: string; weekend?: string }, year = false): string {
   return fmtDate(e.date, { weekday: true, year }) + (e.weekend ? " (exchanges closed)" : "");

@@ -35,11 +35,16 @@ def _safe(fn, default=None):
         return default
 
 
-def closed(region: str, day: date) -> bool:
+def closed(region: str, day: date, now: datetime | None = None) -> bool:
     """Whether `day`'s session is over in that market. Part of every cache key, so facts gathered during the day (an
     admin preview) are never reused for the issue after the close."""
     tz, at = CLOSE[region]
-    local = datetime.now(ZoneInfo(tz))
+    local = (now or datetime.now(ZoneInfo(tz))).astimezone(ZoneInfo(tz))
+    if region == "IN":
+        # India's day is over once its closing auction has matched and derivatives have stopped trading (15:40 since
+        # 3 Aug 2026): facts read between 15:30 and then held the stocks' pre-auction prices (R8B-001)
+        from ..data import sessions as S
+        at = max(at, S.fo_close(day), S.close_known("cas", day))
     return local.date() > day or (local.date() == day and local.time() >= at)
 
 
@@ -237,6 +242,13 @@ def headline_ok(region: str, title: str, frm: str | None = None, to: str | None 
     return not contradicts(title, region, indices)
 
 
+def publisher(source) -> str | None:
+    """Who published a headline, for the plain-text part of an email; the aggregator a feed came through is not a
+    publisher, so it is left out (R9P-009)."""
+    s = " ".join(str(source or "").split())[:60]
+    return None if not s or s.lower() in ("google news", "google", "yahoo", "yahoo finance", "finnhub", "rss") else s
+
+
 def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES,
                    indices: list[dict] | None = None) -> list[dict]:
     """The brief's headlines (R6O-004, R7O-005): stories about the region's market, an index or its economy, never
@@ -256,7 +268,7 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
         if k in keys:
             continue
         keys.add(k)
-        out.append({"headline": title, "url": h.get("url"), "at": h.get("at")})
+        out.append({"headline": title, "url": h.get("url"), "at": h.get("at"), "source": publisher(h.get("source"))})
     return out[:n]
 
 
@@ -359,6 +371,12 @@ def _symbol_data(region: str, sym: str, day: date) -> dict:
     return data
 
 
+def _plain_title(t: str) -> bool:
+    """A stock's headline My Stocks may carry: the same advice-worded titles left out as on the company page (R8B-012)."""
+    from ..intel.news import plain_headline
+    return plain_headline(t)
+
+
 def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dict | None:
     """What changed for one stock since `since` (an ISO date): price, stage, a fresh ST S2 signal, red or amber
     filings and a couple of headlines. None when there's no price data."""
@@ -375,8 +393,8 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     change = _pct(now["price"], before_bars[-1]["c"] if before_bars else None)
     flags = [{"label": i["label"], "severity": i["severity"], "subject": i["subject"], "at": i["at"], "url": i.get("url")}
              for i in data["filings"] or [] if i["severity"] in ("red", "amber") and i["at"] > since][:4]
-    news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at")} for n in data["news"] or []
-            if n.get("headline") and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
+    news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at"), "source": publisher(n.get("source"))} for n in data["news"] or []
+            if n.get("headline") and _plain_title(n["headline"]) and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
     trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]
     surv = _safe(lambda: surveillance_lines(sym, since)) if region == "IN" else None

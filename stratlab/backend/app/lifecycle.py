@@ -304,11 +304,12 @@ def sample(kind: str, now: datetime | None = None) -> dict:
 
 def sample_invoice(now: datetime) -> dict:
     """A made-up invoice shaped as invoices.make stores one, with its GST worked out by the invoices' own rules: the
-    seller set in Admin → Invoices when there is one (a sample GSTIN otherwise) and a buyer in the same state."""
+    seller set in Admin → Invoices and a buyer in the same state. While that has no GSTIN the sample is the plain invoice a
+    real payment gets today (no GST lines, "not registered under GST"), never one with made-up GST details (R9P-003)."""
     from . import invoices
     s = invoices.seller()
-    if not s.get("gstin"):
-        s = {**s, "legal_name": s.get("legal_name") or "StratLab (sample details)", "state": "27", "gstin": "27ABCDE1234F1Z5"}
+    if not s.get("legal_name"):
+        s = {**s, "legal_name": "StratLab (invoice details not set yet)"}
     buyer = {"name": "A. Reader", "email": "you@example.com", "address": "", "state": s.get("state") or "27", "country": "IN", "gstin": ""}
     total = float(PLANS["pro"]["price"])
     lines, supply, note = invoices.tax_lines(total, s, buyer)
@@ -344,9 +345,9 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
 def send_test(kind: str, profile: dict, to: str) -> str:
     """Admin's test: the email with made-up details, to `to`, marked as a test and not recorded. Returns the subject."""
     subject, html, text = build(kind, profile, sample(kind))
-    html, text, _ = kit.finish(html, text, profile["id"], None if EMAILS[kind][1] else CATEGORY)
+    html, text, headers = kit.finish(html, text, profile["id"], None if EMAILS[kind][1] else CATEGORY)
     subject = f"[Test] {subject}"
-    alerts.send_email(to, subject, text, html=html)
+    alerts.send_email(to, subject, text, html=html, headers=headers)
     return subject
 
 

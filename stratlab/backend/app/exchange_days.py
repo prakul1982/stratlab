@@ -128,6 +128,65 @@ def cash_rows(text: str) -> dict[str, dict]:
     return out
 
 
+WEEK52 = ARCHIVE + "/content/CM_52_wk_High_low_{dmy}.csv"
+_W52_DATES = ("%d-%b-%Y", "%d-%m-%Y", "%Y-%m-%d", "%d %b %Y", "%d/%m/%Y")
+
+
+def _w52_day(v: str) -> str | None:
+    v = str(v or "").strip().title()
+    for f in _W52_DATES:
+        try:
+            return datetime.strptime(v, f).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def week52_rows(text: str) -> dict[str, list]:
+    """The exchange's daily 52-week high and low report: {symbol: [high, its day, low, its day]} for the equity series
+    (the main EQ line wins). The file opens with a disclaimer and the day it is for; its figures are adjusted for bonus
+    issues, splits and rights, as the broker's daily candles are. A file without that shape is an error."""
+    lines = (text or "").splitlines()
+    start = next((i for i, ln in enumerate(lines) if "SYMBOL" in ln.upper() and "52" in ln), None)
+    if start is None:
+        raise ValueError("not the 52-week high and low report")
+    rows = rows_of("\n".join(lines[start:]))
+    if not rows:
+        return {}
+    cols = list(rows[0])
+
+    def col(word: str, dated: bool) -> str | None:
+        for c in cols:
+            u = c.upper()
+            if word in u and "52" in u and (("DATE" in u or u.endswith("_DT") or u.endswith(" DT")) == dated):
+                return c
+        return None
+    hi, hi_d, lo, lo_d = col("HIGH", False), col("HIGH", True), col("LOW", False), col("LOW", True)
+    if not hi or not lo:
+        raise ValueError("not the 52-week high and low report")
+    out: dict[str, list] = {}
+    for r in rows:
+        sym, series = r.get("SYMBOL", "").upper(), r.get("SERIES", "EQ").upper()
+        h, lw = num(r.get(hi)), num(r.get(lo))
+        if not sym or series not in ("EQ", "BE", "BZ", "SM", "ST") or not h or not lw or h <= 0 or lw <= 0:
+            continue
+        if sym in out and out[sym][4] == "EQ":
+            continue
+        out[sym] = [h, _w52_day(r.get(hi_d) or "") if hi_d else None, lw, _w52_day(r.get(lo_d) or "") if lo_d else None, series]
+    return {k: v[:4] for k, v in out.items()}
+
+
+def week52(files: Files, day: date) -> dict[str, list] | None:
+    """The 52-week high and low report of a day; None when it isn't published."""
+    text = files.text(WEEK52.format(dmy=dmy(day)))
+    if text is None:
+        return None
+    try:
+        return week52_rows(text)
+    except ValueError:
+        raise SourceError("the exchange", "The exchange's 52-week high and low report wasn't in the expected shape.") from None
+
+
 def cash_closes(files: Files, day: date) -> dict[str, dict] | None:
     """A day's cash-market closes, read once and kept in memory for every desk that needs them; None when the file
     isn't published."""

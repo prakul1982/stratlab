@@ -19,7 +19,9 @@ export function aiReason(message: string | null): string {
 }
 
 /** Account's line for the cap: "3 of 60 (starts again at midnight India time)", or "3 (no daily cap on Pro)". */
-export function aiReadsUse(used: number, limit: number | null, capFor: string | null): string {
+export function aiReadsUse(used: number, limit: number | null, capFor: string | null, planLimit?: number | null): string {
+  // an admin viewing as Free or Basic: the viewed plan's cap against today's count, said not to apply to them (R9P-005)
+  if (limit == null && capFor === "admin" && planLimit != null) return `${used.toLocaleString("en-IN")} of ${planLimit.toLocaleString("en-IN")} (not enforced for you as an admin)`;
   if (limit == null) return `${used.toLocaleString("en-IN")} (no daily cap${capFor === "admin" ? " for the site's admins" : " on Pro"})`;
   return `${used.toLocaleString("en-IN")} of ${limit.toLocaleString("en-IN")} (starts again at midnight India time)`;
 }

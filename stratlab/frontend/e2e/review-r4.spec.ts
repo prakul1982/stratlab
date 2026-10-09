@@ -105,9 +105,13 @@ test("R4-017: every public page has its own tab title, and /login, /signup, /abo
   await expect(page).toHaveTitle("Refunds · StratLab");
   await page.goto("/contact");
   await expect(page).toHaveTitle("Contact · StratLab");
-  for (const [path, title] of [["/login", "Sign in · StratLab"], ["/signup", "Sign up · StratLab"], ["/about", "About · StratLab"]] as const) {
+  // changed on purpose in R8V-008: the landing page at these addresses has the address's own heading as its h1 (the one its
+  // HTML carries for crawlers), with the tagline still shown beside it
+  for (const [path, title, h1] of [["/login", "Sign in · StratLab", "Sign in to StratLab"], ["/signup", "Sign up · StratLab", "Sign up for StratLab"],
+    ["/about", "About · StratLab", "About StratLab"]] as const) {
     await page.goto(path);
-    await expect(page.getByRole("heading", { level: 1, name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toHaveText(h1, { timeout: 30_000 });
+    await expect(page.locator(".lp").getByText("it, research it, track it.").first()).toBeVisible();
     await expect(page).toHaveTitle(title);
     await expect(page.getByText("Page not found")).toHaveCount(0);
   }

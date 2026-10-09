@@ -28,7 +28,9 @@ export type PageMeta = {
 
 /** Pages anyone can open, and what each says about itself. */
 export const PAGES: PageMeta[] = [
-  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-08", heading: HOME_TITLE },
+  // the home page's heading is the one the landing page draws (R8V-008: the raw page said "StratLab: test it, research it,
+  // track it" over a drawn "Test it, research it, track it.")
+  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-08", heading: TAGLINE },
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, updated: "2026-10-08",
     heading: "Plans and prices",
@@ -111,14 +113,93 @@ export const LIBRARY_RULES: Record<string, string> = {
 /** A library entry's strategy slug: "seed-golden-cross-in" → "golden-cross". */
 export const librarySlug = (id: string) => id.replace(/^seed-/, "").replace(/-(in|us|fo)$/, "");
 
-/** A library strategy's page: its own title, description and address, and its heading and rules as the opening words. */
-export const libraryMeta = (id: string, name: string): PageMeta => ({
-  path: `/library/${id}`, title: `${name}: rules and verdict · StratLab`, index: true,
-  description: `${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks, as they came out on past prices. Facts about the past, not advice.`,
-  heading: name,
-  summary: [...(LIBRARY_RULES[librarySlug(id)] ? [`The rules: ${LIBRARY_RULES[librarySlug(id)]}`] : []),
-    "StratLab ran these rules through its own backtest on every stock in the group, after costs, and through four checks: unseen years, nearby settings, a bad-luck drawdown and enough trades. The page shows the return beside buy and hold and the result of each check. A verdict describes the past, not what comes next, and nothing here is investment advice."],
-});
+/** Where it was tested, unless the strategy's own name already says so ("Supertrend flip · 20 US large caps"): by the
+ * words shown, or by the group's own name (`group`, when `where` adds a count to it). */
+export const whereShown = (name: string, where: string | null | undefined, group?: string | null) => {
+  const n = name.toLowerCase();
+  return where && !n.includes(where.toLowerCase()) && !(group && n.includes(group.toLowerCase())) ? where : null;
+};
+
+/** The lead of a verdict's headline, for a tab title: "117.1 points behind buy and hold after costs" from "117.1 points
+ * behind buy and hold after costs; passed all 3 checks run." Without a headline, the verdict's label. */
+const lead = (factHeadline?: string | null, label?: string | null) =>
+  ((factHeadline ?? "").split(";")[0].trim() || (label ?? "").trim()).replace(/\.\s*$/, "");
+
+/** A library strategy's tab title, the result first, as the page's headline leads with it (R7V-006: the title said
+ * "Passed all 3 checks run" over a page that leads with "117.1 points behind buy and hold"). */
+export const libraryTitle = (name: string, factHeadline?: string | null, label?: string | null) => {
+  const l = lead(factHeadline, label);
+  return l ? `${l}: ${name} · StratLab` : `${name} · StratLab`;
+};
+
+/** A library strategy's description for search results and link previews: the headline first, then the strategy, with
+ * where it was tested only when its name doesn't already say it (R7V-006: "… 20 US large caps on 20 US large caps"). */
+export const libraryDescription = (e: { name: string; where?: string | null; group?: string | null; factHeadline?: string | null;
+  headline?: string | null; reason?: string | null }) => {
+  const on = whereShown(e.name, e.where, e.group);
+  return `${e.factHeadline ?? e.headline ?? ""} ${e.name}${on ? ` on ${on}` : ""}. ${e.reason ?? ""} The rules, results after costs and the four checks, as StratLab tested them on past prices.`
+    .replace(/\.\s*\./g, ".").replace(/\s+/g, " ").trim();
+};
+
+/** The scan's internal short name, spelled out: "ST S2: Stage 2 + Supertrend · NIFTY 50 stocks" becomes
+ * "Stage 2 + Supertrend · NIFTY 50 stocks", and "Fresh ST S2" "Fresh Stage 2 + Supertrend" (lib/plainTerms.ts gives it to the app). */
+export function plainTerms(text: string | null | undefined): string {
+  return (text ?? "").replace(/\bST S2:\s*Stage 2 \+ Supertrend/g, "Stage 2 + Supertrend").replace(/\bST S2\b/g, "Stage 2 + Supertrend");
+}
+
+/** What a test group holds, said accurately: a group named "NIFTY 50 stocks" that holds 5 of them is "5 of the NIFTY 50
+ * stocks", not "NIFTY 50 stocks (5)". A name with no number in it gets the count after it ("My banks · 3 in the test"). */
+export function groupLabel(name: string, members?: number | null): string {
+  if (members == null || !Number.isFinite(members) || members < 1) return name;
+  const named = name.match(/\b(\d+)\b/);
+  if (named) return Number(named[1]) === members ? name : `${members} of the ${name}`;
+  return `${name} · ${members} in the test`;
+}
+
+/** What the build reads of a library entry from the server's public library (GET /public/library). */
+export type LibraryEntryWords = {
+  name?: string; reason?: string | null; market?: string; instrument?: { symbol?: string } | null;
+  group?: { name: string; members?: unknown[] | null } | null;
+  verdict?: { fact_headline?: string | null; headline?: string | null; label?: string | null; fact_summary?: string | null; summary?: string | null } | null;
+};
+
+/** Where an entry was tested, as its page says it: the group with its count, else the instrument or the market. */
+const testedOn = (e: LibraryEntryWords) =>
+  e.group ? groupLabel(e.group.name, Array.isArray(e.group.members) ? e.group.members.length : null) : e.instrument?.symbol ?? e.market ?? null;
+
+/** A library strategy's page: its own title, description and address, and its heading and rules as the opening words.
+ * With its entry from the server (`e`, read at build time), the title, description and heading are the ones the page
+ * shows once drawn, the result first (R8V-008: the raw page said "…: rules and verdict" while the drawn one led with
+ * "117.1 points behind buy and hold after costs"). */
+export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | null): PageMeta => {
+  const rules = LIBRARY_RULES[librarySlug(id)] ? [`The rules: ${LIBRARY_RULES[librarySlug(id)]}`] : [];
+  const about = "StratLab ran these rules through its own backtest on every stock in the group, after costs, and through four checks: unseen years, nearby settings, a bad-luck drawdown and enough trades. The page shows the return beside buy and hold and the result of each check. A verdict describes the past, not what comes next, and nothing here is investment advice.";
+  const v = e?.verdict;
+  const head = v ? (v.fact_headline ?? v.headline ?? "").trim() : "";
+  if (e && v && head) {
+    const shown = plainTerms(e.name ?? name);
+    return {
+      path: `/library/${id}`, index: true,
+      title: libraryTitle(shown, v.fact_headline, v.label ?? v.headline),
+      description: libraryDescription({ name: shown, where: testedOn(e), group: e.group?.name, factHeadline: v.fact_headline, headline: v.headline, reason: e.reason }),
+      heading: head,
+      summary: [shown, ...((v.fact_summary ?? v.summary) ? [String(v.fact_summary ?? v.summary)] : []), ...rules, about],
+    };
+  }
+  return {
+    path: `/library/${id}`, title: `${name}: rules and verdict · StratLab`, index: true,
+    description: `${name}: the rules StratLab tested, the return after costs beside buy and hold, and the four checks, as they came out on past prices. Facts about the past, not advice.`,
+    heading: name,
+    summary: [...rules, about],
+  };
+};
+
+/** A landing-page address's own heading ("Plans and prices" at /pricing), the h1 the landing page shows there, so the
+ * address's own HTML and the drawn page agree (R8V-008); none for the home page and addresses without their own page. */
+export const landingHeading = (path: string): string | undefined => {
+  const p = pageMeta(path);
+  return p && p.path !== "/" && p.heading !== TAGLINE ? p.heading : undefined;
+};
 
 /** What a page that is not in the table says: a sign-in page for an address inside the app, or a missing page. */
 export const GATE_DESCRIPTION = "Sign in to StratLab to open this page.";

@@ -844,17 +844,22 @@ def chain_time(now: datetime) -> tuple[str, str]:
     """(the time a chain read from the feed is of, "live" or "close"): now during market hours; outside them the
     feed's prices are the last session's close, so the chain is of that close (R6O-019: "Live chain, 8 Oct, 23:45
     IST" after a 15:30 close)."""
+    from .data import sessions
     from .data.calendar import is_trading_day
     local = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
     hm = local.strftime("%H:%M")
-    if is_trading_day("IN", local.date()) and "09:15" <= hm < "15:30":
+    # options trade until the derivatives segment closes (15:40 since 3 Aug 2026), so the chain is live until then and its
+    # close is that time's (R8B-006: the chain "at the close" was read and stamped while F&O still traded)
+    end = sessions.fo_close(local.date()).strftime("%H:%M")
+    if is_trading_day("IN", local.date()) and "09:15" <= hm < end:
         return local.isoformat(timespec="seconds"), "live"
-    day = local.date() if is_trading_day("IN", local.date()) and hm >= "15:30" else local.date() - timedelta(days=1)
+    day = local.date() if is_trading_day("IN", local.date()) and hm >= end else local.date() - timedelta(days=1)
     for _ in range(10):
         if is_trading_day("IN", day):
             break
         day -= timedelta(days=1)
-    return datetime(day.year, day.month, day.day, 15, 30, tzinfo=IST).isoformat(timespec="seconds"), "close"
+    close = sessions.fo_close(day)
+    return datetime(day.year, day.month, day.day, close.hour, close.minute, tzinfo=IST).isoformat(timespec="seconds"), "close"
 
 
 def live_chain(options_data, exchange: str, name: str, choice: str) -> dict | None:
@@ -978,7 +983,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
             continue
         p, w = pcr(got["chain"]), pcr(near(got["chain"], got.get("spot")))
         out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": w["oi"], "pcr_vol": w["vol"],
-                    "pcr_near": w["oi"], "pcr_all": p["oi"], "near_strikes": NEAR, "spot": got.get("spot"),
+                    "pcr_near": w["oi"], "pcr_all": p["oi"], "strikes_read": len(got["chain"]), "near_strikes": NEAR, "spot": got.get("spot"),
                     "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
     return out
 

@@ -110,6 +110,23 @@ export function rupeeCharge(amount: number, gst: boolean): string {
   return `₹${amount.toLocaleString("en-IN")}${gst ? " incl. 18% GST" : ""}`;
 }
 
+/** The confirm step's words for what a rupee charge is in the currency the visitor sees: " (about $7.23 today)", from the same
+ * `charge_about` figure as the plan cards' "Charged as" line (or the card's own "≈ SAR 27" when the price is converted), so the
+ * last screen before payment never drops the conversion (R9P-006). Empty when the charge is not in rupees or nothing is known. */
+export function chargeAboutNote(inRupeesElsewhere: boolean, shown: string, about: string | null): string {
+  if (!inRupeesElsewhere) return "";
+  if (about) return ` (about ${about} today)`;
+  const m = /^≈\s*(.+)$/.exec(shown);
+  return m ? ` (about ${m[1]} today)` : "";
+}
+
+/** The line under the plan's name in Razorpay's payment window (its `description`; `notes` are not shown to the payer): the plan,
+ * the amount, and that it renews until cancelled, so a payer who goes straight to the window still reads the renewal (R9P-007).
+ * Razorpay's own Esc handling inside its frame is not ours to change. */
+export function checkoutDescription(plan: string, amount: string, period: string): string {
+  return `${plan} plan, ${amount} / ${period}. Renews every ${period} until you cancel.`;
+}
+
 /** What the confirm step says about the payment window that opens next: it names the plan and the period (R6V-009, and
  * the line "shows the amount only" was stale once it did). */
 export function paymentWindowLine(plan: string, period: string): string {

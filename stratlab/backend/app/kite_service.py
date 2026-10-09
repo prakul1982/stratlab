@@ -496,8 +496,8 @@ class KiteService:
             continuous = inst.get("type") == "FUT" and tf == "1d"
         key = (token, tf, days, continuous)
         hit = self._cache.get(key)
-        if hit and time.time() - hit[0] < ttl:
-            return hit[1]
+        if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < self._close_out(now) <= time.time()):
+            return self._official_days(token, tf, hit[1])
         start = now - timedelta(days=days)
         out, frm = [], start
         while frm < now:
@@ -517,11 +517,55 @@ class KiteService:
             if b["t"] not in seen:
                 seen.add(b["t"]); dedup.append(b)
         if not store:
-            return dedup
+            return self._official_days(token, tf, dedup)
         self._cache[key] = (time.time(), dedup)
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))
-        return dedup
+        return self._official_days(token, tf, dedup)
+
+    @staticmethod
+    def _close_out(now: datetime) -> float:
+        """When today's official closes are all out (a couple of minutes after the closing auction matches), as a
+        timestamp: a daily candle read before it is read again after it (R8B-001)."""
+        from .data import sessions as S
+        local = now.astimezone(IST)
+        return (S.at(local.date(), S.close_known("cas", local.date())) + timedelta(minutes=2)).timestamp()
+
+    def _official_days(self, token, tf: str, bars: list[dict]) -> list[dict]:
+        """A stock's daily candles with each recent day's close the exchange's official close (R8B-001: the broker's
+        candle kept the last trade before the closing auction, TCS 2,171.50 against the official 2,156.00)."""
+        # the exchange's official close of a stock's day (official_close.history_close), set on the app's broker by main:
+        # (candles, symbol, kind, exchange) -> candles; none set, the broker's candles as they are
+        fn = self.__dict__.get("day_close")
+        if tf != "1d" or not fn or not bars:
+            return bars
+        inst = self._by_token.get(int(token)) if str(token).isdigit() else None
+        if not inst or inst.get("type") != "EQ" or inst.get("exchange") not in ("NSE", "BSE"):
+            return bars
+        try:
+            from .data import sessions as S
+            kind = S.kind_of(inst, self.derivative_names())
+            return fn(bars, inst["symbol"], kind, inst["exchange"])
+        except Exception as e:                       # the broker's candles rather than none
+            print("official close for candles:", inst.get("symbol"), str(e)[:120])
+            return bars
+
+    def day_quotes(self) -> dict[str, dict]:
+        """Every NSE stock's quote ({symbol: {"price", "at"}}), in batches of 500: read once after the close for the
+        day's official closes until the exchange's file is out."""
+        self._require()
+        rows = [r for r in self.equities() if r["exchange"] == "NSE"]
+        out: dict[str, dict] = {}
+        for i in range(0, len(rows), 500):
+            part = {f"NSE:{r['symbol']}": r["symbol"] for r in rows[i:i + 500]}
+            self._throttle()
+            for k, v in (self.kite.quote(list(part)) or {}).items():
+                traded = v.get("last_trade_time")
+                if hasattr(traded, "tzinfo") and traded.tzinfo is None:
+                    traded = traded.replace(tzinfo=IST)
+                out[part.get(k, k.split(":", 1)[-1])] = {"price": v.get("last_price"),
+                                                         "at": traded.isoformat() if hasattr(traded, "isoformat") else None}
+        return out
 
     @staticmethod
     def warmup_days(tf: str, candles: int = 210) -> int:

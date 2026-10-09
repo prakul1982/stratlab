@@ -10,6 +10,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+from . import risk
 from .engine import costs as C
 from .engine.core import Ctx, Engine
 from .kite_service import IST, KiteService
@@ -123,6 +124,7 @@ class GroupLiveSession:
         self.halted = state.get("halted", False)
         self.day_start_realised = state.get("day_start_realised", 0.0)
         self.equity_curve: list[dict] = state.get("equity_curve", [])
+        self.day_equity: dict = state.get("day_equity") or {}      # each day's closing equity, beyond the curve (R8B-002)
         self.prov = mgr.markets.provider(self.market) if mgr.markets else None
         if self.polled and self.prov is None:
             raise ValueError("That market isn't connected.")
@@ -237,7 +239,12 @@ class GroupLiveSession:
     # ---------- saving and showing ----------
     def state(self) -> dict:
         return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips} for m in self.members}, "day": self.day, "halted": self.halted,
-                "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve}
+                "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
+                "day_equity": self._days()}
+
+    def _days(self) -> dict:
+        self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
+        return self.day_equity
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -262,6 +269,7 @@ class GroupLiveSession:
                 "strategy": self.strategy.model_dump(), "started_at": self.started_at,
                 "last_tick_at": self.last_tick_at, "feed_connected": self.poll_ok if self.polled else self.mgr.hub.connected,
                 "members": rows, "skipped": self.skipped, "events": events, "equity_curve": self.equity_curve,
+                "day_equity": self._days(), "closed": risk.closed_list(trades),
                 "bars": [], "overlays": {}, "oscillators": {},
                 "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
                             "unrealised": sum(m.open_pnl() for m in self.members), "open": open_n, "max_open": self.max_open,

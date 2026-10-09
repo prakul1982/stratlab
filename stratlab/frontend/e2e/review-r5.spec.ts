@@ -46,14 +46,15 @@ test.describe("a page that is never blank (R5V-001)", () => {
     let first = true;
     await page.route("**/config.js*", (r) => { if (first) { first = false; return r.abort(); } return r.fallback(); });
     await page.goto("/");
-    await expect(h1(page)).toContainText("Test it, research it, track it", { timeout: 30_000 });
+    // the landing page's own heading (R8V-008: the start-up block's h1 now has the same words, so it is told apart by .lp)
+    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Test it, research it, track it", { timeout: 30_000 });
   });
 
   test("config.js comes back as a plain-text 502 twice: the retries get it, and the page opens", async ({ page }) => {
     let bad = 2;
     await page.route("**/config.js*", (r) => (bad-- > 0 ? r.fulfill({ status: 502, contentType: "text/plain", body: "upstream request failed" }) : r.fallback()));
     await page.goto("/");
-    await expect(h1(page)).toContainText("Test it, research it, track it", { timeout: 30_000 });
+    await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toContainText("Test it, research it, track it", { timeout: 30_000 });
   });
 
   test("a signed-in person whose config.js fails is never shown as signed out", async ({ page }) => {

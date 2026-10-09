@@ -2,6 +2,7 @@ import { lazy, Suspense, useLayoutEffect, type ComponentType } from "react";
 import { useLocation } from "react-router-dom";
 import { visitorView } from "../lib/deepLinks";
 import { applySeo, seoFor, type SeoKind } from "../lib/seo";
+import { landingHeading } from "../content/seo";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
 
@@ -49,7 +50,7 @@ export function VisitorApp() {
   const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Opening label="Opening StratLab" /></main>;
   return (
     <Suspense fallback={wait}>
-      {view.kind === "landing" ? <Login section={view.section} panel={view.panel} />
+      {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} />
         : view.kind === "legal" ? <LegalPage />
         : view.kind === "verdict" ? <PublicVerdict token={view.token} />
         : view.kind === "library" ? <PublicLibrary />

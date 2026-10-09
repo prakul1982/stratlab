@@ -138,10 +138,13 @@ export interface Me {
     /** The plan's own limits (what the Plans page lists), and what lifts them now ("early access", "the launch offer"). */
     deepdive_plan_limit?: number | null; deck_plan_limit?: number | null; lifted_by?: string | null;
     /** Fresh AI reads today (India's day) against the daily cap; a null limit is no cap (Pro, the site's admins). */
-    ai_reads_today?: number; ai_reads_limit?: number | null; ai_reads_cap_for?: "admin" | null };
+    ai_reads_today?: number; ai_reads_limit?: number | null; ai_reads_cap_for?: "admin" | null;
+    /** The viewed plan's own daily cap on fresh AI reads (null: none), even where it isn't enforced (an admin); and the daily
+     * safety cap on unlimited AI builds (Pro's), null on a plan with a monthly limit. */
+    ai_reads_plan_limit?: number | null; ai_builds_per_day?: number | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
-  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; daily_report?: boolean };
+  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; email_off?: boolean; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;

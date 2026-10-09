@@ -12,10 +12,21 @@ export type Flow = { buy: number | null; sell: number | null; net: number | null
 /** `pcr_oi` and `pcr_vol` are over the strikes near the money the recordings keep (`near_strikes` each side), the same PCR as
  * the chain panel and the history (R7T-005); `pcr_all` over every strike read. */
 export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
-  pcr_all?: number | null; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
+  pcr_all?: number | null; strikes_read?: number; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
 
 /** The strikes either side of the money the recordings keep, and the headline PCR counts. */
 export const NEAR_STRIKES = 15;
+
+/** The strikes a chain read covered, said as it is (R8B-005: "All strikes read" equalled the near-money PCR on every row,
+ * because the live read is the 31 strikes around the money). A PCR over every strike read is given only when the read
+ * went beyond the near-money window, so it is a different figure. */
+export function strikesRead(read: number | null | undefined, near: number | null | undefined, all: number | null | undefined,
+  ratio: (v: number | null) => string): string {
+  const window = 2 * (near ?? NEAR_STRIKES) + 1;
+  if (!read) return "";
+  if (read > window && all != null) return `all strikes read ${ratio(all)} (${read} strikes)`;
+  return `${read} strikes read`;
+}
 
 /** How many days are stored: the first and the last. */
 export type Span = { days: number; first: string | null; last: string | null };

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xbrl
+  xml:lang="en-US"
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:country="http://xbrl.sec.gov/country/2025"
+  xmlns:currency="http://xbrl.sec.gov/currency/2025"
+  xmlns:cyd="http://xbrl.sec.gov/cyd/2025"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025"
+  xmlns:ecd="http://xbrl.sec.gov/ecd/2025"
+  xmlns:ifrs-full="https://xbrl.ifrs.org/taxonomy/2025-03-27/ifrs-full"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:itub="http://itacunibanco.com/20251231"
+  xmlns:link="http://www.xbrl.org/2003/linkbase"
+  xmlns:srt="http://fasb.org/srt/2025"
+  xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+<context id="c-1">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <startDate>2025-01-01</startDate>
+            <endDate>2025-12-31</endDate>
+        </period>
+    </context>
+<context id="c-27">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <instant>2022-12-31</instant>
+        </period>
+    </context>
+<context id="c-5">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <instant>2025-12-31</instant>
+        </period>
+    </context>
+<context id="c-6">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <instant>2024-12-31</instant>
+        </period>
+    </context>
+<context id="c-7">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <startDate>2024-01-01</startDate>
+            <endDate>2024-12-31</endDate>
+        </period>
+    </context>
+<context id="c-78">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <instant>2023-12-31</instant>
+        </period>
+    </context>
+<context id="c-8">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001132597</identifier>
+        </entity>
+        <period>
+            <startDate>2023-01-01</startDate>
+            <endDate>2023-12-31</endDate>
+        </period>
+    </context>
+<unit id="brl">
+        <measure>iso4217:BRL</measure>
+    </unit>
+<unit id="shares">
+        <measure>shares</measure>
+    </unit>
+<dei:DocumentType contextRef="c-1" id="f-1">20-F</dei:DocumentType>
+<dei:DocumentPeriodEndDate contextRef="c-1" id="f-4">2025-12-31</dei:DocumentPeriodEndDate>
+<dei:TradingSymbol contextRef="c-1" id="f-25">ITUB</dei:TradingSymbol>
+<dei:Security12bTitle contextRef="c-1" id="f-27">American Depositary Shares (as evidenced by American Depositary Receipts), each representing one Preferred Share</dei:Security12bTitle>
+<ifrs-full:Cash contextRef="c-5" decimals="-6" id="f-63" unitRef="brl">37144000000</ifrs-full:Cash>
+<ifrs-full:Cash contextRef="c-6" decimals="-6" id="f-64" unitRef="brl">36127000000</ifrs-full:Cash>
+<ifrs-full:PropertyPlantAndEquipment contextRef="c-5" decimals="-6" id="f-109" unitRef="brl">12635000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment contextRef="c-6" decimals="-6" id="f-110" unitRef="brl">13263000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:EquityAttributableToOwnersOfParent contextRef="c-5" decimals="-6" id="f-155" unitRef="brl">204501000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:EquityAttributableToOwnersOfParent contextRef="c-6" decimals="-6" id="f-156" unitRef="brl">211090000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:NoncontrollingInterests contextRef="c-5" decimals="-6" id="f-167" unitRef="brl">10575000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:NoncontrollingInterests contextRef="c-6" decimals="-6" id="f-168" unitRef="brl">10194000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:Equity contextRef="c-5" decimals="-6" id="f-169" unitRef="brl">215076000000</ifrs-full:Equity>
+<ifrs-full:Equity contextRef="c-6" decimals="-6" id="f-170" unitRef="brl">221284000000</ifrs-full:Equity>
+<ifrs-full:Revenue contextRef="c-1" decimals="-6" id="f-173" unitRef="brl">167780000000</ifrs-full:Revenue>
+<ifrs-full:Revenue contextRef="c-7" decimals="-6" id="f-174" unitRef="brl">168050000000</ifrs-full:Revenue>
+<ifrs-full:Revenue contextRef="c-8" decimals="-6" id="f-175" unitRef="brl">154971000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLoss contextRef="c-1" decimals="-6" id="f-239" unitRef="brl">45849000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-7" decimals="-6" id="f-240" unitRef="brl">42128000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-8" decimals="-6" id="f-241" unitRef="brl">33877000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-1" decimals="-6" id="f-242" unitRef="brl">44857000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-7" decimals="-6" id="f-243" unitRef="brl">41085000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-8" decimals="-6" id="f-244" unitRef="brl">33105000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-1" decimals="-6" id="f-245" unitRef="brl">992000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-7" decimals="-6" id="f-246" unitRef="brl">1043000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-8" decimals="-6" id="f-247" unitRef="brl">772000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLoss contextRef="c-1" decimals="-6" id="f-272" unitRef="brl">45849000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-7" decimals="-6" id="f-273" unitRef="brl">42128000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-8" decimals="-6" id="f-274" unitRef="brl">33877000000</ifrs-full:ProfitLoss>
+<ifrs-full:Equity contextRef="c-27" decimals="-6" id="f-359" unitRef="brl">177107000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss contextRef="c-8" decimals="-6" id="f-502" unitRef="brl">33877000000</ifrs-full:ProfitLoss>
+<ifrs-full:Equity contextRef="c-78" decimals="-6" id="f-580" unitRef="brl">199050000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss contextRef="c-7" decimals="-6" id="f-736" unitRef="brl">42128000000</ifrs-full:ProfitLoss>
+<ifrs-full:Equity contextRef="c-6" decimals="-6" id="f-788" unitRef="brl">221284000000</ifrs-full:Equity>
+<ifrs-full:Equity contextRef="c-6" decimals="-6" id="f-814" unitRef="brl">221284000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss contextRef="c-1" decimals="-6" id="f-996" unitRef="brl">45849000000</ifrs-full:ProfitLoss>
+<ifrs-full:Equity contextRef="c-5" decimals="-6" id="f-1048" unitRef="brl">215076000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss contextRef="c-1" decimals="-6" id="f-1065" unitRef="brl">45849000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-7" decimals="-6" id="f-1066" unitRef="brl">42128000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss contextRef="c-8" decimals="-6" id="f-1067" unitRef="brl">33877000000</ifrs-full:ProfitLoss>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense contextRef="c-1" decimals="-6" id="f-1086" unitRef="brl">7386000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense contextRef="c-7" decimals="-6" id="f-1087" unitRef="brl">6440000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense contextRef="c-8" decimals="-6" id="f-1088" unitRef="brl">5652000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities contextRef="c-1" decimals="-6" id="f-1182" unitRef="brl">34466000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities contextRef="c-7" decimals="-6" id="f-1183" unitRef="brl">7069000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities contextRef="c-8" decimals="-6" id="f-1184" unitRef="brl">77493000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities contextRef="c-7" decimals="-6" id="f-1192" unitRef="brl">46811000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities contextRef="c-8" decimals="-6" id="f-1193" unitRef="brl">40087000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities contextRef="c-1" decimals="-6" id="f-1203" unitRef="brl">19440000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities contextRef="c-7" decimals="-6" id="f-1204" unitRef="brl">6968000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities contextRef="c-8" decimals="-6" id="f-1205" unitRef="brl">-31230000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashAndCashEquivalents contextRef="c-6" decimals="-6" id="f-1233" unitRef="brl">117286000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents contextRef="c-78" decimals="-6" id="f-1234" unitRef="brl">116543000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents contextRef="c-27" decimals="-6" id="f-1235" unitRef="brl">104257000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents contextRef="c-5" decimals="-6" id="f-1239" unitRef="brl">114890000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents contextRef="c-6" decimals="-6" id="f-1240" unitRef="brl">117286000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents contextRef="c-78" decimals="-6" id="f-1241" unitRef="brl">116543000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:Cash contextRef="c-5" decimals="-6" id="f-1242" unitRef="brl">37144000000</ifrs-full:Cash>
+<ifrs-full:Cash contextRef="c-6" decimals="-6" id="f-1243" unitRef="brl">36127000000</ifrs-full:Cash>
+<ifrs-full:Cash contextRef="c-78" decimals="-6" id="f-1244" unitRef="brl">32001000000</ifrs-full:Cash>
+<ifrs-full:DepreciationPropertyPlantAndEquipment contextRef="c-1" decimals="-6" id="f-4236" unitRef="brl">17951000000</ifrs-full:DepreciationPropertyPlantAndEquipment>
+<ifrs-full:DepreciationPropertyPlantAndEquipment contextRef="c-7" decimals="-6" id="f-4276" unitRef="brl">17339000000</ifrs-full:DepreciationPropertyPlantAndEquipment>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="c-5"
+      decimals="INF"
+      id="f-4851"
+      unitRef="shares">11026524530</ifrs-full:NumberOfSharesOutstanding>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="c-6"
+      decimals="INF"
+      id="f-4854"
+      unitRef="shares">9776104515</ifrs-full:NumberOfSharesOutstanding>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="c-6"
+      decimals="INF"
+      id="f-4893"
+      unitRef="shares">9776104515</ifrs-full:NumberOfSharesOutstanding>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="c-78"
+      decimals="INF"
+      id="f-4896"
+      unitRef="shares">9803698677</ifrs-full:NumberOfSharesOutstanding>
+<ifrs-full:NoncontrollingInterests contextRef="c-5" decimals="-6" id="f-5082" unitRef="brl">10575000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:NoncontrollingInterests contextRef="c-6" decimals="-6" id="f-5083" unitRef="brl">10194000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-1" decimals="-6" id="f-5084" unitRef="brl">992000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-7" decimals="-6" id="f-5085" unitRef="brl">1043000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-8" decimals="-6" id="f-5086" unitRef="brl">772000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-1" decimals="-6" id="f-5671" unitRef="brl">44857000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-7" decimals="-6" id="f-5672" unitRef="brl">41085000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-8" decimals="-6" id="f-5673" unitRef="brl">33105000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-1" decimals="-6" id="f-7493" unitRef="brl">46997000000</ifrs-full:FeeAndCommissionIncome>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-1" decimals="-6" id="f-7554" unitRef="brl">992000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-1" decimals="-6" id="f-7560" unitRef="brl">44857000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:PropertyPlantAndEquipment contextRef="c-5" decimals="-6" id="f-7582" unitRef="brl">12635000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-7" decimals="-6" id="f-7613" unitRef="brl">47071000000</ifrs-full:FeeAndCommissionIncome>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-7" decimals="-6" id="f-7674" unitRef="brl">1043000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-7" decimals="-6" id="f-7680" unitRef="brl">41085000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:PropertyPlantAndEquipment contextRef="c-6" decimals="-6" id="f-7702" unitRef="brl">13263000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-8" decimals="-6" id="f-7725" unitRef="brl">45731000000</ifrs-full:FeeAndCommissionIncome>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests contextRef="c-8" decimals="-6" id="f-7786" unitRef="brl">772000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent contextRef="c-8" decimals="-6" id="f-7792" unitRef="brl">33105000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:PropertyPlantAndEquipment contextRef="c-78" decimals="-6" id="f-7814" unitRef="brl">9135000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-1" decimals="-6" id="f-7851" unitRef="brl">46997000000</ifrs-full:FeeAndCommissionIncome>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-7" decimals="-6" id="f-7854" unitRef="brl">47071000000</ifrs-full:FeeAndCommissionIncome>
+<ifrs-full:FeeAndCommissionIncome contextRef="c-8" decimals="-6" id="f-7857" unitRef="brl">45731000000</ifrs-full:FeeAndCommissionIncome>
+</xbrl>

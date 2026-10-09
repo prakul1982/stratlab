@@ -451,7 +451,11 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             news = hub.headlines(r, f)
         except SourceError:
             news = []
-        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r))
+        try:
+            sectors = hub.sector_moves(r)
+        except Exception:
+            sectors = None
+        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors)
     try:
         # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five

@@ -12,13 +12,21 @@ self.addEventListener("install", (e) => {
 });
 
 // what a page load gets when the network fails and no copy of the app is kept: a plain offline page, never nothing (a
-// navigation answered with nothing showed Safari's "Returned response is null" error page, R6O-006)
-const OFFLINE = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-  + '<title>StratLab: offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center">'
-  + '<h1 style="font-size:22px">StratLab can\'t be reached</h1><p>Check the connection, then try again.</p>'
-  + '<p><a href="" onclick="location.reload();return false">Try again</a></p></body></html>';
-function offline() {
-  try { return new Response(OFFLINE, { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }); }
+// navigation answered with nothing showed Safari's "Returned response is null" error page, R6O-006). It has a Reload button
+// that works without scripts (a form that asks for the same address again), and tries again by itself after 30 seconds
+// (R8B-011: an iPhone on a 503 saw "StratLab can't be reached" with no way to retry).
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function offlinePage(path) {
+  const to = esc(path || "/");
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<meta http-equiv="refresh" content="30"><meta name="color-scheme" content="light dark">'
+    + '<title>StratLab: offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center">'
+    + '<main><h1 style="font-size:22px">StratLab can\'t be reached</h1><p>Check the connection, then reload. This page also tries again by itself in 30 seconds.</p>'
+    + '<form method="get" action="' + to + '"><button type="submit" data-testid="offline-reload" style="font:inherit;padding:10px 20px;border-radius:8px;'
+    + 'border:1px solid currentColor;background:none;color:inherit;cursor:pointer">Reload</button></form></main></body></html>';
+}
+function offline(path) {
+  try { return new Response(offlinePage(path), { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }); }
   catch { return Response.error(); }
 }
 const shellOr = (fallback) => caches.match("/").then((hit) => hit || fallback()).catch(() => fallback());
@@ -50,9 +58,10 @@ self.addEventListener("fetch", (e) => {
       caches.open(SHELL).then((c) => c.put("/", copy)).catch(() => undefined);
       return res;
     }
-    if (res.status >= 500) return shellOr(() => res);
+    // a server error with no copy of the app kept: the offline page with its Reload, not the host's bare error page
+    if (res.status >= 500) return shellOr(() => offline(url.pathname + url.search));
     return res;
-  }).catch(() => shellOr(offline)));
+  }).catch(() => shellOr(() => offline(url.pathname + url.search))));
 });
 
 self.addEventListener("push", (e) => {

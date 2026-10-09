@@ -147,17 +147,28 @@ def _pe(p: dict, price: float | None) -> float | None:
 
 
 SHARES_DRIFT = 0.015           # the source's market value and its share capital disagree by more than this: use the capital
+# ...unless the balance sheet's count is this much lower: then it is the shares outstanding net of those the company's
+# employee trusts hold (treasury shares, which Ind AS takes out of share capital), not a count the source missed
+TRUST_GAP = 0.05
 
 
 def market_cap(cap_cr: float | None, price: float | None, equity_cr: float | None, face: float | None) -> float | None:
-    """Market value in crore: price times shares. The source's own figure is price times its share count at the moment
-    it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page 361.7, from two
-    reads). The share capital over the face value counts the shares from the balance sheet; when the two differ by
-    more than SHARES_DRIFT, that count is used, so every page multiplies the price by the same number of shares."""
+    """Market value in crore: price times the shares in issue. The source's own figure is price times its share count at
+    the moment it was read, which can lag (TCS, 8 Oct 2026: the screener said 370.3 crore shares, the company page
+    361.7, from two reads). The share capital over the face value counts the shares from the balance sheet; when the
+    two differ by more than SHARES_DRIFT, that count is used, so every page multiplies the price by the same number of
+    shares. A balance-sheet count more than TRUST_GAP below the source's is net of the shares the company's own trusts
+    hold, which are still in issue, so the source's count stands (R8V-005: M&M's 559 crore of ₹5 shares, 111.8 crore,
+    against 124 crore in issue, cut its value from ₹3.42 to ₹3.08 lakh crore at the same close)."""
     if not price or price <= 0:
         return cap_cr
     shares = (equity_cr / face) if equity_cr and face and face > 0 else None
-    if shares and shares > 0 and (not cap_cr or abs(cap_cr / price / shares - 1) > SHARES_DRIFT):
+    if not shares or shares <= 0:
+        return cap_cr
+    if not cap_cr:
+        return round(price * shares, 2)
+    source = cap_cr / price
+    if abs(source / shares - 1) > SHARES_DRIFT and shares >= source * (1 - TRUST_GAP):
         return round(price * shares, 2)
     return cap_cr
 

@@ -160,8 +160,8 @@ def rows() -> list[dict]:
             line = f"{label[key]}, {rep.get('day')}: sent to {rep.get('sent', 0)} of {plural(rep.get('readers', 0), 'reader')}"
             if rep.get("other_edition"):
                 line += f"; {rep['other_edition']} chose the other edition"
-            if why:
-                line += "; not sent: " + ", ".join(f"{n} {w}" for w, n in why.items())
+            # the skipped count and why, said even when it is none, so a reader left out is never invisible (R8B-007)
+            line += f"; skipped {sum(why.values())}" + (": " + ", ".join(f"{n} {w}" for w, n in why.items()) if why else "")
             log.append(line)
         at, extra = _ran(st, "last_run", data=lambda: max((i.get("at") or "" for r in news.SEND_AT for i in news.recent("market", r, 1)), default="") or None)
         error = st.get("last_error") or (f"{plural(failed, 'reader')} couldn't be sent an issue; it is tried again during the day" if failed else None)

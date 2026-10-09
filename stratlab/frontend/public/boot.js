@@ -58,6 +58,15 @@
     window.__stratlabLoadFailed = true;
     recover();
   });
+  // the app's own file failed to download as a rejected import(): Safari's "Importing a module script failed" / "Load failed"
+  // never reached the two handlers above (R9P-008). Only while the page is still the start-up text: once the app has drawn,
+  // a failed request is its own to report
+  window.addEventListener("unhandledrejection", function (e) {
+    var r = e && e.reason, m = String((r && (r.message || r.name)) || r || "");
+    if (!/dynamically imported module|importing a module script|loading chunk|chunkloaderror|load failed|failed to fetch/i.test(m)) return;
+    var root = document.getElementById("root");
+    if (root && root.querySelector("[data-boot]")) { window.__stratlabLoadFailed = true; recover(); }
+  });
   // one of the app's own scripts or stylesheets (the error does not bubble, so listen on the way down)
   window.addEventListener("error", function (e) {
     var t = e && e.target;

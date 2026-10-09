@@ -62,10 +62,10 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
         except Exception as e:
             print("fo changes alert failed:", channel, str(e)[:120])
     to = alerts.newsletter_email(profile)
-    if to and alerts.email_ready() and alerts.email_confirmed(profile):
+    if to and alerts.email_ready() and alerts.email_confirmed(profile) and alerts.alert_emails_on(profile.get("id")):
         try:
             alerts.send_message(to, subject, text, "/trade/fo-changes", "F&O changes",
-                                "You get this because you turned on F&O change alerts on StratLab.")
+                                "You get this because you turned on F&O change alerts on StratLab.", uid=profile.get("id"))
             sent.append("email")
         except Exception as e:
             print("fo changes alert failed: email", str(e)[:120])

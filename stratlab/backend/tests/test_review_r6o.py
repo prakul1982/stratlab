@@ -484,9 +484,13 @@ def test_a_chain_read_after_the_close_is_of_the_close():
     from zoneinfo import ZoneInfo
     from app.positioning import chain_time
     ist = ZoneInfo("Asia/Kolkata")
-    assert chain_time(datetime(2026, 10, 8, 23, 45, tzinfo=ist)) == ("2026-10-08T15:30:00+05:30", "close")
+    # R8B-006 changed the close's time on purpose: options trade until 15:40 since 3 Aug 2026, so a chain read after the
+    # close is of 15:40, not 15:30 (before that day the segment closed at 15:30, as the last line shows)
+    assert chain_time(datetime(2026, 10, 8, 23, 45, tzinfo=ist)) == ("2026-10-08T15:40:00+05:30", "close")
     assert chain_time(datetime(2026, 10, 8, 11, 0, tzinfo=ist)) == ("2026-10-08T11:00:00+05:30", "live")
-    assert chain_time(datetime(2026, 10, 10, 10, 0, tzinfo=ist))[0] == "2026-10-09T15:30:00+05:30"     # a Saturday: Friday's close
+    assert chain_time(datetime(2026, 10, 10, 10, 0, tzinfo=ist))[0] == "2026-10-09T15:40:00+05:30"     # a Saturday: Friday's close
+    assert chain_time(datetime(2026, 10, 8, 15, 35, tzinfo=ist))[1] == "live"                            # F&O still trading
+    assert chain_time(datetime(2026, 7, 1, 23, 45, tzinfo=ist))[0] == "2026-07-01T15:30:00+05:30"
 
 
 def test_todays_expiry_is_gone_after_it_expires():

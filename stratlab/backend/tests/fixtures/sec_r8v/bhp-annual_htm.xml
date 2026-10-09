@@ -1,0 +1,789 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:bhp="http://www.bhp.com/20260630"
+  xmlns:country="http://xbrl.sec.gov/country/2025"
+  xmlns:currency="http://xbrl.sec.gov/currency/2025"
+  xmlns:cyd="http://xbrl.sec.gov/cyd/2025"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025"
+  xmlns:ecd="http://xbrl.sec.gov/ecd/2025"
+  xmlns:ifrs-full="https://xbrl.ifrs.org/taxonomy/2025-03-27/ifrs-full"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:link="http://www.xbrl.org/2003/linkbase"
+  xmlns:srt="http://fasb.org/srt/2025"
+  xmlns:utr="http://www.xbrl.org/2009/utr"
+  xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+<context id="C_6216a4fd-f963-4d2c-9c47-01e99a697378">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <startDate>2024-07-01</startDate>
+            <endDate>2025-06-30</endDate>
+        </period>
+    </context>
+<context id="C_68cdeedb-0979-4020-8126-0d2c5956f60a">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <instant>2025-06-30</instant>
+        </period>
+    </context>
+<context id="C_985047cc-0e7d-4462-bdba-5c5d29121d9a">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <instant>2024-06-30</instant>
+        </period>
+    </context>
+<context id="C_9a5d8d08-1ddb-43da-9f95-8d9a4c04bc5d">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <instant>2023-06-30</instant>
+        </period>
+    </context>
+<context id="C_c41e974f-3c48-4793-a2c0-4f78e60658ca">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <startDate>2023-07-01</startDate>
+            <endDate>2024-06-30</endDate>
+        </period>
+    </context>
+<context id="C_eb41226d-bb00-49cf-984a-193e52f918e7">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <instant>2026-06-30</instant>
+        </period>
+    </context>
+<context id="C_fe862361-fe7a-4059-a1f3-7b447b31d395">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0000811809</identifier>
+        </entity>
+        <period>
+            <startDate>2025-07-01</startDate>
+            <endDate>2026-06-30</endDate>
+        </period>
+    </context>
+<unit id="U_USD">
+        <measure>iso4217:USD</measure>
+    </unit>
+<unit id="U_UnitedStatesOfAmericaDollarsShare">
+        <divide>
+            <unitNumerator>
+                <measure>iso4217:USD</measure>
+            </unitNumerator>
+            <unitDenominator>
+                <measure>shares</measure>
+            </unitDenominator>
+        </divide>
+    </unit>
+<unit id="U_shares">
+        <measure>shares</measure>
+    </unit>
+<dei:DocumentType
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      id="F_2eb259b6-4378-424e-a912-2fea3f735e70">20-F</dei:DocumentType>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="3"
+      id="F_0d301301-0e5f-4090-bbef-0b5e0ce374d6"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.936</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="3"
+      id="F_5aa3e476-0c42-4728-a5a7-30f172970501"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.778</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="3"
+      id="F_eabbb827-cc14-4080-8f44-01200ecb60d4"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.558</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="3"
+      id="F_a7a61fe1-2d72-458a-a521-02fdd459164c"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.932</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="3"
+      id="F_67faabe2-bc88-4b46-a71e-b662cb3e5031"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.774</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="3"
+      id="F_30b0a044-9a26-43b1-94bc-33cbb0c29093"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.555</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="3"
+      id="F_21c95d86-6d02-4f0a-ae71-4c0d6184c82a"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.936</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="3"
+      id="F_d41ce42f-528f-4a34-af17-60a39b2ac556"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.778</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="3"
+      id="F_563bda5a-0ffb-4f83-9a83-7951f79c6a50"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.558</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="3"
+      id="F_9a022158-24d2-470b-a20a-5804ec7756e5"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.932</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="3"
+      id="F_0bb69010-182d-4d65-a4f4-2bd1c3dfca59"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.774</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="3"
+      id="F_b0c943fb-4239-439a-8464-4bd02c84d508"
+      unitRef="U_UnitedStatesOfAmericaDollarsShare">1.555</ifrs-full:DilutedEarningsLossPerShare>
+<dei:DocumentPeriodEndDate
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      id="F_7b5b31b1-c4bd-4d55-99b0-daaa9927f66a">2026-06-30</dei:DocumentPeriodEndDate>
+<dei:EntityCommonStockSharesOutstanding
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="0"
+      id="F_8aa32523-0473-42f7-8091-03e83e2030f2"
+      unitRef="U_shares">5081391706</dei:EntityCommonStockSharesOutstanding>
+<ifrs-full:Revenue
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_2e0cf489-092f-4705-a176-6db165883ebd"
+      unitRef="U_USD">58760000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_459ed143-04a1-4abd-9c51-a1adbd5d8337"
+      unitRef="U_USD">51262000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_52881a4f-568e-4594-b3e9-874686dd95e4"
+      unitRef="U_USD">55658000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_65a1aab8-2045-4cba-aef3-2bb28dfb4379"
+      unitRef="U_USD">23869000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_6524a4ca-772d-4305-8781-3061dc2d7e2b"
+      unitRef="U_USD">19464000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_dc84406f-8de6-4dd0-8bee-33cd7536a7ad"
+      unitRef="U_USD">17537000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:FinanceCosts
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_0f48ed6f-8286-4d43-ab14-4f79194475bd"
+      unitRef="U_USD">2059000000</ifrs-full:FinanceCosts>
+<ifrs-full:FinanceCosts
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_17e77c8f-4b13-4d8f-8618-a26ebdd0c47d"
+      unitRef="U_USD">1771000000</ifrs-full:FinanceCosts>
+<ifrs-full:FinanceCosts
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_39d8aec1-5d29-4a05-8d53-f80c2ae67153"
+      unitRef="U_USD">2198000000</ifrs-full:FinanceCosts>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_3df38c2d-01f1-4b87-b413-cc1d62a872fe"
+      unitRef="U_USD">22414000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_d53e10ed-b444-4e2c-887a-de511c952c3e"
+      unitRef="U_USD">18353000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_a1d58bbd-df65-46f6-a419-2a5cc695e6c9"
+      unitRef="U_USD">16048000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLoss
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_e98c12d5-d670-4d94-b031-c7aa8d86b910"
+      unitRef="U_USD">13026000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_01832965-c1a7-439e-90e7-29d56ac4367d"
+      unitRef="U_USD">11143000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_6b4eab96-bcc8-41cc-b796-50d8f05c5c09"
+      unitRef="U_USD">9601000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_499ecaec-923b-4003-a0d3-5d601f1ea0e8"
+      unitRef="U_USD">3193000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_ba454ad4-6657-410d-bcc4-7372c8fddb6d"
+      unitRef="U_USD">2124000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_4e9b8ee1-84f7-43d8-a65b-0c965b06b529"
+      unitRef="U_USD">1704000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_169bfb0a-6a09-488a-85d7-5325a7e5bfce"
+      unitRef="U_USD">9833000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_7be4ffe2-ea87-4f94-b2ef-86121ec1710a"
+      unitRef="U_USD">9019000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_0e82d04d-cb50-4e1d-8284-860a3935d134"
+      unitRef="U_USD">7897000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLoss
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_4c19b1cd-d0ae-4cd2-801b-136568d53721"
+      unitRef="U_USD">13026000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_cdfe5bcb-0e2e-48f3-a537-a168a4c1285d"
+      unitRef="U_USD">11143000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_97332954-7528-4089-b304-1bb2e24f0149"
+      unitRef="U_USD">9601000000</ifrs-full:ProfitLoss>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_db1f4142-6c58-4b4d-a64e-92cd459a4528"
+      unitRef="U_USD">18532000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_1a631803-b92e-4956-9c79-403f90daa5c5"
+      unitRef="U_USD">11894000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_b8ee1e69-2658-4826-9816-21dd3a90c185"
+      unitRef="U_USD">80046000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_6fa59aed-bf02-4ffc-9255-d6acbfd8cf40"
+      unitRef="U_USD">76457000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_6b090221-5c71-4bea-9b94-b7689cecb207"
+      unitRef="U_USD">50923000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_19ea2108-e655-4626-ac41-42cd369ed11d"
+      unitRef="U_USD">47665000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:NoncontrollingInterests
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_7482b525-ec46-4b01-9cb1-590264cc8e84"
+      unitRef="U_USD">5398000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:NoncontrollingInterests
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_81b977b8-5b1e-459a-a61c-2c407f2cce4f"
+      unitRef="U_USD">4553000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:Equity
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_2d2b3b8b-7589-4fce-bb54-f339953da7c3"
+      unitRef="U_USD">56321000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_c9bc05f3-cd85-49dd-af82-a140eccbca7e"
+      unitRef="U_USD">52218000000</ifrs-full:Equity>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_c5cc5fca-bcf2-46f8-8706-a3a74c5ade37"
+      unitRef="U_USD">22414000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_24a71aa2-546f-486e-9b24-328914603219"
+      unitRef="U_USD">18353000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_5da12d9e-80d5-4fb6-bdd2-7035aca673ca"
+      unitRef="U_USD">16048000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_d9d460ee-e138-497a-9cee-4a6c66ca5d3c"
+      unitRef="U_USD">6201000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_4dbaebc1-00dc-4d89-9b81-17f58708119c"
+      unitRef="U_USD">5540000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_c7c6d2ad-189f-4c71-81c2-fd0ea774fb49"
+      unitRef="U_USD">5295000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_0df17a74-42ff-47d6-ade8-29a9fc309937"
+      unitRef="U_USD">21778000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_43b51b22-bc59-4508-9c47-e327ef704ba2"
+      unitRef="U_USD">18692000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_37251f03-b183-4d6c-b8f2-be5e4f487f43"
+      unitRef="U_USD">20665000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_e1d5ce34-7009-461e-aac8-44a36df0bc38"
+      unitRef="U_USD">9849000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_97b40d75-fc37-4f85-8149-5d317d5612a8"
+      unitRef="U_USD">9398000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_5671d8cf-2976-4526-86b3-80b6fd9a466c"
+      unitRef="U_USD">8816000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_cdbffbfa-eddc-48e1-9f53-98cdd27cfa47"
+      unitRef="U_USD">-12011000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_aa07cd6c-2805-48b3-9c76-406a355b63b2"
+      unitRef="U_USD">-13350000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_78e1fa72-48aa-42ec-9dec-e58347dacfd3"
+      unitRef="U_USD">-8762000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:Equity
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_1b64be90-7c6a-4303-a73e-a9fc48e4e50e"
+      unitRef="U_USD">52218000000</ifrs-full:Equity>
+<ifrs-full:DividendsPaid
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_3329e20f-84c5-47f4-b6bf-2526073f10eb"
+      unitRef="U_USD">9116000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_63d8e99c-cb73-42ae-82aa-9f8e26b65e17"
+      unitRef="U_USD">56321000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="C_985047cc-0e7d-4462-bdba-5c5d29121d9a"
+      decimals="-6"
+      id="F_fe7acbd4-c225-41de-9fec-984b26faac2e"
+      unitRef="U_USD">49120000000</ifrs-full:Equity>
+<ifrs-full:DividendsPaid
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_85187698-352d-47be-a191-e624b97d5d1b"
+      unitRef="U_USD">8159000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_f6949164-5824-4279-a635-43eccd1c59d8"
+      unitRef="U_USD">52218000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="C_9a5d8d08-1ddb-43da-9f95-8d9a4c04bc5d"
+      decimals="-6"
+      id="F_6f53e2e4-6dec-4a7c-bff0-40e8a064b42c"
+      unitRef="U_USD">48530000000</ifrs-full:Equity>
+<ifrs-full:DividendsPaid
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_4f5c2dac-de6c-4692-9050-2084af98b643"
+      unitRef="U_USD">9136000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="C_985047cc-0e7d-4462-bdba-5c5d29121d9a"
+      decimals="-6"
+      id="F_a8c11cb0-417a-453e-b8d1-cfc433ed6f65"
+      unitRef="U_USD">49120000000</ifrs-full:Equity>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_be805e37-83d2-44d2-8fbd-9328c73a4558"
+      unitRef="U_USD">22414000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_d7445c71-11e7-4bd0-b5f2-a3517b0d6e5c"
+      unitRef="U_USD">9849000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_6952cd98-98b0-457b-8857-c231fb95a62b"
+      unitRef="U_USD">18353000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_227195b7-daf4-42d2-b81e-ed744ce1d369"
+      unitRef="U_USD">9398000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_9b2f76b3-5898-443c-baac-d6d88b7ef131"
+      unitRef="U_USD">16048000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_0be0d8c7-558d-4ab3-9995-9ec3155e1224"
+      unitRef="U_USD">8816000000</ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities>
+<ifrs-full:Revenue
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_255ae19d-6e22-42d3-95bd-49ad6bd117a2"
+      unitRef="U_USD">58760000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_00d6178e-64e7-4039-9ef9-e38955d6af3e"
+      unitRef="U_USD">51262000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_c3271281-0745-426a-b068-f0654c854714"
+      unitRef="U_USD">55658000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_822e9093-b4dd-450c-a5ff-f1b4a2a3a1a2"
+      unitRef="U_USD">58760000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_745fcbbf-9824-4c01-b727-a84eea7d5f46"
+      unitRef="U_USD">51262000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_a9c756d7-805e-4606-8be9-c916b4225c8b"
+      unitRef="U_USD">55658000000</ifrs-full:Revenue>
+<ifrs-full:RevenueFromContractsWithCustomers
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_d84000d3-9eec-44db-96fe-2d572738e535"
+      unitRef="U_USD">57495000000</ifrs-full:RevenueFromContractsWithCustomers>
+<ifrs-full:RevenueFromContractsWithCustomers
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_0146384c-b51a-4296-ac4e-f14099eacc04"
+      unitRef="U_USD">51238000000</ifrs-full:RevenueFromContractsWithCustomers>
+<ifrs-full:RevenueFromContractsWithCustomers
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_0ce66e24-ad77-4c35-b33b-fd4de83d2fbc"
+      unitRef="U_USD">55375000000</ifrs-full:RevenueFromContractsWithCustomers>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_925a8b9c-0d6a-4f8f-ae44-f4b64498962a"
+      unitRef="U_USD">6201000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_6d8a07a7-20f1-4676-8445-94748a6c4e6c"
+      unitRef="U_USD">5540000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_a7f93dad-1645-4870-a2cb-3010d7f73055"
+      unitRef="U_USD">5295000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_d3c0a417-8957-41fd-8d81-d6474da27a8c"
+      unitRef="U_USD">22414000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_b0ce79fd-ac1c-45e3-9f07-d5c7b66b5a21"
+      unitRef="U_USD">18353000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_cdc8e8a9-6918-451e-ad41-93e6a2ff5a96"
+      unitRef="U_USD">16048000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_6a58ae1c-9812-48a2-b351-c3a262485141"
+      unitRef="U_USD">9833000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_1e0b58a0-e4ed-4474-9b32-eb60141e40ee"
+      unitRef="U_USD">9019000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_18e6d48c-d443-4010-9ca5-99625d94ad16"
+      unitRef="U_USD">7897000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:WeightedAverageShares
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_4846d29f-cae4-48bf-b57c-8bb509c47fa9"
+      unitRef="U_shares">5078000000</ifrs-full:WeightedAverageShares>
+<ifrs-full:WeightedAverageShares
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_75d3f687-a8c7-4369-84fe-12b37f155f32"
+      unitRef="U_shares">5073000000</ifrs-full:WeightedAverageShares>
+<ifrs-full:WeightedAverageShares
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_cb5e02d4-510e-4f72-84bc-7a240088f199"
+      unitRef="U_shares">5068000000</ifrs-full:WeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_9fbee1e7-62c6-402f-88cd-3753266ed430"
+      unitRef="U_shares">5089000000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_498e7c52-a22d-43ca-a466-2776bd5ad5dc"
+      unitRef="U_shares">5083000000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_56ffe3c4-a4b8-4898-920b-dbb28fa272a6"
+      unitRef="U_shares">5077000000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_c4909cf8-ee1e-4e25-81b1-231dd7c8f058"
+      unitRef="U_USD">9833000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_7210f5e9-203f-48e6-8cc5-06ef58590286"
+      unitRef="U_USD">9019000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_f1c95eec-8e93-4ac1-965e-b482b7c0e4d3"
+      unitRef="U_USD">7897000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_a4f3e734-0639-416f-abb0-e41b20d8f4da"
+      unitRef="U_USD">76457000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:DepreciationPropertyPlantAndEquipment
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_095c07b9-7a7d-45be-bc76-428b6039110c"
+      unitRef="U_USD">6060000000</ifrs-full:DepreciationPropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_75d21043-dbb8-4d6f-9521-e302fafde7c8"
+      unitRef="U_USD">80046000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_985047cc-0e7d-4462-bdba-5c5d29121d9a"
+      decimals="-6"
+      id="F_ceca9f25-0c82-48b3-a835-5579f363aeba"
+      unitRef="U_USD">71629000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:DepreciationPropertyPlantAndEquipment
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_77f0d724-7edd-4c8f-a18d-b7f6f18bf750"
+      unitRef="U_USD">5429000000</ifrs-full:DepreciationPropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_47d1b145-53e8-4423-b335-aaae71fa44a0"
+      unitRef="U_USD">76457000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:AmortisationIntangibleAssetsOtherThanGoodwill
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_47b3d17a-521b-4deb-bef8-fc192de8f2bd"
+      unitRef="U_USD">141000000</ifrs-full:AmortisationIntangibleAssetsOtherThanGoodwill>
+<ifrs-full:AmortisationIntangibleAssetsOtherThanGoodwill
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_1aa29f1e-6722-4beb-99b8-ec3f86f76c3a"
+      unitRef="U_USD">111000000</ifrs-full:AmortisationIntangibleAssetsOtherThanGoodwill>
+<ifrs-full:NoncontrollingInterests
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_7a6150c7-ed8d-47f1-bb23-4394c76008cd"
+      unitRef="U_USD">5398000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:NoncontrollingInterests
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_fcd82884-f452-47ef-a614-ee0e821a88e4"
+      unitRef="U_USD">4553000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_7ad8fe29-bd4c-4eb5-9f48-b13f05d5d939"
+      unitRef="U_USD">3193000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_507b8c5e-0f86-4466-a311-228b0a7e9164"
+      unitRef="U_USD">2124000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:Cash
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_f14c558f-9cee-4e8e-88ea-5fdc9af5b5a0"
+      unitRef="U_USD">7609000000</ifrs-full:Cash>
+<ifrs-full:Cash
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_bd7a5011-08cf-4bb6-9e5a-6ce958943c5a"
+      unitRef="U_USD">7244000000</ifrs-full:Cash>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_fff7f7d4-c7b6-4a25-bba5-657b769e740a"
+      unitRef="U_USD">18532000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_20009998-e9d9-4061-946c-c956c93f4297"
+      unitRef="U_USD">11894000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_b6641d92-c26f-496d-a300-3dc8952e9d05"
+      unitRef="U_USD">18532000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_dddeafb7-9e24-43c2-b231-e1d5eae8cd9c"
+      unitRef="U_USD">11894000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_985047cc-0e7d-4462-bdba-5c5d29121d9a"
+      decimals="-6"
+      id="F_d98262e3-0fec-432e-81b3-899283f3af0a"
+      unitRef="U_USD">12501000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_75c907c3-9030-454f-9ca2-ca11cf61203e"
+      unitRef="U_USD">18532000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_c9287a48-187e-43fb-86c6-e11f6a36f86a"
+      unitRef="U_USD">11894000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:Borrowings
+      contextRef="C_eb41226d-bb00-49cf-984a-193e52f918e7"
+      decimals="-6"
+      id="F_949b0782-ed63-445b-9668-067584d7a10e"
+      unitRef="U_USD">23625000000</ifrs-full:Borrowings>
+<ifrs-full:Borrowings
+      contextRef="C_68cdeedb-0979-4020-8126-0d2c5956f60a"
+      decimals="-6"
+      id="F_3aee580f-ec3e-4498-a2df-15087d1ae7dc"
+      unitRef="U_USD">21543000000</ifrs-full:Borrowings>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_2d0d0135-3eaf-4d9a-834f-d8d2a735a4b5"
+      unitRef="U_USD">1036000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_c367be29-b3fc-4e72-a92b-54e43132fffe"
+      unitRef="U_USD">717000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_c5a0a3fd-18e6-4fe4-b294-db3c484e4225"
+      unitRef="U_USD">1036000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_40e4677a-7e04-43d5-ace7-12f68c0eaaeb"
+      unitRef="U_USD">717000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_63c559e3-8891-453d-8bd9-8394a07d6f3e"
+      unitRef="U_USD">717000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:FinanceCosts
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_d5bcf36c-fda6-441c-887d-af34ab879385"
+      unitRef="U_USD">2059000000</ifrs-full:FinanceCosts>
+<ifrs-full:FinanceCosts
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_006b3fef-3a41-4264-af50-3277541b4c49"
+      unitRef="U_USD">1771000000</ifrs-full:FinanceCosts>
+<ifrs-full:FinanceCosts
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_43049fd9-e595-41d1-894a-c037de5bb51c"
+      unitRef="U_USD">2198000000</ifrs-full:FinanceCosts>
+<ifrs-full:RevenueFromInterest
+      contextRef="C_fe862361-fe7a-4059-a1f3-7b447b31d395"
+      decimals="-6"
+      id="F_296cb5b5-6d78-44b7-aa77-dd702d9a30c6"
+      unitRef="U_USD">573000000</ifrs-full:RevenueFromInterest>
+<ifrs-full:RevenueFromInterest
+      contextRef="C_6216a4fd-f963-4d2c-9c47-01e99a697378"
+      decimals="-6"
+      id="F_89f5d9ba-f1d6-41f8-af95-ae384beaa26d"
+      unitRef="U_USD">603000000</ifrs-full:RevenueFromInterest>
+<ifrs-full:RevenueFromInterest
+      contextRef="C_c41e974f-3c48-4793-a2c0-4f78e60658ca"
+      decimals="-6"
+      id="F_c5d57158-52ff-46c0-b709-d9cca16e4802"
+      unitRef="U_USD">709000000</ifrs-full:RevenueFromInterest>
+</xbrl>

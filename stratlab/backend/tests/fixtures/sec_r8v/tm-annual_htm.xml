@@ -1,0 +1,703 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xbrl
+  xmlns="http://www.xbrl.org/2003/instance"
+  xmlns:country="http://xbrl.sec.gov/country/2025"
+  xmlns:currency="http://xbrl.sec.gov/currency/2025"
+  xmlns:cyd="http://xbrl.sec.gov/cyd/2025"
+  xmlns:dei="http://xbrl.sec.gov/dei/2025"
+  xmlns:ecd="http://xbrl.sec.gov/ecd/2025"
+  xmlns:ifrs-full="https://xbrl.ifrs.org/taxonomy/2025-03-27/ifrs-full"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217"
+  xmlns:link="http://www.xbrl.org/2003/linkbase"
+  xmlns:srt="http://fasb.org/srt/2025"
+  xmlns:tm="http://www.toyota-global.com/20260331"
+  xmlns:xbrldi="http://xbrl.org/2006/xbrldi"
+  xmlns:xlink="http://www.w3.org/1999/xlink">
+<context id="P04_01_2023To03_31_2024">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <startDate>2023-04-01</startDate>
+            <endDate>2024-03-31</endDate>
+        </period>
+    </context>
+<context id="P04_01_2024To03_31_2025">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <startDate>2024-04-01</startDate>
+            <endDate>2025-03-31</endDate>
+        </period>
+    </context>
+<context id="P04_01_2025To03_31_2026">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <startDate>2025-04-01</startDate>
+            <endDate>2026-03-31</endDate>
+        </period>
+    </context>
+<context id="PAsOn03_31_2023">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <instant>2023-03-31</instant>
+        </period>
+    </context>
+<context id="PAsOn03_31_2024">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <instant>2024-03-31</instant>
+        </period>
+    </context>
+<context id="PAsOn03_31_2025">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <instant>2025-03-31</instant>
+        </period>
+    </context>
+<context id="PAsOn03_31_2026">
+        <entity>
+            <identifier scheme="http://www.sec.gov/CIK">0001094517</identifier>
+        </entity>
+        <period>
+            <instant>2026-03-31</instant>
+        </period>
+    </context>
+<unit id="Unit_JPY">
+        <measure>iso4217:JPY</measure>
+    </unit>
+<unit id="Unit_JPY_per_Share">
+        <divide>
+            <unitNumerator>
+                <measure>iso4217:JPY</measure>
+            </unitNumerator>
+            <unitDenominator>
+                <measure>shares</measure>
+            </unitDenominator>
+        </divide>
+    </unit>
+<unit id="Unit_shares">
+        <measure>shares</measure>
+    </unit>
+<dei:DocumentType contextRef="P04_01_2025To03_31_2026" id="ixv-73435">20-F</dei:DocumentType>
+<dei:DocumentPeriodEndDate contextRef="P04_01_2025To03_31_2026" id="ixv-67">2026-03-31</dei:DocumentPeriodEndDate>
+<dei:EntityCommonStockSharesOutstanding
+      contextRef="PAsOn03_31_2026"
+      decimals="INF"
+      id="ixv-73459"
+      unitRef="Unit_shares">13033931974</dei:EntityCommonStockSharesOutstanding>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73488"
+      unitRef="Unit_JPY">8982404000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73489"
+      unitRef="Unit_JPY">12659622000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73528"
+      unitRef="Unit_JPY">15333693000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:PropertyPlantAndEquipment
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73529"
+      unitRef="Unit_JPY">17067365000000</ifrs-full:PropertyPlantAndEquipment>
+<ifrs-full:LongtermBorrowings
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73563"
+      unitRef="Unit_JPY">22963363000000</ifrs-full:LongtermBorrowings>
+<ifrs-full:LongtermBorrowings
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73564"
+      unitRef="Unit_JPY">25624365000000</ifrs-full:LongtermBorrowings>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73590"
+      unitRef="Unit_JPY">35924826000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73591"
+      unitRef="Unit_JPY">39918854000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:NoncontrollingInterests
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73592"
+      unitRef="Unit_JPY">954088000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:NoncontrollingInterests
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73593"
+      unitRef="Unit_JPY">1101214000000</ifrs-full:NoncontrollingInterests>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73594"
+      unitRef="Unit_JPY">36878913000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73595"
+      unitRef="Unit_JPY">41020068000000</ifrs-full:Equity>
+<ifrs-full:Revenue
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73604"
+      unitRef="Unit_JPY">45095325000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73605"
+      unitRef="Unit_JPY">48036704000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73606"
+      unitRef="Unit_JPY">50684952000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73619"
+      unitRef="Unit_JPY">5352934000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73620"
+      unitRef="Unit_JPY">4795586000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73621"
+      unitRef="Unit_JPY">3766216000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73637"
+      unitRef="Unit_JPY">6965085000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73638"
+      unitRef="Unit_JPY">6414590000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLossBeforeTax
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73639"
+      unitRef="Unit_JPY">5152996000000</ifrs-full:ProfitLossBeforeTax>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73643"
+      unitRef="Unit_JPY">5071421000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73644"
+      unitRef="Unit_JPY">4789755000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73645"
+      unitRef="Unit_JPY">3985761000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73646"
+      unitRef="Unit_JPY">4944933000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73647"
+      unitRef="Unit_JPY">4765086000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73648"
+      unitRef="Unit_JPY">3848098000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73649"
+      unitRef="Unit_JPY">126488000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73650"
+      unitRef="Unit_JPY">24670000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLossAttributableToNoncontrollingInterests
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73651"
+      unitRef="Unit_JPY">137664000000</ifrs-full:ProfitLossAttributableToNoncontrollingInterests>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73652"
+      unitRef="Unit_JPY">5071421000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73653"
+      unitRef="Unit_JPY">4789755000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73654"
+      unitRef="Unit_JPY">3985761000000</ifrs-full:ProfitLoss>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="2"
+      id="ixv-73655"
+      unitRef="Unit_JPY_per_Share">365.94</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="2"
+      id="ixv-73656"
+      unitRef="Unit_JPY_per_Share">365.94</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="2"
+      id="ixv-73657"
+      unitRef="Unit_JPY_per_Share">359.56</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="2"
+      id="ixv-73658"
+      unitRef="Unit_JPY_per_Share">359.56</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="2"
+      id="ixv-73659"
+      unitRef="Unit_JPY_per_Share">295.25</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="2"
+      id="ixv-73660"
+      unitRef="Unit_JPY_per_Share">295.25</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73661"
+      unitRef="Unit_JPY">5071421000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73662"
+      unitRef="Unit_JPY">4789755000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73663"
+      unitRef="Unit_JPY">3985761000000</ifrs-full:ProfitLoss>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2023"
+      decimals="-6"
+      id="ixv-73710"
+      unitRef="Unit_JPY">29264213000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73714"
+      unitRef="Unit_JPY">5071421000000</ifrs-full:ProfitLoss>
+<ifrs-full:DividendsPaid
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73727"
+      unitRef="Unit_JPY">970506000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2024"
+      decimals="-6"
+      id="ixv-73754"
+      unitRef="Unit_JPY">35239338000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2024"
+      decimals="-6"
+      id="ixv-73762"
+      unitRef="Unit_JPY">35239338000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73766"
+      unitRef="Unit_JPY">4789755000000</ifrs-full:ProfitLoss>
+<ifrs-full:DividendsPaid
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73779"
+      unitRef="Unit_JPY">1259560000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73809"
+      unitRef="Unit_JPY">36878913000000</ifrs-full:Equity>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73817"
+      unitRef="Unit_JPY">36878913000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73821"
+      unitRef="Unit_JPY">3985761000000</ifrs-full:ProfitLoss>
+<ifrs-full:DividendsPaid
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73834"
+      unitRef="Unit_JPY">1364389000000</ifrs-full:DividendsPaid>
+<ifrs-full:Equity
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73864"
+      unitRef="Unit_JPY">41020068000000</ifrs-full:Equity>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73865"
+      unitRef="Unit_JPY">5071421000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73866"
+      unitRef="Unit_JPY">4789755000000</ifrs-full:ProfitLoss>
+<ifrs-full:ProfitLoss
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73867"
+      unitRef="Unit_JPY">3985761000000</ifrs-full:ProfitLoss>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73868"
+      unitRef="Unit_JPY">2087066000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73869"
+      unitRef="Unit_JPY">2251233000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73870"
+      unitRef="Unit_JPY">2392519000000</ifrs-full:AdjustmentsForDepreciationAndAmortisationExpense>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73919"
+      unitRef="Unit_JPY">4206373000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73920"
+      unitRef="Unit_JPY">3696934000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInOperatingActivities
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73921"
+      unitRef="Unit_JPY">5472920000000</ifrs-full:CashFlowsFromUsedInOperatingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-73949"
+      unitRef="Unit_JPY">-4998751000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-73950"
+      unitRef="Unit_JPY">-4189736000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashFlowsFromUsedInInvestingActivities
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-73951"
+      unitRef="Unit_JPY">-1520307000000</ifrs-full:CashFlowsFromUsedInInvestingActivities>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2023"
+      decimals="-6"
+      id="ixv-73982"
+      unitRef="Unit_JPY">7516966000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2024"
+      decimals="-6"
+      id="ixv-73983"
+      unitRef="Unit_JPY">9412060000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73984"
+      unitRef="Unit_JPY">8982404000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2024"
+      decimals="-6"
+      id="ixv-73988"
+      unitRef="Unit_JPY">9412060000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-73989"
+      unitRef="Unit_JPY">8982404000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-73990"
+      unitRef="Unit_JPY">12659622000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:Revenue
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-74025"
+      unitRef="Unit_JPY">45095325000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-74035"
+      unitRef="Unit_JPY">5352934000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-74049"
+      unitRef="Unit_JPY">2087066000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:Revenue
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-74068"
+      unitRef="Unit_JPY">48036704000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-74078"
+      unitRef="Unit_JPY">4795586000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-74092"
+      unitRef="Unit_JPY">2251233000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:Revenue
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-74110"
+      unitRef="Unit_JPY">50684952000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossFromOperatingActivities
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-74120"
+      unitRef="Unit_JPY">3766216000000</ifrs-full:ProfitLossFromOperatingActivities>
+<ifrs-full:DepreciationAndAmortisationExpense
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-74134"
+      unitRef="Unit_JPY">2392519000000</ifrs-full:DepreciationAndAmortisationExpense>
+<ifrs-full:Cash
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-74168"
+      unitRef="Unit_JPY">6344691000000</ifrs-full:Cash>
+<ifrs-full:Cash
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-74169"
+      unitRef="Unit_JPY">9077428000000</ifrs-full:Cash>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-74172"
+      unitRef="Unit_JPY">8982404000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:CashAndCashEquivalents
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-74173"
+      unitRef="Unit_JPY">12659622000000</ifrs-full:CashAndCashEquivalents>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-74629"
+      unitRef="Unit_JPY">121698000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-74630"
+      unitRef="Unit_JPY">100838000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:DepreciationRightofuseAssets
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-74631"
+      unitRef="Unit_JPY">221871000000</ifrs-full:DepreciationRightofuseAssets>
+<ifrs-full:ShorttermBorrowings
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-75029"
+      unitRef="Unit_JPY">5464469000000</ifrs-full:ShorttermBorrowings>
+<ifrs-full:ShorttermBorrowings
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-75030"
+      unitRef="Unit_JPY">5699083000000</ifrs-full:ShorttermBorrowings>
+<ifrs-full:InterestExpense
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-75085"
+      unitRef="Unit_JPY">1654702000000</ifrs-full:InterestExpense>
+<ifrs-full:InterestExpense
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-75086"
+      unitRef="Unit_JPY">1696845000000</ifrs-full:InterestExpense>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-75823"
+      unitRef="Unit_JPY">35924826000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-75824"
+      unitRef="Unit_JPY">39918854000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:Borrowings
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-75825"
+      unitRef="Unit_JPY">38792879000000</ifrs-full:Borrowings>
+<ifrs-full:Borrowings
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-75826"
+      unitRef="Unit_JPY">43205469000000</ifrs-full:Borrowings>
+<ifrs-full:RevenueFromSaleOfGoods
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-76071"
+      unitRef="Unit_JPY">41648130000000</ifrs-full:RevenueFromSaleOfGoods>
+<ifrs-full:RevenueFromSaleOfGoods
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-76072"
+      unitRef="Unit_JPY">43598877000000</ifrs-full:RevenueFromSaleOfGoods>
+<ifrs-full:RevenueFromSaleOfGoods
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-76073"
+      unitRef="Unit_JPY">45865949000000</ifrs-full:RevenueFromSaleOfGoods>
+<ifrs-full:Revenue
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-76077"
+      unitRef="Unit_JPY">45095325000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-76078"
+      unitRef="Unit_JPY">48036704000000</ifrs-full:Revenue>
+<ifrs-full:Revenue
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-76079"
+      unitRef="Unit_JPY">50684952000000</ifrs-full:Revenue>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-6"
+      id="ixv-76144"
+      unitRef="Unit_JPY">4944933000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:WeightedAverageShares
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-3"
+      id="ixv-76147"
+      unitRef="Unit_shares">13512848000</ifrs-full:WeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="-3"
+      id="ixv-76148"
+      unitRef="Unit_shares">13512848000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="2"
+      id="ixv-76149"
+      unitRef="Unit_JPY_per_Share">365.94</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2023To03_31_2024"
+      decimals="2"
+      id="ixv-76150"
+      unitRef="Unit_JPY_per_Share">365.94</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-6"
+      id="ixv-76151"
+      unitRef="Unit_JPY">4765086000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:WeightedAverageShares
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-3"
+      id="ixv-76154"
+      unitRef="Unit_shares">13252456000</ifrs-full:WeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="-3"
+      id="ixv-76155"
+      unitRef="Unit_shares">13252456000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="2"
+      id="ixv-76156"
+      unitRef="Unit_JPY_per_Share">359.56</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2024To03_31_2025"
+      decimals="2"
+      id="ixv-76157"
+      unitRef="Unit_JPY_per_Share">359.56</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:ProfitLossAttributableToOwnersOfParent
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-6"
+      id="ixv-76158"
+      unitRef="Unit_JPY">3848098000000</ifrs-full:ProfitLossAttributableToOwnersOfParent>
+<ifrs-full:WeightedAverageShares
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-3"
+      id="ixv-76161"
+      unitRef="Unit_shares">13033274000</ifrs-full:WeightedAverageShares>
+<ifrs-full:AdjustedWeightedAverageShares
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="-3"
+      id="ixv-76162"
+      unitRef="Unit_shares">13033274000</ifrs-full:AdjustedWeightedAverageShares>
+<ifrs-full:BasicEarningsLossPerShare
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="2"
+      id="ixv-76163"
+      unitRef="Unit_JPY_per_Share">295.25</ifrs-full:BasicEarningsLossPerShare>
+<ifrs-full:DilutedEarningsLossPerShare
+      contextRef="P04_01_2025To03_31_2026"
+      decimals="2"
+      id="ixv-76164"
+      unitRef="Unit_JPY_per_Share">295.25</ifrs-full:DilutedEarningsLossPerShare>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2025"
+      decimals="-6"
+      id="ixv-76165"
+      unitRef="Unit_JPY">35924826000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="PAsOn03_31_2025"
+      decimals="-3"
+      id="ixv-76166"
+      unitRef="Unit_shares">13048930000</ifrs-full:NumberOfSharesOutstanding>
+<ifrs-full:EquityAttributableToOwnersOfParent
+      contextRef="PAsOn03_31_2026"
+      decimals="-6"
+      id="ixv-76168"
+      unitRef="Unit_JPY">39918854000000</ifrs-full:EquityAttributableToOwnersOfParent>
+<ifrs-full:NumberOfSharesOutstanding
+      contextRef="PAsOn03_31_2026"
+      decimals="-3"
+      id="ixv-76169"
+      unitRef="Unit_shares">13033384000</ifrs-full:NumberOfSharesOutstanding>
+</xbrl>

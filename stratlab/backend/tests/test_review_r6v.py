@@ -348,10 +348,11 @@ def test_the_sites_list_of_library_pages_matches_the_seeds():
 # ---------- R6V-010: the weekly email counts paying apart from given, and says why an admin gets it ----------
 def test_the_weekly_email_separates_paying_from_given_and_matches_admin_errors():
     facts = {"stats": {"users": 10, "new": 4, "paid": {"pro": 6}, "paying": {}, "given": {"pro": 6}, "experiments": 0, "ai": 0},
-             "checks": [], "audits": {}, "errors": 22, "errors_listed": 23, "admin_url": None}
+             "checks": [], "audits": {}, "errors": 22, "errors_since_restart": 0, "errors_before_restart": 23, "admin_url": None}
     _, text = weekly.summary(datetime(2026, 10, 5, 9, 0, tzinfo=IST), facts)
     assert "- Paying: none" in text and "- Given by the owner, not paying: Pro 6" in text and "Paid: Pro 6" not in text
-    assert "- 22 errors this week (23 listed on Admin → System since the last restart)" in text
+    # R9P-004: the words and numbers of Admin → System ("0 since the last restart, 23 kept from before it"), not a second wording
+    assert "- 22 errors this week (0 since the last restart, 23 kept from before it)" in text
 
 
 def test_admin_emails_say_why_an_admin_gets_them(monkeypatch):

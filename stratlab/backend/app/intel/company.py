@@ -563,6 +563,33 @@ class Research:
             out.append(index_level(name, m, region, now))
         return out
 
+    def sector_moves(self, region: str) -> dict | None:
+        """How the market's main sector indices (India: the NSE sector indices the rotation page shows first; the US: the
+        S&P 500 sector funds) moved on the day, counted from StratLab's own quotes: {"up", "down", "unchanged", "of",
+        "rows"}. None when they can't be read. The market mood may say how many sectors rose or fell only from this
+        (R8B-004: "as all sectoral indices turned green" while NIFTY OIL & GAS closed lower)."""
+        from ..rotation import CORE_IN, SECTORS, US_NAMES
+        rows = []
+        try:
+            if region == "IN":
+                if not self._kite():
+                    return None
+                names = sorted(CORE_IN | {"NIFTY OIL AND GAS", "NIFTY HEALTHCARE", "NIFTY CONSR DURBL", "NIFTY PVT BANK"})
+                got = self.kite.index_quotes([f"NSE:{n}" for n in names])
+                rows = [{"name": n, "change_pct": (got.get(f"NSE:{n}") or {}).get("change_pct")} for n in names]
+            elif region == "US":
+                syms = SECTORS["US"]["members"]
+                got = self.quotes("US", syms)
+                rows = [{"name": US_NAMES.get(s, s), "change_pct": (got.get(s) or {}).get("change_pct")} for s in syms]
+        except Exception as e:
+            print("sector moves unavailable:", region, str(e)[:120])
+            return None
+        rows = [{**r, "change_pct": round(float(r["change_pct"]), 2)} for r in rows if r.get("change_pct") is not None]
+        if len(rows) < 5:
+            return None
+        return {"up": sum(1 for r in rows if r["change_pct"] > 0), "down": sum(1 for r in rows if r["change_pct"] < 0),
+                "unchanged": sum(1 for r in rows if r["change_pct"] == 0), "of": len(rows), "rows": rows}
+
     def headlines(self, region: str, focus: str = "") -> list[dict]:
         """The market's headlines for Pulse and the briefs: stories only, never a site's own title or a third party's
         buying worded as advice ("We're buying the dip in a stock…", R7O-005)."""

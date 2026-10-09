@@ -14,7 +14,7 @@ export interface IssueItem { text: string; url?: string | null; symbol?: string 
 
 export interface Issue {
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string;
-  summary: string | null; sections: { title: string; items: IssueItem[] }[]; html: string; at: string;
+  summary: string | null; /** the AI's words, under the facts line (R8B-007) */ ai_summary?: string | null; sections: { title: string; items: IssueItem[] }[]; html: string; at: string;
 }
 
 export interface NewsletterPrefs {

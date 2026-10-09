@@ -10,7 +10,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import "./styles-invest.css";
-import { isPublicForAll, wantsAccount } from "./lib/entry";
+import { isPublicForAll, publicReads, wantsAccount } from "./lib/entry";
 
 /* The one entry point. It reads /config.js (once more, if the first try failed), then loads only the half of the site this
  * page load needs: the full app for someone signed in (or just back from Google), and the much smaller public half for
@@ -64,12 +64,18 @@ async function start() {
     const app = await import("./main");
     app.startApp(root);
   } else {
-    const early = publicPage(path).catch(() => undefined);       // started now, alongside the half itself
+    // the page's questions to the server first (lib/http is in the start-up file already), then its code, alongside the half itself
+    const reads = publicReads(path);
+    if (reads.length) import("./lib/http").then((m) => reads.forEach((r) => m.prefetchPublic(r))).catch(() => undefined);
+    const early = publicPage(path).catch(() => undefined);
     const visitor = await import("./visitor/visitorMain");
     visitor.startVisitor(root);
     void early;
   }
-  if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa()).catch(() => undefined);
+  if (import.meta.env.PROD) import("./lib/pwa").then((m) => m.registerPwa({ later: !account })).catch(() => undefined);
 }
 
-void start();
+/* A failed download of the app's own chunk on the first load (a dropped connection; seen once on Safari as an "Unhandled Promise
+ * Rejection ... import(./main-...js)", R9P-008) used to leave the plain start-up text and nothing else. The start-up script
+ * (public/boot.js) then reloads once on its own, and if that does not help it shows the Reload card. */
+start().catch(() => { if (window.__stratlabRecover) window.__stratlabRecover(); else window.__stratlabShowLoadError?.(); });

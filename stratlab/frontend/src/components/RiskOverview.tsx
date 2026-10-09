@@ -10,6 +10,7 @@ import "../pages/trade/trade.css";
 interface Cur {
   currency: string; sessions: number; capital: number; equity: number; pnl: number; today: number; open_value: number;
   worst_day: { date: string; pnl: number } | null; best_day: { date: string; pnl: number } | null; max_drawdown_pct: number;
+  deepest_fall?: { pnl: number; pct: number; date: string } | null;
   curve: { t: string; pnl: number }[];
 }
 interface Row { id: string; name: string; kind: string; currency: string; open_value: number; today: number; pnl: number; capital: number }
@@ -49,7 +50,8 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               <Stat item label="Today" value={money(c.today, c.currency)} tone={tone(c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "None yet"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : undefined} />
-              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`} note="from the high point" />
+              <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`}
+                note={c.deepest_fall ? `${money(c.deepest_fall.pnl, c.currency)} from the high point, ${day(c.deepest_fall.date)}` : "from the high point"} />
             </StatRow>
             {c.curve.length > 1 && (
               <XYChart ariaLabel={`Combined paper P&L in ${c.currency}`} height={150} times={c.curve.map((p) => p.t)} refs={[{ v: 0, strong: true }]}
