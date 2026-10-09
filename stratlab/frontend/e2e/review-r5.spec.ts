@@ -286,7 +286,8 @@ test.describe("gate and not-found pages (R5V-013, R5V-014)", () => {
     await open(page, "/holdings");
     await expect(h1(page)).toHaveText("Sign in to see Holdings", { timeout: 30_000 });
     await expect(page).toHaveTitle("Sign in · Holdings · StratLab");
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/holdings");
+    // changed on purpose in R10V-005: a sign-in gate is kept out of search results, so it names no canonical address
+    await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   });
 
   test("a page that isn't there has places to go", async ({ page }) => {

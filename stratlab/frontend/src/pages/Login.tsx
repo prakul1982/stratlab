@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { aboutMoney, approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
@@ -206,11 +206,13 @@ export function Login({ section = null, panel, heading }: { section?: string | n
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!section) return;
-    const go = () => document.getElementById(section)?.scrollIntoView();
-    go();
-    const t = window.setTimeout(go, 150);       // once the fonts and the first images have settled the layout
+    const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
+    go();                                        // before the first paint: drawn at its section, never at the top and then moved (R10V-006)
+    const y = window.scrollY;
+    // once the fonts and the first images have settled the layout, unless the visitor has already scrolled
+    const t = window.setTimeout(() => { if (Math.abs(window.scrollY - y) < 2) go(); }, 150);
     return () => window.clearTimeout(t);
   }, [section]);
   useEffect(() => {

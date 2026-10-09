@@ -49,7 +49,7 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   swap(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${attr(description)}">`);
   swap(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="${index ? "index, follow" : "noindex, follow"}">`);
   // a page that isn't there (404.html) names no canonical address: the home page as its canonical said the 404 was the
-  // home page (R8V-008)
+  // home page (R8V-008); nor does any page kept out of search results (R10V-005: /about)
   swap(/<link rel="canonical" href="[^"]*">\n?/, canonical ? `<link rel="canonical" href="${attr(canonical)}">\n` : "");
   swap(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${attr(title)}">`);
   swap(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${attr(description)}">`);
@@ -69,7 +69,7 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
 /** Every file to write, as [path under dist, html]. The home page replaces index.html itself. */
 export function pageFiles(template) {
   const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
-    pageHtml(template, { title: p.title, description: p.description, canonical: absolute(p.canonical ?? p.path), index: p.index,
+    pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
       faq: p.path === "/faq" })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,

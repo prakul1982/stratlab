@@ -17,6 +17,12 @@ from .net import SizedDict, Source, SourceError
 UA = "StratLab research (contact@stratlab.studio)"
 M = 1_000_000
 
+
+class NoNumbers(SourceError):
+    """The company is on the SEC's list, but its annual results can't be shown (no structured data, a home-country
+    filer, a fund...): the message says why in plain words. Its share price can still be (R10V-004: ICICI Bank's 20-F is
+    filed without XBRL, and its public page showed no price at all)."""
+
 # each line: the row in the company table, then the XBRL concepts that report it, best first. Companies change the
 # concept they use over the years (revenue moved to the ASC 606 names in 2018), so each period takes the first that
 # has a value for it. Foreign companies filing a 20-F or 40-F under IFRS use that taxonomy's names (Revenue,
@@ -661,7 +667,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         ends.pop(0)
     ends = ends[-years:]
     if not ends:
-        raise SourceError(SEC.name, no_results(subs, facts, symbol))
+        raise NoNumbers(SEC.name, no_results(subs, facts, symbol))
     kind = company_kind(subs, facts)
     no_revenue = [_label(e) for e in ends if no_revenue_line(e)]
     for i, e in enumerate(ends):
@@ -860,9 +866,9 @@ class SEC(Source):
         self.cache.set("tickers", out, 86400)
         return out
 
-    def cik(self, symbol: str) -> int:
-        """The company's SEC number for a ticker as exchanges and quote screens write it: share classes and preferred
-        series with a dot, a dash or a slash (BRK.B, BRK-B, BRK/B), the way the SEC's list writes them (BRK-B)."""
+    def listing(self, symbol: str) -> dict:
+        """{"cik", "name"} for a ticker as exchanges and quote screens write it: share classes and preferred series with
+        a dot, a dash or a slash (BRK.B, BRK-B, BRK/B), the way the SEC's list writes them (BRK-B)."""
         sym = re.sub(r"[^A-Z0-9.\-/]", "", symbol.upper())
         names = self.tickers()
         pref = re.sub(r"[./-]PR?([A-Z]?)$", r"-P\1", sym)           # preferred series: BAC.PRL, BAC/PL → BAC-PL
@@ -870,7 +876,11 @@ class SEC(Source):
                     if t in names), None)
         if not hit:
             raise SourceError(self.name, f"{sym} isn't a company that files with the SEC (funds and most foreign companies don't).")
-        return hit["cik"]
+        return hit
+
+    def cik(self, symbol: str) -> int:
+        """The company's SEC number for a ticker (see listing)."""
+        return self.listing(symbol)["cik"]
 
     def submissions(self, cik: int, fresh: bool = False) -> dict:
         """The company's details and recent filing list, cached six hours (`fresh` asks again, for a results day)."""
@@ -1008,13 +1018,18 @@ class SEC(Source):
         hit = self.cache.get(key)
         if hit is not None:
             return hit
-        if not doc.lower().endswith((".htm", ".html")) or not self.limit.take():
+        # this read decides whether a company's newest year is on its page at all (R10V-002): it waits for the SEC's rate
+        # limit longer than a listing call does, instead of giving the company up for the hour
+        if not doc.lower().endswith((".htm", ".html")) or not self.limit.take(max_wait=30.0):
             return None
         url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/{re.sub(r'[.]html?$', '', doc)}_htm.xml"
         try:
             with self.http.stream("GET", url) as r:
                 if r.status_code == 404:          # not an inline XBRL filing: nothing to read, not a fault
-                    self.cache.set(key, {}, 30 * 86400)
+                    # ...unless the filing is days old: its data file is made some time after it is filed, so a 404 then is
+                    # asked again within the hour, not kept for a month
+                    new = (date.today() - date.fromisoformat(str(filing.get("filed") or "2000-01-01")[:10])).days < 4
+                    self.cache.set(key, {}, 3600 if new else 30 * 86400)
                     return {}
                 self.check(r)
                 buf = bytearray()
@@ -1026,7 +1041,8 @@ class SEC(Source):
         except (httpx.HTTPError, SourceError, ValueError) as e:
             print("SEC filing data:", acc, str(e)[:120])
             return None
-        out = {"facts": instance_facts(inst, filing["form"], filing["filed"], acc), "classes": class_shares(inst)}
+        out = {"facts": instance_facts(inst, filing["form"], filing["filed"], acc), "classes": class_shares(inst),
+               "cover_shares": cover_shares(inst)}
         self.cache.set(key, out, 30 * 86400)
         return out
 
@@ -1060,7 +1076,7 @@ class SEC(Source):
             hit = self._built.get(str(cik))
         if hit and time.time() - hit[0] < 6 * 3600:
             if hit[1] is None:             # no results to show, found a moment ago: the same reason again
-                raise SourceError(self.name, hit[2])
+                raise NoNumbers(self.name, hit[2])
             return for_symbol(hit[1], symbol)
         try:
             try:
@@ -1084,11 +1100,21 @@ class SEC(Source):
                     if e.busy:
                         raise
             if facts is None:                     # no figures filed as data at all
-                raise SourceError(self.name, no_results(subs, None, symbol))
+                raise NoNumbers(self.name, no_results(subs, None, symbol))
             facts = self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
             if facts.get("annual_unread"):
                 p["annual_unread"] = str(facts["annual_unread"].get("filed") or "")[:10] or True
+            latest = latest_filing(subs, ANNUAL_FORMS)
+            if latest:
+                p["annual_filed"] = latest["filed"]       # the page tells a table a year behind its newest report (annual_behind)
+            if p.get("shares") is None and latest:
+                # no share count in the SEC's facts (a cover page that gives one per class or per kind of security, which
+                # the facts leave out): the count on the newest annual report's cover page (R10V-004: Baidu, BP)
+                got = self.filing_data(cik, latest)
+                cs = (got or {}).get("cover_shares")
+                if cs and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat():
+                    p["shares"], p["shares_from"] = cs["value"], "cover"
         except SourceError as e:
             if not e.busy:
                 with self._build_lock:
@@ -1161,13 +1187,15 @@ def latest_filing(subs: dict, forms: tuple) -> dict | None:
 
 
 def has_filing(facts_json: dict, accn: str) -> bool:
-    """Whether the company facts hold the revenue or profit a filing reported (the SEC adds a filing's figures to
-    them some time after it is filed, and leaves some out)."""
+    """Whether the company facts hold the profit a filing reported for its year (the SEC adds a filing's figures to
+    them some time after it is filed, and leaves some out). The profit, not the revenue: R10V-001, Deutsche Bank's
+    20-F had its revenue in the facts (a note gives it plain) but its profit only for the consolidated entity, which
+    the facts leave out, so the filing counted as read and its two newest years had no profit."""
     facts = (facts_json or {}).get("facts") or {}
     for ns in ("us-gaap", "ifrs-full"):
-        for concept in TOP_LINE + NET_INCOME:
+        for concept in NET_INCOME:
             for rows in (((facts.get(ns) or {}).get(concept) or {}).get("units") or {}).values():
-                if any(r.get("accn") == accn for r in rows):
+                if any(r.get("accn") == accn and r.get("start") and 340 <= _days(r["start"], r["end"]) <= 380 for r in rows):
                     return True
     return False
 
@@ -1346,11 +1374,13 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
     mcap = price * shares / M if price and shares else None
     fx = usd_rate(p)
     usd = lambda v: v * fx if v is not None and fx else None    # noqa: E731
+    # every input from the latest year's own column: a blank in that year is a blank ratio, never an older year's figure
+    # beside this year's (R10V-001: Deutsche Bank's ROE took 2023's profit over 2025's equity)
     equity = _latest(p.get("balance"), "Equity", last_only=True)
-    debt = _latest(p.get("balance"), "Borrowings") or 0
-    fy_profit = _latest(p.get("pl"), "Net Profit", skip_ttm=True)
-    ebitda = _latest(p.get("pl"), "Operating Profit", skip_ttm=True)
-    dep = _latest(p.get("pl"), "Depreciation", skip_ttm=True) or 0
+    debt = _latest(p.get("balance"), "Borrowings", last_only=True)
+    fy_profit = _latest(p.get("pl"), "Net Profit", skip_ttm=True, last_only=True)
+    ebitda = _latest(p.get("pl"), "Operating Profit", skip_ttm=True, last_only=True)
+    dep = _latest(p.get("pl"), "Depreciation", skip_ttm=True, last_only=True)
     divs = usd(_latest(p.get("cashflow"), "Dividends paid"))
     book = usd(equity)
     pe, _ = pe_and_basis(p, price, mcap)
@@ -1358,7 +1388,8 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
            "Stock P/E": round(pe, 1) if pe else None,
            "Book Value": round(book * M / shares, 2) if book and shares else None,
            "ROE": round(fy_profit / equity * 100, 1) if fy_profit is not None and equity and equity > 0 else None,
-           "ROCE": round((ebitda - dep) / (equity + debt) * 100, 1) if ebitda is not None and equity and equity + debt > 0 else None,
+           "ROCE": (round((ebitda - dep) / (equity + debt) * 100, 1)
+                    if None not in (ebitda, dep, debt) and equity and equity + debt > 0 else None),
            "Dividend Yield": round(abs(divs) / mcap * 100, 2) if divs and mcap else 0.0 if mcap and fx else None}
     if high and low:
         out["High / Low"] = f"{high} / {low}"
@@ -1581,25 +1612,72 @@ def _x_num(text: str) -> float | None:
         return None
 
 
+# a filing may state its whole income statement for "the consolidated entity" as a dimension of its own, not as plain
+# facts (R10V-001: Deutsche Bank's 20-Fs of 2025 and 2026 tag the statement under LegalEntityAxis =
+# ConsolidatedBankEntityMember; the SEC's company facts leave such facts out, so its 2024 and 2025 profit was blank beside
+# revenue, which a note also gives without it). That one dimension is the whole group, so its figures stand when the
+# plain fact isn't given. A parent-only or segment dimension never does.
+CONSOLIDATED_AXES = {"LegalEntityAxis", "ConsolidatedAndSeparateFinancialStatementsAxis", "ConsolidatedOrSeparateFinancialStatementsAxis"}
+
+
+def consolidated_only(dims: dict) -> bool:
+    """Whether a context's only dimension says "the consolidated entity" (ConsolidatedMember, ConsolidatedBankEntityMember...)."""
+    if len(dims) != 1:
+        return False
+    axis, member = next(iter(dims.items()))
+    return axis in CONSOLIDATED_AXES and bool(re.match(r"consolidated", member, re.I)) and not re.search(r"separate|parent", member, re.I)
+
+
 def instance_facts(inst: dict, form: str, filed: str, accn: str) -> dict:
     """A filing's figures without dimensions in the company facts' shape ({namespace: {concept: {"units": {unit:
-    [rows]}}}}), so they merge with the SEC's own (see merge_facts)."""
+    [rows]}}}}), so they merge with the SEC's own (see merge_facts). A figure given only for the consolidated entity
+    (see consolidated_only) counts as the plain one, and the plain one wins where both are given."""
     out: dict = {}
     seen = set()
-    for ns, concept, cid, unit, text in inst["facts"]:
-        ctx = inst["contexts"].get(cid)
-        val = _x_num(text) if unit else None
-        if not ctx or ctx["dims"] or val is None or not ctx["end"]:
-            continue
-        key = (ns, concept, unit, ctx["start"], ctx["end"])
-        if key in seen:
-            continue
-        seen.add(key)
-        row = {"end": ctx["end"], "val": val, "accn": accn, "form": form, "filed": filed}
-        if ctx["start"]:
-            row["start"] = ctx["start"]
-        out.setdefault(ns, {}).setdefault(concept, {"units": {}})["units"].setdefault(unit, []).append(row)
+    for pass_ in (0, 1):                  # the plain facts first, then the consolidated entity's where they gave none
+        for ns, concept, cid, unit, text in inst["facts"]:
+            ctx = inst["contexts"].get(cid)
+            val = _x_num(text) if unit else None
+            if not ctx or val is None or not ctx["end"]:
+                continue
+            if bool(ctx["dims"]) != bool(pass_) or (ctx["dims"] and not consolidated_only(ctx["dims"])):
+                continue
+            key = (ns, concept, unit, ctx["start"], ctx["end"])
+            if key in seen:
+                continue
+            seen.add(key)
+            row = {"end": ctx["end"], "val": val, "accn": accn, "form": form, "filed": filed}
+            if ctx["start"]:
+                row["start"] = ctx["start"]
+            out.setdefault(ns, {}).setdefault(concept, {"units": {}})["units"].setdefault(unit, []).append(row)
     return out
+
+
+NOT_ORDINARY = re.compile(r"prefer|debt|note|bond|warrant|unit|right|deposit|adr|ads|trust|capital", re.I)
+
+
+def cover_shares(inst: dict) -> dict | None:
+    """The shares outstanding a report's cover page gives for the company's own ordinary (common) shares, every class
+    together, when the SEC's company facts leave them out because the cover page gives them per class or per kind of
+    security (R10V-004: Baidu's Class A and Class B ordinary shares, BP's ordinary and preference shares): {"value",
+    "end", "classes"}, at the latest date given. Preference shares, notes and depositary receipts are not counted.
+    None without."""
+    ctx = inst["contexts"]
+    by_end: dict[str, dict[str, float]] = {}
+    for ns, concept, cid, unit, text in inst["facts"]:
+        if concept != "EntityCommonStockSharesOutstanding" or unit != "shares" or cid not in ctx:
+            continue
+        dims = ctx[cid]["dims"]
+        member = next(iter(dims.values())) if dims else ""
+        if len(dims) > 1 or member == "typed" or NOT_ORDINARY.search(member):
+            continue
+        v, end = _x_num(text), ctx[cid]["end"] or ""
+        if v and v > 0 and end:
+            by_end.setdefault(end, {}).setdefault(member, v)
+    if not by_end:
+        return None
+    end = max(by_end)
+    return {"value": float(sum(by_end[end].values())), "end": end, "classes": len(by_end[end])}
 
 
 def class_shares(inst: dict) -> dict[str, float]:
