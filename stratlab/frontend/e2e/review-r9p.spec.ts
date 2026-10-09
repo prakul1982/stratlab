@@ -54,7 +54,7 @@ test("R9P-006 and R9P-007: the confirm step says what the rupee charge is in dol
   await expect.poll(() => page.evaluate(() => (window as any).__opened === true), { timeout: 15_000 }).toBe(true);
   const rz = await page.evaluate(() => (window as any).__rz);
   expect(rz.name).toBe("StratLab · Basic, monthly");
-  expect(rz.description).toMatch(/Renews every month until you cancel\.$/);                                      // the line Razorpay shows under the name
+  expect(rz.description).toBe("Basic, monthly · renews every month");                                      // the line Razorpay shows under the name
   expect(rz.subscription_id).toBe("sub_test");
   expect(errors).toEqual([]);
 });

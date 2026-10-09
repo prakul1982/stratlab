@@ -2,11 +2,12 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly } from "../../lib/format";
+import { holidaysSaved } from "./holidays";
 import { Card, CardHead, DataTable, FormActions, Light, Notice, type Column } from "../../components/kit";
 
 export type MarketCoverage = { market: string; name: string; source: string; known_until: string | null; days_left: number | null;
   next: string | null; next_name: string | null; state: "ok" | "warn" | "none"; hint: string | null };
-export type CalendarStatus = { known_until: string | null; added: string[]; covered_until: string | null; days_left: number | null;
+export type CalendarStatus = { known_until: string | null; added: string[]; by_hand?: string[]; covered_until: string | null; days_left: number | null;
   auto?: { at: string | null; tried_at: string | null; error: string | null; count: number }; markets?: MarketCoverage[] };
 
 const COLUMNS: Column<MarketCoverage>[] = [
@@ -45,7 +46,7 @@ export function HolidaysPanel({ status, onSaved }: { status: CalendarStatus; onS
         {status.covered_until ? <>Known until <b>{dateOnly(status.covered_until)}</b>{status.days_left != null && ` (${status.days_left} days)`}. </> : "No holiday calendar loaded. "}
         The server reads the exchange's own holiday list every day, so next year's holidays arrive by themselves when the exchange
         publishes them (usually in December). Paper trading, alerts, expiries and the free trial count skip these days.
-        {status.added.length > 0 && ` ${status.added.length} added by you.`}
+        {status.added.length > 0 && ` ${holidaysSaved(status.added.length, status.by_hand ? status.by_hand.length : null)}`}
       </p>
       <p className={`k-small ${a?.error ? "k-down" : "k-muted"}`}>
         {a?.at ? `Last read from the exchange ${ago(a.at)}: ${a.count} holidays.` : "Not read from the exchange yet."}

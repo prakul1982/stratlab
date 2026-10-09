@@ -15,6 +15,14 @@ export function oneLine(text: string, max = 120): { text: string; full?: string 
   const cut = first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
   return cut === flat ? { text: flat } : { text: cut, full: flat };
 }
+/** A provider's error with each long link in it cut to its address ("https://vercel.com/d?to=…" for a 150-character one), whole sentences
+ * kept: oneLine() keeps only the first sentence, which is right for Overview's one-line list but would drop "Fix the key, then press Test."
+ * on System (R11P-007: a 150-character Vercel link in the AI lines). The whole text stays in `full` for a tooltip. */
+export function shortLinks(text: string | null | undefined, max = 48): { text: string; full?: string } {
+  const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+  const cut = flat.replace(/https?:\/\/[^\s)\]]+/g, (u) => (u.length <= max ? u : `${u.slice(0, max - 1)}…`));
+  return cut === flat ? { text: flat } : { text: cut, full: flat };
+}
 export type Light = { key: string; label: string; state: HealthState; detail: string; to?: string };
 /** A service: its light, and `fix`, the longer words for the page where it's set up (System, Data and jobs). */
 export type Service = Light & { fix?: string };

@@ -8,7 +8,7 @@ import re
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from .. import daily_report, db, deals, holdings, rotation, scan, universes
+from .. import daily_report, db, deals, holdings, official_close, rotation, scan, universes
 from ..data.calendar import is_trading_day
 from ..intel.company import INDICES
 from ..intel.net import TTLCache
@@ -353,9 +353,23 @@ def my_stocks(uid: str) -> list[tuple[str, str]]:
     return out
 
 
-def _symbol_data(region: str, sym: str, day: date) -> dict:
+def official_bars(region: str, sym: str, bars: list[dict] | None, now: datetime | None = None) -> list[dict] | None:
+    """An Indian stock's daily candles with the last close set to the exchange's official close of that day: the
+    bhavcopy's when it is out, else the same-day quote once the closing auction has matched, which is what the company
+    page and the India brief show after 15:40 (R11P-002). Whatever candle the broker's cache holds, the email says the
+    page's figure. Other regions, and a day with no official close yet, are left as they are."""
+    if region != "IN" or not bars:
+        return bars
+    try:
+        return official_close.overlay_bars(list(bars), official_close.base_symbol(sym), True, now)
+    except Exception as e:                     # the candles as they are rather than none
+        print("official close for a newsletter:", sym, str(e)[:120])
+        return bars
+
+
+def _symbol_data(region: str, sym: str, day: date, now: datetime | None = None) -> dict:
     """One stock's daily candles, filings (India) and recent headlines: fetched once a day for every reader."""
-    key = ("stock", region, sym, day.isoformat(), closed(region, day))
+    key = ("stock", region, sym, day.isoformat(), closed(region, day, now))
     hit = _cache.get(key)
     if hit is not None:
         return hit
@@ -363,7 +377,7 @@ def _symbol_data(region: str, sym: str, day: date) -> dict:
 
     def bars():
         ids, _ = universes.resolve(m.markets, region, [{"symbol": sym}])
-        return scan._bars(m.markets, ids[0]) if ids else None
+        return official_bars(region, sym, scan._bars(m.markets, ids[0]), now) if ids else None
     data = {"bars": _safe(bars),
             "filings": _safe(lambda: m.filings_feed.announcements(sym, 30)) if region == "IN" else None,
             "news": _safe(lambda: m.research_hub.news.search(f"{sym} share price" if region == "IN" else f"{sym} stock", region, limit=6), [])}
@@ -385,6 +399,11 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     if not bars:
         return None
     ref = reference_day(region, day, weekly).isoformat()
+    if region == "IN":                     # the change is measured between two official closes (R11P-002)
+        try:
+            bars = official_close.with_reference(bars, official_close.base_symbol(sym), ref)
+        except Exception as e:
+            print("official reference close:", sym, str(e)[:120])
     now = scan.analyse(bars)
     before_bars = [b for b in bars if str(b["t"])[:10] <= ref]
     before = scan.analyse(before_bars) if before_bars else None

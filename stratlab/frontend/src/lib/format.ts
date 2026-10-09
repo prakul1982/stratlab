@@ -360,6 +360,16 @@ export function pctPlain(v: number | null | undefined, dp = 1): string {
   return ok(v) ? `${v.toFixed(dp)}%` : "–";
 }
 
+/** The direction a change reads as: "up", "down", or "flat" for zero and for a change whose printed figure rounds to nothing
+ * ("0.00%", "+₹0 cr"). `text` is the figure as shown; its first number decides, so a rise of 0.001 printed "0.00%" is "flat",
+ * not "▲ Up 0.00%" (R11P-010: USD/INR 96.76 "▲ Up 0.00%" on My space). Every arrow and "Up"/"Down" word comes from here. */
+export function changeDir(v: number | null | undefined, text?: string): "up" | "down" | "flat" {
+  if (!ok(v) || v === 0) return "flat";
+  const first = text === undefined ? null : /\d[\d,]*(?:\.\d+)?/.exec(text)?.[0];
+  if (first != null && !/[1-9]/.test(first)) return "flat";
+  return v > 0 ? "up" : "down";
+}
+
 /** Up or down for a gain or loss that is the user's own (a holding's profit, a fund's gain): for a Stat's `tone`, or
  * `k-${signTone(v)}` as a class. Nothing for zero or a missing value. Never use it on a market-wide change. */
 export function signTone(v: number | null | undefined): "up" | "down" | undefined {
