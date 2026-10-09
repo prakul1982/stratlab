@@ -250,7 +250,8 @@ test.describe("StratLab's own library, readable signed out (R5V-011)", () => {
     await ex.locator("a.lp-example", { hasText: "20/50 EMA" }).click();
     await expect(page).toHaveURL(/\/library\/seed-ema-20-50-nifty50$/);
     await expect(h1(page)).toHaveText("Probably luck.", { timeout: 30_000 });
-    await expect(page).toHaveTitle(/20\/50 EMA cross.*Probably luck\. · StratLab/);
+    // the result first, then the strategy (R7V-006: this was "<strategy>: <result>", while the page leads with the result)
+    await expect(page).toHaveTitle(/^Probably luck: 20\/50 EMA cross.* · StratLab$/);
     await expect(page.locator("main")).toContainText("The rules that were tested");
     await expect(page.locator("main")).toContainText("Buy when");
     for (const c of ["Unseen years", "Nearby settings", "Bad-luck drawdown", "Enough trades"]) await expect(page.locator(".pub-checks")).toContainText(c);

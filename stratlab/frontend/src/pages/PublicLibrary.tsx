@@ -8,6 +8,7 @@ import { signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { PublicFrame } from "../components/PublicFrame";
 import { CHECK_RESULT, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
 import { Card, CardHead } from "../components/kit/Card";
@@ -115,9 +116,11 @@ export function PublicLibraryEntry({ id }: { id: string }) {
   }, [id]);
   useEffect(() => {
     if (!e) return;
-    const title = `${plainTerms(e.name)}: ${e.verdict.label ?? e.verdict.headline} · StratLab`;
+    // the result first, as the page's headline leads with it, and the universe once (R7V-006)
+    const title = libraryTitle(plainTerms(e.name), e.verdict.fact_headline, e.verdict.label ?? e.verdict.headline);
     document.title = title;
-    const desc = `${plainTerms(e.name)} on ${where(e)}: ${e.verdict.fact_headline ?? e.verdict.headline} ${e.reason ?? ""} Rules, results after costs and the four checks, as StratLab tested them on past prices.`.replace(/\s+/g, " ").trim();
+    const desc = libraryDescription({ name: plainTerms(e.name), where: where(e), group: e.group?.name, factHeadline: e.verdict.fact_headline,
+      headline: e.verdict.headline, reason: e.reason });
     applySeo({ ...seoFor(`/library/${id}`, "public"), description: desc, canonical: seoFor(`/library/${id}`).canonical, index: true }, title);
   }, [e, id]);
   const sh = e ? shownStats(e) : null;

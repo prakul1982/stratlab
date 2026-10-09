@@ -62,13 +62,19 @@ class TTLCache:
         self.max_bytes = max_bytes
         self.bytes = 0
 
-    def get(self, key):
+    def get(self, key, max_age: float | None = None):
+        """The value, unless it has expired; with `max_age`, also None when it was stored longer ago than that (a copy
+        another caller kept for longer than this one may use: R7V-005, a chart read in the minutes after the close,
+        before the day's close was final, kept for a day and handed to the page that asked for one read after it)."""
         with self._lock:
             hit = self._d.get(key)
             if not hit:
                 return None
-            if hit[0] < time.time():
+            now = time.time()
+            if hit[0] < now:
                 self._drop(key)
+                return None
+            if max_age is not None and len(hit) > 3 and now - hit[3] > max_age:
                 return None
             self._d.move_to_end(key)
             return hit[1]
@@ -86,11 +92,17 @@ class TTLCache:
             return
         with self._lock:
             self._drop(key)
-            self._d[key] = (time.time() + ttl, value, n)
+            self._d[key] = (time.time() + ttl, value, n, time.time())
             self.bytes += n
             while self._d and (len(self._d) > self.max or self.bytes > self.max_bytes):
                 _, old = self._d.popitem(last=False)
                 self.bytes -= old[2]
+
+    def stored_at(self, key) -> float | None:
+        """When an entry was stored (None when there is none)."""
+        with self._lock:
+            hit = self._d.get(key)
+            return hit[3] if hit and len(hit) > 3 else None
 
     def pop(self, key):
         """Forget one entry (no error when it isn't there)."""
@@ -192,11 +204,13 @@ class Source:
 
     BREAK_AFTER, BREAK_FOR = 3, 60.0     # failures in a row, then seconds treated as down
 
-    def fetch(self, path: str, params: dict | None = None, ttl: float = 300, kind: str = "json"):
+    def fetch(self, path: str, params: dict | None = None, ttl: float = 300, kind: str = "json", with_time: bool = False):
+        """The answer, from the cache when a copy is no older than `ttl` seconds (whoever stored it); `with_time`: also
+        when the source sent it, (value, time)."""
         key = (path, tuple(sorted((params or {}).items())), kind)
-        hit = self.cache.get(key)
+        hit = self.cache.get(key, max_age=ttl)
         if hit is not None:
-            return hit
+            return (hit, self.cache.stored_at(key) or time.time()) if with_time else hit
         if time.time() < self._down_until:   # down a moment ago: answer now instead of queueing behind the outage
             raise SourceError(self.name, f"{self.name} isn't answering right now. Try again in a minute.", busy=True)
         if not self.limit.take():
@@ -220,7 +234,7 @@ class Source:
         self._failed(False, ok=True)
         # parsed JSON takes several times its text size in memory
         self.cache.set(key, value, ttl, size=len(r.content) * (4 if kind == "json" else 1) + 200)
-        return value
+        return (value, time.time()) if with_time else value
 
     def _failed(self, outage: bool, ok: bool = False):
         """Count outages (unreachable, 5xx, 429, a page instead of data); a normal answer, even a 404, resets it."""
