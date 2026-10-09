@@ -47,6 +47,11 @@ def peek(kind: str, key_parts: tuple) -> bool:
     return _cache.get(_key(kind, *key_parts)) is not None
 
 
+def get(kind: str, key_parts: tuple) -> dict | None:
+    """The stored read itself, or None."""
+    return _cache.get(_key(kind, *key_parts))
+
+
 def _ask(system: str, facts: dict | str, ai, max_tokens: int) -> dict:
     text = facts if isinstance(facts, str) else "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str)
     return extract_json(complete(system, text, gemini=ai[0], anthropic=ai[1], max_tokens=max_tokens, kind="research"))
@@ -150,7 +155,7 @@ def results_status(c: dict, today) -> dict | None:
     return out or None
 
 
-READ_CHECKS = 7          # the checks a company read went through (stored with it; a kept read gets them again as it is served)
+READ_CHECKS = 8          # the checks a company read went through (stored with it; a kept read gets them again as it is served)
 
 SCORE_FIELDS = ("scores", "composite", "valuation", "rating", "grade")   # never sent, even from an old stored read
 
@@ -166,7 +171,7 @@ Given FACTS about one listed company, return ONLY this JSON:
  "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 scheduled things ahead (the next results, a meeting, an ex-date), stated as facts with no view on the price"],
- "ideas": [{{"title": "3-6 words", "text": "one rule to test, in plain English", "why": "one sentence"}}]}}
+ "ideas": [{{"title": "3-6 words", "text": "one rule to test, in plain English", "why": "one sentence stating a fact from the FACTS that the rule is built on"}}]}}
 No scores, ratings or grades of any kind: no 0-100 numbers, letter grades or stars, and no "strong", "weak", "good",
 "poor", "healthy" or "excellent" labels on the business, its growth, its price trend or its balance sheet. State the
 numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt is 0.4 times equity".
@@ -181,7 +186,9 @@ results status in "results": a year or quarter the FACTS report is never "estima
 lists only dates ahead that the FACTS give; with none, say the next results date isn't announced yet.
 Compare a figure only with another figure in the FACTS: never with its history, its usual range, its peers, the sector
 or the market, which the FACTS don't give. Never say a kind of strategy "can be effective" or "works": an idea's "why"
-states the fact about the stock it is built on. Name each idea for the rule it is: a crossover is trend following, a
+states the fact about the stock it is built on, as a fact: never what a figure "suggests", "signals" or "indicates",
+what "would" or "could" happen, or that the stock is "suitable" for a style. A holder class whose change the
+shareholding note explains as a reclassification did not buy or sell. Name each idea for the rule it is: a crossover is trend following, a
 break above a high is a breakout, buying a fall below a level or an oversold RSI is mean reversion. Write numbers as the
 FACTS write them. Leave out anything the FACTS don't state rather than saying it isn't stated.
 {RULES}"""
@@ -197,6 +204,8 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
     if not str(r.get("summary") or "").strip() and not r.get("bull") and not r.get("bear"):
         raise AIError("The AI's reply was empty. Press Refresh to try again.")     # never cache a blank read
     read = {"summary": str(r.get("summary") or "")[:700], "facts": key_facts or [],
+            # a holder class's reclassification and the page's words for it, so the read never calls it selling (R8O-004)
+            "class_move": grounding.class_move(c.get("shareholding")),
             "valuation_note": str(r.get("valuation_note") or "")[:300],
             # no revenue split: the model's guess isn't sourced (AAPL read "iPhone 100%, Services 0%, Mac 0%")
             "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": [],

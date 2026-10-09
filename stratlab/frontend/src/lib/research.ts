@@ -95,13 +95,25 @@ export interface CompareAI {
 }
 export interface WatchItem { region: Region; symbol: string; name: string | null }
 
+/** How often, and how many times, a company page asks again for a read being written behind it (about two minutes). */
+export const AI_POLL_MS = 3000;
+export const AI_POLLS = 40;
+
 export const researchApi = {
   company: (r: Region, s: string) => api<Company>(`/research/company/${r}/${encodeURIComponent(s)}`),
   /** The AI read, or an Error saying why there is none (an answer of "unavailable" is a 200 on the wire, so a page opening is never a failed request). */
-  companyAI: async (r: Region, s: string, refresh = false): Promise<CompanyAI> => {
-    const got = await api<CompanyAI | { unavailable: true; message: string }>(`/research/company/${r}/${encodeURIComponent(s)}/ai${refresh ? "?refresh=true" : ""}`);
-    if ("unavailable" in got) throw new Error(got.message);
-    return got;
+  companyAI: async (r: Region, s: string, refresh = false, alive: () => boolean = () => true): Promise<CompanyAI> => {
+    const base = `/research/company/${r}/${encodeURIComponent(s)}/ai`;
+    // the page never waits on its read: a read not written yet is written behind the page and asked for again every few
+    // seconds (R8O-007: company pages settled in 8 to 30 s); "Refresh" asks and waits, as asked
+    for (let i = 0; ; i++) {
+      const got = await api<CompanyAI | { unavailable: true; message: string } | { pending: true }>(refresh ? `${base}?refresh=true` : `${base}?background=true`);
+      if ("unavailable" in got) throw new Error(got.message);
+      if (!("pending" in got)) return got;
+      if (!alive()) throw new Error("left the page");
+      if (i >= AI_POLLS) throw new Error("The AI service is busy. Ask again in a minute.");
+      await new Promise((ok) => setTimeout(ok, i === 0 ? 800 : i === 1 ? 1600 : AI_POLL_MS));      // a quick read shows quickly
+    }
   },
   chart: (r: Region, s: string, range: string) =>
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),

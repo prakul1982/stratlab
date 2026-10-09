@@ -24,12 +24,40 @@ export function titleFor(path: string): string {
   if (OWN[p]) return withBrand(OWN[p]);
   if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Admin");
   const company = p.match(/^\/research\/(IN|US)\/([^/]+)(\/deep)?$/);
-  if (company) return withBrand(`${decodeURIComponent(company[2]).toUpperCase()}${company[3] ? " deep dive" : ""}`);
+  if (company) {
+    // the company's name from the first frame when it has been opened before (R8O-009: "POLYCAB · StratLab" until the
+    // page's numbers arrived)
+    const sym = decodeURIComponent(company[2]).toUpperCase();
+    const name = knownName(company[1], sym);
+    return withBrand(`${name ? `${name} (${sym})` : sym}${company[3] ? " deep dive" : ""}`);
+  }
   const g = locateGroup(p);
   if (g) return withBrand(`${g.group.label} · ${NAV[g.space].label}`);
   const at = locate(p);
   if (at) return withBrand(at.page.label);
   return DEFAULT_TITLE;
+}
+
+const NAMES_KEY = "stratlab.company-names";
+
+/** A company's name as its page last gave it, kept on this device for the tab's title (at most 200 companies). */
+export function rememberName(region: string, symbol: string, name: string | null | undefined) {
+  if (!name) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(NAMES_KEY) || "{}") as Record<string, string>;
+    const k = `${region}:${symbol.toUpperCase()}`;
+    if (all[k] === name) return;
+    delete all[k];
+    all[k] = name;
+    const keys = Object.keys(all);
+    for (const old of keys.slice(0, Math.max(0, keys.length - 200))) delete all[old];
+    localStorage.setItem(NAMES_KEY, JSON.stringify(all));
+  } catch { /* storage off */ }
+}
+
+export function knownName(region: string, symbol: string): string | null {
+  try { return (JSON.parse(localStorage.getItem(NAMES_KEY) || "{}") as Record<string, string>)[`${region.toUpperCase()}:${symbol.toUpperCase()}`] ?? null; }
+  catch { return null; }
 }
 
 /** The pages anyone can open, with the name each gives its tab: the policies, the sign-in addresses and the landing page's

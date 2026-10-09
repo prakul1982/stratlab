@@ -185,8 +185,60 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
     return out
 
 
+# pages built since the index was last gathered: {region: {symbol: (when, row or None)}}. The index takes each at once, so
+# a company's value in the screens and in "the largest companies" is its page's own from the moment the page is built,
+# not half an hour later (R8O-005: Visa, $700.5B on its page, missing from both while its row was a page from before
+# every class of shares was counted)
+_built: dict[str, dict[str, tuple[float, dict | None]]] = {}
+
+
+def note_page(region: str, symbol: str, facts: dict | None) -> None:
+    """A company page was just built: its row in the index now (the page's own market value, P/E and yield), when the
+    index's row for it has no market value (a page from before every class of shares was counted, R8O-005). Any other
+    row, and a company the index doesn't have yet, follow at the index's next gathering."""
+    try:
+        r = row(region, symbol, facts or {})
+    except Exception as e:
+        print("screens: row for a new page failed:", region, symbol, str(e)[:120])
+        return
+    if not r or r.get("market_cap") is None:
+        return
+    try:
+        have = next((x for x in load_index(region).get("rows") or [] if x.get("symbol") == symbol), None)
+    except Exception:
+        return
+    if have is None or have.get("market_cap") is not None:
+        return
+    with _mem_lock:
+        _built.setdefault(region, {})[symbol] = (time.time(), r)
+        hit = _mem.get(region)
+        if hit:
+            _mem[region] = (hit[0], _with_built(region, hit[1]))
+
+
+def _with_built(region: str, index: dict) -> dict:
+    """The index with the rows of pages built since it was gathered in place of the rows it has for them."""
+    fresh = _built.get(region) or {}
+    if not fresh:
+        return index
+    old = {r["symbol"]: r for r in index.get("rows") or []}
+    rows = [r for r in index.get("rows") or [] if r["symbol"] not in fresh]
+    for sym, (_, r) in fresh.items():
+        if r:
+            if region == "IN":
+                r = {**r, "insider_buy_at": (old.get(sym) or {}).get("insider_buy_at")}
+            rows.append(r)
+    rows.sort(key=lambda r: (r["name"].lower(), r["symbol"]))
+    if region == "US":
+        rows = with_us_red(rows)
+    else:
+        rows = with_ranks(one_per_company(rows, stock_pages.nse_twins()))
+    return {**index, "rows": rows}
+
+
 def build_index(region: str, store: bool = True) -> dict:
     """Every stored company page in a market, gathered into the screens' index (and saved)."""
+    started = time.time()
     prefix = f"stocks:page:{region}:"
     rows, ages, empty = [], {}, set()
     bought = deals.buys()["buys"] if region == "IN" else {}
@@ -196,9 +248,10 @@ def build_index(region: str, store: bool = True) -> dict:
         sym = key[len(prefix):]
         ages[sym] = stored.get("ts") or 0
         facts = stored.get("facts") or {}
-        # built again first when a large company's (see Indexer._due): nothing stored, or a US page from before the
-        # facts it shows now (every class of shares counted, one P/E: R7V-001, R7V-002)
-        if not facts or region == "US" and (facts.get("v") or 1) < stock_pages.FACTS_VERSION:
+        # built again first when a large company's (see Indexer._due): nothing stored, or a page from before the facts
+        # it shows now (every class of shares counted, one P/E: R7V-001, R7V-002; India's yield from its own dividends
+        # list: R8O-001)
+        if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION:
             empty.add(sym)
         if stock_pages.has_content(facts):
             shown.append(sym)
@@ -215,7 +268,10 @@ def build_index(region: str, store: bool = True) -> dict:
     index = {"region": region, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "rows": rows}
     if store:
         db.set_setting(INDEX_KEY + region, json.dumps(index))
-        _mem.pop(region, None)
+        with _mem_lock:
+            _mem.pop(region, None)
+            # the pages built before this gathering began are in it now; those built while it ran stay on top of it
+            _built[region] = {s: v for s, v in (_built.get(region) or {}).items() if v[0] >= started}
         # which stored pages have something to show, for the sitemaps: a page with no price and no numbers is noindex,
         # so it isn't listed (R7V-007)
         try:
@@ -246,6 +302,7 @@ def load_index(region: str) -> dict:
     else:                                        # an index stored before: each company once, ranked by size
         index["rows"] = with_ranks(one_per_company(index["rows"], stock_pages.nse_twins()))
     with _mem_lock:
+        index = _with_built(region, index)
         _mem[region] = (time.time(), index)
     return index
 

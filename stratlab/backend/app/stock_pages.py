@@ -43,8 +43,10 @@ SETTLE = 45 * 60               # a market's closing prices are taken as final th
 # after the bell; until then the day's candle can carry a last-traded price, so the page keeps the day before (R6V-002)
 SETTLE_BY = {"IN": 3 * 3600}
 # pages built before market values (and depositary shares, R7O-004) were checked, or before every class of shares was
-# counted and P/E had one definition (R7V-001, R7V-002), are rebuilt when next opened
-FACTS_VERSION = 4
+# counted and P/E had one definition (R7V-001, R7V-002), or (5) before an Indian page's dividend yield came from the
+# company's own dividends list (R8O-001: TCS's stored page kept 3.08%, the last reported year's, after the fix went
+# live, since only US pages were checked for their version), are rebuilt when next opened, in either market
+FACTS_VERSION = 5
 ADR_CHECKED = 3                # the version from which a depositary share's market value was checked (screens.row)
 PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 months before the price is n/a (R7V-003)
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
@@ -506,8 +508,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return now - ts < EMPTY_FOR
     if now - ts >= FRESH:
         return False
-    if stored["facts"].get("region") == "US" and (stored["facts"].get("v") or 1) < FACTS_VERSION:
-        return False                     # a US page built before market values were checked: rebuilt when next opened
+    if (stored["facts"].get("v") or 1) < FACTS_VERSION:
+        return False                     # a page built before the facts a page shows now: rebuilt when next opened
     settled = last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + settle(region)
     # its own build, or the price job's re-read of its price, came after the market's latest settled close
     return ts >= settled or (stored.get("price_ts") or 0) >= settled
@@ -556,8 +558,11 @@ class Pages:
     times a minute. `gather(region, company)` builds one company's facts from the sources, or returns None when they
     have nothing."""
 
-    def __init__(self, gather, per_minute: int = 6):
-        self.gather, self.per_minute = gather, per_minute
+    def __init__(self, gather, per_minute: int = 6, older=None):
+        # `older(region, symbol, facts)`: a stored page from before FACTS_VERSION, served while it can't be rebuilt,
+        # brought in line where that's cheap (see main.stock_page_older_facts)
+        self.gather, self.per_minute, self.older = gather, per_minute, older
+        self.on_built = None           # (region, symbol, facts) after a page is built and stored: screens.note_page
         self.mem = TTLCache(max_items=3000)
         self.recent: deque = deque()
         self.lock = threading.Lock()
@@ -576,6 +581,14 @@ class Pages:
                 return False
             self.recent.append(now)
             return True
+
+    def _as_served(self, region: str, symbol: str, f: dict | None) -> dict | None:
+        if f and self.older and (f.get("v") or 1) < FACTS_VERSION:
+            try:
+                return self.older(region, symbol, f)
+            except Exception as ex:
+                print("stock pages: older page not brought in line:", region, symbol, str(ex)[:120])
+        return f
 
     def peek(self, region: str, symbol: str) -> dict | None:
         """A company's stored facts as they are, however old, without building anything: for the app's company page to
@@ -611,21 +624,27 @@ class Pages:
                 return hit or None
             if not self._may_build():
                 if stored:
-                    return stored.get("facts")
+                    return self._as_served(region, symbol, stored.get("facts"))
                 raise Busy()
             try:
                 got = self.gather(region, co)
             except Exception as ex:      # a source down: the stored copy, however old, or busy
                 print("stock page build failed:", region, symbol, str(ex)[:160])
                 if stored:
-                    self.mem.set(key, stored.get("facts") or {}, 600)
-                    return stored.get("facts")
+                    f = self._as_served(region, symbol, stored.get("facts"))
+                    self.mem.set(key, f or {}, 600)
+                    return f
                 raise Busy() from None
             if got:
                 got["symbol"] = symbol
             _put(key, {"ts": time.time(), "facts": got})
             _mark_thin(region, symbol, not has_content(got))         # nothing to show (or a fund): not in the sitemap
             self.mem.set(key, got or {}, 600)
+            if self.on_built:
+                try:
+                    self.on_built(region, symbol, got)   # the screens' index takes the page's figures at once (R8O-005)
+                except Exception as ex:
+                    print("stock pages: index not told of", region, symbol, str(ex)[:120])
             return got
 
     def refresh_prices(self, region: str, bars_of, analyse=None, limit: int = 200, gap: float = 1.0, sleep=time.sleep,

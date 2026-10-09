@@ -1,4 +1,5 @@
-import { lazy, StrictMode, Suspense, useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ComponentType, type ReactNode } from "react";
+import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppProvider, useApp } from "./lib/app";
@@ -9,10 +10,9 @@ import { pageview } from "./lib/analytics";
 import { Shell } from "./components/Shell";
 import { PageLock } from "./components/PageLock";
 import { ViewAsBanner } from "./components/ViewAs";
-import { Loading } from "./components/ui";
 import { Toast } from "./components/Toast";
 import { VisitorApp } from "./visitor/VisitorApp";
-import { LoadGuard, PageBoundary } from "./components/LoadGuard";
+import { LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { fmtDate } from "./lib/format";
@@ -57,7 +57,8 @@ const SettingsPage = page(() => import("./pages/SettingsPage"), "SettingsPage");
 const AssistantPage = page(() => import("./pages/AssistantPage"), "AssistantPage");
 const AppPage = page(() => import("./pages/AppPage"), "AppPage");
 const InvitePage = page(() => import("./pages/InvitePage"), "InvitePage");
-const AdminPage = page(() => import("./pages/AdminPage"), "AdminPage");
+const adminPage = () => import("./pages/AdminPage");
+const AdminPage = page(adminPage, "AdminPage");
 const LibraryPage = page(() => import("./pages/LibraryPage"), "LibraryPage");
 const CompareExperiments = page(() => import("./pages/CompareExperiments"), "CompareExperiments");
 const research = () => import("./pages/Research");
@@ -192,8 +193,11 @@ function Routed() {
   // page, "Sign in to see …" on an app address, else Not found (visitor/VisitorApp.tsx titles and describes them)
   const everyone = isPublicForAll(loc.pathname);
   useEffect(() => { if (ready && session && !everyone) applySeo({ ...seoFor(loc.pathname, "account"), index: false }); }, [ready, session, everyone, loc.pathname]);
+  // the page's own title from the first frame, while the sign-in is read and the page's code downloads (R8O-009: the tab
+  // had no useful title for 2 s on /research/rotation and /admin/system); a visitor's pages set their own
+  useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
   if (everyone) return <VisitorApp />;
-  if (!ready) return <Loading label="Opening StratLab" />;
+  if (!ready) return <main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main>;
   if (!session) return <VisitorApp />;
   return (
     <Shell>
@@ -205,7 +209,7 @@ function Routed() {
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}
       {/* a page that fails while it runs says so in its own place; only a failed download is a download message (R7T-011) */}
       <PageBoundary at={loc.pathname}>
-      <Suspense fallback={<><h1 className="sr-only">Opening the page</h1><Loading label="Opening" /></>}>
+      <Suspense fallback={<><h1 className="sr-only">Opening the page</h1><Opening /></>}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />
@@ -313,9 +317,22 @@ function App() {
 }
 
 /** Draw the signed-in app (or the first moment of it, before the sign-in check is back). The entry point (entry.tsx) calls this. */
+/** The first page's code, asked for while the sign-in is read, not after it (R8O-007: /mine 5.2 s and /admin 7 s cold, one
+ * request after another). Only a head start: the page itself reports a failed download. */
+export function firstPage(path: string): (() => Promise<unknown>) | null {
+  const p = path.replace(/(.)\/$/, "$1");
+  if (p === "/mine") return mineHome;
+  if (p === "/" || p === "/trade" || p === "/invest" || p === "/money") return spaceHomes;
+  if (p === "/admin" || p.startsWith("/admin/")) return adminPage;
+  if (p === "/research" || p.startsWith("/research/")) return /^\/research\/(IN|US)\/[^/]+\/deep$/i.test(p) ? deep : research;
+  if (p === "/holdings") return holdingsPage;
+  return null;
+}
+
 export function startApp(root: HTMLElement) {
   // without the config the app can't tell who is signed in: never draw it as signed out
   if (!window.STRATLAB_CONFIG?.SUPABASE_URL) { window.__stratlabShowLoadError?.(); return; }
+  void firstPage(location.pathname)?.().catch(() => undefined);
   createRoot(root).render(
     <StrictMode>
       <LoadGuard>

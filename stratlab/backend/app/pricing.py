@@ -198,8 +198,26 @@ def public() -> dict:
     server. Each currency shows the admin price table's amount ($8 and $20 for dollars, the owner's choice, 7 Oct);
     `charged_in` says when a card is still charged the rupee price instead."""
     shown = {c: r for c, r in table().items() if not r.get("no_rate")}
-    return {"currencies": {c: {k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate")} for c, r in shown.items()},
+    return {"currencies": {c: {**{k: v for k, v in r.items() if k not in PLAN_FIELDS + ("rate", "auto", "no_rate")}, **charge_about(c, r)}
+                           for c, r in shown.items()},
             "countries": {k: c for k, c in COUNTRIES.items() if c in shown}}
+
+
+def charge_about(code: str, row: dict) -> dict:
+    """{"charge_about": {field: the rupee charge in this currency at today's rate}} for a currency with its own fixed price
+    that is still charged in rupees, so Plans can say what the card is actually charged beside the price it shows
+    (R8O-006: Basic €8 and £7, charged as ₹699, about €6.45 and £5.47); {} otherwise. Two decimals (none for yen)."""
+    rate = row.get("rate")
+    if code == "INR" or row.get("converted") or not rate or rate <= 0:
+        return {}
+    inr = {f: PLANS[f.split("_")[0]]["price" + ("_year" if f.endswith("_year") else "")] for f in FIELDS}
+    out = {}
+    for f in FIELDS:
+        charged = row.get("yearly_charged_in" if f.endswith("_year") else "charged_in")
+        if charged == "INR":
+            v = inr[f] / rate
+            out[f] = round(v) if code == "JPY" else round(v, 2)
+    return {"charge_about": out} if out else {}
 
 
 def save(changes: dict) -> dict:

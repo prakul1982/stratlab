@@ -57,7 +57,16 @@ ADVICE_TITLE = re.compile(
     r"|\b(buy|sell|accumulate) (the dip|now|these|this|it)\b|\bstocks? to (buy|sell|avoid|accumulate|own)\b|\btop picks?\b"
     r"|\bshould you (buy|sell|hold)\b|\b(buy|sell|hold)\?|\bwhich\b[^?]{0,60}\bwins?\b|\btarget price\b|\bprice target\b"
     r"|\bprediction for (tomorrow|today|next)\b|\bprice prediction\b|\bmultibagger\b|\bbuy or sell\b|\bstock recommendations?\b"
-    r"|\btrading (calls?|ideas?|picks?)\b|\bbrokerages? (recommend|suggest)\b", re.I)
+    r"|\btrading (calls?|ideas?|picks?)\b|\bbrokerages? (recommend|suggest)\b"
+    # R8O-010: a broker's call with its target ("Buy Tata Consultancy Services; target of Rs 2390: Prabhudas Lilladher"),
+    # a question put to the reader ("Should you book profit or invest more?"), upside sold as a bet ("Up to 52% upside …
+    # biggest bets for investors"), and a fund putting its own cash to work ("We're putting some of our large cash pile to
+    # work in a beaten-down consumer name")
+    r"|(^|[:;|]\s*)(buy|sell|accumulate|add|reduce)\b[^.]{0,100}\btarget\b|\btarget (of|at)\s*(rs\.?|₹|\$|inr|usd)"
+    r"|\b(maintains?|reiterates?|retains?|upgrades?|downgrades?)\b[^.]{0,40}\b(to |a |an )?['\"]?(buy|sell|accumulate|outperform|underperform|overweight|underweight)\b"
+    r"|\bshould you\b|\bbook (some )?profits?\b|\b\d+(\.\d+)?\s?% upside\b|\bupside (of|potential|ahead)\b|\bbiggest bets?\b|\bbets? for investors\b"
+    r"|\b(we're|we are|we've|we have|i'm|i am)\s+(putting|deploying|parking|betting|investing)\b|\bputting\b[^.]{0,60}\b(cash|money|capital)\b[^.]{0,40}\bto work\b"
+    r"|\b(stocks?|shares?) (that )?(could|can|may) (rally|surge|jump|double|zoom|soar|gain)\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

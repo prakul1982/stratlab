@@ -47,14 +47,14 @@ PLANS = {
     "pro": {
         "name": "Pro", "price": 1999, "price_year": 19999,
         "backtests_per_month": None,  # unlimited
-        "ai_builds_per_month": None,  # unlimited (a daily safety cap still applies)
+        "ai_builds_per_month": None,  # unlimited (a daily safety cap of 200 builds still applies, said on Plans)
         "live_limit": 10,
         "live_trial_days": None,
         "group_size": 50,
         "holdings": 300,
         "stock_alerts": 100,
         "screens": 25,
-        "deepdives_per_month": None,  # unlimited (the daily cap on fresh AI reads still applies)
+        "deepdives_per_month": None,  # unlimited (and no daily cap on fresh AI reads: ai_reads_per_day)
         "decks_per_month": None,
         "networth_items": None,
         "mf_schemes": None,
@@ -204,17 +204,26 @@ def journal_limit(plan: str) -> int | None:
     return PLANS[plan]["journal_trades"]
 
 
+def ai_reads_per_day(plan: str) -> int | None:
+    """Fresh AI reads a day on a plan (Plans says it): none on Pro, RESEARCH_AI_PER_DAY on Basic and Free. Reads already
+    written for a company or a market, and the market mood, never count (intel/routes.ai_call)."""
+    from .config import settings
+    return None if plan == "pro" else settings.RESEARCH_AI_PER_DAY
+
+
 def plan_info(plan: str) -> dict:
     info = {k: v for k, v in PLANS[plan].items() if k != "features"}
     return {**info, "group_size": group_size(plan), "holdings": holdings_limit(plan), "stock_alerts": stock_alerts(plan),
             "screens": screens(plan), "deepdives_per_month": deepdives(plan), "decks_per_month": decks(plan),
             "networth_items": networth_items(plan), "mf_schemes": mf_limit(plan), "journal_trades": journal_limit(plan), "indicators": has_indicators(plan), "fno": has_fno(plan),
+            "ai_reads_per_day": ai_reads_per_day(plan),
             "features": {f: allows(plan, f) for f in FEATURES}}
 
 
 def public_plans() -> dict:
     """What each plan includes, for the Plans page (independent of early access)."""
-    return {k: {**{x: v for x, v in p.items() if x != "features"}, "features": sorted(p["features"])} for k, p in PLANS.items()}
+    return {k: {**{x: v for x, v in p.items() if x != "features"}, "ai_reads_per_day": ai_reads_per_day(k), "features": sorted(p["features"])}
+            for k, p in PLANS.items()}
 
 
 def _dt(v) -> datetime:

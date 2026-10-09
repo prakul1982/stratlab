@@ -955,7 +955,20 @@ UNSOURCED = re.compile(r"\bhistoric(al(ly)?)?\b|\b(its|their) (usual|typical|nor
                        r"|\bpeers?\b|\bpeer group\b|\b(sector|industry|market|category) (average|median|multiple|norm)s?\b"
                        r"|\b(compared|relative) (to|with) (its |the )?(peers|sector|industry|market|competitors|rivals)\b|\belevated\b"
                        r"|\bwell (above|below)\b|\b(lower|upper|higher|low|high) end\b|\b(above|below) (its|the) (average|norm|usual)\b"
-                       r"|\b(premium|discount) to\b|\bthan (its |the )?(peers|sector|industry|rivals|competitors)\b|\b(high|low) relative\b", re.I)
+                       r"|\b(premium|discount) to\b|\bthan (its |the )?(peers|sector|industry|rivals|competitors)\b|\b(high|low) relative\b"
+                       # "high" or "low" against nothing the page shows (R8O-004: TCS "P/B of 6.6 is relatively high")
+                       r"|\b(relatively|comparatively|fairly|rather|quite) (high|low|rich|expensive|cheap|modest|elevated|stretched|attractive|lofty|steep)\b"
+                       r"|\b(is|are|looks?|appears?|remains?|seems?) (very )?(rich|expensive|cheap|stretched|lofty|steep|undervalued|overvalued)\b", re.I)
+# a trading idea's caption states a fact from the page, never what a figure "suggests", "signals" or makes "suitable",
+# and never what would or could happen (R8O-004: "Recent quarterly profit beat suggests upward momentum", "a clear signal of
+# a trend shift", "A low RSI would signal oversold conditions", "making it suitable for testing oversold bounces")
+# (a moving average's "signal line", an "indicator" and the month of May are facts, not predictions)
+PREDICTS = re.compile(r"\bsuggest\w*\b|\bsignal(s|ed|led|ing|ling)?\s+(of|that|an?|the)\b|\b(clear|strong|reliable|good) signal\b"
+                      r"|\bindicat(es|ing|ed)\b|\bimpl(y|ies|ied)\b|\bpoints? to\b|\bhint\w*\b"
+                      r"|\b(would|could|might|should|will|likely|unlikely|expected to|poised|set to)\b|(?-i:\bmay\b)"
+                      r"|\bsuitab\w*\b|\bsuited\b|\bideal\b|\bmaking (it|this|the stock|them)\b"
+                      r"|\b(upward|downward|positive|negative|building|strong|weak|bullish|bearish)\s+momentum\b|\btrend shift\b"
+                      r"|\bbeat\b|\bbeats\b|\bupside\b|\bdownside\b|\bpotential\b|\bopportunit", re.I)
 # a lender's book has no EBITDA, operating margin or debt-to-equity that means anything (R7O-001: ICICIBANK "EBITDA margin -20.0%")
 LENDER_WORDS = re.compile(r"\bebitda\b|\boperating (profit )?margin\b|\bdebt[- ]to[- ]equity\b|\bd/e\b|\bcapex\b", re.I)
 
@@ -1001,22 +1014,109 @@ def idea_matches_name(title, text) -> bool:
     return named is None or got is None or named == got
 
 
-def polish_company(read: dict, region: str = "IN", lender: bool = False) -> dict:
+_WEEKDAY = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def app_dates(text, today=None) -> str:
+    """ISO dates in a read written the app's way: "2026-10-17" is "Sat, 17 Oct" (the page header's form), with the year
+    when it isn't this one (R8O-004)."""
+    from datetime import date as _date
+    if not isinstance(text, str):
+        return text
+    year = (today or _date.today()).year
+
+    def one(m):
+        try:
+            d = _date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        return f"{_WEEKDAY[d.weekday()]}, {d.day} {_MON[d.month - 1]}" + ("" if d.year == year else f" {d.year}")
+    return _ISO.sub(one, text)
+
+
+# a holder class that "fell" or "rose" by the points of a reclassification (a depositary bank moved from FIIs to Public):
+# the page explains it, and a read never calls it selling or buying (R8O-004: ICICIBANK "FIIs shareholding fell by 12.98
+# points" in its risks)
+_CLASS_WORDS = {"FIIs": r"\bfiis?\b|\bforeign (institutional |portfolio )?investors?\b|\bfpis?\b", "DIIs": r"\bdiis?\b|\bdomestic institution\w*",
+                "Public": r"\bpublic\b|\bretail\b", "Promoters": r"\bpromoters?\b", "Government": r"\bgovernment\b"}
+_MOVED = re.compile(r"\b(fell|fall\w*|declin\w*|dropp?\w*|reduc\w*|cut|sold|sell\w*|exit\w*|lower\w*|decreas\w*|shed|trimm?\w*|"
+                    r"rose|rise\w*|risen|increas\w*|bought|buy\w*|add\w*|rais\w*|higher|jump\w*|climb\w*|grew|grow\w*|up|down)\b", re.I)
+
+
+def mentions_class_move(s: str, classes) -> bool:
+    """Whether a sentence speaks of a moved holder class's holding changing."""
+    for c in classes or ():
+        rx = _CLASS_WORDS.get(str(c))
+        if rx and re.search(rx, s, re.I) and _MOVED.search(s):
+            return True
+    return False
+
+
+def plain_caption(text, lender: bool = False, region: str = "IN") -> str:
+    """A trading idea's caption: the plain sentences that state a fact, none that predicts or calls the stock suitable."""
+    kept = plain_sentences(text, lender, region)
+    return " ".join(s for s in _SENT.split(kept) if s and not PREDICTS.search(s))
+
+
+def polish_company(read: dict, region: str = "IN", lender: bool = False, today=None) -> dict:
     """The checks every company read gets, fresh or stored, at no cost: numbers the page's way, no filler, no
     "can be effective", no comparison the page can't show, no EBITDA for a lender, and only trading ideas whose rule
-    is the kind their name says (R7O-001, R7O-002). Run again whenever a stored read is served."""
+    is the kind their name says (R7O-001, R7O-002); captions that state facts and predict nothing, a holder class's
+    reclassification told as the page tells it, and dates the app's way (R8O-004). Run again whenever a stored read is
+    served."""
     out = dict(read)
+    move = read.get("class_move") if isinstance(read.get("class_move"), dict) else None
+    classes = (move or {}).get("classes") or ()
+    note_used = False
+
+    def prose(text) -> str:
+        nonlocal note_used
+        kept = []
+        for s in _SENT.split(plain_sentences(text or "", lender, region)):
+            if not s:
+                continue
+            if classes and mentions_class_move(s, classes):
+                if not note_used and move.get("note"):          # the page's own explanation, once
+                    kept.append(str(move["note"]).split(" The named holders")[0])
+                    note_used = True
+                continue
+            kept.append(s)
+        return app_dates(" ".join(kept), today)
+
     for k in ("summary", "valuation_note", "position"):
-        out[k] = plain_sentences(read.get(k) or "", lender, region)
+        out[k] = prose(read.get(k))
     for k in ("bull", "bear", "watch"):
-        out[k] = [x for x in (plain_sentences(str(i), lender, region) for i in read.get(k) or []) if x]
+        items = []
+        for i in read.get(k) or []:
+            x = plain_sentences(str(i), lender, region)
+            # a strength or a risk is never a reclassification of holders: left out (the page explains it)
+            x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes)))
+            if x:
+                items.append(app_dates(x, today))
+        out[k] = items
     ideas = []
     for i in read.get("ideas") or []:
         if not isinstance(i, dict) or not idea_matches_name(i.get("title"), i.get("text")):
             continue
-        ideas.append({**i, "why": plain_sentences(str(i.get("why") or ""), lender, region)})
+        why = plain_caption(str(i.get("why") or ""), lender, region)
+        if classes and mentions_class_move(why, classes):
+            why = ""
+        ideas.append({**i, "why": app_dates(why, today)})
     out["ideas"] = ideas
     return out
+
+
+def class_move(shareholding) -> dict | None:
+    """{"classes": the two holder classes that offset each other, "note": the page's explanation} from a company's
+    shareholding (intel/company.class_move_note), or None."""
+    sh = shareholding if isinstance(shareholding, dict) else {}
+    note = sh.get("note")
+    if not note:
+        return None
+    rows = [r for r in sh.get("rows") or [] if isinstance(r, dict) and isinstance(r.get("change"), (int, float)) and abs(r["change"]) >= 5]
+    classes = [str(r.get("label")) for r in rows if str(r.get("label") or "") and str(r.get("label")) in str(note)]
+    return {"classes": classes, "note": str(note)} if classes else None
 
 
 def page_value(v, unit: str = "x", dp: int | None = None):

@@ -47,9 +47,12 @@ test("R7T-003: an index at a previous session's level is never 'today'; Mine's t
   assert.equal(tileToday(sensex, new Date("2026-10-08T20:00:00Z")), "2026-10-09");       // 01:30 IST on 9 Oct
   const sp = MARKET_TILES.find((t) => t.id === "sp500");
   assert.equal(tileToday(sp, new Date("2026-10-09T03:00:00Z")), "2026-10-08");            // 23:00 in New York on 8 Oct
-  const { aiReason } = await import("../src/components/Research.tsx").catch(() => ({ aiReason: null }));
-  if (aiReason) assert.match(aiReason("SENSEX hasn't updated for today's session yet. Ask again in a minute."), /SENSEX hasn't updated/);
-  assert.match(read("src/components/Research.tsx"), /hasn't updated\|haven't updated/);
+  // R8O-002 moved aiReason to lib/aiReason.ts (re-exported by components/Research.tsx), where node can run it: the words
+  // are now checked by running them, not only by reading the source
+  const { aiReason } = await import("../src/lib/aiReason.ts");
+  assert.match(aiReason("SENSEX hasn't updated for today's session yet. Ask again in a minute."), /SENSEX hasn't updated/);
+  assert.match(read("src/lib/aiReason.ts"), /hasn't updated\|haven't updated/);
+  assert.match(read("src/components/Research.tsx"), /export \{ aiLimited, aiReason \} from "\.\.\/lib\/aiReason";/);
 });
 
 test("R7T-004: before 09:15 IST the price is the pre-open's, never the last close", async () => {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
+import { aiLimited, aiReason } from "../lib/aiReason";
 import { ago, marketTz, num, pct, price, safeHref, signCls } from "../lib/format";
 import {
   bandPosition, metricText, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendValue, useWatchlist,
@@ -366,27 +367,27 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
 }
 
 /* ---------- AI read ---------- */
-/** Why an AI read is missing, as the words that follow "No AI read right now": a few plain words, never the message
- * itself, which can be long or name an internal step. When the cause isn't one worth naming, nothing is said of it. */
-export function aiReason(message: string | null): string {
-  if (message && /hasn't updated|haven't updated|previous session/i.test(message)) return `: ${message.replace(/\.?\s*Ask again in a minute\.?$/i, "")}. Ask again in a minute.`;
-  if (message && /busy|overloaded|try again in/i.test(message)) return ": the AI service is busy. Ask again in a minute.";
-  if (message && /used \d+|limit|allowance|tomorrow/i.test(message)) return ": today's fresh AI reads are used up.";
-  if (message && /plan|upgrade/i.test(message)) return ": it isn't on your plan.";
-  return ". Ask again in a moment.";
-}
+export { aiLimited, aiReason } from "../lib/aiReason";
 
 export function AIRead({ region, symbol, onTest }: { region: Region; symbol: string; onTest: (idea: Idea) => void }) {
   const [r, setR] = useState<CompanyAI | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const shown = useRef(`${region}:${symbol}`);
   const load = async (refresh = false) => {
+    const at = `${region}:${symbol}`;
+    const alive = () => shown.current === at;
     setBusy(true); setError(null);
-    try { setR(await researchApi.companyAI(region, symbol, refresh)); }
-    catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
+    try { const got = await researchApi.companyAI(region, symbol, refresh, alive); if (alive()) setR(got); }
+    catch (e) { if (alive()) setError((e as Error).message); }
+    finally { if (alive()) setBusy(false); }
   };
-  useEffect(() => { setR(null); load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [region, symbol]);
+  useEffect(() => {
+    shown.current = `${region}:${symbol}`;
+    setR(null); load();
+    return () => { shown.current = ""; };         // left the page: its read stops being asked for
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [region, symbol]);
   const age = r ? ago(new Date(r.generated_at * 1000).toISOString()) : "";
   return (
     <div className="ai-read">
@@ -397,7 +398,8 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
         {error ? (
           <div className="k-row ai-read-off" role="status">
             <span className="k-small k-muted">No AI read right now{aiReason(error)} The numbers on this page don't depend on it.</span>
-            <button type="button" className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Asking…" : "Ask again"}</button>
+            {/* asking again can't help when the day's cap is the reason (R8O-002) */}
+            {!aiLimited(error) && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => load(true)}>{busy ? "Asking…" : "Ask again"}</button>}
           </div>
         )
           : !r ? <Skeleton label="Reading the numbers" lines={3} /> : (

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { approx, money, usePricing } from "../lib/currency";
+import { aboutMoney, approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn } from "../lib/signin";
@@ -449,6 +449,11 @@ function Pricing() {
             // the amount a card is really charged, when it is not the amount shown (a currency that is charged in rupees)
             const chargedInRupees = p !== "free" && !!local && (year ? local.yearly_charged_in : local.charged_in) === "INR";
             const save = p !== "free" && year ? yearlySaving(amount(p), amount(p, true)) : null;
+            // a fixed price (euros, pounds, dollars) charged in rupees: what that charge is in the currency today (R8O-006)
+            const aboutOf = (plan: string, y: boolean) => {
+              const v = local?.charge_about?.[(y ? `${plan}_year` : plan) as "basic" | "pro" | "basic_year" | "pro_year"];
+              return v != null && local ? ` (about ${aboutMoney(local, v, currency)} today)` : "";
+            };
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -462,7 +467,7 @@ function Pricing() {
                   {p !== "free" && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : chargedInRupees ? `${buy ? "Charged as" : "Will be charged as"} ${rupees(p, year)} / ${per}${gst ? " incl. GST" : ""}`
+                        : chargedInRupees ? `${buy ? "Charged as" : "Will be charged as"} ${rupees(p, year)} / ${per}${gst ? " incl. GST" : ""}${aboutOf(p, year)}`
                         : local || !gst ? "" : "incl. GST"}
                       {!loading && save != null && <span className="lp-save">{`Saves ${money(local, save, currency)} a year against paying monthly`}</span>}
                     </span>

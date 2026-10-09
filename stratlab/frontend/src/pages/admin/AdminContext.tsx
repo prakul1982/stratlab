@@ -18,6 +18,8 @@ export type ServerError = { ref: string; at: string; method: string; path: strin
 export interface Overview {
   server: {
     kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number; options_sessions?: number;
+    /** how many people's options sessions those are (Admin counts every user's) */
+    options_users?: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: ServerError[];
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
@@ -63,11 +65,10 @@ export function AdminData({ children }: { children: ReactNode }) {
   }, [fail]);
   const reload = useCallback(async () => {
     setLoading(true);
-    try {
-      setOvState(await api<Overview>("/admin/overview"));
-      setReported(await api<Reported>("/admin/library"));
-      await reloadJobs();
-    } catch (e) { fail(e); } finally { setLoading(false); }
+    // the three reads at once, each shown as it arrives: one after another made a cold Admin 7 s (R8O-007)
+    const ovDone = api<Overview>("/admin/overview").then(setOvState).catch(fail);
+    const libDone = api<Reported>("/admin/library").then(setReported).catch(fail);
+    try { await Promise.all([ovDone, libDone, reloadJobs()]); } finally { setLoading(false); }
   }, [fail, reloadJobs]);
   useEffect(() => { reload(); }, [reload]);
   const value = useMemo<Ctx>(() => ({ ov, setOv: (f) => setOvState((o) => f(o)), jobs, reported, loading, reload, reloadJobs }), [ov, jobs, reported, loading, reload, reloadJobs]);

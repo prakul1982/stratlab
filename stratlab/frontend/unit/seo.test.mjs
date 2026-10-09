@@ -127,7 +127,7 @@ test("each page's own HTML is written at build time, with structured data on the
 test("the plain page in index.html: a noscript message, a start-up fallback with the page's words, and the boot guard first", () => {
   const html = read("index.html");
   assert.match(html, /<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/);
-  assert.match(html, /<div id="root">\s*<div class="boot[^"]*" data-boot>[\s\S]*Facts, not tips/);
+  assert.match(html, /<div id="root">\s*<main>\s*<div class="boot[^"]*" data-boot>[\s\S]*Facts, not tips/);   // in a main landmark (R8O-009)
   assert.ok(html.indexOf('src="/boot.js"') < html.indexOf('src="/config.js"') && html.indexOf('src="/config.js"') < html.indexOf('src="/src/entry.tsx"'));
   assert.match(html, /<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
 });

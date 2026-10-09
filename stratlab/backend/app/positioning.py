@@ -690,7 +690,10 @@ _live_lock = threading.Lock()
 # The last chain read for each index, kept a few minutes past its minute: when the minute is up, a page gets that one
 # at once while the next read runs in the background, instead of waiting a second or more on the feed.
 _last_live: dict[tuple, tuple[float, dict]] = {}
-LIVE_STALE_FOR = 600
+# how old that last chain may be and still answer at once: past it a page waits for a fresh read (or a fresh recording).
+# Ten minutes let the first page after a quiet spell show a 9-minute-old chain under "live chain" (R8O-012, 11:39:59 at
+# 11:49:08); the page also says a chain's time instead of "live" once it is over two minutes old
+LIVE_STALE_FOR = 150
 _refreshing: set[tuple] = set()
 _refreshing_lock = threading.Lock()
 

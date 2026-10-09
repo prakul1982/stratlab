@@ -714,6 +714,15 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     for f in ((facts.get("dei") or {}).get("EntityCommonStockSharesOutstanding") or {}).get("units", {}).get("shares", []):
         if f.get("val") and f["end"] >= fresh and (shares is None or f["end"] >= shares[0]):
             shares = (f["end"], float(f["val"]))
+    from_cover = shares is not None
+    # the latest year's average number of shares outstanding (treasury shares never count in it), to tell whether a
+    # cover page's count left treasury shares out (see net_of_treasury)
+    avg = None
+    for concept in ("WeightedAverageNumberOfSharesOutstandingBasic", "WeightedAverageShares"):
+        got = [f for f in _facts(facts, concept, "shares") if f.get("val") and f.get("end", "") >= fresh and f.get("fp") in (None, "FY")]
+        if got:
+            avg = float(max(got, key=lambda f: (f["end"], f.get("filed") or ""))["val"])
+            break
     for concept in SHARES if shares is None else ():
         got = [f for f in _facts(facts, concept, "shares") if f.get("val") and f.get("end", "") >= fresh]
         if got:
@@ -733,10 +742,12 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         implied = ni_a[last] / eps_basic[last]
         if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3:
             shares = (last, float(round(implied)))
+            from_cover = False
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
            "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "fiscal_year_end": subs.get("fiscalYearEnd"),
+           "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg,
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
@@ -971,7 +982,8 @@ class SEC(Source):
                         break
         except (httpx.HTTPError, SourceError):
             return unread
-        out = {**ads_ratio(filing_text(bytes(buf).decode("utf-8", "replace"))), "form": forms[i], "url": url}
+        text = filing_text(bytes(buf).decode("utf-8", "replace"))
+        out = {**ads_ratio(text), "treasury": treasury_held(text), "form": forms[i], "url": url}
         self.cache.set(("ads", url), out, 30 * 86400)
         return out
 
@@ -1073,6 +1085,10 @@ class SEC(Source):
             if e.busy:
                 raise
             dep = None
+        if dep and dep.get("form") == "20-F" and dep.get("treasury"):
+            # a 20-F cover page that counts the shares issued, treasury shares included: the market value counts the
+            # shares outstanding (R8O-005 builder note: Eni's 3,146,765,114 held 189,083,769 in treasury)
+            p = net_of_treasury(p, dep["treasury"])
         if dep and dep.get("ads"):
             p = with_ads(p, dep.get("ratio"))
         elif dep and dep.get("unread"):
@@ -1364,6 +1380,36 @@ def ads_ratio(text: str) -> dict:
     if not found:
         return {"ratio": None, "ads": True}
     return {"ratio": max(dict.fromkeys(found), key=found.count), "ads": True}
+
+
+# treasury shares at the balance sheet date, as an annual report states them in words: "A total of 189,083,769 of Eni's
+# ordinary shares (203,137,967 at December 31, 2024) were held in treasury". Only a count said to be held in treasury:
+# shares bought back or cancelled during the year, or held after a later cancellation, are other numbers
+TREASURY_HELD = re.compile(
+    r"(?P<n>\d{1,3}(?:,\d{3}){2,})\s+(?:of\s+[^.;()]{0,60}?\s+)?(?:[\w’']+\s+){0,3}?shares\s*(?:\([^)]{0,120}\)\s*)?"
+    r"(?:were|are|was|is|being)?\s*(?:being\s+)?held\s+(?:in|as)\s+treasury", re.I)
+
+
+def treasury_held(text: str) -> int | None:
+    """The treasury shares an annual report says the company held (the first such statement), or None."""
+    m = TREASURY_HELD.search(text or "")
+    if not m:
+        return None
+    n = int(m.group("n").replace(",", ""))
+    return n if n > 0 else None
+
+
+def net_of_treasury(p: dict, treasury: float | None) -> dict:
+    """A share count from a 20-F's cover page with the treasury shares taken out, when the cover page counted them:
+    the count net of them sits closer to the year's average shares outstanding (which never includes them) than the
+    cover page's own does. A count already net of treasury shares, or not from the cover page, is left as it is."""
+    s, avg = p.get("shares"), p.get("avg_shares")
+    if not s or not treasury or p.get("shares_from") != "cover" or treasury >= 0.5 * s:
+        return p
+    net = s - treasury
+    if not avg or abs(net - avg) >= abs(s - avg):
+        return p
+    return {**p, "shares": float(net), "treasury_shares": float(treasury), "shares_from": "cover net of treasury"}
 
 
 def filing_text(raw: str) -> str:
