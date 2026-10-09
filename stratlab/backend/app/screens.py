@@ -24,6 +24,7 @@ from . import db, deals, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
+BEHIND_FIRST = 1e12                   # added to a page's market value to build it before every other old page (stock_pages.annual_behind)
 KEY = "screens:user:"                 # screens:user:<uid> = {"uid", "items": [...], "sent": [...]}
 KNOWN_KEY = "screens:known:"          # screens:known:IN = the symbols in the index at the last weekly run
 REGIONS = ("IN", "US")
@@ -260,7 +261,8 @@ def build_index(region: str, store: bool = True) -> dict:
             if stock_pages.has_content(facts):
                 # every other company's page from before: rebuilt next, the largest first (R8V-003: Toyota's, Infosys's
                 # and Itaú's pages were a year behind hours after the fix went live, rebuilt only when the ration allowed)
-                old[sym] = _num(facts.get("market_cap")) or 0.0
+                # (a table a year behind its company's newest report goes before them all: its numbers are the stale ones)
+                old[sym] = (_num(facts.get("market_cap")) or 0.0) + (BEHIND_FIRST if stock_pages.annual_behind(facts) else 0.0)
         if stock_pages.has_content(facts):
             shown.append(sym)
         r = row(region, sym, stored.get("facts") or {})

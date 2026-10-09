@@ -180,7 +180,6 @@ def summary(p: dict) -> dict:
     sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
     profit = [v for v in _row(pl, "Net Profit") if v is not None]
     opm = [v for v in _row(pl, "OPM", "Financing Margin") if v is not None]
-    borrow = [v for v in _row(bal, "Borrowings") if v is not None]
     reserves = [v for v in _row(bal, "Reserves") if v is not None]
     equity = [v for v in _row(bal, "Equity Capital") if v is not None]
     price = num(r.get("Current Price"))
@@ -202,8 +201,13 @@ def summary(p: dict) -> dict:
     # Deutsche Bank's 20.1% was 2023's profit over 2025's revenue)
     net_margin = (p_now / s_now * 100) if p_now is not None and s_now else None
     face = num(r.get("Face Value"))
-    whole = [v for v in _row(bal, "Equity") if v is not None]       # US filings: one shareholders' equity row
-    net_worth = (reserves[-1] + (equity[-1] if equity else 0)) if reserves else (whole[-1] if whole else None)
+    # debt to equity: the balance sheet's latest column for both, never the debt of one year over the equity of another
+    last = lambda label: (lambda row: row[-1] if row and row[-1] is not None else None)(_row(bal, label))      # noqa: E731
+    borrow_now, reserves_now, capital_now, whole_now = last("Borrowings"), last("Reserves"), last("Equity Capital"), last("Equity")
+    if _row(bal, "Reserves"):             # Indian pages: reserves and share capital together (none for the newest year: no net worth)
+        net_worth = (reserves_now + (capital_now or 0)) if reserves_now is not None else None
+    else:
+        net_worth = whole_now             # US filings: one shareholders' equity row
     return {
         "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
@@ -214,8 +218,8 @@ def summary(p: dict) -> dict:
         "sales_yoy": ((s_now / s_prev - 1) * 100) if s_now is not None and s_prev is not None and s_prev > 0 else None,
         # a change from a loss isn't a growth rate: none then
         "profit_yoy": ((p_now / p_prev - 1) * 100) if p_now is not None and p_prev is not None and p_prev > 0 else None,
-        "debt_cr": borrow[-1] if borrow else None,
-        "debt_equity": (borrow[-1] / net_worth) if borrow and net_worth else None,
+        "debt_cr": borrow_now,
+        "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth else None,
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
     }
 

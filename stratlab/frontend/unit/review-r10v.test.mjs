@@ -15,6 +15,7 @@ const seo = await import("../src/content/seo.ts");
 const { seoFor } = await import("../src/lib/seo.ts");
 const { pageFiles, libraryFiles } = await import("../scripts/seoPages.mjs");
 const { startupHtml } = await import("../src/lib/held.ts");
+const { signedOutTitle } = await import("../src/lib/title.ts");
 
 const template = read("index.html");
 const tag = (html, re) => (html.match(re) ?? [])[1];
@@ -156,6 +157,14 @@ test("the visitor half draws the kept words while a page's code downloads, and t
     "kept after the config is read and before either half draws over it");
   // the start-up guard still sees the kept words as "the app has not drawn yet"
   assert.match(read("public/boot.js"), /root\.querySelector\("\[data-boot\]"\)/);
+});
+
+test("every public address's tab title at start-up is the title its own HTML carries, so booting resets nothing (R10V-006)", () => {
+  const files = Object.fromEntries(pageFiles(template));
+  for (const p of seo.PAGES) {
+    const html = files[p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`];
+    assert.equal(tag(html, /<title>([^<]*)<\/title>/), signedOutTitle(p.path), p.path);
+  }
 });
 
 test("a strategy's tab keeps the title its own HTML carried until its data names it (R10V-006)", () => {

@@ -581,6 +581,8 @@ def annual_behind(f: dict | None) -> bool:
     again soon rather than kept (R10V-002: a 20-F filed on 29 May 2026 beside a table to Mar 2025)."""
     f = f or {}
     end, filed = figures_end(f), str(f.get("annual_filed") or "")[:10]
+    if not filed and (f.get("v") or 1) < FACTS_VERSION:
+        filed = str(f.get("price_at") or "")[:10]         # a page from before the filing date was kept: the price's date, a sweep of the old tables
     try:
         return bool(end and filed) and (date.fromisoformat(filed) - date.fromisoformat(end)).days > ANNUAL_BEHIND_DAYS
     except ValueError:

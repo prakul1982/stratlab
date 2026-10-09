@@ -264,7 +264,9 @@ def test_a_page_whose_table_is_behind_its_newest_annual_report_is_built_again_wi
     assert stock_pages.annual_behind(behind)
     assert not stock_pages.annual_behind(facts_page("Mar 2026", annual_filed="2026-05-29"))
     assert not stock_pages.annual_behind(facts_page("Mar 2025", annual_filed="2025-06-06"))       # last year's report, filed in time
-    assert not stock_pages.annual_behind(facts_page("Mar 2025"))        # an older page that doesn't say
+    # a page that doesn't say (built before the filing date was kept) is told by its price's date: a sweep of the old tables
+    assert stock_pages.annual_behind(facts_page("Mar 2025", v=6)) and not stock_pages.annual_behind(facts_page("Mar 2026", v=6))
+    assert not stock_pages.annual_behind(facts_page("Mar 2025"))        # a current page that has no filing date is left alone
     now = 1_791_500_000.0
     close = stock_pages.last_close("US", datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + stock_pages.settle("US")
     assert stock_pages.fresh({"ts": close + 60, "price_ts": close + 60, "facts": behind}, "US", now=close + 120)       # just built
@@ -276,12 +278,19 @@ def test_a_page_whose_table_is_behind_its_newest_annual_report_is_built_again_wi
 def test_the_screens_rebuild_a_behind_page_first(monkeypatch, tmp_path):
     from app import db
     store = {"stocks:page:US:RDY": json.dumps({"ts": 1.0, "facts": facts_page("Mar 2025", annual_filed="2026-05-29")}),
-             "stocks:page:US:OK": json.dumps({"ts": 1.0, "facts": facts_page("Mar 2026", annual_filed="2026-05-29")})}
+             "stocks:page:US:OK": json.dumps({"ts": 1.0, "facts": facts_page("Mar 2026", annual_filed="2026-05-29")}),
+             # an older page (before the filing date was kept) with a current table, far larger than Dr. Reddy's
+             "stocks:page:US:BIG": json.dumps({"ts": 1.0, "facts": facts_page("Mar 2026", v=6, market_cap=900_000.0)}),
+             # ...and one whose table is more than a year older than its price: swept first like a page that says so
+             "stocks:page:US:OLDT": json.dumps({"ts": 1.0, "facts": facts_page("Mar 2025", v=6, market_cap=50.0)})}
     monkeypatch.setattr(db, "all_settings_with_prefix", lambda p, *a: [(k, v) for k, v in store.items() if k.startswith(p)])
     monkeypatch.setattr(db, "set_setting", lambda k, v: None)
     monkeypatch.setattr(stock_pages, "nse_twins", lambda: {})
     index = screens.build_index("US", store=False)
-    assert "RDY" in index["_old"] and "OK" not in index["_old"]
+    assert "RDY" in index["_old"] and "OK" not in index["_old"] and "BIG" in index["_old"]
+    # the behind pages are rebuilt before the largest of the other old ones, the tiny one among them
+    order = sorted(index["_old"], key=lambda s: -index["_old"][s])
+    assert order == ["RDY", "OLDT", "BIG"], order
 
 
 def test_a_new_filings_missing_data_file_is_asked_for_again_within_the_hour_an_old_ones_is_not():
@@ -567,3 +576,20 @@ def test_the_index_row_says_whether_a_us_company_is_a_foreign_filer():
     assert screens.row("US", "V", facts_page("Mar 2026", symbol="V", foreign=False))["foreign"] is False
     old = {k: v for k, v in facts_page("Mar 2026").items() if k != "foreign"}
     assert screens.row("US", "OLD", old)["foreign"] is None
+
+
+def test_debt_to_equity_takes_debt_and_equity_from_the_latest_balance_column():
+    bal = {"cols": ["Dec 2024", "Dec 2025"], "rows": {"Borrowings": [100.0, None], "Equity": [500.0, 600.0]}}
+    p = {"pl": {"cols": ["Dec 2024", "Dec 2025"], "rows": {"Sales": [10.0, 12.0], "Net Profit": [1.0, 2.0]}}, "balance": bal, "ratios": {}}
+    got = screener.summary(p)
+    assert got["debt_cr"] is None and got["debt_equity"] is None          # 2024's debt over 2025's equity was 0.17
+    bal["rows"]["Borrowings"] = [100.0, 150.0]
+    got = screener.summary(p)
+    assert got["debt_cr"] == 150.0 and got["debt_equity"] == pytest.approx(0.25)
+    assert got["net_margin"] == pytest.approx(2.0 / 12.0 * 100) and got["profit_yoy"] == pytest.approx(100.0)
+    # an Indian page: reserves and equity capital together are the net worth, both from the newest column; without the
+    # newest reserves there is no net worth to divide by, never last year's reserves
+    ind = {"pl": p["pl"], "balance": {"cols": ["Mar 2025", "Mar 2026"], "rows": {"Borrowings": [10.0, 20.0], "Reserves": [90.0, None], "Equity Capital": [10.0, 10.0]}}, "ratios": {}}
+    assert screener.summary(ind)["debt_equity"] is None
+    ind["balance"]["rows"]["Reserves"] = [90.0, 190.0]
+    assert screener.summary(ind)["debt_equity"] == pytest.approx(20.0 / 200.0)
