@@ -961,8 +961,10 @@ async function sharedLink(page: Page, phone: boolean): Promise<string> {
     return s.url;
   }
   await expect.poll(async () => (await copied(page)).length, { timeout: 30_000 }).toBeGreaterThan(0);
-  await expect(page.getByRole("status")).toContainText("Link copied");
-  await expect(page.getByRole("status").getByRole("button", { name: "Save the image" })).toBeVisible();
+  // the toast is one of several live regions on a company page (the AI read's own status row is another)
+  const toast = page.getByRole("status").filter({ hasText: "Link copied" });
+  await expect(toast).toBeVisible();
+  await expect(toast.getByRole("button", { name: "Save the image" })).toBeVisible();
   expect(await shared(page), "a computer copies the link instead of a share sheet").toEqual([]);
   return (await copied(page))[0];
 }
