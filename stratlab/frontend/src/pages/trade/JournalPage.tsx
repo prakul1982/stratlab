@@ -350,7 +350,7 @@ function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
         </div>
         <Card>
           <span className="k-small k-muted"><b>Strength of evidence</b></span>
-          <div className="dots" aria-label={checksLine(v.passed, v.total)}>
+          <div className="dots" role="img" aria-label={checksLine(v.passed, v.total)}>
             {Array.from({ length: CHECKS }, (_, k) => <span key={k} className={k < v.passed ? "on" : k >= v.total ? "skip" : ""} />)}
           </div>
           <span className="k-small">{checksLine(v.passed, v.total)}</span>

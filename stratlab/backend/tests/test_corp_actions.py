@@ -3,10 +3,12 @@ and the US price history), the bonus and split adjustment maths, dividend income
 calendar, the announcement and ex-date messages with their run markers, the My Stocks section and the API."""
 import json
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from app import corp_actions as C, db, holdings
+from app.data import calendar
 from app.intel.net import SourceError
 from app.newsletter import content, write
 from tests import world as W
@@ -333,10 +335,14 @@ def test_calendar_company_and_holdings_api(w):
     syms = {r["symbol"] for r in got["ahead"]}
     assert {"TCS", "RELIANCE", "INFY"} <= syms and "HDFCBANK" not in syms
     assert any(r["symbol"] == "ITC" and r["kind"] == "buyback" for r in got["recent"])
-    assert c.get("/research/corp-actions?region=IN&scope=all&kind=bonus", headers=h).json()["ahead"][0]["kind"] == "bonus"
+    # the world's TCS bonus goes ex on the latest session: today on a trading day (still ahead), Friday on a weekend (just gone)
+    bonus_ahead = calendar.is_trading_day("IN", datetime.now(ZoneInfo("Asia/Kolkata")).date())
+    bonuses = c.get("/research/corp-actions?region=IN&scope=all&kind=bonus", headers=h).json()
+    assert (bonuses["ahead"] if bonus_ahead else bonuses["recent"])[0]["kind"] == "bonus"
     assert c.get("/research/corp-actions?region=IN&scope=mine", headers=h).json()["ahead"] == []
     one = c.get("/research/corp-actions/IN/TCS", headers=h).json()
-    assert [r["kind"] for r in one["ahead"]][:2] == ["bonus", "dividend"] and one["dividends_12m"]["amount"] == 40.0
+    assert [r["kind"] for r in one["ahead"]][:2] == (["bonus", "dividend"] if bonus_ahead else ["dividend"])
+    assert one["dividends_12m"]["amount"] == 40.0
     us = c.get("/research/corp-actions/US/AAPL", headers=h).json()
     assert us["past"][0]["text"] == "Dividend $0.26 a share" and us["ahead_known"] is False
     for body in (got, one, us):

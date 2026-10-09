@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, Disclosure, Light, Skeleton } from "../../components/kit";
+import { shortLinks } from "./attention";
 
 // Admin only: provider names are fine here (never on public pages).
 type Model = {
@@ -20,13 +21,21 @@ type Provider = {
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
   models: Model[]; blocked: string[];
 };
-type Route = { label: string; budget_s: number; steps: { provider: string; label: string; model: string; ready: boolean }[] };
+type Step = { provider: string; label: string; model: string; ready: boolean; out_of_credit?: boolean };
+type Route = { label: string; budget_s: number; steps: Step[] };
+/** One link of "Who is asked": the provider and model, and why it won't answer now (out of free credit, or paused). */
+const stepText = (s: Step) => `${s.label} · ${s.model}${s.out_of_credit ? " (out of credit)" : s.ready ? "" : " (paused)"}`;
 export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
   rerank_every_hours: number; last_failure: { at: number; task: string; detail: string } | null;
 };
 type TestRow = { name: string; label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
+/** A provider's own words with any long link cut to its address (the whole text on hover), so a 150-character link can't fill a line (R11P-007). */
+function Said({ text }: { text: string | null | undefined }) {
+  const s = shortLinks(text);
+  return <span title={s.full}>{s.text}</span>;
+}
 const iso = (t: number | null | undefined) => (t ? new Date(t * 1000).toISOString() : null);
 const secs = (ms: number | null) => (ms == null ? "–" : `${(ms / 1000).toFixed(1)} s`);
 function until(t: number | null) {
@@ -111,14 +120,14 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
           </p>
           {!on.length && <p className="k-small"><b>No AI keys yet</b>, so the idea builder and research reads are off. Groq and Google Gemini are the quickest to set up (below).</p>}
           {v.last_failure && <p className="k-small adm-warn-t" role="status">
-            Last time nothing could answer ({ago(iso(v.last_failure.at))}, {v.routes[v.last_failure.task]?.label.toLowerCase() ?? v.last_failure.task}): {v.last_failure.detail}</p>}
+            Last time nothing could answer ({ago(iso(v.last_failure.at))}, {v.routes[v.last_failure.task]?.label.toLowerCase() ?? v.last_failure.task}): <Said text={v.last_failure.detail} /></p>}
 
           {on.length > 0 && (
             <div className="k-stack k-small" aria-label="Routing order">
               <b>Who is asked, in order</b>
               {Object.entries(v.routes).map(([task, r]) => (
                 <span key={task}><b>{r.label}</b> <span className="k-muted">(at most {r.budget_s} s): </span>
-                  <span className="k-muted">{r.steps.length ? r.steps.slice(0, 5).map((s) => `${s.label} · ${s.model}${s.ready ? "" : " (paused)"}`).join(" → ") : "–"}
+                  <span className="k-muted">{r.steps.length ? r.steps.slice(0, 5).map(stepText).join(" → ") : "–"}
                     {r.steps.length > 5 ? ` → ${r.steps.length - 5} more` : ""}</span></span>
               ))}
             </div>
@@ -182,8 +191,8 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
         <button type="button" className="btn quiet sm" disabled={!!busy || p.probing} onClick={() => rerank(p.name)} aria-label={`Re-rank ${p.label} models`}>
           {p.probing ? "Measuring…" : "Re-rank"}</button>
       </div>
-      <span className="k-small k-muted">{p.state_text}</span>
-      {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : test.error}</span>}
+      <span className="k-small k-muted"><Said text={p.state_text} /></span>
+      {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : <Said text={test.error} />}</span>}
       {p.quota.limited && p.quota.reset_at && <span className="k-small">Free quota resets {until(p.quota.reset_at)}.</span>}
       {left && (left.requests != null || left.tokens != null) && (
         <span className="k-small k-muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens`].filter(Boolean).join(", ")}
@@ -192,7 +201,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
       <span className="k-small k-muted">Free limit: {p.free}{p.note ? ` ${p.note}` : ""}</span>
       <span className="k-small k-muted">
         {p.ranked_at ? `Measured ${ago(iso(p.ranked_at))}${p.discovered != null ? `: ${p.discovered} models listed${skipped ? `, left out ${skipped}` : ""}` : ""}.` : "Not measured yet: its known-good models are used until then."}
-        {p.rank_error ? ` ${p.rank_error}.` : ""}
+        {p.rank_error ? <> <Said text={p.rank_error} />.</> : ""}
       </span>
       {p.pinned && (
         <span className="k-small k-row">
@@ -214,7 +223,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
                 {m.success != null ? `${m.success}% of ${m.tries} answered well` : "no answers yet"} · median {secs(m.median_ms)}
                 {m.thinks ? " · reasons first" : ""}
                 {m.open_until ? ` · paused ${until(m.open_until)} (${m.open_reason})` : ""}
-                {m.last_error ? ` · last problem: ${m.last_error}` : m.probe.error ? ` · test: ${m.probe.error}` : ""}
+                {m.last_error ? <> · last problem: <Said text={m.last_error} /></> : m.probe.error ? <> · test: <Said text={m.probe.error} /></> : ""}
               </span>
             </div>
             <span className="k-row">

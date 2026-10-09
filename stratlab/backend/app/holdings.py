@@ -6,7 +6,7 @@ is a fact about the user's own positions: value, gain or loss, sector mix, and w
 for each stock. Never a view on what to do with them."""
 import json
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import db, instrument_kinds
 
@@ -65,11 +65,24 @@ def stamp(items: list[dict], before: list[dict], day: str) -> list[dict]:
     return out
 
 
+def saved_day(now: datetime | None = None) -> date:
+    """The day a quantity saved now stands for: today on a trading day, else the last session before it. A file saved
+    on a Saturday holds Friday's positions, and a bonus or split that went ex on Friday isn't in it yet (the new shares
+    are credited days after the record date), so it is still offered as an adjustment."""
+    from zoneinfo import ZoneInfo
+    from .data import calendar
+    d = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo("Asia/Kolkata")).date()
+    for _ in range(10):
+        if calendar.is_trading_day("IN", d):
+            break
+        d -= timedelta(days=1)
+    return d
+
+
 def save(uid: str, items: list[dict], source: str, stamped: bool = False) -> dict:
     """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp)."""
     if not stamped:
-        from zoneinfo import ZoneInfo
-        items = stamp(items, load(uid)["items"], datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat())
+        items = stamp(items, load(uid)["items"], saved_day().isoformat())
     data = {"items": items, "source": source if source in SOURCES else "CSV",
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     db.set_setting(_key(uid), json.dumps(data))

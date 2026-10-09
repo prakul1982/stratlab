@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app import alerts, db, main, newsletter_prefs
+from app.data import calendar
 from app.config import settings
 from app.newsletter import content, job, write
 from tests import world as W
@@ -61,7 +62,11 @@ def reader(uid, email, plan="pro", confirmed=True, **choices):
 
 # ---------- facts ----------
 def test_market_facts_from_the_world(w, monkeypatch):
-    f = content.market_facts("IN", datetime.now(content.ZoneInfo("Asia/Kolkata")).date())   # the brief's day is India's date, not UTC's
+    # the brief's day is India's date, not UTC's, and a trading day: on a weekend the brief is Friday's
+    day = datetime.now(content.ZoneInfo("Asia/Kolkata")).date()
+    while not calendar.is_trading_day("IN", day):
+        day -= timedelta(days=1)
+    f = content.market_facts("IN", day)
     assert f["kind"] == "market" and f["region"] == "IN"
     assert f["indices"] and all("change_pct" in i for i in f["indices"])
     assert f["headlines"] and len(f["headlines"]) <= content.HEADLINES and all(h["headline"] for h in f["headlines"])
