@@ -146,10 +146,12 @@ def with_public_eps(region: str, c: dict) -> dict:
     from .net import num
     pe0, p0, live = num(f.get("pe")), num(f.get("price")), num((c.get("quote") or {}).get("price"))
     has_eps = any(i["label"] == "EPS TTM" for g in c.get("metrics") or [] for i in g["items"])
-    if not pe0 or pe0 <= 0 or not p0 or not live or not has_eps:
+    if not pe0 or pe0 <= 0 or not p0 or not live or not has_eps or f.get("pe_basis") == "year":
         return c
-    eps = p0 / pe0
-    note = "Net profit over the last four reported quarters per share, from the company's filings (as on its public page)"
+    # the public page's own earnings per share (R7V-002: one P/E definition, the close over earnings per share for the
+    # last four reported quarters), else what its P/E and price imply
+    eps = num(f.get("eps")) or p0 / pe0
+    note = "Earnings per share over the last four reported quarters, from the company's filings (as on its public page)"
     out = _set_metric(c, "EPS TTM", round(eps, 2), note)
     return _set_metric(out, "P/E", round(live / eps, 2), "The price over EPS TTM")
 

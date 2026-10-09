@@ -62,14 +62,17 @@ class Yahoo(Source):
         days = max(1, min(days, max_days))
         keep = ttl if ttl is not None else (1800 if tf == "1d" else 60)
         recent = self._recent.get((symbol, tf)) if tf == "1d" and not exact else None
+        # a copy kept here is as old as when the source answered it (it may have come from the source's cache), never
+        # older than this caller allows (R7V-005: candles read in the minutes after the close, before the close was
+        # final, given to the page that asked for a read after it)
         if recent and recent[1] >= days and time.time() - recent[0] < keep:
             cut = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
             return {"meta": recent[2]["meta"], "candles": [b for b in recent[2]["candles"] if b["t"][:10] >= cut]}
-        out = self._chart(symbol, tf, days, interval, ttl)
+        out, at = self._chart(symbol, tf, days, interval, ttl, with_time=True)
         if tf == "1d" and not exact and (not recent or days >= recent[1] or time.time() - recent[0] >= keep):
             if len(self._recent) > 500:
                 self._recent.clear()
-            self._recent[(symbol, tf)] = (time.time(), days, out)
+            self._recent[(symbol, tf)] = (at, days, out)
         return out
 
     def _raw_chart(self, symbol: str, tf: str, days: int) -> dict:
@@ -79,15 +82,15 @@ class Yahoo(Source):
         return self.fetch(f"/v8/finance/chart/{symbol}", {"interval": interval, "period1": now - days * 86400,
                                                           "period2": now, "includePrePost": "false"}, ttl=0)
 
-    def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None) -> dict:
+    def _chart(self, symbol: str, tf: str, days: int, interval: str, ttl: float | None, with_time: bool = False):
         now = int(time.time())
         # round the window so repeated calls share a cache entry
         step = 3600 if tf == "1d" else 60
         end = now - now % step + step
         params = {"interval": interval, "period1": end - days * 86400, "period2": end,
                   "includePrePost": "false", "events": "div,splits"}
-        data = self.fetch(f"/v8/finance/chart/{symbol}", params,
-                          ttl=ttl if ttl is not None else (1800 if tf == "1d" else 60))
+        data, at = self.fetch(f"/v8/finance/chart/{symbol}", params,
+                              ttl=ttl if ttl is not None else (1800 if tf == "1d" else 60), with_time=True)
         res = ((data or {}).get("chart") or {}).get("result") or []
         if not res:
             err = ((data or {}).get("chart") or {}).get("error") or {}
@@ -119,7 +122,8 @@ class Yahoo(Source):
         dedup = {}
         for b in candles:
             dedup[b["t"]] = b
-        return {"meta": meta, "candles": list(dedup.values())}
+        out = {"meta": meta, "candles": list(dedup.values())}
+        return (out, at) if with_time else out
 
     def events(self, symbol: str, days: int = 1100) -> dict:
         """The dividends and splits in a stock's daily price history, by ex-date in the exchange's zone:

@@ -3185,25 +3185,67 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             p["ratios"]["Dividend Yield"] = dy
     if region == "US":
         checks.update(us_cap_checks(p, sym))
+        if close and not sec.non_common(sym):
+            # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
+            # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page
+            pe, basis = sec.pe_and_basis(p, close)
+            if basis:
+                checks.update(pe_basis=basis["basis"], pe_end=basis["end"])
+            if pe and pe > 0:
+                checks["eps"] = round(close / pe, 4)
     nums = deepdive.numbers(p)
     snap = screener_summary(p)
     if region == "IN":
+        if not close:
+            # no daily candles: the exchange's own close of the market's last session, dated (R7V-004), before the
+            # fundamentals source's undated price
+            prices = official_page_close(co) or prices
+            close = (prices or {}).get("price")
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
         snap = at_live_price(snap, close)
-        # the dividend yield as the company page in the app works it out: dividends with an ex-date in the year to the
-        # close, over the close (R7O-004: TCS 3.08% here, the last reported year's, against 5.3% in the app)
-        dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"))
-        if dy is not None:
-            snap = {**snap, "div_yield": dy}
+        # the dividend yield as the company page in the app works it out: every dividend with an ex-date in the year to
+        # the close, specials included, over the close (R7O-004, R7V-002: TCS 3.08% here against 5.35% in the app);
+        # n/a when the dividends couldn't be read, never the last reported year's (another definition)
+        dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"), co)
+        snap = {**snap, "div_yield": dy}
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
 
 
-def page_dividend_yield(region: str, sym: str, close, as_of: str | None) -> float | None:
+def official_page_close(co: dict) -> dict | None:
+    """An Indian company's official close of the market's last settled session, as page prices ({"price", "price_at",
+    "price_basis", "price_official"}); None when the exchange's closing prices for that day aren't stored."""
+    day = stock_pages.last_close("IN")[0].isoformat()
+    try:
+        c = official_close.official(co["bse"] or co["sym"], day, use_quote=False)
+    except Exception:
+        return None
+    return {"price": c, "price_at": day, "price_basis": "close", "price_official": True} if c else None
+
+
+def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dict | None = None) -> float | None:
     """A public page's dividend yield from the same dividends list the app's company page uses (its Corporate actions
-    card); None when that list has none to go on (then the page's older way stands)."""
+    card): every dividend with an ex-date in the year to the close, specials included. None when that list has none to
+    go on. India (`co` given): the company's own list is read again when it is more than a day old (R7V-002: TCS's
+    page fell back to another yield when no list was stored), a list that was read is a real 0% when it holds no
+    dividend in the year, and without any list the price history's dividends count."""
     if not close or not as_of:
         return None
+    if region == "IN" and co is not None:
+        try:
+            rows = corp_actions.actions_for("IN", sym, corp_job.sources(), fetch=True)
+            known = bool(corp_actions.hist_load("IN", sym)["at"])
+        except Exception:
+            rows, known = [], False
+        divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
+                if d.get("kind") == "dividend" and d.get("amount")]
+        if divs or known:
+            return stock_pages.dividend_yield(divs, close, as_of)
+        try:
+            listed = research_hub.yahoo.events(f"{co['bse']}.BO" if co.get("bse") else f"{sym}.NS", 400)["dividends"]
+        except Exception:
+            return None
+        return stock_pages.dividend_yield(listed, close, as_of)
     try:
         rows = research_routes.stored_dividends(region, sym)
     except Exception:
@@ -3254,6 +3296,30 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
     return bars
 
 
+_class_pages: dict = {"names": None, "by_cik": {}}
+
+
+def us_share_class_page(symbol: str) -> str | None:
+    """The page of a US company's other class of common stock (GOOG → GOOGL, BRK.A → BRK-B), from the SEC's list of
+    tickers: the company's ticker that has a page. None for a ticker the SEC doesn't list, a preferred share or the like."""
+    s = sec.price_symbol(symbol)
+    if not s or sec.non_common(s):
+        return None
+    names = sec_feed.cache.get("tickers")               # the list the daily company list read; never a read of its own
+    if not names:
+        return None
+    if _class_pages["names"] is not names:              # the list is read once a day: the map is built once per list
+        cos = stock_pages.companies("US")
+        by_cik: dict = {}
+        for t, v in names.items():
+            if t in cos and not sec.non_common(t):
+                by_cik.setdefault(v["cik"], t)
+        _class_pages.update(names=names, by_cik=by_cik)
+    hit = names.get(s) or names.get(s.replace("-", "."))
+    return _class_pages["by_cik"].get(hit["cik"]) if hit else None
+
+
+stock_pages.share_class_page = us_share_class_page
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)     # the app's US P/E on the public page's EPS (R7O-004)
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
@@ -3377,6 +3443,7 @@ screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
 # broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first
 PRICE_REFRESH = {"IN": (300, 1.0), "US": (150, 2.0)}
 PRICE_REFRESH_EVERY = 15 * 60
+PRICE_REFRESH_BACKLOG = 60                 # seconds between passes while a pass leaves pages behind
 price_refresh_status: dict = {"last_run": None, "IN": None, "US": None}
 
 
@@ -3397,15 +3464,23 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     return price_refresh_status
 
 
+def refresh_backlog(status: dict) -> bool:
+    """Whether a pass left pages it had no room for (pages whose new close wasn't out yet wait for the usual pass)."""
+    return any(isinstance(s, dict) and s.get("left") for s in (status.get(r) for r in PRICE_REFRESH))
+
+
 def stock_price_refresh_job():
-    """Every quarter of an hour: re-read the prices of stored company pages that are a close behind."""
+    """Every quarter of an hour: re-read the prices of stored company pages that are a close behind; a minute apart
+    while a pass leaves pages behind, so the long tail reaches the close the same evening, not a session or two later
+    (R7V-005: one pass of 150 US pages every quarter of an hour couldn't cover thousands of stored pages overnight)."""
     time.sleep(420)                           # after startup traffic, the company lists and the first screens index
     while True:
+        status: dict = {}
         try:
-            stock_price_refresh_once()
+            status = stock_price_refresh_once()
         except Exception as e:
             print("stock price refresh failed:", str(e)[:160])
-        time.sleep(PRICE_REFRESH_EVERY)
+        time.sleep(PRICE_REFRESH_BACKLOG if refresh_backlog(status) else PRICE_REFRESH_EVERY)
 screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
 
 
