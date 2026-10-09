@@ -109,6 +109,11 @@ class MCXProvider:
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         if tf != "1d":       # no continuous intraday series: only the current contract's own life
             days = min(days, self.max_days[tf])
+        else:                # the day's candle is read again after this segment's own close (17:00 currency, 23:30 commodity)
+            from .markets import BY_ID
+            mark = getattr(self.kite, "set_session_close", None)
+            if mark:
+                mark(int(inst["token"]), ((BY_ID.get(self.market) or {}).get("hours") or {}).get("close"))
         try:
             bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
             if tf == "1d" and not bars:

@@ -137,6 +137,16 @@ class KiteService:
         from .intel.net import SizedDict
         self._cache = SizedDict(max_items=300, max_bytes=96 * 1024 * 1024)   # candles: bounded, the market audit reads every company
         self.login_state: str | None = None
+        self.session_close: dict[int, str] = {}   # token -> "HH:MM" IST when its segment closes (commodity and currency futures)
+
+    def set_session_close(self, token: int, hhmm: str | None):
+        """A futures contract whose segment closes later than the stock market (currency 17:00, commodity 23:30 IST):
+        its daily candle is read again after its own close, not the stock market's (R9R-005: a CDS candle read before
+        17:00 was kept for six hours, so the check after the close still saw the day before)."""
+        if hhmm:
+            self.session_close[int(token)] = hhmm
+        else:
+            self.session_close.pop(int(token), None)
 
     # ---------- auth ----------
     def load_saved_token(self):
@@ -496,7 +506,9 @@ class KiteService:
             continuous = inst.get("type") == "FUT" and tf == "1d"
         key = (token, tf, days, continuous)
         hit = self._cache.get(key)
-        if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < self._close_out(now) <= time.time()):
+        own = self.session_close.get(int(token))
+        out_at = self._close_out(now) if not own else self._close_out_at(now, own)
+        if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()):
             return self._official_days(token, tf, hit[1])
         start = now - timedelta(days=days)
         out, frm = [], start
@@ -530,6 +542,13 @@ class KiteService:
         from .data import sessions as S
         local = now.astimezone(IST)
         return (S.at(local.date(), S.close_known("cas", local.date())) + timedelta(minutes=2)).timestamp()
+
+    @staticmethod
+    def _close_out_at(now: datetime, hhmm: str) -> float:
+        """Today's close of a segment that closes at `hhmm` IST, plus two minutes, as a timestamp."""
+        local = now.astimezone(IST)
+        h, m = (int(x) for x in hhmm.split(":"))
+        return (local.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(minutes=2)).timestamp()
 
     def _official_days(self, token, tf: str, bars: list[dict]) -> list[dict]:
         """A stock's daily candles with each recent day's close the exchange's official close (R8B-001: the broker's

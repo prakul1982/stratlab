@@ -822,7 +822,7 @@ def view(uid: str, plan: str) -> dict:
     return {**h, "gains": gains(data, w, today) if can else None, "gains_allowed": can,
             "gains_plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"], "limit": limit,
             "files": data["files"], "updated_at": data["updated_at"], "txns": len(data["txns"]),
-            "kinds": KINDS, "names": names(data), "nav_read_at": navs.as_of(w["daily"].get("read_at")),
+            "kinds": KINDS, "names": names(data), "nav_date": max((r.get("date") or "" for r in w["daily"].get("schemes", {}).values()), default="") or None,
             "assumptions": ASSUMPTIONS, "disclaimer": DISCLAIMER, "as_of": today}
 
 

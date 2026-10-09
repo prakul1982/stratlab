@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from .. import db
+from ..http_retry import real_transport
 from .net import BROWSER_UA, SourceError, TTLCache, RateLimit
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -672,7 +673,7 @@ class NSEFilings:
     BASE = "https://www.nseindia.com"
 
     def __init__(self, transport: httpx.BaseTransport | None = None, sleep=time.sleep):
-        self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
+        self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport or real_transport(), follow_redirects=True,
                                  headers={"User-Agent": BROWSER_UA, "Accept": "application/json, text/plain, */*",
                                           "Accept-Language": "en-US,en;q=0.9", "Referer": self.BASE + "/"})
         self.sleep = sleep
@@ -1187,7 +1188,7 @@ class BSEFilings:
     REST = 600                      # refused through every retry: leave BSE alone this long (ten minutes)
 
     def __init__(self, transport: httpx.BaseTransport | None = None, sleep=time.sleep):
-        self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport, follow_redirects=True,
+        self.http = httpx.Client(base_url=self.BASE, timeout=15, transport=transport or real_transport(), follow_redirects=True,
                                  headers={"User-Agent": BSE_UA, "Accept-Language": "en-US,en;q=0.9", **BSE_CLIENT_HINTS})
         self.limit = RateLimit(30, 5)
         self.cache = TTLCache(max_items=2000)

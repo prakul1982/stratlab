@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from . import db, holdings_file, tax_lots
 from . import journal as J
 from .auth import current_profile
+from .intel.net import TTLCache
 from .kite_service import IST
 from .plans import FEATURE_PLAN, PLANS, allows, journal_limit
 
@@ -122,11 +123,32 @@ def _paper_list(uid: str) -> list[dict]:
              "symbol": (r.get("instrument") or {}).get("symbol") or (r.get("instrument") or {}).get("type")} for r in rows]
 
 
+_synced = TTLCache(max_items=500, max_bytes=1024 * 1024)       # (uid, saved at): the tax report's charges were looked up
+
+
+def sync_tax_charges(uid: str, data: dict) -> dict:
+    """Lines brought in from the tax report before its listed charges were carried over have no charges of their own, so
+    the journal modelled some. Give each the charges the tax report holds for the same sale line (R9R-001), once per
+    saved version of the journal, and save. Lines from a file you uploaded here are never touched."""
+    ck = (uid, data.get("updated_at"))
+    if (_synced.get(ck) or not any(x.get("charges") is None for x in data["lines"])
+            or not any(f.get("name") == "From the tax report" for f in data["files"])):
+        return data
+    _synced.set(ck, True, ttl=3600)
+    mine = {J._line_key(x): x["charges"] for x in J.from_tax(tax_lots.load(uid)["trades"])["lines"]}
+    changed = 0
+    for x in data["lines"]:
+        if x.get("charges") is None and J._line_key(x) in mine:
+            x["charges"] = mine[J._line_key(x)]
+            changed += 1
+    return J.save(uid, data) if changed else data
+
+
 def view(profile, data: dict | None = None, segment: str = "all", market: str = "") -> dict:
     """The journal page: the trades (newest first), open positions, the stats, and on Basic and up the checks, the
     breakdowns, R-multiples and the paper sessions to compare with."""
     uid, plan = profile["id"], profile["_plan"]
-    data = data or J.load(uid)
+    data = sync_tax_charges(uid, data or J.load(uid))
     got = J.trades(uid, data, today())
     every = got["trades"]
     show = data["settings"].get("show", "all")
@@ -170,7 +192,7 @@ def journal(segment: str = Query("all", max_length=20), market: str = Query("", 
 def brief(profile=Depends(current_profile)):
     """A line for the Trade home: how many closed real trades, their P&L after charges and win rate (no checks run;
     chart replay practice isn't counted here)."""
-    j = J.load(profile["id"])
+    j = sync_tax_charges(profile["id"], J.load(profile["id"]))
     allt = [t for t in J.trades(profile["id"], j, today())["trades"] if t["src"] != "practice" and J.market_of(t["segment"]) == "in"]
     limit = journal_limit(profile["_plan"])
     shown = allt[-limit:] if limit else allt

@@ -8,6 +8,8 @@ from collections import OrderedDict
 
 import httpx
 
+from ..http_retry import real_transport
+
 UA = "Mozilla/5.0 (compatible; StratLab/1.0; +https://stratlab.studio)"
 BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/128.0 Safari/537.36")
@@ -195,7 +197,7 @@ class Source:
 
     def __init__(self, base: str, per_minute: float = 120, burst: int = 20, headers: dict | None = None,
                  transport: httpx.BaseTransport | None = None, timeout: float = 15):
-        self.http = httpx.Client(base_url=base, timeout=timeout, transport=transport, follow_redirects=True,
+        self.http = httpx.Client(base_url=base, timeout=timeout, transport=transport or real_transport(), follow_redirects=True,
                                  headers={"User-Agent": UA, **(headers or {})})
         self.limit = RateLimit(per_minute, burst)
         self.cache = TTLCache()

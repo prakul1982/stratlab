@@ -9,6 +9,7 @@ import { MARKET_TILES, goldInr10g, tileToday, tileWhen, useComingUp, useMarketSt
 import { fmtDate } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
+import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
 import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
 import type { LiveRow } from "../lib/types";
@@ -35,7 +36,10 @@ export function MineHome() {
   const [raw, setRaw] = usePersisted<Layout>(LAYOUT_KEY, DEFAULT_LAYOUT);
   const layout = useMemo(() => cleanLayout(raw), [raw]);
   const [customise, setCustomise] = useState(false);
-  const coming = useComingUp(6);
+  // the calendars (the money calendar, market events, results) are below the first screen: they are read once the page has
+  // painted, so the net worth, holdings and prices at the top get the connections first (R9R-010)
+  const later = useAfterPaint();
+  const coming = useComingUp(6, later);
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   const shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
@@ -59,7 +63,7 @@ export function MineHome() {
 
   const change = (next: Layout) => setRaw(next);
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard />, coming: <ComingCard rows={coming} />, watch: <WatchCard />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} />, watch: <WatchCard />,
   })[id];
 
   return (
@@ -211,8 +215,8 @@ function PaperCard() {
 }
 
 /* ---------- the markets ---------- */
-function MarketsCard() {
-  const series = useMarketStrip();
+function MarketsCard({ later }: { later: boolean }) {
+  const series = useMarketStrip(later);
   return (
     <Card testId="mine-markets" label="Markets">
       <CardHead title="Markets" info="Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today." actions={<Link className="btn quiet sm" to="/research/pulse">Market pulse</Link>} />

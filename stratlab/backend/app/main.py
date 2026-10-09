@@ -3666,7 +3666,10 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         live = {**live, "points": live["points"][-1:]}
     out["live"] = live
     # after the close, before the evening's count: the page and the card say the newest day and when the next is due (R8B-008)
-    out["pending"] = stock_pages.day_due(out["group"].get("region") or "IN", (out.get("today") or {}).get("day") or out.get("as_of"))
+    region = out["group"].get("region") or "IN"
+    # a group with no live view (the US) says so while its session trades too, and when its count comes (R9R-007)
+    out["pending"] = stock_pages.day_due(region, (out.get("today") or {}).get("day") or out.get("as_of"),
+                                         due=breadth.due_label(region), during=region not in breadth_live.LIVE_REGIONS)
     return ok(out)
 
 
@@ -4336,7 +4339,9 @@ async def webhook(request: Request):
         print("razorpay webhook refused: RAZORPAY_WEBHOOK_SECRET isn't set on the server")
         err(503, "webhook_not_set", "Webhook secret isn't set on the server: add RAZORPAY_WEBHOOK_SECRET and redeploy.")
     try:
-        billing.handle_webhook(body, request.headers.get("X-Razorpay-Signature", ""), request.headers.get("X-Razorpay-Event-Id", ""))
+        # database reads and writes: off the event loop, so every other request keeps being answered meanwhile (R9R-010)
+        await run_in_threadpool(billing.handle_webhook, body, request.headers.get("X-Razorpay-Signature", ""),
+                                request.headers.get("X-Razorpay-Event-Id", ""))
     except SignatureVerificationError:
         print("razorpay webhook refused: signature doesn't match RAZORPAY_WEBHOOK_SECRET")
         err(400, "bad_signature", "Signature doesn't match: RAZORPAY_WEBHOOK_SECRET on the server must be exactly the "
@@ -4902,7 +4907,23 @@ def admin_platform_last(_=Depends(admin.admin_profile)):
         hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")
     except (ValueError, TypeError):
         last, hist = None, []
-    return {"last": last, "history": hist}
+    return {"last": with_live_fund_costs(last), "history": hist}
+
+
+def with_live_fund_costs(last: dict | None) -> dict | None:
+    """The kept check with its "Fund costs (TER)" line read again from the job's last result, so the Admin System page
+    and Data and jobs quote the same read (R9R-004: 2,178 schemes against 2,182, an hour apart). Nothing is started."""
+    if not isinstance(last, dict) or not isinstance(last.get("checks"), list):
+        return last
+    try:
+        fresh = money_mf_ter.check(start_read=False)
+    except Exception as e:
+        print("fund costs line not refreshed:", type(e).__name__)
+        return last
+    fresh["detail"] = public_text(fresh["detail"])
+    checks = [{**fresh, "seconds": c.get("seconds")} if c.get("name") == fresh["name"] else c for c in last["checks"]]
+    counts = {k: sum(1 for r in checks if r.get("state") == k) for k in ("pass", "warn", "fail")}
+    return {**last, "checks": checks, "counts": counts}
 
 
 PLATFORM_LAST, PLATFORM_HISTORY = "platform:last", "platform:history"

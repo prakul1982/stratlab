@@ -413,7 +413,7 @@ export function NetWorthPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={view?.computed_at} asOfLabel="Worked out as of"
-        lede="What you own minus what you owe: your stocks from My Holdings, plus deposits, provident funds, gold, property and loans you add here."
+        lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out" />
 
       {!view && (error
@@ -439,7 +439,7 @@ export function NetWorthPage() {
 
           {empty && (
             <EmptyState title="Nothing added yet" action={{ label: "Add an entry", onClick: () => setAdding(true) }}>
-              Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.
+              Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are added to the total on their own once you have some there.
             </EmptyState>
           )}
           {/* the history can hold a snapshot from entries since removed (R7M-012: ₹2,43,481.78 on 8 Oct beside "Nothing added yet"):

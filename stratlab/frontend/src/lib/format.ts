@@ -162,13 +162,15 @@ export function fmtDate(v: DateInput, o: DateOpts = {}): string {
 }
 
 /** The day after the close whose numbers aren't stored yet, as the server says it ({day, due}). */
-export type Pending = { day: string; due: string | null } | null | undefined;
+export type Pending = { day: string; due: string | null; during?: boolean } | null | undefined;
 
 /** Numbers stored once a day, on the evening of a session they don't hold yet: "Latest: 8 Oct · 9 Oct due about
- * 18:30 IST", never "Today's numbers · 8 Oct" (R8B-008). Null when the stored day is the newest. */
+ * 18:30 IST", never "Today's numbers · 8 Oct" (R8B-008). While that session is still trading (`during`, a group with no
+ * live view): "Latest close 8 Oct · today's count comes after 5:45 PM ET" (R9R-007). Null when the stored day is the newest. */
 export function latestDue(have: string | null | undefined, pending: Pending): string | null {
   if (!have || !pending?.day || have.slice(0, 10) >= pending.day) return null;
   const d = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
+  if (pending.during) return `Latest close ${d(have)} · today's count comes after ${pending.due ?? "the close"}`;
   return `Latest: ${d(have)} · ${d(pending.day)} due${pending.due ? ` about ${pending.due}` : " this evening"}`;
 }
 
@@ -249,7 +251,7 @@ export const TF_NAME: Record<string, string> = { "1d": "Daily", "1h": "1-hour", 
 export function periodName(days: number): string {
   if (days >= 365 && days % 365 < 5) return `${Math.round(days / 365)} year${days >= 730 ? "s" : ""}`;
   if (days >= 28) { const m = Math.round(days / 30.4); return `${m} month${m === 1 ? "" : "s"}`; }
-  return `${days} days`;
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 /** An outside link that's safe to put in href: only http(s), never javascript: or data: from a feed. */

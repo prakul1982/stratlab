@@ -73,7 +73,7 @@ R_BUCKETS = [(-math.inf, -2, "Under −2R"), (-2, -1, "−2 to −1R"), (-1, 0, 
              (2, 3, "2 to 3R"), (3, math.inf, "3R or more")]
 ASSUMPTIONS = ("Round trips are paired first in, first out per instrument, from flat to flat. Charges on tradebook lines "
                "are STT/CTT, exchange and SEBI fees, stamp duty and GST at today's published rates plus the brokerage you "
-               "set for each line of the file; tax P&L lines keep the charges your broker listed. An option in a tradebook "
+               "set for each line of the file; tax P&L lines keep the charges your broker listed, the same ones your tax report uses. An option in a tradebook "
                "with no exit by its expiry is counted as expiring at ₹0 (one that expired in the money settled at a price "
                "the tradebook doesn't show; your tax P&L has it).")
 MONTHS = {m: i for i, m in enumerate(("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"), 1)}
@@ -349,8 +349,22 @@ def from_tax(trades: list[dict]) -> dict:
         if b and s:
             lines.append({"sym": clean_symbol(b.get("sym") or b.get("symbol") or b.get("isin")), "ed": b["d"], "et": "", "xd": s["d"],
                           "xt": "", "qty": float(s["qty"]), "bv": round(b["qty"] * b["price"], 4), "sv": round(s["qty"] * s["price"], 4),
-                          "charges": None, "side": None, "exchange": str(s.get("exchange") or "")})
+                          "charges": tax_line_charges(b, s), "side": None, "exchange": str(s.get("exchange") or "")})
     return {"fills": fills, "lines": lines}
+
+
+def tax_line_charges(buy: dict, sale: dict) -> float | None:
+    """The charges the tax report takes off one tax P&L line: the ones its file listed on the purchase (added to the cost)
+    and on the sale (taken off the proceeds), the same figures the tax report uses, so both pages total the same sale
+    lines to the same rupee (R9R-001: the journal modelled its own charges and showed +₹34 where the tax report showed
+    -₹59). None when neither side carries a charges figure at all (the journal then models them)."""
+    def listed(t: dict) -> bool:
+        return isinstance(t.get("charges"), (int, float)) and not isinstance(t.get("charges"), bool)
+
+    if not (listed(buy) or listed(sale)):
+        return None
+    q = min(float(buy["qty"]), float(sale["qty"]))
+    return round(sum(float(t["charges"]) * q / t["qty"] for t in (buy, sale) if listed(t) and t["qty"]), 2)
 
 
 # ---------- stored ----------
