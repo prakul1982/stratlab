@@ -75,7 +75,8 @@ test("trade journal: import a tax P&L, the checks, a hand-added trade, a journal
   await expect(page.getByText("16 trade lines added")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "15 closed trades" })).toBeVisible();
   const verdict = page.getByRole("region", { name: "Verdict on your real trades" });
-  await expect(verdict.getByText("Mixed evidence.")).toBeVisible();
+  // the headline states what the checks found (R11C-009: it was "Mixed evidence.")
+  await expect(verdict.getByText(/^Passed \d of the \d checks run\.$/)).toBeVisible();
   await expect(page.locator("[data-check=luck]").getByText(/With 15 trades, a 67% win rate could easily be luck/)).toBeVisible();
   await expect(page.locator("[data-check=costs]").getByText("Passed")).toBeVisible();
   await expect(page.getByRole("img", { name: /Running P&L after charges over 15 trades/ })).toBeVisible();

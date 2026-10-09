@@ -409,10 +409,11 @@ export function noRuleNote(idea: string, notes: string[] = []): { note: string; 
 /** What the person should see about rules that didn't come out as written: a rule left out, a number from the sentence
  * that isn't in the rules (R11C-004). Empty when every number found its place. */
 export function ruleWarnings(idea: string, s: Strategy, dropped: string[], names: (string | null | undefined)[] = []): string[] {
-  const out = dropped.map((d) => `"${d}" was left out: it can't mean anything as a rule.`);
+  // at most nine rules left out and one line of numbers: the notebook keeps ten warnings of 300 characters
+  const out = dropped.slice(0, 9).map((d) => `"${d.slice(0, 200)}" was left out: it can't mean anything as a rule.`);
   const lost = unplacedNumbers(idea, s, names);
   if (lost.length) {
-    const list = lost.map((n) => n.toLocaleString("en-IN")).join(", ");
+    const list = lost.slice(0, 12).map((n) => n.toLocaleString("en-IN")).join(", ") + (lost.length > 12 ? " and more" : "");
     out.push(`${lost.length === 1 ? "The number" : "The numbers"} ${list} in your words ${lost.length === 1 ? "isn't" : "aren't"} in the rules below. Check the rules before you run it.`);
   }
   return out;
