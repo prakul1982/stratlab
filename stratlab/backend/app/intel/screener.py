@@ -139,7 +139,8 @@ def fix_lender_margins(p: dict) -> dict:
     out twice. Each column is checked against the profit before tax (a lender's financing profit is what the profit before
     tax is made of): the reported figure when it fits; else the figure with the interest added back, when that fits; else
     none, and a margin that can't be checked is not shown. Without a profit before tax a negative margin beside a profit
-    can only be the double count, so it is corrected or left out the same way. Changes `p` and returns it."""
+    can only be the double count, so it is corrected or left out the same way. Whatever fits, a negative financing margin
+    beside a positive net profit is left out (R12-002). Changes `p` and returns it."""
     for name in ("quarters", "pl"):
         t = p.get(name) or {}
         rows = t.get("rows") or {}
@@ -172,6 +173,13 @@ def fix_lender_margins(p: dict) -> dict:
                 good = f
             else:
                 good = next((c for c in candidates[1:] if c is not None and c >= 0), None)
+            if good is not None and good < 0 and profit is not None and profit > 0:
+                # a financing loss beside a net profit is the consolidated accounts' split, not a margin: the group's
+                # insurers and brokers book their costs in the expenses and their income in other income, so revenue less
+                # interest less expenses is negative and equals the profit before tax less other income, which the check
+                # above accepts (R12-002: ICICI Bank -18% to -29% a quarter, HDFC Bank, SBI and Kotak too, beside net
+                # margins near 30%). No figure is a lender's financing margin there: left out, not shown wrong
+                good = None
             new_fp.append(round(good) if good is not None else None)
             new_fm.append(round(good / s * 100) if good is not None else None)
         rows[fm] = new_fm

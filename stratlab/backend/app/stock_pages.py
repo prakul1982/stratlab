@@ -50,9 +50,12 @@ SETTLE_BY = {"IN": 3 * 3600}
 # (R8V-001, R8V-005), or (7) before a profit tagged for the consolidated entity was read (Deutsche Bank), a share count
 # from a cover page that gives one per class (Baidu, BP), every ratio came from one year's own column, a year's range ran
 # over exactly 365 days held to the exchange's 52-week report, and a company with no reported numbers could show its price
-# (R10V-001, 003, 004), are rebuilt when next opened, in either market. Until then such a page is served brought in line
+# (R10V-001, 003, 004), or (8) before an Indian year's range was of candles as traded, the broker's scaling for an
+# extraordinary dividend undone (R12-001: INFY, ULTRACEMCO), a year split at a change of control was added up, a cover
+# page's issued count was taken net of treasury shares, and a page knew whether its ticker's type was read (R12-005 to
+# 013), are rebuilt when next opened, in either market. Until then such a page is served brought in line
 # where that's cheap (main.stock_page_older_facts), and the screens' indexer rebuilds the largest first (R8V-003)
-FACTS_VERSION = 7
+FACTS_VERSION = 8
 ADR_CHECKED = 3                # the version from which a depositary share's market value was checked (screens.row)
 PE_BASIS_KEPT = 4              # the version from which a page keeps what its P/E's earnings cover (pe_basis, pe_end)
 PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 months before the price is n/a (R7V-003)
@@ -326,6 +329,83 @@ def year_bars(bars: list[dict]) -> list[dict]:
     return [b for b in bars if str(b.get("t") or "")[:10] > start]
 
 
+def year_low_high(bars: list[dict]) -> tuple[float | None, float | None]:
+    """The lowest low and highest high of the last 365 days of daily candles (year_bars): the one 1-year window every
+    page uses, the app's company page, the public pages, the screens built from them (R12-003: the app's TITAN low was
+    ₹3,401.00 of 6 Oct 2025, 368 days back, from its last 252 candles, against the public page's ₹3,506.50)."""
+    year = year_bars(bars) if bars else []
+    highs = [x for x in (_num(b.get("h")) for b in year) if x is not None]
+    lows = [x for x in (_num(b.get("l")) for b in year) if x is not None]
+    return (min(lows) if lows else None), (max(highs) if highs else None)
+
+
+# The broker's daily candles of an Indian stock are adjusted back for an extraordinary dividend, one above 2% of the price
+# the day before it went ex (the exchange's rule for its derivatives): every candle before the ex-date is scaled by
+# (P - D) / P (R12-001: INFY's ₹25 of 10 Jun 2026, 2.12% of its 1,180.30 close, scaled its 3 Feb 2026 high of 1,728.00 to
+# 1,691.40; ULTRACEMCO's ₹240 of 30 Jul 2026, 2.00% of 11,998.00, took its 13,110.00 high to 12,848 and its 10,325.00 low
+# to 10,118, a print no session had). A 1-year range is of prices as they traded, so the adjustment is undone for it.
+EXTRA_DIVIDEND = 0.0198        # a dividend above this share of the cum-dividend close was adjusted for (2%, less rounding)
+TRADED_MATCH = 0.006           # another source's as-traded candle within this of the undone close is the same session's print
+
+
+def dividend_list(rows) -> list[dict]:
+    """[{"date", "amount"}] from a dividends list in either shape: the price history's ({"date", "amount"}) or the
+    corporate actions card's ({"ex_date", "kind": "dividend", "amount"})."""
+    out = []
+    for d in rows or []:
+        if not isinstance(d, dict) or (d.get("kind") not in (None, "dividend")):
+            continue
+        day, amt = str(d.get("date") or d.get("ex_date") or "")[:10], _num(d.get("amount"))
+        if day and amt and amt > 0:
+            out.append({"date": day, "amount": amt})
+    return out
+
+
+def as_traded(bars: list[dict], dividends, reference=None) -> list[dict]:
+    """Daily candles as the exchange printed them: the broker's scaling for each extraordinary dividend (see
+    EXTRA_DIVIDEND) undone on the candles before its ex-date. A candle the broker scaled has the close (P - D) the day
+    before the ex-date, so the dividend's share of the price is D / (close + D), and the scale close / (close + D).
+    The broker rounds the scaled prices, so an undone price can be a tick or so off: `reference()`, when given, is called
+    only if something was undone and gives another source's daily candles of the same listing as traded; a candle whose
+    close agrees with the undone one (TRADED_MATCH) takes that candle's own prices. The candles given are not changed;
+    the ones undone carry "traded": True."""
+    if not bars:
+        return bars
+    divs = sorted(dividend_list(dividends), key=lambda d: d["date"], reverse=True)
+    if not divs:
+        return bars
+    days = [str(b.get("t") or "")[:10] for b in bars]
+    out = None
+    for d in divs:                                  # newest first: an older one's close is read with the newer undone
+        i = next((k for k, day in enumerate(days) if day >= d["date"]), None)
+        if not i:                                   # after the last candle, or before the first: nothing to undo
+            continue
+        cur = out or bars
+        prev = _num(cur[i - 1].get("c"))
+        if not prev or prev <= 0 or d["amount"] / (prev + d["amount"]) <= EXTRA_DIVIDEND:
+            continue
+        k = (prev + d["amount"]) / prev
+        out = list(cur)
+        for j in range(i):
+            b = out[j]
+            out[j] = {**b, **{x: round(_num(b[x]) * k, 2) for x in ("o", "h", "l", "c") if _num(b.get(x)) is not None},
+                      "traded": True}
+    if out is None:
+        return bars
+    if reference:
+        try:
+            ref = {str(r.get("t") or "")[:10]: r for r in (reference() or []) if isinstance(r, dict)}
+        except Exception as ex:                     # the undone candles rather than none
+            print("as-traded candles: reference not read:", str(ex)[:120])
+            ref = {}
+        for j, b in enumerate(out):
+            r = ref.get(days[j]) if b.get("traded") else None
+            rc, bc = (_num(r.get("c")), _num(b.get("c"))) if r else (None, None)
+            if rc and bc and abs(rc / bc - 1) <= TRADED_MATCH and all(_num(r.get(x)) is not None for x in ("o", "h", "l")):
+                out[j] = {**b, **{x: float(r[x]) for x in ("o", "h", "l", "c")}}
+    return out
+
+
 def fit_to_exchange_range(bars: list[dict], row, report_day: str | None) -> list[dict]:
     """Daily candles held to the exchange's own 52-week high and low for the stock (`row`: [high, its day, low, its day],
     from the report of `report_day`; official_close.ranges). A candle's extreme beyond the exchange's, within the report's
@@ -370,12 +450,9 @@ def price_facts(bars: list[dict], region: str | None = None, now: datetime | Non
     bars = closed_bars(bars, region, now)
     if not bars:
         return {}
-    year = year_bars(bars)
-    highs = [x for x in (_num(b.get("h")) for b in year) if x is not None]
-    lows = [x for x in (_num(b.get("l")) for b in year) if x is not None]
+    low, high = year_low_high(bars)
     return {"price": _num(bars[-1].get("c")), "price_at": str(bars[-1].get("t") or "")[:10], "price_basis": "close",
-            "high52": max(highs) if highs else None, "low52": min(lows) if lows else None,
-            "price_official": bool(bars[-1].get("official"))}
+            "high52": high, "low52": low, "price_official": bool(bars[-1].get("official"))}
 
 
 def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
@@ -613,15 +690,39 @@ def annual_behind(f: dict | None) -> bool:
         return False
 
 
+BEHIND_RETRY = 7 * 86400       # a page still behind after a build that came after its report was filed: swept again weekly
+SEC_DATA_LAG = 4 * 86400       # how long after a filing the SEC's data has it
+
+
+def behind_due(f: dict | None, ts: float | None, now: float | None = None) -> bool:
+    """Whether the screens' sweep should build a page that is behind its newest annual report (annual_behind) ahead of
+    the rest: it was built before that report's data could be out, or not for a week. A page built after it and still
+    behind is one whose report doesn't give the year as one period (R12-006: Bally's 2025 10-K gives 1 Jan to 7 Feb and
+    8 Feb to 31 Dec) or can't be read: building it every half hour first kept the sweep from ever reaching the others
+    (Simec's and Synthesis's pages kept tables a year or more behind until someone opened them)."""
+    if not annual_behind(f):
+        return False
+    now = time.time() if now is None else now
+    ts = ts or 0.0
+    filed = str((f or {}).get("annual_filed") or "")[:10]
+    try:
+        filed_ts = datetime.fromisoformat(filed).replace(tzinfo=timezone.utc).timestamp() if filed else 0.0
+    except ValueError:
+        filed_ts = 0.0
+    return ts < filed_ts + SEC_DATA_LAG or now - ts >= BEHIND_RETRY
+
+
 def cap_missing_reason(f: dict | None) -> str | None:
     """Why a page has no market cap at all (not why a cap failed its checks: see cap_problem), in words, when the page
-    knows: None when it has one, has no price to multiply, or doesn't know why (R10V-004: Baidu and BP showed nothing)."""
+    knows: None when it has one or has no price to multiply (R10V-004: Baidu and BP showed nothing). A page that doesn't
+    know why (one stored before the reason was kept) is "unknown": the item is still shown, as n/a, with a note that
+    claims no cause (R12-005: BP's stored page showed no Market cap item at all)."""
     f = f or {}
     if _num(f.get("market_cap")) is not None or _num(f.get("price")) is None or f.get("not_company"):
         return None
     if f.get("no_numbers"):
         return "no_numbers"
-    return "shares" if f.get("cap_why") == "shares" else None
+    return "shares" if f.get("cap_why") == "shares" else "unknown"
 
 
 def pe_label(f: dict | None) -> str:
@@ -695,7 +796,8 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     opm = years[-1].get("opm") if years else snap.get("opm")
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
-                                                      "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why")
+                                                      "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why",
+                                                      "type_unread")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": public_text(p.get("name") or symbol), "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -728,7 +830,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
-    if (stored["facts"].get("annual_unread") or annual_behind(stored["facts"])) and now - ts >= UNREAD_FRESH:
+    if (stored["facts"].get("annual_unread") or stored["facts"].get("type_unread") or annual_behind(stored["facts"])) \
+            and now - ts >= UNREAD_FRESH:
         return False                     # built without its latest annual report, which couldn't be read then (R8V-003, R10V-002)
     settled = last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + settle(region)
     # its own build, or the price job's re-read of its price, came after the market's latest settled close
@@ -744,6 +847,13 @@ def has_content(f: dict | None) -> bool:
     nothing on (no price and no numbers) is a short noindex page, and a fund or a note filed under a company's name a
     404 (see render)."""
     return bool(f) and not f.get("not_company") and not f.get("no_numbers")
+
+
+def sitemap_ok(f: dict | None) -> bool:
+    """Whether a stored page may be listed in the sitemap: it has something to show (has_content), and the build knew
+    what the ticker is, so it can't turn out to be a fund's 404 when next built (R12-013: GSMT). A page whose build
+    couldn't read that is built again within the hour when opened, like one whose annual report couldn't be read."""
+    return has_content(f) and not (f or {}).get("type_unread")
 
 
 _thin: set[tuple[str, str]] = set()          # companies already marked in this process
@@ -1505,6 +1615,11 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     # the rule P/E has (R10V-002)
     old = figures_stale(f)
     year = lambda text: "n/a" if old else text      # noqa: E731
+    # beside the last twelve months' profit (and a P/E on it), the figures that are the newest year's own name that year,
+    # so no reader takes a year's margin for the twelve months' (R12-007: Katapult's "Net profit, last 12 months $16M",
+    # "P/E 1.4" and "Net margin 0.5%", the last its year to Dec 2025's)
+    end = figures_end(f) if _num(f.get("profit_ttm")) is not None else None
+    of_year = f" (year to {_date(end)[-8:]})" if end and _date(end) else ""
     out = [(price_label(f), _money(f, f.get("price"))),
            # the range is the year's highest and lowest trade, not closes (R6V-014)
            ("1-year range (intraday)", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
@@ -1513,8 +1628,8 @@ def _stats(f: dict) -> list[tuple[str, str]]:
            (f"Net profit, last 12 months ({unit})", _fmt(f.get("profit_ttm"), 0)),
            ("Return on equity", year(_pct(f.get("roe"))))]
     if not f.get("bank"):
-        out += [("EBITDA margin", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
-    out += [("Net margin", year(_pct(f.get("net_margin")))),
+        out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
+    out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
             ("Dividend yield", _fmt(dy, 2, "%") if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
 
@@ -1549,6 +1664,9 @@ def _notes(f: dict) -> list[str]:
                    "this company's filings, so the price can't be multiplied by it.</p>")
     elif why == "no_numbers":
         out.append(f'<p class="note" data-cap-missing>Market cap and reported figures aren\'t shown: {e(public_text(str(f.get("no_numbers"))))}</p>')
+    elif why == "unknown":
+        out.append('<p class="note" data-cap-missing>Market cap isn\'t shown: this page has no count of the shares in issue to '
+                   "multiply the price by. It is worked out again when the page is next rebuilt.</p>")
     if figures_stale(f):
         out.append(f'<p class="note" data-figures-old>Return on equity, margins and debt to equity aren\'t shown: the newest year in '
                    f'the table ended on {e(_date(figures_end(f)))}, more than 15 months before this price, and a newer annual '

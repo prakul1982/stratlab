@@ -206,8 +206,31 @@ def flows(facts: dict, concepts: tuple, kind: str, unit: str = "USD") -> dict[st
             filed = f.get("filed") or ""
             if f["end"] not in best or filed > best[f["end"]][0]:
                 best[f["end"]] = (filed, float(f["val"]))
+        if kind == "annual" and "pershare" not in concept.lower():      # a per-share figure doesn't add up across share counts
+            for end, got in split_years(_facts(facts, concept, unit)).items():
+                best.setdefault(end, got)
         for end, (_, v) in best.items():
             out.setdefault(end, v)
+    return out
+
+
+def split_years(rows: list[dict]) -> dict[str, tuple[str, float]]:
+    """{year end: (filed, value)} for a year an annual report gives only in two parts, at a change of control: the
+    predecessor's period and the successor's, back to back, together a year (R12-006: Bally's 2025 10-K gives revenue for
+    1 Jan to 7 Feb 2025 and for 8 Feb to 31 Dec 2025, and no year, so its page kept 2024 as its newest year). The year is
+    the two parts added, both from the same filing."""
+    parts: dict[str, list[dict]] = {}
+    for f in rows:
+        if (f.get("start") and f.get("val") is not None and f.get("form") in ANNUAL and f.get("accn")
+                and _days(f["start"], f["end"]) < 340):
+            parts.setdefault(f["accn"], []).append(f)
+    out: dict[str, tuple[str, float]] = {}
+    for got in parts.values():
+        for a in got:
+            for b in got:
+                gap, span = _days(a["end"], b["start"]), _days(a["start"], b["end"])
+                if 1 <= gap <= 2 and 340 <= span <= 380 and b["end"] not in out:
+                    out[b["end"]] = (b.get("filed") or "", float(a["val"]) + float(b["val"]))
     return out
 
 
@@ -727,6 +750,7 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     # in its 2023 report; its later reports give each class on the cover, which the company facts leave out, and
     # 9,776,104,515 shares of both classes on the balance sheet at the end of 2024)
     from_cover = shares is not None
+    no_cover_count = not ((facts.get("dei") or {}).get("EntityCommonStockSharesOutstanding") or {}).get("units", {}).get("shares")
     if shares and shares[0] < (date.fromisoformat(ends[-1]) - timedelta(days=31)).isoformat():
         held = [f for c in SHARES_HELD for f in _facts(facts, c, "shares")
                 if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end", "") >= ends[-1]]
@@ -756,16 +780,24 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     recent = (date.fromisoformat(ends[-1]) - timedelta(days=740)).isoformat()
     both = [e for e in sorted(eps_basic) if e >= recent and abs(eps_basic.get(e) or 0) >= 0.05 and ni_a.get(e)]
     last = ends[-1] if ends[-1] in both else (both[-1] if both else ends[-1])
+    # ...unless the balance sheet's count at that year's end agrees with it: the earnings imply the year's average, which
+    # is far below the year-end count for a company that issued most of its shares during the year (R12-007: Liberty's
+    # 8,045,145 average against 25,299,372 shares at the end of 2025 and 28,674,827 on its cover page, a market value of
+    # $279M against $1.2B)
+    year_end_held = [float(f["val"]) for c in SHARES_HELD for f in _facts(facts, c, "shares")
+                     if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end") == last]
     if shares and abs(eps_basic.get(last) or 0) >= 0.05 and ni_a.get(last):
         implied = ni_a[last] / eps_basic[last]
-        if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3:
+        # (a count that grew, by at most ten times: a thousandfold count is a unit error whatever the balance sheet says)
+        agrees = 1 < shares[1] / implied <= 10 and any(0.5 <= shares[1] / h <= 2 for h in year_end_held)
+        if implied > 0 and not 1 / 3 <= shares[1] / implied <= 3 and not agrees:
             shares = (last, float(round(implied)))
             from_cover = False
     out = {"name": subs.get("name") or facts_json.get("entityName") or "", "ratios": {}, "growth": {}, "pros": [], "cons": [],
            "pl": {"cols": pl_cols, "rows": pl_rows}, "balance": bal, "cashflow": cf, "quarters": quarters,
            "basis": "consolidated", "unit": "$ million" if cur == "USD" else f"{cur} million", "currency": cur, "region": "US",
            "cik": facts_json.get("cik"), "sic": sic, "shares": shares[1] if shares else None, "fiscal_year_end": subs.get("fiscalYearEnd"),
-           "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg,
+           "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg, "no_cover_count": no_cover_count,
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
@@ -1114,6 +1146,18 @@ class SEC(Source):
                 got = self.filing_data(cik, latest)
                 cs = (got or {}).get("cover_shares")
                 if cs and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat():
+                    p["shares"], p["shares_from"] = cs["value"], "cover"
+                    if cs.get("treasury"):         # a count of the shares issued: net of those held in treasury (R12-005)
+                        p = net_of_treasury({**p, "avg_shares": p.get("avg_shares") or cs.get("avg")}, cs["treasury"])
+            elif p.get("no_cover_count") and len([t for t in subs.get("tickers") or [] if not non_common(t)]) <= 1:
+                # a count from the accounts, not a cover page: a cover page that gives one count per class (the listed Class
+                # A and an unlisted Class B, which the company facts leave out) counts every class, as the market value
+                # does (R12-007: Legence's 107,976,000 Class A shares alone, a $5.6B value against $8.5B for both classes)
+                rep = latest_filing(subs, ANNUAL_FORMS + ("10-Q",))
+                got = self.filing_data(cik, rep) if rep else None
+                cs = (got or {}).get("cover_shares")
+                if (cs and cs.get("classes", 0) > 1 and cs["value"] > (p.get("shares") or 0)
+                        and cs.get("end", "") >= (date.fromisoformat(p["year_end"]) - timedelta(days=400)).isoformat()):
                     p["shares"], p["shares_from"] = cs["value"], "cover"
         except SourceError as e:
             if not e.busy:
@@ -1677,7 +1721,23 @@ def cover_shares(inst: dict) -> dict | None:
     if not by_end:
         return None
     end = max(by_end)
-    return {"value": float(sum(by_end[end].values())), "end": end, "classes": len(by_end[end])}
+    out = {"value": float(sum(by_end[end].values())), "end": end, "classes": len(by_end[end])}
+    # the treasury shares the accounts count at that date, and the year's average ordinary shares: a cover page that
+    # counts the shares issued (BP's 16,486,312,994 ordinary shares at 31 Dec 2025, of which 1,109,588,000 were held in
+    # treasury: R12-005, a market value of $127B against $119B) is taken net of them (net_of_treasury)
+    for ns, concept, cid, unit, text in inst["facts"]:
+        c = ctx.get(cid) or {}
+        v = _x_num(text) if unit == "shares" else None
+        if not v or v <= 0:
+            continue
+        if (concept == "NumberOfSharesOutstanding" and c.get("end") == end
+                and c.get("dims") == {"ComponentsOfEquityAxis": "TreasurySharesMember"}):
+            out.setdefault("treasury", v)
+        elif (concept in ("WeightedAverageShares", "WeightedAverageNumberOfSharesOutstandingBasic") and c.get("end") == end
+              and c.get("start") and _days(c["start"], end) > 300
+              and (not c.get("dims") or c["dims"] == {"ClassesOfShareCapitalAxis": "OrdinarySharesMember"})):
+            out.setdefault("avg", v)
+    return out
 
 
 def class_shares(inst: dict) -> dict[str, float]:

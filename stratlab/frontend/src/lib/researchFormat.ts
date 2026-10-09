@@ -107,3 +107,12 @@ export function newsAge(iso: string | null | undefined, now: Date = new Date()):
   if (days < 60) { const w = Math.floor(days / 7); return `${w} week${w === 1 ? "" : "s"} old`; }
   return monthsOld(Math.floor(days / 30.4));
 }
+
+/** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
+ * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
+export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined): string {
+  const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "where money is flowing" : "",
+    ai?.themes?.length ? "the themes in play" : ""].filter(Boolean);
+  const list = extra.length > 1 ? `${extra.slice(0, -1).join(", ")} and ${extra[extra.length - 1]}` : extra[0];
+  return `Live index levels and headlines, with an AI read of the mood${list ? `, ${list}` : ""}.`;
+}

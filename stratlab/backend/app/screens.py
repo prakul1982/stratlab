@@ -256,14 +256,16 @@ def build_index(region: str, store: bool = True) -> dict:
         # list: R8O-001)
         # ...or a page whose table is a year behind the company's newest annual report (R10V-002: Dr. Reddy's and Caledonia
         # kept a table to the report before the last one, as long as nobody opened the page)
-        if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or stock_pages.annual_behind(facts):
+        # (a page still behind after a build that came after its report was out waits a week, R12-006: see behind_due)
+        due = stock_pages.behind_due(facts, ages[sym], started)
+        if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION or due:
             empty.add(sym)
             if stock_pages.has_content(facts):
                 # every other company's page from before: rebuilt next, the largest first (R8V-003: Toyota's, Infosys's
                 # and Itaú's pages were a year behind hours after the fix went live, rebuilt only when the ration allowed)
                 # (a table a year behind its company's newest report goes before them all: its numbers are the stale ones)
-                old[sym] = (_num(facts.get("market_cap")) or 0.0) + (BEHIND_FIRST if stock_pages.annual_behind(facts) else 0.0)
-        if stock_pages.has_content(facts):
+                old[sym] = (_num(facts.get("market_cap")) or 0.0) + (BEHIND_FIRST if due else 0.0)
+        if stock_pages.sitemap_ok(facts):        # never a page whose build couldn't tell a fund from a company (R12-013)
             shown.append(sym)
         r = row(region, sym, stored.get("facts") or {})
         if r:

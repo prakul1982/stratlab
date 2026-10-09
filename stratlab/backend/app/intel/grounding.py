@@ -188,7 +188,9 @@ ADVICE = re.compile(
     r"|\b(target price|price target)s?\b|\bundervalued\b|\bovervalued\b|\b(cheap|expensive|bargain)\b|\battractive(ly)?\s+(valued|valuation|entry)\b"
     r"|\bworth (buying|owning|a look)\b|\boutlook\b|\bforecast|\bpredict|\bexpect(s|ed)?\s+to\b|\blikely to\b|\bpoised\b|\bset to\b"
     r"|\b(will|should|could|may|might)\s+(rise|fall|go|climb|drop|rally|gain|continue|outperform|underperform|benefit|recover|rebound|see|drive|lead|weigh|boost|pressure|support)\b"
-    r"|\bopportunit(y|ies)\b|\bmultibagger\b|\b(good|great|right|ideal) time\b|\brecommend", re.I)
+    r"|\bopportunit(y|ies)\b|\bmultibagger\b|\b(good|great|right|ideal) time\b|\brecommend"
+    # R12-004: a buy level or a pick repeated from a headline ("Jim Cramer set a buy level for Starbucks")
+    r"|\bbuy[- ](level|point|zone|signal|range|alert)s?\b|\b(his|her|their) (take|picks?) on\b|\bstocks? to watch\b|\bbreakouts?\b", re.I)
 
 # subjects a market read may mention only when a headline (or the facts) does: central banks, macro data, flows, sectors
 TOPICS = ("fed", "federal reserve", "fomc", "minutes", "powell", "ecb", "boj", "rbi", "repo", "rate cut", "rate hike", "inflation",

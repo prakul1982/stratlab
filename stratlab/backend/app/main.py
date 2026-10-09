@@ -3164,6 +3164,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             kind = stock_pages.FUND_TYPES.get(str(quote.get("type") or "").upper())
             if kind:                      # an ETN filed under its bank's name, a fund: not a company (R6V-001)
                 checks["not_company"] = kind
+            elif not quote.get("type"):
+                # what the ticker is couldn't be read (no quote): a page for a visitor, but not listed in the sitemap until a
+                # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
+                checks["type_unread"] = True
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
@@ -3284,6 +3288,31 @@ def official_page_close(co: dict) -> dict | None:
     return {"price": c, "price_at": day, "price_basis": "close", "price_official": True} if c else None
 
 
+def india_page_dividends(sym: str, co: dict, fetch: bool = True, listed: bool | None = None) -> list[dict] | None:
+    """An Indian company's dividends ([{"date", "amount"}]) as its page reads them: the company's own corporate actions
+    list (read again when more than a day old, with `fetch`), and without any list the price history's dividends (with
+    `listed`, which follows `fetch` unless given). None when there is no list to go on (a list that was read and holds
+    none is [])."""
+    try:
+        rows = corp_actions.actions_for("IN", sym, corp_job.sources() if fetch else None, fetch=fetch)
+        known = bool(corp_actions.hist_load("IN", sym)["at"])
+    except Exception:
+        rows, known = [], False
+    divs = stock_pages.dividend_list(rows)
+    if divs or known:
+        return divs
+    if not (fetch if listed is None else listed):
+        return None
+    try:
+        return stock_pages.dividend_list(research_hub.yahoo.events(yahoo_in_symbol(sym, co), 400)["dividends"])
+    except Exception:
+        return None
+
+
+def yahoo_in_symbol(sym: str, co: dict | None) -> str:
+    return f"{co['bse']}.BO" if (co or {}).get("bse") else f"{sym}.NS"
+
+
 def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dict | None = None, fetch: bool = True) -> float | None:
     """A public page's dividend yield from the same dividends list the app's company page uses (its Corporate actions
     card): every dividend with an ex-date in the year to the close, specials included. None when that list has none to
@@ -3294,22 +3323,8 @@ def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dic
     if not close or not as_of:
         return None
     if region == "IN" and co is not None:
-        try:
-            rows = corp_actions.actions_for("IN", sym, corp_job.sources() if fetch else None, fetch=fetch)
-            known = bool(corp_actions.hist_load("IN", sym)["at"])
-        except Exception:
-            rows, known = [], False
-        divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
-                if d.get("kind") == "dividend" and d.get("amount")]
-        if divs or known:
-            return stock_pages.dividend_yield(divs, close, as_of)
-        if not fetch:
-            return None
-        try:
-            listed = research_hub.yahoo.events(f"{co['bse']}.BO" if co.get("bse") else f"{sym}.NS", 400)["dividends"]
-        except Exception:
-            return None
-        return stock_pages.dividend_yield(listed, close, as_of)
+        divs = india_page_dividends(sym, co, fetch)
+        return stock_pages.dividend_yield(divs, close, as_of) if divs is not None else None
     try:
         rows = research_routes.stored_dividends(region, sym)
     except Exception:
@@ -3362,6 +3377,14 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
         # and the screens (R7O-004: TCS 2,077.00 here against 2,076.00 in the app)
         sym = co["sym"] if not co.get("bse") else co["bse"]
         bars = official_close.overlay_bars(list(bars), sym)
+        # ...as the exchange printed them: the broker scales every candle before an extraordinary dividend's ex-date, so
+        # the year's range read from its candles was 2% low (R12-001: INFY ₹1,691.40 against 1,728.00, ULTRACEMCO ₹10,118
+        # to ₹12,848 against 10,325 to 13,110). Undone from the company's dividends list, with no exchange report needed
+        try:
+            bars = stock_pages.as_traded(bars, india_page_dividends(co["sym"], co, fetch=False, listed=True) or [],
+                                         reference=lambda: research_hub.yahoo.chart(yahoo_in_symbol(co["sym"], co), "1d", 400)["candles"])
+        except Exception as e:                       # the candles as they are rather than none
+            print("as-traded candles for the public page:", sym, str(e)[:120])
         # ...and the year's extremes as the exchange's own 52-week report states them (R10V-003): a stray low in the
         # broker's candles, or a high they clipped, never reaches the page's 1-year range. Public pages only; the app's
         # own candles are read as before (official_close.widen_to_range)

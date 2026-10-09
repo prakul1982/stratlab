@@ -81,7 +81,20 @@ ADVICE_TITLE = re.compile(
     r"|\bentry (point|level|zone|price|range)s?\b|\btargets? (stays?|remains?|kept|maintained|unchanged|raised|cut|lowered|hiked|slashed|revised|trimmed|upgraded)\b"
     r"|\b(bullish|bearish|buy|sell|upbeat)\s+(calls?|view|stance|ratings?|outlook on)\b|\b(retain|retains|retained|maintain|maintains|keep|keeps)\s+(a\s+)?(bullish|bearish)\b"
     r"|\bwhere (could|can|will|might|would|may|should)\b[^?.]{0,80}\bbe\s+(in|by|at|after|over|within)\b"
-    r"|\b(share|stock) price (potentially|could|may|might|likely to)\b", re.I)
+    r"|\b(share|stock) price (potentially|could|may|might|likely to)\b"
+    # R12-004: a level to buy at ("Jim Cramer sets a Starbucks buy level", "Nutanix Nears Buy Point"), a call on where a
+    # price goes ("Prediction: … Will Triple by 2028", "Here's Where the Stock Could Be Headed Next", "1 Chip Stock Has Far
+    # Greater Upside"), a judgement put to the reader ("… Bargain or Warning?", "Smart Move or Costly Gamble?", "Are You
+    # Overpaying For…", "What Buying Into Hype Costs You"), someone's own holding ("My Position on Tesla…", "3 stocks we
+    # just bought", "Has Already Made Investors Rich") and chart calls ("Price Breakout Below Support Level", "what charts
+    # say?", "stocks to watch")
+    r"|\bbuy[- ](level|point|zone|signal|range|alert)s?\b|\bprediction(?!s? markets?)s?\b|\bupside\b(?!\s+surprise)"
+    r"|\b(could|can|may|might|will|would) be headed\b|\bbargain or\b|\bor (a )?bargain\b|\bsmart (move|buy|bet)\b"
+    r"|\bcostly (gamble|mistake)\b|\bwhat (the )?charts? (say|suggest|show|indicate|signal)\b|\bstocks? to watch\b"
+    r"|\bwill (triple|double|quadruple|soar|skyrocket|explode|10x)\b|\bmade (its )?(investors|shareholders|holders) rich\b"
+    r"|\bmake (you|investors) rich\b|\bmy (position|stake|bet|take|view|stance) on\b|\boverpaying\b|\bunderpaying\b"
+    r"|\bbreakouts?\b|\bbuying into (the )?hype\b|\bcosts? you\b|\b(we|i) (just )?(bought|sold|added|trimmed)\b"
+    r"|\b(millionaire|retire rich|get rich)\b|\bno[- ]brainer\b|\b(screaming|table-pounding) buy\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"
@@ -170,3 +183,10 @@ def mentions(name: str, symbol: str, headline: str) -> bool:
         return True
     own = [w for w in _words(_SUFFIX.sub("", name.strip()) or name) if w not in _GENERIC]
     return bool(own) and len(own[0]) >= 4 and own[0] not in _GROUPS and own[0] in words
+
+
+def company_headline(name: str, symbol: str, headline: str | None) -> bool:
+    """A headline a company's page may list: a plain story (plain_headline) that names the company in the headline
+    itself, not only in its summary (R12-004: "Are You Overpaying For Microsoft Stock Versus Its Rivals?" on Apple's page,
+    Apple being one of the rivals its summary named). One rule for every company's news, India's and the US's."""
+    return bool(headline) and plain_headline(headline) and mentions(name, symbol, str(headline))
