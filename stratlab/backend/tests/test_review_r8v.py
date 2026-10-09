@@ -293,7 +293,8 @@ def test_pages_say_which_facts_version_built_them():
     f = stock_pages.facts("US", "ACME", {"name": "Acme"}, {"years": []}, {}, None, None, [], "Listed in the US",
                           checks={"foreign": True, "profit_usd": 7_320.0, "annual_unread": "2026-04-30"})
     # changed on purpose in R10V (the consolidated entity's profit, cover-page share counts, one-year ratios, a 365-day range): 6 -> 7
-    assert f["v"] == stock_pages.FACTS_VERSION == 7
+    # ...and in R12 (an Indian range of candles as traded, split years added up, cover counts net of treasury): 7 -> 8
+    assert f["v"] == stock_pages.FACTS_VERSION == 8
     assert f["foreign"] is True and f["profit_usd"] == 7_320.0 and f["annual_unread"] == "2026-04-30"
 
 

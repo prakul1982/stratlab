@@ -298,9 +298,14 @@ def _day(t, tz: str) -> str | None:
 
 
 def _prior_year(bars: list[dict], today: str, tz: str) -> list[dict]:
-    """The last 52 weeks of candles before today."""
+    """The candles of the 365 days before today: the one 1-year window every page's range uses (R12-003; the last 252
+    candles could reach 368 days back)."""
     done = bars[:-1] if bars and _day(bars[-1].get("t"), tz) == today else bars
-    return done[-YEAR:]
+    try:
+        start = (datetime.fromisoformat(today) - timedelta(days=365)).date().isoformat()
+    except (TypeError, ValueError):
+        return done[-YEAR:]
+    return [b for b in done if (_day(b.get("t"), tz) or "") > start]
 
 
 def _cross(a: dict, state: dict, x: float, level: float) -> tuple[bool, dict]:
