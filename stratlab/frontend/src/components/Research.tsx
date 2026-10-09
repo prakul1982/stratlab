@@ -358,7 +358,7 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
     { name: "Sales", cells: q.sales.map(f) }, { name: "Net profit", cells: q.profit.map(f) },
     // a bank reports a financing margin there, not an EBITDA margin (R7O-001)
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
-  ];
+  ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)
   return (
     <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
       columns={[{ key: "m", header: "₹ cr", rowHeader: true, cell: (r) => r.name },

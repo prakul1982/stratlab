@@ -88,7 +88,7 @@ test("the option chain's open interest is in contracts, as the exchange counts i
 // ---------- R7T-004: the pre-open price is never the last close ----------
 test("a company page at 09:13 IST calls its price the pre-open's (R7T-004)", async ({ page }) => {
   const errors = await open(page, "/research/IN/RELIANCE", [
-    [/\/research\/company\/IN\/RELIANCE$/, edited((j) => ({ ...j, market_open: false, phase: "pre_open",
+    [/\/research\/company\/IN\/RELIANCE(\?lean=1)?$/, edited((j) => ({ ...j, market_open: false, phase: "pre_open",
       quote: { ...(j.quote as object), price: 1179, change: 1, change_pct: 0.0849, prev_close: 1178, at: "2026-10-09T09:09:49+05:30" } }))],
   ], "2026-10-09T03:43:00Z");
   const price = page.getByTestId("company-price");
@@ -102,7 +102,7 @@ test("a company page at 09:13 IST calls its price the pre-open's (R7T-004)", asy
 // ---------- R7T-001: a range from another class of shares isn't drawn ----------
 test("a 52-week range that can't be the share's is not shown under its price (R7T-001)", async ({ page }) => {
   const errors = await open(page, "/research/IN/RELIANCE", [
-    [/\/research\/company\/IN\/RELIANCE$/, edited((j) => ({ ...j, range52: { low: 698000, high: 806102.8 } }))],
+    [/\/research\/company\/IN\/RELIANCE(\?lean=1)?$/, edited((j) => ({ ...j, range52: { low: 698000, high: 806102.8 } }))],
   ]);
   await expect(page.getByTestId("company-price")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).not.toContainText("52-wk low");

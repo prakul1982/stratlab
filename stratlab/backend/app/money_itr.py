@@ -448,7 +448,7 @@ def summary(g: dict) -> list[tuple[str, str]]:
 def sources(g: dict) -> list[str]:
     out = []
     for f in g["files"][-20:]:
-        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {f.get('trades', 0)} trades, uploaded {str(f.get('at'))[:10]}).")
+        out.append(f"Your file {f.get('name')} ({f.get('broker') or 'broker'}, {f.get('trades', 0)} trades, uploaded {_day(str(f.get('at') or '')[:10])}).")
     if g["mf_count"]:
         out.append(f"Your mutual fund statement (CAS): {g['mf_count']} realised sales in all years.")
     if g["us_count"]:

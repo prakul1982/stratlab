@@ -3384,7 +3384,8 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
-research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)     # the app's US P/E on the public page's EPS (R7O-004)
+stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
+research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 

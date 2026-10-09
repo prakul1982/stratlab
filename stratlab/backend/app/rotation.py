@@ -144,11 +144,26 @@ def benchmark_id(registry, market: str) -> tuple[str, str]:
     raise LookupError("No benchmark available for this market.")
 
 
+def completed_sessions(market: str, load, now=None):
+    """`load` without the candle of a session still trading: a chart that says "closes up to 9 Oct" must not carry the
+    9 Oct candle while that session is open (R10O-010: the US page said so at 14:55 UTC, with the day's close not yet in)."""
+    from .intel.company import market_open, market_today
+
+    def wrapped(iid: str, days: int) -> list[dict]:
+        bars = load(iid, days)
+        if market_open(market, now):
+            today = market_today(market, now)
+            return [b for b in bars if str(b["t"])[:10] < today]
+        return bars
+    return wrapped
+
+
 def compute(registry, market: str, members: list[tuple[str, str]], interval: str, tail: int, load,
             bench: tuple[str, str] | None = None) -> dict:
     """Rotation paths for members [(id, symbol)] against the market's benchmark (or `bench`, (id, symbol)).
-    `load(id, days)` gives daily bars."""
+    `load(id, days)` gives daily bars; a session still trading is left out, so the last candle is a finished one."""
     days = 700 if interval == "weekly" else 220
+    load = completed_sessions(market, load)
     bid, bsym = bench or benchmark_id(registry, market)
     try:
         bench_s = closes(load(bid, days), interval)

@@ -176,12 +176,20 @@ def price_phase(region: str, c: dict, now: datetime | None = None) -> str | None
 
 
 @router.get("/company/{region}/{symbol}")
-def company(region: str, symbol: str, profile=Depends(current_profile)):
+def company(region: str, symbol: str, lean: bool = False, profile=Depends(current_profile)):
     """One company's page. `as_of` is when its prices were read, for the page's "as of" line; `market_open` whether
-    its market is trading now (else the price is the last close)."""
+    its market is trading now (else the price is the last close). `lean`: without the news, the encyclopedia entry and
+    the peers (marked `lazy`; /more brings them), so the price, header and tables don't wait on slow sources (R10O-009)."""
     r = region_of(region)
-    c = page_figures(r, source_call(lambda: hub.company(r, symbol_of(symbol))))
+    c = page_figures(r, source_call(lambda: hub.company(r, symbol_of(symbol), lean=True) if lean else hub.company(r, symbol_of(symbol))))
     return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c)})
+
+
+@router.get("/company/{region}/{symbol}/more")
+def company_more(region: str, symbol: str, profile=Depends(current_profile)):
+    """What a lean company page left out: the company's news, its encyclopedia entry and its peers."""
+    r = region_of(region)
+    return ok(source_call(lambda: hub.company_more(r, symbol_of(symbol))))
 
 
 def page_figures(region: str, c: dict) -> dict:
@@ -445,6 +453,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     if stale:
         return ok({"unavailable": True, "code": "stale", "message": stale_words(stale)})
     hour = datetime.now(IST).strftime("%Y-%m-%d %H")
+    cash = flows_today() if r == "IN" else None            # the day's FII and DII figures, as Positioning has them (R10O-004)
+    cash_day = cash.get("as_of") if cash and cash.get("status") == "ok" else None
 
     def build():
         try:
@@ -455,12 +465,12 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             sectors = hub.sector_moves(r)
         except Exception:
             sectors = None
-        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors)
+        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors, cash=cash)
     try:
         # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r))), 3600, refresh, build,
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r)), cash_day), 3600, refresh, build,
                           counted=False, min_age=300))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
@@ -469,6 +479,15 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+def flows_today() -> dict | None:
+    """Positioning's FII and DII cash-market figures for the newest day, or None when they can't be read."""
+    try:
+        from .. import positioning
+        return positioning.cash_today()
+    except Exception:
+        return None
 
 
 def stale_words(names: list[str]) -> str:
