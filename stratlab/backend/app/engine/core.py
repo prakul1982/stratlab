@@ -98,6 +98,7 @@ class Engine:
             cost_kind = "in_eq_mis"
         self.kind = cost_kind
         self.cash = self.r.capital
+        self.emptied_on: str | None = None     # the day the account hit zero: nothing opens after it (R13S-001)
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
         self.init_sl, self.best, self.held = 0.0, 0.0, 0
         self.entry_t = None
@@ -120,7 +121,7 @@ class Engine:
                 "entry_cost": self.entry_cost, "cost_items": self.cost_items,
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
-                "halted": self.halted, "trades": self.trades[-500:], "events": self.events[-1000:]}
+                "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:]}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
@@ -135,6 +136,7 @@ class Engine:
         self.day, self.day_trades = st.get("day"), st.get("day_trades", 0)
         self.day_pnl, self.cool, self.halted = st.get("day_pnl", 0.0), st.get("cool", 0), st.get("halted", False)
         self.trades, self.events = st.get("trades", []), st.get("events", [])
+        self.emptied_on = st.get("emptied_on")
 
     def _pay(self, side: str, qty: float, px: float) -> float:
         items = C.order_costs(self.kind, side, qty, px, self.r.brokerage)
@@ -222,11 +224,27 @@ class Engine:
             self.halted = True
         return ev
 
+    def check_empty(self, b: dict, new: list[dict]) -> None:
+        """An account can't lose more than it has: when its value reaches zero (a leveraged or short position that moved
+        too far), the position is closed at the candle's close, the loss is held to what the account had, and nothing
+        opens afterwards (R13S-001: a long-only run showed -352.6%)."""
+        if self.emptied_on:
+            return
+        if self.qty > 0 and self.equity(b["c"]) <= 0:
+            new.append(self._close(b, b["c"], "Account emptied"))
+        if self.qty == 0 and self.cash <= 0:
+            self.emptied_on = str(b["t"])[:10]
+            if self.cash < 0:
+                self.cash += write_off(self.trades, -self.cash)
+            self.cash = max(self.cash, 0.0)
+
     def _loss_cap(self) -> float:
         return self.r.capital * self.sess.dailyLossPct / 100 if self.sess and self.sess.dailyLossPct else 0.0
 
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
+        if self.emptied_on:
+            return []
         date, closes_at = bar_clock(b["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
@@ -256,6 +274,7 @@ class Engine:
                 else:
                     self.best = min(self.best, b["l"])
                     self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
+            self.check_empty(b, new)
             return new
         if self.cool > 0:
             self.cool -= 1
@@ -370,12 +389,36 @@ class Engine:
         return ev
 
 
+def write_off(trades: list[dict], shortfall: float, owners: list | None = None) -> float:
+    """The loss past an emptied account is nobody's to pay: take `shortfall` back off the losses of the newest trades
+    (newest first), so the trades still add up to the account's change, which is then exactly -100%. Each trade
+    touched notes how much (`capped_loss`). `owners[k]` is the engine of trades[k]: its cash is raised by the same
+    amount, so its own books still add up. Returns what was taken back."""
+    left = shortfall
+    for k in range(len(trades) - 1, -1, -1):
+        if left <= 1e-9:
+            break
+        t = trades[k]
+        if t["pnl"] >= 0:
+            continue
+        back = min(left, -t["pnl"])
+        t["pnl"] += back
+        t["capped_loss"] = round(t.get("capped_loss", 0.0) + back, 2)
+        if t.get("qty") and t.get("entry"):
+            t["ret"] = t["pnl"] / (t["qty"] * t["entry"]) * 100
+        if owners is not None:
+            owners[k].cash += back
+        left -= back
+    return shortfall - left
+
+
 def stats(eq: list[float], trades: list[dict], capital: float, per_year: float) -> dict:
     arr = np.asarray(eq, dtype=float)
     end = float(arr[-1])
     peak = np.maximum.accumulate(arr)
     dd = (arr / peak - 1) * 100
-    rets = np.diff(arr) / arr[:-1] if len(arr) > 1 else np.array([0.0])
+    # once the account is empty it stays at zero: no change, rather than 0 / 0
+    rets = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0) if len(arr) > 1 else np.array([0.0])
     sd = float(rets.std())
     years = len(arr) / per_year
     wins = [t for t in trades if t["pnl"] > 0]
@@ -384,7 +427,7 @@ def stats(eq: list[float], trades: list[dict], capital: float, per_year: float) 
     n = len(trades)
     return {
         "ret": (end / capital - 1) * 100, "pnl": end - capital,
-        "cagr": ((end / capital) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else 0.0,
+        "cagr": ((end / capital) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else (-100.0 if years > 0 and end <= 0 else 0.0),
         "mdd": float(dd.min()), "dd": dd.tolist(),
         "sharpe": float(rets.mean() / sd * math.sqrt(per_year)) if sd > 0 else 0.0,
         "n": n, "win": len(wins) / n * 100 if n else 0.0,
@@ -440,7 +483,7 @@ def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot
     for i in range(start + 1, end):
         was, closed = eng.qty > 0, len(eng.trades)
         eng.step(bars, ctx, i)
-        equity.append(eng.equity(bars[i]["c"]))
+        equity.append(max(eng.equity(bars[i]["c"]), 0.0))
         j = len(equity) - 1
         if was and len(eng.trades) > closed:
             eng.spans[-1][1] = j
@@ -468,10 +511,10 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         k = period_key(t, tf)
         if k != cur:
             if cur is not None:
-                periods.append({"k": cur, "ret": (equity[j - 1] / s_eq - 1) * 100})
+                periods.append({"k": cur, "ret": (equity[j - 1] / s_eq - 1) * 100 if s_eq > 0 else 0.0})
                 s_eq = equity[j - 1]
             cur = k
-    periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100})
+    periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100 if s_eq > 0 else 0.0})
     overlays, osc = chart_series(strategy, ctx, start)
     rng = range(start + 1, len(bars))
     entries = [*strategy.entry, *(strategy.shortEntry if strategy.side == "both" else [])]
@@ -499,7 +542,8 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         "_paths": [np.diff(np.asarray(equity[a:(len(equity) - 1 if b is None else b) + 1], dtype=float)) for a, b, _ in eng.spans],
         "bars": [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]} for b in view],
         "equity": clean(equity), "buy_hold": clean(bh), "drawdown": clean(st.pop("dd")),
-        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size},
+        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size,
+                  "emptied_on": eng.emptied_on},
         "trades": eng.trades, "open_trade": open_trade, "events": eng.events,
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
         "costs": cost_summary(eng, cost_kind, equity[-1] - cap),

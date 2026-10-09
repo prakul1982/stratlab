@@ -221,7 +221,8 @@ def _trade_dd(pnls, capital: float) -> float:
     path = capital + np.cumsum(pnls)
     path = np.concatenate([[capital], path])
     peak = np.maximum.accumulate(path)
-    return float(np.max((peak - path) / peak) * 100)
+    # an account can't fall by more than all of it: a reshuffle that would take it below zero is a fall of 100%
+    return float(min(np.max((peak - path) / peak), 1.0) * 100)
 
 
 def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
@@ -230,7 +231,7 @@ def _trade_dds(orders: np.ndarray, capital: float) -> np.ndarray:
     path = capital + np.cumsum(orders, axis=1)
     path = np.concatenate([np.full((orders.shape[0], 1), capital), path], axis=1)
     peak = np.maximum.accumulate(path, axis=1)
-    return np.max((peak - path) / peak, axis=1) * 100
+    return np.minimum(np.max((peak - path) / peak, axis=1), 1.0) * 100
 
 
 def _path_dds(inc: np.ndarray, starts: np.ndarray, lens: np.ndarray, perms: np.ndarray, capital: float) -> np.ndarray:
