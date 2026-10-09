@@ -3201,6 +3201,9 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             pe, basis = sec.pe_and_basis(p, close)
             if basis:
                 checks.update(pe_basis=basis["basis"], pe_end=basis["end"])
+                if checks.get("foreign"):
+                    # the profit that P/E is on, in dollars: a foreign filer's market value is checked against it (R8V-001)
+                    checks["profit_usd"] = sec.basis_profit(p, basis["basis"])
             if pe and pe > 0:
                 checks["eps"] = round(close / pe, 4)
     nums = deepdive.numbers(p)
@@ -3284,6 +3287,10 @@ def us_cap_checks(p: dict, sym: str) -> dict:
         out["cap_unverified"] = True        # depositary shares of an unknown ratio, or a report that couldn't be read now
     if sec._latest(p.get("cashflow"), "Dividends paid"):
         out["divs_paid"] = True
+    if p.get("foreign") is not None:
+        out["foreign"] = bool(p["foreign"])
+    if p.get("annual_unread"):
+        out["annual_unread"] = p["annual_unread"]       # built again within the hour (stock_pages.fresh, R8V-003)
     return out
 
 
@@ -3337,14 +3344,30 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
     """A stored page built before the facts a page shows now, served as it is while no rebuild is allowed (a burst of
     crawlers past the build ration, a source down): an Indian page's dividend yield is worked out again from the
     company's stored dividends list (the app's), so it never shows another definition's yield (R8O-001: TCS 3.08%,
-    the last reported year's, against 5.35% on the page's own definition). Anything else waits for the rebuild."""
-    if region != "IN" or not f or (f.get("v") or 1) >= stock_pages.FACTS_VERSION:
+    the last reported year's, against 5.35% on the page's own definition). A US page's likewise, from the company's
+    stored dividends list, and n/a when there is none: a page from before PR 172 kept the filings' dividends paid over
+    the market value, another definition (R8V-011: P&G 2.93% against 2.85% by ex-date). Its P/E is labelled with the
+    year it is on and is n/a past 15 months (stock_pages.pe_period), and a foreign filer's value is checked against its
+    profit (stock_pages.cap_problem), as the page is drawn. Anything else waits for the rebuild."""
+    if not f or (f.get("v") or 1) >= stock_pages.FACTS_VERSION:
         return f
-    try:
-        dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
-    except Exception:
-        dy = None
-    return {**f, "div_yield": dy} if dy is not None else f
+    if region == "IN":
+        try:
+            dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
+        except Exception:
+            dy = None
+        return {**f, "div_yield": dy} if dy is not None else f
+    if region == "US" and (f.get("v") or 1) < 4 and not sec.non_common(symbol):
+        try:
+            rows = corp_actions.actions_for("US", symbol, None, fetch=False)
+            known = bool(corp_actions.hist_load("US", symbol)["at"])
+        except Exception:
+            rows, known = [], False
+        divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
+                if d.get("kind") == "dividend" and d.get("amount")]
+        dy = stock_pages.dividend_yield(divs, f.get("price"), f.get("price_at")) if divs or known else None
+        return {**f, "div_yield": dy}
+    return f
 
 
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)

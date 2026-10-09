@@ -45,9 +45,13 @@ SETTLE_BY = {"IN": 3 * 3600}
 # pages built before market values (and depositary shares, R7O-004) were checked, or before every class of shares was
 # counted and P/E had one definition (R7V-001, R7V-002), or (5) before an Indian page's dividend yield came from the
 # company's own dividends list (R8O-001: TCS's stored page kept 3.08%, the last reported year's, after the fix went
-# live, since only US pages were checked for their version), are rebuilt when next opened, in either market
-FACTS_VERSION = 5
+# live, since only US pages were checked for their version), or (6) before a foreign filer's market value was checked
+# against its own profit and an Indian market value stopped counting shares net of those its employee trusts hold
+# (R8V-001, R8V-005), are rebuilt when next opened, in either market. Until then such a page is served brought in line
+# where that's cheap (main.stock_page_older_facts), and the screens' indexer rebuilds the largest first (R8V-003)
+FACTS_VERSION = 6
 ADR_CHECKED = 3                # the version from which a depositary share's market value was checked (screens.row)
+PE_BASIS_KEPT = 4              # the version from which a page keeps what its P/E's earnings cover (pe_basis, pe_end)
 PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 months before the price is n/a (R7V-003)
 CHUNK = 5000                   # companies per sitemap file (the limit is 50,000; smaller files are quicker to fetch)
 PEERS = 12
@@ -69,6 +73,12 @@ IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDI
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
+# a foreign filer's (20-F, depositary shares) market value against its own reported profit (R8V-001: Mizuho at a P/E of
+# 1.8, its depositary ratio read ten times too high): a P/E under PE_MIN_FOREIGN on a profit, or a P/E and the market
+# value over that profit more than PE_GAP times apart, says the share count or the ratio is off, not the company
+PE_MIN_FOREIGN = 3.0
+PE_GAP = 2.0
+UNREAD_FRESH = 3600            # seconds a page built without its latest annual report (unreadable just then) is kept
 PS_MAX = 250.0                 # market value over a year's revenue, for a company with $1 billion of revenue or more
 PRE_REVENUE_MAX = 20_000.0     # $ million: a company with under $10 million of revenue isn't worth $20 billion
 # what the price source calls something that trades but isn't a company's stock
@@ -365,7 +375,11 @@ def cap_problem(f: dict | None) -> str | None:
     - above any company's worth (CAP_CEILING);
     - a US company's value against its revenue: over PS_MAX times a year's revenue of $1 billion or more, or over
       PRE_REVENUE_MAX with almost no revenue (a shell's stray trade, a share count far off);
-    - a P/E above PE_MAX on a company reporting in another currency (a page built before the revenue was stored)."""
+    - a P/E above PE_MAX on a company reporting in another currency (a page built before the revenue was stored);
+    - a foreign filer's (see foreign_filer) value against its own profit: a P/E under PE_MIN_FOREIGN on a profit, or a
+      P/E and the market value over the reported profit ("profit_usd") more than PE_GAP times apart (R8V-001);
+    - a foreign company's page stored before depositary shares were checked (the screens leave its value out too, so
+      the page and the lists by size agree: R8V-004)."""
     if not f:
         return None
     cap = _num(f.get("market_cap"))
@@ -378,6 +392,16 @@ def cap_problem(f: dict | None) -> str | None:
         return "depositary share ratio unknown"
     if cap > CAP_CEILING.get(region, float("inf")):
         return "above any company's value"
+    if region == "US" and foreign_filer(f):
+        if _num(f.get("v")) is not None and f["v"] < ADR_CHECKED and not str(f.get("unit") or "$").startswith("$"):
+            return "not checked for depositary shares"
+        pe, profit = _num(f.get("pe")), _num(f.get("profit_usd"))
+        if pe is not None and 0 < pe < PE_MIN_FOREIGN:
+            return "out of line with profit"
+        if profit is not None and profit > 0:
+            by_profit = cap / profit
+            if by_profit < PE_MIN_FOREIGN or pe is not None and pe > 0 and not 1 / PE_GAP <= pe / by_profit <= PE_GAP:
+                return "out of line with profit"
     if region == "US":
         sales = _num(f.get("sales_usd"))
         if sales is None:
@@ -392,6 +416,15 @@ def cap_problem(f: dict | None) -> str | None:
     return None
 
 
+def foreign_filer(f: dict | None) -> bool:
+    """Whether a US page is a foreign company's: one filing a 20-F or with depositary shares (said when the page was
+    built), or, on a page stored before that was said, one reporting in another currency."""
+    f = f or {}
+    if f.get("foreign") is not None:
+        return bool(f["foreign"])
+    return not str(f.get("unit") or "$").startswith("$")
+
+
 def shown_cap(f: dict | None):
     """The market value to show and rank on: None when there is none or it fails a check."""
     if not f or cap_problem(f):
@@ -400,11 +433,38 @@ def shown_cap(f: dict | None):
     return v if v is not None and v > 0 else None
 
 
+def _month_end(label: str) -> str | None:
+    """"Mar 2025" → "2025-03-31": a table column's year end."""
+    try:
+        d = datetime.strptime(str(label).strip(), "%b %Y").date()
+    except ValueError:
+        return None
+    nxt = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
+    return (nxt - timedelta(days=1)).isoformat()
+
+
+def pe_period(f: dict | None) -> tuple[str | None, str | None]:
+    """(basis, end) of the earnings a page's P/E is on: "ttm" or "year", and the day they run to. As the page was built
+    told it; a US page stored before that was kept (R8V-003: Toyota's, ASML's and Itaú's showed a bare "P/E" on a year
+    up to 18 months old) has no trailing-twelve-months profit when its P/E was on the latest year in its table, so that
+    year it is."""
+    f = f or {}
+    if f.get("pe_basis"):
+        return f["pe_basis"], (str(f.get("pe_end") or "")[:10] or None)
+    if (f.get("region") == "US" and (f.get("v") or 1) < PE_BASIS_KEPT and _num(f.get("pe")) is not None
+            and f.get("profit_ttm") is None):
+        years = [y for y in f.get("years") or [] if isinstance(y, dict) and y.get("year")]
+        end = _month_end(years[-1]["year"]) if years else None
+        if end:
+            return "year", end
+    return None, None
+
+
 def pe_stale(f: dict | None) -> bool:
     """Whether the P/E's earnings ended more than about 15 months before the price (PE_STALE_DAYS): a foreign company
     whose latest annual report couldn't be read (R7V-003: TSMC's P/E of 65.5 was on its 2024 profit)."""
     f = f or {}
-    end, at = str(f.get("pe_end") or "")[:10], str(f.get("price_at") or "")[:10]
+    end, at = str(pe_period(f)[1] or "")[:10], str(f.get("price_at") or "")[:10]
     try:
         return bool(end and at) and (date.fromisoformat(at) - date.fromisoformat(end)).days > PE_STALE_DAYS
     except ValueError:
@@ -412,11 +472,11 @@ def pe_stale(f: dict | None) -> bool:
 
 
 def pe_label(f: dict | None) -> str:
-    """"P/E", or "P/E (year to Dec 2025)" when its earnings are a reported year's, not the last four quarters'."""
-    f = f or {}
-    if f.get("pe_basis") == "year" and f.get("pe_end"):
+    """"P/E", or "P/E (year to Dec 2025)" whenever its earnings are a reported year's, not the last four quarters'."""
+    basis, end = pe_period(f)
+    if basis == "year" and end:
         try:
-            return f"P/E (year to {date.fromisoformat(str(f['pe_end'])[:10]):%b %Y})"
+            return f"P/E (year to {date.fromisoformat(end):%b %Y})"
         except ValueError:
             pass
     return "P/E"
@@ -476,8 +536,13 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         # no daily candles: the fundamentals source's price, a last trade, dated by the session it is from and never
         # called a close (R7V-004: HAL "Last price ₹4,647.00" with no date, the page "as of" the day it was built)
         prices.update(price=snap["price"], price_at=session_day(region).isoformat(), price_basis="last")
+    # the EBITDA margin of the latest year in the table, as the net margin is: one period for the headline and the table
+    # (R8V-010: Kinetic Seas' "EBITDA margin 43.7%" was its last twelve months', above a table whose latest year says
+    # −1,634.4%)
+    opm = years[-1].get("opm") if years else snap.get("opm")
     return {
-        "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps")
+        "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
+                                                      "foreign", "profit_usd", "annual_unread")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": public_text(p.get("name") or symbol), "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
@@ -487,7 +552,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "profit_ttm": _ttm_profit(p),
-        "net_margin": snap.get("net_margin"), "opm": snap.get("opm"), "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
+        "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": bool(nums.get("bank")), "years": years, "currency_note": p.get("currency_note"),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
@@ -510,6 +575,8 @@ def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
         return False
     if (stored["facts"].get("v") or 1) < FACTS_VERSION:
         return False                     # a page built before the facts a page shows now: rebuilt when next opened
+    if stored["facts"].get("annual_unread") and now - ts >= UNREAD_FRESH:
+        return False                     # built without its latest annual report, which couldn't be read then (R8V-003)
     settled = last_close(region, datetime.fromtimestamp(now, timezone.utc))[1].timestamp() + settle(region)
     # its own build, or the price job's re-read of its price, came after the market's latest settled close
     return ts >= settled or (stored.get("price_ts") or 0) >= settled
@@ -760,6 +827,7 @@ def _sized(region: str) -> list[dict]:
 
 
 LARGE_CAP = {"US": 10_000.0, "IN": 20_000.0}       # $ million, ₹ crore: a large company, whose peers should be of its size
+PEER_MIN_SHARE = 0.01                               # a large company's industry peers outside its index group: 1% of its value or more
 PEER_STALE_DAYS = 7                                 # a peer whose last price is older than this (before the newest) is left out
 
 
@@ -810,10 +878,21 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
     rows = _fresh_rows([r for r in sized if r.get("symbol") != symbol])
     name = lambda r: str(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"])        # noqa: E731
     out: list[dict] = []
-    same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()][:PEERS]
+    same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()]
+    large = bool(cap and cap >= LARGE_CAP.get(region, float("inf")))
+    if large:
+        # a large company's industry is its own size's business, not every filer under the same code (R8V-012: Apple's
+        # "Same industry" listed Omnicell, Zepp and Socket Mobile; Visa's, under "business services", Uber, Accenture
+        # and DoorDash): an S&P 500 company keeps the S&P 500 members of its own sector, and companies outside the
+        # S&P 500 of at least PEER_MIN_SHARE of its value; an Indian company keeps those of that size
+        sp = _sp500_sectors() if region == "US" else {}
+        mine = sp.get(symbol)
+        same_ind = [r for r in same_ind if (sp.get(r["symbol"]) == mine if mine and r["symbol"] in sp
+                                            else (_num(r.get("market_cap")) or 0) >= cap * PEER_MIN_SHARE)]
+    same_ind = same_ind[:PEERS]
     big = [r for r in same_ind if cap and (_num(r.get("market_cap")) or 0) >= cap / 10]
     coarse: list[dict] = []
-    if cap and cap >= LARGE_CAP.get(region, float("inf")) and len(big) < 3:
+    if large and len(big) < 3:
         if region == "US" and symbol in _sp500_sectors():
             where = _sp500_sectors()[symbol]
             coarse = [r for r in rows if _sp500_sectors().get(r["symbol"]) == where][:PEERS]
@@ -1258,9 +1337,9 @@ def _notes(f: dict) -> list[str]:
                    "depositary share's price), so it isn't shown, nor is P/E, and the company is left out of lists "
                    "ranked by size.</p>")
     if pe_stale(f) and _num(f.get("pe")) is not None:
-        out.append(f'<p class="note" data-pe-old>P/E isn\'t shown: the latest reported earnings are for the year to '
-                   f'{e(_date(f.get("pe_end")))}, more than 15 months before this price, and a newer annual report '
-                   "couldn't be read.</p>")
+        out.append(f'<p class="note" data-pe-old>P/E isn\'t shown: the latest reported earnings on this page are for the '
+                   f'year to {e(_date(pe_period(f)[1]))}, more than 15 months before this price, and a newer annual '
+                   "report's figures aren't on the page yet.</p>")
     if behind(f):
         out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
                    "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
@@ -1294,7 +1373,7 @@ def _how(f: dict) -> str:
         "reported figures (for example a depositary share counted as an ordinary share).",
         PE_NOTE,
         "EBITDA margin: operating profit before depreciation, interest and tax (and before other income), as a share of "
-        "revenue." + (" The results give it in whole percent." if india else ""),
+        "revenue in the latest reported year, the table's last column." + (" The results give it in whole percent." if india else ""),
         "Net margin: net profit as a share of revenue in the latest reported period.",
         YIELD_NOTE,
     ]
@@ -1348,11 +1427,12 @@ def _table(f: dict) -> str:
 
 def surveillance_html(flags: list[dict]) -> str:
     """The stock's exchange surveillance flags as small badges, each opening to what the exchange's measure is and
-    the date of the list. Inline styles, so pages stored before this existed show it the same way."""
+    the date of the list. The badge's colours are the page's theme tokens, so it reads in dark mode too (R8V-009: a
+    fixed dark amber on the dark card was 2.37:1)."""
     if not flags:
         return ""
-    badge = ("display:inline-block;border:1px solid #b45309;color:#92400e;border-radius:999px;padding:2px 10px;"
-             "font-size:13px;font-weight:600;margin:0 6px 6px 0")
+    badge = ("display:inline-block;border:1px solid var(--orange-ink);color:var(--orange-ink);background:var(--orange-soft);"
+             "border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;margin:0 6px 6px 0")
     items = "".join(
         f'<details style="margin:6px 0"><summary style="cursor:pointer;min-height:32px;line-height:32px">'
         f'<span style="{badge}">{e(f["short"])}</span> {e(f["label"])}</summary>'
@@ -1527,15 +1607,15 @@ def listing(region: str) -> tuple[set, set, set, bool]:
 
 
 def listable(region: str, symbol: str, known: tuple | None = None) -> bool:
-    """Whether a company's page belongs in the sitemap: not one marked as having nothing to show (noindex), nor, by the
-    screens' last gathering of the stored pages, a page stored with nothing to show; a page not built yet is listed
-    unless it is a foreign company's over-the-counter line, which rarely files results here (R7V-007: about one listed
-    page in ten was noindex)."""
+    """Whether a company's page belongs in the sitemap: by the screens' last gathering of the stored pages, a page
+    stored with something to show, and not marked since as having nothing to show (noindex) or as a fund. A page not
+    built yet isn't listed until the screens' indexer has built it (it builds the missing ones first): unbuilt, its
+    first visit could be a 503 "being prepared" or a fund's 404 (R8V-007: MDXR, a fund, listed; TEAM and STRS 503s
+    on a crawler's first hit). Before the first gathering, every page not marked (R7V-007: about one listed page in
+    ten was noindex)."""
     thin, pages, shown, gathered = known or listing(region)
     if symbol in thin:
         return False
     if not gathered:                     # before the first gathering: every page not marked
         return True
-    if symbol in pages:
-        return symbol in shown
-    return not (region == "US" and FOREIGN_OTC.match(symbol))
+    return symbol in shown

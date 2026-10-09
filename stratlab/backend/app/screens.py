@@ -240,7 +240,7 @@ def build_index(region: str, store: bool = True) -> dict:
     """Every stored company page in a market, gathered into the screens' index (and saved)."""
     started = time.time()
     prefix = f"stocks:page:{region}:"
-    rows, ages, empty = [], {}, set()
+    rows, ages, empty, old = [], {}, set(), {}
     bought = deals.buys()["buys"] if region == "IN" else {}
     shown = []
     for key, raw in db.all_settings_with_prefix(prefix):
@@ -253,6 +253,10 @@ def build_index(region: str, store: bool = True) -> dict:
         # list: R8O-001)
         if not facts or (facts.get("v") or 1) < stock_pages.FACTS_VERSION:
             empty.add(sym)
+            if stock_pages.has_content(facts):
+                # every other company's page from before: rebuilt next, the largest first (R8V-003: Toyota's, Infosys's
+                # and Itaú's pages were a year behind hours after the fix went live, rebuilt only when the ration allowed)
+                old[sym] = _num(facts.get("market_cap")) or 0.0
         if stock_pages.has_content(facts):
             shown.append(sym)
         r = row(region, sym, stored.get("facts") or {})
@@ -278,7 +282,7 @@ def build_index(region: str, store: bool = True) -> dict:
             db.set_setting(stock_pages.BUILT_KEY + region, json.dumps({"at": index["at"], "pages": sorted(ages), "shown": sorted(shown)}))
         except Exception as e:
             print("screens: could not save the built pages list", region, str(e)[:120])
-    index["_ages"], index["_empty"] = ages, empty
+    index["_ages"], index["_empty"], index["_old"] = ages, empty, old
     return index
 
 
@@ -788,27 +792,34 @@ class Indexer:
     page into each market's index. `warm(region, symbol, company)` builds one page; it may raise when a source is
     busy, which only means trying again next time."""
 
-    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 12, gap: float = 10.0):
+    def __init__(self, warm=None, every: float = 1800, warm_per_run: int = 20, gap: float = 12.0):
         self.warm, self.every, self.warm_per_run, self.gap = warm, every, warm_per_run, gap
         self.status = {"last_run": None, "rows": {}, "warmed": 0, "last_error": None}
 
-    def _due(self, region: str, ages: dict, empty: set | None = None) -> list[tuple[str, dict]]:
-        """Companies to build next: those with no stored page (the sector lists' first, then the S&P 500), then the sector
+    def _due(self, region: str, ages: dict, empty: set | None = None, old: dict | None = None) -> list[tuple[str, dict]]:
+        """Companies to build next: those with no stored page in the sector lists and the S&P 500, then the sector
         lists' and the S&P 500's own companies whose stored page had nothing (a source down when it was built: a large
         company missing from every list by size until someone opened it, R7V-001) or was built before the facts a page
-        shows now (`empty`), then the stalest."""
+        shows now (`empty`), then every other page built before the facts a page shows now (`old`: {symbol: its stored
+        market value}), the largest first (R8V-003), then the other companies with no stored page (a foreign company's
+        over-the-counter line last: it rarely files results here), then the stalest."""
         cos = stock_pages.companies(region)
         seeds = stock_pages._seeds(region)
         now = time.time()
         # the S&P 500 right after the sector lists: a large company without a stored page is missing from every list by
         # size and every peer list (R7V-009: HP Inc. absent from Apple's industry)
         big = set(stock_pages._sp500_sectors()) if region == "US" else set()
-        missing = sorted((s for s in cos if s not in ages), key=lambda s: (s not in seeds, s not in big, s))
+        missing = sorted((s for s in cos if s not in ages), key=lambda s: (s not in seeds, s not in big,
+                                                                             bool(region == "US" and stock_pages.FOREIGN_OTC.match(s)), s))
+        known = [s for s in missing if s in seeds or s in big]
         hollow = sorted((s for s in empty or () if (s in seeds or s in big) and s in cos and now - ages.get(s, 0) > stock_pages.EMPTY_FOR),
                         key=lambda s: (s not in seeds, ages.get(s, 0)))
         first = set(hollow)
+        behind = sorted((s for s in old or {} if s in cos and s not in first), key=lambda s: (-(old[s] or 0), s))
+        first |= set(behind)
+        rest = [s for s in missing if s not in seeds and s not in big]
         stale = sorted((s for s, t in ages.items() if s in cos and s not in first and now - t > stock_pages.FRESH), key=lambda s: ages[s])
-        return [(s, cos[s]) for s in (missing + hollow + stale)[:self.warm_per_run]]
+        return [(s, cos[s]) for s in (known + hollow + behind + rest + stale)[:self.warm_per_run]]
 
     def run_once(self, sleep=time.sleep) -> dict:
         warmed = 0
@@ -816,7 +827,7 @@ class Indexer:
             try:
                 index = build_index(region, store=False)
                 if self.warm:
-                    for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"))):
+                    for i, (sym, co) in enumerate(self._due(region, index["_ages"], index.get("_empty"), index.get("_old"))):
                         if i:
                             sleep(self.gap)              # leave room in the ration for people opening pages
                         try:

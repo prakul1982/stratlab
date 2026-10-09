@@ -120,6 +120,8 @@ DEBT_ANY += IFRS_DEBT_LINES
 SHARES = ("CommonStockSharesOutstanding", "WeightedAverageNumberOfDilutedSharesOutstanding",
           "WeightedAverageNumberOfSharesOutstandingBasic", "NumberOfSharesOutstanding", "AdjustedWeightedAverageShares",
           "WeightedAverageShares")
+# ...the shares outstanding on a balance-sheet day, every class together (no weighted averages)
+SHARES_HELD = ("CommonStockSharesOutstanding", "NumberOfSharesOutstanding")
 
 ANNUAL = ("10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A")
 
@@ -714,7 +716,17 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
     for f in ((facts.get("dei") or {}).get("EntityCommonStockSharesOutstanding") or {}).get("units", {}).get("shares", []):
         if f.get("val") and f["end"] >= fresh and (shares is None or f["end"] >= shares[0]):
             shares = (f["end"], float(f["val"]))
+    # a cover-page count from before the latest year's end, while the balance sheet gives every share outstanding at
+    # that end: the balance sheet's (R8V-002: Itaú's cover count stopped at one class, 4,958,290,359 ordinary shares,
+    # in its 2023 report; its later reports give each class on the cover, which the company facts leave out, and
+    # 9,776,104,515 shares of both classes on the balance sheet at the end of 2024)
     from_cover = shares is not None
+    if shares and shares[0] < (date.fromisoformat(ends[-1]) - timedelta(days=31)).isoformat():
+        held = [f for c in SHARES_HELD for f in _facts(facts, c, "shares")
+                if f.get("val") and float(f["val"]) > 0 and not f.get("start") and f.get("end", "") >= ends[-1]]
+        if held:
+            f = max(held, key=lambda f: (f["end"], f.get("filed") or ""))
+            shares, from_cover = (f["end"], float(f["val"])), False
     # the latest year's average number of shares outstanding (treasury shares never count in it), to tell whether a
     # cover page's count left treasury shares out (see net_of_treasury)
     avg = None
@@ -1020,12 +1032,17 @@ class SEC(Source):
 
     def with_latest_annual(self, cik: int, subs: dict, facts_json: dict) -> dict:
         """The company facts with the latest annual report's own figures added when the SEC's facts don't have them
-        yet (R7V-003: TSMC's and Ecopetrol's 20-F of April 2026, filed under the 2025 IFRS taxonomy, aren't in them)."""
+        yet (R7V-003: TSMC's and Ecopetrol's 20-F of April 2026, filed under the 2025 IFRS taxonomy, aren't in them;
+        R8V-003: Toyota's and Infosys's of June 2026, March years, and BHP's of August 2026, a June year). A report
+        that couldn't be read just now (the rate limit, the SEC busy) is marked "annual_unread" with its filing, so the
+        company is built again soon rather than kept a year behind for the day."""
         filing = latest_filing(subs, ANNUAL_FORMS)
         if not filing or has_filing(facts_json, filing["accn"]):
             return facts_json
         got = self.filing_data(cik, filing)
-        if not got or not got.get("facts"):
+        if got is None:
+            return {**facts_json, "annual_unread": filing}
+        if not got.get("facts"):
             return facts_json
         return merge_facts({"facts": got["facts"]}, facts_json)
 
@@ -1070,6 +1087,8 @@ class SEC(Source):
                 raise SourceError(self.name, no_results(subs, None, symbol))
             facts = self.with_latest_annual(cik, subs, facts)
             p = build(facts, subs, symbol=symbol.upper())
+            if facts.get("annual_unread"):
+                p["annual_unread"] = str(facts["annual_unread"].get("filed") or "")[:10] or True
         except SourceError as e:
             if not e.busy:
                 with self._build_lock:
@@ -1090,9 +1109,17 @@ class SEC(Source):
             # shares outstanding (R8O-005 builder note: Eni's 3,146,765,114 held 189,083,769 in treasury)
             p = net_of_treasury(p, dep["treasury"])
         if dep and dep.get("ads"):
-            p = with_ads(p, dep.get("ratio"))
+            known = ADS_RATIO_KNOWN.get(int(cik))
+            p = with_ads(p, known or dep.get("ratio"))
+            if known and dep.get("ratio") and abs(known - dep["ratio"]) > 1e-9:
+                p["share_note"] = p["share_note"].replace(
+                    "as its annual report states", f"as the depositary has set it (the annual report's cover page "
+                    f"still gives the earlier figure, {dep['ratio']:,g})")
         elif dep and dep.get("unread"):
             p["ads_unread"] = True          # whether its US shares are depositary shares isn't known this time
+        # a foreign company (a 20-F or 40-F filer, or depositary shares): its market value is checked against its own
+        # profit before it is shown (stock_pages.cap_problem, R8V-001)
+        p["foreign"] = bool(dep and (dep.get("form") in ("20-F", "40-F") or dep.get("ads"))) or (p.get("currency") or "USD") != "USD"
         # several classes of common stock (Berkshire, Visa, Alphabet): every class counted in the listed share's terms,
         # from the latest report's cover page, so the market value counts the whole company (R7V-001)
         common = [t for t in subs.get("tickers") or [] if not non_common(t)]
@@ -1103,11 +1130,22 @@ class SEC(Source):
         with self._build_lock:
             if len(self._built) > 300:
                 self._built.pop(next(iter(self._built)))
-            self._built[str(cik)] = (time.time(), p)
+            # a build without the latest annual report (it couldn't be read just now) is kept a quarter of an hour, not
+            # six, so the next look reads the report
+            at = time.time() - (6 * 3600 - UNREAD_RETRY if p.get("annual_unread") else 0)
+            self._built[str(cik)] = (at, p)
         return for_symbol(p, symbol)
 
 
 ANNUAL_FORMS = ("10-K", "20-F", "40-F")
+UNREAD_RETRY = 15 * 60         # seconds a company built without its latest annual report (unreadable just then) is kept
+
+# depositary-share ratios an annual report states wrongly, by the company's SEC number: ordinary shares per ADS.
+# Mizuho (MFG): its 20-F cover page still says "American depositary shares, each of which represents two shares of
+# common stock", the ratio from before its 1-for-10 share consolidation of 1 October 2020; since then one ADS has
+# stood for 0.2 of a share (five ADSs to a share). Read as two, its market value was a tenth of its real one, $13.3B
+# for about $130B, and its P/E 1.8 (R8V-001). The plausibility check in stock_pages.cap_problem catches any other case.
+ADS_RATIO_KNOWN = {1335730: 0.2}
 
 
 def latest_filing(subs: dict, forms: tuple) -> dict | None:
@@ -1272,6 +1310,21 @@ def pe_and_basis(p: dict, price: float | None, mcap: float | None = None) -> tup
         if profit is not None:
             return by_cap(profit), {"basis": basis, "end": end}
     return None, None
+
+
+def basis_profit(p: dict, basis: str | None) -> float | None:
+    """The net profit a P/E's basis covers ("ttm": the last four quarters', "year": the latest year's), in US dollars
+    million at today's rate; None without it or the rate."""
+    pl = p.get("pl") or {}
+    fx = usd_rate(p)
+    has_ttm = bool(pl.get("cols")) and str(pl["cols"][-1]).upper() == "TTM"
+    if basis == "ttm":
+        v = _latest(pl, "Net Profit", last_only=True) if has_ttm else None
+    elif basis == "year":
+        v = _year_value(pl, "Net Profit") if has_ttm else _latest(pl, "Net Profit", skip_ttm=True, last_only=True)
+    else:
+        return None
+    return round(v * fx, 2) if v is not None and fx else None
 
 
 def _year_value(table: dict, label: str):
