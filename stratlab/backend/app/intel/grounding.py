@@ -381,16 +381,73 @@ def sector_claims_ok(s: str, sectors: dict | None) -> bool:
     return (of is None or of == total) and n == same
 
 
-def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors: dict | None = None) -> dict:
+# R10O-004: the mood said "today's upward move suggests a reversal or stabilization of flows" and "strong domestic
+# institutional interest", worked out from price moves, on the day StratLab's own Positioning page had the FIIs net
+# selling ₹3,569 crore. A sentence about who is buying or selling is kept only when the day's FII and DII figures bear
+# its direction out, and one that infers flows from the market's moves is dropped.
+_FII = r"fiis?|fpis?|foreign\b[^.,;]{0,30}?\b(?:investors?|funds?|institutions?|flows?|money|selling|buying|outflows?|inflows?|exodus)"
+_DII = r"diis?|domestic\b[^.,;]{0,30}?\b(?:investors?|institutions?|funds?|flows?|money|buying|selling|inflows?|outflows?)|mutual funds?"
+_FLOWY = re.compile(rf"\b(?:{_FII}|{_DII}|institutional|flows?|inflows?|outflows?|exodus)\b", re.I)
+_FII_RX, _DII_RX = re.compile(rf"\b(?:{_FII})\b", re.I), re.compile(rf"\b(?:{_DII})\b", re.I)
+_SELL = re.compile(r"\b(sell\w*|sold|outflows?|exodus|withdr\w+|pull\w* out|pulled|exit\w*|dump\w*|offload\w*|net sellers?)\b", re.I)
+_BUY = re.compile(r"\b(buy\w*|bought|inflows?|net buyers?|purchas\w+|pour\w*|accumulat\w*)\b", re.I)
+_INFER = re.compile(r"\b(revers\w*|stabili[sz]\w*|indicat\w*|suggest\w*|signal\w*|reflect\w*|impl\w*|point(?:s|ing)? to|hint\w*|"
+                    r"reveal\w*|interest|appetite|confidence|sentiment)\b", re.I)
+_CLAUSE = re.compile(r"[;,]|\b(?:while|whereas|but|and|as)\b", re.I)
+
+
+def flow_claim_ok(s: str, cash: dict | None) -> bool:
+    """A sentence about institutional flows ("FIIs sold", "domestic funds bought", "outflows") agrees with the day's
+    FII and DII figures `cash` ({"fii": {"net"}, "dii": {"net"}}): the direction is the one the net figure has, for the
+    holder it names. A sentence that infers flows or their interest from price moves is dropped; without the day's
+    figures a direction can't be checked, so only what a headline reports stays."""
+    if not _FLOWY.search(s or ""):
+        return True
+    if _INFER.search(s):
+        return False
+    if not cash:
+        return True
+    for clause in _CLAUSE.split(s):
+        sell, buy = bool(_SELL.search(clause)), bool(_BUY.search(clause))
+        if not (sell or buy):
+            continue
+        fii, dii = bool(_FII_RX.search(clause)), bool(_DII_RX.search(clause))
+        if fii == dii or (sell and buy):               # no holder named, both named, or both directions: can't be checked
+            return False
+        net = ((cash.get("fii") if fii else cash.get("dii")) or {}).get("net")
+        if not isinstance(net, (int, float)) or (sell and net >= 0) or (buy and net <= 0):
+            return False
+    return True
+
+
+def flow_facts(cash: dict | None) -> dict | None:
+    """The day's FII and DII figures in ₹ crore as the model reads them, from positioning.cash_today(); None when the
+    day's numbers aren't in."""
+    if not cash or cash.get("status") != "ok" or not (cash.get("fii") and cash.get("dii")):
+        return None
+    out = {"as_of": cash.get("as_of")}
+    for who in ("fii", "dii"):
+        row = cash[who]
+        out.update({f"{who}_{k}_crore": row.get(k) for k in ("buy", "sell", "net") if row.get(k) is not None})
+    return out
+
+
+def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors: dict | None = None, cash: dict | None = None) -> dict:
     """The market read with only what the index numbers and the headlines support: a sentence with a number not in
     them, a 52-week claim the levels contradict, a move the wrong way, a central bank, flow or sector no headline
-    names, or any advice or outlook is dropped; a company is listed only when a headline names it (R5O-018)."""
+    names, or any advice or outlook is dropped; a company is listed only when a headline names it (R5O-018). `cash` is
+    the day's FII and DII figures (flow_facts): a sentence on who bought or sold agrees with them (R10O-004)."""
     facts = market_facts(indices)
     support = " ".join(str(h.get("headline") or "") for h in headlines).lower()
-    pool = fact_numbers({"i": facts, "h": [h.get("headline") for h in headlines]})
+    flows = flow_facts(cash) if cash and "status" in cash else cash
+    pool = fact_numbers({"i": facts, "h": [h.get("headline") for h in headlines], "c": flows})
+    nets = {w: {"net": flows.get(f"{w}_net_crore")} for w in ("fii", "dii")} if flows else None
+    if flows:                       # the day's figures name the institutions: FIIs, DIIs and their flows are backed
+        support += " fii dii foreign investors foreign funds inflow outflow"
 
     def claim(s):
-        return range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
+        return (range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
+                and flow_claim_ok(s, nets))
     res = dict(out)
     res["tone"] = keep_sentences(out.get("tone"), pool, claim) or template_tone(indices)
     named = lambda x: bool(x) and str(x).lower() in support          # noqa: E731
@@ -398,7 +455,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
                   if named(h.get("name")) or named(h.get("ticker"))]
     res["hot"] = [h for h in res["hot"] if h["why"]]
     res["flows"] = [{**f, "detail": keep_sentences(f.get("detail"), pool, claim)} for f in out.get("flows") or []]
-    res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support)]
+    res["flows"] = [f for f in res["flows"] if f["detail"] and _topics_backed(f.get("title") or "", support) and flow_claim_ok(f.get("title") or "", nets)]
     res["themes"] = [{**t, "detail": keep_sentences(t.get("detail"), pool, claim)} for t in out.get("themes") or []]
     res["themes"] = [t for t in res["themes"] if t["detail"] and (not t.get("example") or named(t.get("example")))]
     res["checked"] = True
@@ -482,6 +539,9 @@ def ground_company(read: dict, facts: dict, region: str, today) -> dict:
     for i in read.get("ideas") or []:
         text = rule_words(str(i.get("text") or ""), sym)
         if not text:
+            continue
+        # a rule made of a typed-in price, or titled for an indicator it doesn't use, tests nothing (R10O-005)
+        if hardcodes_price(text, facts.get("price")) or not idea_uses_what_it_names(i.get("title"), text):
             continue
         ideas.append({**i, "text": text, "why": keep_sentences(str(i.get("why") or ""), pool, page.check)})
     res["ideas"] = ideas
@@ -1119,6 +1179,67 @@ def idea_matches_name(title, text) -> bool:
     return named is None or got is None or named == got
 
 
+# R10O-005: a rule that compares the price with a number typed into it ("Enter long when price rises above 8255") tests
+# one day's price, which stops being current tomorrow; a rule to test is made of indicators and percentages.
+_LEVEL = re.compile(
+    r"\b(price|prices|close|closes|closing|trades?|rises?|climbs?|breaks?|crosses|stays?|remains?|drops?|falls?|dips?|recovers?|"
+    r"rebounds?|reaches?|hits?|moves?|goes|gets?)\b[^.;]{0,40}?\b(above|below|over|under|to|at|through|beyond|past|near|reclaims?)\s+"
+    r"(?:the\s+)?(?:level\s+(?:of\s+)?|price\s+(?:of\s+)?)?(₹|rs\.?\s*|inr\s*|\$|usd\s*)?(\d[\d,]*(?:\.\d+)?)(?!\d)"
+    r"(?!\s*(?:%|-)|\s*(?:day|week|month|period|minute|min|hour|x\b|times|percent|per\s?cent|shares|sessions|candles?|bars?))", re.I)
+_NOT_PRICE = re.compile(r"\b(volume|rsi|atr|macd|adx|average|avg|sma|ema|ratio|yield|p/e|margin|growth|vix|stochastic|cci|momentum)\b", re.I)
+
+
+def hardcodes_price(text, price=None) -> bool:
+    """Whether a trading idea's rule compares the price with a level typed into it. With the current `price`, a level
+    within 40% of it; without, any level of 100 or more (or one marked with a currency)."""
+    cur = None
+    try:
+        cur = float(price) if price is not None else None
+    except (TypeError, ValueError):
+        cur = None
+    for clause in re.split(r"(?<=[;.])\s+|,\s+(?=exit\b|sell\b|stop\b)", " ".join(str(text or "").split()), flags=re.I):
+        for m in _LEVEL.finditer(clause):
+            if _NOT_PRICE.search(clause[:m.start(4)]) and not re.search(r"\bprice\b", clause[:m.start(4)], re.I):
+                continue
+            try:
+                level = float(m.group(4).replace(",", ""))
+            except ValueError:
+                continue
+            if cur and cur > 0:
+                if abs(level / cur - 1) <= 0.4:
+                    return True
+            elif level >= 100 or (m.group(3) and level >= 10):
+                return True
+    return False
+
+
+_NAMED_INDICATORS = [
+    (re.compile(r"\bsma\b|simple moving average", re.I), re.compile(r"\bsma\b|simple moving average|moving average|\d+[- ]day average", re.I)),
+    (re.compile(r"\bema\b|exponential", re.I), re.compile(r"\bema\b|exponential", re.I)),
+    (re.compile(r"\bmoving average\b", re.I), re.compile(r"\bsma\b|\bema\b|moving average|\d+[- ]day average", re.I)),
+    (re.compile(r"\brsi\b|relative strength", re.I), re.compile(r"\brsi\b|relative strength", re.I)),
+    (re.compile(r"\bmacd\b", re.I), re.compile(r"\bmacd\b", re.I)),
+    (re.compile(r"\bbollinger\b", re.I), re.compile(r"\bbollinger\b|\bbands?\b", re.I)),
+    (re.compile(r"\batr\b", re.I), re.compile(r"\batr\b|average true range", re.I)),
+    (re.compile(r"\bsupertrend\b", re.I), re.compile(r"\bsupertrend\b", re.I)),
+]
+_N_DAY_EXTREME = re.compile(r"\b(\d+)[- ](day|week|month)s?\s+(high|low)\b", re.I)
+
+
+def idea_uses_what_it_names(title, text) -> bool:
+    """A trading idea that names an indicator in its title ("Trend following with 20-day SMA", "Mean reversion to 5-day
+    low") uses it in its rule (R10O-005: POLYCAB's "SMA" idea entered on a typed-in price)."""
+    title, text = str(title or ""), str(text or "")
+    for named, used in _NAMED_INDICATORS:
+        if named.search(title) and not used.search(text):
+            return False
+    for m in _N_DAY_EXTREME.finditer(title):
+        want = re.compile(rf"\b{m.group(1)}[- ]{m.group(2)}s?\s+{m.group(3)}\b", re.I)
+        if not want.search(text):
+            return False
+    return True
+
+
 _WEEKDAY = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -1207,6 +1328,8 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
     for i in read.get("ideas") or []:
         if not isinstance(i, dict) or not idea_matches_name(i.get("title"), i.get("text")):
             continue
+        if hardcodes_price(i.get("text")) or not idea_uses_what_it_names(i.get("title"), i.get("text")):
+            continue                  # R10O-005: a typed-in price level, or an indicator in the name that the rule doesn't use
         why = plain_caption(str(i.get("why") or ""), lender, region)
         if classes and mentions_class_move(why, classes):
             why = ""

@@ -372,6 +372,30 @@ def with_official_close(f: dict, close) -> dict:
     return out
 
 
+RANGE_SLACK = 1.25      # as official_close.RANGE_SLACK: a report figure this far beyond the page's is another basis (unadjusted)
+
+
+def with_week52_report(f: dict | None, report: dict | None, symbol: str | None = None) -> dict | None:
+    """A page's facts with the exchange's own 52-week high and low taken in (never narrowing the range): a page stored
+    before that report widened the candles kept the candles' range (R10O-007: the public INFY page read ₹1,691.40 after the
+    app, on the corrected candles, read ₹1,728.00). Served that way, with no rebuild, so every stored page agrees with the
+    app from the first request. `report` is official_close.ranges(): {"rows": {symbol: [high, day, low, day]}}."""
+    if not f or f.get("region") != "IN":
+        return f
+    from .official_close import base_symbol
+    row = ((report or {}).get("rows") or {}).get(base_symbol(symbol or f.get("symbol") or ""))
+    if not row:
+        return f
+    hi, lo = _num(row[0]), _num(row[2])
+    cur_hi, cur_lo = _num(f.get("high52")), _num(f.get("low52"))
+    out = dict(f)
+    if hi is not None and cur_hi is not None and cur_hi < hi <= cur_hi * RANGE_SLACK:
+        out["high52"] = hi
+    if lo is not None and cur_lo is not None and cur_lo / RANGE_SLACK <= lo < cur_lo:
+        out["low52"] = lo
+    return out if (out.get("high52"), out.get("low52")) != (f.get("high52"), f.get("low52")) else f
+
+
 def dividend_yield(dividends: list[dict], price, as_of: str | None) -> float | None:
     """Dividends with an ex-date in the year to `as_of`, per share, as a share of `price` (%). 0 when the year had none:
     the price history lists every dividend, so none is a fact, not a gap. None without a price."""
@@ -698,7 +722,19 @@ class Pages:
             return None
         return (stored or {}).get("facts") or None
 
+    adjust = None              # (region, symbol, facts) -> facts as served: the exchange's 52-week report taken in (R10O-007)
+
     def get(self, region: str, symbol: str, co: dict) -> dict | None:
+        """The company's facts as served: stored or built (see `_get`), with `adjust` applied."""
+        f = self._get(region, symbol, co)
+        if f and self.adjust:
+            try:
+                return self.adjust(region, symbol, f) or f
+            except Exception as ex:                  # the page as stored rather than none
+                print("stock pages: adjust failed:", region, symbol, str(ex)[:120])
+        return f
+
+    def _get(self, region: str, symbol: str, co: dict) -> dict | None:
         """The company's facts; None when the sources have nothing on it. Raises Busy when a fresh build is due,
         none is allowed right now and nothing is stored."""
         key = f"stocks:page:{region}:{symbol}"

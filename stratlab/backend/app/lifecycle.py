@@ -262,7 +262,7 @@ def receipt_blocks(inv: dict) -> list:
         rows += [[t["name"], kit.money(t["amount"], cur, 2)] for t in taxes if isinstance(t.get("amount"), (int, float))]
         rows.append([f"Total paid ({'including GST' if any(t.get('rate') for t in taxes) else 'no GST charged' if not taxes else 'GST at 0%'})",
                      kit.money(inv["total"], cur, 2)])
-        out.append(kit.table(["Item", "Amount"], rows, right=(1,), title="Tax invoice " + str(inv.get("number") or "")))
+        out.append(kit.table(["Item", "Amount"], rows, right=(1,), title=("Tax invoice " if s.get("gstin") else "Invoice ") + str(inv.get("number") or "")))
     parties = []
     if s.get("legal_name") or s.get("gstin"):
         parties.append(kit.Row("From", sub=s.get("legal_name") or "StratLab",

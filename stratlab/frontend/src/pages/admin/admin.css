@@ -21,6 +21,8 @@
 .adm-todo > div { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .adm-todo > div:last-child { border-bottom: 0; }
 .adm-todo-t { display: flex; align-items: baseline; gap: var(--s2); flex: 1 1 280px; min-width: 0; font-size: var(--t-label); }
+.adm-todo-t > span:last-child { min-width: 0; overflow-wrap: anywhere; }   /* a long link in a provider's error breaks instead of widening the page (R10O-001) */
+.adm-main :is(p, .k-small, .k-note) { overflow-wrap: break-word; }
 
 /* small helpers */
 .adm-cell { max-width: 380px; overflow-wrap: anywhere; font-size: var(--t-note); }

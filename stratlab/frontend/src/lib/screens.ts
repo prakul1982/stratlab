@@ -1,5 +1,6 @@
 /** Stock screens: companies filtered by plain facts, from StratLab's stored company numbers. */
 import { api } from "./api";
+import { fmtDate } from "./format";
 import type { Region } from "./research";
 import { track } from "./analytics";
 
@@ -38,6 +39,8 @@ export interface ScreenResult {
   indexed: number; as_of: string | null; index_at: string | null;
   /** the newest price day among the rows shown; `as_of` is the oldest, so the header never claims a newer close (R7O-004) */
   as_of_newest?: string | null;
+  /** rows whose close is more than three days older than the newest: named in a note, left out of `as_of` (R10O-012) */
+  stale?: { symbol: string; name?: string | null; price_at: string }[];
   /** after the close, the session whose closes aren't in the list yet (R8B-008) */
   pending?: { day: string; due: string | null } | null;
 }
@@ -64,4 +67,15 @@ export const screensApi = {
 export function conditionCount(f: Filters): number {
   return (f.sector.length ? 1 : 0) + (f.cap.length ? 1 : 0) + (f.stage.length ? 1 : 0) + (f.red_flags ? 1 : 0) + (f.insider_buy ? 1 : 0) + (f.surveillance ? 1 : 0)
     + Object.values(f.ranges).filter((b) => b && (b.min != null || b.max != null)).length;
+}
+
+/** The stocks among the rows whose close is more than three days older than the rest, named instead of dragging the list's date
+ * back (R10O-012: "Oldest close 2 Oct" above rows that all said 8 Oct). Null when there are none. */
+export function staleNote(stale: { symbol: string; price_at: string }[] | undefined | null): string | null {
+  const list = (stale ?? []).filter((s) => s.symbol && s.price_at);
+  if (!list.length) return null;
+  const day = (s: { price_at: string }) => fmtDate(s.price_at.slice(0, 10), { year: false });
+  if (list.length === 1) return `One stock's close is from ${day(list[0])}: ${list[0].symbol}.`;
+  const shown = list.slice(0, 5).map((s) => `${s.symbol} (${day(s)})`).join(", ");
+  return `${list.length} stocks' closes are more than three days older than the rest: ${shown}${list.length > 5 ? ` and ${list.length - 5} more` : ""}.`;
 }

@@ -604,23 +604,38 @@ class Research:
         return [h for h in self.news.search(q, region, limit=20) if plain_headline(h.get("headline"))][:14]
 
     # ---------- company profiles ----------
-    def company(self, region: str, symbol: str) -> dict:
-        symbol = symbol.strip().upper()
-        return self._company_in(symbol) if region == "IN" else self._company_us(symbol)
+    LAZY = ("news", "about")       # what a lean company page leaves for its second request (see company_more)
 
-    def _company_us(self, sym: str) -> dict:
+    def company(self, region: str, symbol: str, lean: bool = False) -> dict:
+        """One company's page figures. `lean`: without the news and the encyclopedia entry, which come from slow
+        sources of their own (a news search and an encyclopedia lookup took a company page 9 to 30 s, R10O-009): the
+        price, the header and the tables come at once, marked `lazy`, and `company_more` brings the rest."""
+        symbol = symbol.strip().upper()
+        out = self._company_in(symbol, lean) if region == "IN" else self._company_us(symbol, lean)
+        return {**out, "lazy": list(self.LAZY)} if lean else out
+
+    def company_more(self, region: str, symbol: str) -> dict:
+        """What `company(lean=True)` left out: {"news", "wiki", "peers", "sources"} (the peers are in both, as the page has them)."""
+        c = self.company(region, symbol)
+        return {"news": c.get("news") or [], "wiki": (c.get("about") or {}).get("wiki"), "peers": c.get("peers") or [],
+                "sources": c.get("sources") or []}
+
+    def _company_us(self, sym: str, lean: bool = False) -> dict:
         fh = self.finnhub
         p = fh.profile(sym)
         if not p.get("name"):
             raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
-        r, sources = self._run({
+        tasks = {
             "listing": ("Yahoo Finance", lambda: self.yahoo.meta(sym)),
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
             "fin": ("Finnhub", lambda: fh.financials(sym)), "ins": ("Finnhub", lambda: fh.insider(sym)),
             "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
-        })
+        }
+        if lean:
+            tasks = {k: v for k, v in tasks.items() if k not in ("news", "wiki")}
+        r, sources = self._run(tasks)
         q, M = r["q"] or {}, r["m"] or {}
         # the yearly results are in the currency the company reports in (Eni: euros), not the US listing's dollars
         trend = self._us_trend(r["fin"], (p.get("currency") or "USD").upper())
@@ -679,14 +694,14 @@ class Research:
             "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
             "insider": insider_view(ins),
             # US listings only (ENI.MI is in euros), the same-size names in its sector first
-            "peers": us_peers(sym, [x for x in (r["peers"] or []) if isinstance(x, str) and not FOREIGN_TICKER.search(x)]),
+            "peers": us_peers(sym, [x for x in (r.get("peers") or []) if isinstance(x, str) and not FOREIGN_TICKER.search(x)]),
             # the company's own news: a headline (or its summary) that names it, not the day's market stories the feed
             # files under every big ticker (R5O-020)
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                     for n in (r["news"] or []) if n.get("headline") and plain_headline(n["headline"])
+                     for n in (r.get("news") or []) if n.get("headline") and plain_headline(n["headline"])
                      and (mentions(p["name"], sym, n["headline"]) or mentions(p["name"], sym, str(n.get("summary") or "")[:400]))][:8],
-            "about": {"wiki": r["wiki"], "profile": None},
+            "about": {"wiki": r.get("wiki"), "profile": None},
             "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
             "testable": True, "instrument_id": f"US:{sym}",
         }
@@ -714,7 +729,7 @@ class Research:
         return {"unit": unit, "revenue": rev, "profit": ni, "revenue_label": "Revenue", "profit_label": "Net income"} \
             if len(rev) > 1 or len(ni) > 1 else None
 
-    def _company_in(self, sym: str) -> dict:
+    def _company_in(self, sym: str, lean: bool = False) -> dict:
         kite_ok = self._kite()
         inst = (self.kite.equity(sym) or self.kite.by_symbol(sym)) if kite_ok else None
         if kite_ok and not inst:
@@ -743,7 +758,7 @@ class Research:
         s = scr_summary(scr) if scr else {}
         name = (scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym
         clean = re.sub(r"\s+(Ltd|Limited)\.?$", "", name, flags=re.I).strip()
-        r2, sources2 = self._run({
+        r2, sources2 = ({}, []) if lean else self._run({
             "news": ("Google News", lambda: self.news.search(f"{clean} share price", "IN")),
             "wiki": ("Wikipedia", lambda: self.wiki.company(clean)),
         })

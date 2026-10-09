@@ -37,6 +37,17 @@ export interface Company {
   market_open?: boolean;                                   // false: the price is the last close (the market is shut)
   /** "pre_open": India's pre-open price, read between 09:00 and 09:15 IST: indicative, not a close (R7T-004) */
   phase?: "pre_open" | null;
+  /** what a lean company answer left out (news, about, peers): fetched with `companyMore` (R10O-009) */
+  lazy?: string[];
+}
+
+/** What a lean company page leaves for its second request. */
+export interface CompanyMore { news: NewsItem[]; wiki: Company["about"]["wiki"]; peers: string[]; sources: SourceStatus[] }
+
+/** A lean company answer with what it left out put in: the news, the encyclopedia entry, the peers, and the sources' status. */
+export function withMore(c: Company, m: CompanyMore): Company {
+  const seen = new Set(c.sources.map((s) => s.source));
+  return { ...c, news: m.news, peers: m.peers, about: { ...c.about, wiki: m.wiki }, sources: [...c.sources, ...m.sources.filter((s) => !seen.has(s.source))], lazy: undefined };
 }
 
 export interface Idea { title: string; text: string; why: string }
@@ -100,7 +111,9 @@ export const AI_POLL_MS = 3000;
 export const AI_POLLS = 40;
 
 export const researchApi = {
-  company: (r: Region, s: string) => api<Company>(`/research/company/${r}/${encodeURIComponent(s)}`),
+  /** The page asks lean: the price, header and tables first; the news, encyclopedia entry and peers come from `companyMore` (R10O-009). */
+  company: (r: Region, s: string, lean = false) => api<Company>(`/research/company/${r}/${encodeURIComponent(s)}${lean ? "?lean=1" : ""}`),
+  companyMore: (r: Region, s: string) => api<CompanyMore>(`/research/company/${r}/${encodeURIComponent(s)}/more`),
   /** The AI read, or an Error saying why there is none (an answer of "unavailable" is a 200 on the wire, so a page opening is never a failed request). */
   companyAI: async (r: Region, s: string, refresh = false, alive: () => boolean = () => true): Promise<CompanyAI> => {
     const base = `/research/company/${r}/${encodeURIComponent(s)}/ai`;

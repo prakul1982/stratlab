@@ -93,6 +93,8 @@ export function TradeHome() {
     { ...TRADE_TOP[1], testId: "paper-summary",
       status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
     { ...TRADE_TOP[2],
+      // the journal and the tax report are two uploads of different trades: F&O lines kept in the tax report as totals are not round trips here (R10O carry-over of R7M-013)
+      ...(journal !== null && journal !== "none" && journal.count ? { line: "Your real trades as round trips, after charges. F&O lines in your tax report are kept there as totals, not counted here." } : {}),
       // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
       status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")} net after charges` : "" },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },

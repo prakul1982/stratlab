@@ -50,7 +50,7 @@ export function OverviewSection() {
           <div className="adm-todo">
             {todo.map((x, i) => (
               <div key={i}>
-                <span className="adm-todo-t"><Badge tone={x.bad ? "warn" : "plain"}>{x.bad ? "Fix" : "Look"}</Badge><span>{x.text}</span></span>
+                <span className="adm-todo-t"><Badge tone={x.bad ? "warn" : "plain"}>{x.bad ? "Fix" : "Look"}</Badge><span title={x.full}>{x.text}</span></span>
                 <Link className="btn quiet sm" to={x.to}>Open {x.label}</Link>
               </div>
             ))}

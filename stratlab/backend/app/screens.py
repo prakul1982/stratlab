@@ -317,11 +317,33 @@ def as_of(index: dict) -> str | None:
     return max(days) if days else index.get("at")
 
 
+STALE_DAYS = 3           # a close older than the newest by more days than this (a weekend is 3) is one stock's data gap, not the list's date
+
+
+def _day_gap(newer: str, older: str) -> int:
+    from datetime import date as _d
+    return (_d.fromisoformat(newer[:10]) - _d.fromisoformat(older[:10])).days
+
+
 def rows_as_of(rows: list[dict], fallback: str | None) -> tuple[str | None, str | None]:
     """(oldest, newest) price day among the rows a screen shows: the header says the oldest, so it never claims a newer
-    close than a row has (R7O-004: "Prices as of 8 Oct" above 7 Oct closes)."""
+    close than a row has (R7O-004: "Prices as of 8 Oct" above 7 Oct closes). A close more than STALE_DAYS older than the
+    newest is one stock's data gap (R10O-012: "Oldest close 2 Oct" above rows that all said 8 Oct): `stale_rows` names
+    it, and it is left out of the oldest."""
     days = sorted({str(r["price_at"])[:10] for r in rows if r.get("price_at")})
-    return (days[0], days[-1]) if days else (fallback, fallback)
+    if not days:
+        return (fallback, fallback)
+    return ([d for d in days if _day_gap(days[-1], d) <= STALE_DAYS][0], days[-1])
+
+
+def stale_rows(rows: list[dict]) -> list[dict]:
+    """The rows whose close is more than STALE_DAYS older than the newest among them, as {symbol, name, price_at}."""
+    days = [str(r["price_at"])[:10] for r in rows if r.get("price_at")]
+    if not days:
+        return []
+    newest = max(days)
+    return [{"symbol": r["symbol"], "name": r.get("name"), "price_at": str(r["price_at"])[:10]}
+            for r in rows if r.get("price_at") and r.get("symbol") and _day_gap(newest, str(r["price_at"])) > STALE_DAYS]
 
 
 # ---------- the conditions ----------
@@ -482,7 +504,7 @@ def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None 
     page = [_shown(region, r, flags) for r in rows[offset:offset + limit]]
     oldest, newest = rows_as_of(page, as_of(index))
     return {"region": region, "filters": f, "sort": sort, "desc": bool(desc), "total": len(rows), "offset": offset,
-            "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "index_at": index.get("at")}
+            "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "stale": stale_rows(page), "index_at": index.get("at")}
 
 
 def _shown(region: str, r: dict, flags: dict) -> dict:

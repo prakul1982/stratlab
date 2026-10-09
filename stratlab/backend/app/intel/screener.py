@@ -125,6 +125,61 @@ def parse(html: str) -> dict:
     return out
 
 
+def _find(rows: dict, *prefixes: str) -> str | None:
+    return next((k for k in rows if str(k).lower().startswith(prefixes)), None)
+
+
+LENDER_TOLERANCE = 0.08       # a financing profit this share of revenue away from the profit before tax is not that profit
+
+
+def fix_lender_margins(p: dict) -> dict:
+    """A bank's "Financing Profit" and "Financing Margin %" the way a lender's own accounts add up (R10O-011: ICICI Bank's
+    margin read -12% to -29% a quarter beside a net margin near 30%). The source's financing profit is revenue less the
+    expenses AND less the interest line, and for a bank its expenses already hold the interest, so the interest is taken
+    out twice. Each column is checked against the profit before tax (a lender's financing profit is what the profit before
+    tax is made of): the reported figure when it fits; else the figure with the interest added back, when that fits; else
+    none, and a margin that can't be checked is not shown. Without a profit before tax a negative margin beside a profit
+    can only be the double count, so it is corrected or left out the same way. Changes `p` and returns it."""
+    for name in ("quarters", "pl"):
+        t = p.get(name) or {}
+        rows = t.get("rows") or {}
+        fm, fp = _find(rows, "financing margin"), _find(rows, "financing profit")
+        sales = _find(rows, "sales", "revenue")
+        if not fm or not sales:
+            continue
+        interest, pbt, other, net = _find(rows, "interest"), _find(rows, "profit before tax"), _find(rows, "other income"), _find(rows, "net profit")
+        n = len(rows[fm])
+        new_fm, new_fp = [], []
+        for i in range(n):
+            def at(key, i=i):
+                v = rows[key][i] if key and i < len(rows[key]) else None
+                return v if isinstance(v, (int, float)) else None
+            s, m, f = at(sales), at(fm), at(fp)
+            if f is None and s and m is not None:
+                f = s * m / 100
+            if s is None or s <= 0 or m is None:
+                new_fm.append(m)
+                new_fp.append(at(fp))
+                continue
+            i_ = at(interest)
+            candidates = [f] + ([f + i_] if i_ is not None and f is not None else [])
+            profit, p_ = at(net), at(pbt)
+            good = None
+            if p_ is not None:
+                targets = [p_] + ([p_ - at(other)] if at(other) is not None else [])
+                good = next((c for c in candidates if c is not None and any(abs(c - t_) <= LENDER_TOLERANCE * s for t_ in targets)), None)
+            elif f is not None and (f >= 0 or profit is None or profit <= 0):
+                good = f
+            else:
+                good = next((c for c in candidates[1:] if c is not None and c >= 0), None)
+            new_fp.append(round(good) if good is not None else None)
+            new_fm.append(round(good / s * 100) if good is not None else None)
+        rows[fm] = new_fm
+        if fp:
+            rows[fp] = new_fp
+    return p
+
+
 def _pe(p: dict, price: float | None) -> float | None:
     """P/E as the page's own numbers give it: the price over the trailing twelve months' earnings per share (the EPS
     row's TTM column: profit that belongs to the shareholders), else over the latest year's; none for a loss. The
@@ -261,7 +316,7 @@ class Screener(Source):
             self.cache.set(("parsed", path), (html, p), 6 * 3600)
         if not p["ratios"]:
             return None
-        return {**copy.deepcopy(p), "url": f"https://www.screener.in{path}"}
+        return {**fix_lender_margins(copy.deepcopy(p)), "url": f"https://www.screener.in{path}"}
 
     def _schedule(self, p: dict, parent: str, section: str, line: str) -> dict | None:
         """One line of the site's breakdown of a statement line ({column: value}), as its page shows when the line is
