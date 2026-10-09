@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
-  contracts, contractsShort, crore, dayName, istTime, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike,
+  chainUnit, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, unitLine,
   type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
@@ -204,13 +204,13 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
   const cols: Column<PcrRow>[] = [
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
-    { key: "near", header: "Near the money", numeric: true, cell: (r) => ratio(r.pcr_near) },
     { key: "vol", header: "PCR (volume)", numeric: true, cell: (r) => ratio(r.pcr_vol) },
+    { key: "all", header: "All strikes read", numeric: true, cell: (r) => ratio(r.pcr_all ?? null) },
   ];
   return (
     <Card id="pos-pcr" label="Put-call ratio by index">
       <CardHead title="Put-call ratio by index" infoLabel="About the put-call ratio"
-        info="Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the strikes read around the money. 'Near the money' counts only the 15 strikes either side, as StratLab's recordings do, so it matches the history." />
+        info={`Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the ${NEAR_STRIKES} strikes either side of the money that StratLab's recordings keep: the same PCR as the chain panel and the history. 'All strikes read' counts every strike read around the money.`} />
       <Source testId="pcr-source">From each index's live option chain, or StratLab's newest recording of it when the live chain is offline.</Source>
       {rows === null ? <Skeleton label="Reading each index's chain" />
         : rows === "error" ? <ErrorState title="The chains couldn't be read just now" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Try again in a minute.</ErrorState>
@@ -241,6 +241,8 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
   }, [name, expiry, again]);
   const hasChg = c && c !== "error" && c.rows.some((r) => r.call_chg != null || r.put_chg != null);
   type CR = ChainFacts["rows"][number];
+  // contracts (lots), as the exchange's chain and the participant table count them; shares only when the lot isn't known (R7T-002)
+  const unit = c && c !== "error" ? chainUnit(c) : "contracts";
   const rowCols: Column<CR>[] = c && c !== "error" ? [
     { key: "k", header: "Strike", rowHeader: true, cell: (r) => strike(r.strike) },
     { key: "co", header: "Call OI", numeric: true, cell: (r) => contracts(r.call_oi) }, { key: "cc", header: "Change", numeric: true, cell: (r) => <Sgn v={r.call_chg} /> },
@@ -273,10 +275,10 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <Source testId="chain-recorded">{recordedLine(name, c.recorded)}</Source>
             </div>
             <StatRow label="Option chain figures">
-              <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={`Near the money ${ratio(c.pcr_near)} · volume ${ratio(c.pcr?.vol)}`} />
+              <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money · volume ${ratio(c.pcr?.vol)} · all strikes read ${ratio(c.pcr_all ?? null)}`} />
               <Stat label="Max-pain strike" value={strike(c.max_pain)} />
-              <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} contracts` : undefined} />
-              <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} contracts` : undefined} />
+              <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
+              <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
               <Stat label="ATM implied volatility" value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(1)}%`} note={c.atm ? `At the ${strike(c.atm)} strike` : undefined} />
               <IvFig c={c} full={full} plan={plan} />
             </StatRow>
@@ -287,11 +289,12 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             {mode === "chg" && !hasChg ? (
               <p className="k-small k-muted">No recording of this expiry from the trading day before, so there's no change to show yet.</p>
             ) : (
-              <StrikeChart rows={c.rows} mode={mode} spot={c.spot} label={`${name} ${mode === "oi" ? "open interest" : "change in open interest"} by strike, calls and puts`} />
+              <StrikeChart rows={c.rows} mode={mode} spot={c.spot} unit={unit} label={`${name} ${mode === "oi" ? "open interest" : "change in open interest"} by strike, calls and puts, in ${unit}`} />
             )}
+            <p className="k-note" data-testid="chain-unit">{unitLine(c)}</p>
             {c.change_from && <p className="k-note">Change since the recording of {istTime(c.change_from)}.</p>}
             <Disclosure summary="Show the strikes as a table">
-              <DataTable label={`${name} open interest, change and volume by strike`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
+              <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
             <p className="k-note">The PCR, max pain and the top strikes count the {c.strikes_counted ?? c.rows.length} strikes read around the money; the chart shows the 41 nearest. {c.note}</p>

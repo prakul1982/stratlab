@@ -97,6 +97,7 @@ export class PriceChartEngine {
   private on: Partial<Listener> = {};
   private detach: () => void;
   private ro: ResizeObserver;
+  private sizeFrame = 0;
   private viewSet = false;
 
   constructor(host: HTMLElement, theme: Theme, format: (v: number, decimals: number) => string) {
@@ -125,13 +126,15 @@ export class PriceChartEngine {
       tap: (x, y, e) => { if (e.pointerType !== "mouse") this.hover(x, y); },
       reset: () => this.resetView(),
     });
-    this.ro = new ResizeObserver(() => this.resize());
+    // the canvas is resized on the next frame, never inside the observer's callback ("ResizeObserver loop", R7T-014)
+    this.ro = new ResizeObserver(() => { cancelAnimationFrame(this.sizeFrame); this.sizeFrame = requestAnimationFrame(() => this.resize()); });
     this.ro.observe(host);
     this.resize();
   }
 
   destroy(): void {
     cancelAnimationFrame(this.frame);
+    cancelAnimationFrame(this.sizeFrame);
     this.detach();
     this.ro.disconnect();
     this.main.remove();

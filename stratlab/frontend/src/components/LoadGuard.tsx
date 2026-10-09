@@ -19,13 +19,48 @@ export function LoadFailed({ what = "StratLab" }: { what?: string }) {
   );
 }
 
+/** What anyone sees when a page's own code fails while it runs (not a download): honest, with a way on. A reload may not
+ * help, so it isn't promised (R7T-011: "A file didn't download… Reload" for a TypeError that a reload can't fix). */
+export function PageFailed({ inPage = false }: { inPage?: boolean }) {
+  return (
+    <div className={inPage ? "k-page" : "boot"} role="alert" data-testid="page-failed">
+      {inPage ? <h1>This page ran into a problem</h1> : <h1>StratLab ran into a problem.</h1>}
+      <p>Something on this page failed while it was drawn. It has been noted; the rest of StratLab still works.</p>
+      <div className="k-row">
+        <a className={inPage ? "btn" : "boot-btn"} href="/">Go to the home page</a>
+        <button type="button" className={inPage ? "btn quiet" : "boot-btn"} onClick={() => location.reload()}>Try the page again</button>
+      </div>
+    </div>
+  );
+}
+
 /** Wraps the whole page. A failed download reloads the page once on its own (public/boot.js keeps the count); a second
- * failure, or any other crash, shows `LoadFailed` instead of an empty page. */
-export class LoadGuard extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
+ * failure shows `LoadFailed`; any other crash shows `PageFailed`, never a download message. */
+export class LoadGuard extends Component<{ children: ReactNode }, { failed: "load" | "crash" | null }> {
+  state: { failed: "load" | "crash" | null } = { failed: null };
+  static getDerivedStateFromError(error: unknown) { return { failed: isLoadError(error) ? "load" : "crash" }; }
   componentDidCatch(error: unknown) {
     if (isLoadError(error)) window.__stratlabRecover?.();
   }
-  render() { return this.state.failed ? <LoadFailed /> : this.props.children; }
+  render() { return this.state.failed === "load" ? <LoadFailed /> : this.state.failed === "crash" ? <PageFailed /> : this.props.children; }
+}
+
+/** Wraps one page inside the app's frame (`at`: the page's address, so going to another page starts clean): a page's code
+ * that failed to download is the download message (and the one automatic reload); a page that fails while it runs is that
+ * page's own honest message, with the menu still there (R7T-011). */
+export class PageBoundary extends Component<{ children: ReactNode; at?: string }, { failed: "load" | "crash" | null }> {
+  state: { failed: "load" | "crash" | null } = { failed: null };
+  static getDerivedStateFromError(error: unknown) { return { failed: isLoadError(error) ? "load" : "crash" }; }
+  componentDidUpdate(before: { at?: string }) {
+    if (before.at !== this.props.at && this.state.failed) this.setState({ failed: null });
+  }
+  componentDidCatch(error: unknown) {
+    if (isLoadError(error)) window.__stratlabRecover?.();
+    else console.error("page failed:", error);
+  }
+  render() {
+    if (this.state.failed === "load") return <LoadFailed what="this page" />;
+    if (this.state.failed === "crash") return <PageFailed inPage />;
+    return this.props.children;
+  }
 }

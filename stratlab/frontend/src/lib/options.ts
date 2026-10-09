@@ -134,3 +134,15 @@ export function payoff(p: OptPreview) {
 
 /** sessionStorage key: an imported options strategy handed from the import dialog to the Options page. */
 export const IMPORTED = "stratlab.options.import";
+
+/** The line a flat options session shows after a trade closed while the rules' gap between trades still runs (R7T-013: after
+ * a 09:41 stop-out with entries 120 minutes apart, "Entries open until 14:45" instead of the next entry's time). Null when
+ * no gap is running at `now`; `lastEntry` is the day's last entry and `entry` the first. */
+export function gapLine(a: { cool_until?: string | null; next_entry?: string | null }, cooldown: number | null | undefined, lastEntry: string, entry: string,
+  now: Date): string | null {
+  if (!a.cool_until) return null;
+  const until = new Date(a.cool_until);
+  if (Number.isNaN(until.getTime()) || until.getTime() <= now.getTime()) return null;
+  const gap = cooldown ? `entries are ${cooldown} min apart` : "the rules keep a gap between entries";
+  return a.next_entry ? `Next entry from ${a.next_entry}: ${gap}.` : `Next entry ${entry} on the next market day: ${gap}, past the last entry at ${lastEntry}.`;
+}

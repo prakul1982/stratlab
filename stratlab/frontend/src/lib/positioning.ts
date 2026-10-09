@@ -9,8 +9,13 @@ export type PartStatus = { status: "ok" | "pending" | "none"; as_of: string | nu
 export type PRow = { id: "client" | "dii" | "fii" | "pro" | "total"; label: string } & Record<string, number | string | null | undefined>;
 
 export type Flow = { buy: number | null; sell: number | null; net: number | null };
+/** `pcr_oi` and `pcr_vol` are over the strikes near the money the recordings keep (`near_strikes` each side), the same PCR as
+ * the chain panel and the history (R7T-005); `pcr_all` over every strike read. */
 export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
-  spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
+  pcr_all?: number | null; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
+
+/** The strikes either side of the money the recordings keep, and the headline PCR counts. */
+export const NEAR_STRIKES = 15;
 
 /** How many days are stored: the first and the last. */
 export type Span = { days: number; first: string | null; last: string | null };
@@ -32,7 +37,19 @@ export type ChainFacts = {
   pcr_near?: number | null; pcr_near_vol?: number | null; max_pain?: number | null; atm_iv?: number | null; atm?: number | null;
   top?: { call: { strike: number; oi: number } | null; put: { strike: number; oi: number } | null };
   iv: IvStats | null; note: string; plan_needed: string; recorded?: Span;
+  /** open interest, its change and volume are in `unit`: contracts (lots of `lot` shares), or shares when the lot isn't known */
+  lot?: number | null; unit?: "lots" | "shares"; pcr_all?: number | null; near_strikes?: number;
 };
+
+/** The word for the chain's counts: "contracts" (lots), as the exchange and the participant table count them (R7T-002). */
+export const chainUnit = (c: Pick<ChainFacts, "unit">): "contracts" | "shares" => (c.unit === "shares" ? "shares" : "contracts");
+
+/** The line under the chain saying what its counts are. */
+export function unitLine(c: Pick<ChainFacts, "unit" | "lot">): string {
+  return c.unit === "shares" || !c.lot
+    ? "Open interest, its change and volume are in shares: the lot size for this expiry couldn't be read."
+    : `Open interest, its change and volume are in contracts (lots of ${c.lot} shares), as the exchange's chain and the participant table count them.`;
+}
 
 export type PartPoint = { day: string } & Record<"client" | "dii" | "fii" | "pro", Record<string, number | null>>;
 export type CashPoint = { day: string; fii: number | null; dii: number | null };

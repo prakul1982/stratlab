@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { watchSize } from "../../lib/resize";
 
 /* The chart system's plumbing: the drawn width, a linear scale, thinning thousands of points down to what the screen
  * can show, smooth moves that respect "reduce motion", and the little message bus that keeps stacked charts' crosshairs
@@ -13,9 +14,8 @@ export function useWidth<T extends HTMLElement>(initial = 720, min = 260) {
     const el = ref.current;
     if (!el) return;
     setW(Math.max(min, Math.round(el.getBoundingClientRect().width || initial)));
-    const ro = new ResizeObserver(([e]) => setW(Math.max(min, Math.round(e.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
+    // a frame later: no "ResizeObserver loop" page error (R7T-014)
+    return watchSize(el, (e) => { if (e) setW(Math.max(min, Math.round(e.contentRect.width))); });
   }, [initial, min]);
   return [ref, w] as const;
 }

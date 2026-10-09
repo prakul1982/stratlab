@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "../pages/trade/options.css";
 import { contracts, contractsShort, signed, strike as strikeText, type StrikeRow } from "../lib/positioning";
 import { Signed } from "./kit";
+import { watchSize } from "../lib/resize";
 
 /* Open interest by strike as a butterfly: one row per strike, calls to the left of the strike column and puts to the
  * right, each growing out from the middle. In "change" mode each side's zero sits in the middle of its half: open
@@ -19,16 +20,14 @@ function barPath(x0: number, x1: number, y: number, h: number): string {
   return `M${x0},${y}H${xe}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${xe},${y + h}H${x0}Z`;
 }
 
-export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mode: "oi" | "chg"; spot?: number | null; label: string }) {
+export function StrikeChart({ rows, mode, spot, label, unit = "contracts" }: { rows: StrikeRow[]; mode: "oi" | "chg"; spot?: number | null; label: string; unit?: "contracts" | "shares" }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(720);
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(300, Math.round(e.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
+    return watchSize(el, (e) => { if (e) setW(Math.max(300, Math.round(e.contentRect.width))); });
   }, []);
   // highest strike on top, as an option chain is read
   const list = [...rows].sort((a, b) => b.strike - a.strike);
@@ -80,7 +79,7 @@ export function StrikeChart({ rows, mode, spot, label }: { rows: StrikeRow[]; mo
         </div>
       )}
       <p className="k-note">
-        Scale: the longest bar is {contractsShort(max)} contracts{mode === "chg" ? ". Bars growing outward: open interest added; inward (lighter): open interest cut" : ""}.
+        Scale: the longest bar is {contractsShort(max)} {unit}{mode === "chg" ? ". Bars growing outward: open interest added; inward (lighter): open interest cut" : ""}.
       </p>
     </div>
   );

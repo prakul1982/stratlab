@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { ago, marketTz, num, pct, price, safeHref, signCls } from "../lib/format";
 import {
-  bandPosition, metricText, monthsOld, newsAge, ordinal, researchApi, staleQuarter, trendValue, useWatchlist,
+  bandPosition, metricText, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -56,15 +56,19 @@ export function Panel({ title, info, children, right, id }: { title: ReactNode; 
 /** The day's price and its change as one block: the price in the page's sans font and a pill for the change, green or red
  * with the sign (and ▲/▼) printed. The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
  * is that session's ("on the day"), never "today" for a day that hasn't traded. */
-export function Change({ q, currency, closed = false }: { q: Quote | null; currency: string; closed?: boolean }) {
+export function Change({ q, currency, closed: shut = false, preOpen = false }: { q: Quote | null; currency: string; closed?: boolean; preOpen?: boolean }) {
   if (!q || q.price == null) return null;
+  // before India's 09:15 open the price is the pre-open auction's: indicative, never a close (R7T-004)
+  const closed = shut && !preOpen;
+  const { since } = priceLabel({ market_open: !shut, phase: preOpen ? "pre_open" : null });
   return (
-    <div className="k-stat inv-quote" data-testid="company-price">
+    <div className="k-stat inv-quote" data-testid="company-price" data-phase={preOpen ? "pre_open" : undefined}>
+      {preOpen && <span className="k-stat-k">Pre-open (indicative)</span>}
       {closed && <span className="k-stat-k">Last close</span>}
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct}>{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {closed ? "on the day" : "today"}
+          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${q.change >= 0 ? "+" : "−"}${Math.abs(q.change).toFixed(2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {since}
         </span>
       )}
     </div>
@@ -87,7 +91,8 @@ export function PriceChart({ region, symbol, currency, price: shown, asOf: shown
 /* ---------- 52-week rail ---------- */
 export function Rail52({ q, low, high, currency, compact }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean }) {
   const px = q?.price;
-  if (px == null || low == null || high == null || high <= low) return null;
+  // a range that can't be this share's (another class's, another listing's) is never drawn under its price (R7T-001)
+  if (px == null || low == null || high == null || high <= low || !plausibleRange(px, low, high)) return null;
   const at = (v: number) => Math.max(0, Math.min(100, ((v - low) / (high - low)) * 100));
   const p = at(px);
   const band = q?.low != null && q?.high != null && q.high > q.low ? [at(q.low), at(q.high)] : null;
@@ -364,6 +369,7 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
 /** Why an AI read is missing, as the words that follow "No AI read right now": a few plain words, never the message
  * itself, which can be long or name an internal step. When the cause isn't one worth naming, nothing is said of it. */
 export function aiReason(message: string | null): string {
+  if (message && /hasn't updated|haven't updated|previous session/i.test(message)) return `: ${message.replace(/\.?\s*Ask again in a minute\.?$/i, "")}. Ask again in a minute.`;
   if (message && /busy|overloaded|try again in/i.test(message)) return ": the AI service is busy. Ask again in a minute.";
   if (message && /used \d+|limit|allowance|tomorrow/i.test(message)) return ": today's fresh AI reads are used up.";
   if (message && /plan|upgrade/i.test(message)) return ": it isn't on your plan.";

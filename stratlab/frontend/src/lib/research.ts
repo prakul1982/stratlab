@@ -35,6 +35,8 @@ export interface Company {
   testable: boolean; instrument_id: string | null;
   as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
   market_open?: boolean;                                   // false: the price is the last close (the market is shut)
+  /** "pre_open": India's pre-open price, read between 09:00 and 09:15 IST: indicative, not a close (R7T-004) */
+  phase?: "pre_open" | null;
 }
 
 export interface Idea { title: string; text: string; why: string }
@@ -56,7 +58,32 @@ export interface SectorAI {
   value_chain: { layer: string; description: string; companies: Co[] }[];
   tailwinds: string[]; risks: string[]; generated_at: number;
 }
-export interface IndexLevel { name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null }
+/** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
+ * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */
+export interface IndexLevel {
+  name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null;
+  at?: string | null; day?: string | null; live?: boolean; stale?: boolean;
+}
+
+/** Whether a 52-week range can be this share's: the price within a third below its low or half above its high, as the
+ * server checks it (R7T-001: Class A's $698,000-$806,102 beside BRK-B's $511). */
+export const plausibleRange = (px: number, low: number, high: number) => low > 0 && high >= low && px >= low * 0.67 && px <= high * 1.5;
+
+/** What a company's price is called and what its change is against: "Pre-open (indicative)" before India's 09:15 open (a
+ * price from the pre-open auction, never a close, R7T-004), "Last close" while the market is shut, else the live price. */
+export function priceLabel(c: Pick<Company, "market_open" | "phase">): { label: string | null; since: string } {
+  if (c.phase === "pre_open") return { label: "Pre-open (indicative)", since: "against the last close" };
+  if (c.market_open === false) return { label: "Last close", since: "on the day" };
+  return { label: null, since: "today" };
+}
+
+/** The words under an index's change: "today" only for a live level of today's session; a previous session's level while
+ * the market trades says it hasn't updated; out of hours, the session it is of ("on 8 Oct"). */
+export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale">, dayText: (iso: string) => string): string {
+  if (i.stale) return i.day ? `${dayText(i.day)} close · not updated today yet` : "not updated today yet";
+  if (i.live || i.live === undefined && i.day === undefined) return "today";
+  return i.day ? `on ${dayText(i.day)}` : "last session";
+}
 export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" }[];

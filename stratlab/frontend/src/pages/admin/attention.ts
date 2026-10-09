@@ -15,6 +15,18 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** The India paper sessions that need the broker's live feed (other markets are polled). Older servers sent only the total. */
 export const indiaSessions = (sv: Overview["server"]): number => sv.india_sessions ?? sv.live_sessions;
 
+/** The live price feed's light. India's options paper sessions run on the broker's quotes read every few seconds, not on its
+ * streaming feed, and are counted as running all the same (R7T-012: "Idle: no India paper sessions running" beside a
+ * running NIFTY options session). */
+export function feedTile(sv: Overview["server"]): Service {
+  const india = indiaSessions(sv), options = sv.options_sessions ?? 0;
+  const opts = options ? `${plural(options, "options paper session")} running on quotes read every few seconds` : "";
+  const detail = sv.feed_connected ? [`Connected${india ? `, ${plural(india, "India paper session")} running` : ""}`, opts].filter(Boolean).join(" · ")
+    : india ? [`Not connected, with ${plural(india, "India paper session")} running`, opts].filter(Boolean).join(" · ")
+    : options ? `Not needed: ${opts}` : "Idle: no India paper sessions running";
+  return { key: "feed", label: "Live price feed", state: sv.feed_connected || india === 0 ? "ok" : "warn", to: "/admin/data", detail };
+}
+
 /** Whether a provider with a key can answer now: the server's own reading (a short rate limit still counts as up; a
  * used-up free quota or a paused provider does not; one listed model it can't use doesn't make it down). Older servers
  * sent only the last error. */
@@ -62,10 +74,7 @@ export function services(ov: Overview | null): Service[] {
   const out: Service[] = [];
   out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready ? "ok" : "bad", to: "/admin/data",
     detail: sv.kite_invalid ? sv.kite_invalid : sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline." });
-  const india = indiaSessions(sv);
-  out.push({ key: "feed", label: "Live price feed", state: sv.feed_connected || india === 0 ? "ok" : "warn", to: "/admin/data",
-    detail: sv.feed_connected ? `Connected${india ? `, ${plural(india, "India paper session")} running` : ""}`
-      : india ? `Not connected, with ${plural(india, "India paper session")} running` : "Idle: no India paper sessions running" });
+  out.push(feedTile(sv));
   out.push({ key: "auto", label: "Automatic daily login", to: "/admin/data",
     state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : sv.auto_login.ok ? "ok" : "warn",
     detail: !sv.auto_login_configured ? "Off" : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`,
