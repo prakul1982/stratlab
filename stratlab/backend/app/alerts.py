@@ -149,15 +149,38 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
         s.send_message(msg)
 
 
+ALERT_EMAILS = "alert_emails"           # the unsubscribe category of every alert, reminder and admin note by email
+ALERT_OFF = "alert-email-off:"          # app_settings key prefix: set while the person has turned alert emails off
+
+
+def alert_emails_on(uid: str | None) -> bool:
+    """False once the person pressed Unsubscribe on an alert email; saving an email address in Settings turns it back on."""
+    if not uid:
+        return True
+    from . import db
+    try:
+        return not db.get_setting(ALERT_OFF + uid)
+    except Exception:
+        return True
+
+
+def set_alert_emails(uid: str, on: bool) -> None:
+    from . import db
+    db.set_setting(ALERT_OFF + uid, "" if on else "1")
+
+
 def send_message(to: str, subject: str, text: str, path: str = "/account", label: str = "Alert",
                  why: str = "You get this because you turned on notifications in StratLab.", button_label: str | None = None,
-                 headers: dict | None = None) -> None:
+                 headers: dict | None = None, uid: str | None = None) -> None:
     """Email a plain-lines message (subject and text, as a phone notification would carry them) in the shared email
-    design, with a button to `path` on the site and a Manage emails link. The text version is the lines themselves."""
+    design, with a button to `path` on the site and a Manage emails link. The text version is the lines themselves.
+    With `uid` (the reader), the footer has a one-click unsubscribe and the email carries stratlab.studio's own
+    List-Unsubscribe headers, so the mail service's tracking link isn't the one a mail app offers (R9P-001)."""
     from . import email_kit as kit
     html, plain = kit.message(subject, text, path, label, why, button_label=button_label,
-                              date=kit.today_label())
-    send_email(to, subject, plain, html=html, headers=headers)
+                              date=kit.today_label(), unsubscribe="Turn off alert emails" if uid else None)
+    html, plain, own = kit.finish(html, plain, uid, ALERT_EMAILS if uid else None)
+    send_email(to, subject, plain, html=html, headers={**(own or {}), **(headers or {})} or None)
 
 
 def email_for(profile: dict) -> str | None:
@@ -174,6 +197,7 @@ NEWSLETTER_NAMES = {"market_in": "the India market email", "market_us": "the US 
                     "my_stocks": "the My stocks email", "tips": "tips and reminders emails",
                     "screens": "the weekly emails from your saved stock screens",
                     "advance_tax": "the advance tax reminders",
+                    "alert_emails": "alert emails (your alerts, reminders and the admin notes)",
                     "all": "all StratLab newsletters, tips and reminders"}
 
 
@@ -254,8 +278,9 @@ def tell_admins(subject: str, text: str) -> int:
 
 
 def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: str | None = None,
-             label: str = "Alert") -> list[tuple[str, object]]:
-    """(channel, send) for every channel the user set up that the server can use."""
+             label: str = "Alert", force_email: bool = False) -> list[tuple[str, object]]:
+    """(channel, send) for every channel the user set up that the server can use. Email is skipped once the person
+    unsubscribed from alert emails, except for a test they asked for (`force_email`)."""
     from . import push
     jobs = []
     if profile.get("id") and push.enabled() and push.devices(profile["id"]):
@@ -263,8 +288,8 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: s
     if profile.get("telegram_chat_id") and telegram_ready():
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
-    if to and email_ready() and email_confirmed(profile):      # only an address its owner confirmed from a link
-        jobs.append(("email", lambda: send_message(to, subject, text, url, label, **({"why": why} if why else {}))))
+    if to and email_ready() and email_confirmed(profile) and (force_email or alert_emails_on(profile.get("id"))):   # only an address its owner confirmed from a link
+        jobs.append(("email", lambda: send_message(to, subject, text, url, label, uid=profile.get("id"), **({"why": why} if why else {}))))
     return jobs
 
 
@@ -292,7 +317,7 @@ def notify(profile: dict, subject: str, text: str, background: bool = True, url:
 def test(profile: dict) -> tuple[list[str], dict[str, str]]:
     """Send a test on each channel separately: which worked, and why the others didn't."""
     sent, failed = [], {}
-    for channel, job in jobs_for(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", "/account"):
+    for channel, job in jobs_for(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", "/account", force_email=True):
         try:
             job()
             sent.append(channel)

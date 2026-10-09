@@ -71,10 +71,10 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
         except Exception as e:
             print("market events reminder failed:", channel, str(e)[:120])
     to = alerts.newsletter_email(profile)
-    if to and alerts.email_ready() and alerts.email_confirmed(profile):
+    if to and alerts.email_ready() and alerts.email_confirmed(profile) and alerts.alert_emails_on(profile.get("id")):
         try:
             alerts.send_message(to, subject, text, "/trade/events", "Market events",
-                                "You get this because you turned on market event reminders on StratLab.")
+                                "You get this because you turned on market event reminders on StratLab.", uid=profile.get("id"))
             sent.append("email")
         except Exception as e:
             print("market events reminder failed: email", str(e)[:120])

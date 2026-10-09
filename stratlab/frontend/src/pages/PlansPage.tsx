@@ -11,7 +11,7 @@ import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
-import { canBuy, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
@@ -106,7 +106,7 @@ export function PlansPage() {
         // the payment window's name carries the plan and the period (R6V-009)
         key: d.key_id, subscription_id: d.subscription_id, name: `StratLab · ${planName(plan)}, ${period === "year" ? "yearly" : "monthly"}`,
         notes: { plan, period },
-        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}${gst ? " incl. GST" : ""}` : priceOf(plan, period).shown} / ${period}`,
+        description: checkoutDescription(plan === "pro" ? "Pro" : "Basic", d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}${gst ? " incl. GST" : ""}` : priceOf(plan, period).shown, period),
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
           try { await api("/billing/verify", { method: "POST", body: resp }); await refreshMe(); notify(`You're on ${plan === "pro" ? "Pro" : "Basic"} now.`); }
@@ -129,7 +129,8 @@ export function PlansPage() {
   const chargeWords = (p: "basic" | "pro") => {
     const rs = rupeeCharge(rupees(p, period), gst);
     const shown = priceOf(p, period);
-    return `${rs}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
+    // charged in rupees from another currency's card: the dialog says what that is there today ("₹699 (about $7.23 today)")
+    return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
   };
 
   return (

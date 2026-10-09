@@ -127,9 +127,13 @@ def test_email_subjects_are_sent_by_the_rule(monkeypatch):
 
 
 # ---------- the receipt ----------
-def test_receipt_carries_the_gst_invoice_details(built):
+def test_receipt_carries_the_gst_invoice_details(monkeypatch):
+    # R9P-003: the preview carries GST lines only when the seller set in Admin → Invoices has a GSTIN (a real payment gets
+    # exactly that); the plain variant for an empty seller is tested in test_review_r9p. So this one sets a seller with a GSTIN.
     from app import invoices
-    text = built["lifecycle_receipt"]["text"]
+    seller = {"legal_name": "StratLab Labs LLP", "address": "Pune", "state": "27", "gstin": "27ABCDE1234F1Z5", "prefix": "SL"}
+    monkeypatch.setattr(invoices, "seller", lambda: {**{f: "" for f in invoices.FIELDS}, **seller})
+    text = P.describe("lifecycle_receipt", True)["text"]
     inv = lifecycle.sample_invoice(datetime.now(timezone.utc))
     taxable, _ = invoices.backed_out(inv["total"])
     for fact in (kit.money(taxable, "INR", 2), "CGST 9%", "SGST 9%", kit.money(inv["total"], "INR", 2), "GSTIN ", "SAC 998431",

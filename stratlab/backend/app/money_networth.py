@@ -15,6 +15,7 @@ import math
 import secrets
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Literal, Optional
 
@@ -887,6 +888,19 @@ class Job:
 
 
 # ---------- routes ----------
+POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="networth")
+
+
+def deposit_tax(profile) -> dict | None:
+    """What the fixed and recurring deposits' interest comes to after tax; None when it can't be worked out."""
+    try:
+        from . import fixed_income        # imports this module, so not at the top
+        return fixed_income.networth_deposits(profile)
+    except Exception as e:
+        print("net worth: deposit tax unavailable:", type(e).__name__)
+        return None
+
+
 def make_router(current_profile, stocks_of: Callable[[dict], dict | None], prices: Prices,
                 item_limit: Callable[[str], int | None], has_history: Callable[[str], bool], throttle: Callable) -> APIRouter:
     """The /money/net-worth routes. stocks_of(profile) gives the My Holdings totals in rupees; item_limit(plan) the
@@ -906,8 +920,13 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
     def page(profile, why: str | None = None) -> dict:
         uid = profile["id"]
         items = load(uid)["items"]
-        v = build(items, stocks(profile), mf_value(uid), prices)
-        hist = history(uid)
+        # the holdings, the mutual funds, the history and the deposits' tax are separate reads: asked together, not one after
+        # another (R9P-008: this page took 16 to 21 s to show anything)
+        has_dep = any(i.get("kind") in ("fd", "rd") for i in items)
+        f_stocks, f_mf, f_hist = POOL.submit(stocks, profile), POOL.submit(mf_value, uid), POOL.submit(history, uid)
+        f_dep = POOL.submit(deposit_tax, profile) if has_dep else None
+        v = build(items, f_stocks.result(), f_mf.result(), prices)
+        hist = f_hist.result()
         has_any = bool(v["assets"] or v["liabilities"])
         this_month = today().strftime("%Y-%m")
         day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
@@ -918,13 +937,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         plan = profile["_plan"]
         allowed = has_history(plan)
         limit = item_limit(plan)
-        dep = None
-        if any(i.get("kind") in ("fd", "rd") for i in items):
-            try:
-                from . import fixed_income        # imports this module, so not at the top
-                dep = fixed_income.networth_deposits(profile)
-            except Exception as e:
-                print("net worth: deposit tax unavailable:", type(e).__name__)
+        dep = f_dep.result() if f_dep else None
         return {**v, "deposit_tax": dep, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist),
                 "limit": limit, "count": len(items), "kinds": {k: LABEL[k] for k in KINDS}}
 

@@ -55,10 +55,10 @@ export function aiTile(ai: AIRow[]): Service {
   const notes = [quota ? `${quota} out of credit` : "", failing ? `${failing} failing` : "", paused ? `${paused} paused` : "",
     untested ? `${untested} not tried yet` : "", slow ? `${slow} with a model paused` : ""].filter(Boolean);
   const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : working < keys.length || slow ? "warn" : "ok";
-  // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008)
-  const setUp = ai.length > keys.length ? ` (${keys.length} of ${ai.length} set up)` : "";
+  // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008); one denominator, not two ("12" beside "12 of 13"), R7M-008
+  const someUnset = ai.length > keys.length;
   return { key: "ai", label: "AI providers", state, to: "/admin/system",
-    detail: [`${working} of ${keys.length} working${setUp}`, ...notes].join(" · ") };
+    detail: [someUnset ? `${working} working of ${keys.length} set up (${ai.length} known)` : `${working} of ${keys.length} working`, ...notes].join(" · ") };
 }
 
 /** The invoice seller details still empty, said for Overview and Money (R7M-001): until a GSTIN is set every invoice is a

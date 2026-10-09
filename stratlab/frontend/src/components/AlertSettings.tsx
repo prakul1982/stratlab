@@ -65,6 +65,7 @@ export function AlertSettingsCard() {
         {ch.telegram && <Field label="Telegram chat ID" optional info="Open the StratLab bot and press Start, then message @userinfobot to find your chat ID."
           value={alerts.tg} disabled={!canReport} inputMode="numeric" maxLength={40} onChange={(e) => setAlerts({ ...alerts, tg: e.target.value })} />}
         {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
+        {ch.email && me.alerts.email_off && <p className="k-small k-muted k-hint-line" data-testid="alert-emails-off">Alert emails are off: you used the unsubscribe link in one. Save an email address here to turn them back on.</p>}
         <FormActions>
           <button type="submit" className="btn" disabled={!canReport}>Save</button>
           <button type="button" className="btn outline" disabled={!!testWhy} title={testWhy ?? undefined} aria-describedby={testWhy ? "alert-test-why" : undefined} onClick={() => void test()}>Send a test</button>

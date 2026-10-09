@@ -69,10 +69,10 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         else:
             line += ", no mismatches or errors"
         lines.append(line)
-    listed = facts.get("errors_listed")
-    # the same count Admin → System shows beside it, so the two never seem to disagree (R6V-010)
-    lines += ["", "Server errors", f"- {_n(facts['errors'], 'error')} this week"
-              + (f" ({listed} listed on Admin → System since the last restart)" if listed is not None and listed != facts["errors"] else "")]
+    # Admin → System's own words and split: "N since the last restart, M kept from before it" (R9P-004)
+    since, before = facts.get("errors_since_restart"), facts.get("errors_before_restart")
+    split = (f" ({since} since the last restart" + (f", {before} kept from before it" if before else "") + ")") if since is not None else ""
+    lines += ["", "Server errors", f"- {_n(facts['errors'], 'error')} this week{split}"]
     if facts.get("admin_url"):
         lines += ["", f"Admin page: {facts['admin_url']}"]
 
