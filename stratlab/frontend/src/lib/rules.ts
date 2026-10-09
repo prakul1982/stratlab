@@ -187,6 +187,20 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   if ((m = t.match(/(?:exit|close|sell|cover|square off)(?: the trade)? after (\d+) (?:days?|candles?|bars?|sessions?)/))) {
     out.risk.maxBars = +m[1];
     t = t.replace(m[0], " ");
+  } else {
+    // "sell when RSI is above 55 or after 15 bars": a time exit in a sell sentence (R11C-004: the 15 was dropped)
+    const sentence = t.split(/[.;\n]/).find((x) => /\b(sell|exit|close|cover|square off)\b/.test(x) && /\b(?:or )?after \d+ (?:days?|candles?|bars?|sessions?)\b/.test(x));
+    const at = sentence?.match(/\b(?:or )?after (\d+) (?:days?|candles?|bars?|sessions?)\b/);
+    if (at) { out.risk.maxBars = +at[1]; t = t.replace(at[0], " "); }
+  }
+  // "no stop loss" is a stop of 0, said, so it is never asked again or filled with the default 2% (R11C-005)
+  if ((m = t.match(/\b(?:no|without(?: an?| any)?|don'?t use(?: an?)?|not? use(?: an?)?)\s+(?:stop[ -]?loss(?:es)?|stops?|sl)\b/))) {
+    out.risk.sl = 0;
+    t = t.replace(m[0], " ");
+  }
+  if ((m = t.match(/\b(?:no|without(?: an?| any)?)\s+(?:target|take[ -]?profit|profit target)s?\b/))) {
+    out.risk.tgt = 0;
+    t = t.replace(m[0], " ");
   }
   // "stop loss 5%" or "5% stop loss", either way round
   const STOP = "(?:stop[ -]?loss|\\bsl\\b|\\bstop\\b)", TARGET = "(?:target|take[ -]?profit|\\btp\\b)";
@@ -206,13 +220,24 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
   let lastCross: Cond | null = null;
+  // "close" as a way out ("close the trade"), never the price closing ("the price closes above the SMA", R11C-004: that
+  // buy rule became a sell rule); the first of the two kinds of word in a clause decides which it is
+  const EXIT = /\b(sell|exit|close\b(?! (?:is |was )?(?:above|below|over|under))|square off|book profit)/;
+  const first = (cl: string, a: RegExp, b: RegExp): "a" | "b" | null => {
+    const i = cl.search(a), j = cl.search(b);
+    return i < 0 && j < 0 ? null : j < 0 || (i >= 0 && i <= j) ? "a" : "b";
+  };
   for (const cl of clauses) {
     if (short) {
       // a short opens with a sell and closes with a buy
-      if (/\b(cover|buy back|buy to cover|exit|close|square off|book profit)/.test(cl)) side = "exit";
-      else if (/\b(short|sell|enter)/.test(cl)) side = "entry";
-    } else if (/\b(sell|exit|close|square off|book profit)/.test(cl)) side = "exit";
-    else if (/\b(buy|enter|go long)/.test(cl)) side = "entry";
+      const w = first(cl, /\b(cover|buy back|buy to cover|exit|close\b(?! (?:is |was )?(?:above|below|over|under))|square off|book profit)/, /\b(short|sell|enter)/);
+      if (w === "a") side = "exit";
+      else if (w === "b") side = "entry";
+    } else {
+      const w = first(cl, EXIT, /\b(buy|enter|go long)/);
+      if (w === "a") side = "exit";
+      else if (w === "b") side = "entry";
+    }
     for (const p of cl.split(/ and | & /)) {
       const om = p.match(opRe);
       if (!om || om.index == null) continue;
@@ -239,7 +264,89 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
       if (op === "xa" || op === "xb") lastCross = { l: L, op, r: R };
     }
   }
+  return { ...out, entry: meaningful(out.entry).kept, exit: meaningful(out.exit).kept };
+}
+
+/* ---------- checks on built rules (R11C-004) ---------- */
+const PRICE_SCALE = new Set<RefType>(["price", "open", "high", "low", "prev_close", "day_open", "day_high", "day_low", "sma", "ema", "vwap",
+  "bb_upper", "bb_mid", "bb_lower", "supertrend", "dc_upper", "dc_lower"]);
+const SCALE_100 = new Set<RefType>(["rsi", "stoch_k", "adx"]);
+const sameRef = (a: Ref, b: Ref) => JSON.stringify(Object.entries(a).filter(([, v]) => v != null).sort()) === JSON.stringify(Object.entries(b).filter(([, v]) => v != null).sort());
+
+/** Rules that can't mean anything, left out with a word for each: a price against 0 or less ("Price crosses below 0"),
+ * a 0-100 value against a number outside 0-100, a 0-100 value against a price, a value against itself. */
+export function meaningful(conds: Cond[]): { kept: Cond[]; dropped: string[] } {
+  const kept: Cond[] = [], dropped: string[] = [];
+  for (const c of conds) {
+    const say = `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
+    const pairs: [Ref, Ref][] = [[c.l, c.r], [c.r, c.l]];
+    const bad = sameRef(c.l, c.r)
+      || pairs.some(([a, b]) => PRICE_SCALE.has(a.t) && b.t === "num" && (b.v == null || b.v <= 0))
+      || pairs.some(([a, b]) => SCALE_100.has(a.t) && b.t === "num" && b.v != null && (b.v < 0 || b.v > 100))
+      || pairs.some(([a, b]) => SCALE_100.has(a.t) && PRICE_SCALE.has(b.t));
+    if (bad) dropped.push(say); else kept.push(c);
+  }
+  return { kept, dropped };
+}
+
+/** The numbers in a strategy's rules, risk and session, in every form a sentence may give them. */
+function numbersIn(s: Strategy): number[] {
+  const out: number[] = [];
+  const ref = (r: Ref) => { for (const v of [r.p, r.m, r.v, r.ago, r.k]) if (v != null) out.push(+v); if (r.tf) out.push(+r.tf.replace(/\D/g, "")); };
+  for (const c of [...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])]) { ref(c.l); ref(c.r); if (c.w != null) out.push(c.w); }
+  // the money settings a sentence can give (a capital in lakh or k too); brokerage and slippage are the app's own
+  const r = s.risk as unknown as Record<string, unknown>;
+  for (const k of ["sl", "tgt", "trail", "maxBars", "riskPct", "capital", "perTrade", "leverage", "maxAlloc"]) {
+    const v = r[k];
+    if (typeof v === "number") out.push(v, v / 1e3, v / 1e5, v / 1e7);
+  }
+  for (const v of Object.values(s.session ?? {})) {
+    if (typeof v === "number") out.push(v);
+    else if (typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v)) out.push(...v.split(":").map(Number));
+  }
+  if (s.minScore) out.push(s.minScore);
+  out.push(...({ "5m": [5], "15m": [15], "1h": [1, 60], "1d": [1] } as Record<string, number[]>)[s.tf] ?? []);
   return out;
+}
+
+/** The numbers a sentence gives that the built rules don't hold (R11C-004: "RSI 14 is above 55" lost its 55 and became
+ * "Price is above RSI 14", with nothing said). Numbers in the instrument's own name ("NIFTY 50"), in a candle size ("15
+ * minute candles") or a time ("9:30") don't count. */
+export function unplacedNumbers(text: string, s: Strategy, names: (string | null | undefined)[] = []): number[] {
+  let t = ` ${text.toLowerCase()} `;
+  for (const n of names) if (n) t = t.split(n.toLowerCase()).join(" ");
+  t = t.replace(/\b(nifty|sensex|bank ?nifty|s&p|nasdaq|dow)\s*\d+/g, " ")
+    .replace(/\d+\s*[- ]?\s*(?:min(?:ute)?s?|m|hours?|hr|h|day)\s+(?:candles?|bars?|charts?|timeframe)/g, " ")
+    .replace(/\b\d{1,2}:\d{2}\b/g, " ").replace(/\b(?:1|one)[- ]?(?:hour|day)\b/g, " ");
+  const have = numbersIn(s);
+  const seen = new Set<number>();
+  for (const m of t.matchAll(/\d+(?:,\d{3})*(?:\.\d+)?/g)) {
+    const v = +m[0].replace(/,/g, "");
+    if (!Number.isFinite(v) || seen.has(v)) continue;
+    if (!have.some((h) => Math.abs(h - v) < 1e-9 * Math.max(1, Math.abs(v)))) seen.add(v);
+  }
+  return [...seen];
+}
+
+/** What a sentence itself says about the questions the notebook asks ("Stop loss 3%", "No stop loss", "daily candles", a
+ * sell rule): a question it answered is never asked, and a default never overwrites it (R11C-005). */
+export function statedIn(text: string | undefined | null): string[] {
+  if (!text?.trim()) return [];
+  const p = parseStrategyText(text);
+  const out = Object.keys(p.risk);
+  if (p.exit.length) out.push("exit");
+  if (detectTf(text)) out.push("tf");
+  return out;
+}
+
+/** Whether a notebook's name is one it was given rather than one the person typed: none, "Untitled notebook", or the
+ * strategy's own name (numbered "… 2" or "… (copy)" as a new notebook or a copy gets it). Only such a name may follow
+ * the strategy's (R11C-001: every rule edit put "TCS SMA Crossover" back over the person's own name). */
+export function isAutoNotebookName(name: string | null | undefined, strategyName: string | null | undefined): boolean {
+  const n = (name ?? "").trim(), s = (strategyName ?? "").trim();
+  if (!n || n === "Untitled notebook") return true;
+  if (!s) return false;
+  return n === s || n === `${s} (copy)` || (n.startsWith(`${s} `) && /^\d+$/.test(n.slice(s.length + 1)));
 }
 
 export function detectTf(t: string): Tf | null {
@@ -297,4 +404,16 @@ export function noRuleNote(idea: string, notes: string[] = []): { note: string; 
     return { system: true, note: "That one is on our side: the builder couldn't turn your sentence into rules just now, and your wording looks fine. Try again, start from a classic idea, or build the rules by hand." };
   }
   return { system: false, note: "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." + (notes.length ? " " + notes.join(" ") : "") };
+}
+
+/** What the person should see about rules that didn't come out as written: a rule left out, a number from the sentence
+ * that isn't in the rules (R11C-004). Empty when every number found its place. */
+export function ruleWarnings(idea: string, s: Strategy, dropped: string[], names: (string | null | undefined)[] = []): string[] {
+  const out = dropped.map((d) => `"${d}" was left out: it can't mean anything as a rule.`);
+  const lost = unplacedNumbers(idea, s, names);
+  if (lost.length) {
+    const list = lost.map((n) => n.toLocaleString("en-IN")).join(", ");
+    out.push(`${lost.length === 1 ? "The number" : "The numbers"} ${list} in your words ${lost.length === 1 ? "isn't" : "aren't"} in the rules below. Check the rules before you run it.`);
+  }
+  return out;
 }

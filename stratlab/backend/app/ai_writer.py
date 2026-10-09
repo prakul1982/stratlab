@@ -238,3 +238,116 @@ def _universe(u) -> dict | None:
     mo = u.get("maxOpen")
     max_open = int(mo) if isinstance(mo, (int, float)) and not isinstance(mo, bool) and mo >= 1 else None
     return {"preset": preset, "symbols": symbols, "maxOpen": max_open}
+
+
+# ---------- the AI's rules checked against the sentence they came from (R11C-004, R11C-005) ----------
+# values on the price's own scale: compared with a number, it must be a price above 0
+PRICE_LIKE = {"price", "open", "high", "low", "prev_close", "day_open", "day_high", "day_low", "sma", "ema", "vwap",
+              "bb_upper", "bb_mid", "bb_lower", "supertrend", "dc_upper", "dc_lower"}
+# values on a 0-100 scale, and how a sentence names them
+SCALED = {"rsi": r"rsi", "stoch_k": r"stoch(?:astic)?(?:\s*%?k)?", "adx": r"adx"}
+_SHORT = re.compile(r"\b(sell(?:ing)? short|short[- ]?sell(?:ing)?|go(?:es|ing)? short|shorts?|shorting|short side|"
+                    r"both ways|both directions|long (?:and|or) short)\b(?![- ]?term)", re.I)
+_BUY = re.compile(r"\b(buy|buys|buying|go long|enter|long)\b", re.I)
+_NO_STOP = re.compile(r"\b(no|without(?: an?| any)?|don'?t use(?: an?)?|not? use(?: an?)?)\s+(stop[- ]?loss(?:es)?|stops?|sl)\b", re.I)
+_NO_TGT = re.compile(r"\b(no|without(?: an?| any)?)\s+(target|take[- ]?profit|profit target)s?\b", re.I)
+_AFTER = re.compile(r"\b(?:after|hold(?:ing)? for|for at most|at most)\s+(\d+)\s+(bars?|candles?|days?|sessions?)\b", re.I)
+_EXIT_WORDS = re.compile(r"\b(sell|sells|exit|close|square[- ]?off|cover|get out)\b", re.I)
+_CMP = r"(?:is |was |goes |moves |rises |falls |drops |crosses |closes )?(?:back )?(above|over|greater than|more than|>|below|under|less than|<)\s*(-?\d+(?:\.\d+)?)"
+
+
+def _same(a: dict, b: dict) -> bool:
+    keep = lambda r: {k: v for k, v in r.items() if v is not None}       # noqa: E731
+    return keep(a) == keep(b)
+
+
+def _scaled_from_text(kind: str, period, text: str) -> dict | None:
+    """'RSI 14 is above 55' read straight from the sentence: the 0-100 value, the comparison and its number."""
+    p = int(period) if period else None
+    before = rf"(?:{p}[- ]?(?:day|period|bar|candle)?s?[- ]?)?" if p else ""
+    after = rf"(?:\s*\(?\s*{p}\s*\)?)?" if p else ""
+    m = re.search(rf"\b{before}{SCALED[kind]}{after}\b[^.;,]*?\s{_CMP}", text, re.I)
+    if not m:
+        return None
+    word, v = m.group(1).lower(), float(m.group(2))
+    if not 0 <= v <= 100:
+        return None
+    op = "gt" if word in ("above", "over", "greater than", "more than", ">") else "lt"
+    return {"l": {"t": kind, **({"p": period} if period else {})}, "op": op, "r": {"t": "num", "v": v}}
+
+
+def check_against_text(out: dict, text: str) -> dict:
+    """The AI builder's rules, checked against the person's own sentence before anyone sees them. Each change is said in
+    the notes, so nothing is fixed silently:
+    - a rule that can never mean anything ("Price crosses below 0", a value against itself) is left out;
+    - a 0-100 value set against the price ("Price is above RSI 14" from "RSI 14 is above 55") is read again from the
+      sentence, or left out when the sentence doesn't say it;
+    - "sell" means selling what was bought: a short side only when the sentence says short ("sell short", "go short");
+    - "no stop loss" is a stop of 0, said (and so never asked again), and "after 15 bars" is a time exit."""
+    notes = list(out.get("notes") or [])
+
+    def clean(conds: list[dict]) -> list[dict]:
+        kept = []
+        for c in conds:
+            l, r = c.get("l") or {}, c.get("r") or {}
+            if _same(l, r):
+                notes.append("A rule that compared a value with itself was left out.")
+                continue
+            bad = None
+            for a, b in ((l, r), (r, l)):
+                if a.get("t") in PRICE_LIKE and b.get("t") == "num" and (b.get("v") is None or b["v"] <= 0):
+                    bad = f"A rule comparing the price with {b.get('v', 0):g} was left out: it can't mean anything."
+                if a.get("t") in SCALED and b.get("t") == "num" and b.get("v") is not None and not 0 <= b["v"] <= 100:
+                    bad = f"A rule comparing a 0-100 value with {b['v']:g} was left out: it can't mean anything."
+            if bad:
+                notes.append(bad)
+                continue
+            mixed = next(((a, b) for a, b in ((l, r), (r, l)) if a.get("t") in SCALED and b.get("t") in PRICE_LIKE), None)
+            if mixed:
+                osc = mixed[0]
+                fixed = _scaled_from_text(osc["t"], osc.get("p"), text)
+                if fixed:
+                    kept.append({**fixed, **({"w": c["w"]} if c.get("w") is not None else {})})
+                    notes.append(f"A rule was read again from your words: {osc['t'].upper().replace('_K', '')} "
+                                 f"{'above' if fixed['op'] == 'gt' else 'below'} {fixed['r']['v']:g}.")
+                else:
+                    notes.append("A rule comparing the price with a 0-100 value was left out: the two aren't on the same scale.")
+                continue
+            kept.append(c)
+        return kept
+
+    for k in ("entry", "exit", "shortEntry", "shortExit"):
+        out[k] = clean(list(out.get(k) or []))
+    # "Sell when it crosses below" is the way out of a buy, not a short sale (R11C-004)
+    if out.get("side") in ("short", "both") and not _SHORT.search(text):
+        if out["side"] == "both":
+            if not out.get("exit"):
+                out["exit"] = [c for c in out.get("shortEntry") or [] if not any(_same(c, e) for e in out.get("entry") or [])]
+            out.update(side="long", shortEntry=[], shortExit=[])
+            notes.append('"Sell" was read as selling what was bought, not as a short sale. Say "sell short" to trade short.')
+        elif _BUY.search(text):
+            out.update(side="long")
+            notes.append('"Sell" was read as selling what was bought, not as a short sale. Say "sell short" to trade short.')
+    risk = dict(out.get("risk") or {})
+    mentioned = set(out.get("mentioned") or [])
+    if _NO_STOP.search(text):
+        risk["sl"] = 0                      # said: no stop, and so not asked again (R11C-005: it came back as a 2% stop)
+        mentioned.add("sl")
+    if _NO_TGT.search(text):
+        risk["tgt"] = 0
+        mentioned.add("tgt")
+    if "maxBars" not in risk:
+        for sentence in re.split(r"[.;\n]", text):
+            m = _AFTER.search(sentence)
+            if m and _EXIT_WORDS.search(sentence):
+                risk["maxBars"] = int(m.group(1))
+                mentioned.add("maxBars")
+                break
+    if out.get("exit"):
+        mentioned.add("exit")
+    elif "exit" in mentioned and not risk.get("maxBars") and not risk.get("sl") and not risk.get("tgt"):
+        mentioned.discard("exit")           # no sell rule survived: the app asks for one
+    out["risk"] = risk
+    out["mentioned"] = sorted(mentioned)
+    out["notes"] = list(dict.fromkeys(notes))[:10]
+    return out

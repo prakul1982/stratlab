@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, isAutoName, legName, legRule, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, staleQuoteLine, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -109,7 +109,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
       onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /> },
     ...(preview ? [
       { key: "strike", header: "Strike", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.strike ?? (p?.pick ? "none fits" : "not listed"); } },
-      { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? price(p.fill, "INR") : "no quote"; } },
+      { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? `${price(p.fill, "INR", preview.tick && preview.tick < 0.01 ? 4 : undefined)}${p.from_last ? " (last trade)" : ""}` : "no quote"; } },
     ] : []),
     { key: "x", header: <span className="sr-only">Remove</span>, action: true, cell: ({ i }) => (s.legs.length > 1 ? <button type="button" className="chip-x" aria-label={`Remove leg ${i + 1}`} onClick={() => set(s.legs.filter((_, j) => j !== i))}>×</button> : null) },
   ];
@@ -131,7 +131,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
   );
 }
 
-const points = (xs: number[]) => xs.map((b) => Math.round(b).toLocaleString("en-IN")).join(" and ");
+const points = (xs: number[], tick?: number | null) => xs.map((b) => levelText(b, tick)).join(" and ");
 const share = (v: number | null) => (v == null ? "–" : v > 0 && v < 0.005 ? "under 0.01%" : `${v.toFixed(2)}%`);
 const asOf = (d: string) => fmtDate(d);
 
@@ -199,13 +199,16 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
   const bestOut = outside(best, f.bestAt), worstOut = outside(worst, f.worstAt);
   const curves: PayoffCurve[] = [{ id: "expiry", label: "At expiry", values: f.ys },
     ...(c ? [{ id: "after", label: "After charges", values: f.ys.map((y) => y - c.total), dash: "4 4", width: 1.4 }] : [])];
-  const markers: PayoffMarker[] = [{ x: p.spot, label: `Spot ${Math.round(p.spot).toLocaleString("en-IN")}`, kind: "spot" as const },
+  const markers: PayoffMarker[] = [{ x: p.spot, label: `Spot ${levelText(p.spot, p.tick)}`, kind: "spot" as const },
     // each breakeven's label sits on the side away from the spot, so both read beside the spot's
-    ...before.map((x) => ({ x, label: `Breakeven ${Math.round(x).toLocaleString("en-IN")}`, kind: "breakeven" as const, side: x < p.spot ? "left" as const : "right" as const })),
+    ...before.map((x) => ({ x, label: `Breakeven ${levelText(x, p.tick)}`, kind: "breakeven" as const, side: x < p.spot ? "left" as const : "right" as const })),
     // after charges they sit a few points inside: lines only, the numbers are in the note under the chart
     ...(c ? c.breakevens_after.map((x) => ({ x, label: "", kind: "other" as const })) : [])];
+  const stale = staleQuoteLine(p.from_last ?? p.legs.filter((l) => l.from_last).length, p.legs.length);
   return (
     <>
+      {stale && <Notice tone="warn" role="status" className="opt-stale">{stale}</Notice>}
+      {p.impossible && <Notice tone="warn" role="status" className="opt-impossible">{p.impossible}</Notice>}
       <Card label="Summary">
         <CardHead title="Summary" info="Worked out at expiry from the fills shown, with the legs held to the end. Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes." />
         <StatRow label="Priced structure">
@@ -214,8 +217,8 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
             note={c && c.max_profit_after != null ? `${optMoney(c.max_profit_after)} after charges` : undefined} />
           <Stat testId="opt-max-loss" label="Most it can lose" value={worst == null ? "Unlimited" : optMoney(worst)} tone={worst == null ? undefined : "down"}
             note={c && c.max_loss_after != null ? `${optMoney(c.max_loss_after)} after charges` : undefined} />
-          <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before) : "None"}
-            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after)} after charges` : "none after charges") : undefined} />
+          <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before, p.tick) : "None"}
+            note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after, p.tick)} after charges` : "none after charges") : undefined} />
           <Stat testId="opt-margin" label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"}
             note={p.margin != null ? "the broker's figure for these legs, asked when priced" : "the broker didn't give one; price it again"} />
         </StatRow>
@@ -228,13 +231,13 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
             ariaLabel="Profit or loss at expiry and today across prices" />
         ) : (
           <PayoffChart ariaLabel="Profit or loss at expiry across prices" height={220} xs={f.xs} testId="payoff-chart"
-            format={(v) => inr(v)} axisFormat={axisInrFor(Math.max(0, ...curves.flatMap((x) => x.values.map((v) => Math.abs(v ?? 0)))))} xFormat={(x) => Math.round(x).toLocaleString("en-IN")}
+            format={(v) => inr(v)} axisFormat={axisInrFor(Math.max(0, ...curves.flatMap((x) => x.values.map((v) => Math.abs(v ?? 0)))))} xFormat={(x) => levelText(x, p.tick)}
             curves={curves} markers={markers} />
         )}
         <p className="k-note" data-testid="opt-breakevens">
           At expiry, if held to the end{c ? "; the dashed line is after charges" : ", before costs"}.{" "}
-          {before.length > 0 && <>Breaks even at {points(before)}{c ? " before charges" : ""}. </>}
-          {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after)}. </> : <>After charges it doesn't break even at any price. </>)}
+          {before.length > 0 && <>Breaks even at {points(before, p.tick)}{c ? " before charges" : ""}. </>}
+          {c && (c.breakevens_after.length > 0 ? <>After charges: {points(c.breakevens_after, p.tick)}. </> : <>After charges it doesn't break even at any price. </>)}
           {bestOut != null && <>The most it can make is reached at {bestOut}, outside the chart. </>}
           {worstOut != null && <>The most it can lose is reached at {worstOut}, outside the chart. </>}
           Paper trades close at your square-off time, usually well before expiry, so they rarely reach these extremes.
@@ -437,7 +440,7 @@ export function OptionsPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Practise" title="Options builder" info={HELP.options} infoLabel="About options"
-        lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask."
+        lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask; a contract with none is priced from its last trade, and the page says so."
         actions={<><Badge tone="plain" dot={false}>Backtesting coming soon</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
 
       {offline && <Notice tone="warn">{offline}</Notice>}
@@ -470,7 +473,8 @@ export function OptionsPage() {
             <div className="k-expiry">
               <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
                 options={[{ value: "current", label: "Nearest" }, { value: "next", label: "Next" }, { value: "month", label: "Monthly" }]} onChange={(v) => patch({ expiry: v })} />
-              {und && <span className="k-note">{exp && s.expiry !== "month" ? `${expiryName(exp)} · ` : ""}lot {und.lot}</span>}
+              {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
+              {und && <span className="k-note" data-testid="opt-expiry-note">{preview ? `${expiryName(preview.expiry)} · ` : exp && s.expiry !== "month" ? `${expiryName(exp)} · ` : ""}lot {und.lot}</span>}
             </div>
           </FieldGroup>
           <FieldGroup label="Strategy" wide>

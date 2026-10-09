@@ -218,7 +218,8 @@ def test_too_few_trades_says_a_win_rate_could_be_luck():
     v = J.verdict(ts)
     luck = next(c for c in v["checks"] if c["id"] == "luck")
     assert "With 23 trades, a 61% win rate could easily be luck" in luck["detail"]
-    assert v["verdict"] in ("mixed", "luck") and v["headline"] in ("Mixed evidence.", "Probably luck.")
+    # the headline states what the checks found, never "Probably luck." (R11C-009)
+    assert v["verdict"] in ("mixed", "luck") and v["headline"].startswith("Passed ") and "checks run" in v["headline"]
     small = J.verdict(ts[:10])
     assert small["verdict"] == "not_enough" and small["summary"].startswith("Only 10 closed trades here.")
     assert next(c for c in small["checks"] if c["id"] == "sample")["detail"] == "Too few trades to tell skill from luck."
@@ -227,7 +228,7 @@ def test_too_few_trades_says_a_win_rate_could_be_luck():
 def test_a_steady_record_passes_and_a_costly_one_fails():
     good = [T(v, f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}", charges=2) for i, v in enumerate([120, 90, -40, 150, 80, -30] * 8)]
     v = J.verdict(good, capital=100000)
-    assert v["verdict"] == "edge" and v["headline"] == "Likely a real edge." and v["passed"] == 4
+    assert v["verdict"] == "edge" and v["headline"] == "Passed all four checks." and v["passed"] == 4      # a fact, not a claim (R11C-009)
     shuffle = next(c for c in v["checks"] if c["id"] == "shuffle")
     assert shuffle["data"]["unit"] == "pct" and "your trades'" in shuffle["detail"] and "backtest" not in shuffle["detail"]
     costly = [T(v - 70, d["exit_t"], gross=v, charges=70) for v, d in zip([120, 90, -40, 150, 80, -30] * 8, good)]

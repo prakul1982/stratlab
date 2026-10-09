@@ -161,13 +161,32 @@ def run_group(registry, strategy: Strategy, market: str, preset: dict, now: str,
     return rec, group
 
 
+def risk_text(spec: dict, group: dict) -> str:
+    """The stop and the cap on one position, in the card's own words, right after the rules (R11C-017: both were seen only
+    after opening "The rules"): "A 12% stop loss; at most 10% of the capital in one stock, up to 10 at once." A stop the
+    rules' text already describes isn't said twice."""
+    risk = {**RISK, **spec["body"].get("risk", {})}
+    bits = []
+    if "stop" not in spec["text"].lower():
+        kind, sl = risk.get("stopType", "pct"), risk.get("sl") or 0
+        if sl:
+            bits.append(f"a {sl:g}% stop loss" if kind == "pct" else f"a stop {sl:g} times the 14-day ATR from the entry" if kind == "atr"
+                        else f"a {sl:g}-point stop" if kind == "points" else f"a stop at the {sl:g}-candle swing")
+        else:
+            bits.append("no stop loss")
+    unit = "coin" if group.get("market") == "CRYPTO" else "stock"
+    bits.append(f"at most {risk['maxAlloc']:g}% of the capital in one {unit}, up to {group.get('maxOpen')} at once")
+    text = "; ".join(bits)
+    return text[:1].upper() + text[1:] + "."
+
+
 def publish(slug: str, spec: dict, market: str, preset: dict, rec: dict, group: dict) -> dict:
     """The library entry for one run: StratLab's, badged, with the engine's verdict as it came out."""
     eid = entry_id(slug, preset["id"])
     old = library.load(eid)
     nb = {"id": None, "name": f"{spec['name']} · {preset['name']}",
           "question": f"How did {spec['name']} do on {preset['name']}?", "group": group}
-    e = library.entry(nb, rec, OWNER, AUTHOR, f"{spec['text']} {NOTE}", entry_id=eid)
+    e = library.entry(nb, rec, OWNER, AUTHOR, f"{spec['text']} {risk_text(spec, group)} {NOTE}", entry_id=eid)
     e["verdict"]["summary"] = plain(e["verdict"].get("summary") or "")
     e.update(official=True, badge=BADGE, seed={"slug": slug, "version": SEED_VERSION, "universe": preset["id"], "market": market,
                                               "days": rec.get("days"), "from": (rec.get("range") or {}).get("from"),

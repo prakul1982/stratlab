@@ -29,3 +29,23 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
 export const CHECK_NAMES: Record<string, string> = { unseen: "unseen years", nearby: "nearby settings", shuffle: "bad-luck fall", sample: "enough trades" };
 
 export const checkTone =(s: CheckStatus | "pass" | "warn" | "fail" | "skip"): "ok" | "warn" | "plain" => (s === "pass" ? "ok" : s === "fail" ? "warn" : "plain");
+
+/** "Every trade"'s caption and the trades it has no row for (R11C-003: "200 closed + 10 still open" under a header of 250
+ * trades, and rows that summed to $301,405 against a total of $279,150). Only the newest closed trades are kept as rows, so
+ * the caption says "Newest 200 of 250 closed", and the P&L of the rest is the total less the rows: the rows and one line
+ * for the rest add up to the total. */
+export function tradeListFacts(e: { trades: { exit_t?: string | null; pnl: number }[]; stats: { n: number; pnl?: number | null };
+  trimmed_pnl?: number; omitted_pnl?: number }) {
+  const open = e.trades.filter((t) => !t.exit_t).length;
+  const closed = e.trades.length - open;
+  const n = Math.max(e.stats.n ?? closed, closed);
+  const hidden = n - closed;
+  const listed = e.trades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const total = e.stats.pnl ?? listed + (e.omitted_pnl ?? 0) + (e.trimmed_pnl ?? 0);
+  const count = (k: number) => k.toLocaleString("en-IN");
+  const still = open ? ` + ${count(open)} still open` : "";
+  return {
+    open, closed, hidden, total, hiddenPnl: hidden ? total - listed : 0,
+    caption: hidden ? `Newest ${count(closed)} of ${count(n)} closed${still}` : `${count(closed)} closed${still}`,
+  };
+}

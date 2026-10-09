@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { blankStrategy, detectInstrument, detectTf, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, withDefaultExit } from "../lib/rules";
+import { blankStrategy, detectInstrument, detectTf, meaningful, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, ruleWarnings, withDefaultExit } from "../lib/rules";
 import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
 import { Notice } from "./kit";
@@ -11,7 +11,7 @@ export interface Built {
   strategy: Strategy;
   instrument: Instrument | null;
   question: string;
-  gaps: { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string };
+  gaps: { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; warnings?: string[] };
   group?: Group | null;   // a strategy that trades a list of instruments together
 }
 
@@ -100,18 +100,31 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
   }
   const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
-  const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: out.entry }, instrument?.symbol));
+  // what the sentence plainly says about the money side ("no stop loss", "stop loss 3%", "after 15 bars") stands when the
+  // builder gave no value of its own for it, and counts as said, so no question asks it again (R11C-005)
+  const said = parseStrategyText(idea).risk;
+  const extra = Object.fromEntries(Object.entries(said).filter(([k]) => !(k in (out.risk || {}))));
+  const mentioned = [...new Set([...(out.mentioned || []), ...Object.keys(extra)])];
+  // rules that can't mean anything are left out, and said (R11C-004: "Price crosses below 0" from "after 15 bars")
+  const checked = { entry: meaningful(out.entry), exit: meaningful(out.exit || []), shortEntry: meaningful(out.shortEntry ?? []), shortExit: meaningful(out.shortExit ?? []) };
+  const s = blankStrategy(out.name || nameFor({ ...blankStrategy(), entry: checked.entry.kept }, instrument?.symbol));
   const strategy: Strategy = {
-    ...s, text: idea, entry: out.entry, exit: out.exit || [], entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
-    side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: out.shortEntry ?? [], shortExit: out.shortExit ?? [],
+    ...s, text: idea, entry: checked.entry.kept, exit: checked.exit.kept, entryJoin: out.entryJoin || "all", tf: out.tf || "1d",
+    side: out.side === "short" || out.side === "both" ? out.side : "long", shortEntry: checked.shortEntry.kept, shortExit: checked.shortExit.kept,
     minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
-    risk: riskForCurrency({ ...s.risk, ...out.risk }, instrument?.currency),
+    risk: riskForCurrency({ ...s.risk, ...extra, ...out.risk }, instrument?.currency),
   };
+  if (!strategy.entry.length) {
+    const r = noRuleNote(idea, out.notes);
+    return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
+  }
+  const built = withDefaultExit(strategy, mentioned);
   return {
     usedAI, note: fallback,
     // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
-    built: { strategy: withDefaultExit(strategy, out.mentioned || []), instrument, question: questionFrom(idea, instrument?.symbol),
-      gaps: { mentioned: out.mentioned || [], notes: out.notes || [], instName: out.instrument, usedAI, fallback } },
+    built: { strategy: built, instrument, question: questionFrom(idea, instrument?.symbol),
+      gaps: { mentioned, notes: out.notes || [], instName: out.instrument, usedAI, fallback,
+        warnings: ruleWarnings(idea, built, Object.values(checked).flatMap((x) => x.dropped), [out.instrument, instrument?.symbol, instrument?.name]) } },
   };
 }
 

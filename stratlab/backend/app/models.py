@@ -163,6 +163,8 @@ class GapsReq(BaseModel):
     usedAI: bool = True
     fallback: str = Field("", max_length=400)
     answered: dict[Annotated[str, Field(max_length=20)], Annotated[str, Field(max_length=120)]] = Field(default_factory=dict, max_length=20)
+    # what didn't come out of the words as written: a rule left out, a number not in the rules (R11C-004)
+    warnings: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
 
 
 class NotebookReq(BaseModel):
@@ -241,6 +243,7 @@ class SaveStrategyReq(BaseModel):
     strategy: Strategy
     instrument_token: Optional[int] = None
     instrument: Optional[str] = Field(None, max_length=60)
+    group: Optional[GroupReq] = None        # an export of a notebook set to a group carries the group (R11C-013)
 
 
 class AdminPlanReq(BaseModel):

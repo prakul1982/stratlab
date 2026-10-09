@@ -68,16 +68,33 @@ def _at(now: datetime, t: str) -> datetime:
     return now.replace(hour=h, minute=m, second=0, microsecond=0)
 
 
-def fill_price(q: dict | None, side: str, slip_ticks: int) -> float | None:
-    """What an order fills at: the bid when selling, the ask when buying, falling back to the last price."""
+TICKS = {"CDS": 0.0025}     # an NSE currency option's premium moves in quarter paise, everything else here in 5 paise
+
+
+def tick_for(exchange: str | None) -> float:
+    return TICKS.get(exchange or "", TICK)
+
+
+def fill_price(q: dict | None, side: str, slip_ticks: int, tick: float = TICK) -> float | None:
+    """What an order fills at: the bid when selling, the ask when buying, falling back to the last price. `tick` is the
+    contract's price step: a currency option's premium (₹0.1125) keeps its quarter paise."""
     if not q:
         return None
     best = q.get("bid") if side == "sell" else q.get("ask")
     px = best if best and best > 0 else q.get("ltp")
     if not px or px <= 0:
         return None
-    px += (-1 if side == "sell" else 1) * slip_ticks * TICK
-    return max(round(px, 2), TICK)
+    px += (-1 if side == "sell" else 1) * slip_ticks * tick
+    return max(round(px, 4 if tick < 0.01 else 2), tick)
+
+
+def from_last(q: dict | None, side: str) -> bool:
+    """Whether a fill comes from the last traded price because the side it fills on (the bid to sell, the ask to buy) has
+    no quote: a price that may be hours old (R11C-007)."""
+    if not q:
+        return False
+    best = q.get("bid") if side == "sell" else q.get("ask")
+    return not (best and best > 0)
 
 
 class OptionsEngine:
@@ -117,7 +134,7 @@ class OptionsEngine:
     # ---------- marks ----------
     def _mark(self, leg: dict, quotes: dict) -> float:
         """What closing a leg gets now; remembers the last good mark when a quote is missing."""
-        px = fill_price(quotes.get(leg["key"]), "buy" if leg["side"] == "sell" else "sell", 0)
+        px = fill_price(quotes.get(leg["key"]), "buy" if leg["side"] == "sell" else "sell", 0, tick_for(self.s.exchange))
         if px is not None:
             leg["mark"] = px
         return leg.get("mark", leg["entry"])
@@ -157,7 +174,7 @@ class OptionsEngine:
 
     def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out, picked: str | None = None) -> bool:
         key = contracts.key(opt, strike)
-        px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks) if key else None
+        px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks, tick_for(self.s.exchange)) if key else None
         if px is None:
             return False
         sym = key.split(":", 1)[1]
@@ -169,7 +186,7 @@ class OptionsEngine:
 
     def _close_leg(self, now, leg, quotes, why, out):
         side = "buy" if leg["side"] == "sell" else "sell"
-        px = fill_price(quotes.get(leg["key"]), side, self.s.costs.slippageTicks) or leg.get("mark", leg["entry"])
+        px = fill_price(quotes.get(leg["key"]), side, self.s.costs.slippageTicks, tick_for(self.s.exchange)) or leg.get("mark", leg["entry"])
         pnl = self._leg_pnl(leg, px)
         leg.update(open=False, exit=px, mark=px)
         self.pos["closed_pnl"] += pnl

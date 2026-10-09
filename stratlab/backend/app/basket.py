@@ -77,13 +77,13 @@ def run(registry, strategy, market: str, exclude: str | None, days: int) -> dict
     beat = [r for r in tested if r["ret"] > r["buy_hold"]]
     share = len(profitable) / len(tested) if tested else 0
     if len(tested) < 4:
-        status, headline = "warn", "Too few instruments could be tested to judge."
+        status, headline = "warn", f"Only {len(tested)} similar instrument{'' if len(tested) == 1 else 's'} could be tested: too few to judge."
     elif share >= 0.6:
-        status, headline = "pass", f"It travels: profitable on {len(profitable)} of {len(tested)} similar instruments."
+        status, headline = "pass", f"Profitable on {len(profitable)} of {len(tested)} similar instruments."
     elif share >= 0.4:
         status, headline = "warn", f"Mixed: profitable on {len(profitable)} of {len(tested)} similar instruments."
     else:
-        status, headline = "fail", f"It doesn't travel: profitable on only {len(profitable)} of {len(tested)} similar instruments."
+        status, headline = "fail", f"Profitable on {len(profitable)} of {len(tested)} similar instruments."
     return {"status": status, "headline": headline, "market": market, "days": days,
             "tested": len(tested), "profitable": len(profitable), "beat_buy_hold": len(beat),
             "median_ret": statistics.median([r["ret"] for r in tested]) if tested else None,

@@ -13,7 +13,7 @@ import "../pages/trade/trade.css";
 
 interface ImportOut {
   source: string; source_name: string; used_ai: boolean; kind?: "options";
-  strategy?: Strategy; instrument_id?: string | null;                       // a StratLab export
+  strategy?: Strategy; instrument_id?: string | null; group?: Group | null;  // a StratLab export (with the group it tested on)
   entry?: Cond[]; exit?: Cond[]; entryJoin?: "all" | "any" | "score"; side?: "long" | "short" | "both"; tf?: Tf | null; name?: string | null;
   shortEntry?: Cond[]; shortExit?: Cond[]; minScore?: number; session?: Session; product?: Strategy["product"];
   instrument?: string | null; market?: string | null; risk?: Partial<Risk>; mentioned?: string[]; notes: string[];
@@ -82,7 +82,8 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
           // an import is a translation: no stop or target the script didn't have (R5O-010)
           risk: riskForCurrency({ ...s.risk, sl: 0, tgt: 0, ...(out.risk || {}) }, instrument?.currency) };
       }
-      const group = out.universe ? await groupFor(out.universe, out.market || market || "IN") : null;
+      // a StratLab export of a notebook set to a group brings the group back (R11C-013)
+      const group = out.group ?? (out.universe ? await groupFor(out.universe, out.market || market || "IN") : null);
       if (group) instrument = null;
       const fallback = !out.strategy && !out.used_ai ? "The AI translator was busy, so StratLab's built-in Pine Script reader was used. It covers moving averages, RSI, crossovers and percent stops." : "";
       await onBuilt({

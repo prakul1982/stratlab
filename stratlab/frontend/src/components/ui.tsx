@@ -4,7 +4,8 @@ import { usePopover } from "./kit/Dialog";
 import { asOf } from "../lib/format";
 
 const VERDICT_NAME: Record<VerdictKind, string> = {
-  edge: "Likely a real edge", mixed: "Mixed evidence", luck: "Probably luck", not_enough: "Not enough evidence", no_edge: "No edge here",
+  // facts about the checks, never a claim about the strategy (R11C-009: the badge said "Likely a real edge" beside a return far behind buy and hold)
+  edge: "Passed the checks", mixed: "Mixed check results", luck: "Failed a robustness check", not_enough: "Too few trades", no_edge: "Lost money after costs",
 };
 export const STATUS_NAME: Record<CheckStatus, string> = { pass: "Passed", warn: "Warning", fail: "Failed", skip: "Skipped" };
 

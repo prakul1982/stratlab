@@ -51,6 +51,15 @@ WANT_FOR = 30        # a contract asked for in the last 30 s rides along with ev
 BATCH = 450          # contracts per quote request (Kite allows 500)
 
 
+def broker_qty(key: str, units: float) -> int:
+    """An order's quantity as the broker counts it: units of the underlying, except NSE currency contracts, which the
+    broker counts in lots (one USDINR lot is 1,000 dollars; the app holds units, CDS_UNITS a lot). R11C-007: the margin
+    asked for 1,000 lots of a one-lot USDINR condor, ₹10.3 lakh for a structure that could lose ₹30 to ₹400."""
+    if str(key).startswith("CDS:"):
+        return max(1, int(round(float(units) / CDS_UNITS)))
+    return int(units)
+
+
 class OptionsData:
     def __init__(self, kite):
         self.kite = kite                 # KiteService
@@ -97,8 +106,11 @@ class OptionsData:
         today = ist_date().isoformat()
         seen: dict[tuple, dict] = {}
         for exch, rows in self._rows.items():
+            # today's expiry is gone once its contracts have stopped trading, as in expiries(): the "Nearest" the page names
+            # is the one priced (R11C-007: "Nearest · Fri, 9 Oct" after USDINR's 12:30 expiry, priced on 16 Oct)
+            gone = today if expired_today(exch) else None
             for r in rows:
-                if r["type"] == "FUT" or r["expiry"] < today:
+                if r["type"] == "FUT" or r["expiry"] < today or r["expiry"] == gone:
                     continue
                 k = (exch, r["name"])
                 u = seen.setdefault(k, {"exchange": exch, "name": r["name"], "lot": r["lot"], "expiries": set()})
@@ -271,7 +283,7 @@ class OptionsData:
         """The broker's margin for a basket (hedge benefit included), or None if it can't be had."""
         orders = [{"exchange": l["key"].split(":", 1)[0], "tradingsymbol": l["key"].split(":", 1)[1],
                    "transaction_type": "SELL" if l["side"] == "sell" else "BUY", "variety": "regular",
-                   "product": "NRML", "order_type": "MARKET", "quantity": int(l["qty"]), "price": 0, "trigger_price": 0}
+                   "product": "NRML", "order_type": "MARKET", "quantity": broker_qty(l["key"], l["qty"]), "price": 0, "trigger_price": 0}
                   for l in legs]
         try:
             self.kite._throttle()

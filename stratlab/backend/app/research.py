@@ -74,6 +74,7 @@ def load(registry, strategy, req) -> dict:
     days = min(req.days, max_days)
     # a weekday market is only ever tested on the days it trades, whatever the feed sent
     bars = trading_bars(inst.get("market"), prov.history(inst, tf, days + prov.warmup_days(tf)), tf)
+    bars = closed_only(bars, tf, inst.get("market"))
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     start = next((i for i, b in enumerate(bars) if parse_t(b["t"]) >= cutoff), len(bars))
     if len(bars) - start < 10:
@@ -81,6 +82,39 @@ def load(registry, strategy, req) -> dict:
     lot = inst.get("step") or (inst["lot"] if inst.get("fno") else 1)
     return {"inst": inst, "bars": bars, "start": start, "days": days, "max_days": max_days,
             "lot": lot, "kind": C.kind_of(inst)}
+
+
+TF_MINUTES = {"1h": 60, "15m": 15, "5m": 5}
+
+
+def closed_only(bars: list[dict], tf: str, market: str | None = None, now: datetime | None = None) -> list[dict]:
+    """Intraday candles without the one still forming: a backtest never decides on a candle that hasn't closed (R11C-011:
+    a run at 13:37 opened a trade on the 13:37 candle, which the next run then saw differently). A candle has closed once
+    its length has passed, or the market's close has, whichever comes first (an hour candle from 15:15 in India closes at
+    15:30)."""
+    mins = TF_MINUTES.get(tf)
+    if not mins or not bars:
+        return bars
+    now = now or datetime.now(timezone.utc)
+    try:
+        start = parse_t(bars[-1]["t"])
+    except (ValueError, KeyError):
+        return bars
+    end = start + timedelta(minutes=mins)
+    try:
+        from zoneinfo import ZoneInfo
+        from .data.markets import BY_ID
+        m = BY_ID.get(market or "") or {}
+        close = (m.get("hours") or {}).get("close")
+        if close:
+            local = start.astimezone(ZoneInfo(m["tz"]))
+            h, mi = (int(x) for x in close.split(":"))
+            at_close = local.replace(hour=h, minute=mi, second=0, microsecond=0)
+            if local < at_close < end:
+                end = at_close
+    except (KeyError, ValueError, TypeError):
+        pass
+    return bars[:-1] if end > now else bars
 
 
 def _default_meta():
@@ -121,6 +155,16 @@ def _pick(n: int) -> list[int]:
     return sorted({round(i * step) for i in range(MAX_POINTS)})
 
 
+def omitted(closed: list[dict]) -> dict:
+    """The closed trades an experiment keeps no row for (only the newest MAX_TRADES are kept): how many, and their P&L
+    after costs, so the trade list says "newest 200 of 250" and its rows plus this line add up to the total (R11C-003:
+    "Every trade" listed 200 of 250 with no word of the rest, and its rows didn't add up)."""
+    left = closed[:-MAX_TRADES] if len(closed) > MAX_TRADES else []
+    if not left:
+        return {}
+    return {"trades_omitted": len(left), "omitted_pnl": round(sum(t["pnl"] for t in left), 2)}
+
+
 def record(result: dict, strategy, label: str, version: int, now: str) -> dict:
     """The compact, storable form of one experiment: everything the verdict page draws."""
     bars = result["bars"]
@@ -134,6 +178,7 @@ def record(result: dict, strategy, label: str, version: int, now: str) -> dict:
     if result.get("open_trade"):
         trades.append(result["open_trade"])
     return {
+        **omitted(result["trades"]),
         "v": version, "label": label or f"Experiment v{version}", "created_at": now,
         "strategy": strategy.model_dump(),
         "instrument": {k: inst.get(k) for k in ("id", "symbol", "name", "market", "currency", "exchange", "type", "lot", "step", "fno", "tz")},
@@ -178,6 +223,7 @@ def record_group(result: dict, strategy, label: str, version: int, now: str, gro
     first = datasets[0]["inst"] if datasets else {}
     trades = list(result["trades"][-MAX_TRADES:]) + result["open_trades"]
     return {
+        **omitted(result["trades"]),
         "v": version, "label": label or f"Experiment v{version}", "created_at": now,
         "strategy": strategy.model_dump(),
         "instrument": {"id": f"GROUP:{group.get('id') or 'custom'}", "symbol": group.get("name") or "My group", "name": group.get("name"),
@@ -202,7 +248,10 @@ def slim(experiments: list[dict]) -> list[dict]:
     for i, e in enumerate(experiments):
         trades = e.get("trades") or []
         if i < cut and len(trades) > OLD_TRADES:
-            e = {**e, "trades": trades[-OLD_TRADES:], "trades_trimmed": e.get("trades_trimmed", 0) + len(trades) - OLD_TRADES}
+            gone = trades[:-OLD_TRADES]
+            # the trades cleared are counted with their P&L, so the rows left still add up to the total (R11C-003)
+            e = {**e, "trades": trades[-OLD_TRADES:], "trades_trimmed": e.get("trades_trimmed", 0) + len(trades) - OLD_TRADES,
+                 "trimmed_pnl": round((e.get("trimmed_pnl") or 0) + sum(t.get("pnl") or 0 for t in gone), 2)}
         out.append(e)
     return out
 
@@ -336,6 +385,12 @@ def describe_change(prev: dict | None, rec: dict) -> str:
     if ps.get("product") != ns.get("product"):
         bits.append(f"Product: {ps.get('product')} → {ns.get('product')}")
     if not bits:
-        return "Same setup, newer candles"
+        # "newer candles" only when the candles are newer: a rerun on the same candles says so (R11C-017)
+        pr, nrg = prev.get("range") or {}, rec.get("range") or {}
+        if pr.get("to") and nrg.get("to") and str(nrg["to"]) > str(pr["to"]):
+            return "Same setup, newer candles"
+        if pr.get("from") == nrg.get("from") and pr.get("to") == nrg.get("to") and prev.get("candles") == rec.get("candles"):
+            return "Same setup, same candles"
+        return "Same setup, candles revised"
     text = "; ".join(bits)
     return text if len(text) <= 120 else text[:117].rsplit("; ", 1)[0] + " …"
