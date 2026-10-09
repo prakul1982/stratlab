@@ -449,6 +449,37 @@ class KiteService:
             }
         return out
 
+    def index_quotes(self, keys: list[str]) -> dict[str, dict]:
+        """Indices' live levels by their quote keys ("NSE:NIFTY 50", "BSE:SENSEX"): the level, the day's range, the previous
+        close and the change against it, and the time of the reading. BSE's indices aren't in the day's instrument list
+        (only BSE-only companies are kept), so each answer's instrument token is kept for its candles (index_token)."""
+        self._require()
+        self._throttle()
+        data = self.kite.quote(list(keys))
+        tokens = self.__dict__.setdefault("_index_tokens", {})
+        out = {}
+        for k, v in data.items():
+            if v.get("instrument_token"):
+                tokens[k] = int(v["instrument_token"])
+            ohlc = v.get("ohlc") or {}
+            prev = ohlc.get("close") or None
+            last = v.get("last_price")
+            at = v.get("timestamp") or v.get("last_trade_time")
+            if hasattr(at, "tzinfo") and at.tzinfo is None:
+                at = at.replace(tzinfo=IST)
+            out[k] = {"price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"),
+                      "at": at.isoformat() if hasattr(at, "isoformat") else None, "token": v.get("instrument_token"),
+                      "change": (last - prev) if last is not None and prev else None,
+                      "change_pct": ((last / prev - 1) * 100) if last is not None and prev else None}
+        return out
+
+    def index_token(self, key: str) -> int | None:
+        """The instrument token of an index by its quote key, from a quote of it (kept for the day's process)."""
+        tokens = self.__dict__.setdefault("_index_tokens", {})
+        if key not in tokens:
+            self.index_quotes([key])
+        return tokens.get(key)
+
     # ---------- historical candles ----------
     def history(self, token: int, tf: str, days: int, continuous: bool | None = None, ttl: float | None = None,
                 store: bool = True) -> list[dict]:

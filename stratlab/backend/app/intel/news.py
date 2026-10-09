@@ -67,7 +67,9 @@ SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\
 def plain_headline(title: str | None) -> bool:
     """A headline a page may show: a story, not a site's name for itself, and not a third party's buying or selling
     worded as advice."""
-    t = " ".join(str(title or "").split())
+    # typographic apostrophes as plain ones: "We’re adding to our position…" (R7T-009, CNBC's own curly quote) is the
+    # same advice-worded title as "We're adding…"
+    t = " ".join(str(title or "").replace("’", "'").replace("‘", "'").replace("ʼ", "'").split())
     return bool(t) and not ADVICE_TITLE.search(t) and not SITE_TITLE.search(t)
 
 

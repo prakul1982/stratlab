@@ -391,6 +391,18 @@ RETRY = ("unconfirmed", "no_address", "email_off", "error", "profile")       # w
 SENT = "newssent:"          # app_settings: who an issue went to, so a retry never sends twice
 
 
+def email_of(issue: dict) -> tuple[str, str]:
+    """(html, text) of an issue's email, written from the stored issue at the moment it is sent: the same summary,
+    sections and numbers the web page shows from that issue, so the two can never differ (R7T-009: the 8 Oct US email
+    said "mixed on Tuesday" while the page, repaired after the send, said Thursday). A copy written when the issue was
+    built is used only when the issue can't be written again."""
+    try:
+        return write.render(issue)
+    except Exception as e:
+        print("newsletter: email written at build time used,", issue.get("id"), str(e)[:120])
+        return issue["html"], issue["text"]
+
+
 def deliver_why(profile: dict, issue: dict, what: str, teaser_too: bool = True) -> str:
     """Email the issue (and send the teaser). "sent" when the email went, else why not: no_address, unconfirmed, email_off
     or error. Nothing here raises: one reader's failure never stops the others (R7M-005)."""
@@ -403,7 +415,7 @@ def deliver_why(profile: dict, issue: dict, what: str, teaser_too: bool = True) 
         elif not alerts.email_ready():
             why = "email_off"
         else:
-            html, text, headers = kit.finish(issue["html"], issue["text"], profile["id"], what)
+            html, text, headers = kit.finish(*email_of(issue), profile["id"], what)
             alerts.send_email(to, issue["subject"], text, html=html, headers=headers)
             why = "sent"
     except Exception as e:

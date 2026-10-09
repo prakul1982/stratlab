@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, metricText, monthsOld, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -47,7 +47,8 @@ function useTestOnStratLab() {
     nav("/new", { state: { prefill: { market: c.region, symbol: c.symbol, instrumentId: c.instrument_id ?? null, text: idea?.text ?? "" } } });
 }
 
-/** The day's index levels: a figure for each, with its change today and where it sits against its 52-week high. */
+/** The day's index levels: a figure for each, with its change (today's only when it is today's, R7T-003) and where it sits
+ * against its 52-week high. */
 export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
@@ -55,8 +56,8 @@ export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
     <StatRow label="Index levels">
       {indices.map((i) => (
         <Stat key={i.name} item label={i.name} value={Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}
-          delta={i.change_pct != null ? <Delta value={i.change_pct}>{pct(i.change_pct, 2)}</Delta> : undefined}
-          note={<>today{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</>} />
+          delta={i.change_pct != null ? <Delta value={i.change_pct} tone={i.stale ? "neutral" : "auto"}>{pct(i.change_pct, 2)}</Delta> : undefined}
+          note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</span>} />
       ))}
     </StatRow>
   );
@@ -220,7 +221,7 @@ export function CompanyPage() {
             </div>
           </div>
           <div className="k-stack inv-head-price">
-            <Change q={c.quote} currency={ccy} closed={c.market_open === false} />
+            <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} />
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -586,8 +587,8 @@ export function ComparePage() {
                   <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open →</Link>
                   <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
                 <StatRow>
-                  <Stat label={c.market_open === false ? "Last close" : "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={c.market_open === false ? "on the day" : "today"} />
+                  <Stat label={priceLabel(c).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
+                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c).since} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
               </Card>

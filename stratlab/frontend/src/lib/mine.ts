@@ -31,8 +31,26 @@ export const MARKET_TILES: MarketTile[] = [
 /** Gold in rupees for 10 grams, from its dollars an ounce and the dollar in rupees (31.1035 grams to a troy ounce). */
 export const goldInr10g = (usdPerOz: number, inrPerUsd: number) => (usdPerOz * inrPerUsd / 31.1035) * 10;
 
-export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null }
+/** `day`: the session of the last close (its calendar day in the market's zone), so a move that isn't today's says its day. */
+export interface Series { values: number[]; last: number; prev: number | null; changePct: number | null; day?: string | null }
 type Candle = { c: number | null; t: string };
+
+/** The tiles' markets' zones, for the day of their last candle. */
+const TILE_TZ: Record<string, string> = { IN: "Asia/Kolkata", US: "America/New_York" };
+
+/** "on 8 Oct" when a tile's last close is a session before today in its market (R7T-003: SENSEX showed 8 Oct's −1.44% as the
+ * day's move after 9 Oct's open); null when it is today's. */
+export function tileWhen(day: string | null | undefined, today: string, fmt: (iso: string) => string): string | null {
+  return day && day < today ? `on ${fmt(day)}` : null;
+}
+
+/** Today's date in a tile's market. */
+export function tileToday(t: MarketTile, now = new Date()): string {
+  const tz = "research" in t.from ? TILE_TZ[t.from.research[0]] ?? "UTC" : "UTC";
+  return now.toLocaleDateString("en-CA", { timeZone: tz });
+}
+
+const candleDay = (t: string, tz: string) => (/^\d{4}-\d{2}-\d{2}$/.test(t) ? t : /^\d{4}-\d{2}-\d{2}T00:00:00/.test(t) ? t.slice(0, 10) : new Date(t).toLocaleDateString("en-CA", { timeZone: tz }));
 const seriesCache = new Map<string, { at: number; p: Promise<Series | null> }>();
 
 function loadSeries(t: MarketTile): Promise<Series | null> {
@@ -41,11 +59,13 @@ function loadSeries(t: MarketTile): Promise<Series | null> {
   const url = "research" in t.from
     ? `/research/chart/${t.from.research[0]}/${encodeURIComponent(t.from.research[1])}?tf=1d&range=1m`
     : `/chart/candles/${encodeURIComponent(t.from.instrument)}?tf=1d&range=1m`;
+  const tz = "research" in t.from ? TILE_TZ[t.from.research[0]] ?? "UTC" : "UTC";
   const p = api<{ candles: Candle[] }>(url).then((r) => {
-    const values = (r.candles ?? []).map((c) => c.c).filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+    const rows = (r.candles ?? []).filter((c): c is { c: number; t: string } => typeof c.c === "number" && Number.isFinite(c.c));
+    const values = rows.map((c) => c.c);
     if (!values.length) return null;
     const last = values[values.length - 1], prev = values.length > 1 ? values[values.length - 2] : null;
-    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null };
+    return { values, last, prev, changePct: prev ? (last / prev - 1) * 100 : null, day: candleDay(rows[rows.length - 1].t, tz) };
   }).catch(() => { seriesCache.delete(t.id); return null; });
   seriesCache.set(t.id, { at: Date.now(), p });
   return p;

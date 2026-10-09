@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
-import { upDown } from "../lib/tradeUi";
+import { sessionPath, upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { PriceChart, strategyStudies, type Tf } from "../charts/price/lazy";
@@ -50,13 +50,20 @@ function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
     bars={bars} tf={s.tf as Tf} timeframes={[s.tf as Tf]} markers={markers} levels={levels} pageStudies={studies} height={340} />;
 }
 
+/** A session's snapshot with every list it draws present: an older or other kind of session may leave one out (R7T-011: an
+ * options session's snapshot has no candles, and `bars.length` crashed the page). */
+export function withLists(s: LiveSnapshot): LiveSnapshot {
+  return { ...s, bars: s.bars ?? [], events: s.events ?? [], equity_curve: s.equity_curve ?? [] };
+}
+
 function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: () => void; onDeleted: () => void }) {
   const { fail, refreshMe, markets } = useApp();
+  const nav = useNavigate();
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
 
   const load = useCallback(async () => {
-    try { setSnap(await api<LiveSnapshot>(`/live/sessions/${sid}`)); } catch (e) { fail(e); }
+    try { setSnap(withLists(await api<LiveSnapshot>(`/live/sessions/${sid}`))); } catch (e) { fail(e); }
   }, [sid, fail]);
 
   useEffect(() => {
@@ -66,7 +73,11 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     return () => window.clearInterval(t);
   }, [load]);
 
-  if (!snap) return <Card><Skeleton label="Connecting to the session" /></Card>;
+  // an options or signal session's id here opens its own page (R7T-011)
+  const own = snap ? sessionPath({ id: sid, kind: (snap as unknown as { kind?: string }).kind, instrument: snap.instrument as { type?: string; signal?: boolean } }) : null;
+  useEffect(() => { if (own && own !== `/paper/${sid}`) nav(own, { replace: true }); }, [own, sid, nav]);
+
+  if (!snap || (own && own !== `/paper/${sid}`)) return <Card><Skeleton label="Connecting to the session" /></Card>;
   if ((snap as unknown as GroupSnapshot).kind === "group") {
     const g = snap as unknown as GroupSnapshot;
     return <GroupSession snap={g}
@@ -198,7 +209,13 @@ export function PaperPage() {
 
   const stopped = (rows ?? []).filter((r) => r.status !== "running" && r.status !== "paused");
   const current = (rows ?? []).filter((r) => !stopped.includes(r));     // running and paused first; the stopped ones folded
-  const open = (r: LiveRow) => nav(r.instrument?.type === "OPTIONS" ? `/options/s/${r.id}` : (r.instrument as { signal?: boolean })?.signal ? `/trade/signals/${r.id}` : `/paper/${r.id}`);
+  const open = (r: LiveRow) => nav(sessionPath({ id: r.id, instrument: r.instrument as { type?: string; signal?: boolean } | null }));
+  // an options or signal session's id at /paper/<id> opens its own page (R7T-011)
+  useEffect(() => {
+    const r = sid ? (rows ?? []).find((x) => x.id === sid) : null;
+    const to = r ? sessionPath({ id: r.id, instrument: r.instrument as { type?: string; signal?: boolean } | null }) : null;
+    if (to && to !== `/paper/${sid}`) nav(to, { replace: true });
+  }, [rows, sid, nav]);
   const clearStopped = async () => {
     setClearing(false);
     try {

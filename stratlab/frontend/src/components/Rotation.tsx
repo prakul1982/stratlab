@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { watchSize } from "../lib/resize";
 
 export type Quadrant = "leading" | "weakening" | "lagging" | "improving";
 export interface RotationRow {
@@ -26,10 +27,8 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
-    ro.observe(el);
     setW(el.clientWidth);
-    return () => ro.disconnect();
+    return watchSize(el, () => setW(el.clientWidth));      // a frame later: no "ResizeObserver loop" page error (R7T-014)
   }, []);
   return [ref, w];
 }

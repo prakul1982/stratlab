@@ -6,7 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, legName, legRule, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, gapLine, legName, legRule, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -289,5 +289,8 @@ function flatLine(snap: OptionSnapshot, closedToday: number): string {
   const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ });
   const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: TZ });
   if (wd === "Sat" || wd === "Sun" || hm > s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
+  // the gap the rules keep between trades, still running after a trade closed (R7T-013)
+  const gap = gapLine(a, s.timing.cooldown, s.timing.lastEntry, s.timing.entry, now);
+  if (gap) return `${none} ${gap}`;
   return hm < s.timing.entry ? `${none} Next entry ${s.timing.entry}.` : `${none} Entries open until ${s.timing.lastEntry}.`;
 }

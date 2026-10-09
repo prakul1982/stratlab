@@ -14,6 +14,7 @@ import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Onboarding, openTour } from "./Onboarding";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
+import { watchSize } from "../lib/resize";
 
 // the pop-ups load when they first open, so they don't slow down the first page
 const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
@@ -260,11 +261,10 @@ function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" |
     };
     look();
     el.addEventListener("scroll", look, { passive: true });
-    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(look);
-    ro?.observe(el);
+    const stopSize = watchSize(el, look);           // a frame later: no "ResizeObserver loop" page error (R7T-014)
     const mo = new MutationObserver(look);
     mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
-    return () => { el.removeEventListener("scroll", look); ro?.disconnect(); mo.disconnect(); };
+    return () => { el.removeEventListener("scroll", look); stopSize(); mo.disconnect(); };
   }, [ref]);
   return fade;
 }

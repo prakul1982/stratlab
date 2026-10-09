@@ -74,7 +74,8 @@ def test_price_crossing_fires_only_on_the_cross_with_a_factual_message():
     # already above when it was set: no alert until it goes below and back
     assert sa.evaluate({**a, "state": {"side": "above"}}, snap(3050))[0] is None
     b = alert(kind="price", op="below", value=2500, state={"side": "above"})
-    assert sa.evaluate(b, snap(2499.5))[0] == "RELIANCE crossed below ₹2,500 (now ₹2,499.50)"
+    # R7T-014: the level and the price beside it have the same places ("₹258.90 (now ₹259.00)", not "(now ₹259)")
+    assert sa.evaluate(b, snap(2499.5))[0] == "RELIANCE crossed below ₹2,500.00 (now ₹2,499.50)"
     assert sa.evaluate(b, snap(2500))[0] is None                         # exactly on the level isn't a cross
 
 
@@ -93,7 +94,7 @@ def test_moving_average_crossing_uses_todays_price():
     text, st = sa.evaluate(a, snap(99, bars=bars))
     assert text is None and st["side"] == "below"
     text, _ = sa.evaluate({**a, "state": st}, snap(110, bars=bars))
-    assert text == "RELIANCE crossed above its 50-day average of ₹100.20 (now ₹110)"
+    assert text == "RELIANCE crossed above its 50-day average of ₹100.20 (now ₹110.00)"      # one precision for both (R7T-014)
     assert sa.evaluate(alert(kind="ma", op="above", period=200), snap(110, bars=bars))[0] is None   # too little history
 
 
@@ -124,7 +125,7 @@ def test_52_week_high_and_low():
     year = bars_from([100.0 + (i % 7) for i in range(300)])             # highs up to 106 * 1.01, lows from 99
     hi, lo = alert(kind="high52"), alert(kind="low52")
     assert sa.evaluate(hi, snap(107, bars=year))[0] is None
-    assert sa.evaluate(hi, snap(108, bars=year))[0] == "RELIANCE traded above its 52-week high of ₹107.06 (now ₹108)"
+    assert sa.evaluate(hi, snap(108, bars=year))[0] == "RELIANCE traded above its 52-week high of ₹107.06 (now ₹108.00)"
     assert sa.evaluate(lo, snap(98, bars=year))[0] == "RELIANCE traded below its 52-week low of ₹99 (now ₹98)"
     assert sa.evaluate(hi, snap(108, bars=year[:5]))[0] is None           # not enough history to say
 

@@ -309,12 +309,11 @@ def nifty_iv(options_data, now: datetime) -> dict:
     from . import positioning
     today = None
     try:
-        got = positioning.live_chain(options_data, "NFO", "NIFTY", "current") or \
-            positioning.recorded_chain("NIFTY", "current", now.date())
-        if got:
-            at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" else now
-            iv = positioning.atm_iv(sorted(got["chain"], key=lambda r: r[0]), got.get("spot"), got["expiry"], at)
-            today = {"iv": iv["iv"], "as_of": got["taken_at"], "source": got["source"], "at_close": bool(got.get("at_close"))} if iv else None
+        # the chain panel's own reading and sum (positioning.chain_now): one ATM IV for one chain, at the chain's own time
+        # (R7T-005: 14.40% here against 13.3% in the chain panel for the same 8 Oct close)
+        got, _, stats = positioning.chain_now(options_data, "NIFTY", "current", now)
+        if got and stats and stats.get("atm_iv") is not None:
+            today = {"iv": stats["atm_iv"], "as_of": got["taken_at"], "source": got["source"], "at_close": bool(got.get("at_close"))}
     except Exception as e:
         print("india vix: nifty iv", str(e)[:120])
     since = (now.date() - timedelta(days=YEAR_DAYS)).isoformat()

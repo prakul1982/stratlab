@@ -17,7 +17,7 @@ export type ServerError = { ref: string; at: string; method: string; path: strin
 
 export interface Overview {
   server: {
-    kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number;
+    kite_ready: boolean; kite_token_day: string | null; kite_invalid?: string | null; feed_connected: boolean; live_sessions: number; india_sessions?: number; options_sessions?: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
     recent_errors?: ServerError[];
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */

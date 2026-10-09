@@ -12,7 +12,7 @@ import { ViewAsBanner } from "./components/ViewAs";
 import { Loading } from "./components/ui";
 import { Toast } from "./components/Toast";
 import { VisitorApp } from "./visitor/VisitorApp";
-import { LoadGuard } from "./components/LoadGuard";
+import { LoadGuard, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { fmtDate } from "./lib/format";
@@ -203,6 +203,8 @@ function Routed() {
       {me?.promo && loc.pathname !== "/" && loc.pathname !== "/plans" && !SPACE_HOMES.includes(loc.pathname) && <PromoBanner until={me.promo.until} />}{/* those show a countdown */}
       <PageLock />{/* a paid feature this plan lacks: said at the top, honestly (the server refuses it either way) */}
       {/* a page whose code is still on its way still has its one heading (axe page-has-heading-one, R7O-010) */}
+      {/* a page that fails while it runs says so in its own place; only a failed download is a download message (R7T-011) */}
+      <PageBoundary at={loc.pathname}>
       <Suspense fallback={<><h1 className="sr-only">Opening the page</h1><Loading label="Opening" /></>}>
       <Routes>
         <Route path="/" element={<SpaceHome />} />
@@ -294,6 +296,7 @@ function Routed() {
         <Route path="*" element={<NotFound signedIn />} />
       </Routes>
       </Suspense>
+      </PageBoundary>
     </Shell>
   );
 }

@@ -54,6 +54,8 @@
   // a lazily loaded page (Vite raises this when its file or one it needs fails to download)
   window.addEventListener("vite:preloadError", function (e) {
     if (e && e.preventDefault) e.preventDefault();
+    // the page's code then arrives empty and the app fails on it: that failure is this download's, not the page's own
+    window.__stratlabLoadFailed = true;
     recover();
   });
   // one of the app's own scripts or stylesheets (the error does not bubble, so listen on the way down)

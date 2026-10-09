@@ -248,5 +248,8 @@ export interface OptionSnapshot {
     strike?: number; opt?: "CE" | "PE"; pick?: string; kind?: "skip"; vix?: number }[];
   trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;
-    trades: number; wins: number; unrealised: number };
+    trades: number; wins: number; unrealised: number;
+    /** after a trade closed: when the gap the rules keep between trades ends (an instant), and that time ("13:41") when it
+     * falls before the day's last entry (R7T-013) */
+    cool_until?: string | null; next_entry?: string | null };
 }

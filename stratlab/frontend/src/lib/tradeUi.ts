@@ -1,6 +1,14 @@
 import type { CheckStatus } from "./types";
 import { signCls } from "./format";
 
+/** A paper session's own page: options sessions at /options/s/<id>, a notebook signal's at /trade/signals/<id>, the rest at
+ * /paper/<id> (R7T-011: an options session opened at /paper/<id> crashed the page). */
+export function sessionPath(s: { id: string; kind?: string | null; instrument?: { type?: string | null; signal?: boolean } | null }): string {
+  if (s.kind === "options" || s.instrument?.type === "OPTIONS") return `/options/s/${s.id}`;
+  if (s.instrument?.signal) return `/trade/signals/${s.id}`;
+  return `/paper/${s.id}`;
+}
+
 /** The class for a gain or a loss in the kit's colours (green up, red down, nothing at zero or when unknown). */
 export const upDown = (v: number | null | undefined): string => signCls(v);
 

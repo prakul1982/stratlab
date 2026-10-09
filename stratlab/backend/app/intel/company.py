@@ -22,7 +22,60 @@ INDICES = {
     "IN": [("NIFTY 50", "^NSEI"), ("SENSEX", "^BSESN"), ("NIFTY BANK", "^NSEBANK")],
     "US": [("S&P 500", "^GSPC"), ("NASDAQ", "^IXIC"), ("DOW JONES", "^DJI")],
 }
+# India's indices on the broker's feed, as its quotes name them: the live level and the day's candle come from there, the
+# way the option chains read NIFTY's spot (R7T-003: the other source's SENSEX stayed at the 8 Oct close after 9 Oct's open)
+KITE_INDEX = {"^NSEI": "NSE:NIFTY 50", "^BSESN": "BSE:SENSEX", "^NSEBANK": "NSE:NIFTY BANK"}
 _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
+
+
+def market_open(region: str, now: datetime | None = None) -> bool:
+    """Whether a market is trading now (its hours, on one of its trading days)."""
+    from zoneinfo import ZoneInfo
+    from ..data.calendar import is_trading_day
+    from ..data.markets import BY_ID
+    m = BY_ID.get(region)
+    if not m or not m.get("hours"):
+        return False
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(m["tz"]))
+    return is_trading_day(region, local.date()) and m["hours"]["open"] <= local.strftime("%H:%M") < m["hours"]["close"]
+
+
+def market_today(region: str, now: datetime | None = None) -> str:
+    """The market's own calendar day now (India's or New York's), as an ISO date."""
+    from zoneinfo import ZoneInfo
+    from ..data.markets import BY_ID
+    tz = (BY_ID.get(region) or {}).get("tz") or "UTC"
+    return (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz)).date().isoformat()
+
+
+def session_day(at, region: str) -> str | None:
+    """The trading day (in the market's own zone) a quote's time falls on; None without a readable time."""
+    from zoneinfo import ZoneInfo
+    from ..data.markets import BY_ID
+    try:
+        t = datetime.fromisoformat(str(at).replace("Z", "+00:00")) if at else None
+    except ValueError:
+        return None
+    if t is None:
+        return None
+    tz = ZoneInfo((BY_ID.get(region) or {}).get("tz") or "UTC")
+    return (t if t.tzinfo else t.replace(tzinfo=tz)).astimezone(tz).date().isoformat()
+
+
+def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:
+    """One index's tile: its level and change with the session they are of. `stale`: the market is open today and this
+    quote is still a previous session's, so its change is that session's and is never shown as today's (R7T-003: SENSEX
+    "−1.44% today" after 9 Oct's open was 8 Oct's move); `live`: the quote is today's while the market trades."""
+    day = session_day(q.get("at"), region)
+    is_open = market_open(region, now)
+    today = market_today(region, now)
+    hi = q.get("high52")
+    price = q["price"]
+    if hi and q.get("high") and q["high"] > hi:
+        hi = q["high"]                          # today's high above the year's: the year's high is today's
+    return {"name": name, "price": price, "change_pct": q.get("change_pct"), "high52": hi, "low52": q.get("low52"),
+            "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": q.get("at"), "day": day,
+            "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today))}
 
 
 def _fy(label: str) -> str:
@@ -175,15 +228,45 @@ def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> di
     if lst.get("exchange") and (foreign or not US_VENUE.search(ex or "")):
         ex = lst["exchange"]
     lo, hi = num(metrics.get("52WeekLow")), num(metrics.get("52WeekHigh"))
-    if foreign or lo is None or hi is None:
-        lo, hi = num(lst.get("low52")), num(lst.get("high52"))
+    # the listed symbol's own range when the fundamentals' range is another listing's: an ADR's home market, or another
+    # class of the same company (R7T-001: BRK-B's page showed Class A's $698,000-$806,102 beside a $511 price)
+    own_lo, own_hi, px = num(lst.get("low52")), num(lst.get("high52")), num(lst.get("price"))
+    if foreign or lo is None or hi is None or (px and not plausible_range(px, lo, hi) and plausible_range(px, own_lo, own_hi)):
+        lo, hi = own_lo, own_hi
     cap = profile.get("marketCapitalization")
     rate = fx(home, cur) if cap else None
     return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
             "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
 
 
-US_LENDERS = ("bank", "banking", "financial services", "insurance", "capital markets", "thrift", "credit", "mortgage", "lending")
+def plausible_range(price, low, high) -> bool:
+    """Whether a 52-week range can be this share's: the price within a third below its low or half above its high (a
+    range from another class of shares, or another listing, is off by far more)."""
+    p, lo, hi = num(price), num(low), num(high)
+    if not p or p <= 0 or lo is None or hi is None or lo <= 0 or hi < lo:
+        return False
+    return lo * 0.67 <= p <= hi * 1.5
+
+
+def with_today_range(c: dict) -> dict:
+    """The page's 52-week range checked against its price and taking in today's high and low: a range that can't be this
+    share's is left out (R7T-001), and one the day has already traded beyond is widened to the day's high or low, so the
+    price never sits below the year's low (R7T-007: RELIANCE "52-wk low ₹1,160.80" with the day's low at ₹1,160.20)."""
+    rng, q = c.get("range52") or {}, c.get("quote") or {}
+    px, lo, hi = num(q.get("price")), num(rng.get("low")), num(rng.get("high"))
+    if lo is None and hi is None:
+        return c
+    if px and not plausible_range(px, lo, hi):
+        return {**c, "range52": {"low": None, "high": None}}
+    d_lo, d_hi = num(q.get("low")), num(q.get("high"))
+    for v in (d_lo, d_hi, px):
+        if v and v > 0:
+            lo = v if lo is None else min(lo, v)
+            hi = v if hi is None else max(hi, v)
+    return {**c, "range52": {"low": lo, "high": hi}}
+
+
+US_LENDERS = ("bank","banking", "financial services", "insurance", "capital markets", "thrift", "credit", "mortgage", "lending")
 
 
 def is_lender(scr: dict | None = None, industry: str | None = None) -> bool:
@@ -389,38 +472,95 @@ class Research:
         from ..chart_data import older, parse_before, window
         symbol = symbol.strip().upper()
         until = parse_before(before)
+        # while the market trades, today's daily candle is still forming: read again within a minute, not a copy kept
+        # for hours (R7T-006: the 1Y chart had no 9 Oct candle 17 minutes after the open, while 1M and 6M did)
+        forming = tf == "1d" and until is None and market_open(region)
         if region == "IN" and self._kite():
-            inst = self.kite.equity(symbol) or self.kite.by_symbol(symbol)
+            inst = self._kite_index(symbol) if symbol in KITE_INDEX else self.kite.equity(symbol) or self.kite.by_symbol(symbol)
             if inst:
                 from ..data import KITE_MAX_DAYS
                 days, more = window(tf, rng, until, KITE_MAX_DAYS.get(tf))
                 try:
+                    bars = older(self.kite.history(inst["token"], tf, days, ttl=60 if forming else None), until)
                     return {"currency": "INR", "source": "Kite", "tf": tf, "more": more,
-                            "candles": older(self.kite.history(inst["token"], tf, days), until)}
+                            "candles": self._with_today(region, symbol, bars) if forming else bars}
                 except Exception:
                     pass
         from .yahoo import INTERVAL
         days, more = window(tf, rng, until, INTERVAL[tf][1])
         ysym = _yahoo_in(symbol) if region == "IN" and not symbol.startswith("^") else symbol
-        c = self.yahoo.chart(ysym, tf, days)
+        c = self.yahoo.chart(ysym, tf, days, ttl=60 if forming else None)
+        bars = older(c["candles"], until)
         return {"currency": c["meta"].get("currency") or ("INR" if region == "IN" else "USD"),
-                "source": "Yahoo Finance", "tf": tf, "more": more, "candles": older(c["candles"], until)}
+                "source": "Yahoo Finance", "tf": tf, "more": more, "candles": self._with_today(region, symbol, bars) if forming else bars}
+
+    def _kite_index(self, symbol: str) -> dict | None:
+        """An Indian index on the broker's feed ({"token"}), by the chart symbol the pages use (^NSEI, ^BSESN)."""
+        key = KITE_INDEX.get(symbol)
+        if not key:
+            return None
+        ex, name = key.split(":", 1)
+        try:
+            row = self.kite.by_symbol(name, ex)
+            if row:
+                return row
+            tok = self.kite.index_token(key)
+        except Exception:
+            return None
+        return {"token": tok} if tok else None
+
+    def _live_quote(self, region: str, symbol: str) -> dict | None:
+        """The quote of a symbol now: an Indian index from the broker's feed, else the page's own quotes."""
+        try:
+            if region == "IN" and symbol in KITE_INDEX and self._kite():
+                return self.kite.index_quotes([KITE_INDEX[symbol]]).get(KITE_INDEX[symbol])
+            if symbol.startswith("^"):
+                return self.yahoo.meta(symbol)
+            return (self.quotes(region, [symbol]) or {}).get(symbol)
+        except Exception:
+            return None
+
+    def _with_today(self, region: str, symbol: str, bars: list[dict]) -> list[dict]:
+        """Daily candles with today's, from the quote, when the source's last one is a previous session's while the market
+        trades (R7T-003: SENSEX's chart had no 9 Oct candle at 09:39 IST)."""
+        today = market_today(region)
+        if bars and str(bars[-1].get("t", ""))[:10] >= today:
+            return bars
+        q = self._live_quote(region, symbol)
+        px = num((q or {}).get("price"))
+        if not px or session_day((q or {}).get("at"), region) != today:
+            return bars
+        from zoneinfo import ZoneInfo
+        from ..data.markets import BY_ID
+        t = datetime.fromisoformat(today).replace(tzinfo=ZoneInfo(BY_ID[region]["tz"])).isoformat()
+        o = num(q.get("open")) or px
+        hi, lo = max(x for x in (num(q.get("high")), o, px) if x), min(x for x in (num(q.get("low")), o, px) if x)
+        return [*bars, {"t": t, "o": o, "h": hi, "l": lo, "c": px, "v": num(q.get("volume")) or 0.0}]
 
     # ---------- market pulse ----------
-    def indices(self, region: str) -> list[dict]:
+    def indices(self, region: str, now: datetime | None = None) -> list[dict]:
+        """The market's index levels, each with the session it is of (see index_level). India's levels and day moves are
+        the broker's live ones, the way NIFTY's spot is read for the option chains; the other source gives the 52-week
+        range, and the level itself when the broker is offline."""
         out = []
-        futures = [(name, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
-        for name, f in futures:
+        futures = [(name, sym, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
+        live: dict = {}
+        if region == "IN" and self._kite():
+            try:
+                live = self.kite.index_quotes([KITE_INDEX[s] for _, s in INDICES["IN"]])
+            except Exception as e:
+                print("index levels: broker quotes unavailable,", str(e)[:120])
+        for name, sym, f in futures:
             try:
                 m = f.result(timeout=20)
             except Exception:
-                continue
+                m = {}
+            k = live.get(KITE_INDEX.get(sym, "")) or {}
+            if k.get("price") is not None:
+                m = {**m, **{x: k.get(x) for x in ("price", "change_pct", "high", "low", "at")}}
             if m.get("price") is None:
                 continue
-            hi = m.get("high52")
-            out.append({"name": name, "price": m["price"], "change_pct": m.get("change_pct"),
-                        "high52": hi, "low52": m.get("low52"),
-                        "from_high_pct": ((m["price"] / hi - 1) * 100) if hi else None})
+            out.append(index_level(name, m, region, now))
         return out
 
     def headlines(self, region: str, focus: str = "") -> list[dict]:

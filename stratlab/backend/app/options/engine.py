@@ -382,6 +382,7 @@ class OptionsEngine:
             self.note = "" if now < _at(now, t.entry) else f"Entries stop at {t.lastEntry}; next entry at {t.entry} on the next market day."
             return out
         if self.cool_until and now < datetime.fromisoformat(self.cool_until):
+            self.note = next_entry_note(self.cool_until, t)
             return out
         if sig:
             if not want:
@@ -432,6 +433,29 @@ class OptionsEngine:
             out.append({"sym": l["sym"], "opt": l["opt"], "side": l["side"], "strike": l["strike"], "qty": l["qty"],
                         "entry": l["entry"], "mark": px, "open": l["open"], "pnl": round(self._leg_pnl(l, px), 2)})
         return out
+
+
+def next_entry(cool_until: str | None, t) -> str | None:
+    """The time ("13:41") the next entry is allowed after the gap the rules keep between trades (`t`: the timing
+    rules), or None when that gap runs past the day's last entry (or there is none)."""
+    if not cool_until:
+        return None
+    try:
+        at = datetime.fromisoformat(cool_until)
+    except ValueError:
+        return None
+    hm = at.strftime("%H:%M")
+    return hm if hm < t.lastEntry else None
+
+
+def next_entry_note(cool_until: str | None, t) -> str:
+    """What a flat session waits for after a trade closed (R7T-013: after a 09:41 stop-out the page said "Entries open
+    until 14:45" with a 120-minute gap between trades in its rules)."""
+    hm = next_entry(cool_until, t)
+    gap = f"{t.cooldown} minutes apart" if getattr(t, "cooldown", None) else "the gap in the rules"
+    if hm:
+        return f"Next entry from {hm}: entries are {gap}."
+    return f"Entries are {gap}, which runs past the last entry at {t.lastEntry}; next entry at {t.entry} on the next market day."
 
 
 def vix_band(f) -> str:
