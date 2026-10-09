@@ -68,6 +68,7 @@ svg { display: block; }
 .muted { color: var(--muted); }
 .small { font-size: 13.5px; }
 .eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricing: "Plans and prices"), drawn as the eyebrow */
 .ruled { background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 34px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* "Skip to content": the first Tab stop on every page; hidden like .sr-only until it has focus */

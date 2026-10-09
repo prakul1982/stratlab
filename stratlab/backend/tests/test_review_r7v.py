@@ -416,7 +416,9 @@ def test_the_sitemap_leaves_out_pages_with_nothing_to_show(mem, monkeypatch):
     mem[stock_pages.BUILT_KEY + "US"] = json.dumps({"at": "2026-10-09", "pages": ["AAPL", "SIAI", "VUECF"], "shown": ["AAPL"]})
     xml = stock_pages.sitemap("stocks-us-1")
     listed = set(re.findall(r"/stocks/us/([A-Z.-]+)</loc>", xml))
-    assert listed == {"AAPL", "NEWCO"}
+    # changed on purpose in R8V-007: a page not built yet (NEWCO) is no longer listed until the screens' indexer has built
+    # it, since an unbuilt page's first visit could be a 503 "being prepared" or a fund's 404 (MDXR)
+    assert listed == {"AAPL"}
     # before the screens have gathered the stored pages: every company not marked as empty
     del mem[stock_pages.BUILT_KEY + "US"]
     mem["stocks:thin:US:SIAI"] = "1"

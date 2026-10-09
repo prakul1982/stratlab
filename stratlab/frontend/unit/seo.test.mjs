@@ -106,7 +106,9 @@ test("each page's own HTML is written at build time, with structured data on the
   assert.deepEqual(Object.keys(files).sort(), ["404.html", "about/index.html", "contact/index.html", "faq/index.html", "help/index.html", "index.html", "library/index.html",
     "login/index.html", "pricing/index.html", "privacy/index.html", "refunds/index.html", "signup/index.html", "terms/index.html"]);
   for (const [file, html] of Object.entries(files)) {
-    for (const re of [/<title>/g, /<link rel="canonical"/g, /<meta name="description"/g, /<meta name="robots"/g]) assert.equal((html.match(re) ?? []).length, 1, `${file} ${re}`);
+    for (const re of [/<title>/g, /<meta name="description"/g, /<meta name="robots"/g]) assert.equal((html.match(re) ?? []).length, 1, `${file} ${re}`);
+    // changed on purpose in R8V-008: the 404 page names no canonical address (it named the home page); every other one names one
+    assert.equal((html.match(/<link rel="canonical"/g) ?? []).length, file === "404.html" ? 0 : 1, `${file} canonical`);
     assert.doesNotMatch(html, /<!--jsonld-->/);
   }
   const terms = files["terms/index.html"];

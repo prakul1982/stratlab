@@ -198,8 +198,10 @@ function useDetailsDismiss(ref: React.RefObject<HTMLDetailsElement | null>) {
 }
 
 /** `section`: scroll there first (the page was opened as /pricing, /faq…). `panel`: the address was /login or /signup, so
- * the way in is open on top of the page. */
-export function Login({ section = null, panel }: { section?: string | null; panel?: "login" | "signup" } = {}) {
+ * the way in is open on top of the page. `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
+ * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
+ * own HTML is the one the page shows (R8V-008). */
+export function Login({ section = null, panel, heading }: { section?: string | null; panel?: "login" | "signup"; heading?: string } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
   const [way, setWay] = useState(panel ?? null);
@@ -253,8 +255,10 @@ export function Login({ section = null, panel }: { section?: string | null; pane
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
           <div className="stack g22 lp-hero-copy">
-            <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>
-            <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>
+            {heading ? <h1 className="eyebrow">{heading}</h1> : <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>}
+            {heading
+              ? <p className="serif lp-h1"><em>Test</em> it, research it, track it.</p>
+              : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
             <p className="serif lp-lede">One place for trading ideas, company research and your own money. Facts and tests, never tips.</p>
             <div className="row wrap g12">
               {cta()}
