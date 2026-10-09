@@ -73,6 +73,15 @@ CLOSE = {"IN": ("Asia/Kolkata", "15:45"), "US": ("America/New_York", "16:15")}  
 RUN_AT = {"IN": ("Asia/Kolkata", "18:30"), "US": ("America/New_York", "17:45")}    # the daily run, after the close
 RANGES = {"3m": 63, "6m": 126, "1y": 252, "2y": 504, "all": None}
 
+
+def due_label(region: str) -> str | None:
+    """When a market's daily count is usually in, as the pages say it: "5:45 PM ET" for the US run (RUN_AT). None for India,
+    whose pages already say "18:30 IST" (stock_pages.DUE_AT)."""
+    if region != "US":
+        return None
+    h, m = (int(x) for x in RUN_AT[region][1].split(":"))
+    return f"{h % 12 or 12}:{m:02d} {'PM' if h >= 12 else 'AM'} ET"
+
 # what each number means, in plain words: the page's (i) next to each figure and chart
 HELP = {
     "ad": "Advances are stocks that closed higher than the day before; declines closed lower. The ratio is advances "

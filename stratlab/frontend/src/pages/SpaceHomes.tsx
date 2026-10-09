@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, money, pct, signCls } from "../lib/format";
 import { homeOf } from "../lib/spaces";
+import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { evWhen, useEvents } from "../lib/marketEvents";
@@ -162,7 +163,7 @@ const INVEST_STRIP: Tool[] = [
 
 export function InvestHome() {
   const nav = useNavigate();
-  const [region, setRegion] = useState<Region>("IN");
+  const [region, setRegion] = useState<Region>(homeRegion);
   const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
   const tools = INVEST_STRIP;
   return (
@@ -182,12 +183,12 @@ export function InvestHome() {
       <ToolStrip label="Invest tools" tools={tools} />
       <NextEvents />
       <div className="grid2 space-panels">
-        <WatchPanel />
-        <ResultsToday />
+        <WatchPanel region={region} />
+        <ResultsToday region={region} />
       </div>
       <div className="grid2 space-panels">
-        <BreadthCard />
-        <RedFlags />
+        <BreadthCard region={region} />
+        <RedFlags region={region} />
       </div>
       <Explore title="More you can do" hide={INVEST_LINKED} order="invest" />
     </div>
@@ -211,18 +212,18 @@ function NextEvents({ limit = 3, testId = "invest-events" }: { limit?: number; t
   );
 }
 
-/** The watchlist's prices, India then the US. */
-function WatchPanel() {
+/** The watchlist's prices for the market picked at the top (R9R-008: the US tab left India's panels in place). */
+function WatchPanel({ region }: { region: Region }) {
   const { items } = useWatchlist();
   const by = (r: Region) => (items ?? []).filter((w) => w.region === r);
-  const regions = (["IN", "US"] as Region[]).filter((r) => by(r).length);
+  const regions = ([region] as Region[]).filter((r) => by(r).length);
   return (
     <Panel title="Your watchlist" right={<Link to="/research/investor" className="link">At a glance →</Link>}>
       {items === null ? <PanelSkel label="Opening your watchlist" />
-        : !regions.length ? <p className="small muted">Press Watch on any company to keep it here, with live prices.</p>
+        : !regions.length ? <p className="small muted">{(items ?? []).length ? `None of your watchlist is in ${REGION_NAME[region]}. Press Watch on a ${REGION_NAME[region]} company to keep it here, with live prices.` : "Press Watch on any company to keep it here, with live prices."}</p>
         : regions.map((r) => (
           <div key={r} className="k-stack snug">
-            {regions.length > 1 && <span className="eyebrow">{REGION_NAME[r]}</span>}
+            <span className="eyebrow">{REGION_NAME[r]}</span>
             <QuoteGrid region={r} symbols={by(r).slice(0, 6).map((w) => w.symbol)} names={Object.fromEntries(by(r).map((w) => [w.symbol, w.name]))} />
           </div>
         ))}
@@ -232,12 +233,13 @@ function WatchPanel() {
 
 type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
 
-/** Results days for your stocks: today's, else the next one. */
-function ResultsToday() {
+/** Results days for your stocks in the market picked at the top: today's, else the next one. */
+function ResultsToday({ region }: { region: Region }) {
   const [rows, setRows] = useState<{ today: ResultRow[]; next: ResultRow | null } | null>(null);
   useEffect(() => {
     let live = true;
-    Promise.all((["IN", "US"] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=mine`).catch(() => null)))
+    setRows(null);
+    Promise.all(([region] as Region[]).map((r) => api<ResultsView>(`/research/results?region=${r}&scope=mine`).catch(() => null)))
       .then((views) => {
         if (!live) return;
         const all = views.flatMap((v) => (v ? v.weeks.flatMap((w) => w.rows).map((r) => ({ ...r, today: v.today })) : []));
@@ -246,9 +248,9 @@ function ResultsToday() {
         setRows({ today, next });
       });
     return () => { live = false; };
-  }, []);
+  }, [region]);
   return (
-    <Panel title="Results today" right={<Link to="/research/results" className="link">Calendar →</Link>}>
+    <Panel title={region === "US" ? "US results today" : "Results today"} right={<Link to="/research/results" className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
         : rows.today.length ? (
           <div className="k-stack snug">
@@ -259,7 +261,7 @@ function ResultsToday() {
             ))}
           </div>
         ) : (
-          <p className="small muted">None of your stocks has results today.{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
+          <p className="small muted">None of your {REGION_NAME[region]} stocks has results today.{rows.next ? ` Next: ${rows.next.symbol} on ${resultDay(rows.next.date)}.` : ""}</p>
         )}
     </Panel>
   );
@@ -268,12 +270,21 @@ function ResultsToday() {
 type Filings = { rows: { symbol: string; summary: FilingSummary }[] };
 
 /** Held and watched companies with red flags filed lately (India; Basic and up, as on the red flags page). */
-function RedFlags() {
+function RedFlags({ region }: { region: Region }) {
   const { me } = useApp();
   const allowed = !!me?.plan_info?.features?.filings;
   const [data, setData] = useState<Filings | null>(null);
-  useEffect(() => { if (allowed) api<Filings>("/research/filings").then(setData).catch(() => setData({ rows: [] })); }, [allowed]);
+  const us = region === "US";
+  useEffect(() => { if (allowed && !us) api<Filings>("/research/filings").then(setData).catch(() => setData({ rows: [] })); }, [allowed, us]);
   const flagged = data?.rows.filter((r) => r.summary.red > 0) ?? [];
+  // red flags are read from India's exchange filings: none exist for US companies, so the card says that instead of showing India's (R9R-008)
+  if (us) {
+    return (
+      <Panel title="Red flags" right={<Link to="/invest/holders?region=US" className="link">US 5% holders →</Link>}>
+        <p className="small muted" data-testid="invest-us-redflags">Red-flag filings are read from India's exchange, so there are none to show for US companies. A US company's own page lists its SEC filings.</p>
+      </Panel>
+    );
+  }
   return (
     <Panel title="Red flags in your holdings and watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
       {!allowed ? <p className="small muted">Red flags for all your holdings and watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>

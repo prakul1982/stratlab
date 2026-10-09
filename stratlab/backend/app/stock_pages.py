@@ -247,10 +247,12 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
 DUE_AT = {"IN": "18:30 IST"}     # when the evening's stored numbers (breadth, screens, public pages) are usually in
 
 
-def day_due(region: str, have: str | None, now: datetime | None = None) -> dict | None:
+def day_due(region: str, have: str | None, now: datetime | None = None, due: str | None = None, during: bool = False) -> dict | None:
     """When numbers stored once a day are still of an older session than the one that closed today: {"day" (today's
     session), "due" (about when its numbers come, or None)}; else None. A page then says "Latest: 8 Oct · 9 Oct due
-    about 18:30 IST" instead of "Today's numbers · 8 Oct" on the evening of 9 Oct (R8B-008)."""
+    about 18:30 IST" instead of "Today's numbers · 8 Oct" on the evening of 9 Oct (R8B-008). `due` names another time
+    than DUE_AT's. With `during`, a session still trading counts too, answered with "during": True (R9R-007: the US
+    breadth page said "Today's numbers · 8 Oct" three minutes after the US open, with no live view to explain it)."""
     from .data.calendar import is_trading_day
     from .data.markets import BY_ID
     if not have:
@@ -258,11 +260,16 @@ def day_due(region: str, have: str | None, now: datetime | None = None) -> dict 
     m = BY_ID.get(region) or {}
     tz = ZoneInfo(m.get("tz") or "UTC")
     hh, mm = ((m.get("hours") or {}).get("close") or "23:59").split(":")
+    oh, om = ((m.get("hours") or {}).get("open") or "00:00").split(":")
     local = (now or datetime.now(timezone.utc)).astimezone(tz)
     d = local.date()
-    if not is_trading_day(region, d) or local < datetime.combine(d, dtime(int(hh), int(mm)), tz) or str(have)[:10] >= d.isoformat():
+    if not is_trading_day(region, d) or str(have)[:10] >= d.isoformat():
         return None
-    return {"day": d.isoformat(), "due": DUE_AT.get(region)}
+    closed = local >= datetime.combine(d, dtime(int(hh), int(mm)), tz)
+    if not closed and not (during and local >= datetime.combine(d, dtime(int(oh), int(om)), tz)):
+        return None
+    out = {"day": d.isoformat(), "due": due or DUE_AT.get(region)}
+    return out if closed else {**out, "during": True}
 
 
 def session_day(region: str, now: datetime | None = None) -> date:
