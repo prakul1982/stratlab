@@ -60,6 +60,38 @@ def broker_qty(key: str, units: float) -> int:
     return int(units)
 
 
+def no_live_quote(q: dict | None) -> bool:
+    """Whether a quote is no live quote at all: nothing to buy or sell at (no bid, no ask) and not one contract traded
+    (volume 0), so its last price is whatever the contract last traded at, which can be weeks old. R13-002: every
+    USDINR option on 9 Oct 2026 had bid and ask null, OI 0 and volume 0, the future's price 96.135 since 9 Sep, while
+    the dollar was at 96.76. A quote that traded today, or has a bid or an ask, is live; one with no volume figure at all
+    can't be judged here and counts as live (R11C-007's banner says when a fill is a last trade)."""
+    if not q:
+        return True
+    if any((q.get(k) or 0) > 0 for k in ("bid", "ask")):
+        return False
+    vol = q.get("volume")
+    return vol is not None and not vol
+
+
+def frozen_series(bars: list[dict] | None, n: int = 5) -> bool:
+    """Whether a run of daily candles is one standing price, not trading: the last `n` candles all have volume 0 and the
+    same open, high, low and close (R13-002: USDINR's 1-day CDS candles were o=h=l=c=96.135, volume 0, every day from
+    9 Sep to 9 Oct 2026)."""
+    tail = [b for b in (bars or [])][-n:]
+    if len(tail) < n:
+        return False
+    first = tail[0].get("c")
+    return all(not (b.get("v") or 0) and b.get("o") == b.get("h") == b.get("l") == b.get("c") == first for b in tail)
+
+
+# NSE currency options settle at the RBI reference rate, a spot rate: with no live future, the underlying is the spot
+# pair's price (rupees per unit; JPYINR is quoted per 100 yen)
+SPOT_PAIRS = {"USDINR": ("USDINR=X", 1.0), "EURINR": ("EURINR=X", 1.0), "GBPINR": ("GBPINR=X", 1.0), "JPYINR": ("JPYINR=X", 100.0)}
+NO_LIVE = ("No live quote: {name}'s options on NSE currency have no bid or ask and nothing traded today, so the last prices "
+           "shown can be weeks old. The structure isn't priced until there is a live quote.")
+
+
 class OptionsData:
     def __init__(self, kite):
         self.kite = kite                 # KiteService
@@ -71,6 +103,7 @@ class OptionsData:
         self._wanted: dict[str, float] = {}      # contract key -> when a session last asked for it
         self._last_quote = 0.0
         self.quote_calls = 0
+        self.spot_source = None          # pair -> its price now ("USDINR=X" -> 96.76), set by main for currency options
 
     def ready(self) -> bool:
         return self.kite.ready()
@@ -233,13 +266,29 @@ class OptionsData:
             ts = ts.replace(tzinfo=now.tzinfo)
         return abs((now - ts).total_seconds()) <= FRESH_SECONDS
 
+    def spot(self, exchange: str, name: str, expiry: str | None = None) -> tuple[float | None, dict | None, str]:
+        """(price, quote, where it came from) of an option's underlying. A currency option's future with no live quote
+        (no bid or ask, nothing traded: R13-002's USDINR at a month-old 96.135) gives way to the spot pair, the rate the
+        options settle against: "spot". Otherwise the future's or index's own quote: "quote"."""
+        sk = self.spot_key(exchange, name, expiry)
+        q = self.quotes([sk]).get(sk) if sk else None
+        if exchange == "CDS" and no_live_quote(q) and name in SPOT_PAIRS and callable(self.spot_source):
+            pair, per = SPOT_PAIRS[name]
+            try:
+                px = self.spot_source(pair)
+            except Exception as e:                     # no spot either: the caller says the price can't be had
+                print("currency spot unavailable:", pair, str(e)[:120])
+                px = None
+            if px:
+                return round(float(px) * per, 4), {"ltp": round(float(px) * per, 4), "ts": None}, "spot"
+            return None, q, "none"
+        return (q or {}).get("ltp"), q, "quote"
+
     def chain(self, exchange: str, name: str, choice: str, around: int = 10) -> dict:
         c = self.contracts(exchange, name, choice)
         if not c:
             return {"expiry": None, "rows": [], "spot": None}
-        sk = self.spot_key(exchange, name, c.expiry)
-        spot_q = self.quotes([sk]).get(sk) if sk else None
-        spot = spot_q.get("ltp") if spot_q else None
+        spot, spot_q, spot_from = self.spot(exchange, name, c.expiry)
         mid = c.atm(spot) if spot else c.strikes[len(c.strikes) // 2]
         i = c.strikes.index(mid)
         strikes = c.strikes[max(0, i - around): i + around + 1]
@@ -248,7 +297,7 @@ class OptionsData:
         rows = [{"strike": k, "ce": q.get(c.key("CE", k)), "pe": q.get(c.key("PE", k))} for k in strikes]
         return {"expiry": c.expiry, "expiries": self.expiries(exchange, name)[:6], "lot": c.lot, "spot": spot,
                 "atm": mid, "step": c.step(mid), "rows": rows, "spot_ts": spot_q.get("ts") if spot_q else None,
-                "freeze": freeze(name)}
+                "spot_from": spot_from, "freeze": freeze(name)}
 
     def settlement_price(self, exchange: str, name: str, expiry: str) -> float | None:
         """The price NSE and BSE options settle at on their expiry day: the underlying's official close that day (the

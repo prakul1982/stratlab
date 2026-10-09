@@ -38,7 +38,10 @@ def candles(inst_id: str, tf: str = "1d", range: str = Query("1y", max_length=5)
         err(400, "bad_tf", "This market doesn't have candles of that size.")
     days, more = CD.window(tf, range.lower(), until, max_days)
     bars = CD.older(prov.history(inst, tf, days), until)
-    return ok({"currency": inst.get("currency"), "tf": tf, "more": more,
+    from .options.data import frozen_series
+    # daily candles that are one standing price with no volume for a week: no live quote, and the chart says so (R13-002)
+    stale = tf == "1d" and not until and inst.get("market") in ("CDS", "MCX") and frozen_series(bars)
+    return ok({"currency": inst.get("currency"), "tf": tf, "more": more, **({"no_live": True} if stale else {}),
                "candles": [{k: b.get(k) for k in ("t", "o", "h", "l", "c", "v")} for b in bars]})
 
 

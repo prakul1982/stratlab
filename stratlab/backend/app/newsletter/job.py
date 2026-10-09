@@ -1,6 +1,7 @@
 """Building, storing and sending the newsletters.
 
-The Market Brief goes out after each trading day's close (India 16:15 IST, US 16:30 New York) and as a weekly
+The Market Brief goes out after each trading day's close (India 16:15 IST, US 16:50 New York, once the closing prints
+have settled) and as a weekly
 digest on Saturday morning (IST). My Stocks goes after India's close, or on Saturday, as each reader chose, and only
 when something changed for their stocks. Each issue is stored as news:<kind>:<region or uid>:<day>, and every run
 is remembered in the database before anything is sent, so a restart never sends twice."""
@@ -16,7 +17,11 @@ from ..plans import allows, plan_of
 from . import content, write
 
 KINDS = ("market", "my_stocks")
-SEND_AT = {"IN": ("Asia/Kolkata", "16:15"), "US": ("America/New_York", "16:30")}
+# the US brief waits for the closing prints to settle, as the public pages do (stock_pages.settle: 45 minutes after the
+# 16:00 close), so its stock lines are the final closes (R13-003: built at 16:32 ET, V +2.83%, MA +2.56%, UNH +2.16%
+# against final closes of +2.76%, +2.50% and +2.25%)
+SEND_AT = {"IN": ("Asia/Kolkata", "16:15"), "US": ("America/New_York", "16:50")}
+SEND_WORDS = "India 4:15 PM IST and US 4:50 PM New York time"     # what the pages promise (SEND_AT)
 WEEKLY_AT = ("Asia/Kolkata", 5, "08:00")         # Saturday morning, India time
 AFTER_CLOSE = {"market-IN", "market-US", "stocks"}   # issues built from the day's closes: never before they are final
 INDEX_CAP = 60

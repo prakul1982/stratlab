@@ -89,8 +89,10 @@ def test_a_us_brief_names_the_weekday_of_its_date_and_stamps_new_york_time_in_th
     issue = {"id": "market.US.2026-10-08", "kind": "market", "region": "US", "day": "2026-10-08", "weekly": False, "subject": "Market Brief US, Thu 8 Oct",
              "summary": "x", "sections": [], "indices": [], "at": "2026-10-09T02:04+05:30"}
     html, plain = write.render(issue)
-    assert "Prices and numbers as of 8 Oct 2026, 16:34 ET" in plain and "IST" not in plain
-    assert "16:34 ET" in html
+    # R13-003 changed this on purpose: a Market Brief's numbers are the day's close, so its stamp names the 16:00 ET close
+    # rather than the 16:34 build time; still New York's time, never India's
+    assert "Prices and numbers as of the 16:00 ET close of 8 Oct 2026" in plain and "IST" not in plain
+    assert "16:00 ET close" in html
 
 
 def test_stored_us_briefs_are_stamped_again_in_new_york_time_once(w):
@@ -98,10 +100,11 @@ def test_stored_us_briefs_are_stamped_again_in_new_york_time_once(w):
                             "indices": [{"name": "S&P 500", "price": 7765.36, "change_pct": -0.47}]}, "US")
     issue["at"] = "2026-10-09T02:04+05:30"
     issue["html"], issue["text"] = write.render(issue)
-    issue["text"] = issue["text"].replace("8 Oct 2026, 16:34 ET", "9 Oct 2026, 02:04 IST")          # as it was stored before the fix
+    # as it was stored before the fix (R13-003: the stamp is now the close's, the one this repair writes)
+    issue["text"] = issue["text"].replace("the 16:00 ET close of 8 Oct 2026", "9 Oct 2026, 02:04 IST")
     job.save(issue)
     assert job.repair_us_stamp() == 1
-    assert "as of 8 Oct 2026, 16:34 ET" in job.load(issue["id"])["text"]
+    assert "as of the 16:00 ET close of 8 Oct 2026" in job.load(issue["id"])["text"]
     assert job.repair_us_stamp() == 0
 
 

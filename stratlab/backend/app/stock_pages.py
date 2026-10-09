@@ -65,6 +65,8 @@ PEERS = 12
 # browsers keep a page five minutes and the site's cache fifteen: a page follows its market's close within minutes, never
 # a day later (a stored page itself is rebuilt after each close, see Pages.get)
 CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"
+BEHIND_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=30"   # a page waiting for its new close
+MIN_CACHE = 60
 EXTREME = 100.0                # a margin beyond ±100% says revenue is tiny next to costs or profit
 STAGE = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
 STAGE_WHY = {1: "the 150-day average has stopped falling, or the price has climbed above a falling average",
@@ -233,6 +235,54 @@ def settle(region: str | None) -> int:
     return SETTLE_BY.get(region or "", SETTLE)
 
 
+def next_settle(region: str, now: datetime | None = None) -> datetime | None:
+    """When the market's next close settles (its close plus settle(region)), after `now`; None without its hours."""
+    from .data.calendar import is_trading_day
+    from .data.markets import BY_ID
+    m = BY_ID.get(region) or {}
+    close = (m.get("hours") or {}).get("close")
+    if not close:
+        return None
+    tz = ZoneInfo(m.get("tz") or "UTC")
+    hh, mm = close.split(":")
+    local = (now or datetime.now(timezone.utc)).astimezone(tz)
+    d = local.date()
+    for _ in range(15):
+        at = datetime.combine(d, dtime(int(hh), int(mm)), tz) + timedelta(seconds=settle(region))
+        if at > local and is_trading_day(region, d):
+            return at
+        d += timedelta(days=1)
+    return None
+
+
+def cache_control(region: str | None, f: dict | None = None, now: datetime | None = None) -> str:
+    """A company page's Cache-Control. The site's cache keeps one copy per compression (identity, gzip, br, zstd), each
+    from when it was first asked for, so a copy cached just before the close settled outlived the page's refresh by up
+    to s-maxage plus stale-while-revalidate: browsers (gzip, br) got 8 Oct's page until 20:59 UTC while plain requests
+    had 9 Oct's from 20:51 (R13-006). So no copy is kept past the market's next settle point, and a page still waiting
+    for its new close is kept a minute, so every copy follows the refresh within a minute or two."""
+    now = now or datetime.now(timezone.utc)
+    if f and region and behind(f, now):
+        return BEHIND_CACHE
+    nxt = next_settle(region, now) if region else None
+    if nxt is None:
+        return CACHE_CONTROL
+    left = int((nxt - now).total_seconds())
+    if left >= 900 + 600:
+        return CACHE_CONTROL
+    s_max = max(MIN_CACHE, min(900, left))
+    swr = max(0, min(600, left - s_max))
+    return f"public, max-age={min(300, s_max)}, s-maxage={s_max}, stale-while-revalidate={swr}"
+
+
+def html_ttl(region: str | None, now: datetime | None = None) -> int:
+    """How long a rendered page is kept in memory: ten minutes, never past the market's next settle point."""
+    nxt = next_settle(region, now) if region else None
+    if nxt is None:
+        return 600
+    return max(MIN_CACHE, min(600, int((nxt - (now or datetime.now(timezone.utc))).total_seconds())))
+
+
 def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime]:
     """(day, when) of the market's latest settled close: the latest trading day whose close was at least settle(region)
     ago. Before then, today's candle is still a session in progress (or not yet the official close), not a close."""
@@ -249,6 +299,32 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
             return d, at
         d -= timedelta(days=1)
     return d, datetime.combine(d, dtime(int(hh), int(mm)), tz)
+
+
+SETTLING_MARKETS = ("US",)      # where the app's prices say they are still settling after the bell (India: R8B-001's official close)
+
+
+def settling(region: str, now: datetime | None = None) -> str | None:
+    """The day (ISO) whose closing prints are still settling: from a trading day's close until settle(region) after it,
+    in a market whose app prices say so; None otherwise. R13-005: from 16:00 to about 16:30 ET the company header, the
+    scans and the chart showed provisional prints, all labelled "Last close" and disagreeing by a few cents."""
+    if region not in SETTLING_MARKETS:
+        return None
+    from .data.calendar import is_trading_day
+    from .data.markets import BY_ID
+    m = BY_ID.get(region) or {}
+    tz = ZoneInfo(m.get("tz") or "UTC")
+    close = (m.get("hours") or {}).get("close")
+    if not close:
+        return None
+    hh, mm = close.split(":")
+    local = (now or datetime.now(timezone.utc)).astimezone(tz)
+    at = datetime.combine(local.date(), dtime(int(hh), int(mm)), tz)
+    try:
+        trading = is_trading_day(region, local.date())
+    except Exception:
+        return None
+    return local.date().isoformat() if trading and at <= local < at + timedelta(seconds=settle(region)) else None
 
 
 DUE_AT = {"IN": "18:30 IST"}     # when the evening's stored numbers (breadth, screens, public pages) are usually in
@@ -1073,7 +1149,7 @@ class Pages:
         hit = self.mem.get(key)
         if hit is None:
             hit = render(self.get(region, symbol, co), region, symbol, co["name"])
-            self.mem.set(key, hit, 600)
+            self.mem.set(key, hit, html_ttl(region))      # never served past the next close's settle point (R13-006)
         return hit
 
 
@@ -1557,7 +1633,11 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
         return _not_company_page(region, symbol, str(f["not_company"]))
     desc = description(f)
     as_of = as_of_text(f)
-    if _num(f.get("price")) is not None and is_close(f):
+    if _num(f.get("price")) is not None and is_close(f) and behind(f):
+        # "Last price, 8 Oct" above: the line under it says what that price is, never "Prices are closing prices" (R13-006)
+        as_of_line = (f"As of {e(as_of)}. The price shown is the close of {e(_date(f.get('price_at')))}, the last this page has; "
+                      "facts from reported results, exchange filings and daily prices. Not investment advice.")
+    elif _num(f.get("price")) is not None and is_close(f):
         as_of_line = (f"As of {e(as_of)}. Prices are closing prices; facts from reported results, exchange filings and "
                       "daily prices. Not investment advice.")
     elif _num(f.get("price")) is not None:              # a last trade, dated by its session (R7V-004)

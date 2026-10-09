@@ -71,15 +71,20 @@ DEFAULT = "nifty500"
 REGIONS = ("IN", "US")
 CLOSE = {"IN": ("Asia/Kolkata", "15:45"), "US": ("America/New_York", "16:15")}     # a day's candle is final after this
 RUN_AT = {"IN": ("Asia/Kolkata", "18:30"), "US": ("America/New_York", "17:45")}    # the daily run, after the close
+# the run starts at the first check after RUN_AT (one every 5 minutes) and reads every stock of the market, a few minutes
+# more: the time the pages give is when it is in, not when it starts (R13-009: "due about 5:45 PM ET", in at 5:51)
+RUN_TAKES = {"US": 10}
 RANGES = {"3m": 63, "6m": 126, "1y": 252, "2y": 504, "all": None}
 
 
 def due_label(region: str) -> str | None:
-    """When a market's daily count is usually in, as the pages say it: "5:45 PM ET" for the US run (RUN_AT). None for India,
-    whose pages already say "18:30 IST" (stock_pages.DUE_AT)."""
+    """When a market's daily count is usually in, as the pages say it: "5:55 PM ET" for the US run (RUN_AT, plus the
+    RUN_TAKES minutes it takes to start and finish). None for India, whose pages already say "18:30 IST" (stock_pages.DUE_AT)."""
     if region != "US":
         return None
     h, m = (int(x) for x in RUN_AT[region][1].split(":"))
+    t = h * 60 + m + RUN_TAKES.get(region, 0)
+    h, m = divmod(t, 60)
     return f"{h % 12 or 12}:{m:02d} {'PM' if h >= 12 else 'AM'} ET"
 
 # what each number means, in plain words: the page's (i) next to each figure and chart
@@ -226,6 +231,30 @@ def rows_of(total: pd.DataFrame | None, index: dict[str, float] | None = None) -
     return out
 
 
+REVISED_KEEP = 10                # revisions kept per group
+COUNTED = ("adv", "dec", "unch")
+
+
+def revisions(old: dict[str, list], new: dict[str, list], through: str | None) -> list[dict]:
+    """The days before `through` already stored whose rose, fell or unchanged counts a new run gives differently (a
+    stock's candle corrected by its source after the day was published): [{"day", "before", "after"}]. R13-009: 8 Oct's
+    S&P 500 line went from 337/163/1 to 338/163/1 without a word."""
+    idx = [COLS.index(k) for k in COUNTED]
+    out = []
+    for d in sorted(new):
+        if through and d >= through or d not in old:
+            continue
+        a, b = old[d], new[d]
+        try:
+            before, after = {k: a[i] for k, i in zip(COUNTED, idx)}, {k: b[i] for k, i in zip(COUNTED, idx)}
+        except (IndexError, TypeError):
+            continue
+        if None in before.values() or None in after.values() or before == after:
+            continue
+        out.append({"day": d, "before": before, "after": after})
+    return out
+
+
 def merge(old: dict[str, list], new: dict[str, list], keep_from: str | None) -> dict[str, list]:
     """The stored days with the new run's days laid over them, from `keep_from` on (earlier new days lack a full
     year of lookback, so the stored ones stand). The latest KEEP_ROWS days are kept."""
@@ -253,9 +282,20 @@ def load_hist(group: str) -> dict[str, list]:
     return out
 
 
-def save_hist(group: str, rows: dict[str, list]):
+def save_hist(group: str, rows: dict[str, list], revised: list[dict] | None = None):
+    """A group's days, with the revisions of earlier days the runs made (the newest REVISED_KEEP), kept beside them."""
     db.set_setting(HIST_KEY + group, json.dumps({"fields": list(COLS), "at": _now(),
-                                                 "rows": [[d, *rows[d]] for d in sorted(rows)]}))
+                                                 "rows": [[d, *rows[d]] for d in sorted(rows)],
+                                                 **({"revised": revised[-REVISED_KEEP:]} if revised else {})}))
+
+
+def load_revised(group: str) -> list[dict]:
+    """The revisions of earlier days a group's runs made, oldest first ([{"day", "before", "after", "at"}])."""
+    try:
+        raw = db.json_value(db.get_setting(HIST_KEY + group), {})
+    except Exception:
+        return []
+    return [r for r in raw.get("revised") or [] if isinstance(r, dict) and r.get("day")]
 
 
 def save_base(region: str, day: str, stocks: dict[str, list]):
@@ -477,13 +517,17 @@ class Runner:
                 out[g] = {"days": len(stored[g]), "stocks": 0, "members": 0, "as_of": max(stored[g]) if stored[g] else None}
                 continue
             index = self._index(region, GROUPS[g]["index"], days, through)
-            rows = merge(stored[g], rows_of(tally.groups.get(g), index), None if not stored[g] else keep_from)
+            fresh = rows_of(tally.groups.get(g), index)
+            laid = {d: r for d, r in fresh.items() if d >= keep_from}        # the days the merge lays over the stored ones
+            changed = [{**r, "at": _now()} for r in revisions(stored[g], laid, through)] if stored[g] else []
+            rows = merge(stored[g], fresh, None if not stored[g] else keep_from)
             if not stored[g]:           # the first run: only days with a full year behind them
                 rows = {d: r for d, r in rows.items() if d >= keep_from}
             for d, r in rows.items():   # an index close the stored day didn't have yet
                 if r[-1] is None and d in index:
                     r[-1] = index[d]
-            save_hist(g, rows)
+            kept = [r for r in load_revised(g) if (r["day"], r.get("after")) not in {(c["day"], c["after"]) for c in changed}]
+            save_hist(g, rows, (kept + changed) if (kept or changed) else None)
             db.set_setting(SECTOR_KEY + g, json.dumps(sectors_of(tally, g)))
             out[g] = {"days": len(rows), "stocks": tally.stocks.get(g, 0), "members": len(who[g]),
                       "as_of": max(rows) if rows else None}
@@ -638,7 +682,9 @@ def view(group: str, range_: str = "1y", full: bool = True, brief: bool = False)
     out = {"group": {"id": group, **g}, "groups": groups_list(), "today": today(s), "as_of": s["days"][-1] if s["days"] else None,
            "since": s["days"][0] if s["days"] else None, "range": range_, "help": HELP,
            "status": (status().get(g["region"]) or {}).get("ran_at"), "locked": not full, "history": None, "sectors": None,
-           "thrusts": None}
+           "thrusts": None,
+           # an earlier day's counts a later run changed, said beside the numbers (R13-009); the last week's only
+           "revised": [r for r in load_revised(group) if s["days"] and r["day"] >= s["days"][max(0, len(s["days"]) - 6)]]}
     if brief or not full or not s["days"]:
         return out
     cut = 0 if n is None else max(0, len(s["days"]) - n)

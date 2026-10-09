@@ -42,10 +42,16 @@ def region_of(region: str) -> str:
     return r
 
 
-def symbol_of(symbol: str) -> str:
+def symbol_of(symbol: str, region: str | None = None) -> str:
+    """A ticker checked, and as the app keeps it: with `region` "US", a share class with a dash (BRK.B -> BRK-B), so every
+    source is asked for the one listing the canonical page shows (R13-001)."""
     s = symbol.strip().upper()
     # a letter or digit first (or ^ for an index): "..", "-x" and the like never reach a data source's address
-    if not s or len(s) > 20 or not (s[0].isalnum() or s[0] == "^") or not all(ch.isalnum() or ch in "&-._^" for ch in s):
+    if not s or len(s) > 20 or not (s[0].isalnum() or s[0] == "^") or not all(ch.isalnum() or ch in "&-._^/" for ch in s):
+        err(400, "bad_symbol", "That doesn't look like a ticker.")
+    from ..us_ticker import canon
+    s = canon(region, s) if region else s
+    if "/" in s:
         err(400, "bad_symbol", "That doesn't look like a ticker.")
     return s
 
@@ -136,7 +142,12 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
 # ---------- data ----------
 @router.get("/search")
 def search(q: str = "", region: str = "IN", profile=Depends(current_profile)):
-    return ok(source_call(lambda: hub.search(q[:40], region_of(region))))
+    r = region_of(region)
+    from ..us_ticker import CLASS, canon
+    q = q[:40]
+    if r == "US" and CLASS.match(q.strip().upper()):       # "BRK.B" finds BRK-B (R13-001)
+        q = canon(r, q)
+    return ok(source_call(lambda: hub.search(q, r)))
 
 
 def prices_as_of(c: dict) -> str:
@@ -167,7 +178,12 @@ def price_phase(region: str, c: dict, now: datetime | None = None) -> str | None
     from .company import market_today, session_day
     from ..data.calendar import is_trading_day
     if region != "IN":
-        return None
+        # a US price read between the 16:00 close and its settle point is the day's last prints, not yet its close: the
+        # header says "Latest, closing prints still settling" until then, never "Last close" (R13-005)
+        from .. import stock_pages
+        day = stock_pages.settling(region, now)
+        at = (c.get("quote") or {}).get("at")
+        return "settling" if day and (not at or session_day(at, region) == day) else None
     local = (now or datetime.now(timezone.utc)).astimezone(IST)
     if not is_trading_day("IN", local.date()) or not ("09:00" <= local.strftime("%H:%M") < "09:15"):
         return None
@@ -181,7 +197,8 @@ def company(region: str, symbol: str, lean: bool = False, profile=Depends(curren
     its market is trading now (else the price is the last close). `lean`: without the news, the encyclopedia entry and
     the peers (marked `lazy`; /more brings them), so the price, header and tables don't wait on slow sources (R10O-009)."""
     r = region_of(region)
-    c = page_figures(r, source_call(lambda: hub.company(r, symbol_of(symbol), lean=True) if lean else hub.company(r, symbol_of(symbol))))
+    s = symbol_of(symbol, r)
+    c = page_figures(r, source_call(lambda: hub.company(r, s, lean=True) if lean else hub.company(r, s)))
     return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c)})
 
 
@@ -189,7 +206,8 @@ def company(region: str, symbol: str, lean: bool = False, profile=Depends(curren
 def company_more(region: str, symbol: str, profile=Depends(current_profile)):
     """What a lean company page left out: the company's news, its encyclopedia entry and its peers."""
     r = region_of(region)
-    return ok(source_call(lambda: hub.company_more(r, symbol_of(symbol))))
+    s = symbol_of(symbol, r)
+    return ok(source_call(lambda: hub.company_more(r, s)))
 
 
 def page_figures(region: str, c: dict) -> dict:
@@ -319,13 +337,23 @@ def chart(region: str, symbol: str, range: str = "1y", tf: str = "1d", before: s
     candles when the chart is scrolled back, and `more` says whether still older ones exist."""
     if tf not in ("5m", "15m", "1h", "1d"):
         err(400, "bad_tf", "Pick 5m, 15m, 1h or 1d candles.")
-    return ok(source_call(lambda: hub.chart(region_of(region), symbol_of(symbol), range[:5], tf, (before or "")[:40])))
+    r = region_of(region)
+    s = symbol_of(symbol, r)
+    return ok(source_call(lambda: hub.chart(r, s, range[:5], tf, (before or "")[:40])))
 
 
 @router.get("/quotes")
 def quotes(region: str = "IN", symbols: str = "", profile=Depends(current_profile)):
-    syms = [symbol_of(s) for s in symbols.split(",") if s.strip()][:24]
-    return ok(source_call(lambda: hub.quotes(region_of(region), syms)))
+    r = region_of(region)
+    asked = [s.strip().upper() for s in symbols.split(",") if s.strip()][:24]
+    syms = [symbol_of(s, r) for s in asked]
+    got = source_call(lambda: hub.quotes(r, syms))
+    # answered under the ticker asked for too, so a page holding "BRK.B" finds its quote (R13-001)
+    if isinstance(got, dict):
+        for a, s in zip(asked, syms):
+            if a != s and s in got:
+                got.setdefault(a, got[s])
+    return ok(got)
 
 
 @router.get("/pulse")
@@ -387,7 +415,8 @@ def behind_the_page(key: tuple, run) -> dict | None:
 def company_ai(region: str, symbol: str, refresh: bool = False, background: bool = False, profile=Depends(current_profile)):
     """A company's AI read. `background`: the page asks without waiting; a read not written yet is written behind the
     page and the answer is {"pending": true} until it is there (the page asks again every few seconds)."""
-    r, s = region_of(region), symbol_of(symbol)
+    r = region_of(region)
+    s = symbol_of(symbol, r)
     pro = has_indicators(profile["_plan"])       # which indicators the read may mention; the facts are the same
 
     def build():
@@ -452,7 +481,10 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     stale = [i["name"] for i in indices if i.get("stale")]
     if stale:
         return ok({"unavailable": True, "code": "stale", "message": stale_words(stale)})
-    hour = datetime.now(IST).strftime("%Y-%m-%d %H")
+    is_open = market_open(r)
+    # while the market trades, a read an hour; once it has closed, one read per close, whoever asks and whenever (R13-011:
+    # two views 12 minutes apart after the US close got two different texts, the hour having turned in India)
+    hour = datetime.now(IST).strftime("%Y-%m-%d %H") if is_open else "close"
     cash = flows_today() if r == "IN" else None            # the day's FII and DII figures, as Positioning has them (R10O-004)
     cash_day = cash.get("as_of") if cash and cash.get("status") == "ok" else None
 
@@ -470,8 +502,9 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r)), cash_day), 3600, refresh, build,
-                          counted=False, min_age=300))
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day),
+                          3600 if is_open else CLOSED_MOOD_TTL, refresh, build, counted=False,
+                          min_age=300 if is_open else CLOSED_MOOD_TTL))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it
@@ -479,6 +512,9 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+CLOSED_MOOD_TTL = 20 * 3600      # a closed session's mood read: kept until the next session, never written again on "Ask again"
 
 
 def flows_today() -> dict | None:
@@ -529,7 +565,8 @@ def industry_lookup(region: str):
 
 @router.get("/compare")
 def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
-    r, sa, sb = region_of(region), symbol_of(a), symbol_of(b)
+    r = region_of(region)
+    sa, sb = symbol_of(a, r), symbol_of(b, r)
     if sa == sb:
         err(400, "same_symbol", "Pick two different companies.")
     # each side's figures as its own page shows them (market value, P/E, range)
@@ -573,10 +610,11 @@ def get_watchlist(profile=Depends(current_profile)):
 def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
     seen, items = set(), []
     for i in req.items:
-        k = (i.region, i.symbol.upper())
+        sym = symbol_of(i.symbol, i.region)            # BRK.B is kept as BRK-B, once (R13-001)
+        k = (i.region, sym)
         if k not in seen:
             seen.add(k)
-            items.append({"region": i.region, "symbol": symbol_of(i.symbol), "name": i.name})
+            items.append({"region": i.region, "symbol": sym, "name": i.name})
     before = get_watchlist(profile)["items"]
     before = before if isinstance(before, list) else []
     db.set_setting(_watch_key(profile), json.dumps({"items": items}))

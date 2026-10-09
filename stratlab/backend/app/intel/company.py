@@ -266,6 +266,23 @@ def with_today_range(c: dict) -> dict:
     return {**c, "range52": {"low": lo, "high": hi}}
 
 
+def us_year_range(given: dict, candles: list[dict] | None, price=None) -> dict:
+    """A US company's 52-week range on the one rule every page uses: the lowest low and highest high of the closed sessions
+    of exactly the last 365 days (stock_pages.year_low_high), as its public page works it out. R13-008: the app gave KO's
+    low as 65.87, the fundamentals source's range reaching 367 days back to 7 Oct 2025, against the public page's 66.00.
+    The given range stands when there are no candles, or theirs can't be this share's."""
+    from .. import stock_pages
+    try:
+        bars = stock_pages.closed_bars(list(candles or []), "US")
+    except Exception:
+        bars = list(candles or [])
+    lo, hi = stock_pages.year_low_high(bars) if bars else (None, None)
+    px = num(price) or (num(bars[-1].get("c")) if bars else None)
+    if lo is None or hi is None or (px and not plausible_range(px, lo, hi)):
+        return given
+    return {"low": lo, "high": hi}
+
+
 US_LENDERS = ("bank","banking", "financial services", "insurance", "capital markets", "thrift", "credit", "mortgage", "lending")
 
 
@@ -445,7 +462,8 @@ class Research:
 
     # ---------- quotes ----------
     def quotes(self, region: str, symbols: list[str]) -> dict[str, dict]:
-        symbols = [s.strip().upper() for s in symbols if s.strip()][:24]
+        from ..us_ticker import canon
+        symbols = [canon(region, s) for s in symbols if s.strip()][:24]
         if not symbols:
             return {}
         if region == "IN" and self._kite():
@@ -479,7 +497,8 @@ class Research:
         """Candles for the price chart: a range of daily ones, a recent window of intraday ones, or (with
         `before`) the page of older candles before a time. `more` says whether older candles exist."""
         from ..chart_data import older, parse_before, window
-        symbol = symbol.strip().upper()
+        from ..us_ticker import canon
+        symbol = canon(region, symbol)                   # BRK.B's candles are BRK-B's (R13-001)
         until = parse_before(before)
         # while the market trades, today's daily candle is still forming: read again within a minute, not a copy kept
         # for hours (R7T-006: the 1Y chart had no 9 Oct candle 17 minutes after the open, while 1M and 6M did)
@@ -619,7 +638,8 @@ class Research:
         """One company's page figures. `lean`: without the news and the encyclopedia entry, which come from slow
         sources of their own (a news search and an encyclopedia lookup took a company page 9 to 30 s, R10O-009): the
         price, the header and the tables come at once, marked `lazy`, and `company_more` brings the rest."""
-        symbol = symbol.strip().upper()
+        from ..us_ticker import canon
+        symbol = canon(region, symbol)                   # one share basis for BRK.B and BRK-B (R13-001)
         out = self._company_in(symbol, lean) if region == "IN" else self._company_us(symbol, lean)
         return {**out, "lazy": list(self.LAZY)} if lean else out
 
@@ -628,6 +648,12 @@ class Research:
         c = self.company(region, symbol)
         return {"news": c.get("news") or [], "wiki": (c.get("about") or {}).get("wiki"), "peers": c.get("peers") or [],
                 "sources": c.get("sources") or []}
+
+    def _quiet_candles(self, sym: str) -> list[dict]:
+        try:
+            return self.yahoo.chart(sym, "1d", 400)["candles"]
+        except Exception:
+            return []
 
     def _company_us(self, sym: str, lean: bool = False) -> dict:
         fh = self.finnhub
@@ -641,6 +667,9 @@ class Research:
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
             "fin": ("Finnhub", lambda: fh.financials(sym)), "ins": ("Finnhub", lambda: fh.insider(sym)),
             "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
+            # the year's daily candles, for the 52-week range on the public page's rule (R13-008); the chart reads the same
+            # (never a missing-data line of its own: without them the fundamentals' range stands)
+            "k1y": ("Yahoo Finance", lambda: self._quiet_candles(sym)),
         }
         if lean:
             tasks = {k: v for k, v in tasks.items() if k not in ("news", "wiki")}
@@ -654,6 +683,7 @@ class Research:
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
         one = us_listing(p, r.get("listing"), M)
+        one = {**one, "range52": us_year_range(one["range52"], r.get("k1y"), q.get("c") or (r.get("listing") or {}).get("price"))}
         lender = is_lender(None, p.get("finnhubIndustry"))
         return {
             "region": "US", "symbol": sym, "name": p.get("name"), "exchange": one["exchange"],
