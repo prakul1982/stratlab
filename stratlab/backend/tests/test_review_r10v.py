@@ -498,9 +498,10 @@ def test_a_page_with_no_market_value_says_why_when_it_knows():
     f = facts_page("Mar 2026", market_cap=None, pe=None, cap_why="shares")
     page = stock_pages.render(f, "US", "BIDU", None)
     assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page and "number of shares in issue couldn't be read" in page
-    # no reason known (an older page): nothing is claimed
+    # no reason known (an older page): no cause is claimed, but the item is still there, as n/a with a plain note
+    # (changed on purpose for R12-005: the item used to be left out, and BP's page showed no Market cap at all)
     page = stock_pages.render(facts_page("Mar 2026", market_cap=None, pe=None), "US", "BIDU", None)
-    assert stat(page, "Market cap") is None and "data-cap-missing" not in page
+    assert stat(page, "Market cap") == "n/a" and "data-cap-missing" in page and "couldn't be read" not in page
     # a failed check keeps its own note
     assert stock_pages.cap_missing_reason(facts_page("Mar 2026", cap_why="shares")) is None
 

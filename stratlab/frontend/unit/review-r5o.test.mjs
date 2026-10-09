@@ -139,7 +139,10 @@ test("a failed /me shows Retry, never a spinner that waits forever (R5O-002)", (
 test("notebook defaults invent nothing, and the sell question stays (R5O-010)", () => {
   const rules = read("src/lib/rules.ts");
   assert.match(rules, /const DEFAULT_RISK: Risk = \{[^}]*tgt: 0,/);
-  assert.match(read("src/components/IdeaComposer.tsx"), /strategy: withDefaultExit\(strategy, out\.mentioned \|\| \[\]\)/);
+  // the default sell rule is in the built strategy; what counts as said is the builder's list plus what the words plainly
+  // give ("no stop loss", R11C-005), so it is `mentioned`, no longer `out.mentioned` alone
+  assert.match(read("src/components/IdeaComposer.tsx"), /const built = withDefaultExit\(strategy, mentioned\);/);
+  assert.match(read("src/components/IdeaComposer.tsx"), /const mentioned = \[\.\.\.new Set\(\[\.\.\.\(out\.mentioned \|\| \[\]\)/);
   assert.match(read("src/components/ImportStrategy.tsx"), /\{ \.\.\.s\.risk, sl: 0, tgt: 0, \.\.\.\(out\.risk \|\| \{\}\) \}/);
   const page = read("src/pages/NotebookPage.tsx");
   assert.match(page, /body: \{ gaps: g \}/);                       // the questions are saved with the notebook

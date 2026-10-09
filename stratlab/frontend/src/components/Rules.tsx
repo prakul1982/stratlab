@@ -7,7 +7,7 @@ import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/i
 import { Info } from "./ui";
 import { Pencil } from "./Icons";
 import { Block, More } from "./More";
-import { buildIdea } from "./IdeaComposer";
+import { buildIdea, type Built } from "./IdeaComposer";
 import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select, TimeInput, usePopover } from "./kit";
 import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } from "../lib/types";
 import "../pages/trade/trade.css";
@@ -180,14 +180,19 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
   ["pct", "% target", "percent of the entry price"], ["points", "point target", "price points"], ["r", "R target", "a multiple of the stop distance: 2R is twice the risk"],
 ];
 
-export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: string; onChange: (s: Strategy) => void }) {
+export function RulesCard({ s, currency, onChange, onRebuilt }: {
+  s: Strategy; currency: string; onChange: (s: Strategy) => void;
+  /** Called after "Edit in words" rebuilds the rules, with what the new words said and didn't say. */
+  onRebuilt?: (gaps: Built["gaps"]) => void;
+}) {
   const { allIndicators, refreshMe, me } = useApp();
   const [rewrite, setRewrite] = useState<string | null>(null);
   const [rebuilding, setRebuilding] = useState(false);
   const [rewriteNote, setRewriteNote] = useState("");
+  const [rewriteWarnings, setRewriteWarnings] = useState<string[]>([]);
   const rebuild = async () => {
     if (rewrite === null) return;
-    setRebuilding(true); setRewriteNote("");
+    setRebuilding(true); setRewriteNote(""); setRewriteWarnings([]);
     try {
       const out = await buildIdea(rewrite.trim());
       if (out.usedAI) refreshMe();
@@ -198,6 +203,9 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
         risk: { ...s.risk, sl: n.risk.sl, tgt: n.risk.tgt, stopType: n.risk.stopType, tgtType: n.risk.tgtType, trail: n.risk.trail, maxBars: n.risk.maxBars } });
       setRewrite(null);
       if (out.note) setRewriteNote(out.note);
+      // a rule left out or a number that didn't make it into the rules is said where the rules are (R11C-004)
+      setRewriteWarnings([...(out.built.gaps.warnings ?? []), ...out.built.gaps.notes]);
+      onRebuilt?.(out.built.gaps);
     } catch (e) { setRewriteNote((e as Error).message); } finally { setRebuilding(false); }
   };
   const set = (patch: Partial<Strategy>) => onChange({ ...s, ...patch });
@@ -306,6 +314,12 @@ export function RulesCard({ s, currency, onChange }: { s: Strategy; currency: st
             <button type="button" className="btn sm" disabled={rebuilding || rewrite.trim().length < 5} onClick={rebuild}>{rebuilding ? "Rebuilding…" : "Rebuild the rules"}</button>
             {rewriteNote && <Notice tone="warn" role="status">{rewriteNote}</Notice>}
           </div>
+        </div>
+      )}
+      {rewrite === null && (rewriteNote || rewriteWarnings.length > 0) && (
+        <div className="k-stack k-tight" data-testid="rebuild-warnings">
+          {rewriteNote && <Notice tone="warn" role="status">{rewriteNote}</Notice>}
+          {rewriteWarnings.map((w) => <Notice key={w} tone="warn" role="status">{w}</Notice>)}
         </div>
       )}
       <p className="k-small k-muted">Tap any highlighted word to change it: the indicator, its length, the condition or a number.</p>

@@ -24,12 +24,14 @@ PERIOD_TYPES = {"sma", "ema", "rsi", "vwap", "macd", "macd_signal", "macd_hist",
                 "adx", "stoch_k", "atr_pct", "dc_upper", "dc_lower", "vol_sma"}
 NUDGES = (0.6, 0.8, 1.0, 1.2, 1.4)
 
+# each verdict in a few words, as facts about the checks (R11C-009: no "Likely a real edge." or "Probably luck."); a
+# verdict's own headline is fact_headline's, with its numbers
 HEADLINES = {
-    "edge": "Likely a real edge.",
-    "mixed": "Mixed evidence.",
-    "luck": "Probably luck.",
-    "not_enough": "Not enough evidence.",
-    "no_edge": "No edge here.",
+    "edge": "Passed the checks.",
+    "mixed": "Mixed check results.",
+    "luck": "Failed a robustness check.",
+    "not_enough": "Too few trades.",
+    "no_edge": "Lost money after costs.",
 }
 
 
@@ -166,7 +168,8 @@ def _with(strategy, subs: dict[tuple, float]):
     return s
 
 
-def check_nearby(bars, strategy, start, lot, kind, ctx) -> dict:
+def check_nearby(bars, strategy, start, lot, kind, ctx, traded: bool | None = None) -> dict:
+    """`traded`: whether the exact settings made any trade (False: none at all, so there's nothing to compare)."""
     keys = _param_keys(strategy)
     if not keys:
         return {"id": "nearby", "title": "Nearby settings", "status": "skip",
@@ -193,9 +196,15 @@ def check_nearby(bars, strategy, start, lot, kind, ctx) -> dict:
         grid.append(row)
     share = profitable / total
     status = "pass" if share >= 0.6 else "warn" if share >= 0.4 else "fail"
-    detail = {"pass": "Most settings near yours make money too, so the idea doesn't hinge on one lucky number.",
-              "warn": "About half the settings near yours make money. The result depends a lot on the exact numbers.",
-              "fail": "Most settings near yours lose money. Your exact numbers look like a lucky fit."}[status]
+    detail = {"pass": f"{profitable} of {total} settings near yours made money too.",
+              "warn": f"{profitable} of {total} settings near yours made money: the result changes a lot with the exact numbers.",
+              "fail": f"{profitable} of {total} settings near yours made money; most lost money."}[status]
+    if traded is False:
+        # no trade with the exact settings: nothing to compare the neighbours with (R11C-006: "Failed ... Your exact
+        # numbers look like a lucky fit" on a test with no trades)
+        status = "skip"
+        detail = (f"Your settings made no trades in this period, so there is no result of yours to compare. "
+                  f"{profitable} of {total} settings near yours made money.")
 
     def label(key):
         if key[0] in MARKET:
@@ -241,19 +250,38 @@ def fall_text(v: float) -> str:
 
 
 def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest", whose: str = "your backtest's",
-                  paths: list | None = None) -> dict:
+                  paths: list | None = None, steps: list | None = None) -> dict:
     """Reshuffle the trades' order: how deep a fall the same trades could have had. `who` and `whose` name the trades
     in the wording (a backtest's, or the user's real trades in the journal).
 
     With `paths` (a backtest: each trade's day-by-day changes in account value, the open trade's too), falls are
     measured day by day from the peak, the same measure as the backtest's "Worst fall", which "yours" then equals.
-    Without them (real trades, known only by their results) each trade is one step."""
+    Without them (real trades, known only by their results) each trade is one step.
+
+    With `steps` (a group of instruments, whose trades overlap), the account's day-by-day changes are reshuffled: the
+    same days in another order. A reshuffle that can't reorder anything (fewer than five pieces to move) proves nothing,
+    so the check is then not run rather than passed (R11C-010)."""
     pnls = np.array([t["pnl"] for t in trades], dtype=float)
     if len(pnls) < 5:
         return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
                 "detail": "Too few trades to reshuffle.", "data": None}
     rng = np.random.default_rng(42)  # same answer every time for the same trades
-    if paths:
+    moving = [s for s in (steps or []) if s] if steps is not None else None
+    if steps is not None and len(moving) < 5:
+        return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
+                "detail": "Too few days with a change in the account to reshuffle.", "data": None}
+    if paths is not None and steps is None and len(paths) < 5:
+        return {"id": "shuffle", "title": "Bad-luck drawdown", "status": "skip",
+                "detail": "Too few separate trades to reshuffle: they overlap, so their order can't change.", "data": None}
+    by = "trades"
+    if steps is not None:
+        by = "days"
+        inc = np.asarray(steps, dtype=float)
+        yours = _trade_dd(inc, capital)
+        rows = max(1, SHUFFLE_BLOCK // max(1, len(inc)))
+        dds = np.concatenate([_trade_dds(np.stack([rng.permutation(inc) for _ in range(min(rows, SHUFFLES - i))]), capital)
+                              for i in range(0, SHUFFLES, rows)])
+    elif paths:
         segs = [np.asarray(p, dtype=float) for p in paths]
         lens = np.array([len(p) for p in segs])
         inc = np.concatenate(segs) if segs else np.zeros(0)
@@ -270,17 +298,19 @@ def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest"
                               for i in range(0, SHUFFLES, rows)])
         yours = _trade_dd(pnls, capital)
     p95, worst = float(np.percentile(dds, 95)), float(dds.max())
+    what = "days" if by == "days" else "trades"
     if p95 >= 35:
         status = "fail"
-        detail = f"With worse luck the same trades could have fallen {fall_text(p95)}. That's hard to sit through."
+        detail = (f"{who} fell {fall_text(yours)} at worst; in 95 of 100 reshuffles of the same {what} the fall was up to "
+                  f"{fall_text(p95)}, 35% or more.")
     elif p95 > max(1.5 * yours, 5):
         status = "warn"
         detail = f"{who} fell {fall_text(yours)} at worst; in 95 of 100 reshuffles the fall was up to {fall_text(p95)}."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls stay around {fall_text(p95)}, close to {whose} {fall_text(yours)}."
+        detail = f"In 95 of 100 reshuffles the fall was up to {fall_text(p95)}, close to {whose} {fall_text(yours)}."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
-            "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES, "daily": bool(paths)}}
+            "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES, "daily": bool(paths) or by == "days", "by": by}}
 
 
 def check_sample(n: int) -> dict:
@@ -318,7 +348,7 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
     trades = base["trades"]
     checks = [
         check_unseen(bars, base, start, strategy.risk.capital),
-        check_nearby(bars, strategy, start, lot, cost_kind, ctx),
+        check_nearby(bars, strategy, start, lot, cost_kind, ctx, bool(trades or base.get("open_trade"))),
         check_shuffle(trades, strategy.risk.capital, paths=base.get("_paths")),
         check_sample(len(trades)),
     ]
@@ -342,25 +372,86 @@ def versus_hold(ret: float, hold: float | None) -> str:
     return f" The strategy returned {_pc(ret)} after costs, {rel} buying and holding over the same period ({_pc(hold)})."
 
 
+def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False) -> str:
+    """The verdict as a fact about the checks, in the library card's words (library.label): no claim about the strategy,
+    no instruction."""
+    run = [c for c in checks if c.get("status") != "skip"]
+    passed = sum(1 for c in run if c.get("status") == "pass")
+    if verdict == "not_enough":
+        return "No trades in this period" if none or n == 0 else f"Only {n} trade{'s' if n != 1 else ''}: too few to judge"
+    if verdict == "no_edge":
+        return "Lost money after costs"
+    if verdict == "luck":
+        by = {c["id"]: c.get("status") for c in checks}
+        if by.get("unseen") == "fail":
+            return "Lost money on the unseen part of the period"
+        if by.get("nearby") == "fail":
+            return "Failed the nearby-settings check"
+    if not run:
+        return "No checks could be run"
+    if passed == 4:
+        return "Passed all four checks"
+    return f"Passed all {len(run)} checks run" if passed == len(run) else f"Passed {passed} of the {len(run)} checks run"
+
+
+def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: float | None, none: bool = False) -> str:
+    """The headline of a verdict as facts (R11C-009: "Likely a real edge." over +55.8% against +173.6% for buy and hold):
+    how the return after costs compares with buying and holding, then what the checks found, as the library card says it
+    ("117.1 points behind buy and hold after costs; passed all 3 checks run.")."""
+    lab = fact_label(verdict, checks, n, none)
+    if hold is None or none:
+        return lab + "."
+    gap = ret - hold
+    low = lab[:1].lower() + lab[1:]
+    if gap <= -1:
+        return f"{abs(gap):.1f} points behind buy and hold after costs; {low}."
+    if gap >= 1:
+        return f"{gap:.1f} points ahead of buy and hold after costs; {low}."
+    return f"Within a point of buy and hold after costs; {low}."
+
+
+# the headlines verdicts were stored with before they stated facts: shown again, they are worded from the verdict's own
+# facts instead (R11C-009)
+OLD_HEADLINES = {"Likely a real edge.", "Mixed evidence.", "Probably luck.", "Not enough evidence.", "No edge here."}
+
+
+def restated(v: dict | None, stats: dict | None) -> dict | None:
+    """A stored verdict with a claim for a headline ("Likely a real edge.") given its facts instead; any other as it is."""
+    if not isinstance(v, dict) or v.get("headline") not in OLD_HEADLINES:
+        return v
+    st = stats or {}
+    n, ret = int(st.get("n") or 0), float(st.get("ret") or 0.0)
+    hold = st.get("buy_hold_ret")
+    return {**v, "headline": fact_headline(v.get("verdict") or "", list(v.get("checks") or []), n, ret,
+                                           float(hold) if isinstance(hold, (int, float)) else None, n == 0 and abs(ret) < 1e-9)}
+
+
 def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None) -> dict:
     """The verdict from the checks, the trade count and the return after costs. `hold` is buy and hold's return over
     the same period: the summary always states how the two compare."""
     by = {c["id"]: c["status"] for c in checks}
-    if n < 15:
+    none = n == 0 and abs(ret) < 1e-9          # not one trade, not even one still open: nothing happened to judge
+    if none:
+        verdict = "not_enough"
+        # no claim about a return that no trade made (R11C-006: "returned 0.0% after costs, more than buying and holding")
+        summary = "No trades happened in this period: the rules' conditions never held together, so the account stayed at its starting capital."
+        if hold is not None:
+            summary += f" Buying and holding returned {_pc(hold)} over the same period."
+    elif n < 15:
         verdict = "not_enough"
         summary = (f"Only {n} trade{'s' if n != 1 else ''} in this period. That's too few to tell a real edge "
                    "from a lucky streak, whatever the return says.")
     elif ret <= 0:
         verdict = "no_edge"
-        summary = "After costs, the strategy lost money over the period, so there's no edge to test."
+        summary = "After costs, the strategy lost money over the period."
     elif by["unseen"] == "fail" or by["nearby"] == "fail":
         verdict = "luck"
         bits = []
         if by["unseen"] == "fail":
             bits.append("it lost money on the part of the period it wasn't tuned on")
         if by["nearby"] == "fail":
-            bits.append("most settings near yours lose money")
-        summary = "It made money overall, but " + " and ".join(bits) + ". The profit looks like a lucky fit."
+            bits.append("most settings near yours lost money")
+        summary = "It made money overall, but " + " and ".join(bits) + "."
     elif by["unseen"] == "pass" and by["nearby"] in ("pass", "skip") and by["shuffle"] != "fail":
         verdict = "edge"
         # only what the checks showed: a nearby-settings check that wasn't run (a group of stocks) proves nothing about
@@ -370,12 +461,13 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
                    "It made money after costs and kept making money on unseen data. The nearby-settings check wasn't "
                    "run, so this doesn't show whether the result depends on the exact settings.")
         if by["shuffle"] == "warn":
-            summary += " With the trades in a worse order, the worst fall could have been much deeper."
+            summary += " With the trades in a worse order, the worst fall was much deeper."
     else:
         verdict = "mixed"
         summary = "It made money after costs, but some checks pass and some don't."
-    summary += versus_hold(ret, hold)
-    return {"verdict": verdict, "headline": HEADLINES[verdict], "summary": summary,
+    if not none:
+        summary += versus_hold(ret, hold)
+    return {"verdict": verdict, "headline": fact_headline(verdict, checks, n, ret, hold, none), "summary": summary,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"),
             "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days)}
@@ -400,9 +492,23 @@ def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> d
     checks.append({"id": "nearby", "title": "Nearby settings", "status": "skip",
                    "detail": "Not run on a group of instruments yet: it would mean hundreds of backtests. Test the idea on one stock to see this check.",
                    "data": None})
-    checks.append(check_shuffle(base["trades"], cap, paths=base.get("_paths")))
+    # a group's trades overlap (ten positions open at once), so reordering whole trades isn't possible: the stretches with
+    # any position open run into one, and a reshuffle of one stretch is no reshuffle at all (R11C-010: p95 = worst = yours
+    # to 15 digits). The group's own account is reshuffled instead, day by day.
+    checks.append(check_shuffle(base["trades"], cap, steps=day_steps(times, base.get("equity") or [], cap)))
     checks.append(check_sample(len(base["trades"])))
     return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"))
+
+
+def day_steps(times: list[str], equity: list, capital: float) -> list[float]:
+    """Each trading day's change in the account's value, from its value at the day's last candle: what the group's
+    bad-luck check reshuffles."""
+    last: dict[str, float] = {}
+    for t, v in zip(times, equity):
+        if v is not None:
+            last[str(t)[:10]] = float(v)
+    values = [capital, *(last[d] for d in sorted(last))]
+    return [b - a for a, b in zip(values, values[1:])]
 
 
 def _when(t: str):

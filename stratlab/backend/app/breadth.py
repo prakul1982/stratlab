@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from . import db, rotation, scan_presets, sector_members, universes
+from . import db, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
 from .newsletter import job as news_job
@@ -801,6 +801,14 @@ class Job(news_job.Job):
                 _set_status(region, last_error=str(e)[:200], failed_at=_now())
                 continue
             if not result.get("ok"):
+                continue
+            if day and region == "IN" and official_close.waiting(last_complete(region, now), now):
+                # read on the day's last trades, before the exchange's official closes were out: the trend scans stored
+                # with it are read again once they are (R11C-008), so the day isn't marked done yet
+                self.retry[name] = time.time() + 1800
+                self.last[f"{name}-filled"] = "1"
+                ran += 1
+                self.status.update(last_run=now.isoformat(), last_error=None)
                 continue
             if day:
                 self.mark(name, day)

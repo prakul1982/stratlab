@@ -14,7 +14,7 @@ from . import risk
 from .engine import costs as C
 from .engine.core import Ctx, Engine
 from .kite_service import IST, KiteService
-from .live import CandleBuilder, _closed, close_at_auction, drop_forming, official_close, session_kind
+from .live import CandleBuilder, _closed, candle_end, close_at_auction, drop_forming, official_close, session_kind
 from .models import Strategy
 
 POLL_SECONDS = 60          # each polled member is checked this often for a newly closed candle
@@ -182,7 +182,7 @@ class GroupLiveSession:
                         ev = x.engine._close(bar, x.last_price, "Daily loss cap")
                         self.mgr.on_order(self, {**ev, "sym": x.sym})
                 self.halted = True
-        t = str(c["t"])
+        t = candle_end(c, self.tf)             # the value at the candle's close, stamped when it closed (R11C-011)
         if self.equity_curve and self.equity_curve[-1]["t"] == t:
             self.equity_curve[-1]["eq"] = round(self.equity(), 2)
         else:
@@ -238,9 +238,19 @@ class GroupLiveSession:
 
     # ---------- saving and showing ----------
     def state(self) -> dict:
-        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips} for m in self.members}, "day": self.day, "halted": self.halted,
+        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym}
+                            for m in self.members}, "day": self.day, "halted": self.halted,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
                 "day_equity": self._days()}
+
+    def final_state(self, now: datetime | None = None) -> dict:
+        """The state kept at the stop: open positions stay open, each valued at its last price, and the account's value at
+        those prices is the curve's last point (R11C-002)."""
+        if any(m.engine.qty > 0 for m in self.members):
+            eq = round(self.equity(), 2)
+            if not self.equity_curve or self.equity_curve[-1]["eq"] != eq:
+                self.equity_curve.append({"t": (now or datetime.now(IST)).isoformat(timespec="seconds"), "eq": eq})
+        return self.state()
 
     def _days(self) -> dict:
         self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
@@ -288,10 +298,33 @@ def stopped_snapshot(row: dict) -> dict:
     events = sorted(({**ev, "sym": names.get(iid, iid.split(":", 1)[-1])} for iid, m in (st.get("members") or {}).items() for ev in m.get("events", [])[-60:]),
                     key=lambda e: str(e["t"]))[-200:]
     realised = sum(t["pnl"] for t in trades)
+    # positions open at the stop stay open, each valued at its last price before the stop, as in the running session
+    # (R11C-002: the page showed the realised P&L alone and no position)
+    rows, open_pnl, unpriced = [], 0.0, False
+    for iid, m in (st.get("members") or {}).items():
+        qty, d, px = m.get("qty") or 0, m.get("dir") or 1, m.get("last_price")
+        pnl = round(sum(t["pnl"] for t in m.get("trades", [])), 2)
+        pos = None
+        if qty > 0:
+            unpriced = unpriced or not px
+            u = d * qty * ((px or m.get("entry") or 0) - (m.get("entry") or 0)) - (m.get("entry_cost") or 0)
+            open_pnl += u
+            pos = {"side": "short" if d == -1 else "long", "qty": qty, "entry": m.get("entry"), "unrealised": round(u, 2),
+                   "stop": m["sl"] if (m.get("sl") or 0) > 0 else None, "target": m.get("tg")}
+        rows.append({"symbol": m.get("symbol") or names.get(iid, iid.split(":", 1)[-1]), "id": iid, "price": px,
+                     "trades": len(m.get("trades", [])), "skipped": sum((m.get("skips") or {}).values()), "spread": None,
+                     "pnl": pnl, "position": pos})
+    rows.sort(key=lambda r: (r["position"] is None, -r["pnl"]))
+    curve = st.get("equity_curve", [])
+    equity = cap + realised + open_pnl
+    if unpriced and curve:              # stopped before each member's last price was kept: the value the curve ends at
+        equity = curve[-1]["eq"]
+        open_pnl = equity - cap - realised
+    n_open = sum(1 for r in rows if r["position"])
     return {"id": row["id"], "name": row["name"], "kind": "group", "status": row["status"], "stop_reason": row.get("stop_reason"),
             "instrument": row["instrument"], "strategy": row["strategy"], "started_at": row["started_at"],
-            "stopped_at": row.get("stopped_at"), "members": [], "skipped": [], "events": events,
-            "equity_curve": st.get("equity_curve", []), "bars": [], "overlays": {}, "oscillators": {},
-            "account": {"capital": cap, "equity": cap + realised, "realised": realised, "unrealised": 0, "open": 0,
+            "stopped_at": row.get("stopped_at"), "members": rows if n_open else [], "skipped": [], "events": events,
+            "equity_curve": curve, "bars": [], "overlays": {}, "oscillators": {},
+            "account": {"capital": cap, "equity": equity, "realised": realised, "unrealised": open_pnl, "open": n_open,
                         "max_open": row["instrument"].get("maxOpen"), "halted": False, "today": 0, "trades": len(trades),
                         "wins": sum(1 for t in trades if t["pnl"] > 0)}}

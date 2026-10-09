@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
-import { defaultExit, refName } from "../lib/rules";
+import { defaultExit, refName, statedIn } from "../lib/rules";
 import type { Instrument, Strategy } from "../lib/types";
 import { Badge, Card, CardHead, Notice } from "./kit";
 import "../pages/trade/trade.css";
 
 /** What the idea didn't say, and the answers given so far: kept with the notebook, so the questions are still there
  * after the person leaves and comes back (R5O-010). */
-export interface GapInfo { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; answered?: Record<string, string> }
+export interface GapInfo {
+  mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; answered?: Record<string, string>;
+  /** What didn't come out of the words as written: a rule left out, a number not in the rules (R11C-004). */
+  warnings?: string[];
+}
 
 interface Opt { label: string; explain: string; rec?: boolean; apply: (s: Strategy) => Strategy | "pick-market" | { instrument: Instrument } }
 interface Q { id: string; short: string; title: string; why: string; options: Opt[] }
@@ -16,7 +20,10 @@ interface Q { id: string; short: string; title: string; why: string; options: Op
 const plain = (r: Strategy["entry"][number]["l"]) => refName(r);
 
 function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string): Q[] {
-  const m = new Set(gaps.mentioned), qs: Q[] = [], r = s.risk;
+  // what the idea said, at the build or in the words the rules were last rebuilt from, is never asked again (R11C-005: a
+  // 3% stop given in "Edit in words" was asked again, and "Use the default answers" put 2% over it)
+  const m = new Set([...gaps.mentioned, ...statedIn(s.text)]), qs: Q[] = [], r = s.risk;
+  const together = s.entry.length > 1;
   if (!hasInstrument) {
     qs.push({ id: "inst", short: "Instrument", title: "What do you want to test it on?",
       why: gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "The same rules can behave very differently on different markets.",
@@ -29,12 +36,18 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
   s.entry.forEach((c, k) => {
     if ((c.op === "gt" || c.op === "lt") && c.r.t !== "num") {
       const w = c.op === "gt" ? "above" : "below";
+      // beside another condition it is a filter, a state that holds while the other one fires: a one-time cross of it
+      // would almost never fall on the same candle (R11C-006: "price above the 200-day SMA" with RSI under 30 became a
+      // cross, and 0 trades in 5 years). On its own, the cross stays the default.
       qs.push({ id: `style${k}`, short: "Buy timing", title: `Buy only when it first crosses ${w}, or any time it's ${w}?`,
-        why: `"${plain(c.l)} is ${w} ${plain(c.r)}" stays true on every candle, not just once. That decides how often you trade.`,
+        why: together
+          ? `"${plain(c.l)} is ${w} ${plain(c.r)}" is one of ${s.entry.length} buy conditions. As a state it holds on every candle it stays ${w}, so the other conditions decide when to buy; a one-time cross rarely falls on the same candle as them.`
+          : `"${plain(c.l)} is ${w} ${plain(c.r)}" stays true on every candle, not just once. That decides how often you trade.`,
         options: [
-          { label: `Only when it first crosses ${w}`, rec: true, explain: "Buys once, on the candle where it moves across.",
+          { label: `Only when it first crosses ${w}`, rec: !together, explain: "Buys once, on the candle where it moves across.",
             apply: (st) => ({ ...st, entry: st.entry.map((x, i) => (i === k ? { ...x, op: x.op === "gt" ? "xa" : "xb" } : x)) }) },
-          { label: `Any time it's ${w}`, explain: "Buys straight away, and again after every exit while it stays there.", apply: (st) => st },
+          { label: `Any time it's ${w}`, rec: together, apply: (st) => st,
+            explain: together ? "A filter: buys when the other conditions fire while it holds." : "Buys straight away, and again after every exit while it stays there." },
         ] });
     }
   });
@@ -122,6 +135,7 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
     <Card label="Questions about your idea">
       <div aria-live="polite" className="k-stack">
         {!gaps.usedAI && gaps.fallback && <Notice tone="warn">{gaps.fallback}</Notice>}
+        {(gaps.warnings ?? []).map((w) => <Notice key={w} tone="warn" role="status">{w}</Notice>)}
         {gaps.notes.length > 0 && <ul className="k-list muted">{gaps.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         {Object.entries(answered).map(([id, label]) => (
           <div key={id} className="k-row k-small"><Badge tone="ok" dot={false}>✓</Badge>{all.find((q) => q.id === id)?.short ?? "Answer"}: <b>{label}</b></div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "../../components/ui";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, dateOnly } from "../../lib/format";
+import { ago, dateOnly, plainDates } from "../../lib/format";
 import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
 import { services } from "./attention";
@@ -33,7 +33,7 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
         {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert">Last problem: {job.error}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>
-        {job.log.length ? <ul className="adm-log">{job.log.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p className="k-small k-muted">Nothing besides the times above.</p>}
+        {job.log.length ? <ul className="adm-log">{job.log.map((l, i) => <li key={i}>{plainDates(l)}</li>)}</ul> : <p className="k-small k-muted">Nothing besides the times above.</p>}
         {mine.length > 0 && <>
           <h3 className="adm-sub">Run from here, this visit</h3>
           <ul className="adm-log">{mine.map((m, i) => <li key={i}>{ago(m.at)}: {m.text}</li>)}</ul>

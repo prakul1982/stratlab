@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
-import { riskForCurrency, usesPro } from "../lib/rules";
+import { isAutoNotebookName, riskForCurrency, usesPro } from "../lib/rules";
+import { runCopy, runTime } from "../lib/notebookText";
 import type { Experiment, Instrument, LiveRow, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
 import { track, trackBacktest } from "../lib/analytics";
@@ -118,6 +119,15 @@ export function NotebookPage() {
   const [days, setDays] = useState("");
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
+  // how long the run has taken so far, said on the button: a group's first run reads every stock's prices and can take a
+  // minute or two (R11C-018: over 2 minutes with no sign of progress under "Takes a few seconds")
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!running) { setElapsed(0); return; }
+    const t0 = Date.now();
+    const t = window.setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => window.clearInterval(t);
+  }, [running]);
   const [rewrite, setRewrite] = useState(false);
   const [groupStart, setGroupStart] = useState(false);
   const [paperAsk, setPaperAsk] = useState(false);
@@ -189,7 +199,10 @@ export function NotebookPage() {
   const nextV = ((nb.experiments ?? []).slice(-1)[0]?.v ?? 0) + 1;
   const last = (nb.experiments ?? []).slice(-1)[0] as Experiment | undefined;
 
-  const setStrategy = (st: Strategy) => patch({ strategy: st, name: st.name });
+  // saving rules saves the rules: the notebook's name is the person's, and only a name the notebook was given (none, or
+  // the strategy's own) follows a new strategy name (R11C-001: every rule edit put "TCS SMA Crossover" over the name typed)
+  const setStrategy = (st: Strategy) => patch({ strategy: st,
+    ...(st.name !== s.name && st.name && isAutoNotebookName(nb.name, s.name) ? { name: st.name } : {}) });
 
   const run = async () => {
     if (running) return;
@@ -248,10 +261,12 @@ export function NotebookPage() {
   const exportStrategy = async () => {
     if (!canExport) { plansToast("Strategy export is on the Pro plan."); return; }
     try {
-      const r = await api<Response>("/export/strategy", { method: "POST", body: { strategy: s, instrument: inst?.id ?? null }, raw: true });
+      // the group a notebook tests on goes with its rules, so an import sets up the same group (R11C-013)
+      const r = await api<Response>("/export/strategy", { method: "POST", raw: true,
+        body: { strategy: { ...s, name: nb.name }, instrument: group ? null : inst?.id ?? null, ...(group ? { group } : {}) } });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(await r.blob());
-      a.download = (s.name.replace(/[^a-z0-9]+/gi, "-") || "strategy") + ".json";
+      a.download = (nb.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "strategy") + ".json";
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     } catch (e) { fail(e); }
@@ -299,7 +314,8 @@ export function NotebookPage() {
   applyRef.current = apply;
 
   const steps = [
-    { done: !!inst, text: "Pick what to test it on", act: () => nav(`/n/${nb.id}/market`) },
+    // a group is something to test on too (R11C-017: a library copy set to a group showed step 1 as next)
+    { done: !!inst || !!group, text: "Pick what to test it on", act: () => nav(`/n/${nb.id}/market`) },
     { done: s.entry.length > 0, text: "Check the rules", act: () => document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth" }) },
     { done: experiments.length > 0, text: "Run an experiment", act: () => document.getElementById("exp-h")?.scrollIntoView({ behavior: "smooth" }) },
   ];
@@ -368,7 +384,7 @@ export function NotebookPage() {
         )}
 
         {gaps && (
-          <GapsCard s={s} gaps={gaps} hasInstrument={!!inst} currency={currency}
+          <GapsCard s={s} gaps={gaps} hasInstrument={!!inst || !!group} currency={currency}
             onStrategy={setStrategy}
             onInstrument={(i) => patch({ instrument: i, instrumentId: i.id, strategy: { ...s, risk: riskForCurrency(s.risk, i.currency) } }, true)}
             onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); void api(`/notebooks/${nb.id}`, { method: "PUT", body: { clearGaps: true } }).catch(() => undefined); }}
@@ -378,7 +394,8 @@ export function NotebookPage() {
           <Notice tone="warn" role="status">No sell rule is set: {s.risk.sl > 0 || s.risk.tgt > 0 ? `a trade closes only at the ${[s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target"].filter(Boolean).join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test."} Add one under The rules.</Notice>
         )}
 
-        <RulesCard s={s} currency={currency} onChange={setStrategy} />
+        <RulesCard s={s} currency={currency} onChange={setStrategy}
+          onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings }); }} />
 
         <Card id="exp-h" label="Experiments">
           <CardHead title="Experiments" info={HELP.experiments} infoLabel="About experiments"
@@ -394,14 +411,14 @@ export function NotebookPage() {
           <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
             <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
             <FormActions>
-              <button type="submit" className="btn" disabled={running}>{running ? "Running 4 honesty checks…" : `Run experiment v${nextV}`}</button>
+              <button type="submit" className="btn" disabled={running}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
               <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
           </FormGrid>
           <p className="k-note">
             {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month. ` : ""}
-            Takes a few seconds.
+            {runCopy(group?.members.length ?? 0, running, elapsed)}
           </p>
           {experiments.length === 0
             ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>

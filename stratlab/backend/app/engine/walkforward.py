@@ -111,27 +111,27 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
     n = len(windows)
     trades = sum(w["trades"] for w in windows)
 
+    # facts about what happened, never a prediction or an instruction (R11C-009: "Treat the backtest return as optimistic.")
     if wf_ret <= 0:
         status = "fail"
-        headline = "Re-tuning doesn't rescue it."
-        detail = (f"Tuned on the past and traded on the next stretch, it lost {abs(wf_ret):.1f}% over the unseen periods. "
-                  "The best settings in hindsight didn't carry forward, which is what curve-fitting looks like.")
+        headline = f"Lost {abs(wf_ret):.1f}% when re-tuned as it went."
+        detail = (f"Tuned on the past and traded on the next stretch, it lost {abs(wf_ret):.1f}% over the unseen periods: "
+                  "the best settings in hindsight didn't make money on the stretch after.")
     elif profitable / n >= 0.6 and (efficiency is None or efficiency >= 0.5):
         status = "pass"
-        headline = "It holds up when re-tuned as you go."
+        headline = f"Made money in {profitable} of {n} unseen periods when re-tuned as it went."
         detail = (f"Tuned only on past data each time, it made money in {profitable} of {n} unseen periods "
-                  f"({wf_ret:+.1f}% in all). The edge survives without hindsight.")
+                  f"({wf_ret:+.1f}% in all).")
     else:
         status = "warn"
-        headline = "It survives, but only just."
-        detail = (f"It made {wf_ret:+.1f}% over the unseen periods, but only {profitable} of {n} of them were profitable"
-                  + (f", and it kept about {max(efficiency, 0) * 100:.0f}% of the return it showed when tuned" if efficiency is not None else "")
-                  + ". Treat the backtest return as optimistic.")
+        headline = f"Made {wf_ret:+.1f}% when re-tuned as it went; {profitable} of {n} unseen periods were profitable."
+        detail = (f"It made {wf_ret:+.1f}% over the unseen periods, and {profitable} of {n} of them were profitable"
+                  + (f". It kept about {max(efficiency, 0) * 100:.0f}% of the yearly return it showed on the years it was tuned on"
+                     if efficiency is not None else "") + ".")
 
     if status == "pass" and trades < 10:
         status = "warn"
-        headline = "Promising, but thin."
-        detail += f" Only {trades} trades happened in the unseen periods, though, so this could still be chance."
+        detail += f" Only {trades} trades happened in the unseen periods."
     # thin the curve for storage
     step = max(1, len(times) // 240)
     idx = list(range(0, len(times), step))

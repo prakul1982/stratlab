@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
+  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -464,7 +464,7 @@ export function PulsePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title="How the market feels today"
-        lede="Live index levels and headlines, with an AI read of the mood, what's moving and where money is flowing." />
+        lede={pulseLede(ai)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} /></Card>
       <Card>

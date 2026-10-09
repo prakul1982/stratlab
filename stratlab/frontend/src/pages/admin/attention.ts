@@ -89,7 +89,7 @@ export function invoiceWarning(s: InvoiceSeller | undefined): string | null {
 }
 
 /** Every service's light, worded once. */
-export function services(ov: Overview | null): Service[] {
+export function services(ov: Overview | null, jobs: JobRow[] | null = null): Service[] {
   if (!ov) return [];
   const sv = ov.server;
   const out: Service[] = [];
@@ -113,8 +113,15 @@ export function services(ov: Overview | null): Service[] {
     detail: sv.research?.finnhub ? "Key is set" : "No key",
     fix: sv.research?.finnhub ? undefined : "No key. Add the company-data key in Railway for US company pages (setup guide, step 6). India needs no key." });
   out.push({ key: "pay", label: "Payments", state: sv.billing_enabled ? "ok" : "warn", detail: sv.billing_enabled ? "Connected" : "Not set up", to: "/admin/money" });
-  if (sv.calendar?.days_left != null) out.push({ key: "cal", label: "Exchange holidays", to: "/admin/data",
-    state: sv.calendar.days_left < 30 ? "bad" : sv.calendar.days_left < 60 ? "warn" : "ok", detail: `Known for ${sv.calendar.days_left} more days` });
+  if (sv.calendar?.days_left != null) {
+    // the holidays on file and the exchange's live list are two facts: with the daily read failing the light says both, so
+    // it never reads "OK" beside "The exchange feed isn't answering" in Needs your attention (R12-010)
+    const left = sv.calendar.days_left;
+    const down = (jobs ?? []).some((j) => j.id === "holidays" && j.state === "bad");
+    const state: HealthState = left < 30 ? "bad" : left < 60 || down ? "warn" : "ok";
+    out.push({ key: "cal", label: "Exchange holidays", to: "/admin/data", state,
+      detail: down ? `Holidays on file for ${left} more days · live feed down` : `Known for ${left} more days` });
+  }
   return out;
 }
 
@@ -128,7 +135,7 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (!ov) return [];
   const sv = ov.server;
   const out: Attention[] = [];
-  const s = Object.fromEntries(services(ov).map((x) => [x.key, x]));
+  const s = Object.fromEntries(services(ov, jobs).map((x) => [x.key, x]));
   if (s.kite.state === "bad") out.push({ text: `Broker data (India): ${s.kite.detail}`, to: "/admin/data", label: "Data and jobs", bad: true });
   if (s.auto.state === "bad") out.push({ text: `The automatic broker login failed: ${sv.auto_login.message}`, to: "/admin/data", label: "Data and jobs", bad: true });
   if (s.feed.state !== "ok") out.push({ text: `Live price feed: ${s.feed.detail}.`, to: "/admin/data", label: "Data and jobs", bad: false });
@@ -148,13 +155,18 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (errs.since) out.push({ text: `${plural(errs.since, "server error")} since the last restart.`, to: "/admin/system", label: "System", bad: false });
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
-  for (const j of jobs ?? []) if (j.state === "bad") out.push({ text: `${j.name}: ${j.error}`, to: "/admin/data", label: "Data and jobs", bad: false });
+  for (const j of jobs ?? []) {
+    if (j.state !== "bad") continue;
+    // the holidays read failing isn't holidays missing: said the way the Services light says it (R12-010)
+    const text = j.id === "holidays" && s.cal ? `Exchange holidays: ${s.cal.detail.replace(/^Holidays/, "holidays")}. ${j.error}` : `${j.name}: ${j.error}`;
+    out.push({ text, to: "/admin/data", label: "Data and jobs", bad: false });
+  }
   // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
   // switched off on purpose isn't listed.
   const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off");
   if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
-  if (s.cal && s.cal.state !== "ok") out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
+  if (s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });
@@ -191,7 +203,7 @@ export function errorCounts(sv: { recent_errors?: { at: string }[]; server_start
 export function lights(ov: Overview | null, jobs: JobRow[] | null): { services: Light[]; feeds: Light[] } {
   if (!ov) return { services: [], feeds: [] };
   const feeds: Light[] = (jobs ?? []).map((j) => ({ key: j.id, label: j.name, state: j.state, detail: jobDetail(j), to: "/admin/data" }));
-  return { services: services(ov).map(({ fix: _fix, ...l }) => l), feeds };
+  return { services: services(ov, jobs).map(({ fix: _fix, ...l }) => l), feeds };
 }
 
 export { jobDetail };

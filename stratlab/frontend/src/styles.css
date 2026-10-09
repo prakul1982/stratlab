@@ -601,7 +601,8 @@ td.num, .num { font-family: var(--sans); }
 /* facts band */
 
 /* sections */
-.lp-sec { padding: clamp(48px, 6vw, 80px) 0; scroll-margin-top: 64px; }
+/* a section scrolled to (/pricing, /faq) starts below the sticky header, about 71 px tall on a phone (R12-008) */
+.lp-sec { padding: clamp(48px, 6vw, 80px) 0; scroll-margin-top: 76px; }
 .lp-alt { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }

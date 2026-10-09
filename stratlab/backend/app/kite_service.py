@@ -136,6 +136,7 @@ class KiteService:
         self._names_idx: dict = {}
         from .intel.net import SizedDict
         self._cache = SizedDict(max_items=300, max_bytes=96 * 1024 * 1024)   # candles: bounded, the market audit reads every company
+        self._tails: dict[tuple, tuple[float, list[dict]]] = {}   # (token, tf) -> the newest candles seen, so no answer ends before them
         self.login_state: str | None = None
         self.session_close: dict[int, str] = {}   # token -> "HH:MM" IST when its segment closes (commodity and currency futures)
 
@@ -509,7 +510,7 @@ class KiteService:
         own = self.session_close.get(int(token))
         out_at = self._close_out(now) if not own else self._close_out_at(now, own)
         if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()):
-            return self._official_days(token, tf, hit[1])
+            return self._official_days(token, tf, self._with_tail(token, tf, hit[1], continuous=continuous))
         start = now - timedelta(days=days)
         out, frm = [], start
         while frm < now:
@@ -528,12 +529,34 @@ class KiteService:
         for b in out:
             if b["t"] not in seen:
                 seen.add(b["t"]); dedup.append(b)
+        dedup = self._with_tail(token, tf, dedup, note=True, continuous=continuous)
         if not store:
             return self._official_days(token, tf, dedup)
         self._cache[key] = (time.time(), dedup)
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))
         return self._official_days(token, tf, dedup)
+
+    TAIL = 200        # candles kept per token and timeframe: a day and more of 5-minute candles
+    TAIL_FOR = 12 * 3600   # ...and for how long they count
+
+    def _with_tail(self, token, tf: str, bars: list[dict], note: bool = False, continuous: bool = False) -> list[dict]:
+        """Candles that end no earlier than the newest ones already seen for this token and timeframe. For a while around
+        midnight India time the broker's history service answered some ranges from an older copy: TCS's 5-year, all-time
+        and intraday candles ended on 8 Oct while the 1-year range, read earlier, had 9 Oct (R11C-012). An answer that ends
+        before candles already seen keeps those newer candles, so every range and candle size ends on the same day; with
+        `note`, the answer (a fresh one) also becomes the newest seen when it is. The list given is never changed."""
+        key = (str(token), tf, bool(continuous))
+        kept = self._tails.get(key)
+        tail = kept[1] if kept and time.time() - kept[0] < self.TAIL_FOR else None
+        if bars and tail and str(tail[-1]["t"]) > str(bars[-1]["t"]):
+            last = str(bars[-1]["t"])
+            bars = [*bars, *(b for b in tail if str(b["t"]) > last)]
+        if note and bars and (not tail or str(bars[-1]["t"]) >= str(tail[-1]["t"])):
+            if len(self._tails) > 2000:
+                self._tails.clear()
+            self._tails[key] = (time.time(), [dict(b) for b in bars[-self.TAIL:]])
+        return bars
 
     @staticmethod
     def _close_out(now: datetime) -> float:

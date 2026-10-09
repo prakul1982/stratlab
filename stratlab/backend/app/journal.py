@@ -990,7 +990,7 @@ def check_drawdown(nets: list[float], capital: float | None, sym: str = "₹") -
         detail = f"Your trades fell {money(yours, sym)} at worst from a high, but with worse luck the same trades could have fallen {money(p95, sym)}."
     else:
         status = "pass"
-        detail = f"Even with worse luck, falls stay around {money(p95, sym)}, close to your trades' {money(yours, sym)}."
+        detail = f"In 95 of 100 reshuffles the fall was up to {money(p95, sym)}, close to your trades' {money(yours, sym)}."
     return {"id": "shuffle", "title": "Bad-luck drawdown", "status": status, "detail": detail,
             "data": {"yours": yours, "p95": p95, "worst": worst, "runs": SHUFFLES, "unit": "rupees"}}
 
@@ -1041,15 +1041,15 @@ def decide(checks: list[dict], n: int, net: float, wins: int) -> dict:
             bits.append("random wins and losses of the same sizes often did as well")
         if by["costs"] == "fail":
             bits.append("charges took the whole profit")
-        summary_ = "Your trades made money overall, but " + " and ".join(bits) + ". The profit looks like it could be luck."
+        summary_ = "Your trades made money overall, but " + " and ".join(bits) + "."
     elif by["luck"] == "pass" and by["sample"] == "pass" and by["shuffle"] != "fail" and by["costs"] == "pass":
         verdict_ = "edge"
         summary_ = ("Your trades made money after charges, did better than random wins and losses of the same sizes, and "
                     "would still be in profit with charges doubled.")
     else:
         verdict_ = "mixed"
-        summary_ = "Some checks pass and some don't. Treat it as a maybe: more trades will tell."
-    return {"verdict": verdict_, "headline": V.HEADLINES[verdict_], "summary": summary_,
+        summary_ = "Your trades made money after charges, but some checks pass and some don't."
+    return {"verdict": verdict_, "headline": V.fact_headline(verdict_, checks, n, net, None), "summary": summary_,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"), "checks": checks}
 

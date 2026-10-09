@@ -53,7 +53,8 @@ export function PublicVerdict({ token }: { token: string }) {
         {!snap && !gone && <Card><Skeleton label="Opening the verdict" /></Card>}
         {gone && (
           <ErrorState title="This verdict isn't available" action={{ label: "See what StratLab does", to: "/" }}>
-            {gone} The person who shared it may have turned the link off.
+            {/* the API's own words: "This link was turned off or never existed." (R11C-015) */}
+            {gone || "This link was turned off or never existed."}
           </ErrorState>
         )}
         {snap && v && (

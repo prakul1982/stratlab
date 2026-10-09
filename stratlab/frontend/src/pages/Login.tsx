@@ -210,10 +210,24 @@ export function Login({ section = null, panel, heading }: { section?: string | n
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
     go();                                        // before the first paint: drawn at its section, never at the top and then moved (R10V-006)
-    const y = window.scrollY;
+    // ...and held there while the layout above it settles (the fonts, the plans' prices arriving and changing the height
+    // of what comes before): each change puts the section back under the header, its heading clear of it (the section's
+    // scroll-margin-top), until the visitor scrolls, touches or presses a key, or a few seconds pass (R12-008: a cold
+    // /faq on a phone landed with "Good to know." under the 71 px header)
+    let moved = false, y = window.scrollY;
+    const stop = () => { moved = true; };
+    const opts = { passive: true, capture: true } as const;
+    for (const ev of ["wheel", "touchstart", "keydown", "pointerdown"]) window.addEventListener(ev, stop, opts);
+    const root = document.querySelector(".lp") ?? document.body;
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => { if (!moved) { go(); y = window.scrollY; } }) : null;
+    ro?.observe(root);
     // once the fonts and the first images have settled the layout, unless the visitor has already scrolled
-    const t = window.setTimeout(() => { if (Math.abs(window.scrollY - y) < 2) go(); }, 150);
-    return () => window.clearTimeout(t);
+    const t = window.setTimeout(() => { if (moved) return; if (Math.abs(window.scrollY - y) < 2) go(); }, 150);
+    const end = window.setTimeout(() => ro?.disconnect(), 4000);
+    return () => {
+      window.clearTimeout(t); window.clearTimeout(end); ro?.disconnect();
+      for (const ev of ["wheel", "touchstart", "keydown", "pointerdown"]) window.removeEventListener(ev, stop, opts);
+    };
   }, [section]);
   useEffect(() => {
     if (error && /[?#&]error/.test(location.search + location.hash)) history.replaceState(null, "", location.pathname);

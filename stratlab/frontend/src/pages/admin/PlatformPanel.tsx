@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago } from "../../lib/format";
+import { ago, plainDates } from "../../lib/format";
 import { Card, CardHead, StatusList, StatusRow, type HealthState } from "../../components/kit";
 
 type Check = { name: string; area: string; state: "pass" | "warn" | "fail"; detail: string; seconds: number | null };
@@ -36,7 +36,7 @@ export function PlatformPanel() {
           <p className="k-small">{r.auto ? "Automatic check, " : ""}{ago(r.at)} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
           <StatusList label="Feature checks">
             {[...r.checks].sort((a, b) => order[a.state] - order[b.state] || a.area.localeCompare(b.area)).map((c) => (
-              <StatusRow key={c.name} state={LIGHT[c.state]} word={WORD[c.state]} label={c.name} detail={`${c.detail}${c.seconds != null ? ` (${c.seconds}s)` : ""}`} />
+              <StatusRow key={c.name} state={LIGHT[c.state]} word={WORD[c.state]} label={c.name} detail={`${plainDates(c.detail)}${c.seconds != null ? ` (${c.seconds}s)` : ""}`} />
             ))}
           </StatusList>
         </>

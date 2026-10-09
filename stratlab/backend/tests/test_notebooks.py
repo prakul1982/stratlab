@@ -206,6 +206,8 @@ def test_a_rerun_on_a_later_day_is_allowed(api):
     api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     row = api.rows[nb["id"]]
     row["body"]["experiments"][-1]["created_at"] = "2020-01-01T00:00:00+00:00"     # run on an earlier day
+    # ...on that day's candles: "newer candles" is said only when the candles are newer (R11C-017)
+    row["body"]["experiments"][-1]["range"]["to"] = "2020-01-01T00:00:00+00:00"
     r = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
     assert r.status_code == 200 and r.json()["experiment"]["label"] == "Same setup, newer candles"
 

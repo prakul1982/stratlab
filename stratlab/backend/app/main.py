@@ -63,6 +63,7 @@ from .responses import err, ok
 from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
+from .engine.verdict import restated as verdict_restated
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -75,10 +76,10 @@ from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
-from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators
+from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import OptionsData, freeze as freeze_limit
-from .options.engine import fill_price
+from .options.engine import fill_price, from_last, tick_for
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
@@ -1003,7 +1004,9 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
     iid = req.instrument or (f"IN:{req.instrument_token}" if req.instrument_token else None)
     inst = markets.resolve(iid)[1] if iid else None
     payload = {"format": "stratlab-strategy-v1", "exported_at": datetime.now(IST).isoformat(),
-               "instrument": inst, "summary": describe(req.strategy), "strategy": req.strategy.model_dump()}
+               "instrument": None if req.group else inst, "summary": describe(req.strategy), "strategy": req.strategy.model_dump()}
+    if req.group:
+        payload["group"] = group_body(req.group)      # the group the notebook tests on, so an import sets it up again (R11C-013)
     name = "".join(ch if ch.isalnum() else "-" for ch in req.strategy.name).strip("-") or "strategy"
     return Response(json.dumps(payload, indent=2), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
@@ -1095,6 +1098,7 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
         err(503, "ai_busy", str(e))
     except AIError as e:
         err(422, "ai_failed", str(e))
+    out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
     db.add_usage(profile["id"], "ai")
     out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
     return out
@@ -1261,7 +1265,10 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
 
 @app.get("/notebooks/{nid}")
 def read_notebook(nid: str, profile=Depends(current_profile)):
-    return ok(get_notebook(profile, nid))
+    nb = get_notebook(profile, nid)
+    # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
+    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in nb.get("experiments") or []]
+    return ok(nb)
 
 
 @app.put("/notebooks/{nid}")
@@ -1472,7 +1479,14 @@ def _stored_scan(profile, region: str, group: str, preset: str, name: str) -> di
     got = scan_presets.stored_view(group, preset)
     if got is None or not got["checked"]:
         err(404, "not_stored", f"{name} hasn't been checked yet: it is read once a day after the market closes. Try a smaller group for now.")
+    read_at = {r["symbol"]: r.get("price") for r in got["rows"][:SCAN_ROWS]}
     rows = with_nse_close(region, got["rows"][:SCAN_ROWS], "as_of", "chg")
+    # a match read on the day's last trade, before the official close it now shows: the numbers say which price matched
+    # (R11C-008: the row said 4,185.20, the detail "Closed at 4,244.30"); the list itself is read again once the day's
+    # official closes are in (breadth.Job)
+    rows = [{**r, "detail": scan_presets.on_last_trade(r.get("detail") or "", read_at[r["symbol"]], r["price"]), "read_on_last": True}
+            if r.get("price_source") and not r.get("days_ago") and read_at.get(r["symbol"]) is not None
+            and abs(float(read_at[r["symbol"]]) - float(r["price"])) >= 0.005 else r for r in rows]
     names = _scan_names(region, [r["symbol"] for r in rows])
     return {"rows": [{**r, **names.get(r["symbol"], {})} for r in rows], "matches": len(got["rows"]), "checked": got["checked"], "as_of": got["as_of"],
             "updated_at": got["at"], "missing": [], "problems": [], "stored": True}
@@ -3101,7 +3115,8 @@ def public_verdict_image(token: str):
 def public_verdict_page(token: str):
     snap = public.load(token)
     if not snap:
-        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+        # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
+        return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
     return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
 
 
@@ -3164,6 +3179,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             kind = stock_pages.FUND_TYPES.get(str(quote.get("type") or "").upper())
             if kind:                      # an ETN filed under its bank's name, a fund: not a company (R6V-001)
                 checks["not_company"] = kind
+            elif not quote.get("type"):
+                # what the ticker is couldn't be read (no quote): a page for a visitor, but not listed in the sitemap until a
+                # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
+                checks["type_unread"] = True
             items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
@@ -3284,6 +3303,31 @@ def official_page_close(co: dict) -> dict | None:
     return {"price": c, "price_at": day, "price_basis": "close", "price_official": True} if c else None
 
 
+def india_page_dividends(sym: str, co: dict, fetch: bool = True, listed: bool | None = None) -> list[dict] | None:
+    """An Indian company's dividends ([{"date", "amount"}]) as its page reads them: the company's own corporate actions
+    list (read again when more than a day old, with `fetch`), and without any list the price history's dividends (with
+    `listed`, which follows `fetch` unless given). None when there is no list to go on (a list that was read and holds
+    none is [])."""
+    try:
+        rows = corp_actions.actions_for("IN", sym, corp_job.sources() if fetch else None, fetch=fetch)
+        known = bool(corp_actions.hist_load("IN", sym)["at"])
+    except Exception:
+        rows, known = [], False
+    divs = stock_pages.dividend_list(rows)
+    if divs or known:
+        return divs
+    if not (fetch if listed is None else listed):
+        return None
+    try:
+        return stock_pages.dividend_list(research_hub.yahoo.events(yahoo_in_symbol(sym, co), 400)["dividends"])
+    except Exception:
+        return None
+
+
+def yahoo_in_symbol(sym: str, co: dict | None) -> str:
+    return f"{co['bse']}.BO" if (co or {}).get("bse") else f"{sym}.NS"
+
+
 def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dict | None = None, fetch: bool = True) -> float | None:
     """A public page's dividend yield from the same dividends list the app's company page uses (its Corporate actions
     card): every dividend with an ex-date in the year to the close, specials included. None when that list has none to
@@ -3294,22 +3338,8 @@ def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dic
     if not close or not as_of:
         return None
     if region == "IN" and co is not None:
-        try:
-            rows = corp_actions.actions_for("IN", sym, corp_job.sources() if fetch else None, fetch=fetch)
-            known = bool(corp_actions.hist_load("IN", sym)["at"])
-        except Exception:
-            rows, known = [], False
-        divs = [{"date": str(d.get("ex_date") or ""), "amount": d.get("amount")} for d in rows or []
-                if d.get("kind") == "dividend" and d.get("amount")]
-        if divs or known:
-            return stock_pages.dividend_yield(divs, close, as_of)
-        if not fetch:
-            return None
-        try:
-            listed = research_hub.yahoo.events(f"{co['bse']}.BO" if co.get("bse") else f"{sym}.NS", 400)["dividends"]
-        except Exception:
-            return None
-        return stock_pages.dividend_yield(listed, close, as_of)
+        divs = india_page_dividends(sym, co, fetch)
+        return stock_pages.dividend_yield(divs, close, as_of) if divs is not None else None
     try:
         rows = research_routes.stored_dividends(region, sym)
     except Exception:
@@ -3362,6 +3392,14 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
         # and the screens (R7O-004: TCS 2,077.00 here against 2,076.00 in the app)
         sym = co["sym"] if not co.get("bse") else co["bse"]
         bars = official_close.overlay_bars(list(bars), sym)
+        # ...as the exchange printed them: the broker scales every candle before an extraordinary dividend's ex-date, so
+        # the year's range read from its candles was 2% low (R12-001: INFY ₹1,691.40 against 1,728.00, ULTRACEMCO ₹10,118
+        # to ₹12,848 against 10,325 to 13,110). Undone from the company's dividends list, with no exchange report needed
+        try:
+            bars = stock_pages.as_traded(bars, india_page_dividends(co["sym"], co, fetch=False, listed=True) or [],
+                                         reference=lambda: research_hub.yahoo.chart(yahoo_in_symbol(co["sym"], co), "1d", 400)["candles"])
+        except Exception as e:                       # the candles as they are rather than none
+            print("as-traded candles for the public page:", sym, str(e)[:120])
         # ...and the year's extremes as the exchange's own 52-week report states them (R10V-003): a stray low in the
         # broker's candles, or a high they clipped, never reaches the page's 1-year range. Public pages only; the app's
         # own candles are read as before (official_close.widen_to_range)
@@ -3939,16 +3977,7 @@ def get_live(sid: str, profile=Depends(current_profile)):
             snap = options_stopped(row)
             snap["orders"] = orders_from(snap["events"])
             return ok(snap)
-        st = row.get("state") or {}
-        realised = sum(t["pnl"] for t in st.get("trades", []))
-        cap = row["strategy"]["risk"]["capital"]
-        snap = {"id": sid, "name": row["name"], "status": row["status"], "stop_reason": row.get("stop_reason"),
-                "instrument": row["instrument"], "strategy": row["strategy"], "started_at": row["started_at"],
-                "stopped_at": row.get("stopped_at"), "bars": [], "overlays": {}, "oscillators": {},
-                "events": st.get("events", []), "equity_curve": st.get("equity_curve", []),
-                "account": {"capital": cap, "equity": st.get("cash", cap), "cash": st.get("cash", cap), "qty": 0,
-                            "unrealised": 0, "realised": realised, "trades": len(st.get("trades", [])),
-                            "wins": sum(1 for t in st.get("trades", []) if t["pnl"] > 0)}}
+        snap = live_stopped(row)
     snap["orders"] = orders_from(snap.get("events") or [])
     return ok(snap)
 
@@ -4111,7 +4140,9 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
     q = options_data.quotes([l["key"] for l in legs if l["key"]])
     for l in legs:
         l["quote"] = q.get(l["key"]) if l["key"] else None
-        l["fill"] = fill_price(l["quote"], l["side"], s.costs.slippageTicks)
+        l["fill"] = fill_price(l["quote"], l["side"], s.costs.slippageTicks, tick_for(s.exchange))
+        # no bid or ask on the side it fills on: priced from the last trade, which may be hours old (R11C-007)
+        l["from_last"] = l["fill"] is not None and from_last(l["quote"], l["side"])
         l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
     freeze = s.costs.freeze or freeze_limit(s.underlying)
     units = s.sizing.lots
@@ -4128,10 +4159,22 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
     charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
                if units and priced and len(priced) == len(legs) else None)
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
+            "tick": tick_for(s.exchange), "from_last": sum(1 for l in legs if l.get("from_last")),
+            "impossible": impossible(priced) if priced and len(priced) == len(legs) else None,
             "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts"),
             **_preview_greeks(c, spot, legs, units)}
+
+
+def impossible(priced: list[dict]) -> str | None:
+    """Why fills like these can't be real: a structure that makes money at every price at expiry, as quotes can't allow
+    (R11C-007: an iron fly's ₹1,400 credit over a 1.0 wing, "Most it can lose ₹400"). None when the fills could be real."""
+    worst = opt_charges.max_loss(priced)
+    if worst is None or worst <= 0:
+        return None
+    return ("These prices make money at every price at expiry: the premium taken in is more than the most the legs can "
+            "pay out. Real bids and asks don't allow that, so at least one price here is out of date.")
 
 
 def _preview_greeks(c, spot: float, legs: list[dict], units: int) -> dict:

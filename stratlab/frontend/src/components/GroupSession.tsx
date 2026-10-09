@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { STOP_DIALOG } from "../lib/paperText";
 import { useApp } from "../lib/app";
 import { money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
@@ -74,6 +75,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
         </div>
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {!running && a.open > 0 && <Notice className="stopped-open">{a.open === 1 ? "1 position was" : `${a.open} positions were`} open at the stop and stay open, each valued at its last price before the stop. Nothing more is traded.</Notice>}
       {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</Notice>}
       {snap.skipped.length > 0 && <p className="k-note">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
       {on.length > 0 && <p className="k-note">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>}
@@ -109,16 +111,16 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
         </div>
         <Card label="Orders today">
           <CardHead level={3} title="Orders today" />
-          {today.length ? <OrderList events={today} cur={cur} tz={tz} newest />
+          {today.length ? <OrderList events={today} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={markets.find((m) => m.id === snap.instrument.market)?.hours?.close ?? null} />
             : <p className="k-small k-muted">{snap.events.length ? "No orders today." : "None yet."}</p>}
           <Earlier label="Earlier orders" count={earlier.length} className="in-card" open
             note={<><span className={upDown(closedPnl)}>{money(closedPnl, cur)}</span> on closed trades</>}>
-            <OrderList events={earlier} cur={cur} tz={tz} newest />
+            <OrderList events={earlier} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={markets.find((m) => m.id === snap.instrument.market)?.hours?.close ?? null} />
           </Earlier>
         </Card>
       </div>
       {ask === "stop" && <ConfirmDialog title="Stop this session?" confirmLabel="Stop session" onConfirm={() => { setAsk(null); onStop(); }} onClose={() => setAsk(null)}>
-        Open paper positions are left as they are, and it can't be restarted.</ConfirmDialog>}
+        {STOP_DIALOG}</ConfirmDialog>}
       {ask === "delete" && <ConfirmDialog title={`Delete "${snap.name}"?`} confirmLabel="Delete session" onConfirm={() => { setAsk(null); onDelete(); }} onClose={() => setAsk(null)}>
         Its orders go with it. This can't be undone.</ConfirmDialog>}
     </div>

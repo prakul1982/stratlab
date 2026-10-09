@@ -12,7 +12,7 @@ from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
 from .net import NotFound, SourceError, num
-from .news import GoogleNews, Wikipedia, mentions, plain_headline
+from .news import GoogleNews, Wikipedia, company_headline, mentions, plain_headline
 from .screener import Screener, clean_profile, summary as scr_summary
 from .yahoo import Yahoo
 from ..kite_service import ist_date
@@ -321,6 +321,15 @@ def insider_view(ins: list[dict], n: int = 8) -> dict | None:
 
 def _public(row: dict) -> dict:
     return {k: v for k, v in row.items() if k != "_t"}
+
+
+def _stored_dividends_in(sym: str) -> list[dict]:
+    """An Indian company's dividends as its Corporate actions card has them stored (no read of any source), or none."""
+    try:
+        from .. import corp_actions
+        return corp_actions.actions_for("IN", sym, None, fetch=False)
+    except Exception:
+        return []
 
 
 def _yahoo_in(sym: str) -> str:
@@ -695,12 +704,12 @@ class Research:
             "insider": insider_view(ins),
             # US listings only (ENI.MI is in euros), the same-size names in its sector first
             "peers": us_peers(sym, [x for x in (r.get("peers") or []) if isinstance(x, str) and not FOREIGN_TICKER.search(x)]),
-            # the company's own news: a headline (or its summary) that names it, not the day's market stories the feed
-            # files under every big ticker (R5O-020)
+            # the company's own news: a plain headline that names it, not the day's market stories the feed files under
+            # every big ticker (R5O-020), nor another company's story that names it only in the summary (R12-004)
             "news": [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                       "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
                      for n in (r.get("news") or []) if n.get("headline") and plain_headline(n["headline"])
-                     and (mentions(p["name"], sym, n["headline"]) or mentions(p["name"], sym, str(n.get("summary") or "")[:400]))][:8],
+                     and mentions(p["name"], sym, n["headline"])][:8],
             "about": {"wiki": r.get("wiki"), "profile": None},
             "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
             "testable": True, "instrument_id": f"US:{sym}",
@@ -770,9 +779,15 @@ class Research:
             quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume")}
             lo52, hi52 = y.get("low52") or lo52, y.get("high52") or hi52
         if r.get("k1y"):
-            bars = r["k1y"][-252:]
-            if bars:
-                lo52, hi52 = min(b["l"] for b in bars), max(b["h"] for b in bars)
+            # the year's range as the public page works it out: the candles of exactly the last 365 days (R12-003: the
+            # last 252 candles reached 368 days back, to TITAN's ₹3,401.00), as the exchange printed them, the broker's
+            # scaling for an extraordinary dividend undone (R12-001: INFY ₹1,691.40 against 1,728.00)
+            from .. import stock_pages
+            bars = stock_pages.as_traded(r["k1y"], _stored_dividends_in(sym),
+                                         reference=lambda: self.yahoo.chart(_yahoo_in(code or sym), "1d", 400)["candles"])
+            lo, hi = stock_pages.year_low_high(bars)
+            if lo is not None and hi is not None:
+                lo52, hi52 = lo, hi
         if quote is None and s.get("price"):
             quote = {"price": s["price"]}
         s = at_live_price(s, num((quote or {}).get("price")))
@@ -842,7 +857,7 @@ class Research:
             "pros": [], "cons": [],
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
-            "news": [n for n in (r2.get("news") or []) if mentions(clean, sym, n.get("headline") or "") and plain_headline(n.get("headline"))],
+            "news": [n for n in (r2.get("news") or []) if company_headline(clean, sym, n.get("headline"))],
             "about": {"wiki": r2.get("wiki"), "profile": clean_profile((scr or {}).get("about"))},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
