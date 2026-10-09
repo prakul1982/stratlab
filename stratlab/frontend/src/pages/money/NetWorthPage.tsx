@@ -9,7 +9,7 @@ import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
+import { BarList, Card, CardHead, ChartFrame, ConfirmDialog, DateField, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, TilePicker, type Choice, type Column, type TileGroup } from "../../components/kit";
 
 /* /money/net-worth: what you own minus what you owe: stocks from My Holdings, plus the deposits, provident funds, gold,
  * property and loans added here, each with how it is worked out and its date. Built from the kit (components/kit). */
@@ -442,6 +442,14 @@ export function NetWorthPage() {
               Add your savings, deposits, EPF or a loan. Stocks in <Link className="link" to="/holdings">My Holdings</Link> are counted on their own.
             </EmptyState>
           )}
+          {/* the history can hold a snapshot from entries since removed (R7M-012: ₹2,43,481.78 on 8 Oct beside "Nothing added yet"):
+              it is said, and can be removed below, so it doesn't reappear in the chart when the next entry is added */}
+          {empty && view.history_allowed && hist.length > 0 && (
+            <Notice tone="warn" role="status" label="Kept history">
+              The history still holds {hist.length === 1 ? "a snapshot" : `${hist.length} snapshots`} from earlier entries (latest {inr(hist[hist.length - 1].net)} on {day(hist[hist.length - 1].d)}), though nothing is entered now.
+              {hist.length === 1 ? " It" : " They"} will show in the chart again once you add an entry; remove {hist.length === 1 ? "it" : "them"} below if {hist.length === 1 ? "it isn't" : "they aren't"} yours.
+            </Notice>
+          )}
 
           {view.allocation.length > 0 && (
             <Card>
@@ -463,7 +471,7 @@ export function NetWorthPage() {
           )}
 
           {view.history_allowed && hist.length > 0 && (
-            <details className="k-card nw-snaps" data-testid="nw-snapshots">
+            <details className="k-card nw-snaps" data-testid="nw-snapshots" open={empty || undefined}>
               <summary className="k-small">The history's snapshots ({hist.length}): remove one</summary>
               <ul className="k-stack k-tight">
                 {[...hist].reverse().map((h) => (

@@ -1,3 +1,4 @@
+import { zerodhaLine } from "../lib/zerodha";
 import { useCallback, useEffect, useState } from "react";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -196,10 +197,7 @@ function ZerodhaCard({ c, set }: P) {
       {!k.available && <p className="k-small k-muted">Zerodha login isn't open yet. Upload your Zerodha holdings file in My Holdings meanwhile.</p>}
       {k.available && !k.connected && <FormActions><button type="button" className="btn" disabled={busy} onClick={() => void login()}>Connect Zerodha</button></FormActions>}
       {k.available && k.connected && <>
-        <p className="k-small" data-testid="kite-line">{k.live
-          ? `Connected · refreshed ${k.refreshed_label ?? "today"} · tap to refresh tomorrow`
-          : `Today's login has ended${k.refreshed_label ? ` · last refreshed ${k.refreshed_label}` : ""} · log in again to refresh`}
-          {k.count != null && k.live ? ` · ${k.count} holdings` : ""}</p>
+        <p className="k-small" data-testid="kite-line">{zerodhaLine(k)}</p>
         <FormActions>
           <button type="button" className="btn" disabled={busy} onClick={() => void (k.live ? refresh() : login())}>{k.live ? "Refresh" : "Log in to Zerodha"}</button>
           <button type="button" className="btn quiet" disabled={busy} onClick={() => void drop()}>Disconnect</button>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { Card, CardHead, DataTable, EmptyState, StatusList, StatusRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
 import { errorCounts, service } from "./attention";
@@ -57,9 +57,10 @@ export function SystemSection() {
   return (
     <>
       <Card label="Server errors">
-        <CardHead title={`Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})`}
+        {/* until the status has arrived there is nothing to count: a "0 errors, nothing has crashed" then would be false comfort (R7M-007) */}
+        <CardHead title={sv ? `Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})` : "Server errors"}
           info="Crashes newest first: those since the server last started, and the last ones from before it, which are kept across a restart. Users see the ref code in the error message." />
-        {!errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
+        {!sv ? <Skeleton label="Loading the server errors" lines={2} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
           : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.ref} columns={ERRORS} />}
       </Card>
 

@@ -7,7 +7,12 @@ export type Plan = "free" | "basic" | "pro";
 export type AIRow = { label: string; configured: boolean; in_use: boolean; model: string | null; last_error: string | null; quota?: boolean; quick_rank?: number | null; research_rank?: number | null;
   /** whether it can answer now (a short rate limit still counts; a used-up free quota or a paused provider does not), and why
    * not in the provider's own words; how many of its models in use are paused; whether its free quota is used up */
-  answering?: boolean | null; state_text?: string | null; paused_models?: number; quota_used?: boolean };
+  answering?: boolean | null; state_text?: string | null; paused_models?: number; quota_used?: boolean;
+  /** what its last real result says (R7M-008): working, quota (free credit used up, or a card is needed), paused, failed,
+   * untested (a key, nothing tried yet); null without a key. Older servers don't send it. */
+  result?: "working" | "quota" | "paused" | "failed" | "untested" | null };
+/** Which invoice seller details are still empty (R7M-001): `missing` names them; `gst` is whether invoices will carry GST. */
+export type InvoiceSeller = { complete: boolean; missing: string[]; gst: boolean };
 export type ServerError = { ref: string; at: string; method: string; path: string; error: string; where: string };
 
 export interface Overview {
@@ -18,7 +23,7 @@ export interface Overview {
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
     server_started_at?: string | null;
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
-    calendar?: CalendarStatus; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
+    calendar?: CalendarStatus; invoice_seller?: InvoiceSeller; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; experiments_month: number; ai_month: number;
@@ -83,5 +88,5 @@ export const SECTIONS: { path: string; label: string; title: string; lede: strin
   { path: "data", label: "Data and jobs", title: "Data and jobs", tabs: ["checks"], lede: "Every background job: when it last ran, when it runs next, and a button to run it now." },
   { path: "quality", label: "Quality", title: "Quality", tabs: [], lede: "Audits of the company data, strategies users reported, and the rates and rules StratLab uses." },
   { path: "system", label: "System", title: "System", tabs: ["services"], lede: "Server errors, other services, AI providers, platform checks and real prices for testing." },
-  { path: "emails", label: "Email previews", title: "Email previews", tabs: [], lede: "Every email StratLab sends, with made-up details. Nothing here is sent." },
+  { path: "emails", label: "Email previews", title: "Email previews", tabs: [], lede: "Every email StratLab sends, as a reader gets it. The market briefs are the newest real issues; the rest use made-up details. Nothing here is sent." },
 ];

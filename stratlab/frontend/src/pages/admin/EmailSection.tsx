@@ -18,7 +18,7 @@ function List({ items }: { items: Item[] }) {
   }, [items]);
   return (
     <Card label="Emails">
-      <CardHead title={`${items.length} emails`} info="Each sample goes through the same builder the real email uses, with made-up details. Nothing is sent." />
+      <CardHead title={`${items.length} emails`} info="Each sample goes through the same builder the real email uses. The market briefs show the newest issue actually built (its real figures); the other emails use made-up details. Nothing is sent." />
       <div className="adm-mail-list" role="list" aria-label="Emails">
         {groups.map(([group, rows]) => (
           <div key={group}>

@@ -4,9 +4,10 @@ import { useApp } from "../../lib/app";
 import { ago, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, DataTable, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
+import { rateNote } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
-  auto: boolean; rate: number | null;
+  auto: boolean; rate: number | null; no_rate?: boolean;
   plan_basic: string | null; plan_pro: string | null; plan_basic_year: string | null; plan_pro_year: string | null };
 type View = { currencies: Record<string, Row>; rates_at: string | null; rate_errors: string[] };
 const PRICE = ["basic", "pro", "basic_year", "pro_year"] as const;
@@ -54,7 +55,8 @@ export function PricesPanel() {
       <span><b>{c}</b> <span className="k-small k-muted">{r.name}{r.rate ? ` · ${money(r.rate, "INR", r.rate < 1 ? 4 : 2)}` : ""}</span></span>) },
     ...shown.map((f): Column<{ c: string; r: Row }> => ({ key: f, header: LABEL[f], numeric: true, cell: ({ c }) => (
       <input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`} />) })),
-    { key: "mode", header: "Price", cell: ({ c, r }) => r.auto ? <Badge tone="ok" dot={false}>Automatic</Badge>
+    { key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
+      : r.auto ? <Badge tone="ok" dot={false}>Automatic</Badge>
       : <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)} title="Follow the rupee price again">Fixed · make automatic</button> },
     { key: "in", header: "Charged in", cell: ({ c, r }) => <Badge tone={r.charged_in === c ? "ok" : "plain"} dot={false}>{r.charged_in === c ? c : "Rupees"}</Badge> },
     { key: "plans", header: <span className="sr-only">Razorpay plans</span>, action: true, cell: ({ c }) => <button type="button" className="btn quiet sm" onClick={() => setOpen(open === c ? null : c)}>{open === c ? "Hide plans" : "Razorpay plans"}</button> },
@@ -70,7 +72,7 @@ export function PricesPanel() {
           <button type="button" className="btn sm" disabled={busy || !Object.keys(edit).length} onClick={save}>{busy ? "Saving…" : "Save changes"}</button>
         </>} />
       <p className="k-note k-muted">{fx.at ? `Exchange rates read ${ago(fx.at)}.` : "Exchange rates not read yet: the built-in amounts are shown."}
-        {fx.errors.length ? ` Couldn't read: ${fx.errors.map((e) => e.split(":")[0]).join(", ")} (last rate kept).` : ""}</p>
+        {rows ? ` ${rateNote(fx.errors, rows)}` : ""}</p>
       {!rows ? <Skeleton label="Loading prices" /> : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
       {open && rows?.[open] && (
         <FormGrid label={`${open} Razorpay plans`}>

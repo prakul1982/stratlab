@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { openInvoice } from "../../components/InvoicesCard";
 import { Card, CardHead, DataTable, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
+import { useAdmin } from "./AdminContext";
 
 type Seller = { legal_name: string; address: string; state: string; gstin: string; pan: string; lut_arn: string; email: string; prefix: string };
 type Row = { number: string; date: string; total: number; currency: string; supply: string; email: string; tax: number };
@@ -10,6 +11,7 @@ type Row = { number: string; date: string; total: number; currency: string; supp
 /** Admin → Money → Invoices: who the invoices are from (GST details) and every invoice of a financial year. */
 export function InvoiceAdminPanel() {
   const { fail, notify } = useApp();
+  const { reload } = useAdmin();
   const [s, setS] = useState<Seller | null>(null);
   const [states, setStates] = useState<Record<string, string>>({});
   const [rows, setRows] = useState<Row[]>([]);
@@ -19,7 +21,7 @@ export function InvoiceAdminPanel() {
     .then((x) => { setS(x.seller); setStates(x.states); setYear(x.year); setAsked(x.year); setRows(x.invoices); }).catch(fail);
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
-    try { const x = await api<{ seller: Seller }>("/admin/invoices/seller", { method: "PUT", body: s }); setS(x.seller); notify("Invoice details saved."); }
+    try { const x = await api<{ seller: Seller }>("/admin/invoices/seller", { method: "PUT", body: s }); setS(x.seller); notify("Invoice details saved."); void reload(); }
     catch (e) { fail(e); }
   };
   const csv = () => {
@@ -42,7 +44,7 @@ export function InvoiceAdminPanel() {
   ];
   return (
     <>
-      <Card label="Invoice details">
+      <Card id="invoice-details" label="Invoice details">
         <CardHead title="Invoice details" info="Every payment gets an invoice, numbered per financial year. Prices include GST: 18% split CGST + SGST within your state, IGST across states. Customers outside India are an export of services: zero-rated with your LUT number, otherwise IGST is shown as included. Without a GSTIN the invoice says you aren't registered for GST. Have your accountant confirm the setup." />
         {!s ? <Skeleton label="Loading invoice details" lines={3} /> : (
           <FormGrid label="Who the invoices are from" onSubmit={(e) => { e.preventDefault(); save(); }}>

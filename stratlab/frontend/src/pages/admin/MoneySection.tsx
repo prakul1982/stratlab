@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { Card, CardHead, StatusList, StatusRow } from "../../components/kit";
+import { Card, CardHead, Notice, StatusList, StatusRow } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
+import { invoiceWarning } from "./attention";
 import { InvoiceAdminPanel } from "./InvoiceAdminPanel";
 import { PricesPanel } from "./PricesPanel";
 
@@ -23,8 +24,15 @@ export function MoneySection() {
     try { setCheck(await api<BillingCheck>("/admin/billing/check", { method: "POST" })); } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const on = !!ov?.server.billing_enabled;
+  const empty = invoiceWarning(ov?.server.invoice_seller);        // R7M-001: the first invoice would contradict the Plans page
   return (
     <>
+      {empty && (
+        <Notice tone="warn" role="status" label="Invoice seller details" className="adm-invoice-warning"
+          action={{ label: "Fill them in", onClick: () => document.getElementById("invoice-details")?.scrollIntoView({ block: "start" }) }}>
+          {empty}
+        </Notice>
+      )}
       <Card label="Payments">
         <CardHead title="Payments" actions={<button type="button" className="btn quiet sm" disabled={busy} onClick={run}>{busy ? "Asking Razorpay…" : "Check payments setup"}</button>} />
         <StatusList label="Payments">

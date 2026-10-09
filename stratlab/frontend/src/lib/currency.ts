@@ -7,7 +7,9 @@ export type CurrencyRow = { symbol: string; name: string; basic: number; pro: nu
   /** the amount is the rupee charge (GST included) at today's rate, rounded: shown with "≈" while the card is charged in
    * rupees (R7O-008: "SAR 22" for a ₹699 charge that is about SAR 27) */
   converted?: boolean };
-export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer };
+export type Pricing = { currencies: Record<string, CurrencyRow>; countries: Record<string, string>; offer?: Offer;
+  /** whether invoices carry GST (the seller's GSTIN is set in Admin → Money); the pages say "incl. GST" only then (R7M-001) */
+  invoice?: { gst: boolean } };
 
 const KEY = "stratlab.currency";
 

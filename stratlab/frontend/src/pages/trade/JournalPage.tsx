@@ -9,6 +9,7 @@ import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
+import { JOURNAL_LEDE, journalVsTax } from "../../lib/journalTax";
 import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
@@ -155,7 +156,7 @@ export function JournalPage() {
   };
 
   const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.as_of}
-    lede="Your broker's trades, equity, F&O, commodity and currency, and US stocks and crypto you add by hand, as round trips after charges, checked like a backtest. Only you can see them." />;
+    lede={JOURNAL_LEDE} />;
   if (error && !j) return <div className="k-page j-page">{header}<ErrorState title="Your journal couldn't be opened" action={{ label: "Try again", onClick: () => { setError(null); load(); } }}>{error}</ErrorState></div>;
   if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
   const s = j.summary;
@@ -254,6 +255,14 @@ export function JournalPage() {
           </>
         )}
         {j.tax_totals.length > 0 && <TaxTotals rows={j.tax_totals} />}
+        {has && (taxTrades > 0 || j.tax_totals.length > 0) && (
+          <Disclosure summary="Why these numbers differ from your tax report" testId="j-vs-tax">
+            <div className="k-stack k-tight">
+              {journalVsTax(j.tax_totals.length > 0).map((t) => <p key={t} className="k-small">{t}</p>)}
+              <p className="k-small">Here: {s.n.toLocaleString("en-IN")} closed round trip{s.n === 1 ? "" : "s"}. Your <Link className="link" to="/tax-report">tax report</Link> has the sale lines and the yearly totals.</p>
+            </div>
+          </Disclosure>
+        )}
         {has && (j.open.length > 0 || j.unmatched.length > 0) && <OpenList j={j} />}
 
         <section className="k-stack k-tight" aria-label="About these numbers">

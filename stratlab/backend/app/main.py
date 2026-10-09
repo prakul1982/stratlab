@@ -83,6 +83,7 @@ from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
 from . import plan_interest
 from . import email_kit
+from . import mail_pages
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -207,7 +208,7 @@ filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), 
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
 kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
-newsletter_job = news.Job()
+newsletter_job = news.Job("newsletters")      # its status is kept for Admin → Data and jobs
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
 results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
@@ -582,7 +583,8 @@ def plans():
 def prices():
     """Prices in every currency StratLab shows, which currency each is charged in, country → currency, and the offer
     in force today (payments on or not, the launch offer), so the public pages say what the app does."""
-    return {**pricing.public(), "offer": offer_state()}
+    # `invoice.gst`: invoices carry GST (a GSTIN is set in Admin → Money), so the pages only promise a GST invoice then (R7M-001)
+    return {**pricing.public(), "offer": offer_state(), "invoice": {"gst": invoices.gst_registered()}}
 
 
 def fx_rate(code: str) -> float:
@@ -862,13 +864,8 @@ def test_alert(profile=Depends(current_profile)):
 
 # ---------- newsletter email: confirming the address, unsubscribing from a link ----------
 def mail_page(title: str, text: str, status: int = 200) -> HTMLResponse:
-    """A tiny page for links opened from an email."""
-    e = html_escape
-    return HTMLResponse(status_code=status, content=(
-        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>{e(title)}</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
-        f"<h1 style='font-size:1.3rem'>{e(title)}</h1><p>{e(text)}</p>"
-        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Open StratLab</a></p></body>"))
+    """A small page for links opened from an email, in the site's look (R7M-004)."""
+    return HTMLResponse(status_code=status, content=mail_pages.notice(title, text))
 
 
 def _unsubscribe(t: str, act: bool = True) -> str | None:
@@ -888,6 +885,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
     return alerts.NEWSLETTER_NAMES[what]
 
 
+WHERE_EMAILS = "in Settings → Notifications"       # where a reader changes their emails (the real path, R7M-004)
+
+
 @app.get("/unsubscribe", response_class=HTMLResponse)
 def unsubscribe_page(t: str = ""):
     """Asks before unsubscribing: mail scanners open every link in an email, and shouldn't unsubscribe anyone."""
@@ -896,16 +896,8 @@ def unsubscribe_page(t: str = ""):
                          "sign-in, and that one email type is turned off. This is a preview, so nothing was changed.")
     name = _unsubscribe(t, act=False)
     if not name:
-        return mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400)
-    e = html_escape
-    return HTMLResponse(content=(
-        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>Unsubscribe</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
-        f"<h1 style='font-size:1.3rem'>Unsubscribe from {e(name)}?</h1>"
-        f"<form method=post action='/unsubscribe?t={e(t)}&amp;page=1'>"
-        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
-        f"Unsubscribe</button></form>"
-        f"<p><a href='{e(settings.PUBLIC_SITE_URL)}/account'>Or change your emails in Account</a></p></body>"))
+        return mail_page("This link doesn't work", f"It may be incomplete. You can turn emails off any time {WHERE_EMAILS}.", 400)
+    return HTMLResponse(content=mail_pages.ask(f"Unsubscribe from {name}?", f"/unsubscribe?t={t}&page=1", "Unsubscribe"))
 
 
 @app.post("/unsubscribe")
@@ -913,8 +905,8 @@ def unsubscribe_one_click(t: str = "", page: int = 0):
     """Mail apps' own unsubscribe button (RFC 8058 one-click), and the button on the page above."""
     name = _unsubscribe(t)
     if page:
-        return (mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time in Account.") if name
-                else mail_page("This link doesn't work", "It may be incomplete. You can turn emails off any time in Account.", 400))
+        return (mail_page("Unsubscribed", f"You're unsubscribed from {name}. Change this any time {WHERE_EMAILS}.") if name
+                else mail_page("This link doesn't work", f"It may be incomplete. You can turn emails off any time {WHERE_EMAILS}.", 400))
     if not name:
         return Response("This unsubscribe link isn't valid.", status_code=400, media_type="text/plain")
     return Response("Unsubscribed.", media_type="text/plain")
@@ -942,7 +934,7 @@ def send_email_confirmation(profile=Depends(current_profile)):
 
 
 def _confirm_link_bad() -> HTMLResponse:
-    return mail_page("This link doesn't work", "It may have expired (links work for 3 days). Ask for a new one in Account.", 400)
+    return mail_page("This link doesn't work", f"It may have expired (links work for 3 days). Ask for a new one {WHERE_EMAILS}.", 400)
 
 
 @app.get("/email/confirm", response_class=HTMLResponse)
@@ -951,15 +943,8 @@ def confirm_email_page(t: str = ""):
     got = mail_tokens.read(t, "confirm")
     if not got or not got[1]:
         return _confirm_link_bad()
-    e = html_escape
-    return HTMLResponse(content=(
-        f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>Confirm your email</title><body style='font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem'>"
-        f"<h1 style='font-size:1.3rem'>Send StratLab newsletters to {e(got[1])}?</h1>"
-        f"<form method=post action='/email/confirm?t={e(t)}'>"
-        f"<button style='font:inherit;padding:.6rem 1.2rem;border-radius:8px;border:1px solid #111;background:#111;color:#fff;cursor:pointer'>"
-        f"Confirm my email</button></form>"
-        f"<p>If you didn't ask for this, close this page.</p></body>"))
+    return HTMLResponse(content=mail_pages.ask(f"Send StratLab newsletters to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
+                                               "If you didn't ask for this, close this page.", manage=False))
 
 
 @app.post("/email/confirm", response_class=HTMLResponse)
@@ -969,7 +954,7 @@ def confirm_email(t: str = ""):
         return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
-    return mail_page("Email confirmed", f"Newsletters you choose in Account will go to {address}.")
+    return mail_page("Email confirmed", f"Newsletters you choose {WHERE_EMAILS} will go to {address}.")
 
 
 # ---------- markets and instruments ----------
@@ -2401,10 +2386,22 @@ def holdings_view(profile) -> dict:
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
 
+def zerodha_read(profile) -> dict | None:
+    """What the connected Zerodha account last returned, so an empty Holdings page can say it was asked and had nothing
+    (R7M-009); None when Zerodha isn't connected."""
+    try:
+        k = connect_kite.status(profile["id"], profile)
+    except Exception:
+        return None
+    if not k.get("connected"):
+        return None
+    return {"live": bool(k.get("live")), "count": k.get("count"), "read_at": k.get("refreshed_at")}
+
+
 @app.get("/holdings")
 def my_holdings(profile=Depends(current_profile)):
     """The user's holdings at today's prices: value, gain or loss, the day's change and the mix by sector."""
-    return ok(holdings_view(profile))
+    return ok({**holdings_view(profile), "zerodha": zerodha_read(profile)})
 
 
 @app.get("/holdings/facts")
@@ -4153,7 +4150,7 @@ def admin_invoices(year: str = "", _=Depends(admin.admin_profile)):
     """Seller details and every invoice of a financial year (this one by default), for the accounts."""
     fy = year or invoices.fy(datetime.now(timezone.utc))
     rows = invoices.of_year(fy)
-    return {"seller": invoices.seller(), "states": invoices.STATES, "year": fy,
+    return {"seller": invoices.seller(), "seller_status": invoices.readiness(), "states": invoices.STATES, "year": fy,
             "invoices": [{k: i[k] for k in ("number", "date", "total", "currency", "supply")} | {"email": i["buyer"].get("email"),
                          "tax": round(sum(t["amount"] for t in i["taxes"]), 2)} for i in rows]}
 
@@ -4161,7 +4158,7 @@ def admin_invoices(year: str = "", _=Depends(admin.admin_profile)):
 @app.put("/admin/invoices/seller")
 def admin_invoice_seller(req: SellerReq, _=Depends(admin.admin_profile)):
     try:
-        return {"seller": invoices.save_seller(req.model_dump())}
+        return {"seller": invoices.save_seller(req.model_dump()), "seller_status": invoices.readiness()}
     except ValueError as e:
         err(400, "bad_seller", str(e))
 
@@ -4226,7 +4223,7 @@ def server_status() -> dict:
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)), "server_started_at": SERVER_STARTED_AT,
-            "calendar": calendar_status(),
+            "calendar": calendar_status(), "invoice_seller": invoices.readiness(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 

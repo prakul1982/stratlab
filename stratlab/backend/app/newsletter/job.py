@@ -331,6 +331,24 @@ def repair_r7(region: str, days: int = 60) -> int:
     return fixed
 
 
+_IST_STAMP = re.compile(r"Prices and numbers as of [^\n<]*\bIST\b")
+
+
+def repair_us_stamp() -> int:
+    """US briefs stored with "Prices and numbers as of 9 Oct 2026, 02:04 IST" in their email, which the page writes as
+    "8 Oct 2026, 16:34 ET" (R7M-002): the stored email written again with New York's time. Returns how many changed."""
+    fixed = 0
+    for iid in ids("market", "US"):
+        issue = load(iid)
+        if not issue or not _IST_STAMP.search(issue.get("text") or ""):
+            continue
+        issue["html"], issue["text"] = write.render(issue)
+        kind, scope, dkey = parse_id(iid)
+        db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
+        fixed += 1
+    return fixed
+
+
 # ---------- readers ----------
 def address(profile: dict) -> str | None:
     """Where newsletters go: the alert email set in Account, else the address they sign in with."""
@@ -366,31 +384,84 @@ def teaser(profile: dict, issue: dict):
     alerts.notify(quiet, issue["subject"], f"{issue['subject']}\n{first}".strip(), url=kit.news_path(issue["id"]))
 
 
+# why a reader didn't get an issue, in the words Admin → Data and jobs uses (R7M-005)
+WHY = {"unconfirmed": "email address not confirmed", "no_address": "no email address", "email_off": "email isn't set up on the server",
+       "error": "the email failed to send", "profile": "the account couldn't be read", "nothing_new": "nothing changed for their stocks"}
+RETRY = ("unconfirmed", "no_address", "email_off", "error", "profile")       # worth trying again later the same day
+SENT = "newssent:"          # app_settings: who an issue went to, so a retry never sends twice
+
+
+def deliver_why(profile: dict, issue: dict, what: str, teaser_too: bool = True) -> str:
+    """Email the issue (and send the teaser). "sent" when the email went, else why not: no_address, unconfirmed, email_off
+    or error. Nothing here raises: one reader's failure never stops the others (R7M-005)."""
+    try:
+        to = address(profile)
+        if not to:
+            why = "no_address"
+        elif not confirmed(profile):
+            why = "unconfirmed"
+        elif not alerts.email_ready():
+            why = "email_off"
+        else:
+            html, text, headers = kit.finish(issue["html"], issue["text"], profile["id"], what)
+            alerts.send_email(to, issue["subject"], text, html=html, headers=headers)
+            why = "sent"
+    except Exception as e:
+        print("newsletter email failed:", str(e)[:160])
+        why = "error"
+    if teaser_too:
+        try:
+            teaser(profile, issue)
+        except Exception as e:
+            print("newsletter teaser failed:", str(e)[:160])
+    return why
+
+
 def deliver(profile: dict, issue: dict, what: str) -> bool:
     """Email the issue (and send the teaser). True when the email went."""
-    sent = False
-    to = address(profile)
-    if to and confirmed(profile) and alerts.email_ready():
-        html, text, headers = kit.finish(issue["html"], issue["text"], profile["id"], what)
-        try:
-            alerts.send_email(to, issue["subject"], text, html=html, headers=headers)
-            sent = True
-        except Exception as e:
-            print("newsletter email failed:", str(e)[:160])
-    try:
-        teaser(profile, issue)
-    except Exception as e:
-        print("newsletter teaser failed:", str(e)[:160])
-    return sent
+    return deliver_why(profile, issue, what) == "sent"
+
+
+def ledger(iid: str) -> dict:
+    """Who an issue went to ("sent"), who it didn't and why ("skipped": uid -> reason), and whether the run reached the
+    end of its readers ("done")."""
+    d = db.json_value(db.get_setting(SENT + iid), {}) or {}
+    return {"sent": [u for u in d.get("sent") or [] if isinstance(u, str)],
+            "skipped": {k: v for k, v in (d.get("skipped") or {}).items() if isinstance(k, str)}, "done": bool(d.get("done"))}
+
+
+def has_ledger(iid: str) -> bool:
+    """Whether a send of this issue was recorded. One sent before the ledger existed (a deploy on the same day) has none, and
+    is never sent again."""
+    return bool(db.get_setting(SENT + iid))
+
+
+def save_ledger(iid: str, led: dict) -> None:
+    db.set_setting(SENT + iid, json.dumps(led))
+
+
+def retryable(led: dict) -> bool:
+    return not led.get("done") or any(r in RETRY for r in led.get("skipped", {}).values())
+
+
+def skipped_words(skipped: dict) -> dict:
+    """{reason in words: how many} from a ledger's uid -> reason."""
+    out: dict[str, int] = {}
+    for r in skipped.values():
+        out[WHY.get(r, r)] = out.get(WHY.get(r, r), 0) + 1
+    return out
 
 
 # ---------- the schedule ----------
 class Job:
     """Checks every five minutes what is due; each run is marked in the database before sending, so it runs once."""
 
-    def __init__(self):
+    def __init__(self, status_key: str | None = None):
         from .. import job_status
+        if status_key:
+            self.status_key = status_key
         self.last: dict[str, str] = {}
+        self._open: dict[str, bool] = {}          # issue id -> whether some reader may still be sent it today (catch_up)
         # stores itself whenever a run is written into it, so Admin has it after a restart (R6O-003)
         self.status = job_status.Status(self.status_key, {"last_run": None, "sent": 0, "last_error": None})
 
@@ -457,11 +528,25 @@ class Job:
         db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
         print(f"newsletters: checked the headlines and weekdays of {n} stored briefs")
 
+    def et_once(self):
+        """Once per database: the stored US briefs' email in New York's time (see repair_us_stamp)."""
+        flag = "newsfix:us-stamp-et"
+        if db.get_setting(flag):
+            return
+        try:
+            n = repair_us_stamp()
+        except Exception as e:
+            print("newsletters et:", str(e)[:160])
+            return
+        db.set_setting(flag, datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"))
+        print(f"newsletters: stamped {n} stored US briefs in New York time")
+
     def _loop(self):
         self.repair_once()
         self.restyle_once()
         self.headlines_once()
         self.r7_once()
+        self.et_once()
         while True:
             try:
                 self.tick(datetime.now(ZoneInfo("UTC")))
@@ -495,59 +580,164 @@ class Job:
             job_status.keep(self.status_key, self)           # Admin shows its last run after a restart too
 
     def tick(self, now: datetime) -> int:
-        sent, ran = 0, False
+        sent, ran, problems = 0, False, []
         for region, (tz, at) in SEND_AT.items():
             day = self.due(f"market-{region}", now, tz, at, region=region)
             issue = build_market(region, day) if day else None
             if issue:                      # every source down: try again on the next check
                 self.mark(f"market-{region}", day)
-                sent, ran = sent + self.send_market(region, issue, False), True
+                sent, ran = sent + self._send(region, issue, False, problems), True
         day = self.due("stocks", now, *SEND_AT["IN"], region="IN")
         if day:
             self.mark("stocks", day)
-            sent, ran = sent + self.run_stocks(day, False), True
+            try:
+                sent, ran = sent + self.run_stocks(day, False), True
+            except Exception as e:
+                problems.append(f"My stocks: {str(e)[:160]}")
+                ran = True
         tz, weekday, at = WEEKLY_AT
         day = self.due("weekly", now, tz, at, weekday=weekday)
         if day:
             self.mark("weekly", day)
             for region in SEND_AT:
                 issue = build_market(region, day, True)
-                sent += self.send_market(region, issue, True) if issue else 0
-            sent, ran = sent + self.run_stocks(day, True), True
+                sent += self._send(region, issue, True, problems) if issue else 0
+            try:
+                sent, ran = sent + self.run_stocks(day, True), True
+            except Exception as e:
+                problems.append(f"My stocks weekly: {str(e)[:160]}")
+                ran = True
+        sent += self.catch_up(now, problems)
         if ran:
-            self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            self.status.update(last_run=now.isoformat(), sent=sent, problems=problems[:5], last_error=problems[0][:200] if problems else None)
         return sent
 
-    def send_market(self, region: str, issue: dict, weekly: bool) -> int:
-        """Send the region's issue (built once, for everyone) to its readers."""
+    def _send(self, region: str, issue: dict, weekly: bool, problems: list, retry: bool = False) -> int:
+        """send_market, with whatever goes wrong said instead of stopping the schedule: the day's run is already marked,
+        so an error here used to end the region's sends for the day without a word (R7M-005)."""
+        try:
+            return self.send_market(region, issue, weekly, retry=retry)
+        except Exception as e:
+            print("newsletter send failed:", region, str(e)[:160])
+            problems.append(f"{region}{' weekly' if weekly else ''}: {str(e)[:160]}")
+            return 0
+
+    def catch_up(self, now: datetime, problems: list) -> int:
+        """Today's issues again for readers who didn't get them for a reason that can pass (the address was confirmed
+        after the send, the email service or the database failed for a moment, a run cut short), once a reader qualifies.
+        Only today's issues, each reader at most once (the ledger). Returns how many were sent."""
+        total = 0
+        for region, (tz, _) in SEND_AT.items():
+            day = now.astimezone(ZoneInfo(tz)).date().isoformat()
+            for weekly in (False, True):
+                if self.last.get("weekly" if weekly else f"market-{region}") != day:
+                    continue
+                iid = issue_id("market", region, day, weekly)
+                if self._open.get(iid) is False:
+                    continue
+                issue = load(iid)
+                if not issue or not has_ledger(iid) or not retryable(ledger(iid)):
+                    self._open[iid] = False
+                    continue
+                self._open[iid] = True
+                total += self._send(region, issue, weekly, problems, retry=True)
+        return total
+
+    def _report(self, key: str, rep: dict) -> None:
+        """Remember how a send went, per region, for Admin → Data and jobs (kept across restarts with the job's status)."""
+        regions = dict(self.status.get("regions") or {})
+        regions[key] = rep
+        self.status.update(regions=regions, last_run=self.status.get("last_run") or rep["at"])
+
+    def send_market(self, region: str, issue: dict, weekly: bool, retry: bool = False) -> int:
+        """Send the region's issue (built once, for everyone) to its readers. Each reader's result is kept (who got it, who
+        didn't and why): the next check sends it to readers who couldn't be reached before, and Admin shows the counts
+        (R7M-005). With `retry`, only those readers are tried, and no teaser goes twice."""
         what, sent = f"market_{region.lower()}", 0
-        for sub in subscribers():
+        if retry and not has_ledger(issue["id"]):
+            return 0
+        led = ledger(issue["id"])
+        if not retry:
+            save_ledger(issue["id"], led)         # from the first reader on, a run cut short can be picked up again
+        readers = other = 0
+        subs = subscribers()
+        for sub in subs:
             how = sub.get(what)
-            if how == "off":
+            if how not in ("daily", "weekly"):
                 continue
-            profile = db.get_profile(sub["uid"])
-            daily_ok = allowed(profile, what, "daily")
+            readers += 1
+            uid = sub["uid"]
+            if uid in led["sent"]:
+                continue
+            if retry and led["done"] and led["skipped"].get(uid) not in RETRY:
+                continue
+            try:
+                profile = db.get_profile(uid)
+                daily_ok = allowed(profile, what, "daily")
+            except Exception as e:
+                print("newsletter reader failed:", str(e)[:160])
+                led["skipped"][uid] = "profile"
+                continue
             # daily readers get each day's issue; weekly ones, and daily ones whose plan no longer has it, the digest
-            if (not weekly and how == "daily" and daily_ok) or (weekly and (how == "weekly" or not daily_ok)):
-                sent += deliver(profile, issue, what)
+            if not ((not weekly and how == "daily" and daily_ok) or (weekly and (how == "weekly" or not daily_ok))):
+                other += 1
+                led["skipped"].pop(uid, None)
+                continue
+            why = deliver_why(profile, issue, what, teaser_too=not retry)
+            if why == "sent":
+                led["sent"].append(uid)
+                led["skipped"].pop(uid, None)
+                sent += 1
+                save_ledger(issue["id"], led)
+            else:
+                led["skipped"][uid] = why
+        led["done"] = True
+        save_ledger(issue["id"], led)
+        self._open[issue["id"]] = retryable(led)
+        self._report(f"{region}-weekly" if weekly else region, {
+            "issue": issue["id"], "day": issue.get("day"), "weekly": weekly, "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"),
+            "readers": readers, "sent": len(led["sent"]), "other_edition": other, "skipped": skipped_words(led["skipped"])})
         return sent
 
     def run_stocks(self, day: date, weekly: bool) -> int:
-        sent = 0
+        sent, readers, quiet, other, skipped = 0, 0, 0, 0, {}
         for sub in subscribers():
             how = sub.get("my_stocks")
-            if how not in ("daily", "weekly") or (not weekly and how != "daily"):
+            if how not in ("daily", "weekly"):
                 continue
-            profile = db.get_profile(sub["uid"])
+            readers += 1
+            if not weekly and how != "daily":
+                other += 1
+                continue
+            try:
+                profile = db.get_profile(sub["uid"])
+            except Exception as e:
+                print("my stocks reader failed:", str(e)[:160])
+                skipped["profile"] = skipped.get("profile", 0) + 1
+                continue
             daily_ok = allowed(profile, "my_stocks", "daily")
             # as with the Market Brief: a daily reader whose plan no longer has daily editions gets the weekly one
             if (not weekly and not daily_ok) or (weekly and how == "daily" and daily_ok):
+                other += 1
                 continue
             try:
                 issue = build_stocks(sub["uid"], day, weekly)
             except Exception as e:
                 print("my stocks issue failed:", str(e)[:160])
+                skipped["error"] = skipped.get("error", 0) + 1
                 continue
-            if issue:
-                sent += deliver(profile, issue, "my_stocks")
+            if not issue:
+                quiet += 1
+                continue
+            why = deliver_why(profile, issue, "my_stocks")
+            if why == "sent":
+                sent += 1
+            else:
+                skipped[why] = skipped.get(why, 0) + 1
+        words = {WHY.get(k, k): n for k, n in skipped.items()}
+        if quiet:
+            words[WHY["nothing_new"]] = quiet
+        self._report("stocks-weekly" if weekly else "stocks", {
+            "issue": None, "day": day.isoformat(), "weekly": weekly, "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"),
+            "readers": readers, "sent": sent, "other_edition": other, "skipped": words})
         return sent
