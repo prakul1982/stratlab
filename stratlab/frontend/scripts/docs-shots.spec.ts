@@ -62,7 +62,7 @@ for (const theme of THEMES) {
   test(`landing, ${theme}`, async ({ browser }) => {
     const { ctx, page } = await open(browser, theme, { signedIn: false, height: 760 });
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(".lp").getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
     await settle(page);
     await page.screenshot({ path: `${OUT}/landing-${theme}.png` });
     const noNav = ".lp-nav { visibility: hidden; }";     // the sticky menu would sit over a section scrolled to the top

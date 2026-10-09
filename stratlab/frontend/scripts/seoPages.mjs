@@ -48,10 +48,12 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   swap(/<title>[^<]*<\/title>/, `<title>${text(title)}</title>`);
   swap(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${attr(description)}">`);
   swap(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="${index ? "index, follow" : "noindex, follow"}">`);
-  swap(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${attr(canonical)}">`);
+  // a page that isn't there (404.html) names no canonical address: the home page as its canonical said the 404 was the
+  // home page (R8V-008)
+  swap(/<link rel="canonical" href="[^"]*">\n?/, canonical ? `<link rel="canonical" href="${attr(canonical)}">\n` : "");
   swap(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${attr(title)}">`);
   swap(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${attr(description)}">`);
-  swap(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${attr(canonical)}">`);
+  swap(/<meta property="og:url" content="[^"]*">\n?/, canonical ? `<meta property="og:url" content="${attr(canonical)}">\n` : "");
   swap(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${attr(title)}">`);
   swap(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${attr(description)}">`);
   swap(/<!--jsonld-->/, jsonld);
@@ -70,19 +72,52 @@ export function pageFiles(template) {
     pageHtml(template, { title: p.title, description: p.description, canonical: absolute(p.canonical ?? p.path), index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
       faq: p.path === "/faq" })]);
-  files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: `${SITE}/`, index: false,
+  files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION] })]);
   return files;
 }
 
 /** StratLab's own library strategies, one file each (dist/library/<id>/index.html), with that strategy's own tags
- * (R6V-012: they carried the home page's title and canonical address), heading and rules (R7V-008). */
-export function libraryFiles(template) {
+ * (R6V-012: they carried the home page's title and canonical address), heading and rules (R7V-008). With `entries`
+ * ({id: the public library's entry}), the title, description and opening words lead with the verdict's result, the
+ * words the page itself shows once it has drawn ("117.1 points behind buy and hold after costs: …"), so a link preview
+ * or a crawler that runs no script reads the same (R8V-008). Without an entry, the strategy's own words. */
+export function libraryFiles(template, entries = {}) {
   return LIBRARY_SEEDS.map(([id, name]) => {
-    const p = libraryMeta(id, name);
+    const p = libraryMeta(id, name, entries[id]);
     return [`${p.path.slice(1)}/index.html`, pageHtml(template, { title: p.title, description: p.description, canonical: absolute(p.path), index: true,
       heading: p.heading, summary: p.summary })];
   });
+}
+
+/** The API's address for the build to read the public library from: STRATLAB_API_BASE, else where vercel.json sends
+ * the company pages (the same server). */
+export function apiBase(env = process.env, vercel = null) {
+  if (env.STRATLAB_API_BASE) return env.STRATLAB_API_BASE.replace(/\/+$/, "");
+  try {
+    const v = vercel ?? JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+    const r = (v.rewrites ?? []).find((x) => x.source === "/stocks/:path*");
+    return r ? r.destination.replace(/\/stocks\/:path\*$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+/** StratLab's own library entries, {id: entry}, read once at build time (a few seconds at most) when the site's host
+ * builds it (VERCEL is set there) or STRATLAB_SEO_ONLINE asks for it. {} otherwise (a local or test build stays the
+ * same whatever the server holds), when the server can't be reached, or with STRATLAB_SEO_OFFLINE: the pages then carry
+ * the strategy's own words, as before. */
+export async function libraryEntries(env = process.env, get = globalThis.fetch) {
+  const base = apiBase(env);
+  if (!base || !(env.VERCEL || env.STRATLAB_SEO_ONLINE) || env.STRATLAB_SEO_OFFLINE || typeof get !== "function") return {};
+  try {
+    const r = await get(`${base}/public/library?limit=200`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return {};
+    const body = await r.json();
+    return Object.fromEntries((body.entries ?? []).filter((e) => e && typeof e.id === "string").map((e) => [e.id, e]));
+  } catch {
+    return {};
+  }
 }
 
 export function seoPages() {
@@ -91,9 +126,10 @@ export function seoPages() {
     name: "stratlab-seo-pages",
     apply: "build",
     configResolved(c) { out = join(c.root, c.build.outDir); },
-    closeBundle() {
+    async closeBundle() {
       const template = readFileSync(join(out, "index.html"), "utf8");
-      for (const [file, html] of [...pageFiles(template), ...libraryFiles(template)]) {
+      const entries = await libraryEntries();
+      for (const [file, html] of [...pageFiles(template), ...libraryFiles(template, entries)]) {
         mkdirSync(dirname(join(out, file)), { recursive: true });
         writeFileSync(join(out, file), html);
       }

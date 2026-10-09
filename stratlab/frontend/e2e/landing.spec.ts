@@ -14,7 +14,8 @@ async function open(page: Page) {
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
+  // the landing page's own heading, inside .lp (R8V-008: the start-up block's h1 now has the same words as the page's)
+  await expect(page.locator(".lp").getByRole("heading", { name: /Test it, research it, track it/ })).toBeVisible({ timeout: 30_000 });
   return errors;
 }
 

@@ -25,3 +25,18 @@ export function wantsAccount(o: { supabaseUrl?: string; search?: string; hash?: 
 /** The pages anyone sees the same way, signed in or not: the policies and a shared verdict or library entry. */
 export const PUBLIC_FOR_ALL = [/^\/(terms|privacy|refunds|contact)\/?$/, /^\/verdict\/[^/]+\/?$/, /^\/library\/[^/]+\/?$/];
 export const isPublicForAll = (path: string) => PUBLIC_FOR_ALL.some((re) => re.test(path.split(/[?#]/)[0]));
+
+/** The server's public answers a visitor's first page will ask for, by its address: asked at once, alongside the page's
+ * code, instead of after it (R8V-013: /library's one question waited for some forty files and about 3 s). The pages take
+ * them through lib/http's publicGet; each address is written exactly as its page writes it. */
+export function publicReads(path: string): string[] {
+  const p = path.split(/[?#]/)[0];
+  const one = (s: string) => { try { return encodeURIComponent(decodeURIComponent(s)); } catch { return encodeURIComponent(s); } };
+  const lib = p.match(/^\/library\/([^/]+)\/?$/);
+  const verdict = p.match(/^\/verdict\/([^/]+)\/?$/);
+  return /^\/library\/?$/.test(p) ? ["/public/library"]
+    : lib ? [`/public/library/${one(lib[1])}`]
+    : verdict ? [`/public/v/${one(verdict[1])}`]
+    : /^\/(pricing|plans|upgrade|help|faq|features|login|signup|about)?\/?$/.test(p) ? ["/pricing", "/public/library?sort=new&limit=60"]
+    : [];
+}

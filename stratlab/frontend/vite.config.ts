@@ -32,6 +32,10 @@ export default defineConfig({
             // the two kit pieces that read the account (a plan note, the company picker): apart from the rest of the kit, which the public pages use
             // the two the landing page uses (the billing switch and the sign-in panel), on their own so the landing page stays small
             { name: "kit-lite", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]kit[\\/](Seg|Dialog)\.tsx|lib[\\/]focusTrap\.ts)$/ },
+            // the kit pieces the public pages draw (the library, a shared verdict, the policies, the sign-in gate), on their
+            // own: in the rest of the kit's file they brought the sign-in library and the account code with them, some
+            // forty files and 100 kB a visitor's /library waited for (R8V-013)
+            { name: "kit-public", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Badge|Card|DataTable|Stat|States|Form|PageHeader|LinkCard|Signed)\.tsx$/ },
             { name: "kit", includeDependenciesRecursively: false, test: /src[\\/](components[\\/]kit[\\/](?!index|Notice|StockPicker|Seg|Dialog)[^\\/]+\.tsx?|lib[\\/]dateInput\.ts)$/ },
             { name: "kit-account", includeDependenciesRecursively: false, test: /src[\\/]components[\\/]kit[\\/](Notice|StockPicker)\.tsx$/ },
             { name: "account", includeDependenciesRecursively: false, test: /src[\\/](lib[\\/](api|app)|components[\\/]CompanySearch)\.tsx?$/ },

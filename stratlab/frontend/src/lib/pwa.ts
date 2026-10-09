@@ -6,11 +6,19 @@ type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{
 let deferred: InstallEvent | null = null;
 const listeners = new Set<() => void>();
 
-export function registerPwa() {
+/** `later`: a visitor's page (the policies, the library, the landing page): the service worker, and the few files it
+ * keeps for offline use, wait until the page has loaded and the browser is idle, so they aren't fetched while the page
+ * itself is (R8V-013: a text page made 28 requests). */
+export function registerPwa({ later = false }: { later?: boolean } = {}) {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e as InstallEvent; listeners.forEach((f) => f()); });
   window.addEventListener("appinstalled", () => { deferred = null; listeners.forEach((f) => f()); });
-  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => undefined); });
+  const register = () => { navigator.serviceWorker.register("/sw.js").catch(() => undefined); };
+  const idle = (f: () => void) => {
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(f, { timeout: 10_000 });
+    else setTimeout(f, 3000);                     // Safari has no idle callback
+  };
+  window.addEventListener("load", () => (later ? window.setTimeout(() => idle(register), 4000) : register()));
 }
 
 export const onInstallChange = (f: () => void) => { listeners.add(f); return () => { listeners.delete(f); }; };
