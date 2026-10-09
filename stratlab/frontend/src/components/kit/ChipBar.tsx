@@ -60,8 +60,8 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   return (
     <div className="k-chipwrap">
       {/* "+ Custom" sits beside the scrolling row, not at its faded end, so it is never cut off at the card's edge (R7O-010) */}
-      <div className="k-chiprow">
-        <div className={`k-chipbar${wrap ? " wrap" : ""}`} role="group" aria-label={label}>
+      <div className="k-chiprow" role="group" aria-label={label}>
+        <div className={`k-chipbar${wrap ? " wrap" : ""}`}>
           {all.map((o) => <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
         </div>
         {custom && <button ref={opener} type="button" className="k-chip add" aria-expanded={open} onClick={() => setOpen((x) => !x)}>+ Custom</button>}
