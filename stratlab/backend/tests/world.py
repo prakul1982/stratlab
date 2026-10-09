@@ -357,6 +357,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     plans.forget_free_basic()                   # free Basic time another test gave
     plans._promo.update(read_at=0.0, until=None)   # a launch offer another test started (the stress tests post /admin/promo)
     pricing.forget()                            # prices another test saved
+    from app import invoices
+    invoices.forget_gst()                       # the seller's GST answer another test cached
     invite_rewards._touched.clear()
     from app import corp_actions
     corp_actions._empty.clear()                 # company pages another test looked up with nothing found

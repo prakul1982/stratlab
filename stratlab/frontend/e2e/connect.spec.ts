@@ -140,7 +140,7 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   const errors = await signIn(page, request, OWNER, "/settings#accounts");
   const main = page.locator("main");
   const z = main.locator("#zerodha");
-  await expect(z.getByTestId("kite-line")).toHaveText(/^Connected · refreshed today \d\d:\d\d · tap to refresh tomorrow/, { timeout: 30_000 });
+  await expect(z.getByTestId("kite-line")).toHaveText(/^Connected · last read today \d\d:\d\d IST/, { timeout: 30_000 });
   await z.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("Read 1 holdings.")).toBeVisible();
   await sane(page, errors, phone);

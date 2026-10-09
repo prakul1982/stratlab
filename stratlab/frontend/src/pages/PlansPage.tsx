@@ -10,7 +10,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
-import { canBuy, finePrint, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { canBuy, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
@@ -48,7 +48,7 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
 export function PlansPage() {
-  const { me, fail, notify, refreshMe } = useApp();
+  const { me, fail, notify, refreshMe, viewAs } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const { pricing, currency, pick } = usePricing();
   // one answer for what's on sale today (plans.offer_state): /me's, else the public one the landing page reads
@@ -61,6 +61,9 @@ export function PlansPage() {
   const paid = me?.paid_plan ?? me?.plan;   // me.plan is Pro for everyone during the launch offer
   const row = pricing?.currencies[currency];
   const inr = pricing?.currencies.INR;
+  // GST is spoken of only while the invoices carry it (the seller's GSTIN is set in Admin → Money): an invoice with no GSTIN
+  // says the supplier isn't registered and charges none, so "incl. GST" and "a GST invoice" would contradict it (R7M-001)
+  const gst = pricing?.invoice?.gst === true;
   const rupees = (p: PlanId, per: string) => {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
@@ -93,10 +96,10 @@ export function PlansPage() {
       await loadRazorpay();
       track("checkout started", { plan, period });
       const rz = new window.Razorpay({
-        // the payment window shows the name and the amount only, so the name carries the plan and the period (R6V-009)
+        // the payment window's name carries the plan and the period (R6V-009)
         key: d.key_id, subscription_id: d.subscription_id, name: `StratLab · ${planName(plan)}, ${period === "year" ? "yearly" : "monthly"}`,
         notes: { plan, period },
-        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")} incl. GST` : priceOf(plan, period).shown} / ${period}`,
+        description: `${plan === "pro" ? "Pro" : "Basic"} plan, ${d.currency === "INR" ? `₹${rupees(plan, period).toLocaleString("en-IN")}${gst ? " incl. GST" : ""}` : priceOf(plan, period).shown} / ${period}`,
         prefill: { email: d.email || "" }, theme: { color: "#1D1B17" },
         handler: async (resp: unknown) => {
           try { await api("/billing/verify", { method: "POST", body: resp }); await refreshMe(); notify(`You're on ${plan === "pro" ? "Pro" : "Basic"} now.`); }
@@ -111,14 +114,13 @@ export function PlansPage() {
   };
 
   const [switching, setSwitching] = useState<"basic" | "pro" | null>(null);
-  // every purchase is confirmed on this page first, with the plan, the period, the amount charged and the renewal, since
-  // the payment window itself shows only the amount (R6V-009)
+  // every purchase is confirmed on this page first, with the plan, the period, the amount charged and the renewal (R6V-009)
   const ask = (plan: "basic" | "pro") => setSwitching(plan);
   const given = !!me?.billing?.given_by_owner;
   const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
   /** What the card is charged, in words: "₹699 incl. 18% GST, every month". */
   const chargeWords = (p: "basic" | "pro") => {
-    const rs = `₹${rupees(p, period).toLocaleString("en-IN")} incl. 18% GST`;
+    const rs = rupeeCharge(rupees(p, period), gst);
     const shown = priceOf(p, period);
     return `${rs}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
   };
@@ -149,6 +151,7 @@ export function PlansPage() {
           )}
         </FormGrid>
       )}
+      {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
       {anyRupees && billing && <Notice>Paid in rupees for now: your card is charged the rupee price shown under each plan and your bank converts it, so the amount in {currency} can differ slightly.</Notice>}
       <div className="k-plans">
         {(["free", "basic", "pro"] as const).map((p) => {
@@ -162,9 +165,9 @@ export function PlansPage() {
               </div>
               <div className="k-stack tight">
                 <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
-                {price.inr && <span className="k-note">incl. GST</span>}
+                {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
-                {price.charged && <span className="k-note">{billing ? `Charged as ${price.charged} incl. GST / ${period}` : `${price.charged} a ${period} in India, incl. GST`}</span>}
+                {price.charged && <span className="k-note">{billing ? `Charged as ${price.charged}${gst ? " incl. GST" : ""} / ${period}` : `${price.charged} a ${period} in India${gst ? ", incl. GST" : ""}`}</span>}
               </div>
               <ul className="k-plan-list">
                 {FEATURES[p].map((f) => f.endsWith(":") ? <li key={f} className="head">{f}</li> : <li key={f}><span aria-hidden="true">✓</span>{f}</li>)}
@@ -174,7 +177,8 @@ export function PlansPage() {
                   : !billing ? <span className="lp-plan-note k-small k-muted">Opens soon</span>
                     // a plan the owner gave already includes everything below it: nothing to buy there (R6V-009)
                     : given && paid && RANK[p] <= RANK[paid as PlanId] ? <span className="k-small k-muted" data-testid="plan-included">Included in the {planName(paid as PlanId)} plan you were given</span>
-                    : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy} onClick={() => ask(p)}>
+                    : <button className={`btn ${p === "pro" ? "" : "outline"}`} disabled={!!busy || !!viewAs} onClick={() => ask(p)}
+                      title={viewAs ? viewingPlansNote(planName(viewAs)) : undefined} aria-describedby={viewAs ? "plans-viewas" : undefined}>
                       {busy === p ? "Opening checkout…" : paid === "pro" && p === "basic" ? "Switch to Basic" : `Upgrade to ${planName(p)}`}</button>}
             </Card>
           );
@@ -185,10 +189,10 @@ export function PlansPage() {
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}
       {billing ? (
-        <p className="k-small k-muted k-measure">Rupee prices include 18% GST, and every payment gets a GST invoice in Account. Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
+        <p className="k-small k-muted k-measure">{gst ? "Rupee prices include 18% GST, and every payment gets a GST invoice in Account." : "Every payment gets an invoice in Account."} Paid plans renew automatically each month or year until you cancel, which you can do any time from Account. By subscribing you agree to the <Link className="link" to="/terms">terms</Link> and the <Link className="link" to="/refunds">cancellation and refund policy</Link>. Payments are handled securely by our payment partner.</p>
       ) : (
         <p className="k-small k-muted k-measure">{finePrint(offer, { currency: row && currency !== "INR" ? currency : "INR", inRupees: row?.charged_in === "INR", inRupeesYear: row?.yearly_charged_in === "INR",
-          charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` } }).join(" ")}</p>
+          charged: { basic: `₹${rupees("basic", "month").toLocaleString("en-IN")}`, pro: `₹${rupees("pro", "month").toLocaleString("en-IN")}` }, gst }).join(" ")}</p>
       )}
       <p className="k-small k-muted k-measure">StratLab is a research and paper trading tool. It doesn't place real orders or give investment advice, and past results don't predict future returns.</p>
       <LegalLinks />
@@ -198,7 +202,7 @@ export function PlansPage() {
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically
-            each {period} until you cancel, any time from Account. The payment window that opens next shows the amount only.
+            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period)}
             {paid !== "free" && me && !given ? " Your current subscription stops billing once the new one is active." : ""}
           </span>
         </ConfirmDialog>

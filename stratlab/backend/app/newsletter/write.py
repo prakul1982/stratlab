@@ -301,12 +301,17 @@ TYPE_LABEL = {"market": "Market brief", "my_stocks": "My stocks"}
 DOT = " · "
 
 
-def as_of(iso: str | None) -> str | None:
-    """When an issue's numbers were gathered, in words: "3 Oct 2026, 16:15 IST"."""
+def as_of(iso: str | None, region: str | None = None) -> str | None:
+    """When an issue's numbers were gathered, in words: "3 Oct 2026, 16:15 IST". A US brief is in New York time, as its page
+    writes it ("8 Oct 2026, 16:34 ET"), not India's (R7M-002: "9 Oct 2026, 02:04 IST" in the email beside "16:34 ET" on the page)."""
     try:
         d = datetime.fromisoformat(str(iso))
     except (TypeError, ValueError):
         return None
+    if region == "US" and d.tzinfo is not None:
+        from zoneinfo import ZoneInfo
+        d = d.astimezone(ZoneInfo("America/New_York"))
+        return f"{d.day} {d:%b %Y}, {d:%H:%M} ET"
     zone = "IST" if d.utcoffset() == timedelta(hours=5, minutes=30) else "UTC" if d.utcoffset() == timedelta(0) else ""
     return f"{d.day} {d:%b %Y}, {d:%H:%M}" + (f" {zone}" if zone else "")
 
@@ -382,7 +387,7 @@ def render(issue: dict) -> tuple[str, str]:
         if tiles and sec["title"] == "Indices":
             continue                                         # already shown as tiles
         blocks.append(kit.card(sec["title"], [_row(it) for it in sec["items"]]))
-    when = as_of(issue.get("at"))
+    when = as_of(issue.get("at"), region)
     if when:
         blocks.append(kit.note(f"Prices and numbers as of {when}"))
     name = {"market_in": "India briefs", "market_us": "US briefs", "my_stocks": "My stocks"}[unsubscribe_type({**issue, "kind": kind, "region": region})]

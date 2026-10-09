@@ -155,9 +155,10 @@ class KiteService:
         the other login's token in turn."""
         if not self.ready():
             return
-        self.invalid_reason = (f"Zerodha cancelled today's Kite token at {datetime.now(IST):%H:%M}. This usually means the "
-                               "same Zerodha account logged in to this Kite Connect app somewhere else (another bot or "
-                               "script using the same API key). Log in again from the admin page.")
+        self.invalid_reason = (f"Zerodha cancelled today's Kite token at {datetime.now(IST):%H:%M} IST. Zerodha does that when the "
+                               "same account logs in to this Kite Connect app somewhere else (another bot or script using the "
+                               "same API key), and when its own daily reset ends the login. To log in again, open Admin → Data "
+                               "and jobs and press \"Run the automatic login now\" (or log in by hand there).")
         print("Kite token rejected:", e)
         if self.on_invalid:
             try:

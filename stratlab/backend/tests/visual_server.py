@@ -49,6 +49,11 @@ def build():
         w["client"].post("/tax/import", headers=world.headers("admin-token"),
                          json={"filename": name, "data": base64.b64encode(trades.read_bytes()).decode()})
     invite_rewards()
+    # a made-up GST-registered seller, so the Plans page speaks of GST as it does once the owner has filled the real details in
+    # (R7M-001: with none, it says nothing of GST; e2e/review-r7m.spec.ts shows that state by answering /pricing without it)
+    from app import invoices
+    # (only the GSTIN: a name and address would also print on the Contact page, which e2e/review-r5.spec.ts checks stays bare)
+    invoices.save_seller({"gstin": "27AAAAA0000A1Z5", "prefix": "SL"})
     main.corp_job.refresh("IN")             # the corporate-actions calendar, as the morning job would have built it
     from app import surveillance
     surveillance.refresh(main.filings_feed)  # the exchange's surveillance lists, as the morning run would have read them

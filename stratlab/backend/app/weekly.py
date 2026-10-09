@@ -41,7 +41,8 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
              "Users",
              f"- {st['new']} new this week, {st['users']} in all",
              *plan_lines,
-             f"- {_n(st['experiments'], 'experiment')} run, {_n(st['ai'], 'AI build')}", ""]
+             # counted from the same seven days as the line above (usage events since `since`), never the month's (R7M-006)
+             f"- {_n(st['experiments'], 'experiment')} run, {_n(st['ai'], 'AI build')} in the last 7 days", ""]
 
     checks = facts["checks"]
     failed_runs = [c for c in checks if c.get("fail")]

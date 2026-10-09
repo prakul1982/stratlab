@@ -249,6 +249,14 @@ def ask_provider(name: str, system: str, text: str, max_tokens: int = 1500, tran
 
 
 # ---------- the Admin page ----------
+def model_name(st, model: str) -> str:
+    """The name Admin shows for a model: its own id, or for an id Cloudflare lists as a UUID the usable name it was read
+    with (R7M-008); a UUID with no name known is shortened, never shown whole."""
+    if not R._UUID.match(model):
+        return model
+    return (st.aliases or {}).get(model) or f"unnamed model ({model[:8]}…)"
+
+
 QUOTA_TEXT = "Free quota used up for now; it resets on its own."
 TEST_SYSTEM = 'Reply with ONLY this JSON object and nothing else: {"ok": true}'
 
@@ -300,11 +308,40 @@ def health() -> list[dict]:
                     "research_rank": r.index(name) + 1 if name in r else None,
                     "model": st.model or (R.in_use(name)[:1] or [None])[0] if configured(name) else None,
                     "last_ok": st.last_ok, "last_error": st.last_error, "quota": st.quota,
-                    "answering": answering, "state": view["state"] if view else "off",
+                    "answering": answering, "result": view["result"] if view else None, "state": view["state"] if view else "off",
                     "state_text": view["state_text"] if view else None,
                     "paused_models": view["paused_models"] if view else 0,
                     "quota_used": bool(view and view["quota"]["limited"])})
     return out
+
+
+def last_result(name: str, st, is_on: bool, cooling: bool, all_closed: bool, models: list, now: float) -> str | None:
+    """What the provider's last real result says (R7M-008: "11 of 12 answering" over providers that were only configured
+    or never tried): "working" (it answered and nothing newer failed, or only a short rate limit or one unavailable
+    model did), "quota" (free credit used up, or the account needs a card), "paused", "failed" (a rejected key, empty
+    replies, an error after its last answer), "untested" (a key, and nothing tried yet). None without a key."""
+    if not is_on:
+        return None
+    stats = [R.stats(name, m["id"]) for m in models]
+    good = max([st.last_ok or 0.0] + [s.last_ok_at or 0.0 for s in stats] + [s.probe_at or 0.0 for s in stats if s.probe_ok > 0])
+    bad = st.last_error_at or 0.0
+    newer_bad = bad > good                      # the last thing that happened was a failure
+    wall = newer_bad and (st.last_error_kind == "credit" or "payment method" in (st.last_error or ""))
+    if wall or (st.quota and (cooling or all_closed)):
+        return "quota"
+    if st.config_error and cooling:
+        return "failed"
+    if cooling or all_closed:
+        return "paused"
+    if not good and not bad:
+        return "untested"
+    if not newer_bad:
+        return "working"
+    if good and st.last_error_kind == "rate":
+        return "working"                       # a short rate limit: it answers again in a moment
+    if good and st.last_error_kind in ("model", "forbidden") and any(m["in_use"] and not m["open_until"] for m in models):
+        return "working"                       # one listed model isn't served to this key; the ones in use answer
+    return "failed"
 
 
 def _provider_view(name: str, now: float) -> dict:
@@ -319,7 +356,7 @@ def _provider_view(name: str, now: float) -> dict:
         s = R.stats(name, m)
         ok, tries = s.counts()
         med = s.median_ms()
-        models.append({"id": m, "in_use": m in use, "rank": use.index(m) + 1 if m in use else None,
+        models.append({"id": m, "name": model_name(st, m), "in_use": m in use, "rank": use.index(m) + 1 if m in use else None,
                        "success": round(ok * 100 / tries) if tries else None, "tries": tries,
                        "median_ms": round(med) if med is not None else None,
                        "probe": {"ok": s.probe_ok, "tries": s.probe_tries, "at": s.probe_at or None, "error": s.probe_error},
@@ -328,6 +365,10 @@ def _provider_view(name: str, now: float) -> dict:
                        "blocked": R.blocked(name, m), "pinned": m == (pin_admin or pin_env), "ctx": s.ctx, "thinks": thinks(m)})
     cooling = st.cooldown_until > now
     all_closed = bool(use) and all(R.ready(name, m, now) > 0 for m in use)
+    # a stored Cloudflare id that a model of the same name already covers is the same model listed twice
+    names = {m["name"] for m in models if m["name"] == m["id"]}
+    models = [m for m in models if m["name"] == m["id"] or m["name"] not in names]
+    result = last_result(name, st, is_on, cooling, all_closed, models, now)
     if not is_on:
         state, text = "off", "No key yet."
     elif st.config_error and cooling:
@@ -361,7 +402,7 @@ def _provider_view(name: str, now: float) -> dict:
     reset_at = st.quota_reset if (st.quota_reset or 0) > now else (st.cooldown_until if cooling else None)
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
-            "state": state, "state_text": text, "answering": answering, "paused_models": paused_models,
+            "state": state, "state_text": text, "answering": answering, "result": result, "paused_models": paused_models,
             "quota": {"limited": bool(st.quota and (cooling or all_closed)), "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
                       "remaining_at": st.remaining.get("at")},
