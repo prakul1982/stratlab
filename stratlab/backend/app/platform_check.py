@@ -32,9 +32,33 @@ def market_today(market: str) -> date:
     return datetime.now(ZoneInfo((BY_ID.get(market) or {}).get("tz") or "UTC")).date()
 
 
-def check_market(registry, market: str, today: date | None = None) -> dict:
+# How long after a market's close its day's candle is expected: a broker's feed has it within minutes, the global
+# source's daily candles can take a few hours.
+CANDLE_GRACE = {"IN": timedelta(minutes=45), "MCX": timedelta(minutes=45), "CDS": timedelta(minutes=45)}
+CANDLE_GRACE_DEFAULT = timedelta(hours=3)
+ZONES = {"Asia/Kolkata": "IST", "America/New_York": "ET", "Europe/London": "UK time", "Europe/Berlin": "CET", "Asia/Tokyo": "JST"}
+
+
+def last_completed_session(market: str, now: datetime | None = None) -> date:
+    """The latest trading day whose candle should exist by `now`: today once the market's close (and a grace for the
+    feed) has passed, else the last session before today. A market that doesn't close (crypto, currencies) has no
+    close to wait for, so for it this is the last session before today."""
+    meta = BY_ID.get(market) or {}
+    tz = ZoneInfo(meta.get("tz") or "UTC")
+    local = (now or datetime.now(tz)).astimezone(tz)
+    close = (meta.get("hours") or {}).get("close")
+    if close and calendar.is_trading_day(market, local.date()):
+        h, m = (int(x) for x in close.split(":"))
+        if local >= local.replace(hour=h, minute=m, second=0, microsecond=0) + CANDLE_GRACE.get(market, CANDLE_GRACE_DEFAULT):
+            return local.date()
+    return last_session(market, local.date())
+
+
+def check_market(registry, market: str, today: date | None = None, now: datetime | None = None) -> dict:
     """Daily prices for the market's first ready-made instrument: present, sane, and no older than the last session
-    (by the market's own date unless `today` is given)."""
+    (by the market's own date unless `today` is given). A warning when the latest candle is the session before the
+    last one to have closed: the market closed (CDS at 17:00 IST) and its candle isn't here yet (R9R-005)."""
+    explicit = today is not None
     today = today or market_today(market)
     prov = registry.provider(market)
     if prov is None:
@@ -55,6 +79,14 @@ def check_market(registry, market: str, today: date | None = None) -> dict:
     if last < expected:
         return _result(f"Prices: {market}", "Prices", "fail",
                        f"{inst['symbol']}: last daily candle {last}, but {expected} was a trading day." + _why_stale(prov, inst))
+    done = expected if explicit else last_completed_session(market, now)
+    if last < done:
+        meta = BY_ID.get(market) or {}
+        close = (meta.get("hours") or {}).get("close")
+        at = f" at {close} {ZONES.get(meta.get('tz'), meta.get('tz') or 'UTC')}" if close else ""
+        return _result(f"Prices: {market}", "Prices", "warn",
+                       f"{inst['symbol']}: the latest daily candle is {last}, but the {done} session closed{at} and its candle should be "
+                       f"here by now (last close {bars[-1]['c']:,.2f}).{_why_stale(prov, inst)}")
     return _result(f"Prices: {market}", "Prices", "pass", f"{inst['symbol']}: {len(bars)} daily candles, latest {last}, close {bars[-1]['c']:,.2f}.")
 
 
@@ -229,10 +261,10 @@ def check_calendar(today: date) -> dict:
     india = next((r for r in rows if r["market"] == "IN"), None)
     if short:
         detail = "Fewer than 60 days of holidays known: " + ", ".join(
-            f"{r['name']} ({r['days_left']} days)" if r["days_left"] is not None else f"{r['name']} (none loaded)" for r in short) + "."
+            f"{r['name']} ({r['days_left']} day{'' if r['days_left'] == 1 else 's'})" if r["days_left"] is not None else f"{r['name']} (none loaded)" for r in short) + "."
     else:
         detail = (f"Holidays known at least 60 days ahead in all {len(rows)} markets"
-                  + (f"; India's until {india['known_until']} ({india['days_left']} days)." if india and india["known_until"] else "."))
+                  + (f"; India's until {india['known_until']} ({india['days_left']} day{'' if india['days_left'] == 1 else 's'})." if india and india["known_until"] else "."))
     return _result("Holiday calendar", "Server", "warn" if short else "pass", detail)
 
 

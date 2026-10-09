@@ -238,7 +238,7 @@ def period_name(days: int) -> str:
     if days >= 28:
         m = round(days / 30.4)
         return f"{m} month{'' if m == 1 else 's'}"
-    return f"{days} days"
+    return f"{days} day{'' if days == 1 else 's'}"
 
 
 TF_NAMES = {"1d": "daily", "1h": "1-hour", "15m": "15-minute", "5m": "5-minute"}

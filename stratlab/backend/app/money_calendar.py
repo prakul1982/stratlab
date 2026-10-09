@@ -266,7 +266,7 @@ def _action_events(a: dict, item: dict | None, frm: date, to: date, qty: float |
     held = f" You hold this stock.{shares}" if item else " On your watchlist."
     if ex and frm <= ex <= to:
         out.append(_ev(ex, f"{sym}: ex-date, {a.get('short') or a.get('label')}", "holdings", f"ex_{a.get('kind')}",
-                       f"{what}. Shares bought from today don't get it.{held}", amount=total, symbol=sym, ref=a["id"], url=url))
+                       f"{what}. Shares bought on or after {ex.day} {ex.strftime('%b')} don't get it.{held}", amount=total, symbol=sym, ref=a["id"], url=url))
     if rec and rec != ex and frm <= rec <= to:
         out.append(_ev(rec, f"{sym}: record date, {a.get('short') or a.get('label')}", "holdings", f"record_{a.get('kind')}",
                        f"{what}.{held}", amount=total, symbol=sym, ref=a["id"], url=url))

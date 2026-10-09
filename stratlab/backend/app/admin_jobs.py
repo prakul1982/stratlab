@@ -174,9 +174,13 @@ def rows() -> list[dict]:
         st = _plain(m.positioning_job, "positioning")
         from . import positioning as P
         at, why = _ran(st, "last_run", data=lambda: P.state().get("last_run"))
-        return _row("positioning", "Positioning", "Trading days from 6:40 PM IST until the day's files are in", at,
-                    st.get("last_error"), [str(st.get("last_result") or "")] + why, [{"label": "Run now", "path": "/admin/positioning/run"}],
-                    running=m.positioning_runner.running)
+        line, waiting = P.run_sentence(st.get("last_result"))
+        row = _row("positioning", "Positioning", "Trading days from 6:40 PM IST until the day's files are in", at,
+                   st.get("last_error"), [line] + why, [{"label": "Run now", "path": "/admin/positioning/run"}],
+                   running=m.positioning_runner.running)
+        if waiting and row["state"] == "ok":          # a file isn't out yet: Check until it arrives
+            row["state"] = "warn"
+        return row
     add("Positioning", positioning)
 
     def etf():

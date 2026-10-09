@@ -4,6 +4,7 @@ import time
 from fastapi import Header, HTTPException
 
 from . import db
+from .flight import Flights
 from .plans import access_plan, effective_plan, view_as_of
 
 _cache: dict[str, tuple[float, str, str, bool, str | None]] = {}     # token -> (until, id, email, verified, sign-in method)
@@ -25,6 +26,43 @@ def _unreachable(e: Exception) -> bool:
     return isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError))
 
 
+_flights = Flights()
+
+
+def _unavailable() -> HTTPException:
+    return HTTPException(503, {"code": "auth_unavailable", "message": "Sign-in isn't answering right now. "
+                                                                      "You're still signed in; try again in a minute."})
+
+
+def _verify(token: str, now: float) -> tuple[str, str | None, bool, str | None]:
+    """Ask the sign-in service about a token: (user id, email, proven by Google, how they signed in), kept for a minute.
+    A token it refuses is remembered as refused for a minute."""
+    try:
+        user = db.sb().auth.get_user(token).user
+    except Exception as e:
+        if _unreachable(e):                     # the sign-in service is down: don't tell people they're signed out
+            raise _unavailable() from None
+        user = None
+    if not user:
+        with _lock:
+            if len(_rejected) > 20000:
+                _rejected.clear()
+            _rejected[token] = now + 60
+        raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
+    uid, email = user.id, user.email
+    # only an address proven by Google sign-in is trusted for admin access: Supabase's own email sign-up can be
+    # called by anyone with the public key, and whether it confirms addresses is a dashboard setting
+    meta = getattr(user, "app_metadata", None) or {}
+    providers = set(meta.get("providers") or []) | {meta.get("provider")}
+    verified = bool(getattr(user, "email_confirmed_at", None)) and "google" in providers
+    method = meta.get("provider") or next((p for p in meta.get("providers") or [] if p), None)   # how they signed in, for Account
+    with _lock:
+        if len(_cache) > 5000:
+            _cache.clear()
+        _cache[token] = (now + 60, uid, email, verified, method)
+    return uid, email, verified, method
+
+
 def current_profile(authorization: str | None = Header(None), x_view_as: str | None = Header(None)) -> dict:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, {"code": "login_required", "message": "Sign in to continue."})
@@ -38,30 +76,23 @@ def current_profile(authorization: str | None = Header(None), x_view_as: str | N
     if hit and hit[0] > now:
         uid, email, verified, method = hit[1], hit[2], hit[3], hit[4]
     else:
-        try:
-            user = db.sb().auth.get_user(token).user
-        except Exception as e:
-            if _unreachable(e):                     # the sign-in service is down: don't tell people they're signed out
-                raise HTTPException(503, {"code": "auth_unavailable", "message": "Sign-in isn't answering right now. "
-                                          "You're still signed in; try again in a minute."}) from None
-            user = None
-        if not user:
+        # a page opens with a dozen calls at once, each carrying the same token: one of them asks the sign-in service and
+        # the others wait for its answer, rather than every one asking (R9R-010: 17 calls, each with its own check)
+        with _flights.hold(token) as flight:
+            if flight.get("down"):              # the check these calls were waiting on found the service unreachable: no wait of their own
+                raise _unavailable()
             with _lock:
-                if len(_rejected) > 20000:
-                    _rejected.clear()
-                _rejected[token] = now + 60
-            raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
-        uid, email = user.id, user.email
-        # only an address proven by Google sign-in is trusted for admin access: Supabase's own email sign-up can be
-        # called by anyone with the public key, and whether it confirms addresses is a dashboard setting
-        meta = getattr(user, "app_metadata", None) or {}
-        providers = set(meta.get("providers") or []) | {meta.get("provider")}
-        verified = bool(getattr(user, "email_confirmed_at", None)) and "google" in providers
-        method = meta.get("provider") or next((p for p in meta.get("providers") or [] if p), None)   # how they signed in, for Account
-        with _lock:
-            if len(_cache) > 5000:
-                _cache.clear()
-            _cache[token] = (now + 60, uid, email, verified, method)
+                hit, bad = _cache.get(token), _rejected.get(token)
+            if bad and bad > time.time():
+                raise HTTPException(401, {"code": "login_required", "message": "Your session expired. Sign in again."})
+            if hit and hit[0] > time.time():
+                uid, email, verified, method = hit[1], hit[2], hit[3], hit[4]
+            else:
+                try:
+                    uid, email, verified, method = _verify(token, now)
+                except HTTPException as e:
+                    flight["down"] = e.status_code == 503
+                    raise
     profile = db.cached_profile(uid, email)
     profile["_paid_plan"] = effective_plan(profile)     # what they pay for: billing reads this, never the "View as" plan
     # the profile keeps the address from sign-up; trust it only while it's still the one Google just proved

@@ -37,7 +37,7 @@ type View = {
   schemes: Scheme[]; allocation: { broad: string; value: number; pct: number | null; schemes: number; subs: { sub: string; value: number; pct: number | null }[] }[];
   total: { value: number; invested: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; nav_dates: [string, string] | null };
   gains: Gains | null; gains_allowed: boolean; gains_plan: string; limit: number | null; files: { name: string; kind: string; txns: number; at: string }[];
-  updated_at: string | null; txns: number; kinds: Record<Kind, string>; nav_read_at: string | null; assumptions: string[]; disclaimer: string; as_of: string;
+  updated_at: string | null; txns: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
 type Problem = { line?: number; text: string; reason: string };
 type ImportReply = { kind: "cas" | "csv"; added: number; duplicates: number; over_limit: string[]; schemes: number; problems: Problem[]; limit: number | null; upgrade: string | null; view: View };
@@ -171,7 +171,7 @@ export function MutualFundsPage() {
     <div className="k-page">
       <PageHeader eyebrow="Money · What you own" title="Your mutual funds, in one place"
         lede="Upload your Consolidated Account Statement to see every scheme's value at the latest NAV, the gain, XIRR and capital gains for each financial year."
-        asOf={t?.nav_dates?.[1] ?? view?.nav_read_at} asOfLabel="NAVs up to"
+        asOf={t?.held ? (t.nav_dates?.[1] ?? view?.nav_date) : undefined} asOfLabel="NAVs up to"
         info="Your value, what you put in, the gain, XIRR, your mix by category, and capital gains for each financial year. Only you can see your funds, and you can delete them at any time." infoLabel="What this page shows" />
       <Notice label="Facts and arithmetic">{view?.disclaimer ?? "Facts and arithmetic from your own statement, valued at the latest published NAV. Not investment or tax advice."}</Notice>
 

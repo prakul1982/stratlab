@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import alerts, db
+from .http_retry import real_transport
 
 KEY = "ruleswatch:state"
 DAY_KEY = "ruleswatch:day"
@@ -237,7 +238,7 @@ class Fetcher:
 
     def _client(self) -> httpx.Client:
         if self.http is None:
-            self.http = httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": SEC_UA})
+            self.http = httpx.Client(timeout=TIMEOUT, follow_redirects=True, transport=real_transport(), headers={"User-Agent": SEC_UA})
         return self.http
 
     def get(self, src: dict, today: date):

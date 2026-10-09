@@ -18,7 +18,9 @@ test("Red flags and the breadth card open on the reader's own market (R7O-003, R
   assert.equal(homeRegion("America/New_York"), "US");
   assert.match(read("src/pages/ResearchScans.tsx"), /useRegion\(homeRegion\(\)\)/);
   const card = read("src/components/BreadthCard.tsx");
-  assert.match(card, /const region = homeRegion\(\)/);
+  // changed on purpose (R9R-008): the card follows the market tab picked on the Invest home, which itself starts on the reader's own market
+  assert.match(card, /const region = picked \?\? homeRegion\(\)/);
+  assert.match(read("src/pages/SpaceHomes.tsx"), /useState<Region>\(homeRegion\)/);
   assert.doesNotMatch(card, /savedRegion/);                       // an old S&P 500 pick or a US company look-up doesn't move it
   // an old pick stored for the US never opens India's card on the S&P 500
   const store = new Map([["stratlab.breadth", JSON.stringify({ group: "sp500", range: "1y" })]]);
