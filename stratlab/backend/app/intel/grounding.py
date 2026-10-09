@@ -344,7 +344,44 @@ def template_tone(indices: list[dict]) -> str:
     return " ".join(parts)
 
 
-def ground_pulse(out: dict, indices: list[dict], headlines: list[dict]) -> dict:
+# a claim about how many sectors moved, or that all of them did (R8B-004: "as all sectoral indices turned green", repeated
+# from a headline, while NIFTY OIL & GAS closed 0.09% lower): kept only when StratLab's own sector count bears it out
+_ALL_SECTORS = re.compile(r"\b(all|every|each|entire)\b[^.;]{0,25}\b(sector\w*|sectoral)\b|\bacross (all |the )?(sectors|the board)\b", re.I)
+_COUNT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16}
+_N = r"(\d{1,2}|" + "|".join(_COUNT_WORDS) + r")"
+_N_SECTORS = re.compile(rf"\b{_N}\b(?:\s+(?:of|out of)\s+(?:the\s+)?{_N}\b)?\s+(?:[a-z&]+\s+){{0,2}}?(?:sector\w*|sectoral)", re.I)
+_EXCEPT = re.compile(r"\b(except|barring|but|other than|save for|apart from|bar)\b", re.I)
+_GREEN = re.compile(r"\b(green|gain\w*|rose|risen|rising|higher|up|advanc\w*|positive|rall\w*|climb\w*)\b", re.I)
+_RED = re.compile(r"\b(red|los[st]\w*|fell|fallen|falling|lower|down|declin\w*|negative|slipp?\w*|slid)\b", re.I)
+
+
+def _count(w: str | None) -> int | None:
+    if not w:
+        return None
+    return int(w) if w.isdigit() else _COUNT_WORDS.get(w.lower())
+
+
+def sector_claims_ok(s: str, sectors: dict | None) -> bool:
+    """A sentence that counts the sectors that rose or fell, or says all of them did, agrees with StratLab's own count
+    (hub.sector_moves). Without that count no such claim is kept."""
+    every, counted = _ALL_SECTORS.search(s), _N_SECTORS.search(s)
+    if not every and not counted:
+        return True
+    if not sectors or not sectors.get("of"):
+        return False
+    up, down, total = int(sectors.get("up") or 0), int(sectors.get("down") or 0), int(sectors["of"])
+    green, red = bool(_GREEN.search(s)), bool(_RED.search(s))
+    if green == red:
+        return False                                    # no clear direction: the claim can't be checked
+    same, other = (up, total - up) if green else (down, total - down)
+    if every and not counted:
+        return other >= 1 if _EXCEPT.search(s) else same == total
+    n, of = _count(counted.group(1)), _count(counted.group(2))
+    return (of is None or of == total) and n == same
+
+
+def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors: dict | None = None) -> dict:
     """The market read with only what the index numbers and the headlines support: a sentence with a number not in
     them, a 52-week claim the levels contradict, a move the wrong way, a central bank, flow or sector no headline
     names, or any advice or outlook is dropped; a company is listed only when a headline names it (R5O-018)."""
@@ -353,7 +390,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict]) -> dict:
     pool = fact_numbers({"i": facts, "h": [h.get("headline") for h in headlines]})
 
     def claim(s):
-        return range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support)
+        return range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
     res = dict(out)
     res["tone"] = keep_sentences(out.get("tone"), pool, claim) or template_tone(indices)
     named = lambda x: bool(x) and str(x).lower() in support          # noqa: E731
@@ -474,7 +511,7 @@ def rule_words(text: str, symbol: str) -> str:
 
 # ---------- the company read against the page's own table (R6O-001) ----------
 _MONTHS = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
-_ISO = re.compile(r"\b(20\d\d)-(\d\d)-(\d\d)\b")
+_ISO = re.compile(r"\b(20\d\d)[-\u2010\u2011\u2012\u2013](\d\d)[-\u2010\u2011\u2012\u2013](\d\d)\b")   # any hyphen a model writes (R8B-003)
 _DMY = re.compile(r"\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(20\d\d)\b", re.I)
 _MDY = re.compile(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d\d)\b", re.I)
 _QLABEL = re.compile(r"\bQ([1-4])\s*(?:of\s+)?(?:FY|fiscal(?:\s+year)?)\s*'?(\d{4}|\d{2})\b", re.I)
@@ -973,10 +1010,78 @@ PREDICTS = re.compile(r"\bsuggest\w*\b|\bsignal(s|ed|led|ing|ling)?\s+(of|that|a
 LENDER_WORDS = re.compile(r"\bebitda\b|\boperating (profit )?margin\b|\bdebt[- ]to[- ]equity\b|\bd/e\b|\bcapex\b", re.I)
 
 
+# a direction word must say what its numbers do (R8B-003: AAPL "Net profit declined from FY24 (93.7 B) to FY25 (112.0 B)",
+# a 19.5% rise)
+_UP_WORDS = (r"rose|risen|rises|rising|increased|increases|increasing|grew|grown|grows|growing|climbed|climbs|climbing|"
+             r"jumped|jumps|improved|improves|expanded|expands|gained|gains|higher|up|surged|soared|advanced")
+_DOWN_WORDS = (r"fell|fallen|falls|falling|declined|declines|declining|dropped|drops|dropping|decreased|decreases|decreasing|"
+               r"shrank|shrunk|shrinks|slipped|slips|contracted|contracts|lower|down|dipped|dips|slid|slumped|eased")
+_MOVE_WORD = re.compile(rf"\b({_UP_WORDS}|{_DOWN_WORDS})\b", re.I)
+_UP_RE = re.compile(rf"^(?:{_UP_WORDS})$", re.I)
+_FROM_TO = re.compile(rf"\b(?P<w>{_UP_WORDS}|{_DOWN_WORDS})\b[^.;]{{0,60}}?\bfrom\b(?P<a>[^;]{{1,50}}?)\bto\b(?P<b>[^;]{{1,60}})", re.I)
+_LABELS = re.compile(r"\b(?:FY|CY|Q[1-4]\s*FY|H[12]\s*FY)\s*'?\d{2,4}\b|\bQ[1-4]\b|\b(?:19|20)\d\d\b|\bfiscal(?:\s+year)?\b", re.I)
+_AMOUNT = re.compile(r"(?<![\w.])([-−]?\d[\d,]*(?:\.\d+)?)\s*(lakh\s+crore|crore|cr\b|lakh|trillion|tn\b|t\b|billion|bn\b|b\b|"
+                     r"million|mn\b|m\b|k\b)?", re.I)
+_SCALE = {"lakh crore": 1e12, "crore": 1e7, "cr": 1e7, "lakh": 1e5, "trillion": 1e12, "tn": 1e12, "t": 1e12, "billion": 1e9,
+          "bn": 1e9, "b": 1e9, "million": 1e6, "mn": 1e6, "m": 1e6, "k": 1e3}
+
+
+def _amount(seg: str) -> tuple[float, str] | None:
+    m = _AMOUNT.search(_LABELS.sub(" ", seg))
+    if not m:
+        return None
+    try:
+        v = float(m.group(1).replace(",", "").replace("−", "-"))
+    except ValueError:
+        return None
+    return v, re.sub(r"\s+", " ", (m.group(2) or "").lower())
+
+
+def moves_agree(s: str) -> bool:
+    """False when a sentence says a figure rose (or fell) "from" one amount "to" another that moved the other way."""
+    for m in _FROM_TO.finditer(s or ""):
+        a, b = _amount(m.group("a")), _amount(m.group("b"))
+        if not a or not b:
+            continue
+        ua, ub = a[1] or b[1], b[1] or a[1]
+        va, vb = a[0] * _SCALE.get(ua, 1.0), b[0] * _SCALE.get(ub, 1.0)
+        if va == vb or va < 0 or vb < 0:            # a loss that "rose" grows more negative: left alone
+            continue
+        if bool(_UP_RE.match(m.group("w"))) != (vb > va):
+            return False
+    return True
+
+
+def _fy_years(s: str) -> list[int]:
+    out = []
+    for m in _FYEAR.finditer(s or ""):
+        y = int(m.group(1))
+        out.append(y + 2000 if y < 100 else y)
+    return out
+
+
+def newest_move_year(texts) -> int | None:
+    """The newest fiscal year that any sentence about a figure moving names, across a read."""
+    years = [y for t in texts for s in _SENT.split(str(t or "")) if _MOVE_WORD.search(s) and not _AHEAD.search(s)
+             for y in _fy_years(s)]
+    return max(years) if years else None
+
+
+def stale_move(s: str, newest: int | None) -> bool:
+    """A sentence about a figure moving between years older than the newest one the read reports (AAPL's risks listed
+    "Revenue fell from FY22 to FY23" beside FY25's figures): no longer the current picture."""
+    if newest is None or not _MOVE_WORD.search(s):
+        return False
+    years = _fy_years(s)
+    return bool(years) and max(years) < newest
+
+
 def plain_ok(s: str, lender: bool = False) -> bool:
     """A sentence any read may keep: no filler, no suggestion that a style of trading works, no comparison with a
-    figure the page doesn't show, and for a bank or lender no EBITDA or operating margin."""
-    return not (FILLER.search(s) or EFFECTIVE.search(s) or UNSOURCED.search(s) or (lender and LENDER_WORDS.search(s)))
+    figure the page doesn't show, for a bank or lender no EBITDA or operating margin, and no direction word that its
+    own numbers contradict."""
+    return not (FILLER.search(s) or EFFECTIVE.search(s) or UNSOURCED.search(s) or (lender and LENDER_WORDS.search(s))
+                or not moves_agree(s))
 
 
 def plain_sentences(text, lender: bool = False, region: str = "IN") -> str:
@@ -1086,12 +1191,15 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
 
     for k in ("summary", "valuation_note", "position"):
         out[k] = prose(read.get(k))
+    # a strength or a risk about a move between years older than the newest the read reports isn't current (R8B-003)
+    newest = newest_move_year([read.get(k) for k in ("summary", "position")] + list(read.get("bull") or []) + list(read.get("bear") or []))
     for k in ("bull", "bear", "watch"):
         items = []
         for i in read.get(k) or []:
             x = plain_sentences(str(i), lender, region)
             # a strength or a risk is never a reclassification of holders: left out (the page explains it)
-            x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes)))
+            x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes))
+                         and not (k != "watch" and stale_move(s, newest)))
             if x:
                 items.append(app_dates(x, today))
         out[k] = items

@@ -12,6 +12,8 @@ from ..data.calendar import is_trading_day
 
 IST = timezone(timedelta(hours=5, minutes=30))
 AROUND = 15                     # strikes each side of the money
+CLOSE_AFTER = timedelta(minutes=1)     # the chain "at the close" is read this long after the derivatives segment closes
+CLOSE_UNTIL = timedelta(minutes=30)    # ...and no later than this (a server down then has no closing read that day)
 
 
 def parse_targets(text: str) -> list[tuple[str, str]]:
@@ -29,6 +31,17 @@ def in_hours(now: datetime) -> bool:
     local = now.astimezone(IST)
     start, end = sessions.continuous("fo", local.date())
     return is_trading_day("IN", local.date()) and start <= local.time() <= end
+
+
+def close_window(now: datetime) -> bool:
+    """Whether it is time for the day's closing read: from a minute after the derivatives segment closes (15:41 since
+    3 Aug 2026), so the chain "at the close" holds the session's final open interest and volume (R8B-006: the last
+    recording, stamped 15:39, was read while F&O still traded to 15:40)."""
+    local = now.astimezone(IST)
+    if not is_trading_day("IN", local.date()):
+        return False
+    end = sessions.at(local.date(), sessions.fo_close(local.date()))
+    return end + CLOSE_AFTER <= local <= end + CLOSE_UNTIL
 
 
 def compact(chain: dict) -> list[list]:
@@ -71,9 +84,10 @@ class Recorder:
         now = now or datetime.now(timezone.utc)
         if self.targets:
             self.prune_old(now)
-        if not self.targets or not in_hours(now) or not self.data.ready():
-            return 0
         day = now.astimezone(IST).date().isoformat()
+        closing = self.close_due(now)
+        if not self.targets or not (in_hours(now) or closing) or not self.data.ready():
+            return 0
         if self.status["day"] != day:
             self.status.update(day=day, today=0)
         saved = 0
@@ -97,7 +111,13 @@ class Recorder:
         if saved:
             self.status["today"] += saved
             self.status["last_at"] = now.isoformat()
+            if closing:
+                self.status["close_day"] = day           # one closing read a day
         return saved
+
+    def close_due(self, now: datetime) -> bool:
+        """The day's closing read is due and hasn't been taken."""
+        return close_window(now) and self.status.get("close_day") != now.astimezone(IST).date().isoformat()
 
     def start(self):
         if not self.targets:
@@ -106,7 +126,7 @@ class Recorder:
         def loop():
             while True:
                 t = time.time()
-                if t >= self._next:
+                if t >= self._next or self.close_due(datetime.now(timezone.utc)):
                     self._next = t + self.every
                     try:
                         self.run_once()

@@ -66,7 +66,10 @@ test("R7T-004: before 09:15 IST the price is the pre-open's, never the last clos
 test("R7T-005: the PCR is one figure across the table, the chain panel and the history", async () => {
   const page = read("src/pages/PositioningPage.tsx");
   assert.doesNotMatch(page, /header: "Near the money"/);
-  assert.match(page, /header: "All strikes read"/);
+  // R8B-005 changed this on purpose: the "All strikes read" column repeated the near-money PCR on every row (the live
+  // read is the 31 strikes around the money), so the table now says how many strikes were read instead
+  assert.match(page, /header: "Strikes read"/);
+  assert.doesNotMatch(page, /header: "All strikes read"/);
   const { NEAR_STRIKES } = await import("../src/lib/positioning.ts");
   assert.equal(NEAR_STRIKES, 15);
 });

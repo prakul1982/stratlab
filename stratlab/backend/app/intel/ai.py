@@ -280,13 +280,16 @@ companies with the most direct link to the theme, in value-chain order, not rank
     }
 
 
-def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None) -> dict:
+def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,
+          sectors: dict | None = None) -> dict:
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
     system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
 Never say the market is at record highs unless an index's from_high_pct is above -0.5. Describe where an index sits in its
 52-week range only with from_low_pct and from_high_pct (above its low when from_low_pct is positive). Quote only numbers
 from the FACTS. Mention a central bank, economic data, money flows or a sector only when a headline given names it.
+Say how many sectors rose or fell, or that all of them did, only as the FACTS' "sectors" counts give it (and never without
+them), whatever a headline says.
 Return ONLY this JSON:
 {{"tone": "3-4 sentences on how the market moved today and what the headlines say is driving it, citing the live levels",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
@@ -298,6 +301,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     facts = {"today": ist_date().isoformat(), "indices": grounding.market_facts(indices),
              # after the close the levels are the day's close: the read says the market closed, never "opened" (R6O-025)
              **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
+             # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)
+             **({"sectors": {k: sectors[k] for k in ("up", "down", "unchanged", "of")}} if sectors else {}),
              "headlines": [f"[{(h.get('at') or '')[:10]}] {h['headline']}" for h in headlines[:14]]}
     r = _ask(system, facts, ai, 2500)
     if not isinstance(r, dict) or not str(r.get("tone") or "").strip():     # never cache a read with nothing in it
@@ -311,7 +316,7 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
-    out = grounding.ground_pulse(read, indices, headlines)
+    out = grounding.ground_pulse(read, indices, headlines, sectors)
     out = grounding.closed_words(out) if closed else out
     tidy = lambda t: grounding.tidy_numbers(t, region)          # noqa: E731  (numbers the page's way, R7O-001)
     return {**out, "tone": tidy(out.get("tone")),

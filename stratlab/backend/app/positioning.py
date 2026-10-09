@@ -978,7 +978,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
             continue
         p, w = pcr(got["chain"]), pcr(near(got["chain"], got.get("spot")))
         out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": w["oi"], "pcr_vol": w["vol"],
-                    "pcr_near": w["oi"], "pcr_all": p["oi"], "near_strikes": NEAR, "spot": got.get("spot"),
+                    "pcr_near": w["oi"], "pcr_all": p["oi"], "strikes_read": len(got["chain"]), "near_strikes": NEAR, "spot": got.get("spot"),
                     "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
     return out
 

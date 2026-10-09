@@ -35,11 +35,16 @@ def _safe(fn, default=None):
         return default
 
 
-def closed(region: str, day: date) -> bool:
+def closed(region: str, day: date, now: datetime | None = None) -> bool:
     """Whether `day`'s session is over in that market. Part of every cache key, so facts gathered during the day (an
     admin preview) are never reused for the issue after the close."""
     tz, at = CLOSE[region]
-    local = datetime.now(ZoneInfo(tz))
+    local = (now or datetime.now(ZoneInfo(tz))).astimezone(ZoneInfo(tz))
+    if region == "IN":
+        # India's day is over once its closing auction has matched and derivatives have stopped trading (15:40 since
+        # 3 Aug 2026): facts read between 15:30 and then held the stocks' pre-auction prices (R8B-001)
+        from ..data import sessions as S
+        at = max(at, S.fo_close(day), S.close_known("cas", day))
     return local.date() > day or (local.date() == day and local.time() >= at)
 
 

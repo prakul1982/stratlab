@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..models import OptionStrategy
+from .. import risk
 from .data import OptionsData, freeze
 from .engine import VIX_KEY, OptionsEngine, next_entry
 from . import strikes as SR
@@ -31,6 +32,7 @@ class OptionSession:
         self.engine = OptionsEngine(s, state=state or None, margin_fn=data.margin, freeze_default=freeze(s.underlying),
                                     settle_fn=(lambda e: settle(s.exchange, s.underlying, e)) if settle else None)
         self.equity_curve: list[dict] = state.get("equity_curve", [])
+        self.day_equity: dict = state.get("day_equity") or {}      # each day's closing equity, beyond the curve (R8B-002)
         self.lock = threading.Lock()
         self.dirty = False
         self.next_poll = 0.0
@@ -114,6 +116,7 @@ class OptionSession:
     def state(self) -> dict:
         d = self.engine.dump()
         d["equity_curve"] = self.equity_curve
+        d["day_equity"] = self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
         if self.signal:
             d["signal"] = self.signal.dump()
         return d
@@ -129,6 +132,7 @@ class OptionSession:
                 "lot": self.contracts.lot if self.contracts else None, "note": e.note,
                 "legs": e.legs_view(q), "position": _position(e, q),
                 "events": e.events[-200:], "trades": e.trades[-100:], "equity_curve": self.equity_curve,
+                "day_equity": risk.note_days(self.day_equity, self.equity_curve), "closed": risk.closed_list(e.trades),
                 "account": account(e, q),
                 "signal": None if not self.signal else {**self.signal.view(), "name": self.strategy.signal.name,
                                                         "short": self.strategy.signal.short},

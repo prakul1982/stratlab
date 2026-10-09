@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
-  chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, unitLine,
+  chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
   type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
@@ -205,12 +205,12 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
     { key: "vol", header: "PCR (volume)", numeric: true, cell: (r) => ratio(r.pcr_vol) },
-    { key: "all", header: "All strikes read", numeric: true, cell: (r) => ratio(r.pcr_all ?? null) },
+    { key: "read", header: "Strikes read", numeric: true, cell: (r) => (r.strikes_read ? String(r.strikes_read) : "–") },
   ];
   return (
     <Card id="pos-pcr" label="Put-call ratio by index">
       <CardHead title="Put-call ratio by index" infoLabel="About the put-call ratio"
-        info={`Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the ${NEAR_STRIKES} strikes either side of the money that StratLab's recordings keep: the same PCR as the chain panel and the history. 'All strikes read' counts every strike read around the money.`} />
+        info={`Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the ${NEAR_STRIKES} strikes either side of the money that StratLab's recordings keep: the same PCR as the chain panel and the history. 'Strikes read' is how many strikes of the chain were read for it.`} />
       <Source testId="pcr-source">From each index's live option chain, or StratLab's newest recording of it when the live chain is offline.</Source>
       {rows === null ? <Skeleton label="Reading each index's chain" />
         : rows === "error" ? <ErrorState title="The chains couldn't be read just now" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Try again in a minute.</ErrorState>
@@ -275,7 +275,8 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <Source testId="chain-recorded">{recordedLine(name, c.recorded)}</Source>
             </div>
             <StatRow label="Option chain figures">
-              <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money · volume ${ratio(c.pcr?.vol)} · all strikes read ${ratio(c.pcr_all ?? null)}`} />
+              <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={[`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
+                strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ")} />
               <Stat label="Max-pain strike" value={strike(c.max_pain)} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />

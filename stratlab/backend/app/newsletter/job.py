@@ -18,6 +18,7 @@ from . import content, write
 KINDS = ("market", "my_stocks")
 SEND_AT = {"IN": ("Asia/Kolkata", "16:15"), "US": ("America/New_York", "16:30")}
 WEEKLY_AT = ("Asia/Kolkata", 5, "08:00")         # Saturday morning, India time
+AFTER_CLOSE = {"market-IN", "market-US", "stocks"}   # issues built from the day's closes: never before they are final
 INDEX_CAP = 60
 _ID = re.compile(r"^(market|my_stocks)\.([A-Za-z0-9\-]{1,64})\.(\d{4}-\d{2}-\d{2}(?:-weekly)?)$")
 
@@ -576,6 +577,8 @@ class Job:
             return None
         if (weekday is not None and day.weekday() != weekday) or (region and not is_trading_day(region, day)):
             return None
+        if name in AFTER_CLOSE and region and not content.closed(region, day, now):
+            return None                    # never with the day's pre-auction prices: the official closes first (R8B-001)
         if db.get_setting(f"newsjob:{name}") == day.isoformat():          # already ran today (before a restart)
             self.last[name] = day.isoformat()
             return None
