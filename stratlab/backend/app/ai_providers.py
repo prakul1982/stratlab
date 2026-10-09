@@ -14,6 +14,7 @@ Providers and models are described in ai_catalog.py, requests are sent by ai_cli
 provider (users may see them); the details are on the Admin page."""
 import hashlib
 import json
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -334,7 +335,10 @@ def last_result(name: str, st, is_on: bool, cooling: bool, all_closed: bool, mod
     if cooling or all_closed:
         return "paused"
     if not good and not bad:
-        return "untested"
+        # nothing real tried yet, but the last measuring of its models stopped on the provider's answer: that answer, as
+        # System shows it (R8O-008: Cerebras and SambaNova "not tried yet" on Overview beside System's "stopped measuring:
+        # the free credit is used up")
+        return measured_result(st) or "untested"
     if not newer_bad:
         return "working"
     if good and st.last_error_kind == "rate":
@@ -342,6 +346,18 @@ def last_result(name: str, st, is_on: bool, cooling: bool, all_closed: bool, mod
     if good and st.last_error_kind in ("model", "forbidden") and any(m["in_use"] and not m["open_until"] for m in models):
         return "working"                       # one listed model isn't served to this key; the ones in use answer
     return "failed"
+
+
+_QUOTA_WORDS = re.compile(r"credit|quota|payment method|billing|insufficient (funds|balance)", re.I)
+
+
+def measured_result(st) -> str | None:
+    """What the last measuring of a provider's models says when it stopped on the provider's own answer: "quota" (free
+    credit or quota used up), "failed" (anything else that stopped it); None when it didn't stop."""
+    why = str(st.rank_error or "")
+    if not why.startswith("stopped measuring") or re.search(r"rate limit|\b429\b|too many requests", why, re.I):
+        return None                   # a short rate limit stops a measuring without saying anything about the key
+    return "quota" if _QUOTA_WORDS.search(why) else "failed"
 
 
 def _provider_view(name: str, now: float) -> dict:
@@ -386,6 +402,11 @@ def _provider_view(name: str, now: float) -> dict:
         state, text = "ok", f"Working; one other model isn't available to this key ({st.last_error})."
     elif st.last_error and (st.last_error_at or 0) >= (st.last_ok or 0):
         state, text = "warn", f"Last try failed: {st.last_error}"
+    elif result == "quota" and not st.last_ok:
+        # the same reading as the overview's tile: the last measuring stopped on used-up free credit (R8O-008)
+        state, text = "warn", f"Free credit was used up when its models were last measured ({st.rank_error.split(': ', 1)[-1]}); it resets on its own."
+    elif result == "failed" and not st.last_ok and not st.last_error:
+        state, text = "warn", f"The last measuring of its models stopped: {st.rank_error.split(': ', 1)[-1]}. Press Test to try it again."
     elif st.last_ok or st.order:
         state, text = "ok", "Working."
     else:
@@ -397,13 +418,14 @@ def _provider_view(name: str, now: float) -> dict:
     # can it answer now: a short rate limit (it answers again in a moment) counts as yes; a used-up free quota, a
     # paused provider, a rejected key or a model gone does not (R5O-016; R6O-003: "12 of 12 answering" beside a paused
     # provider and one whose free credit was used up)
-    answering = None if not is_on else state in ("ok", "idle") or (state == "warn" and st.last_error_kind == "rate" and not st.quota)
+    answering = None if not is_on else (state in ("ok", "idle") or (state == "warn" and st.last_error_kind == "rate" and not st.quota)) \
+        and result not in ("quota", "failed")
     paused_models = sum(1 for m in models if m["in_use"] and m["open_until"])
     reset_at = st.quota_reset if (st.quota_reset or 0) > now else (st.cooldown_until if cooling else None)
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
             "state": state, "state_text": text, "answering": answering, "result": result, "paused_models": paused_models,
-            "quota": {"limited": bool(st.quota and (cooling or all_closed)), "reset_at": reset_at,
+            "quota": {"limited": bool(st.quota and (cooling or all_closed)) or (result == "quota" and not st.last_ok), "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
                       "remaining_at": st.remaining.get("at")},
             "last_ok": st.last_ok, "last_error": st.last_error, "last_used_model": st.model,

@@ -58,8 +58,10 @@ def test_a_session_still_trading_is_not_a_close():
 
 def test_a_stored_page_is_rebuilt_once_its_market_closes_again():
     close = stock_pages.last_close("IN")[1].timestamp() + stock_pages.settle("IN")
-    built_after = {"ts": close + 60, "facts": {"price": 1}}
-    built_before = {"ts": close - 60, "facts": {"price": 1}}
+    # pages of the current facts version: a page of an older one is rebuilt in either market whatever its time (R8O-001),
+    # which isn't what this test is about
+    built_after = {"ts": close + 60, "facts": {"price": 1, "v": stock_pages.FACTS_VERSION}}
+    built_before = {"ts": close - 60, "facts": {"price": 1, "v": stock_pages.FACTS_VERSION}}
     assert stock_pages.fresh(built_after, "IN", now=close + 120) and not stock_pages.fresh(built_before, "IN", now=close + 120)
     assert not stock_pages.fresh({"ts": close + 60 - stock_pages.FRESH - 10, "facts": {"price": 1}}, "IN", now=close + 70)
     assert stock_pages.fresh({"ts": close - 60, "facts": None}, "IN", now=close + 120)   # nothing at the source: asked again

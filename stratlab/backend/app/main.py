@@ -647,7 +647,9 @@ def me(profile=Depends(current_profile)):
     seen = profile.get("_view_as") if profile.get("_view_as") in PLANS else None
     paid = seen or (profile.get("_paid_plan", plan) if profile.get("_paid_plan", plan) in PLANS else "free")
     info = plan_info(plan)
+    reads_today = _usage_pool.submit(research_routes.ai_reads_today, profile)
     used = month_usage(profile["id"], ("backtest", "ai", "deepdive", "deck"))
+    reads_cap = research_routes.ai_cap(profile)
     return ok({
         "id": profile["id"], "email": profile.get("email"),
         "plan": plan, "plan_info": info, "paid_plan": seen or profile.get("_paid_plan", plan),
@@ -668,6 +670,9 @@ def me(profile=Depends(current_profile)):
                   "deck_used": used["deck"], "deck_limit": info["decks_per_month"],
                   # the plan's own limits (what the Plans page lists), and why they're lifted now when they are
                   "deepdive_plan_limit": PLANS[paid]["deepdives_per_month"], "deck_plan_limit": PLANS[paid]["decks_per_month"],
+                  # fresh AI reads today against the person's daily cap (None: no cap), said on Account (R8O-002)
+                  "ai_reads_today": reads_today.result(), "ai_reads_limit": reads_cap,
+                  "ai_reads_cap_for": "admin" if admin.is_admin(profile) else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
         "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
@@ -998,9 +1003,13 @@ def ai_allowance(profile) -> tuple[int, int | None]:
     if limit is not None and used >= limit:
         err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
-    if db.count_usage(profile["id"], "ai", since) >= 200:
-        err(429, "ai_daily_limit", "You've used the AI builder 200 times today. Try again tomorrow.")
+    # a safety cap on Pro's unlimited builds, said on Plans; the site's admins have none (R8O-002)
+    if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) >= AI_BUILDS_PER_DAY:
+        err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. Try again tomorrow.")
     return used, limit
+
+
+AI_BUILDS_PER_DAY = 200
 
 
 @app.post("/search/ideas")
@@ -2072,9 +2081,10 @@ def company_hosts(p: dict) -> tuple[str, ...]:
 
 
 def deep_ai_allowed(profile) -> None:
-    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
-    if db.count_usage(profile["id"], "research_ai", since) >= settings.RESEARCH_AI_PER_DAY:
-        err(429, "research_ai_limit", f"You've used {settings.RESEARCH_AI_PER_DAY} fresh AI reads today. Stored reads still work; try again tomorrow.")
+    """The deep dive's AI reads count against the same daily cap as the research pages' (none for admins and Pro)."""
+    limit = research_routes.ai_cap(profile)
+    if limit is not None and research_routes.ai_reads_today(profile) >= limit:
+        err(429, research_routes.LIMIT_CODE, research_routes.limit_words(limit))
 
 
 DEEP_KINDS = {"deepdive": ("deepdives_per_month", deepdives_limit), "deck": ("decks_per_month", decks_limit)}
@@ -3223,17 +3233,18 @@ def official_page_close(co: dict) -> dict | None:
     return {"price": c, "price_at": day, "price_basis": "close", "price_official": True} if c else None
 
 
-def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dict | None = None) -> float | None:
+def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dict | None = None, fetch: bool = True) -> float | None:
     """A public page's dividend yield from the same dividends list the app's company page uses (its Corporate actions
     card): every dividend with an ex-date in the year to the close, specials included. None when that list has none to
     go on. India (`co` given): the company's own list is read again when it is more than a day old (R7V-002: TCS's
     page fell back to another yield when no list was stored), a list that was read is a real 0% when it holds no
-    dividend in the year, and without any list the price history's dividends count."""
+    dividend in the year, and without any list the price history's dividends count. `fetch` False: the stored list
+    only, no read of any source (a stored page's yield worked out again as it is served, R8O-001)."""
     if not close or not as_of:
         return None
     if region == "IN" and co is not None:
         try:
-            rows = corp_actions.actions_for("IN", sym, corp_job.sources(), fetch=True)
+            rows = corp_actions.actions_for("IN", sym, corp_job.sources() if fetch else None, fetch=fetch)
             known = bool(corp_actions.hist_load("IN", sym)["at"])
         except Exception:
             rows, known = [], False
@@ -3241,6 +3252,8 @@ def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dic
                 if d.get("kind") == "dividend" and d.get("amount")]
         if divs or known:
             return stock_pages.dividend_yield(divs, close, as_of)
+        if not fetch:
+            return None
         try:
             listed = research_hub.yahoo.events(f"{co['bse']}.BO" if co.get("bse") else f"{sym}.NS", 400)["dividends"]
         except Exception:
@@ -3320,7 +3333,21 @@ def us_share_class_page(symbol: str) -> str | None:
 
 
 stock_pages.share_class_page = us_share_class_page
-stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE)
+def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | None:
+    """A stored page built before the facts a page shows now, served as it is while no rebuild is allowed (a burst of
+    crawlers past the build ration, a source down): an Indian page's dividend yield is worked out again from the
+    company's stored dividends list (the app's), so it never shows another definition's yield (R8O-001: TCS 3.08%,
+    the last reported year's, against 5.35% on the page's own definition). Anything else waits for the rebuild."""
+    if region != "IN" or not f or (f.get("v") or 1) >= stock_pages.FACTS_VERSION:
+        return f
+    try:
+        dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
+    except Exception:
+        dy = None
+    return {**f, "div_yield": dy} if dy is not None else f
+
+
+stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)     # the app's US P/E on the public page's EPS (R7O-004)
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
@@ -3438,6 +3465,7 @@ def screen_warm(region: str, sym: str, co: dict):
 
 
 screen_indexer = screens.Indexer(lambda r, s, c: screen_warm(r, s, c))
+stock_page_store.on_built = screens.note_page       # a page built is in the screens and the largest list at once (R8O-005)
 
 # after each close, how many stored pages' prices are re-read per run, and the pause between reads (seconds): India's
 # broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first
@@ -4302,11 +4330,30 @@ def session_counts(sessions: list) -> dict:
             "options_sessions": sum(1 for x in sessions if getattr(x, "kind", None) == "options")}
 
 
+def running_now(sessions: dict, stopped: set | None = None) -> list:
+    """The paper sessions running now, each once ({id: session} as the manager keeps them): one whose stored row says it
+    stopped (stopped elsewhere, its row changed while it stayed in memory) isn't counted (R8O-011)."""
+    by_id = {}
+    for key, s in sessions.items():
+        sid = getattr(s, "id", None) or key
+        if sid not in (stopped or ()):
+            by_id[sid] = s
+    return list(by_id.values())
+
+
 def server_status() -> dict:
+    current = dict(manager.sessions)
+    try:
+        stopped = db.stopped_among([getattr(s, "id", None) or k for k, s in current.items()])
+    except Exception:
+        stopped = None
+    live = running_now(current, stopped)
     return {"kite_ready": kite.ready(), "kite_token_day": kite.token_day, "kite_invalid": kite.invalid_reason, "feed_started": hub.started,
-            "feed_connected": hub.connected, "live_sessions": len(manager.sessions),
+            "feed_connected": hub.connected, "live_sessions": len(live),
             # the sessions that need the broker's live feed (India); other markets are polled and never use it
-            **session_counts(list(manager.sessions.values())),
+            **session_counts(live),
+            # whose they are: Admin counts every user's sessions, and says so when they are more than one person's (R8O-011)
+            "options_users": len({getattr(s, "user_id", None) for s in live if getattr(s, "kind", None) == "options"}),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),

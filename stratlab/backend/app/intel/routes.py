@@ -1,7 +1,9 @@
 """/research API: company profiles, charts, quotes, market pulse, sector maps, comparisons,
 AI reads and the watchlist. Every third-party call happens here on the server."""
 import json
-from datetime import datetime, timedelta, timezone
+import threading
+import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -12,7 +14,6 @@ from ..branding import public_research
 from ..responses import err, safe
 from ..ai_providers import AIBusy, AIError
 from ..auth import current_profile
-from ..config import settings
 from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
@@ -58,21 +59,76 @@ def source_call(fn):
         err(503 if e.busy else 502, "source_error", str(e))
 
 
-def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build):
-    """Serve an AI read from the shared cache, or build it within the user's daily allowance."""
+def ai_cap(profile) -> int | None:
+    """A person's daily cap on fresh AI reads (the Plans page and Account say it): none for the site's admins and for
+    a Pro plan they pay for; RESEARCH_AI_PER_DAY a day (India's day) for Basic and Free, Free's an abuse guard. The plan
+    paid for, never the launch offer's Pro or a "View as" plan (R8O-002: a hidden 60 a day stopped the owner's market
+    mood and company reads while Plans said Pro was unlimited)."""
+    from .. import admin
+    from ..plans import ai_reads_per_day, effective_plan
+    if admin.is_admin(profile):
+        return None
+    return ai_reads_per_day(profile.get("_paid_plan") or effective_plan(profile))
+
+
+def ai_auto_counts(profile) -> bool:
+    """Whether a company read written as a company page opens counts against the person's cap: only for an account
+    that pays for no plan (the abuse guard); a read already written for that company today never counts for anyone."""
+    from ..plans import effective_plan
+    return ai_cap(profile) is not None and (profile.get("_paid_plan") or effective_plan(profile)) == "free"
+
+
+def ai_day_start() -> str:
+    """The start of today in India: the cap is "a day" as the message says, and comes back at midnight IST."""
+    return datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+def ai_reads_today(profile) -> int:
+    return db.count_usage(profile["id"], "research_ai", ai_day_start())
+
+
+LIMIT_CODE = "research_ai_limit"
+
+
+def limit_words(limit: int) -> str:
+    return (f"You've used today's {limit} fresh AI reads on your plan. Reads already written for a company or the market "
+            "still open, and the count starts again at midnight India time.")
+
+
+_building: dict[str, threading.Lock] = {}
+_building_lock = threading.Lock()
+
+
+def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0):
+    """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
+    `counted`: a fresh build counts against the person's daily cap and is refused past it; False for reads shared by
+    everyone (the market mood) and a company read written as its page opens on a paid plan, which neither count nor are
+    refused. `min_age`: a refresh of a shared read younger than this is the read already written (one person's "Ask
+    again" can't make everyone's read be written over and over)."""
     if not refresh and A.peek(kind, key):
         return A.cached(kind, key, ttl, False, build)[0]
-    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
-    limit = settings.RESEARCH_AI_PER_DAY
-    if db.count_usage(profile["id"], "research_ai", since) >= limit:
-        err(429, "research_ai_limit", f"You've used {limit} fresh AI reads today. Cached ones still work; try again tomorrow.")
+    if refresh and min_age and (hit := A.get(kind, key)) and time.time() - float(hit.get("generated_at") or 0) < min_age:
+        return hit
+    limit = ai_cap(profile) if counted else None
+    if limit is not None and ai_reads_today(profile) >= limit:
+        err(429, LIMIT_CODE, limit_words(limit))
+    k = repr((kind, key))
+    with _building_lock:
+        one = _building.setdefault(k, threading.Lock())
     try:
-        out, fresh = A.cached(kind, key, ttl, refresh, build)
+        with one:                     # two people opening the same company at once: one read, written once
+            if not refresh and A.peek(kind, key):
+                return A.cached(kind, key, ttl, False, build)[0]
+            out, fresh = A.cached(kind, key, ttl, refresh, build)
     except AIBusy as e:
         err(503, "ai_busy", str(e))
     except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
         err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
-    if fresh:
+    finally:
+        with _building_lock:
+            if len(_building) > 2000:
+                _building.clear()
+    if fresh and counted:
         db.add_usage(profile["id"], "research_ai")
     return out
 
@@ -276,8 +332,53 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
 
 
 # ---------- AI reads ----------
+_writing: dict[tuple, dict] = {}         # company reads being written behind the page: {key: {"at", "done", "error"}}
+_writing_lock = threading.Lock()
+_writers = None
+WRITE_FOR = 120                          # a read still being written after this long is given up on (the page says so)
+
+
+def _writer_pool():
+    global _writers
+    if _writers is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _writers = ThreadPoolExecutor(max_workers=4, thread_name_prefix="company-ai")
+    return _writers
+
+
+def behind_the_page(key: tuple, run) -> dict | None:
+    """A company read written behind the page (R8O-007: the page waited 8 to 30 s on its read): started once per company
+    whoever asks, and polled. None while it is being written; {"error": detail} once, when it failed."""
+    now = time.time()
+    with _writing_lock:
+        job = _writing.get(key)
+        if job and job.get("done"):
+            _writing.pop(key, None)
+            return {"error": job.get("error")} if job.get("error") else None
+        if job and now - job["at"] < WRITE_FOR:
+            return None
+        job = _writing[key] = {"at": now, "done": False, "error": None}
+        if len(_writing) > 500:
+            for k in [k for k, v in _writing.items() if now - v["at"] > WRITE_FOR]:
+                _writing.pop(k, None)
+
+    def work():
+        try:
+            run()
+        except HTTPException as e:
+            job["error"] = e.detail if isinstance(e.detail, dict) else {"code": "ai_failed", "message": str(e.detail)}
+        except Exception as e:                       # noqa: BLE001 - said to the page, never raised in a worker
+            job["error"] = {"code": "ai_failed", "message": f"The AI read couldn't be written ({str(e)[:80]}). Press Refresh to try again."}
+        finally:
+            job["done"] = True
+    _writer_pool().submit(work)
+    return None
+
+
 @router.get("/company/{region}/{symbol}/ai")
-def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(current_profile)):
+def company_ai(region: str, symbol: str, refresh: bool = False, background: bool = False, profile=Depends(current_profile)):
+    """A company's AI read. `background`: the page asks without waiting; a read not written yet is written behind the
+    page and the answer is {"pending": true} until it is there (the page asks again every few seconds)."""
     r, s = region_of(region), symbol_of(symbol)
     pro = has_indicators(profile["_plan"])       # which indicators the read may mention; the facts are the same
 
@@ -291,8 +392,22 @@ def company_ai(region: str, symbol: str, refresh: bool = False, profile=Depends(
         except Exception:
             pass
         return A.company(c, _ai, pro, company_key_facts(r, c))
+    key = (r, s, pro, datetime.now(IST).date().isoformat())
+    counted = refresh or ai_auto_counts(profile)
+    if background and not refresh and not A.peek("company", key):
+        # within the cap the read is written behind the page; past it, the page hears so now, not after a wait
+        limit = ai_cap(profile) if counted else None
+        if limit is None or ai_reads_today(profile) < limit:
+            failed = behind_the_page(("company",) + key, lambda: ai_call(profile, "company", key, 12 * 3600, False, build, counted=counted))
+            if failed is None and not A.peek("company", key):
+                return ok({"pending": True})
+            if failed:
+                d = failed["error"]
+                return ok({"unavailable": True, "code": d.get("code") or "ai_failed", "message": d.get("message") or "No AI read right now."})
     try:
-        read = ai_call(profile, "company", (r, s, pro, datetime.now(IST).date().isoformat()), 12 * 3600, refresh, build)
+        # one read per company a day, shared by everyone: opening a page that already has one costs nobody anything, and
+        # on a paid plan a read written as the page opens doesn't count either; "Refresh" (asked for) does (R8O-002)
+        read = ai_call(profile, "company", key, 12 * 3600, refresh, build, counted=counted)
     except HTTPException as e:
         # the read is a nice-to-have on a page that has loaded: no AI answer today is an answer ("unavailable", and why),
         # not a failed request on every company page opened
@@ -338,7 +453,11 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             news = []
         return A.pulse(r, f, indices, news, _ai, closed=not market_open(r))
     try:
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r))), 3600, refresh, build))
+        # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
+        # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
+        # minutes old gives that read
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, market_open(r))), 3600, refresh, build,
+                          counted=False, min_age=300))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it

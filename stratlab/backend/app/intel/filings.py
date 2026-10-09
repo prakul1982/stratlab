@@ -38,8 +38,20 @@ RULES: list[tuple[str, str, str, list[str]]] = [
         r"\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b.{0,120}"
         r"\b(record date|redemption|interest payment|payment of interest|suspension of trading|allotment|allotted)"]),
     ("suspension", "Trading suspended", "red", [r"suspension of trading", r"trading .{0,20}suspended"]),
+    # a meeting the tribunal convened (of shareholders or creditors, on a merger or arrangement) and its voting results
+    # are routine, and so is the company's clarification of a news report (R8O-003: AMBUJACEM's "Outcome of
+    # NCLT-convened meeting", JUBLCPL's voting results and LICHSGFIN's "Clarification on media news" read as insolvency)
+    ("court_meeting", "Tribunal-convened meeting", "info", [
+        r"\bnclt[- ]convened\b", r"convened .{0,80}\b(nclt|national company law tribunal|tribunal)\b",
+        r"\b(nclt|national company law tribunal|tribunal)\b.{0,60}\bconvened\b",
+        r"meeting of (the )?(equity shareholders|shareholders|members|(secured |unsecured )?creditors)\b.{0,120}\b(nclt|tribunal)\b",
+        r"\bvoting results?\b.{0,160}\b(nclt|tribunal|convened)\b", r"\b(nclt|tribunal|convened)\b.{0,160}\bvoting results?\b"]),
+    ("news_clarification", "Clarification of a news report", "info", [
+        r"clarification .{0,40}\b(media|news|article|rumou?rs?|report(ed|s)?)\b", r"\b(media|news) (report|item|article)s?\b.{0,80}\bclarif"]),
+    # explicit insolvency or CIRP wording only: "NCLT" alone names the tribunal, which sanctions mergers too (R8O-003);
+    # the company must be the debtor as well (DEBTOR, classify)
     ("insolvency", "Insolvency proceedings", "red", [r"corporate insolvency resolution", r"insolvency (and bankruptcy|resolution|proceedings?|petition|application)",
-                                                     r"\bnclt\b", r"\bibc\b", r"\bcirp\b", r"initiation of .{0,30}insolvency"]),
+                                                     r"\bibc\b", r"\bcirp\b", r"initiation of .{0,30}insolvency"]),
     ("qip", "QIP (fund raise)", "red", [r"qualified institutions? placement", r"\bqip\b"]),
     ("preferential", "Preferential issue (fund raise)", "red", [r"preferential (issue|allotment|basis)"]),
     ("rights", "Rights issue (fund raise)", "red", [r"rights issue", r"issue .{0,20}on rights basis"]),
@@ -75,7 +87,9 @@ _COMPILED = [(i, label, sev, [re.compile(p, re.I) for p in pats]) for i, label, 
 FUND_RAISE = {"qip", "preferential", "rights", "warrants", "fund_raise"}
 LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change",
                                                   "insolvency_other": "Insolvency filing, the company not shown as the debtor"}
-RULES_VERSION = 4              # raised when the rules change, so the stored whole-market list is read again
+# raised when the rules change, so the stored whole-market list is read again (5: "NCLT" alone is no longer insolvency,
+# tribunal-convened meetings and news clarifications are routine, R8O-003)
+RULES_VERSION = 5
 
 # R6O-002: the filing's subject says what it is about. A routine certificate is routine whatever its body names
 # (ICICIBANK's "Certificate under SEBI (Depositories and Participants) Regulations, 2018" read as a debt raise).

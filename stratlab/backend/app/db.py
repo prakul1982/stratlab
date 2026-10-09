@@ -198,6 +198,15 @@ def running_sessions() -> list[dict]:
     return sb().table("live_sessions").select("*").eq("status", "running").execute().data
 
 
+def stopped_among(ids: list[str]) -> set[str]:
+    """Which of these sessions are stored as anything but running (one light read, for Admin's count)."""
+    ids = [i for i in ids if isinstance(i, str)]
+    if not ids:
+        return set()
+    rows = sb().table("live_sessions").select("id,status").in_("id", ids[:500]).execute().data or []
+    return {r["id"] for r in rows if r.get("status") != "running"}
+
+
 def user_sessions(user_id: str, limit: int = 20) -> list[dict]:
     return (sb().table("live_sessions")
             .select("id,name,instrument,status,started_at,stopped_at,stop_reason")

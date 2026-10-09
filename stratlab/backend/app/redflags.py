@@ -360,6 +360,12 @@ def reread(i: dict) -> dict | None:
     if "text" in i:
         cid, sev = filings.classify(subject, i.get("text") or "")
         return None if sev == "info" else {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
+    if i.get("category") == "insolvency":
+        # an insolvency label needs the filing's own words to say so, and a row kept without its summary has only its
+        # subject and its file's name: "Shareholders meeting" with "Outcome_NCLT_Meeting.pdf" is a tribunal-convened
+        # meeting, not a case against the company (R8O-003: 12 rows still labelled so after the rules changed)
+        cid, sev = filings.classify(subject, filings.file_words(i.get("url")))
+        return {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev} if cid == "insolvency" else None
     cid, sev = filings.classify(subject, "")
     if sev != "info":
         return {**i, "category": cid, "label": filings.LABEL[cid], "severity": sev}
