@@ -35,7 +35,7 @@ const edited = (edit: (j: Record<string, any>) => Record<string, any>, wait = 0)
 };
 const onSale = (j: Record<string, any>) => ({ ...j, offer: { ...(j.offer ?? {}), payments: true, yearly: true }, billing_enabled: true });
 
-test("R7M-010: under View as Free the buy buttons are off before /me answers, and after", async ({ page }) => {
+test("R7M-010: under View as Free no buy button can be pressed before /me answers, and after", async ({ page }) => {
   let meAnswered = false;
   await page.route(`${API}/pricing`, edited(onSale));
   // /me takes its time, as it did cold on the live site: the buttons are drawn from the public prices meanwhile
@@ -45,13 +45,15 @@ test("R7M-010: under View as Free the buy buttons are off before /me answers, an
   await page.route(`${API}/billing/subscribe`, (r) => { subscribed = true; return r.fulfill({ status: 409, json: {} }); });
   const errors = await open(page, "/plans", owner, { "stratlab.viewas.v1": "free" });
   const buy = page.getByRole("button", { name: "Upgrade to Basic" });
+  // while /me is on its way a signed-in visitor sees no buy button to press (R15-003: the page waits for sign-in)
+  await page.waitForTimeout(1500);
+  expect(meAnswered).toBe(false);
+  await expect(page.getByRole("button", { name: /Upgrade to (Basic|Pro)/, disabled: false })).toHaveCount(0);
+  await expect.poll(() => meAnswered, { timeout: 20_000 }).toBe(true);
   await expect(buy).toBeVisible({ timeout: 30_000 });
-  expect(meAnswered, "the buttons were drawn before /me answered").toBe(false);
   await expect(buy).toBeDisabled();
   await expect(buy).toContainText("(off while viewing as Free)");
   await expect(page.getByRole("button", { name: "Upgrade to Pro" })).toBeDisabled();
-  await expect.poll(() => meAnswered, { timeout: 20_000 }).toBe(true);
-  await expect(buy).toBeDisabled();
   await expect(page.getByTestId("plans-viewas")).toContainText("turn it off to change your billing");
   await buy.click({ force: true, timeout: 2000 }).catch(() => undefined);
   await expect(page.getByRole("dialog")).toHaveCount(0);
