@@ -19,6 +19,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+from . import leader
 from .ai_catalog import PROVIDERS, TASKS, configured, model_setting, size_b, strength, thinks, unusable
 from .ai_clients import CallError, client
 from .ai_reply import BadReply, check, extract_json, remaining
@@ -324,7 +325,7 @@ def in_use(name: str) -> list[str]:
     """The provider's models to try, best first: the pinned one alone, else the measured top few, else (before any
     measurement) the curated defaults. Blocked models never."""
     p = pinned(name)
-    if p and not pin_gone(name, p):
+    if p and not blocked(name, p) and not pin_gone(name, p):      # a blocked pin (Railway's too) holds nothing
         return [p]
     st = status(name)
     order = [m for m in st.order if not blocked(name, m) and m != p and not _UUID.match(m)]
@@ -637,7 +638,7 @@ def rerank(name: str, transport=None) -> Status:
         p = pinned(name)
         st.aliases.update(getattr(cl, "aliases", None) or {})     # R7M-008: a stored UUID is shown by its model's name
         cands, skipped, ctx = candidates(name, listed)
-        if p and p not in cands:
+        if p and not blocked(name, p) and p not in cands:
             cands = [p] + cands[:PROVIDERS[name].probe_max - 1]
         st.discovered, st.skipped = (len(listed) if listed is not None else None), skipped
         for m in cands:
@@ -717,7 +718,8 @@ class RerankJob:
         time.sleep(self.first_wait)
         while True:
             try:
-                rerank_many([n for n in PROVIDERS if stale(n)])
+                if leader.leading():      # another container leads: it runs this pass
+                    rerank_many([n for n in PROVIDERS if stale(n)])
             except Exception:  # noqa: BLE001  (a bug here must not end the loop)
                 pass
             time.sleep(self.every)

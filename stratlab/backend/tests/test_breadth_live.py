@@ -185,3 +185,47 @@ def test_page_carries_the_live_card(w, monkeypatch):
     assert us["live"] is None
     assert c.get("/admin/breadth", headers=headers("admin-token")).json()["live"] is not None
     assert not PROVIDERS.search(json.dumps(v))
+
+
+MONDAY = datetime(2026, 10, 12, 4, 0, tzinfo=timezone.utc)         # Monday 12 Oct 2026, 09:30 IST: Friday's base is current
+AFTER_HOLIDAY = datetime(2026, 1, 27, 4, 0, tzinfo=timezone.utc)   # Tuesday 27 Jan, the morning after Republic Day (Monday)
+
+
+@pytest.mark.parametrize("now,base_day", [(MONDAY, "2026-10-09"), (AFTER_HOLIDAY, "2026-01-23")])
+def test_base_of_the_last_trading_day_is_not_rebuilt(mem, now, base_day):
+    breadth.save_base("IN", base_day, {"UP": [999.0, 250, 1900.0, 4900.0, 19900.0]})
+    rebuilt = []
+    res = live(mem, rebuild=lambda r, n: rebuilt.append(r)).round("IN", now)
+    assert not rebuilt and res.get("error") != "no base"
+
+
+def test_a_base_still_old_after_a_failed_rebuild_is_unavailable(mem):
+    breadth.save_base("IN", "2026-10-02", {"UP": [999.0, 250, 1900.0, 4900.0, 19900.0]})
+    def fail(r, n):
+        raise RuntimeError("down")
+    res = live(mem, rebuild=fail).round("IN", MONDAY)
+    assert res["ok"] is False and breadth_live.status()["IN"]["error"]
+    assert not breadth_live.load("nifty500", "2026-10-12")["points"]
+
+
+def test_the_candle_is_final_earlier_on_a_us_half_day():
+    half = datetime(2026, 11, 27, 18, 30, tzinfo=timezone.utc)      # 13:30 ET, 27 Nov: closed at 13:00, final from 13:15
+    normal = datetime(2026, 11, 25, 18, 30, tzinfo=timezone.utc)    # 13:30 ET, a full day: still trading
+    assert breadth.last_complete("US", half) == "2026-11-27" and breadth.last_complete("US", normal) == "2026-11-24"
+    assert breadth.last_trading("US", "2026-11-26") == "2026-11-25"      # Thanksgiving is closed
+
+
+def test_early_close_moves_fixed_times_the_open_check_and_the_finished_candle(mem):
+    from datetime import date
+    from app import rotation, scan
+    from app.data.calendar import shifted
+    from app.intel.company import market_open
+    assert shifted("US", date(2026, 11, 27), "16:50") == "13:50" and shifted("US", date(2026, 11, 25), "16:50") == "16:50"
+    assert shifted("IN", date(2026, 11, 27), "16:05") == "16:05"
+    half_after = datetime(2026, 11, 27, 18, 30, tzinfo=timezone.utc)   # 13:30 ET
+    assert not market_open("US", half_after) and market_open("US", half_after.replace(day=25))
+    bars = [{"t": "2026-11-26T00:00:00", "c": 1}, {"t": "2026-11-27T00:00:00", "c": 2}]
+    assert len(rotation.completed_sessions("US", lambda i, d: bars, half_after)("x", 5)) == 2     # the day's candle is final
+    job = scan.Alerts(None, None, None)
+    assert job.due("US", datetime(2026, 11, 27, 18, 45, tzinfo=timezone.utc)) is None            # 13:45 ET, before 13:50
+    assert job.due("US", datetime(2026, 11, 27, 18, 55, tzinfo=timezone.utc)) == "2026-11-27"    # 13:55 ET

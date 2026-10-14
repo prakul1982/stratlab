@@ -214,6 +214,18 @@ def day_close(market: str, day: date) -> str | None:
         return None
 
 
+def shifted(market: str, day: date, at: str) -> str:
+    """A fixed time of day ("HH:MM", set for the usual close) moved by how much earlier the day closes (an early close)."""
+    from .markets import BY_ID
+    usual = ((BY_ID.get(market) or {}).get("hours") or {}).get("close")
+    early = day_close(market, day)
+    if not usual or not early or early >= usual:
+        return at
+    mins = lambda t: int(t[:2]) * 60 + int(t[3:5])
+    m = max(0, mins(at) - (mins(usual) - mins(early)))
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
 def is_holiday(market: str, day: date) -> bool:
     """A weekday the exchange is closed."""
     return day.weekday() < 5 and not is_trading_day(market, day)

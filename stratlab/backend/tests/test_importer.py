@@ -143,3 +143,17 @@ def test_universe_needs_a_preset_or_a_list():
     assert ai_writer._universe({"preset": "made_up"}) is None
     assert ai_writer._universe({"symbols": ["SBIN"]}) is None
     assert ai_writer._universe({"symbols": ["sbin", "tcs"], "maxOpen": 5}) == {"preset": None, "symbols": ["SBIN", "TCS"], "maxOpen": 5}
+
+
+def test_pine_import_still_works_at_the_ai_build_limit(client, monkeypatch):
+    from fastapi import HTTPException
+    from contextlib import contextmanager
+
+    @contextmanager
+    def full(profile):
+        raise HTTPException(429, {"code": "ai_limit", "message": "limit"})
+        yield
+    monkeypatch.setattr(main, "ai_slot", full)
+    r = client.post("/import/strategy", json={"text": PINE}).json()
+    assert r["source"] == "pine" and not r["used_ai"] and len(r["entry"]) == 2
+    assert client.post("/import/strategy", json={"text": "void OnTick() { OrderSend(); }"}).status_code == 429

@@ -55,7 +55,7 @@ test("payments on: plans can be bought, cancelled any time, yearly in the visito
 
 test("the launch offer names its end; an unknown offer promises nothing", () => {
   const i = offer.pricingIntro(promo, LIMITS.pro, "landing");
-  assert.match(i.title, /^Every Pro feature, free until 31 Oct\.$/);
+  assert.match(i.title, /^Every Pro feature, free until Sat 31 Oct at 5:30 am IST\.$/);
   assert.match(i.lede, /ask us at support@stratlab\.studio for early access/);
   assert.equal(offer.promoUntil(promo, Date.parse("2099-10-30")), promo.promo_until);
   assert.equal(offer.promoUntil(promo, Date.parse("2099-11-01")), null);
@@ -172,4 +172,9 @@ test("the AI assistant's address comes from the server the page talks to", () =>
   assert.equal(mcpEndpoint("/api", "https://stratlab.studio"), "https://stratlab.studio/api/mcp");
   assert.equal(mcpEndpoint("", "https://stratlab.studio"), "https://stratlab.studio/mcp");
   assert.equal(mcpEndpoint("javascript:alert(1)", "https://stratlab.studio", "https://srv/mcp"), "https://srv/mcp");
+});
+
+test("the offer's end is said in India time, from the stored instant", () => {
+  assert.equal(offer.endsAt("2026-10-22T11:50:59+00:00"), "Thu 22 Oct at 5:20 pm IST");
+  assert.equal(offer.endsAt("2026-11-02T18:30:00+00:00"), "Tue 3 Nov at 12:00 am IST");
 });

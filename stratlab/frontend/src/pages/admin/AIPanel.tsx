@@ -31,8 +31,9 @@ export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
   rerank_every_hours: number; last_failure: { at: number; task: string; detail: string } | null;
 };
-/** What is waiting for a yes: Block and Re-rank change how every user's AI questions are routed (R13S-004). */
-type Ask = { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string };
+/** What is waiting for a yes: Block, Unblock, Pin and Re-rank change how every user's AI questions are routed (R13S-004). */
+type Ask = { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string; blocked: boolean }
+  | { kind: "pin"; p: Provider; model: string | null };
 type RankSnap = Record<string, unknown>;
 
 type TestRow = { name: string; label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
@@ -113,7 +114,8 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
     setAsk(null);
     if (!a) return;
     if (a.kind === "rerank") void rerank(a.provider?.name);
-    else void setBlocked(a.p, a.model, true);
+    else if (a.kind === "pin") void pin(a.p, a.model);
+    else void setBlocked(a.p, a.model, a.blocked);
   };
 
   const on = v?.providers.filter((p) => p.configured) ?? [];
@@ -154,8 +156,8 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
             </div>
           )}
 
-          {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={(name) => setAsk({ kind: "rerank", provider: v.providers.find((x) => x.name === name) })} pin={pin}
-            block={(pp, model, blocked) => (blocked ? setAsk({ kind: "block", p: pp, model }) : void setBlocked(pp, model, false))} />)}
+          {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={(name) => setAsk({ kind: "rerank", provider: v.providers.find((x) => x.name === name) })} pin={(pp, model) => setAsk({ kind: "pin", p: pp, model })}
+            block={(pp, model, blocked) => setAsk({ kind: "block", p: pp, model, blocked })} />)}
 
           {off.length > 0 && (
             <div className="k-stack" aria-label="More free providers">
@@ -184,13 +186,17 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
 
 function askTitle(a: Ask): string {
   if (a.kind === "rerank") return a.provider ? `Re-rank ${a.provider.label}'s models?` : "Re-rank every provider's models?";
-  return `Block ${a.model}?`;
+  if (a.kind === "pin") return a.model ? `Pin ${a.p.label} to ${a.model}?` : `Unpin ${a.p.label}?`;
+  return `${a.blocked ? "Block" : "Unblock"} ${a.model}?`;
 }
 function askLabel(a: Ask): string {
-  return a.kind === "rerank" ? "Re-rank" : "Block it";
+  if (a.kind === "pin") return a.model ? "Pin it" : "Unpin";
+  return a.kind === "rerank" ? "Re-rank" : a.blocked ? "Block it" : "Unblock it";
 }
 function askBody(a: Ask): string {
   if (a.kind === "rerank") return "The models are measured again, which takes a minute or two and can change the order every user's AI questions are routed in. The message that follows has an Undo.";
+  if (a.kind === "pin") return a.model ? `${a.p.label} will use only ${a.model}, for every user, until it is unpinned.` : `${a.p.label} goes back to its measured models, for every user.`;
+  if (!a.blocked) return `${a.p.label} can use ${a.model} again, for every user. The message that follows has an Undo.`;
   return `${a.p.label} won't use ${a.model} again, for every user, until it is unblocked. The message that follows has an Undo.`;
 }
 

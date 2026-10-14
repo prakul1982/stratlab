@@ -36,16 +36,20 @@ def _key(uid: str) -> str:
     return f"{KEY}{uid}"
 
 
-def load(uid: str) -> dict:
-    """{"items": [...], "source", "updated_at"}; empty when the user has none (or the row is damaged)."""
+def _parse(raw: str | None) -> dict:
     try:
-        got = json.loads(db.get_setting(_key(uid)) or "{}")
+        got = json.loads(raw or "{}")
     except (ValueError, TypeError):
         got = {}
     items = got.get("items") if isinstance(got, dict) else None
     clean = [i for i in items or [] if isinstance(i, dict) and i.get("symbol") and isinstance(i.get("qty"), (int, float))]
     return {"items": clean, "source": got.get("source") if isinstance(got, dict) else None,
             "updated_at": got.get("updated_at") if isinstance(got, dict) else None}
+
+
+def load(uid: str) -> dict:
+    """{"items": [...], "source", "updated_at"}; empty when the user has none (or the row is damaged)."""
+    return _parse(db.get_setting(_key(uid)))
 
 
 ADJUST_KEYS = ("since", "applied", "dismissed", "adjusted")      # what corporate actions keep on a holding
@@ -79,15 +83,39 @@ def saved_day(now: datetime | None = None) -> date:
     return d
 
 
+def _data(before: list[dict], items: list[dict], source: str, stamped: bool, since: str | None) -> dict:
+    if not stamped:
+        items = stamp(items, before, min(since, saved_day().isoformat()) if since else saved_day().isoformat())
+    return {"items": items, "source": source if source in SOURCES else "CSV",
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 def save(uid: str, items: list[dict], source: str, stamped: bool = False, since: str | None = None) -> dict:
     """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp): `since` when the
     quantities are as of an earlier day (a statement's last day), else the day they're saved."""
-    if not stamped:
-        items = stamp(items, load(uid)["items"], min(since, saved_day().isoformat()) if since else saved_day().isoformat())
-    data = {"items": items, "source": source if source in SOURCES else "CSV",
-            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    data = _data(load(uid)["items"] if not stamped else [], items, source, stamped, since)
     db.set_setting(_key(uid), json.dumps(data))
     return data
+
+
+def update(uid: str, fn) -> dict | None:
+    """Change the holdings atomically, so a daily broker sync and a hand edit can't lose each other's save.
+    fn(load's result) returns (items, source[, stamped[, since]]) as save takes them, None to leave the holdings, or
+    db.REMOVE to delete them. It runs again on the new holdings if another save got in first, so keep side effects
+    out of it. Returns what was saved (None when nothing was)."""
+    out = []
+
+    def go(raw):
+        before = _parse(raw)
+        got = fn(before)
+        if got is None or got is db.REMOVE:
+            out[:] = [None]
+            return got
+        items, source, *more = got
+        out[:] = [_data(before["items"], items, source, *(more + [False, None][len(more):]))]
+        return json.dumps(out[0])
+    db.update_setting(_key(uid), go)
+    return out[0]
 
 
 def delete(uid: str):

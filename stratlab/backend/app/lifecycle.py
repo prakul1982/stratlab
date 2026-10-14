@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from . import alerts, db
+from . import alerts, db, leader
 from . import email_kit as kit
 from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
 
@@ -60,7 +60,6 @@ WHATS_NEW = [
 ]
 
 BACKGROUND = True                # tests turn this off to send in the calling thread
-_lock = threading.Lock()
 
 
 def _now(now: datetime | None) -> datetime:
@@ -101,19 +100,25 @@ def sent(uid: str) -> dict:
 
 def _claim(uid: str, key: str, now: datetime) -> bool:
     """Record the email as sent, unless it already was. True when this caller should send it."""
-    with _lock:
-        have = sent(uid)
+    won = []
+
+    def mark(raw):
+        have = db.json_value(raw, {})
+        won.clear()
         if key in have:
-            return False
-        db.set_setting(SENT + uid, json.dumps({**have, key: now.isoformat()}))
-        return True
+            return None
+        won.append(1)
+        return json.dumps({**have, key: now.isoformat()})
+    db.update_setting(SENT + uid, mark)           # atomic, so two containers can't both claim it
+    return bool(won)
 
 
 def _release(uid: str, key: str):
-    with _lock:
-        have = sent(uid)
+    def drop(raw):
+        have = db.json_value(raw, {})
         have.pop(key, None)
-        db.set_setting(SENT + uid, json.dumps(have))
+        return json.dumps(have)
+    db.update_setting(SENT + uid, drop)
 
 
 def address(profile: dict) -> str | None:
@@ -130,6 +135,12 @@ def _day(d: date) -> str:
 def _last_day(end: datetime) -> date:
     """The India date of the last moment before `end` (an offer ending at midnight ends the day before)."""
     return (end - timedelta(seconds=1)).astimezone(IST).date()
+
+
+def _end_text(end: datetime) -> str:
+    """An instant in India time, as the pages say it: Thu 22 Oct at 5:20 pm IST."""
+    t = end.astimezone(IST)
+    return f"{t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
 
 
 def _url(path: str) -> str:
@@ -186,11 +197,10 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             "After that, the Basic or Pro plan keeps paper trading going. Your notebooks and backtests stay either way."],
             ("See plans", "/plans"), label="Your trial")
     if kind in ("promo_before", "promo_end"):
-        last = ctx.get("last_day") or date.today()
         when = "tomorrow" if kind == "promo_before" else "today"
+        end = ctx.get("end") or datetime.now(timezone.utc)
         return _compose(f"The launch offer ends {when}", [
-            f"Every Pro feature has been free for everyone during the launch offer. It ends at the end of {_day(last)} "
-            "(India time).",
+            f"Every Pro feature has been free for everyone during the launch offer. It ends on {_end_text(end)}.",
             "After that, the Free plan's limits apply again unless you choose a plan. Your notebooks, backtests and "
             "watchlist stay either way."], ("See plans", "/plans"), label="Launch offer")
     if kind == "inactive":
@@ -290,9 +300,9 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     now = _now(now)
     tomorrow = now.astimezone(IST).date() + timedelta(days=1)
     if kind in ("trial_before", "promo_before"):
-        return {"last_day": tomorrow}
+        return {"last_day": tomorrow, "end": now + timedelta(days=1)}
     if kind in ("trial_end", "promo_end"):
-        return {"last_day": now.astimezone(IST).date()}
+        return {"last_day": now.astimezone(IST).date(), "end": now + timedelta(hours=3)}
     if kind == "receipt":
         return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":
@@ -439,7 +449,7 @@ def due(profile: dict, now: datetime, record: dict, seen_day: str | None, promo_
         last = _last_day(promo_end)
         for kind, day in (("promo_end", last), ("promo_before", last - timedelta(days=1))):
             if today == day:                       # one per offer: a later offer can remind again
-                out[kind] = (kind, f"{kind}:{last.isoformat()}", {"last_day": last})
+                out[kind] = (kind, f"{kind}:{last.isoformat()}", {"last_day": last, "end": promo_end})
     try:
         age = now - _dt(profile["created_at"])
     except (KeyError, TypeError, ValueError):
@@ -496,7 +506,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("lifecycle emails:", e)

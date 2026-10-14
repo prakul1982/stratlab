@@ -107,6 +107,12 @@ class Query:
             rows = self.db.tables.setdefault(self.table, [])
             match = [r for r in rows if all(f(r) for f in self.filters)]
             if self.op == "insert":
+                if self.table == "app_settings":      # key is the primary key
+                    from postgrest.exceptions import APIError
+                    for p in (self.payload if isinstance(self.payload, list) else [self.payload]):
+                        if any(r.get("key") == p.get("key") for r in rows):
+                            raise APIError({"message": 'duplicate key value violates unique constraint "app_settings_pkey"',
+                                            "code": "23505"})
                 new = [self._fill(p) for p in (self.payload if isinstance(self.payload, list) else [self.payload])]
                 rows += new
                 return SimpleNamespace(data=copy.deepcopy(new), count=None)

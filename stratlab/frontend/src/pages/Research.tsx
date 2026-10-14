@@ -49,10 +49,11 @@ function useTestOnStratLab() {
 
 /** The day's index levels: a figure for each, with its change (today's only when it is today's, R7T-003) and where it sits
  * against its 52-week high. */
-export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
+export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
   return (
+    <>
     <StatRow label="Index levels">
       {indices.map((i) => (
         <Stat key={i.name} item label={i.name} value={Math.round(i.price).toLocaleString(i.name.includes("NIFTY") || i.name === "SENSEX" ? "en-IN" : "en-US")}
@@ -60,6 +61,8 @@ export function IndexStrip({ indices }: { indices: IndexLevel[] | null }) {
           note={<span data-testid="index-when" data-stale={i.stale ? "1" : undefined}>{indexWhen(i, (d) => fmtDate(d, { year: false }))}{i.from_high_pct != null && ` · ${i.from_high_pct > -0.5 ? "near its 52-week high" : `${Math.abs(i.from_high_pct).toFixed(1)}% below its 52-week high`}`}</span>} />
       ))}
     </StatRow>
+    {!!missing?.length && <p className="k-small k-muted" data-testid="index-missing">{missing.join(", ")} couldn't load.</p>}
+    </>
   );
 }
 
@@ -78,8 +81,13 @@ function OpenCompany({ region, label = "Company", autoFocus }: { region: Region;
 /* ================= Companies (home) ================= */
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
-  const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[] } | null>(null);
-  useEffect(() => { setPulse(null); researchApi.pulse(region).then(setPulse).catch(() => setPulse({ indices: [], headlines: [] })); }, [region]);
+  const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    setPulse(null);
+    researchApi.pulse(region).then((p) => live && setPulse(p)).catch(() => live && setPulse({ indices: [], headlines: [] }));
+    return () => { live = false; };
+  }, [region]);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title="Look up a company"
@@ -95,7 +103,7 @@ export function ResearchHome() {
       </Card>
       <Card>
         <CardHead title={`${REGION_NAME[region]} today`} info={HELP.researchPulse} actions={<Link to={`/research/pulse?region=${region}`} className="btn quiet sm">Full market pulse →</Link>} />
-        <IndexStrip indices={pulse?.indices ?? null} />
+        <IndexStrip indices={pulse?.indices ?? null} missing={pulse?.missing} />
       </Card>
       <Card>
         <CardHead title="Explore a theme" info={HELP.researchThemes} actions={<Link to={`/research/themes?region=${region}`} className="btn quiet sm">Themes →</Link>} />
@@ -450,7 +458,7 @@ export function ThemesPage() {
 /* ================= Market pulse ================= */
 export function PulsePage() {
   const [region, setRegion] = useRegion();
-  const [data, setData] = useState<{ indices: IndexLevel[]; headlines: NewsItem[] } | null>(null);
+  const [data, setData] = useState<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] } | null>(null);
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -469,7 +477,7 @@ export function PulsePage() {
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title="How the market feels today"
         lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })())} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} /></Card>
+      <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} missing={data?.missing} /></Card>
       <Card>
         <CardHead title="The mood" info={HELP.researchPulse}
           actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />

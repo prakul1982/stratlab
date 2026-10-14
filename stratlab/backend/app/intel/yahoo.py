@@ -45,13 +45,29 @@ def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     return before[-1] if before else (meta.get("previousClose") or meta.get("chartPreviousClose"))
 
 
+# the market whose trading days a Yahoo answer follows, by its instrument type, else by its exchange's zone
+MARKET_OF = {"CURRENCY": "FX", "FUTURE": "CMDTY", "Asia/Kolkata": "IN", "America/New_York": "US", "Europe/London": "UK",
+             "Europe/Berlin": "EU", "Asia/Tokyo": "JP"}
+
+
 def _partial(out: dict, now: float | None = None) -> bool:
-    """Whether the last daily candle is of a session still trading (the answer's own session end is ahead)."""
+    """Whether the last daily candle is of a session still trading: today's candle, on a trading day of its market, with
+    the answer's own session open now. Crypto trades all day: today's (UTC) candle is still forming."""
+    from ..data.calendar import is_trading_day
+    now = now or time.time()
     try:
-        end = out["meta"]["currentTradingPeriod"]["regular"]["end"]
-        tz = ZoneInfo(out["meta"].get("exchangeTimezoneName") or "UTC")
-        day = datetime.fromtimestamp(now or time.time(), tz).date().isoformat()
-        return (now or time.time()) < end and out["candles"][-1]["t"][:10] == day
+        meta = out["meta"]
+        tz = ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")
+        today = datetime.fromtimestamp(now, tz).date()
+        if out["candles"][-1]["t"][:10] != today.isoformat():
+            return False
+        if meta.get("instrumentType") == "CRYPTOCURRENCY":
+            return True
+        market = MARKET_OF.get(meta.get("instrumentType")) or MARKET_OF.get(meta.get("exchangeTimezoneName"))
+        if market and not is_trading_day(market, today):
+            return False
+        period = meta["currentTradingPeriod"]["regular"]
+        return (period.get("start") or 0) <= now < period["end"]
     except (KeyError, IndexError, TypeError, ValueError):
         return False
 

@@ -91,14 +91,16 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
     # every message carries the status code and the provider's own words, so Admin tells a rejected key from a bug
     if code == 401:
         return CallError("auth", f"rejected the key (401: {msg})" if msg else "rejected the key (401)", scope="provider")
-    if re.search(r"credit card|payment method on file|billing (details|information)", body, re.I):
+    if code != 429 and re.search(r"credit card|payment method on file|billing (details|information)", body, re.I):
         # an account setting, not a used-up allowance: nothing resets on its own (a gateway that wants a card on file)
         return CallError("auth", f"the account needs a payment method on file ({code}: {msg})", scope="provider")
     if code == 402 or re.search(r"credit balance|insufficient (credit|balance|quota)|out of credits|payment required", body, re.I):
         return CallError("credit", "the free credit is used up", wait=6 * 3600, scope="provider", daily=True)
     if code == 429:
         wait, daily = wait_from(r.headers, body), is_daily(body)
-        scope = "provider" if p.limit_scope == "provider" or re.search(r"free-models-per-day|account|organization", body, re.I) else "model"
+        # Groq's 429 always names the organization though the cap is the model's: only a plainly account-wide limit pauses all
+        whole = re.search(r"free-models-per-day|(account|organi[sz]ation)\b[^.]{0,40}\b(restricted|suspended|disabled|blocked)", body, re.I)
+        scope = "provider" if p.limit_scope == "provider" or whole else "model"
         return CallError("rate", "rate limited" + (" (daily free quota)" if daily else "") + (f" (429: {msg})" if msg else " (429)"), wait=wait, scope=scope,
                          daily=daily or (wait or 0) > 600)
     if too_big(code, body):

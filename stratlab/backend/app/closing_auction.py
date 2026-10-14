@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from . import db
+from . import db, leader
 from .auth import current_profile
 from .data import sessions as S
 from .data.calendar import is_trading_day
@@ -190,7 +190,8 @@ def refresh(feed=None, now: datetime | None = None) -> dict:
     except Exception as e:                    # the stocks still count
         print("CAS indices unavailable:", str(e)[:120])
         indices = {}
-    save_live(now.astimezone(IST).date().isoformat(), stocks, indices, now)
+    day = (stocks["as_of"] or "")[:10] or now.astimezone(IST).date().isoformat()      # the day the exchange stamped, else today
+    save_live(day, stocks, indices, now)
     return stocks
 
 
@@ -425,7 +426,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
             time.sleep(10)

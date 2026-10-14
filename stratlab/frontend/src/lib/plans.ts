@@ -62,7 +62,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Scans and watchlist: every trend scan (the Stage 2 scan, 52-week high breakout, golden cross and five more), watchlist red flags and Watchlist at a glance, with alerts. Also market breadth charts and margin funding history, and SIP dip rules with every start month",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax and a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
-  pro: ["Everything in Basic, plus:", "Unlimited backtests, AI builds (up to 200 a day), deep dives, decks and fresh AI reads", `Paper trade ${L.pro.live_limit} strategies at a time`,
+  pro: ["Everything in Basic, plus:", "Unlimited backtests, deep dives and decks; up to 200 AI builds a day", `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Export rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",

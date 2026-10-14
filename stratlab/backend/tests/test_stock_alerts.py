@@ -144,6 +144,13 @@ def store(monkeypatch):
     kv = {}
     monkeypatch.setattr(db, "set_setting", lambda k, v: kv.__setitem__(k, v))
     monkeypatch.setattr(db, "get_setting", lambda k: kv.get(k))
+
+    def update(k, fn):
+        new = fn(kv.get(k))
+        if new is not None:
+            kv[k] = new
+        return kv.get(k)
+    monkeypatch.setattr(db, "update_setting", update)
     monkeypatch.setattr(db, "all_settings_with_prefix", lambda p, page=1000: sorted((k, v) for k, v in kv.items() if k.startswith(p)))
     monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: d.weekday() < 5)
     return kv

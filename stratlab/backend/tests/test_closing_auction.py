@@ -184,3 +184,15 @@ def test_positions_at_the_indicative_settlement(monkeypatch):
 def test_unicode_minus_is_a_minus_in_num():
     from app.intel.net import num
     assert num("−12") == -12.0 and num("−12.5%") == -12.5 and num("12") == 12.0
+
+
+def test_a_read_is_stamped_with_the_day_the_exchange_gave(w):
+    class Old(FC.Feed):
+        def cas_stocks(self):
+            d = FC.auction_stocks(final=True)
+            d["timestamp"] = "02-Oct-2026 15:14:00"                 # the exchange's last read is Friday's
+            return d
+    CA.refresh(Old(final=True), now=ist(2026, 10, 5, 15, 16).astimezone(timezone.utc))
+    assert CA.load_live()["day"] == "2026-10-02"
+    CA.refresh(FC.Feed(), now=ist(2026, 10, 5, 15, 16).astimezone(timezone.utc))       # no stamp from the exchange: the IST day
+    assert CA.load_live()["day"] == "2026-10-05"

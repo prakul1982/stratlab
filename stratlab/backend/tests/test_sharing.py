@@ -4,6 +4,7 @@ import base64
 import json
 import re
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -83,6 +84,26 @@ def test_a_shared_card_previews_and_opens_the_company_page_with_the_invite(w):
     # without an image the preview falls back to the site's own
     assert "/og-image.png" in c.get(f"/c/{other['token']}").text
     assert c.get(f"/c/{other['token']}.png").status_code == 404
+
+
+def test_a_shared_card_preview_is_kept_out_of_search_and_names_no_canonical(w):
+    c = w["client"]
+    token = c.post("/cards/company/IN/RELIANCE", headers=_h("pro-token"), json={"image": PNG}).json()["token"]
+    page = c.get(f"/c/{token}")
+    assert '<meta name="robots" content="noindex,follow">' in page.text
+    assert 'rel="canonical"' not in page.text                  # a kept-out page names no address to point search engines at
+    assert page.headers["cache-control"] == "public, max-age=300"
+
+
+def test_the_card_image_check_does_not_decode_the_picture(w, monkeypatch):
+    c = w["client"]
+    token = c.post("/cards/company/IN/RELIANCE", headers=_h("pro-token"), json={"image": PNG}).json()["token"]
+
+    def no_decode(*_a, **_k):
+        raise AssertionError("the picture was decoded just to see that it exists")
+    monkeypatch.setattr(company_cards, "base64", SimpleNamespace(b64decode=no_decode))
+    assert company_cards.has_image(token) is True and company_cards.has_image("nope") is False
+    assert f"/c/{token}.png" in c.get(f"/c/{token}").text
 
 
 def test_bad_card_tokens_and_images(w):

@@ -317,7 +317,7 @@ def test_snapshot_on_the_first_of_each_month_once(w):
     assert snap and snap[0]["why"] == "month" and snap[0]["net"] == 7000
 
 
-def test_a_partial_total_is_named_and_never_recorded(w, monkeypatch):
+def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monkeypatch):
     c = w["client"]
     add(c, {"kind": "cash", "value": 7000})
     before = nw.history("u-pro")
@@ -327,8 +327,10 @@ def test_a_partial_total_is_named_and_never_recorded(w, monkeypatch):
     monkeypatch.setattr(main, "holdings_view", broken)
     v = add(c, {"kind": "cash", "value": 1000})
     assert v["totals"]["partial"] == ["My Holdings couldn't be read"] and nw.history("u-pro") == before
-    assert main.networth_job.tick(datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)) == 0
-    assert not [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]          # the month's snapshot isn't a partial total
+    # the month's snapshot is taken anyway, flagged with what's missing (a fund never valued mustn't stop the history)
+    assert main.networth_job.tick(datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)) == 1
+    snap = [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]
+    assert len(snap) == 1 and snap[0]["partial"] == ["My Holdings couldn't be read"] and snap[0]["why"] == "month"
     t = nw.build([], {"in": 100.0, "us": 0, "count": 2, "us_no_rate": True}, {"value": 500.0, "at_cost": 1, "missing": 0}, nw.Prices())
     assert t["totals"]["partial"] == ["US stocks (no dollar rate right now)"]
     assert "1 fund without a NAV at cost" in next(r for r in t["assets"] if r["kind"] == "mf")["rule"]

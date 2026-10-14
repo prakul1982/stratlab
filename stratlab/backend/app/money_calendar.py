@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from . import db, run_marks
+from . import db, leader, run_marks
 from .auth import current_profile
 from .branding import public_text
 from .responses import err as _err
@@ -547,7 +547,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = type(e).__name__
                 print("money calendar job:", type(e).__name__)

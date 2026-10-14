@@ -76,7 +76,7 @@ export function SystemSection() {
               actions={<>
                 {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "mail"} onClick={testEmail}>{busy === "mail" ? "Sending…" : "Send a test email"}</button>}
                 {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "review"} onClick={reviewLink} title="A one-time link that signs the automated reviewer in as you, sent to your own address">{busy === "review" ? "Sending…" : "Email a reviewer sign-in link"}</button>}
-                <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : "Send this week's summary now"}</button>
+                <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : `Send this week's summary now to ${sv.admin_alerts.to.length ? `${sv.admin_alerts.to.length} admin address${sv.admin_alerts.to.length === 1 ? "" : "es"}` : "all admins"}`}</button>
               </>} />}
             <StatusRow state={!filing ? "warn" : filing.ok ? "ok" : "bad"} word={filing ? undefined : "Not checked"} label={`Exchange filings${filing ? ` (${filing.symbol})` : ""}`}
               detail={!filing ? "Press the button to ask the exchange for a company's filings." : filing.ok

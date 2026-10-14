@@ -56,7 +56,7 @@ export function BreadthPage() {
       .catch((e) => {
         if (n !== seq.current) return;
         if ((e as { status?: number }).status === 404 && group !== "nifty500") { setGroup("nifty500"); return; }   // a group no longer offered
-        setError((e as Error).message);
+        setData(null); setError((e as Error).message);     // not the last group's numbers under the new group's name
         fail(e);
       })
       .finally(() => { if (n === seq.current) setLoading(false); });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -7,7 +7,7 @@ import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { fyLink, movedYearNote, rememberFy, savedFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
-import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
+import { Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 
 /* /money/us-tax: US share sales in rupees the way the Income-tax Rules convert them, long or short term under the
  * 24-month rule, US dividends with the tax withheld and the foreign tax credit, and the calendar-year Schedule FA table.
@@ -47,6 +47,9 @@ const tone = (v: number | null | undefined) => { const t = signTone(v); return t
 export function UsTaxPage() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
+  const seq = useRef(0);                  // the answer to the last request is the one shown, whatever order they come in
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -57,7 +60,8 @@ export function UsTaxPage() {
     const q = new URLSearchParams();
     if (fy) q.set("fy", String(fy));
     if (cy) q.set("cy", String(cy));
-    return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`).then(setV).catch(fail);
+    const n = ++seq.current;
+    return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`).then((x) => { if (n === seq.current) setV(x); }).catch((e) => { if (n === seq.current) fail(e); });
   }, [fail]);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
@@ -65,20 +69,22 @@ export function UsTaxPage() {
   // filed; when that year has no sales and another has, the latest year with sales, said in one line.
   useEffect(() => {
     let live = true;
+    const n = ++seq.current;
+    setError(null);
     (async () => {
       const want = asked ?? savedFy();
       const first = await api<View>(`/money/us-tax${want ? `?fy=${want}` : ""}`);
-      if (!live) return;
+      if (!live || n !== seq.current) return;
       const here = first.years.find((x) => x.fy === first.fy);
       const busy = asked == null && !here?.count ? [...first.years].sort((a, b) => b.fy - a.fy).find((x) => x.count > 0) : undefined;
       if (!busy) { setV(first); return; }
       const v = await api<View>(`/money/us-tax?fy=${busy.fy}`);
-      if (!live) return;
+      if (!live || n !== seq.current) return;
       setMovedFrom(first.fy);
       setV(v);
-    })().catch((e) => live && fail(e));
+    })().catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
     return () => { live = false; };
-  }, [asked, fail]);
+  }, [asked, fail, tries]);
 
   const add = async () => {
     const body = { d: form.d, side: form.side, sym: form.sym.trim().toUpperCase(), qty: Number(form.qty), price: Number(form.price), fees: Number(form.fees || 0) };
@@ -218,7 +224,8 @@ export function UsTaxPage() {
         )}
       </Card>
 
-      {!v && <Card><Skeleton label="Opening your US stocks" /></Card>}
+      {!v && (error ? <ErrorState title="Your US stocks couldn't be opened" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
+        : <Card><Skeleton label="Opening your US stocks" /></Card>)}
       {v && v.trades.length === 0 && (
         <EmptyState title="No US trades yet">Add your US purchases and sales above to see each sale's gain in rupees, which lots are long term, and the Schedule FA table.</EmptyState>
       )}

@@ -31,7 +31,7 @@ test("R9P-005: Account's AI builds line carries Pro's daily cap, as the Plans ca
   assert.equal(aiBuildsUse(5, null, 200, true), "5 (unlimited; up to 200 a day, not enforced for you as an admin)");
   assert.equal(aiBuildsUse(5, null, null), "5 (unlimited)");
   const { FEATURES } = await import("../src/lib/plans.ts");
-  assert.ok(FEATURES.pro.some((f) => /AI builds \(up to 200 a day\)/.test(f)));                    // the card the line has to match
+  assert.ok(FEATURES.pro.some((f) => /up to 200 AI builds a day/.test(f)));                    // the card the line has to match
   assert.match(read("src/pages/AccountPage.tsx"), /aiBuildsUse\(u\.ai_used, u\.ai_limit, u\.ai_builds_per_day, !!me\.is_admin\)/);
 });
 

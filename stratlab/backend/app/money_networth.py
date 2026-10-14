@@ -22,7 +22,7 @@ from typing import Callable, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from . import db
+from . import db, leader
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -436,18 +436,40 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
 
 
 # ---------- storage ----------
-def load(uid: str) -> dict:
-    """{"items": [...], "updated_at"}; empty when the user has none (or the row is damaged)."""
-    got = db.json_value(db.get_setting(KEY + uid), {})
+def _parse(raw: str | None) -> dict:
+    got = db.json_value(raw, {})
     items = [i for i in got.get("items") or [] if isinstance(i, dict) and i.get("kind") in KINDS and i.get("id")]
     return {"items": items, "updated_at": got.get("updated_at")}
+
+
+def load(uid: str) -> dict:
+    """{"items": [...], "updated_at"}; empty when the user has none (or the row is damaged)."""
+    return _parse(db.get_setting(KEY + uid))
+
+
+def _text(items: list[dict]) -> str:
+    return json.dumps({"items": items, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
+def update(uid: str, fn) -> list[dict] | None:
+    """Change the entries atomically, so a statement read and a hand edit can't lose each other's save.
+    fn(current items) returns the new items (none left: the row goes), or None to leave them. It runs again on the
+    newer items if another save got in first, so keep side effects out of it. Returns the items saved."""
+    out = []
+
+    def go(raw):
+        got = fn(_parse(raw)["items"])
+        out[:] = [got]
+        return None if got is None else _text(got) if got else db.REMOVE
+    db.update_setting(KEY + uid, go)
+    return out[0]
 
 
 def save(uid: str, items: list[dict]):
     if not items:
         db.delete_setting(KEY + uid)
         return
-    db.set_setting(KEY + uid, json.dumps({"items": items, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}))
+    db.set_setting(KEY + uid, _text(items))
 
 
 def history(uid: str) -> list[dict]:
@@ -456,12 +478,16 @@ def history(uid: str) -> list[dict]:
 
 def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[dict]:
     """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total (a source that
-    couldn't be read or valued) is never stored: it would show as a fall that didn't happen."""
-    if totals.get("partial"):
+    couldn't be read or valued) is stored only as the month's snapshot, flagged with what's missing: a fund with neither
+    NAV nor cost may never be valued, and history mustn't stop for it; any other partial total isn't stored, it would
+    show as a fall that didn't happen."""
+    if totals.get("partial") and why != "month":
         return history(uid)
     d = (day or today()).isoformat()
     rows = [h for h in history(uid) if h["d"] != d]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
+    if totals.get("partial"):
+        snap["partial"] = list(totals["partial"])
     rows = sorted(rows + [snap], key=lambda h: h["d"])[-MAX_LOG:]
     db.set_setting(LOG + uid, json.dumps(rows))
     return rows
@@ -873,7 +899,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("net worth snapshots:", type(e).__name__)
@@ -890,7 +917,7 @@ class Job:
             uid = key[len(KEY):]
             try:
                 v = self.value_of(uid)
-                if v and not v["totals"].get("partial"):  # a partial total isn't a snapshot (see record)
+                if v:                                       # a partial total is stored flagged (see record)
                     record(uid, v["totals"], "month", local.date())
                     n += 1
             except Exception as e:                          # one user's data never stops the others'
@@ -973,35 +1000,38 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             entry = clean(req)
         except EntryError as e:
             bad(422, "bad_entry", str(e))
-        items = load(profile["id"])["items"]
-        if len(items) >= MAX_ITEMS:
-            bad(400, "too_many", f"Net worth keeps up to {MAX_ITEMS} entries.")
-        _limit_check(profile, len(items) + 1)
-        entry["id"] = secrets.token_hex(4)
-        save(profile["id"], items + [entry])
+        def add(items):
+            if len(items) >= MAX_ITEMS:
+                bad(400, "too_many", f"Net worth keeps up to {MAX_ITEMS} entries.")
+            _limit_check(profile, len(items) + 1)
+            entry["id"] = secrets.token_hex(4)
+            return items + [entry]
+        update(profile["id"], add)
         return page(profile, "change")
 
     @r.put("/items/{iid}")
     def edit_item(iid: str, req: ItemReq, profile=Depends(current_profile)):
         """Change an entry (its kind can change too)."""
         throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
-        items = load(profile["id"])["items"]
-        if not any(i["id"] == iid for i in items):
-            bad(404, "not_found", "That entry isn't in your net worth any more.")
-        try:
-            entry = clean(req)
-        except EntryError as e:
-            bad(422, "bad_entry", str(e))
-        save(profile["id"], [{**entry, "id": iid} if i["id"] == iid else i for i in items])
+        def edit(items):
+            if not any(i["id"] == iid for i in items):
+                bad(404, "not_found", "That entry isn't in your net worth any more.")
+            try:
+                entry = clean(req)
+            except EntryError as e:
+                bad(422, "bad_entry", str(e))
+            return [{**entry, "id": iid} if i["id"] == iid else i for i in items]
+        update(profile["id"], edit)
         return page(profile, "change")
 
     @r.delete("/items/{iid}")
     def delete_item(iid: str, profile=Depends(current_profile)):
         throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
-        items = load(profile["id"])["items"]
-        if not any(i["id"] == iid for i in items):
-            bad(404, "not_found", "That entry isn't in your net worth any more.")
-        save(profile["id"], [i for i in items if i["id"] != iid])
+        def drop(items):
+            if not any(i["id"] == iid for i in items):
+                bad(404, "not_found", "That entry isn't in your net worth any more.")
+            return [i for i in items if i["id"] != iid]
+        update(profile["id"], drop)
         return page(profile, "change")
 
     @r.post("/prepay")

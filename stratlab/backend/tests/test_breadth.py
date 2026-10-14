@@ -57,6 +57,13 @@ def mem(monkeypatch):
     store: dict = {}
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+
+    def update(k, fn):                   # db.update_setting over the same dict (stock_alerts.flush uses it)
+        new = fn(store.get(k))
+        if new is not None:
+            store[k] = new
+        return store.get(k)
+    monkeypatch.setattr(db, "update_setting", update)
     monkeypatch.setattr(breadth, "MIN_MEMBERS", 1)
     monkeypatch.setattr(breadth, "MIN_SECTOR", 1)
     return store

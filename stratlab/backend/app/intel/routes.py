@@ -13,13 +13,13 @@ from pydantic import BaseModel, Field
 from .. import db, usage_slots
 from ..branding import public_research
 from ..responses import err, safe
-from ..ai_providers import AIBusy, AIError
+from ..ai_providers import AIBusy, AIError, ask_again
 from ..auth import current_profile
 from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
 from . import grounding, key_facts
-from .company import Research, with_dividend_yield
+from .company import INDICES, Research, with_dividend_yield
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -135,7 +135,8 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
             with one:                     # two people opening the same company at once: one read, written once
                 if not refresh and A.peek(kind, key):
                     return A.cached(kind, key, ttl, False, build)[0]
-                out, fresh = A.cached(kind, key, ttl, refresh, build)
+                with ask_again() if refresh else contextlib.nullcontext():
+                    out, fresh = A.cached(kind, key, ttl, refresh, build)
         except AIBusy as e:
             err(503, "ai_busy", str(e))
         except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
@@ -374,7 +375,8 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
         news = hub.headlines(r, focus[:60])
     except SourceError:
         news = []
-    return ok({"indices": indices, "headlines": news})
+    got = {i["name"] for i in indices}
+    return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got]})
 
 
 # ---------- AI reads ----------

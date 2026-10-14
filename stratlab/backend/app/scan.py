@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from . import db, run_marks, scan_presets, universes
+from . import db, leader, run_marks, scan_presets, universes
 from .engine.indicators import stage, supertrend
 from .intel.net import TTLCache
 
@@ -232,6 +232,9 @@ class Alerts:
 
     def _loop(self):
         while True:
+            if not leader.leading():      # another container leads: it runs this pass
+                time.sleep(60)
+                continue
             now = datetime.now(ZoneInfo("UTC"))
             for check in self.checks:
                 try:
@@ -246,9 +249,10 @@ class Alerts:
             time.sleep(60)
 
     def due(self, market: str, now: datetime) -> str | None:
-        from .data.calendar import is_trading_day
+        from .data.calendar import is_trading_day, shifted
         tz, at = SEND_AT[market]
         local = now.astimezone(ZoneInfo(tz))
+        at = shifted(market, local.date(), at)
         day = local.date().isoformat()
         if local.strftime("%H:%M") < at or self.last.get(market) == day or not is_trading_day(market, local.date()):
             return None

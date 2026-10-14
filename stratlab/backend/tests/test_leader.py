@@ -270,3 +270,42 @@ def test_a_database_error_at_boot_is_retried_on_the_next_pass(monkeypatch):
     with pytest.raises(Stop):
         j._loop()
     assert len(tries) == 2 and len(ticks) == 3       # retried once, then done; the sends ran every pass
+
+
+def test_a_follower_runs_none_of_the_jobs(monkeypatch):
+    from app import audit, corp_actions, deals, money_networth, results, scan, screens
+    from app.connect import jobs as connect_jobs
+    from app.intel import filings
+    monkeypatch.setattr(leader, "leading", lambda: False)
+    ran = []
+
+    def job(cls, **attrs):
+        j = object.__new__(cls)
+        j.status, j.lock = {}, threading.Lock()
+        for name in ("tick", "run_once", "step"):
+            setattr(j, name, lambda *a, _n=name: ran.append((cls.__name__, _n)))
+        j.__dict__.update(attrs)
+        return j
+    for name in ("send_weekly_summary", "stock_price_refresh_once"):
+        monkeypatch.setattr(main, name, lambda *a, _n=name: ran.append(_n))
+    monkeypatch.setattr(main.pricing, "refresh_rates", lambda *a: ran.append("rates"))
+    loops = [
+        (results, job(results.Job)._loop), (corp_actions, job(corp_actions.Job)._loop),
+        (money_networth, job(money_networth.Job)._loop), (filings, job(filings.Alerts)._loop),
+        (scan, job(scan.Alerts, checks=[lambda now: ran.append("stock alerts")])._loop),
+        (connect_jobs, job(connect_jobs.Job)._loop), (screens, job(screens.Indexer, every=1).loop),
+        (audit, job(audit.MarketAudit, full_once=lambda: None, pause=0, cool=0).loop),
+        (news, job(deals.Job, booted=True, repair_once=lambda: ran.append("repair"))._loop),
+        (main, main.rates_job), (main, main.weekly_job), (main, main.stock_price_refresh_job),
+    ]
+    for mod, loop in loops:
+        passes = []
+
+        def sleep(_):
+            passes.append(1)
+            if len(passes) == 3:
+                raise Stop()
+        monkeypatch.setattr(mod, "time", types.SimpleNamespace(sleep=sleep, time=time.time))
+        with pytest.raises(Stop):
+            loop()
+    assert ran == []

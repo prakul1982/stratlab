@@ -24,6 +24,7 @@ class FakeQuery:
 
     def select(self, *a, **k): return self
     def gte(self, *a): return self
+    def eq(self, col, v): return FakeQuery([r for r in self.rows if r.get(col) == v])
     def order(self, *a, **k): return self
     def limit(self, *a): return self
 
@@ -31,7 +32,7 @@ class FakeQuery:
         return FakeQuery([r for r in self.rows if pat.strip("%") in (r.get(col) or "")])
 
     def execute(self):
-        return type("R", (), {"data": self.rows})()
+        return type("R", (), {"data": self.rows, "count": len(self.rows)})()
 
 
 class FakeSB:
@@ -115,3 +116,42 @@ def test_old_key_urls_are_gone_and_callback_needs_the_state(client):
     main.kite.login_state = "good"
     r = c.get("/admin/kite/callback?status=success&request_token=t&state=<script>")
     assert r.status_code == 403 and "<script>" not in r.text
+
+
+def test_counts_page_past_the_servers_read_cap(monkeypatch):
+    rows = [{"id": f"{i:05d}", "plan": "free", "plan_status": None, "current_period_end": None,
+             "created_at": NOW.isoformat(), "razorpay_subscription_id": None} for i in range(2500)]
+
+    class Paged(FakeQuery):
+        def __init__(self, rows):
+            super().__init__(rows)
+            self.after, self.n = "", None
+        def gt(self, c, v): self.after = v; return self
+        def limit(self, n): self.n = min(n, 1000); return self      # the server never returns more than 1000
+        def execute(self):
+            got = [r for r in self.rows if r["id"] > self.after][:self.n or 1000]
+            return type("R", (), {"data": got, "count": len(self.rows)})()
+        def eq(self, *a): return self
+
+    monkeypatch.setattr(db, "sb", lambda: type("S", (), {"table": lambda s, n: Paged(rows)})())
+    st = admin.stats(main.month_start_iso())
+    assert st["users"] == 2500 and st["plans"]["free"] == 2500 and st["signups_today"] == 2500
+    assert st["experiments_month"] == 2500                          # counted by the database, not read back
+
+
+def test_a_plan_given_by_hand_after_a_cancelled_subscription_is_not_paying():
+    sub = {"id": "u9", "plan": "pro", "plan_status": "active", "razorpay_subscription_id": "sub_old"}
+    assert admin._paying(sub)
+    assert not admin._paying(sub, {"u9"})                          # given by hand (admin.granted)
+    assert not admin._paying({**sub, "plan_status": "cancelled"})
+
+
+def test_set_plan_records_that_it_was_given_by_hand(monkeypatch):
+    saved, store = {}, {}
+    monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.update(f) or {"id": uid, **f})
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    admin.set_plan("u1", "pro", 30)
+    assert "plan_source" not in saved and admin.granted() == {"u1"}      # no new profile column needed
+    admin.set_plan("u1", "free", None)
+    assert admin.granted() == set()

@@ -122,6 +122,15 @@ def test_the_central_banks_schedule_statement_and_minutes():
     assert M.read_rbi_statement(sample("rbi_statement_2026_08.html")) == {"repo": 5.25, "move": "unchanged"}
     assert M.read_rbi_statement("the MPC voted to reduce the policy repo rate by 25 basis points to 5.00 per cent.") == {"repo": 5.0, "move": "cut"}
     assert M.read_rbi_statement("nothing about rates") is None
+
+
+def test_rbi_statement_reads_a_figure_with_a_decimal_point_before_it():
+    cut = "the MPC voted to reduce the policy repo rate under the liquidity adjustment facility by 25 basis points from 5.50 per cent to 5.25 per cent."
+    hold = "the MPC voted to keep the policy repo rate under the liquidity adjustment facility unchanged at 5.25 per cent."
+    hike = "the MPC voted to increase the policy repo rate under the liquidity adjustment facility by 25 basis points from 6.00 per cent to 6.25 per cent."
+    assert M.read_rbi_statement(cut) == {"repo": 5.25, "move": "cut"}
+    assert M.read_rbi_statement(hold) == {"repo": 5.25, "move": "unchanged"}
+    assert M.read_rbi_statement(hike) == {"repo": 6.25, "move": "raised"}
     assert M.meeting_span("September 29 to October 1, 2025") == (date(2025, 9, 29), date(2025, 10, 1))
     assert M.meeting_span("June 4 and 5, 2026") == (date(2026, 6, 4), date(2026, 6, 5))
     assert M.meeting_span("no dates here") is None and M.meeting_span("June 4 and 25, 2026") is None

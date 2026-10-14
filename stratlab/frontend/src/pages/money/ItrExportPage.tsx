@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { Download } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import { movedYearNote, rememberFy, savedFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 import { minus } from "../../lib/format";
@@ -43,6 +43,10 @@ export function ItrExportPage() {
   const { fail, me } = useApp();
   const yours = PLAN_NAME[(me?.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const [v, setV] = useState<View | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
+  const seq = useRef(0);                  // the year picked last is the one shown, whatever order the answers come in
+  const picked = useRef<number | null>(null);
   const [getting, setGetting] = useState<Format | null>(null);
   const [open, setOpen] = useState<string | null>("112a");
 
@@ -51,14 +55,17 @@ export function ItrExportPage() {
   const one = useCallback((fy?: number) => api<View>(`/money/itr${fy ? `?fy=${fy}` : ""}`), []);
   /** A year picked by hand opens as it is. */
   const load = useCallback((fy: number) => {
-    setV(null);
+    const n = ++seq.current;
+    picked.current = fy;
+    setV(null); setError(null);
     setMovedFrom(null);
-    one(fy).then(setV).catch(fail);
+    one(fy).then((x) => n === seq.current && setV(x)).catch((e) => { if (n !== seq.current) return; setError((e as Error).message); fail(e); });
   }, [one, fail]);
   /** The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
    * filed; when that year has no schedule lines and another has, the latest year that has some, said in one line. */
   useEffect(() => {
     let live = true;
+    setError(null);
     (async () => {
       const first = await one(asked ?? savedFy() ?? undefined);
       if (!live) return;
@@ -70,9 +77,9 @@ export function ItrExportPage() {
         if (hasLines(v)) { setMovedFrom(first.fy); setV(v); return; }
       }
       setV(first);
-    })().catch((e) => live && fail(e));
+    })().catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
     return () => { live = false; };
-  }, [one, asked, fail]);
+  }, [one, asked, fail, tries]);
 
   const download = async (f: Format) => {
     if (!v) return;
@@ -103,7 +110,8 @@ export function ItrExportPage() {
       </FormGrid>
 
       {v && movedFrom != null && movedFrom !== v.fy && <p className="k-small k-muted" data-testid="itr-moved-year">{movedYearNote(movedFrom, v.fy, v.years[0] ?? v.fy, "figures")}</p>}
-      {!v && <Card><Skeleton label="Laying out your schedules" /></Card>}
+      {!v && (error ? <ErrorState title="Your schedules couldn't be laid out" action={{ label: "Try again", onClick: () => (picked.current != null ? load(picked.current) : setTries((n) => n + 1)) }}>{error}</ErrorState>
+        : <Card><Skeleton label="Laying out your schedules" /></Card>)}
       {v && (
         <>
           <Card>

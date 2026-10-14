@@ -132,16 +132,25 @@ def record(newcomer: dict, code: str | None, now: datetime | None = None) -> str
         return "not_new"
     with _lock:
         if db.get_setting(f"ref:by:{uid}"):
+            if referred_by(uid) == ref:
+                _start_reward(referrer, newcomer, retry=True)    # an earlier try may have failed before the reward started
             return "already"
         at = now.isoformat(timespec="seconds")
-        db.set_setting(f"ref:by:{uid}", json.dumps({"by": ref, "at": at}))
         rows = [r for r in joined(ref) if isinstance(r, dict) and r.get("id") != uid]
         db.set_setting(f"ref:joined:{ref}", json.dumps(rows + [{"id": uid, "at": at}]))
+        db.set_setting(f"ref:by:{uid}", json.dumps({"by": ref, "at": at}))     # last: its absence lets a retry through
+    _start_reward(referrer, newcomer)
+    return "recorded"
+
+
+def _start_reward(referrer: dict, newcomer: dict, retry: bool = False) -> None:
+    from . import invite_rewards
+    if retry and invite_rewards.row(newcomer["id"]):
+        return
     try:
         on_referral_joined(referrer, newcomer)
     except Exception as e:                           # a reward going wrong must not undo the record
         print("referral reward failed:", str(e)[:160])
-    return "recorded"
 
 
 def on_referral_joined(referrer: dict, newcomer: dict) -> None:

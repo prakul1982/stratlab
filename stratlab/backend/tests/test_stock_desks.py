@@ -309,8 +309,10 @@ def test_lending_summaries_and_eligibility(w):
 
 
 def test_margin_funding_for_a_stock_and_the_market(w):
-    fill()
-    r = mtf.for_symbol("RELIANCE", full=True)
+    import time_machine
+    with time_machine.travel(datetime(2026, 10, 14, 21, 0, tzinfo=IST), tick=False):      # not across midnight (CI, 14 Oct)
+        fill()
+        r = mtf.for_symbol("RELIANCE", full=True)
     assert r["funded"] and r["crore"] > 0 and r["issued"] == FS.STOCKS["RELIANCE"][3]
     assert r["pct_shares"] == mtf.pct_shares(r["shares"], r["issued"]) and r["day"]["shares"] > 0     # grows each day
     assert r["d30"]["from"] < r["as_of"] and r["history"][-1]["day"] == r["as_of"]

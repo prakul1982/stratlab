@@ -1,6 +1,7 @@
 /* StratLab: the lab notebook look. Paper, ink, one blue for real edges, one orange for luck. */
 /* Design tokens that do not change with the theme (see DESIGN.md): spacing, radii, control heights, type scale. */
 :root {
+  --css-ok: 1;      /* public/boot.js checks it: if the stylesheet did not apply, it shows the reload message */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --r-card: 14px; --r-ctl: 10px;
   --ctl: 44px; --ctl-sm: 34px;

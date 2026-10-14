@@ -23,7 +23,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import alerts, db, run_marks
+from . import alerts, db, leader, run_marks
 from .config import settings
 from .tax_lots import fy_label, money
 
@@ -308,7 +308,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("advance tax reminders:", e)

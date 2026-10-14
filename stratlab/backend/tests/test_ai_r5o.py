@@ -191,3 +191,24 @@ def test_errors_carry_the_status_code_and_the_providers_words(monkeypatch):
     assert e.detail.endswith("(429: slow down)")
     e = C.classify("groq", httpx.Response(403, json={"error": {"message": "model blocked"}}), "m")
     assert e.detail == "this key can't use m (403: model blocked)"
+
+
+# ---------- a 429 is a rate limit, not a missing card; one Groq model's cap doesn't pause the others ----------
+def test_geminis_quota_429_is_a_rate_limit_even_when_it_names_billing(monkeypatch):
+    keys(monkeypatch, "gemini")
+    body = {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": [{"retryDelay": "34s"}],
+                      "message": "You exceeded your current quota, please check your plan and billing details."}}
+    e = C.classify("gemini", httpx.Response(429, json=body), "m")
+    assert e.kind == "rate" and e.wait == 34
+    e = C.classify("gemini", httpx.Response(403, json={"error": {"message": "Add billing details to use this model."}}), "m")
+    assert e.kind == "auth"                                                # a 403 asking for a card still is one
+
+
+def test_one_groq_models_daily_cap_pauses_only_that_model(monkeypatch):
+    keys(monkeypatch, "groq")
+    said = ("Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01` service tier `on_demand` on "
+            "tokens per day (TPD): Limit 100000, Used 99990, Requested 500. Please try again in 8m.")
+    e = C.classify("groq", httpx.Response(429, json={"error": {"message": said}}), "llama-3.3-70b-versatile")
+    assert e.kind == "rate" and e.scope == "model"
+    e = C.classify("groq", httpx.Response(429, json={"error": {"message": "Your organization has been restricted."}}), "m")
+    assert e.scope == "provider"                                           # plainly the whole account

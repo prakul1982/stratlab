@@ -4,6 +4,7 @@ import { api, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
+import { endsAt } from "../lib/offer";
 import { HELP } from "../lib/help";
 import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
@@ -60,7 +61,7 @@ export function AccountPage() {
   };
 
   const usage: [string, string][] = [
-    ...(me.promo ? [["Launch offer", `Every Pro feature free until ${dateOnly(me.promo.until)}`] as [string, string]] : []),
+    ...(me.promo ? [["Launch offer", `Every Pro feature free until ${endsAt(me.promo.until)}`] as [string, string]] : []),
     ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`] as [string, string]] : []),
     ...(row ? [row] : []),
     ["Backtests this month", monthlyUse(u.backtests_used, u.backtests_limit)],

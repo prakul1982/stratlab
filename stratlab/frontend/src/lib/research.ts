@@ -175,7 +175,7 @@ export const researchApi = {
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),
-  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[] }>(`/research/pulse?region=${r}${focusParam(focus)}`),
+  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] }>(`/research/pulse?region=${r}${focusParam(focus)}`),
   /** The market read, or an Error saying why there is none (like companyAI: "unavailable" is a 200 on the wire). */
   pulseAI: async (r: Region, focus = "", refresh = false): Promise<PulseAI> => {
     const got = await api<PulseAI | { unavailable: true; message: string }>(`/research/pulse/ai?region=${r}${focusParam(focus)}${refresh ? "&refresh=true" : ""}`);

@@ -105,7 +105,7 @@ def test_launch_offer_reminders_for_free_users_once_per_offer(w):
     until = datetime(2026, 10, 9, 18, 30, tzinfo=timezone.utc)                  # midnight IST: last day is Fri 9 Oct
     p = user(created=NOW - timedelta(days=30))
     day_before = datetime(2026, 10, 8, 5, 0, tzinfo=timezone.utc)
-    assert lifecycle.due(p, day_before, {}, None, until) == [("promo_before", "promo_before:2026-10-09", {"last_day": date(2026, 10, 9)})]
+    assert lifecycle.due(p, day_before, {}, None, until) == [("promo_before", "promo_before:2026-10-09", {"last_day": date(2026, 10, 9), "end": until})]
     assert lifecycle.due(p, day_before + timedelta(days=1), {}, None, until)[0][1] == "promo_end:2026-10-09"
     assert lifecycle.due(p, NOW, {}, None, until) == []                                   # two days before: nothing yet
     pro = user("u-pro2", "pro2@example.com", NOW - timedelta(days=30), plan="pro", plan_status="active",
@@ -263,8 +263,9 @@ def test_every_email_is_facts_not_advice_and_names_no_data_source(w, kind):
 def test_dates_in_reminders(w):
     s, _, text = lifecycle.build("trial_before", {}, {"last_day": date(2026, 10, 9)})
     assert s == "Your paper-trading trial ends tomorrow" and "Fri, 9 Oct 2026" in text
-    s, _, text = lifecycle.build("promo_end", {}, {"last_day": date(2026, 10, 9)})
-    assert s == "The launch offer ends today" and "Fri, 9 Oct 2026" in text
+    end = datetime(2026, 10, 22, 11, 50, 59, tzinfo=timezone.utc)                  # 17:20 IST: the stored instant is what is said
+    s, _, text = lifecycle.build("promo_end", {}, {"last_day": date(2026, 10, 22), "end": end})
+    assert s == "The launch offer ends today" and "ends on Thu 22 Oct at 5:20 pm IST." in text and "end of" not in text
     assert "What's new" in lifecycle.build("inactive", {})[0]
     with pytest.raises(ValueError):
         lifecycle.build("nope", {})
@@ -298,12 +299,24 @@ def test_sweep_end_to_end_with_trial_and_offer(w, outbox):
     user("u-p", "p@example.com", NOW - timedelta(days=40))
     lifecycle.sweep(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc))
     assert [m["subject"] for m in outbox if m["to"] in ("p@example.com", "t@example.com")] == ["The launch offer ends tomorrow"] * 2
-    assert "Mon, 2 Nov 2026" in outbox[0]["text"]
+    assert "ends on Tue 3 Nov at 12:00 am IST." in outbox[0]["text"]
     lifecycle.sweep(datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc))
     assert len([m for m in outbox if m["to"] == "p@example.com"]) == 1
     lifecycle.sweep(datetime(2026, 11, 2, 5, 0, tzinfo=timezone.utc))
     assert [m["subject"] for m in outbox if m["to"] == "p@example.com"][-1] == "The launch offer ends today"
     assert not any(m["to"] == "pro@example.com" for m in outbox)                   # paying users aren't reminded
+
+
+def test_ends_today_is_never_sent_after_the_end(w, outbox):
+    end = datetime(2026, 10, 22, 11, 50, 59, tzinfo=timezone.utc)                  # 17:20 IST
+    db.set_setting(plans.PROMO_KEY, end.isoformat())
+    plans._promo.update(read_at=0.0)
+    user("u-q", "q@example.com", NOW - timedelta(days=40))
+    mine = lambda: [m for m in outbox if m["to"] == "q@example.com"]
+    lifecycle.sweep(end + timedelta(minutes=10))                                   # 17:30 IST, after the end
+    assert not mine()
+    lifecycle.sweep(end - timedelta(minutes=20))                                   # 17:00 IST, before it
+    assert [m["subject"] for m in mine()] == ["The launch offer ends today"] and "5:20 pm IST" in mine()[0]["text"]
 
 
 # ---------- admin ----------

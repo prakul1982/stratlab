@@ -134,25 +134,30 @@ def read(data: bytes, passwords: list[str]) -> Parsed:
 # ---------- saving ----------
 def save_nps(uid: str, figures: dict, asof: str | None, plan: str, how: str = "statement") -> str:
     """The NPS balance as a Net worth entry marked as read from a statement; one the user typed in is left alone."""
-    items = money_networth.load(uid)["items"]
-    # one read from any statement (the depository's or NPS's own) is the same balance: updated, never added twice
-    mine = [i for i in items if i["kind"] == "nps" and i.get("auto")]
-    typed = [i for i in items if i["kind"] == "nps" and not i.get("auto")]
-    if typed and not mine:
-        return "You already have an NPS entry in Net worth, so the statement's balance was not added."
-    if mine and asof and str(mine[0].get("as_of") or "") > asof:
-        return "Net worth already has a newer NPS balance, so this statement's balance was not added."
-    entry = money_networth.clean(money_networth.ItemReq(kind="nps", name="NPS", tier1=figures.get("tier1") or 0,
-                                                        tier2=figures.get("tier2") or None, as_of=asof))
-    entry["auto"] = how
-    if mine:
-        entry["id"] = mine[0]["id"]
-        money_networth.save(uid, [entry if i["id"] == entry["id"] else i for i in items])
-    else:
+    why = []
+
+    def put(items):             # runs again on the newer entries if the user edits Net worth meanwhile
+        why.clear()
+        # one read from any statement (the depository's or NPS's own) is the same balance: updated, never added twice
+        mine = [i for i in items if i["kind"] == "nps" and i.get("auto")]
+        typed = [i for i in items if i["kind"] == "nps" and not i.get("auto")]
+        if typed and not mine:
+            why.append("You already have an NPS entry in Net worth, so the statement's balance was not added.")
+            return None
+        if mine and asof and str(mine[0].get("as_of") or "") > asof:
+            why.append("Net worth already has a newer NPS balance, so this statement's balance was not added.")
+            return None
+        entry = money_networth.clean(money_networth.ItemReq(kind="nps", name="NPS", tier1=figures.get("tier1") or 0,
+                                                            tier2=figures.get("tier2") or None, as_of=asof))
+        entry["auto"] = how
+        if mine:
+            entry["id"] = mine[0]["id"]
+            return [entry if i["id"] == entry["id"] else i for i in items]
         import secrets
         entry["id"] = secrets.token_hex(4)
-        money_networth.save(uid, items + [entry])
-    return ""
+        return items + [entry]
+    money_networth.update(uid, put)
+    return why[0] if why else ""
 
 
 def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:

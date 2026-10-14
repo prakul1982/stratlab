@@ -239,17 +239,21 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
 
 
 def _save_entry(uid: str, kind: str, fields: dict, asof: str | None) -> str:
-    items = money_networth.load(uid)["items"]
-    mine = [i for i in items if i["kind"] == kind and i.get("auto") == "passbook"]
-    typed = [i for i in items if i["kind"] == kind and not i.get("auto")]
-    if typed and not mine:
-        return f"You already have an {kind.upper()} entry in Net worth, so this balance was not added."
-    entry = money_networth.clean(money_networth.ItemReq(kind=kind, name=kind.upper(), as_of=asof, **fields))
-    entry["auto"] = "passbook"
-    if mine:
-        entry["id"] = mine[0]["id"]
-        money_networth.save(uid, [entry if i["id"] == entry["id"] else i for i in items])
-    else:
+    why = []
+
+    def put(items):             # runs again on the newer entries if the user edits Net worth meanwhile
+        why.clear()
+        mine = [i for i in items if i["kind"] == kind and i.get("auto") == "passbook"]
+        typed = [i for i in items if i["kind"] == kind and not i.get("auto")]
+        if typed and not mine:
+            why.append(f"You already have an {kind.upper()} entry in Net worth, so this balance was not added.")
+            return None
+        entry = money_networth.clean(money_networth.ItemReq(kind=kind, name=kind.upper(), as_of=asof, **fields))
+        entry["auto"] = "passbook"
+        if mine:
+            entry["id"] = mine[0]["id"]
+            return [entry if i["id"] == entry["id"] else i for i in items]
         entry["id"] = secrets.token_hex(4)
-        money_networth.save(uid, items + [entry])
-    return ""
+        return items + [entry]
+    money_networth.update(uid, put)
+    return why[0] if why else ""

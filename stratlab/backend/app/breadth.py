@@ -27,6 +27,7 @@ import pandas as pd
 
 from . import db, official_close, rotation, scan_presets, sector_members, universes
 from .engine.indicators import stage
+from .data import calendar
 from . import deals  # noqa: F401  (before the newsletter job, which imports it back while loading)
 from .newsletter import job as news_job
 
@@ -418,11 +419,22 @@ def sector_map(region: str) -> dict[str, str]:
 
 
 def last_complete(region: str, now: datetime) -> str:
-    """The latest day whose candle is final: today once the market has closed (with a margin), else yesterday."""
+    """The latest day whose candle is final: today once the market has closed (with a margin; early on a half day),
+    else the day before."""
     tz, at = CLOSE[region]
     local = now.astimezone(ZoneInfo(tz))
-    day = local.date() if local.strftime("%H:%M") >= at else local.date() - timedelta(days=1)
+    day = local.date() if local.strftime("%H:%M") >= calendar.shifted(region, local.date(), at) else local.date() - timedelta(days=1)
     return day.isoformat()
+
+
+def last_trading(region: str, day: str) -> str:
+    """The latest trading day on or before `day`: what a stored base's day is compared to (Monday's is Friday's)."""
+    d = date.fromisoformat(day)
+    for _ in range(15):
+        if calendar.is_trading_day(region, d):
+            break
+        d -= timedelta(days=1)
+    return d.isoformat()
 
 
 # ---------- the run ----------
@@ -534,7 +546,7 @@ class Runner:
         as_of = max((v["as_of"] for v in out.values() if v["as_of"]), default=None)
         if bases:
             try:
-                save_base(region, through, bases)
+                save_base(region, last_trading(region, through), bases)
             except Exception as e:      # the intraday view rebuilds it when it needs to
                 print("breadth base save:", region, str(e)[:120])
         for g, found in scans.items():
@@ -836,6 +848,7 @@ class Job(news_job.Job):
             if time.time() < self.retry.get(name, 0) or not self.ready(region):
                 continue
             tz, at = RUN_AT[region]
+            at = calendar.shifted(region, now.astimezone(ZoneInfo(tz)).date(), at)
             day = self.due(name, now, tz, at, region=region)
             if not day and (self.last.get(f"{name}-filled") or self._has_history(region, now)):
                 continue
