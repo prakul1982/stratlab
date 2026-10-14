@@ -1,6 +1,7 @@
 """Rule evaluation, the trading engine and backtest statistics.
 The same Engine drives backtests and live paper trading."""
 import math
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from . import costs as C
@@ -110,6 +111,7 @@ class Engine:
         self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
+        self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
         if state:
             self.load(state)
 
@@ -334,16 +336,23 @@ class Engine:
         open_side = "buy" if d == 1 else "sell"
         px = b["c"] * (1 + slip * d)
         dist = self._stop_distance(bars, ctx, i, px, d)
+        # flat, the engine's cash is the account's value; in a group it is the shared pot's
+        pot = self.funds() if self.funds is not None else None
+        worth = pot[0] if pot else self.equity(b["c"])
         if r.sizing == "capital":
             per = r.perTrade or r.capital * r.maxAlloc / 100
-            cap = min(per, max(self.equity(b["c"]), 0)) * r.leverage       # margin can't exceed what you have
+            cap = min(per, max(worth, 0)) * r.leverage       # margin can't exceed what you have
+        else:
+            cap = max(worth, 0) * r.maxAlloc / 100 * r.leverage
+        if pot:
+            cap = min(cap, max(pot[1], 0) * r.leverage)     # the pot's other positions tie up part of its cash
+        if r.sizing == "capital":
             q = cap / px
         else:
-            cap = self.cash * r.maxAlloc / 100
             # the stated risk is a share of the capital ("1% of Rs5,00,000, that is Rs5,000 if the stop loss is hit"): a
             # stop hit never costs more, however much the account has grown (11 units x 2% x Rs24,187 = Rs5,321 did,
             # from 1% of the grown account); after losses the smaller account's share is risked
-            q = min(self.cash, r.capital) * r.riskPct / 100 / dist if dist > 0 else math.inf
+            q = min(worth, r.capital) * r.riskPct / 100 / dist if dist > 0 else math.inf
             q = min(q, (cap - brok) / px)
         q = C.floor_to(q, self.qty_step)
         # percentage costs (STT, exchange fees) must fit in the budget too
@@ -370,14 +379,29 @@ class Engine:
         return ev
 
 
-def stats(eq: list[float], trades: list[dict], capital: float, per_year: float) -> dict:
+def span_years(t0, t1) -> float | None:
+    """Calendar years from one bar's time to another's, or None when they can't be read or are under a day apart."""
+    try:
+        a, b = (datetime.fromisoformat(str(t)[:19]) for t in (t0, t1))
+    except (TypeError, ValueError):
+        return None
+    days = (b - a).total_seconds() / 86400
+    return days / 365.25 if days >= 1 else None
+
+
+def stats(eq: list[float], trades: list[dict], capital: float, per_year: float, years: float | None = None) -> dict:
+    """`years` is the test's span in calendar years; bars a year then come from the data (a coin trades 365 days, a
+    stock 252). Without it, `per_year` from the timeframe stands in for both."""
     arr = np.asarray(eq, dtype=float)
     end = float(arr[-1])
     peak = np.maximum.accumulate(arr)
     dd = (arr / peak - 1) * 100
     rets = np.diff(arr) / arr[:-1] if len(arr) > 1 else np.array([0.0])
     sd = float(rets.std())
-    years = len(arr) / per_year
+    if years:
+        per_year = max(len(arr) - 1, 1) / years
+    else:
+        years = len(arr) / per_year
     wins = [t for t in trades if t["pnl"] > 0]
     gw = sum(t["pnl"] for t in wins)
     gl = -sum(t["pnl"] for t in trades if t["pnl"] <= 0)
@@ -458,7 +482,7 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
     open_trade = None
     if eng.qty > 0:
         open_trade = open_position(eng, bars[-1]["c"])
-    st = stats(equity, eng.trades, cap, PER_YEAR[tf])
+    st = stats(equity, eng.trades, cap, PER_YEAR[tf], span_years(bars[start]["t"], bars[-1]["t"]))
     first = view[0]["c"]
     bh = [cap * b["c"] / first for b in view]
     # period returns

@@ -2,6 +2,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from app.engine.core import Ctx, Engine, backtest, eval_cond
 from app.engine.indicators import compute, rsi
@@ -106,3 +107,44 @@ def test_bars_across_a_daylight_saving_change():
             {"t": "2026-03-09T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1}]
     ctx = Ctx(bars, intraday=False)
     assert [d.day for d in ctx.df.t] == [6, 9]
+
+
+def test_leverage_raises_the_cap_on_risk_sized_trades():
+    # risk 1,000 at a 0.5% stop wants 1,818 shares (2,00,000); 50% of 1,00,000 caps it at 454, x5 leverage at 2,272
+    risk = {"capital": 100000, "riskPct": 1, "maxAlloc": 50, "sl": 0.5, "brokerage": 0, "slippage": 0}
+    bars = bars_from([100.0] * 10 + [110.0] * 5)
+    ctx = Ctx(bars, intraday=False)
+    qty = {}
+    for lev in (1, 5):
+        eng = Engine(strat(risk={**risk, "leverage": lev}))
+        for i in range(1, len(bars)):
+            eng.step(bars, ctx, i)
+            if eng.qty:
+                break
+        qty[lev] = eng.qty
+    assert qty[1] == math.floor(50000 / 110)
+    assert qty[5] == math.floor(1000 / (110 * 0.005))       # the stop's risk binds once the cap is 2,50,000
+
+
+def test_cagr_and_sharpe_come_from_the_calendar():
+    # a coin growing 0.1% a day for 365 days: one year, so CAGR is the return, not the return over 1.45 "years"
+    closes = [100 * 1.001 ** k for k in range(366)]
+    bars = bars_from(closes)
+    s = strat(entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 0}}], exit=[],
+              risk={"capital": 100000, "riskPct": 100, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0})
+    out = backtest(bars, s, start=0)
+    st = out["stats"]
+    # with 252 days in a year (the old table) it was about 28%
+    assert st["cagr"] == pytest.approx(st["ret"], rel=0.01) and st["ret"] > 40
+
+
+def test_stats_bars_a_year_follow_the_span():
+    from app.engine.core import span_years, stats
+    eq = [100 * 1.001 ** k for k in range(366)]
+    st = stats(eq, [], 100, 252, span_years("2024-01-01T00:00:00+00:00", "2024-12-31T06:00:00+00:00"))
+    assert st["cagr"] == pytest.approx(44.0, abs=0.2)
+    old = stats(eq, [], 100, 252)            # no times: the timeframe's table, as before
+    assert old["cagr"] < 30
+    # Sharpe annualised with 365 returns a year, not 252
+    assert st["sharpe"] / old["sharpe"] == pytest.approx(math.sqrt(365 / 252), rel=0.01)
+    assert span_years("2024-01-01T09:15", "2024-01-01T15:30") is None and span_years(None, "x") is None
