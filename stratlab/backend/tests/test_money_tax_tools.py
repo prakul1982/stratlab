@@ -298,6 +298,17 @@ def test_tracker_counts_fund_gains_and_leaves_out_gold_etfs(monkeypatch):
     assert t["exemption"]["used"] == 125000 and t["exemption"]["left"] == 0 and t["long"] == []
 
 
+def test_the_tracker_sets_off_losses_brought_forward_like_the_report():
+    # FY 2024-25: a long-term loss of 1,00,000; FY 2025-26: a long-term gain of 2,00,000
+    today = "2025-10-14"
+    trades = [b("2020-01-01", 1, 200000, "X"), s_("2024-09-01", 1, 100000, "X"), b("2020-01-01", 1, 100000, "Y"), s_("2025-09-01", 1, 300000, "Y")]
+    c = T.compute(trades, today=today)
+    rep = next(y for y in T.report(trades, {}, {}, {}, [], today)["years"] if y["fy"] == 2025)
+    t = L.tracker(c, {}, today)
+    assert rep["exemption"]["used"] == 100000 and t["exemption"]["used"] == rep["exemption"]["used"]
+    assert t["exemption"]["left"] == rep["exemption"]["left"] == 25000
+
+
 def test_unpriced_lots_are_counted_not_guessed():
     c = T.compute([b("2024-01-10", 5, 100, "Z")], today="2026-10-04")
     t = L.tracker(c, {}, "2026-10-04")
@@ -381,6 +392,23 @@ def test_advance_tax_api_dates_for_free_amounts_for_pro(w, paid):
     assert s["due"] and s["tds"] == 50000 and s["net"] == round(s["tax"] - 50000, 2)
     assert s["instalments"][0]["paid"] == 10000 and r.json()["inputs"]["paid"] == [{"d": f"{fy}-06-15", "amount": 10000.0}]
     assert c.put("/money/advance-tax", headers=PRO, json={"fy": fy, "tds": -1}).status_code == 422
+
+
+@time_machine.travel(datetime(2025, 10, 14, 5, 0, tzinfo=ZoneInfo("UTC")))
+def test_advance_tax_and_the_tracker_carry_losses_forward_like_the_report(w):
+    c = w["client"]
+    fno = lambda fy, pnl: {"seg": "fno", "fy": fy, "first": f"{fy}-05-01", "last": f"{fy + 1}-03-01", "pnl": pnl, "turnover": abs(pnl) * 10,
+                           "turnover_contract": abs(pnl) * 5, "charges": 0.0, "stt": 0.0, "trades": 10}
+    # FY 2024-25: F&O loss of 5 lakh and a long-term loss of 1 lakh; FY 2025-26: F&O profit of 20 lakh, long-term gain of 2 lakh
+    trades = [b("2020-01-01", 1, 200000, "X", src="trades"), s_("2024-09-01", 1, 100000, "X", src="trades"),
+              b("2020-01-01", 1, 100000, "Y", src="trades"), s_("2025-09-01", 1, 300000, "Y", src="trades")]
+    T.save("u-pro", trades, [], {}, [fno(2024, -500000), fno(2025, 2000000)])
+    assert c.put("/tax/inputs", headers=PRO, json={"fy": 2025, "regime": "new", "other": 0}).status_code == 200
+    y = next(x for x in c.get("/tax", headers=PRO).json()["years"] if x["fy"] == 2025)
+    assert [(p["kind"], p["used"]) for p in y["total"]["brought_forward"]] == [("business", 500000)] and y["exemption"]["used"] == 100000
+    adv = c.get("/money/advance-tax?fy=2025", headers=PRO).json()
+    assert adv["schedule"]["tax"] == y["total"]["total"]
+    assert c.get("/money/ltcg", headers=PRO).json()["exemption"]["used"] == y["exemption"]["used"]
 
 
 def test_reminders_opt_in_job_and_unsubscribe(w, monkeypatch):

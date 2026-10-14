@@ -62,7 +62,7 @@ type Report = {
 type Problem = { line: number | null; text: string; reason: string };
 type Skipped = { name: string; reason: string };
 type Check = { section: string; file: number | null; summary: number | null; ok: boolean; what?: "pnl" | "turnover" };
-type BizReply = { lines: number; added: number; replaced: number; same: number; years: number[] };
+type BizReply = { lines: number; added: number; replaced: number; same: number; overlap?: number; years: number[] };
 type ImportReply = {
   broker: string; kind: "trades" | "pnl" | "business"; read: number; added: number; duplicates: number; over_limit: number; problems: Problem[]; problem_count: number;
   not_listed: string[]; skipped: Skipped[]; check: Check[]; files: { name: string; section: string; lines: number }[]; report: Report;
@@ -87,7 +87,7 @@ function combine(a: ImportReply | null, b: ImportReply): ImportReply {
     not_listed: [...new Set([...a.not_listed, ...b.not_listed])], skipped: [...a.skipped, ...b.skipped], check: [...a.check, ...b.check], files: [...a.files, ...b.files],
     business: {
       lines: a.business.lines + b.business.lines, added: a.business.added + b.business.added, replaced: a.business.replaced + b.business.replaced,
-      same: a.business.same + b.business.same, years: [...new Set([...a.business.years, ...b.business.years])].sort(),
+      same: a.business.same + b.business.same, overlap: (a.business.overlap ?? 0) + (b.business.overlap ?? 0), years: [...new Set([...a.business.years, ...b.business.years])].sort(),
     },
   };
 }
@@ -255,7 +255,9 @@ export function TaxReportPage() {
             <p className="k-small">
               <b>{result.picked ? `Read ${result.picked} files` : result.broker === "CSV" ? "Read as a CSV file" : `Read as a ${result.broker} ${result.kind === "trades" ? "tradebook" : "tax P&L"}`}:</b>{" "}
               {result.added} trade{result.added === 1 ? "" : "s"} added{result.duplicates > 0 && `, ${result.duplicates} already uploaded (skipped)`}.
-              {result.business.lines > 0 && ` ${result.business.lines.toLocaleString("en-IN")} F&O, commodity and currency line${result.business.lines === 1 ? "" : "s"} added up as business income${result.business.same && !result.business.added && !result.business.replaced ? " (already uploaded, unchanged)" : result.business.replaced ? " (in place of the figures from an earlier file for the same dates)" : ""}.`}
+              {result.business.lines > 0 && (result.business.overlap && !result.business.added && !result.business.replaced && !result.business.same
+                ? ` ${result.business.lines.toLocaleString("en-IN")} F&O, commodity and currency line${result.business.lines === 1 ? "" : "s"} read but not added: the dates overlap an earlier file's (below).`
+                : ` ${result.business.lines.toLocaleString("en-IN")} F&O, commodity and currency line${result.business.lines === 1 ? "" : "s"} added up as business income${result.business.same && !result.business.added && !result.business.replaced ? " (already uploaded, unchanged)" : result.business.replaced ? " (in place of the figures from an earlier file for the same dates)" : ""}.`)}
               {result.problem_count > 0 && ` ${result.problem_count} line${result.problem_count === 1 ? "" : "s"} left out (below).`}
               {result.over_limit > 0 && ` Only the first ${rep?.max_trades.toLocaleString("en-IN")} trades are kept.`}
             </p>

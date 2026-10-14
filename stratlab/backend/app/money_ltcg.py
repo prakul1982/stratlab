@@ -3,7 +3,8 @@ been used by the long-term gains already realised, what is left, the unrealised 
 latest price, and the open lots that turn long-term in the next 30, 60 or 90 days.
 
 Worked out from the same open lots and realised sales as the tax report (tax_lots.compute), with grandfathering for
-shares held on 31 Jan 2018. Arithmetic only: "if sold today, the gain would be…", never a view on selling."""
+shares held on 31 Jan 2018 and the capital losses brought forward from earlier years in the files, as the report sets
+them off (tax_lots.years_with_total). Arithmetic only: "if sold today, the gain would be…", never a view on selling."""
 from datetime import date
 
 from . import tax_lots as T
@@ -15,7 +16,8 @@ FACTS = [
     "An unused part doesn't carry forward to the next year.",
     "Long-term gains above it are taxed at 12.5% (sales from 23 July 2024), plus 4% cess and any surcharge.",
     "Losses are set off first: short-term losses against short-term gains and then long-term ones, long-term losses "
-    "only against long-term gains. A loss realised in the same year reduces the gains the exemption is used against.",
+    "only against long-term gains. A loss realised in the same year, or brought forward from an earlier year in your "
+    "files, reduces the gains the exemption is used against.",
     "Shares sold and bought again start a new holding period from the new purchase, at its price as the cost.",
     "A sale is long-term when the shares were held for more than 12 months: from the day after the first anniversary "
     "of the purchase.",
@@ -43,7 +45,7 @@ def tracker(c: dict, quotes: dict[str, dict], today: str, full: bool = True) -> 
     """This year's exemption used and left, open long-term lots with their gain at today's price, and lots turning
     long-term soon. `c` is tax_lots.compute's output, with the ETF and gold bond sales as `unit_rows` when there are any."""
     fy = T.fy_of(today)
-    y = T.year(fy, c["realised"], c["intraday"], limit=0, units=c.get("unit_rows"))
+    y = T.years_with_total([fy], c["realised"], c["intraday"], c.get("unit_rows") or [], [], c["names"], [], {}, {}, limit=0)[fy]
     long_rows, soon, unpriced = [], [], 0
     t = date.fromisoformat(today)
     for lot in c["open"]:

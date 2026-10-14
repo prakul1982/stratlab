@@ -334,7 +334,7 @@ def test_fno_file_inside_a_saved_range_is_already_counted(w):
 def test_fno_files_merge_by_their_dates(w):
     c = w["client"]
     q1 = send(c, fno([line("2024-05-10", 1000), line("2024-06-20", -300)]), EXITS + "F&O.csv").json()
-    assert q1["business"] == {"lines": 2, "added": 1, "replaced": 0, "same": 0, "years": [2024]}
+    assert q1["business"] == {"lines": 2, "added": 1, "replaced": 0, "same": 0, "overlap": 0, "years": [2024]}
     q3 = send(c, fno([line("2024-10-10", 500)]), "Tradewise Exits Q3-F&O.csv").json()       # the next quarter: added
     assert q3["business"]["added"] == 1
     y = year_of(q3["report"], 2024)
@@ -354,6 +354,17 @@ def test_fno_files_merge_by_their_dates(w):
     # starting again with an equity file drops them
     rep = send(c, M._csv(M.TAX_SHORT).encode(), "short.csv", mode="replace").json()["report"]
     assert year_of(rep, 2024)["business"]["segments"] == [] and rep["business_lines"] == 0
+
+
+def test_an_fno_file_overlapping_part_of_a_saved_one_is_refused_with_the_dates(w):
+    c = w["client"]
+    send(c, fno([line("2024-04-02", 1000), line("2024-09-26", 500)]), EXITS + "F&O.csv")             # April to September
+    r = send(c, fno([line("2024-09-02", 200), line("2025-03-27", 300)]), EXITS + "F&O.csv").json()  # September to March
+    assert r["business"]["overlap"] == 1 and r["business"]["added"] == 0 and r["business"]["replaced"] == 0
+    [sk] = r["skipped"]
+    assert sk["name"] == "F&O FY 2024-25" and "2 Sep 2024 to 26 Sep 2024" in sk["reason"]
+    y = year_of(r["report"], 2024)
+    assert y["business"]["pnl"] == 1500 and y["business"]["trades"] == 2                         # the saved figures, not lost
 
 
 def test_the_fmv_and_the_inputs_keep_the_fno_totals(w):

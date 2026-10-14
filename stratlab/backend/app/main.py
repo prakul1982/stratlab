@@ -3037,8 +3037,8 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     merged, added, dup = tax_lots.merge(old, trades)
     over = max(0, len(merged) - tax_lots.MAX_TRADES)
     files = [] if mode == "replace" else before["files"]
-    business, b_added, b_replaced, b_same = tax_lots.merge_business([] if mode == "replace" else before["business"],
-                                                                   parsed.get("business") or [])
+    business, b_added, b_replaced, b_same, b_overlaps = tax_lots.merge_business([] if mode == "replace" else before["business"],
+                                                                               parsed.get("business") or [])
     lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
         sum(b["trades"] for b in parsed.get("business") or [])
     if added or b_added or b_replaced:
@@ -3048,10 +3048,10 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     elif mode == "replace":
         tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
-               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same,
+               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same, "overlap": len(b_overlaps),
                             "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
-               "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
+               "not_listed": missed[:50], "skipped": parsed.get("skipped", []) + b_overlaps, "check": parsed.get("check", []),
                "files": parsed.get("files", []), "dividends_added": div_added, "report": tax_view(profile)})
 
 
