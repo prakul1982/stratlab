@@ -27,7 +27,7 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
 
 /** A strategy that lost money after costs has no edge to test: no pass count is headlined for it (R16-006). */
 export const LOST_CHECKS = "Checks not applicable: lost money after costs";
-export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && (ret ?? 0) <= 0;
+export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && ret != null && ret <= 0;
 
 /** The checks' plain names, for "nearby settings not run". */
 export const CHECK_NAMES: Record<string, string> = { unseen: "unseen years", nearby: "nearby settings", shuffle: "bad-luck fall", sample: "enough trades" };
