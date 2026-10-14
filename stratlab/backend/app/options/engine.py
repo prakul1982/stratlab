@@ -13,7 +13,6 @@ exercised options is not modelled."""
 import math
 from datetime import datetime, timedelta
 
-from ..data import sessions
 from ..engine import costs as C
 from ..models import OptionStrategy
 from . import strikes as SR
@@ -197,11 +196,16 @@ class OptionsEngine:
         out.append(self._order(now, leg, side, px, why, pnl))
 
     def _expired(self, now: datetime, expiry: str) -> bool:
-        """The contracts have stopped trading: the expiry day's derivatives close has passed."""
+        """The contracts have stopped trading: the expiry day's close for this exchange has passed."""
         today = now.date().isoformat()
-        return expiry < today or (expiry == today and now.time() >= sessions.fo_close(now.date()))
+        return expiry < today or (expiry == today and self._past_expiry_time(now))
 
-    def _settle_expiry(self, now: datetime, under: float, out: list):
+    def _past_expiry_time(self, now: datetime) -> bool:
+        from .data import expiry_time
+        at = expiry_time(self.s.exchange, now.date())
+        return bool(at) and now.strftime("%H:%M") >= at
+
+    def _settle_expiry(self, now: datetime, under: float, out: list, estimate: str = ""):
         """Every open leg at its intrinsic value against the settlement price, then the trade is closed."""
         p = self.pos
         for leg in p["legs"]:
@@ -213,7 +217,7 @@ class OptionsEngine:
             leg.update(open=False, exit=px, mark=px)
             p["closed_pnl"] += pnl
             ev = {"t": now.isoformat(), "side": "buy" if leg["side"] == "sell" else "sell", "qty": leg["qty"], "px": px,
-                  "why": f"Expiry settlement at {under:,.2f}", "sym": leg["sym"], "strike": k, "opt": leg.get("opt"),
+                  "why": f"Expiry settlement at {under:,.2f}{estimate}", "sym": leg["sym"], "strike": k, "opt": leg.get("opt"),
                   "slices": 0, "pnl": round(pnl, 2)}
             self.events.append(ev)
             out.append(ev)
@@ -355,7 +359,9 @@ class OptionsEngine:
             if self.settle_fn and p.get("expiry") and self._expired(now, p["expiry"]):
                 px = self.settle_fn(p["expiry"])
                 if px is not None:
-                    self._settle_expiry(now, float(px), out)
+                    est = {"CDS": " (estimate: the last underlying price; the RBI reference rate isn't available)",
+                           "MCX": " (estimate: the last futures price, not the final settlement price)"}.get(self.s.exchange, "")
+                    self._settle_expiry(now, float(px), out, est)
                     return out
             if not fresh:
                 return out   # without live prices no stop can be judged; hold and wait
@@ -365,11 +371,13 @@ class OptionsEngine:
             if sig and (not want or want["dir"] != p.get("dir")):
                 self._exit(now, quotes, "The rules exited" if not want else "The rules turned " + want["dir"], out)
                 return out
-            if rk.legStopPct:
+            if rk.legStopPct and any(l["side"] == "sell" for l in p["legs"]):
+                stopped = False
                 for leg in p["legs"]:
                     if leg["open"] and leg["side"] == "sell" and self._mark(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
-                if not any(l["open"] and l["side"] == "sell" for l in p["legs"]):
+                        stopped = True
+                if stopped and not any(l["open"] and l["side"] == "sell" for l in p["legs"]):
                     self._exit(now, quotes, "Leg stops hit", out)
                     return out
             m = self.mtm(quotes)
@@ -398,6 +406,9 @@ class OptionsEngine:
             return out
         if self.entries_today >= t.maxEntries:
             self.note = f"Took today's {t.maxEntries} entries; next entries on the next market day."
+            return out
+        if contracts and contracts.expiry == today and self._past_expiry_time(now):
+            self.note = f"Today's {contracts.expiry} contracts have expired; next entry on the next market day."
             return out
         if not (_at(now, t.entry) <= now < _at(now, t.lastEntry)) or now >= _at(now, t.squareoff):
             self.note = "" if now < _at(now, t.entry) else f"Entries stop at {t.lastEntry}; next entry at {t.entry} on the next market day."

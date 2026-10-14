@@ -156,3 +156,12 @@ test("R11C-015 and R11C-016: a dead link says so; the share page keeps its rules
   assert.match(v, /\{gone \|\| "This link was turned off or never existed\."\}/);
   assert.match(v, /The strategy's rules are private to the person who shared it\./);
 });
+
+test("the payoff lists every breakeven, also those beyond the ±10% price grid", async () => {
+  const O = await import("../src/lib/options.ts");
+  // a bought 10000 put at 1000 and a sold 25000 call at 100: the payoff crosses zero once, at 9,100 (the grid runs 22,500-27,500)
+  const p = { spot: 25000, units: 1, lot: 1, legs: [
+    { side: "buy", opt: "PE", strike: 10000, fill: 1000, lots: 1 }, { side: "sell", opt: "CE", strike: 25000, fill: 100, lots: 1 }] };
+  const be = O.payoff(p).breakevens;
+  assert.ok(be.some((x) => Math.abs(x - 9100) < 1e-6) && be.length === 1, String(be));
+});

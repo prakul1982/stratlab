@@ -204,3 +204,68 @@ def test_missing_leg_is_named_and_old_notes_clear_after_hours():
     # after the entry window the note says why nothing happens, instead of the morning's quote problem
     assert e.step(at("15:40"), 25000, c, q, False) == [] and "Entries stop at 14:45" in e.note
     assert e.step(at("09:00", day=25), 25000, c, q, False) == [] and e.note == ""
+
+
+# ---------- leg stops on long structures, expiry times per exchange, settlement, tick on the Greeks/roll endpoints ----------
+def test_a_long_structure_with_a_leg_stop_stays_open_on_unchanged_quotes():
+    s = straddle(legs=[{"side": "buy", "opt": "CE", "offset": 0}, {"side": "buy", "opt": "PE", "offset": 0}],
+                 risk={"stopType": "none", "legStopPct": 30})
+    e, c = OptionsEngine(s), contracts()
+    e.step(at("09:31"), 25000, c, quotes(25000), True)
+    assert e.step(at("09:36"), 25000, c, quotes(25000), True) == [] and e.pos
+
+
+def test_expiry_time_per_exchange_and_mcx_across_us_daylight_saving():
+    from datetime import date
+    from app.options.data import expiry_time, expired_today
+    assert expiry_time("NFO", date(2026, 10, 14)) == "15:40" and expiry_time("CDS") == "12:30"
+    assert expiry_time("MCX", date(2026, 10, 14)) == "23:30" and expiry_time("MCX", date(2026, 11, 2)) == "23:55"
+    assert expiry_time("MCX", date(2027, 3, 5)) == "23:55" and expiry_time("MCX", date(2027, 3, 15)) == "23:30"
+    assert not expired_today("NFO", datetime(2026, 10, 14, 15, 35, tzinfo=IST))
+    assert expired_today("NFO", datetime(2026, 10, 14, 15, 40, tzinfo=IST))
+
+
+def cds_contracts(expiry="2026-09-24"):
+    rows = [{"opt": o, "strike": k, "symbol": f"USDINR{k:g}{o}"} for k in (95.0, 96.0, 97.0) for o in ("CE", "PE")]
+    return Contracts(rows, 1000, expiry, "CDS")
+
+
+def cds_strategy():
+    return OptionStrategy(name="Short call", underlying="USDINR", exchange="CDS",
+                          legs=[{"side": "sell", "opt": "CE", "offset": 0}],
+                          timing={"entry": "09:30", "lastEntry": "16:15", "squareoff": "16:45", "maxEntries": 1, "cooldown": 0},
+                          risk={"stopType": "none"}, costs={"brokerage": 0, "slippageTicks": 0, "freeze": 0})
+
+
+def test_a_currency_option_settles_at_the_underlying_after_12_30_and_says_it_is_an_estimate():
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
+    e, c = OptionsEngine(cds_strategy(), settle_fn=lambda ex: 96.0), cds_contracts()
+    e.step(at("09:31"), 96.0, c, q, True)
+    assert e.step(at("12:29"), 96.0, c, q, True) == []
+    out = e.step(at("12:30"), 96.0, c, q, True)
+    assert out[0]["px"] == 0.0 and "estimate" in out[0]["why"] and "RBI reference rate" in out[0]["why"]
+    assert e.pos is None and e.trades[-1]["why"] == "Expiry settlement"
+
+
+def test_no_entry_on_expiry_day_after_the_exchange_stopped_trading():
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
+    e, c = OptionsEngine(cds_strategy()), cds_contracts()
+    assert e.step(at("13:00"), 96.0, c, q, True) == [] and e.pos is None and "expired" in e.note
+    assert e.step(at("12:00"), 96.0, c, q, True)          # before 12:30 it enters
+
+
+def test_greeks_and_roll_price_a_currency_option_at_its_own_tick(monkeypatch):
+    from app import main
+    c = cds_contracts()
+    monkeypatch.setattr(main, "_held", lambda req, expiry=None: (c, 96.0, {}))
+    monkeypatch.setattr(main.options_data, "quotes", lambda keys: {k: {"bid": 0.0125, "ask": 0.015, "ltp": 0.0125} for k in keys})
+    monkeypatch.setattr(main.opt_greeks, "position", lambda legs, m: {"legs": [{} for _ in legs]})
+    monkeypatch.setattr(main.opt_charges, "orders_cost", lambda orders, kind, b, f: seen.append(orders) or {"total": 0, "orders": 1, "items": []})
+    monkeypatch.setattr(main.opt_charges, "labelled", lambda items, kind: items)
+    monkeypatch.setattr(main.opt_greeks, "public_model", lambda m: {})
+    seen = []
+    from app.models import OptGreeksReq
+    req = OptGreeksReq(exchange="CDS", underlying="USDINR", expiry="2026-09-24",
+                       legs=[{"side": "sell", "opt": "CE", "strike": 96.0, "qty": 1000, "fill": 0.02}])
+    main.options_greeks(req, profile={})
+    assert seen[-1][0]["fill"] == 0.015              # not floored to 0.05

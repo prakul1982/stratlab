@@ -277,7 +277,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             <StatRow label="Option chain figures">
               <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={[`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
                 strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ")} />
-              <Stat label="Max-pain strike" value={strike(c.max_pain)} />
+              <Stat label="Max-pain strike" value={strike(c.max_pain)} note={`within the ${c.strikes_counted ?? c.rows.length} strikes shown`} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
               <Stat label="ATM implied volatility" value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(1)}%`} note={c.atm ? `At the ${strike(c.atm)} strike` : undefined} />
