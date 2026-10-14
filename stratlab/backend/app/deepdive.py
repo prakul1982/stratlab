@@ -349,8 +349,9 @@ PLAN_WORDS = [r"capex", r"capital expenditure", r"capacity", r"expansion", r"gre
               r"commission", r"guidance", r"outlook", r"we expect", r"target", r"margin", r"growth of", r"crore"]
 
 
-def _clip(x, n: int, length: int = 300) -> list:
-    return [str(i)[:length] for i in (x or []) if str(i).strip() and not ADVICE.search(str(i))][:n] if isinstance(x, list) else []
+def _clip(x, n: int, length: int = 300, plain: bool = False) -> list:
+    """Up to n non-empty items; with `plain`, an item worded as advice or a forecast is left out."""
+    return [str(i)[:length] for i in (x or []) if str(i).strip() and not (plain and ADVICE.search(str(i)))][:n] if isinstance(x, list) else []
 
 
 def _num(v):
@@ -391,7 +392,8 @@ def clean_business(d: dict) -> dict:
         if isinstance(s, dict) and str(s.get("name") or "").strip():
             segs.append({"name": str(s["name"])[:80], "share_pct": _num(s.get("share_pct")), "what": _plain(s.get("what"), 200)})
     return {"summary": _plain(d.get("summary"), 700), "segments": segs, "customers": _plain(d.get("customers"), 300),
-            "drivers": _clip(d.get("drivers"), 5), "strengths": _clip(d.get("strengths"), 5), "risks": _clip(d.get("risks"), 5)}
+            "drivers": _clip(d.get("drivers"), 5, plain=True), "strengths": _clip(d.get("strengths"), 5, plain=True),
+            "risks": _clip(d.get("risks"), 5)}     # a risk is said as one ("could pressure margins"): kept as the filing words it
 
 
 def _with_unit(v) -> str | None:

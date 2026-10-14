@@ -523,3 +523,5 @@ def test_business_read_drops_advice_wording():
                                  "risks": ["Raw material prices"], "customers": "Buy the stock now."})
     assert b["summary"] == "Makes pumps. Sells to farms."
     assert b["drivers"] == ["Rural demand"] and b["customers"] == ""
+    risky = deepdive.clean_business({"summary": "x", "risks": ["Higher steel prices could pressure margins"]})
+    assert risky["risks"] == ["Higher steel prices could pressure margins"]          # a risk is a filing's own words
