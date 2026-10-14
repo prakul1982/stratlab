@@ -347,7 +347,9 @@ def test_calendar_company_and_holdings_api(w):
     assert (bonuses["ahead"] if bonus_ahead else bonuses["recent"])[0]["kind"] == "bonus"
     assert c.get("/research/corp-actions?region=IN&scope=mine", headers=h).json()["ahead"] == []
     one = c.get("/research/corp-actions/IN/TCS", headers=h).json()
-    assert [r["kind"] for r in one["ahead"]][:2] == (["bonus", "dividend"] if bonus_ahead else ["dividend"])
+    # a company's own card counts an ex-date of today as gone (it is in the 12 months, not "coming up")
+    assert [r["kind"] for r in one["ahead"]][:2] == ["dividend"]
+    assert "bonus" in [r["kind"] for r in one["past"]]
     assert one["dividends_12m"]["amount"] == 40.0
     us = c.get("/research/corp-actions/US/AAPL", headers=h).json()
     assert us["past"][0]["text"] == "Dividend $0.26 a share" and us["ahead_known"] is False

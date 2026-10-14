@@ -935,10 +935,10 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
         rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()
     year_ago = (today - timedelta(days=365)).isoformat()
-    divs = [r for r in rows if r["kind"] == "dividend" and r.get("amount") and year_ago <= r["ex_date"] < t]
+    divs = [r for r in rows if r["kind"] == "dividend" and r.get("amount") and year_ago < r["ex_date"] <= t]
     strip = lambda r: {k: v for k, v in r.items() if k != "fresh"}
-    return {"region": region, "symbol": symbol.upper(), "today": t, "ahead": [strip(r) for r in rows if r["ex_date"] >= t],
-            "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] < t), key=lambda r: r["ex_date"], reverse=True)[:30]],
+    return {"region": region, "symbol": symbol.upper(), "today": t, "ahead": [strip(r) for r in rows if r["ex_date"] > t],
+            "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] <= t), key=lambda r: r["ex_date"], reverse=True)[:30]],
             "dividends_12m": {"amount": round(sum(r["amount"] for r in divs), 4), "count": len(divs), "currency": CUR[region]} if divs else None,
             "ahead_known": region == "IN", "note": NOTE}
 
