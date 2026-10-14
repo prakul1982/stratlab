@@ -385,9 +385,10 @@ def public_entries() -> list[dict]:
     return _official_cache[1]
 
 
-def all_entries() -> list[dict]:
+def all_entries(everything: bool = False) -> list[dict]:
+    """The newest 1000 entries, or with `everything` every one (a read of the whole prefix, a page at a time)."""
     out = []
-    for raw in db.settings_with_prefix(PREFIX):
+    for raw in ([v for _, v in db.all_settings_with_prefix(PREFIX)] if everything else db.settings_with_prefix(PREFIX)):
         try:
             out.append(json.loads(raw))
         except (TypeError, ValueError):

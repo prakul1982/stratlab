@@ -75,7 +75,9 @@ def test_a_broken_analytics_service_never_breaks_a_payment(sent, monkeypatch):
         raise ConnectionError("unreachable")
     monkeypatch.setattr(product_analytics.httpx, "post", down)
     assert billing.invoice_for(PROFILE, SUB, PAY)
-    monkeypatch.setattr(product_analytics.db, "get_setting", down)     # even the database marker failing
+    real = product_analytics.db.get_setting                            # even the database marker failing (the invoice's own reads
+    monkeypatch.setattr(product_analytics.db, "get_setting",           # must not fail with it: they raise, so a number is never guessed)
+                        lambda k: down() if k.startswith(product_analytics.SENT) else real(k))
     assert billing.invoice_for(PROFILE, SUB, {**PAY, "id": "pay_3"})
     assert product_analytics.capture("u1", "payment completed", once="x") is False
 

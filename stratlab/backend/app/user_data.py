@@ -37,9 +37,17 @@ def _drawings(uid: str) -> int:
     return n
 
 
+PAGE = 50          # rows a read takes of the tables whose rows are large (a notebook, a session's state)
+
+
+def _pages(table: str, uid: str, cols: str = "*"):
+    """The user's rows in a table one small page at a time, so nothing holds them all at once."""
+    return db.pages(lambda: db.sb().table(table).select(cols).eq("user_id", uid), PAGE)
+
+
 def _rows(table: str, uid: str, cols: str = "*") -> list[dict]:
     """Every row of the user's in a table, a page at a time (the server caps one read)."""
-    return db.paged(lambda: db.sb().table(table).select(cols).eq("user_id", uid))
+    return [r for page in _pages(table, uid, cols) for r in page]
 
 
 def _connect(uid: str) -> int:
@@ -60,15 +68,17 @@ def _connect(uid: str) -> int:
 
 def _notebooks(uid: str) -> int:
     from . import library
-    rows = _rows("strategies", uid, "id,body")
-    for r in rows:                            # their share links and library entries are public: they go first
-        library.take_down((r.get("body") or {}).get("experiments") or [])
-    for e in library.all_entries():           # also entries whose experiment is already gone
-        if e.get("owner") == uid:
+    n = 0
+    for page in _pages("strategies", uid, "id,body"):
+        n += len(page)
+        for r in page:                        # their share links and library entries are public: they go first
+            library.take_down((r.get("body") or {}).get("experiments") or [])
+    for e in library.all_entries(everything=True):    # also entries whose experiment is already gone, past the newest 1000
+        if isinstance(e, dict) and e.get("owner") == uid:
             library.remove(e.get("id"))
-    if rows:
-        db.sb().table("strategies").delete().eq("user_id", uid).execute()
-    return len(rows)
+    if n:
+        db.sb().table("strategies").delete(returning="minimal").eq("user_id", uid).execute()
+    return n
 
 
 def _holdings(uid: str) -> int:
@@ -154,7 +164,10 @@ def _referrals(uid: str) -> int:
 
 def _free_basic(uid: str) -> int:
     from . import plans
-    return _setting_keys(plans.FREE_KEY)(uid)
+    try:
+        return _setting_keys(plans.FREE_KEY)(uid)
+    finally:
+        plans.forget_free_basic()             # the 30 s copy still has the row: they would keep Basic, and /me could save it back
 
 
 def _cards(uid: str) -> int:
@@ -180,8 +193,11 @@ def _live(uid: str) -> int:
     if main is not None:
         for s in main.manager.user_running(uid):
             main.manager.stop(s.id, "The account's data was deleted.")
-    db.sb().table("live_orders").delete().eq("user_id", uid).execute()
-    return len(db.sb().table("live_sessions").delete().eq("user_id", uid).execute().data or [])
+    # sessions run on the leader only: from another server (or one this process doesn't hold) the stored row is the way to
+    # stop one, which the leader follows (LiveManager.reconcile), so the rows are marked stopped before they go
+    db.stop_user_sessions(uid, "The account's data was deleted.")
+    db.sb().table("live_orders").delete(returning="minimal").eq("user_id", uid).execute()
+    return db.sb().table("live_sessions").delete(count="exact", returning="minimal").eq("user_id", uid).execute().count or 0
 
 
 def _profile_alerts(uid: str) -> None:
@@ -227,21 +243,26 @@ KEPT = "Kept: the sign-in account, plan and payment records (invoices, as the la
 
 
 # ---------- the user's own copy: "Download all my data" ----------
-SECRET = ("token", "password", "secret", "api_key")                     # never in an export, even sealed
-SECRET_NAMES = {"key", "keys", "auth", "p256dh", "endpoint", "address", "inbox", "sealed"}
+# Never in an export, even sealed. Exact names: a field that merely contains a word (instrument_token, the number of an
+# exchange's instrument, not a credential) is the person's own data and stays.
+SECRET_NAMES = {"token", "tokens", "access_token", "kite_access_token", "refresh_token", "request_token", "exchange_token",
+                "public_token", "password", "passwd", "pw", "inbox_password", "statement_password", "secret", "webhook_secret",
+                "api_secret", "api_key", "apikey", "key", "keys", "auth", "p256dh", "endpoint", "address", "inbox", "sealed",
+                "hash"}
+KEEP = {"billing": {"address"}, "invoices": {"address"}}      # the person's own billing address is theirs to have
 
 
-def _secret(name) -> bool:
+def _secret(name, keep=()) -> bool:
     n = str(name).lower()
-    return n in SECRET_NAMES or any(s in n for s in SECRET)
+    return n in SECRET_NAMES and n not in keep
 
 
-def _clean(v):
+def _clean(v, keep=()):
     """JSON-safe, without any secret: sealed broker tokens, the statement password, push keys and the inbox address."""
     if isinstance(v, dict):
-        return {str(k): _clean(x) for k, x in v.items() if not _secret(k)}
+        return {str(k): _clean(x, keep) for k, x in v.items() if not _secret(k, keep)}
     if isinstance(v, (list, tuple, set)):
-        return [_clean(x) for x in v]
+        return [_clean(x, keep) for x in v]
     if v is None or isinstance(v, (str, int, float, bool)):
         return v
     return str(v)
@@ -297,8 +318,22 @@ def _x_referrals(uid: str) -> dict:
 
 def _x_usage(uid: str) -> dict:
     out: dict = {}
-    for r in _rows("usage_events", uid, "id,kind"):
-        out[r.get("kind")] = out.get(r.get("kind"), 0) + 1
+    for page in _pages("usage_events", uid, "id,kind"):     # kinds are open-ended (a deep dive's mark names the company), so a page at a time, totalled as it goes
+        for r in page:
+            out[r.get("kind")] = out.get(r.get("kind"), 0) + 1
+    return out
+
+
+def _x_invoices(uid: str) -> list:
+    """The tax invoices billed to the person (kept as payment records, but theirs to download)."""
+    import json
+    nums = db.json_value(db.get_setting(f"invoices:{uid}"), [])
+    out = []
+    for n in nums:
+        raw = db.get_setting(f"invoice:{n}")
+        inv = json.loads(raw) if raw else None
+        if isinstance(inv, dict) and inv.get("user_id") == uid:
+            out.append(inv)
     return out
 
 
@@ -336,6 +371,9 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("referrals", "Invite link and invites", _x_referrals),
     ("free_basic", "Free Basic time", lambda uid: _settings_of(*_keys(("plans.FREE_KEY",)))(uid)),
     ("usage", "Usage counts", _x_usage),
+    ("billing", "Billing details (name, address, GSTIN)", _settings_of("billing:")),
+    ("invoices", "Tax invoices", _x_invoices),
+    ("company_cards", "Shared company cards", _settings_of("cards:user:")),
 ]
 
 
@@ -349,7 +387,7 @@ def export(profile: dict) -> dict:
                  "not_included": []}
     for key, label, fn in EXPORT:
         try:
-            out[key] = _clean(fn(uid))
+            out[key] = _clean(fn(uid), KEEP.get(key, ()))
         except Exception as e:
             log.warning("user data export: %s for %s failed: %s", key, uid, str(e)[:160])
             out["not_included"].append({"key": key, "label": label})

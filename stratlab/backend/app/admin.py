@@ -259,6 +259,9 @@ def set_plan(user_id: str, plan: str, days: int | None) -> dict:
     else:
         until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat() if days else None
         fields = {"plan": plan, "plan_status": "active", "current_period_end": until, "cancel_at_period_end": False}
+    # a halted or cancelled subscription is not live (no 409 above), but billing._act still finds the profile by it: a
+    # late cancelled/completed event or refund would wipe the plan just given. A hand-given plan has no subscription.
+    fields |= {"razorpay_subscription_id": None, "pending_subscription_id": None}
     row = db.update_profile(user_id, **fields)
     if row is None:
         raise HTTPException(404, {"code": "no_user", "message": "No user with that ID."})
