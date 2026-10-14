@@ -121,31 +121,31 @@ def test_vercel_without_a_card_is_an_account_setting_not_a_model_fault(monkeypat
     assert health("vercel")["answering"] is False
 
 
-# ---------- GitHub Models: a 200 that isn't a chat reply ----------
+# ---------- a 200 that isn't a chat reply ----------
 def test_a_reply_that_is_not_a_chat_answer_shows_what_came_back(monkeypatch):
-    keys(monkeypatch, "github")
-    t = httpx.MockTransport(lambda req: httpx.Response(200, headers={"content-type": "text/html"}, text="<html><body>Sign in to GitHub</body></html>"))
+    keys(monkeypatch, "nvidia")
+    t = httpx.MockTransport(lambda req: httpx.Response(200, headers={"content-type": "text/html"}, text="<html><body>Sign in to NVIDIA</body></html>"))
     with pytest.raises(Exception):
         P.complete("s", "t", transport=t)
-    text = view("github")["state_text"]
-    assert "answered 200 without a chat reply (text/html: <html><body>Sign in to GitHub" in text
+    text = view("nvidia")["state_text"]
+    assert "answered 200 without a chat reply (text/html: <html><body>Sign in to NVIDIA" in text
     assert "empty reply" not in text
 
 
 def test_a_model_list_that_is_not_a_list_says_what_it_was(monkeypatch):
-    keys(monkeypatch, "github")
+    keys(monkeypatch, "nvidia")
     t = httpx.MockTransport(lambda req: httpx.Response(200, headers={"content-type": "text/plain"}, text="OK"))
     with pytest.raises(C.CallError) as e:
-        C.client("github", t).models(9e18)
+        C.client("nvidia", t).models(9e18)
     assert e.value.detail == "sent something that isn't a model list (200, text/plain: OK)"
 
 
 def test_a_redirected_model_list_says_where_it_went(monkeypatch):
-    keys(monkeypatch, "github")
-    t = httpx.MockTransport(lambda req: httpx.Response(301, headers={"location": "https://github.com/marketplace/models"}))
+    keys(monkeypatch, "nvidia")
+    t = httpx.MockTransport(lambda req: httpx.Response(301, headers={"location": "https://build.nvidia.com/models"}))
     with pytest.raises(C.CallError) as e:
-        C.client("github", t).models(9e18)
-    assert "301: moved to https://github.com/marketplace/models" in e.value.detail
+        C.client("nvidia", t).models(9e18)
+    assert "301: moved to https://build.nvidia.com/models" in e.value.detail
 
 
 # ---------- SambaNova and OpenRouter: rate limits aren't "down" ----------

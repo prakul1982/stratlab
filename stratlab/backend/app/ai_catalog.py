@@ -107,13 +107,6 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              ctx=128000, probe_max=4, prior=(19, 19, 19),
              note="Fine on a Vercel Pro team; Vercel's Hobby plan is for personal, non-commercial use, so it's asked after "
                   "the production-ready providers."),
-    Provider("github", "GitHub Models", "openai", "https://models.github.ai/inference", "GITHUB_MODELS_TOKEN",
-             "https://github.com/settings/personal-access-tokens/new",
-             "Free: 50 to 150 requests a day per model (8,000 tokens in, 4,000 out per request).", "prototype",
-             ("openai/gpt-4.1-mini", "meta/Llama-3.3-70B-Instruct", "openai/gpt-4.1", "mistral-ai/mistral-small-2503"),
-             models_url="https://models.github.ai/catalog/models", limit_scope="model", ctx=8000, max_out=4000, probe_max=2, probe_every_h=24,
-             prior=(20, 20, 20), headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
-             note="GitHub's free tier is meant for prototyping, so StratLab asks it only after every other free provider."),
     Provider("nvidia", "NVIDIA API catalog", "openai", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "https://build.nvidia.com/settings/api-keys",
              "Free for development: about 40 requests a minute.", "prototype",
              ("meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
@@ -125,6 +118,7 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
 ]}
 
 # Providers left out on purpose (checked October 2026), so nobody adds them back by mistake:
+# - GitHub Models: GitHub retired it on 30 July 2026; its inference API now answers every request with a bare 200 "OK".
 # - Chutes: its free API tier ended on 30 September 2026 (subscriptions from $3 a month).
 # - Cohere: the free trial key is for non-commercial use only.
 # - Anonymous gateways (LLM7, Pollinations): no account, no terms we can rely on, and prompts pass through a third party.

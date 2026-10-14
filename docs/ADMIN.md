@@ -198,21 +198,20 @@ adding a key in **Railway → Variables**, redeploy, then press **Re-rank models
 | Z.ai (GLM Flash) | The GLM Flash models cost nothing; about one request at a time | No clear statement either way: check z.ai's terms before relying on it. China-based | [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) | `ZAI_API_KEY` (`ZAI_MODEL`) |
 | Hugging Face | $0.10 of credit a month (about a hundred short answers); $2 with a PRO account | Yes (it's their paid service with a small free credit) | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens): a fine-grained token with "Make calls to Inference Providers" | `HF_TOKEN` (`HUGGINGFACE_MODEL`) |
 | Vercel AI Gateway | $5 of credit every 30 days on a set of free-tier models; buying credit ends the monthly $5 | **Flagged:** fine on a Vercel Pro team; Vercel's Hobby plan is for personal, non-commercial use. Asked after the production-ready providers | [vercel.com/dashboard/ai-gateway](https://vercel.com/dashboard/ai-gateway) | `AI_GATEWAY_API_KEY` (`AI_GATEWAY_MODEL`) |
-| GitHub Models | 50 to 150 requests a day per model; 8,000 tokens in and 4,000 out per request | **Flagged: prototyping tier.** GitHub describes free use as for prototyping. Asked only after every other free provider, and never for long documents | [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new): a fine-grained token with the "Models" (read) permission | `GITHUB_MODELS_TOKEN` (`GITHUB_MODEL`) |
 | NVIDIA API catalog | About 40 requests a minute | **Flagged: development and testing only** under NVIDIA's terms. Asked only after every other free provider | [build.nvidia.com/settings/api-keys](https://build.nvidia.com/settings/api-keys) | `NVIDIA_API_KEY` (`NVIDIA_MODEL`) |
 | Anthropic | None (paid) | Yes | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`) |
 
-Left out on purpose: **Chutes** (its free API tier ended on 30 September 2026), **Cohere** (the free trial key is for
-non-commercial use only) and anonymous gateways such as LLM7 and Pollinations (no account, no terms to rely on, and
-prompts pass through a third party). Free limits change often: the **Test** and **Re-rank** buttons show what actually
-works today.
+Left out on purpose: **GitHub Models** (GitHub retired it on 30 July 2026), **Chutes** (its free API tier ended on
+30 September 2026), **Cohere** (the free trial key is for non-commercial use only) and anonymous gateways such as LLM7
+and Pollinations (no account, no terms to rely on, and prompts pass through a third party). Free limits change often:
+the **Test** and **Re-rank** buttons show what actually works today.
 
 **Suggested set-up:** Groq, Google Gemini and Mistral first (production-ready, generous), then Cloudflare and Cerebras.
 The flagged ones add resilience but are asked last.
 
 ### How it picks models
 
-- **Measured, not listed.** Every 6 hours (every 12 on Cloudflare, 24 on GitHub and 72 on Hugging Face, where measuring spends scarce credit; Anthropic only on demand), when you press **Re-rank models**, and
+- **Measured, not listed.** Every 6 hours (every 12 on Cloudflare and 72 on Hugging Face, where measuring spends scarce credit; Anthropic only on demand), when you press **Re-rank models**, and
   when every model a provider was using stops working, each provider's model list is read and filtered
   (`backend/app/ai_catalog.py`, with a comment per rule): no speech, image, embedding, safety-filter or search models,
   no code or maths specialists, no models built for another language (such as ALLaM, which is Arabic-first), nothing
