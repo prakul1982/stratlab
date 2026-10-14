@@ -117,8 +117,8 @@ def on_trading_day(d: date, market: str = "IN", back: bool = False) -> date:
     return d
 
 
-# The fake market's "now" while a test runs: tests/conftest.py sets it as each test starts, so a test that reads a price,
-# then a page, then the price again in India's session sees one price throughout, whatever minute it ticks over.
+# The fake market's "now" while the tests run: tests/conftest.py sets it once as the run starts, so a test that reads a
+# price, then a page, then the price again in India's session sees one price throughout, whatever minute it ticks over.
 FROZEN: datetime | None = None
 
 

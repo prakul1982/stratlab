@@ -40,10 +40,11 @@ def no_official_close_reads():
         oc.forget()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="session")
 def still_market_clock():
-    """The fake market's clock stands still for the length of a test (tests/fake_prices.py): in the session, a price read
-    by the test and the same price read by a page a moment later never fall on two sides of a minute."""
+    """The fake market's clock stands still for the whole run (tests/fake_prices.py): in the session, a price read by a
+    test and the same price read by a page a moment later, or kept in a quote cache by the test before, never fall on
+    two sides of a minute."""
     from datetime import datetime, timezone
     from tests import fake_prices
     fake_prices.FROZEN = datetime.now(timezone.utc)
