@@ -36,6 +36,7 @@ import io
 import json
 import math
 import re
+from collections import Counter
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends
@@ -123,8 +124,9 @@ def today_ist() -> str:
 _INTL = re.compile(r"\b(us|u\.s\.|usa|nasdaq|s&p|s ?& ?p 500|global|international|overseas|world|emerging|greater china|china|"
                    r"hang seng|japan|europe|asia|fang|taiwan|developed)\b", re.I)
 _GOLD = re.compile(r"\b(gold|silver|precious)\b", re.I)
-_DEBT = re.compile(r"\b(gilt|g-?sec|sdl|bond|debt|crisil|liquid|overnight|money market|psu|target maturity|treasury|t-?bill|"
+_DEBT = re.compile(r"\b(gilt|g-?sec|sdl|bond|debt|crisil|liquid|overnight|money market|psu (?:bond|debt)|bharat bond|target maturity|treasury|t-?bill|"
                    r"income|corporate|credit|duration|floater|floating|fmp|fixed maturity|banking)\b", re.I)
+_EQ_NAME = re.compile(r"\b(bank(?!ing)|cpse|pse|equity)\b", re.I)    # equity ETF/index words that outrank a stray debt word
 
 
 def kind_of(category: str, name: str, hint: str = "") -> str:
@@ -147,7 +149,7 @@ def kind_of(category: str, name: str, hint: str = "") -> str:
     if c or not hint:
         if _GOLD.search(n) or _INTL.search(n):
             return "other"
-        if _DEBT.search(n):
+        if _DEBT.search(n) and not _EQ_NAME.search(n):
             return "debt"
         if re.search(r"hybrid|balanced|asset allocation|multi asset", n, re.I):
             return "hybrid"
@@ -454,7 +456,13 @@ def merge(before: dict, got: dict, limit: int | None) -> tuple[dict, dict]:
                 cur[f] = cur.get(f) or s.get(f) or ""
             if s.get("stmt_date") and (not cur.get("stmt_date") or s["stmt_date"] >= cur["stmt_date"]):
                 cur["stmt_nav"], cur["stmt_date"] = s.get("stmt_nav"), s["stmt_date"]
-    seen = {_sig(t) for t in out["txns"]}
+    # an older file's transactions replace a stored opening balance that falls on or after them
+    early: dict[str, str] = {}
+    for t in got["txns"]:
+        if t["t"] != "opening" and t["k"] in have:
+            early[t["k"]] = min(early.get(t["k"], t["d"]), t["d"])
+    out["txns"] = [t for t in out["txns"] if not (t["t"] == "opening" and t["k"] in early and early[t["k"]] <= t["d"])]
+    seen = Counter(_sig(t) for t in out["txns"])     # stored copies only, so same-day twins in one file both stay
     added = dup = 0
     for t in got["txns"]:
         if t["k"] not in have:
@@ -462,12 +470,12 @@ def merge(before: dict, got: dict, limit: int | None) -> tuple[dict, dict]:
         if t["t"] == "opening" and t["k"] in first and first[t["k"]] <= t["d"]:
             continue
         sig = _sig(t)
-        if sig in seen:
+        if seen[sig] > 0:
+            seen[sig] -= 1
             dup += 1
             continue
         if len(out["txns"]) >= MAX_TXNS:
             break
-        seen.add(sig)
         out["txns"].append(t)
         added += 1
     return out, {"added": added, "duplicates": dup, "over_limit": over, "schemes": len(got["schemes"])}
@@ -579,6 +587,9 @@ def compute(data: dict, kinds: dict[str, str], gf: dict[str, float]) -> dict:
             if typ in ("gift_in",):
                 out["notes"].add("gift_in")
             lots[k].append({"d": d, "u": u, "cost": cost, "gift": typ == "gift_in"})
+            if typ == "div_reinvest" and amt:       # income in its year, but not new money for XIRR
+                fy = tax_lots.fy_of(d)
+                out["dividends"][fy] = out["dividends"].get(fy, 0.0) + amt
             if typ not in ("div_reinvest", "opening", "segregation") and cost is not None:
                 out["flows"][k].append((d, -cost))
         elif typ == "stamp":
