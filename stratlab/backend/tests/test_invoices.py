@@ -136,3 +136,64 @@ def test_a_replayed_webhook_event_does_nothing(store, monkeypatch):
     billing.handle_webhook(body, "sig", "evt_1")                                  # the same signed event, sent again
     billing.handle_webhook(body, "sig", "evt_2")
     assert acted == ["sub_old", "sub_old"]
+
+
+_ids = __import__("itertools").count()
+
+
+def _webhook(monkeypatch, profile, sub, event="subscription.activated", payment=None):
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "w")
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(utility=SimpleNamespace(verify_webhook_signature=lambda *a: True)))
+    monkeypatch.setattr(billing.db, "profile_by_subscription", lambda sid: profile)
+    acted, made = [], []
+    monkeypatch.setattr(billing, "activate", lambda p, s: acted.append(s["id"]))
+    monkeypatch.setattr(billing, "invoice_for", lambda p, s, pay: made.append(pay))
+    monkeypatch.setattr(billing.invite_rewards, "safe_paid", lambda *a: None)
+    body = {"event": event, "payload": {"subscription": {"entity": sub}, "payment": {"entity": payment or PAY}}}
+    billing.handle_webhook(json.dumps(body).encode(), "sig", f"evt_{next(_ids)}")      # each call its own event
+    return acted, made
+
+
+def test_a_late_webhook_for_an_old_subscription_keeps_the_plan(store, monkeypatch):
+    now = {"id": "u", "plan_status": "active", "razorpay_subscription_id": "sub_B"}
+    acted, made = _webhook(monkeypatch, now, {"id": "sub_A"}, "subscription.charged")
+    assert acted == [] and len(made) == 1                                      # no plan change, the payment is still invoiced
+    assert _webhook(monkeypatch, now, {"id": "sub_C"}, "subscription.activated")[0] == []
+    assert _webhook(monkeypatch, {**now, "pending_subscription_id": "sub_C"}, {"id": "sub_C"})[0] == ["sub_C"]   # the checkout in progress
+    assert _webhook(monkeypatch, now, {"id": "sub_B"})[0] == ["sub_B"]         # the current one
+    assert _webhook(monkeypatch, {"id": "u", "plan_status": "free"}, {"id": "sub_A"})[0] == ["sub_A"]       # paid, nothing active
+    assert _webhook(monkeypatch, {"id": "u"}, {"id": "sub_A", "status": "cancelled"})[0] == []              # an ended one
+
+
+def test_a_gstin_fills_or_must_match_the_state(store):
+    assert invoices.save_billing("u", {"gstin": "27ABCDE1234F1Z5"})["state"] == "27"
+    assert invoices.save_billing("u", {"gstin": "27ABCDE1234F1Z5", "state": "27"})["state"] == "27"
+    with pytest.raises(ValueError, match="not the state chosen"):
+        invoices.save_billing("u", {"gstin": "27ABCDE1234F1Z5", "state": "29"})
+
+
+def test_a_payer_abroad_saved_as_india_gets_an_export_invoice(store):
+    invoices.save_seller(SELLER)
+    invoices.save_billing("u5", {"name": "Zed", "country": "IN"})
+    abroad = invoices.make({**PAY, "id": "p5", "international": True}, {"id": "u5"}, "pro", "month")
+    assert abroad["buyer"]["country"] == "XX" and abroad["supply"] == "Export (IGST paid)"
+    invoices.save_billing("u6", {"name": "Acme", "state": "29", "country": "IN"})
+    kept = invoices.make({**PAY, "id": "p6", "international": True}, {"id": "u6"}, "pro", "month")
+    assert kept["buyer"]["country"] == "IN"                                     # an Indian business keeps India
+
+
+def test_a_subscription_is_charged_in_the_currency_plans_showed(monkeypatch):
+    from app import pricing
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_ID", "k")
+    monkeypatch.setattr(settings, "RAZORPAY_KEY_SECRET", "s")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "inr_b")
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "inr_p")
+    monkeypatch.setattr(pricing, "table", lambda: {"USD": {"plan_basic": "usd_b", "plan_pro": ""},
+                                                   "EUR": {"plan_basic": "eur_b", "plan_pro": "eur_p"}})
+    made = []
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(subscription=SimpleNamespace(create=lambda d: made.append(d) or {"id": "s"})))
+    monkeypatch.setattr(billing.db, "update_profile", lambda *a, **k: None)
+    assert billing.create_subscription({"id": "u"}, "basic", "month", "USD")["currency"] == "INR"    # only one of the two exists
+    assert made[-1]["plan_id"] == "inr_b"
+    assert billing.create_subscription({"id": "u"}, "pro", "month", "EUR")["currency"] == "EUR"
+    assert made[-1]["plan_id"] == "eur_p"

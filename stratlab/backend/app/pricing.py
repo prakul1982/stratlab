@@ -255,11 +255,14 @@ def save(changes: dict) -> dict:
 
 
 def plan_id(currency: str, plan: str, period: str) -> str | None:
-    """The Razorpay plan to subscribe to for this currency, or None to use the rupee plan."""
+    """The Razorpay plan to subscribe to for this currency, or None to use the rupee plan. As in table(), the currency's
+    own plan is used only when both its plans for the period exist."""
     if currency in (None, "", "INR"):
         return None
-    row = table().get(currency) or {}
-    return row.get(f"plan_{plan}{'_year' if period == 'year' else ''}") or None
+    row, suffix = table().get(currency) or {}, "_year" if period == "year" else ""
+    if not (row.get(f"plan_basic{suffix}") and row.get(f"plan_pro{suffix}")):
+        return None
+    return row[f"plan_{plan}{suffix}"]
 
 
 def all_plan_ids() -> dict[str, tuple[str, str, str]]:

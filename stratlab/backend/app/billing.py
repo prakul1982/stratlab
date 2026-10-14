@@ -158,6 +158,16 @@ def activate(profile: dict, sub: dict):
             print("could not cancel old subscription:", e)
 
 
+def _stale(profile: dict, sub: dict) -> bool:
+    """A late or retried event for a subscription that must not change the plan: it has ended, or the user has since
+    moved to another active one (and this one isn't the checkout in progress)."""
+    if sub.get("status") in ("cancelled", "completed", "halted", "expired"):
+        return True
+    cur = profile.get("razorpay_subscription_id")
+    return bool(profile.get("plan_status") == "active" and cur and cur != sub["id"]
+                and sub["id"] != profile.get("pending_subscription_id"))
+
+
 def invoice_for(profile: dict, sub: dict, payment: dict | None):
     """The payment's invoice; a failure here never stops the plan switching on (the webhook tries again)."""
     if not payment or not payment.get("id") or payment.get("status") not in (None, "captured", "authorized"):
@@ -249,8 +259,9 @@ def _act(event: dict):
     if not profile:
         return
     if name in ("subscription.activated", "subscription.charged", "subscription.resumed"):
-        activate(profile, sub)
-        if name == "subscription.charged":
+        if not _stale(profile, sub):
+            activate(profile, sub)
+        if name == "subscription.charged":      # a real payment still gets its invoice, whatever the plan
             payment = (event.get("payload", {}).get("payment") or {}).get("entity")
             invoice_for(profile, sub, payment)
             invite_rewards.safe_paid(profile, payment)      # an invited friend's first real payment
