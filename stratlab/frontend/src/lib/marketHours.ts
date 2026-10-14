@@ -110,6 +110,19 @@ export function sessionFeed(o: { feedConnected: boolean | undefined; lastTickAt:
   return { text: "Reconnecting to prices", tone: "plain" };
 }
 
+/** What an option chain says about its prices (R20-012: "bid / ask, IV and Greeks, live" at 03:25 IST with the market shut):
+ * "live" while the exchange trades, else when the latest quote was struck and that the market is closed ("as of Wed 14 Oct,
+ * 15:30 IST (market closed)"). `times` are the chain's quote times; the exchange's own zone is assumed for one without an
+ * offset (the broker's feed sends none). Without a market to judge by, "live" stays. */
+export function chainStamp(o: { market?: Market | null; times?: (string | null | undefined)[]; now?: Date }): string {
+  const st = o.market ? marketState(o.market, o.now ?? new Date()) : null;
+  if (!st || !o.market || st.open || st.always || st.offline) return "live";
+  const tz = o.market.tz;
+  const stamps = (o.times ?? []).filter((t): t is string => !!t)
+    .map((t) => Date.parse(/(Z|[+-]\d\d:?\d\d)$/.test(t) || tz !== "Asia/Kolkata" ? t : `${t}+05:30`)).filter((n) => Number.isFinite(n));
+  return stamps.length ? `as of ${exchangeTime(new Date(Math.max(...stamps)), tz)} (market closed)` : "last prices (market closed)";
+}
+
 /** The line under "Today" when it adds a US session to India's (R6O-015: Today ₹192 = an India day that had closed plus
  *  AAPL moving live, so it changed by the minute under one word): the US part named, live or at its close, in dollars
  *  and at the rupee rate used. null when there's no US part in Today. */

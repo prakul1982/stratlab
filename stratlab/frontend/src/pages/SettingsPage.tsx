@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { api, CFG, supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, sourceWords } from "../lib/format";
-import { aiMissingRow, serverRow } from "../lib/connection";
+import { aiCountText, aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
 import { viewForFocus } from "../lib/spaces";
 import type { Focus, Level } from "../lib/types";
@@ -153,14 +153,20 @@ function ConnectionCheck() {
         // only the owner tests every provider: each test spends the shared free AI allowance
         add({ t: "AI strategy builder", s: "warn", d: "Testing each provider…" });
         try {
-          const r = await api<{ providers: { label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number }[] }>("/admin/ai/test", { method: "POST" });
+          const r = await api<{ providers: { name: string; label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number }[];
+            view?: { providers: { name: string; configured: boolean; result: string | null }[] } }>("/admin/ai/test", { method: "POST" });
           rows.pop();
-          const working = r.providers.filter((p) => p.ok).length;
+          // counted as Admin counts: by each provider's own reading (a short rate limit still works), not by this one test
+          const seen = r.view?.providers ?? [];
+          const set = seen.filter((p) => p.configured);
+          const readOf = (name: string) => set.find((p) => p.name === name)?.result;
+          const working = set.length ? set.filter((p) => p.result === "working").length : r.providers.filter((p) => p.ok).length;
           add({ t: "AI strategy builder", s: working ? "pass" : "fail",
-            d: working ? `${working} of ${r.providers.length} providers working` : "No provider answered, so the simple converter is used. See the reasons below." });
+            d: working ? aiCountText(working, set.length || r.providers.length, seen.length || r.providers.length) : "No provider answered, so the simple converter is used. See the reasons below." });
           for (const p of r.providers) {
-            add({ t: `AI: ${p.label}`, s: p.ok ? "pass" : p.quota ? "warn" : "fail",
-              d: p.ok ? `Working${p.model ? ` with ${p.model}` : ""}, answered in ${(p.ms / 1000).toFixed(1)}s` : p.error || "Failed" });
+            const up = p.ok || readOf(p.name) === "working";
+            add({ t: `AI: ${p.label}`, s: up ? "pass" : p.quota ? "warn" : "fail",
+              d: p.ok ? `Working${p.model ? ` with ${p.model}` : ""}, answered in ${(p.ms / 1000).toFixed(1)}s` : up ? (p.quota ? "Working; rate limited right now" : p.error || "Working") : p.error || "Failed" });
           }
         } catch (e) {
           rows.pop();

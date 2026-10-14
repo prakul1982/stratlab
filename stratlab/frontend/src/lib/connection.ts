@@ -18,3 +18,10 @@ export function aiMissingRow(isAdmin: boolean): CheckLine {
     ? { s: "fail", d: "No AI key on the server, so the simple converter is used. Add a free GROQ_API_KEY (console.groq.com) in Railway → Variables, then redeploy." }
     : { s: "warn", d: "Using the simple converter right now. Describing ideas still works." };
 }
+
+/** The providers count, worded once for Settings' Connection check and Admin's Overview (R20-005: "5 of 10 providers working"
+ * beside "4 working of 10"). `working` is the server's reading of each provider (a short rate limit still counts as working);
+ * `set` the providers with a key, `known` all of them. */
+export function aiCountText(working: number, set: number, known: number): string {
+  return known > set ? `${working} working of ${set} set up (${known} known)` : `${working} of ${set} working`;
+}

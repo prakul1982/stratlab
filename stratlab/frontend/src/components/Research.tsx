@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { ago, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
-  SETTLING, bandPosition, metricText, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendValue, useWatchlist,
+  SETTLING, bandPosition, metricText, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -224,7 +224,7 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
           const cls = `tbar-bar${neg ? " neg" : i === points.length - 1 ? ` last ${tone}` : ""}`;
           return (
             <div key={p.y} className="tbar" title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
-              <span className={`tbar-num${neg ? " neg" : ""}`}>{trendValue(p.v, unit)}</span>
+              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{trendShort(p.v, unit) && <span className="tbar-short">{trendShort(p.v, unit)}</span>}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 {down > 0 && <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />}
                 <rect className={cls} data-v={p.v} x="1.5" width="7" y={neg ? zero : zero - h} height={h} />

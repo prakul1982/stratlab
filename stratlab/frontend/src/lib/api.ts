@@ -3,6 +3,7 @@ import { fieldWords, invalidField, invalidText, serverProblems } from "./validat
 import { CFG, sessionKey } from "./config";
 import { ApiError } from "./http";
 import { viewAsHeaders } from "./viewAs";
+import { hasSavedSession } from "./entry";
 
 export { CFG } from "./config";
 export { ApiError } from "./http";
@@ -41,6 +42,12 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
   }
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
+  // a saved sign-in the sign-in service couldn't renew just now: not a request without a token (the 401 would sign the person out)
+  if (!token && hasSavedSession(CFG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })())) {
+    const e = new ApiError("Can't reach the sign-in service. Check your connection and try again.");
+    e.code = "network";
+    throw e;
+  }
   let r: Response;
   try {
     r = await fetch(CFG.API_BASE + path, {

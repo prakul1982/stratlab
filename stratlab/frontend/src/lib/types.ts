@@ -214,7 +214,7 @@ export interface OptQuote { ltp: number | null; bid: number | null; ask: number 
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
   model?: GreekModel | null;       // the inputs every strike's IV and Greeks share (model estimates)
-  spot_from?: "quote" | "spot" | "none" }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
+  spot_from?: "quote" | "spot" | "none"; spot_ts?: string | null }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
 /** A position's model view (options/greeks.py position): each leg's IV and Greeks per option, the what-if inputs of the
  * legs that have an IV, and the net Greeks (× quantity, sold legs negative). */
 export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: ModelLeg[]; complete: boolean; net: (NetGreeks & { pnl: number }) | null }

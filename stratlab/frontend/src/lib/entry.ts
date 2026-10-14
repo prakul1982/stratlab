@@ -22,6 +22,13 @@ export function wantsAccount(o: { supabaseUrl?: string; search?: string; hash?: 
   try { return !!o.storage?.getItem(sessionKeyFor(o.supabaseUrl)); } catch { return true; }       // storage that throws: let the app sort it out
 }
 
+/** A sign-in is saved in this browser. When the app then finds no session (the sign-in service didn't answer while the
+ * saved one was renewed), that is "couldn't check", not "signed out": only an empty store is a definite no. Storage that
+ * throws counts as nothing saved (there is nothing to lose). */
+export function hasSavedSession(supabaseUrl: string | undefined, storage: Pick<Storage, "getItem"> | null | undefined): boolean {
+  try { return !!storage?.getItem(sessionKeyFor(supabaseUrl)); } catch { return false; }
+}
+
 /** The pages anyone sees the same way, signed in or not: the policies and a shared verdict or library entry. */
 export const PUBLIC_FOR_ALL = [/^\/(terms|privacy|refunds|contact)\/?$/, /^\/verdict\/[^/]+\/?$/, /^\/library\/[^/]+\/?$/];
 export const isPublicForAll = (path: string) => PUBLIC_FOR_ALL.some((re) => re.test(path.split(/[?#]/)[0]));

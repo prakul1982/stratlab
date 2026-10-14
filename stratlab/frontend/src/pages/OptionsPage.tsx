@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
+import { chainStamp } from "../lib/marketHours";
 import { HELP } from "../lib/help";
 import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
@@ -256,7 +257,7 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
 }
 
 function Chain({ s }: { s: OptionStrategy }) {
-  const { fail } = useApp();
+  const { fail, markets } = useApp();
   const [chain, setChain] = useState<OptChain | null>(null);
   const [busy, setBusy] = useState(false);
   const load = async () => {
@@ -283,10 +284,13 @@ function Chain({ s }: { s: OptionStrategy }) {
     { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike}</b> },
     { key: "pq", header: "Put bid / ask", numeric: true, cell: (r) => q(r.pe) }, { key: "po", header: "Put OI", numeric: true, cell: (r) => r.pe?.oi?.toLocaleString("en-IN") ?? "–" },
   ];
+  // Indian index and stock options trade in the Indian market's hours; outside them the prices are the last ones struck (R20-012)
+  const stamp = chainStamp({ market: s.exchange === "NFO" || s.exchange === "BFO" ? markets.find((m) => m.id === "IN") : null,
+    times: [chain?.spot_ts, ...(chain?.rows ?? []).flatMap((r) => [r.ce?.ts, r.pe?.ts])] });
   const atm = (r: CRow): Record<string, string> => (r.strike === chain?.atm ? { "data-atm": "1", className: "atm" } : {});
   return (
     <Card label="Option chain" testId="chain-card">
-      <Disclosure className="chain" summary={<><b>Option chain</b><span className="k-note">bid / ask, IV and Greeks, live</span></>} onToggle={(o) => { if (o && !chain) void load(); }}>
+      <Disclosure className="chain" summary={<><b>Option chain</b><span className="k-note">bid / ask, IV and Greeks, {chain ? stamp : stamp === "live" ? "live" : "market closed"}</span></>} onToggle={(o) => { if (o && !chain) void load(); }}>
         {busy && <Skeleton label="Loading the chain" />}
         {chain && (
           <div className="k-stack">

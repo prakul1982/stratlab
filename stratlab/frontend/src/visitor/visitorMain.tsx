@@ -17,7 +17,8 @@ function Watch() {
   const { pathname } = useLocation();
   useEffect(() => { pageview(pathname); }, [pathname]);          // usage analytics: off without a key
   // a link from a policy page to an address inside the app, for someone who is signed in: load the whole app
-  useEffect(() => { if (!isPublicForAll(pathname) && signedInNow()) location.reload(); }, [pathname]);
+  // (also when the config never loaded on a page anyone can see: the app address can't tell who is signed in, R20-002)
+  useEffect(() => { if (!isPublicForAll(pathname) && (signedInNow() || !window.STRATLAB_CONFIG)) location.reload(); }, [pathname]);
   useEffect(() => {
     const on = () => { if (signedInNow() && !isPublicForAll(location.pathname)) location.reload(); };
     window.addEventListener("storage", on);                      // signed in from another tab
