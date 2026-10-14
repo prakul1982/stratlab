@@ -215,6 +215,20 @@ def test_an_older_statement_leaves_holdings_alone(w, on):
     assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}["INFY"] == 12
 
 
+def test_a_future_dated_statement_is_ignored_and_blocks_nothing(w, on):
+    def dated(shares, end):
+        return make_nsdl(PAN, [{"broker": "EXAMPLE BROKING LTD", "dp_id": "IN300001", "client_id": "12345678",
+                                "equities": [("INE009A01021", "INFY", "Infosys Limited", shares, 1500.5)]}], period=("01-Sep-2026", end))
+    upload(w["client"], nsdl(shares=12))
+    r = upload(w["client"], dated(99, "31-Dec-2099"))
+    assert r.status_code == 400 and state.section(PRO_ID, "inbox")["last"]["status"] == "future_dated"
+    assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}["INFY"] == 12
+    assert state.section(PRO_ID, "inbox")["cas_asof"] == "2026-09-30"             # the far date was not recorded
+    assert upload(w["client"], dated(15, "10-Oct-2026")).status_code == 200      # a real later statement still applies
+    assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}["INFY"] == 15
+    assert state.section(PRO_ID, "inbox")["cas_asof"] == "2026-10-10"
+
+
 def test_upload_wrong_password_and_garbage(w, on):
     r = upload(w["client"], nsdl(), password="WRONGPASS1")
     assert r.status_code == 400 and r.json()["detail"]["code"] == "wrong_password"
