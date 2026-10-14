@@ -212,3 +212,10 @@ def test_members_are_sized_from_the_shared_pot(monkeypatch):
     assert 0 < b.engine.qty * 100 <= 1000000 - a.engine.qty * 100 - a.engine.entry_cost
     value, free = s.funds()
     assert abs(value - s.equity()) < 1e-6 and free >= 0
+
+
+def test_the_engines_open_fill_gate_takes_the_backtests_argument(monkeypatch):
+    # the engine asks its gate free_slot(at_open=True) when a pending entry fills at a candle's open (group backtests)
+    mgr, _ = make_manager()
+    s = group_live.GroupLiveSession(mgr, row())
+    assert s.free_slot(at_open=True) is True and s.members[0].engine.gate(at_open=True) is True

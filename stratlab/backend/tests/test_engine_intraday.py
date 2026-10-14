@@ -147,6 +147,7 @@ def test_intraday_india_equity_backtest_has_no_capital_gains_estimate():
           session={"squareoff": "15:00"})
     out = backtest(bars, s, 0, cost_kind="in_eq")
     assert out["costs"]["tax"]["amount"] is None and "20%" not in out["costs"]["tax"]["note"]
+    assert "speculative business income" in out["costs"]["tax"]["note"]
 
 
 def test_old_strategies_behave_as_before():
