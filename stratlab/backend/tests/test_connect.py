@@ -1372,3 +1372,19 @@ def test_a_staged_zerodha_login_expires(w, kite, monkeypatch):
 
 def test_confirming_a_zerodha_login_needs_signing_in(w, kite):
     assert w["client"].post("/connect/kite/confirm", json={"state": "u1.x", "claim": "y"}).status_code == 401
+
+
+def _acct(sym, q, a):
+    return {"symbol": sym, "exchange": "NSE", "qty": q, "avg": None, "accts": {a: q}}
+
+
+@pytest.mark.parametrize("first,second", [("NSDL:abc", "NSDL"), ("NSDL", "NSDL:abc")])
+def test_an_account_whose_key_changes_is_not_counted_twice(first, second):
+    s = sync.merge_sync([], [_acct("INFY", 10, first)], "cas", True, {first})[0]
+    items, _ = sync.merge_sync(s, [_acct("INFY", 10, second)], "cas", True, {second})
+    assert items[0]["qty"] == 10 and items[0]["accts"] == {second: 10}
+
+
+def test_different_ids_of_one_depository_stay_two_accounts():
+    assert not sync.same_account("NSDL:abc", "NSDL:def") and sync.same_account("CDSL", "CDSL:x")
+    assert not sync.same_account("NSDL", "CDSL:x")

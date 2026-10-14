@@ -231,7 +231,14 @@ def merge(rows: list[dict]) -> list[dict]:
         else:
             cur["avg"] = None   # one line has no cost, so the combined cost is unknown
         cur["qty"] = q
-    return list(out.values())
+    return drop_stale_accts(list(out.values()))
+
+
+def drop_stale_accts(rows: list[dict]) -> list[dict]:
+    """The rows without "accts" where its parts no longer add up to the quantity (typed or added over a statement's
+    per-account one: no hidden second quantity; the next statement sets it again)."""
+    return [{k: v for k, v in r.items() if k != "accts"} if r.get("accts") and abs(sum(r["accts"].values()) - r["qty"]) > 1e-9
+            else r for r in rows]
 
 
 def cap(items: list[dict], before: list[dict], limit: int) -> tuple[list[dict], list[str]]:
