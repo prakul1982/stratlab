@@ -4,7 +4,7 @@ import { mcpEndpoint } from "../lib/mcp";
 import { useApp } from "../lib/app";
 import { ago, dateOnly } from "../lib/format";
 import { Earlier } from "./Earlier";
-import { Badge, Card, CardHead, CheckField, ConfirmDialog, Disclosure, EmptyState, Field, FormActions, FormGrid, Notice, PlanNote, Skeleton } from "./kit";
+import { Badge, Card, CardHead, CheckField, ConfirmDialog, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PlanNote, Skeleton } from "./kit";
 
 type Key = { id: string; name: string; paper: boolean; hint: string; created_at: string; last_used_at: string | null; revoked_at: string | null };
 type Entry = { at: string; key_id: string; key: string; tool: string; args: string; result: "ok" | "error" | "refused" | "rate_limited"; detail: string; ms: number };
@@ -74,7 +74,14 @@ export function AssistantCards() {
   const [made, setMade] = useState<{ token: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState<Key | null>(null);
-  useEffect(() => { api<AssistantPage>("/me/assistant").then(setP).catch(fail); }, [fail]);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    api<AssistantPage>("/me/assistant").then((x) => live && setP(x)).catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
+    return () => { live = false; };
+  }, [fail, tries]);
 
   const [nameMissing, setNameMissing] = useState(false);
   const create = async () => {
@@ -92,6 +99,7 @@ export function AssistantCards() {
     try { setP(await api<AssistantPage>(`/me/assistant/keys/${asking.id}`, { method: "DELETE" })); notify("Key revoked."); setAsking(null); } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
+  if (!p && error) return <ErrorState title="Your assistants couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>;
   if (!p) return <Card label="Your assistants"><Skeleton label="Loading your assistants" /></Card>;
   // the plan the page is seen on (View as included), never the feature's own plan read as the reader's (R6O-005)
   if (!p.allowed) return <PlanNote>Connecting an AI assistant is on the {p.plan} plan.{p.your_plan ? ` You are on the ${p.your_plan} plan.` : ""}</PlanNote>;

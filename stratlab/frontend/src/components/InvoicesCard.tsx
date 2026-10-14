@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money } from "../lib/format";
-import { Card, CardHead, Disclosure, EmptyState, Field, FormActions, FormGrid, Select, Skeleton } from "./kit";
+import { Card, CardHead, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Select, Skeleton } from "./kit";
 
 type Inv = { number: string; date: string; total: number; currency: string; supply: string };
 type Billing = { name?: string; address?: string; state?: string; gstin?: string; country?: string };
@@ -25,10 +25,16 @@ export function InvoicesCard() {
   const [rows, setRows] = useState<Inv[] | null>(null);
   const [b, setB] = useState<Billing>({});
   const [states, setStates] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
+    let live = true;
+    setError(null);
     api<{ invoices: Inv[]; billing: Billing; states: Record<string, string> }>("/billing/invoices")
-      .then((x) => { setRows(x.invoices); setB({ country: "IN", ...x.billing }); setStates(x.states); }).catch(fail);
-  }, [fail]);
+      .then((x) => { if (!live) return; setRows(x.invoices); setB({ country: "IN", ...x.billing }); setStates(x.states); })
+      .catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
+    return () => { live = false; };
+  }, [fail, tries]);
   const save = async () => {
     try { const x = await api<{ billing: Billing }>("/billing/details", { method: "PUT", body: b }); setB(x.billing); notify("Billing details saved."); }
     catch (e) { fail(e); }
@@ -37,7 +43,8 @@ export function InvoicesCard() {
   return (
     <Card id="invoices">
       <CardHead title="Invoices" />
-      {!rows ? <Skeleton label="Loading your invoices" lines={2} /> : rows.length === 0
+      {!rows ? (error ? <ErrorState title="Your invoices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
+        : <Skeleton label="Loading your invoices" lines={2} />) : rows.length === 0
         ? <EmptyState title="No payments yet">An invoice appears here for every payment.</EmptyState> : (
         <div>{rows.map((r) => (
           <div key={r.number} className="k-line-row">

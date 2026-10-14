@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { asOf as asOfText, dateOnly, inr, pctPlain } from "../../lib/format";
-import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, PageHeader, PlanNote, Skeleton, type Column } from "../../components/kit";
+import { Card, CardHead, ChipBar, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, PlanNote, Skeleton, type Column } from "../../components/kit";
 
 /* /money/rates: fixed-income rates and the yield after your tax: T-bill cut-offs, G-sec yields and the repo rate from the
  * Reserve Bank, this quarter's small savings rates with their tax treatment, the RBI floating rate bond, and your own
@@ -29,12 +29,16 @@ export function RatesPage() {
   const { fail } = useApp();
   const [pick, setPick] = useState<number | "mine">("mine");
   const [d, setD] = useState<Rates | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     let live = true;
-    api<Rates>(pick === "mine" ? "/money/rates" : `/money/rates?slab=${pick}`).then((r) => { if (live) setD(r); }).catch(fail);
+    setError(null);
+    api<Rates>(pick === "mine" ? "/money/rates" : `/money/rates?slab=${pick}`).then((r) => { if (live) setD(r); })
+      .catch((e) => { if (!live) return; setD(null); setError((e as Error).message); fail(e); });     // not the last slab's figures under this slab's chip
     return () => { live = false; };
-  }, [pick, fail]);
+  }, [pick, fail, tries]);
 
   const table = (rows: Row[], label: string, extra?: (r: Row) => ReactNode) => {
     const cols: Column<Row>[] = [
@@ -66,7 +70,8 @@ export function RatesPage() {
         lede="Treasury bills, government bonds, the repo rate, small savings and your own deposits, each beside what it comes to after your tax."
         asOf={d?.as_of} info={d ? <>Published rates with their dates, and arithmetic: not a ranking of where to put money. Market rates: {d.rbi_source}.</> : undefined} infoLabel="Where the rates come from" />
 
-      {!d ? <Card><Skeleton label="Reading the rates" /></Card> : <>
+      {!d ? (error ? <ErrorState title="The rates couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
+        : <Card><Skeleton label="Reading the rates" /></Card>) : <>
         <Card label="Your tax rate">
           <CardHead title="Your tax rate" info="The tax rate that turns each rate into what you keep. Pick your own estimate from the tax report, or a slab." />
           <ChipBar label="Tax rate" options={rateOptions} value={pickValue} onChange={(v) => setPick(v === "mine" ? "mine" : Number(v))} />

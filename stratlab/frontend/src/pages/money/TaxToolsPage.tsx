@@ -6,7 +6,7 @@ import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from
 import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
-import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
+import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { fyLink, movedYearNote, openFy, rememberFy, savedFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
 
@@ -81,11 +81,15 @@ export function TaxToolsPage() {
 
 const yearOptions = (years: { fy: number; label: string }[], current: number) => years.map((x) => ({ value: x.fy, label: `${x.label}${x.fy === current ? " (this year)" : ""}` }));
 const loading = (label: string) => <Card><Skeleton label={label} /></Card>;
+/** A first load that failed: what happened and a way to try again, not a skeleton for ever. */
+const failedLoad = (title: string, message: string, retry: () => void) => <ErrorState title={title} action={{ label: "Try again", onClick: retry }}>{message}</ErrorState>;
 
 // ---------- dividends ----------
 function DividendsTab() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<Dividends | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   const [fy, setFy] = useState<number | null>(null);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const [busy, setBusy] = useState(false);
@@ -102,7 +106,12 @@ function DividendsTab() {
       return o.fy;
     });
   }, [asked]);
-  useEffect(() => { api<Dividends>("/money/dividends").then(show).catch(fail); }, [show, fail]);
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    api<Dividends>("/money/dividends").then((d) => live && show(d)).catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
+    return () => { live = false; };
+  }, [show, fail, tries]);
 
   const pick = async (files: FileList | null, reset: () => void) => {
     const f = files?.[0];
@@ -128,7 +137,7 @@ function DividendsTab() {
     catch (e) { fail(e); } finally { setBusy(false); setAsking(false); }
   };
 
-  if (!v) return loading("Adding up your dividends");
+  if (!v) return error ? failedLoad("Your dividends couldn't be read", error, () => setTries((n) => n + 1)) : loading("Adding up your dividends");
   const y = v.years.find((x) => x.fy === fy) ?? v.years[0];
   const companyCols: Column<Company>[] = [
     { key: "co", header: "Company", rowHeader: true, cell: (c) => <><b>{c.symbol}</b>{c.country === "US" && <span className="k-note"> US</span>}</> },
@@ -223,22 +232,28 @@ const num = (s: string) => { const n = Number(s.replace(/[,\s₹]/g, "")); retur
 function AdvanceTab() {
   const { fail, notify } = useApp();
   const [v, setV] = useState<Advance | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   const [fy, setFy] = useState<number | null>(null);
   const asked = useAskedFy();
   // Advance tax is paid during the year, so it opens on the year running now; a year picked or asked for on the other Money
   // pages carries here when this page has it (this year and the one before)
   useEffect(() => {
+    let live = true;
+    setError(null);
     api<Advance>(`/money/advance-tax${fy ? `?fy=${fy}` : ""}`).then((a) => {
+      if (!live) return;
       const want = fy == null ? asked ?? savedFy() : null;
       if (want != null && want !== a.fy && (want === a.current_fy || want === a.current_fy - 1)) setFy(want);
       else setV(a);
-    }).catch(fail);
-  }, [fy, fail, asked]);
+    }).catch((e) => { if (!live) return; setV(null); setError((e as Error).message); fail(e); });     // not the last year's schedule under this year's chip
+    return () => { live = false; };
+  }, [fy, fail, asked, tries]);
   const remind = async (on: boolean) => {
     try { await api("/money/advance-tax/reminders", { method: "PUT", body: { on } }); setV((x) => (x ? { ...x, remind: on } : x)); notify(on ? "Reminders on: 7 days and 1 day before each date." : "Reminders off."); }
     catch (e) { fail(e); }
   };
-  if (!v) return loading("Working out the instalments");
+  if (!v) return error ? failedLoad("The instalments couldn't be worked out", error, () => setTries((n) => n + 1)) : loading("Working out the instalments");
   const s = v.schedule;
   const cols: Column<Instalment>[] = [
     { key: "by", header: "By", rowHeader: true, cell: (r) => <><b>{r.label}</b>{r.status === "next" && <span className="k-note"> next</span>}</> },
@@ -351,9 +366,16 @@ function PaymentRow({ i, r, onChange, onRemove }: { i: number; r: { d: string; a
 function LtcgTab() {
   const { fail } = useApp();
   const [v, setV] = useState<Ltcg | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
   const [within, setWithin] = useState(90);
-  useEffect(() => { api<Ltcg>("/money/ltcg").then(setV).catch(fail); }, [fail]);
-  if (!v) return loading("Checking your lots");
+  useEffect(() => {
+    let live = true;
+    setError(null);
+    api<Ltcg>("/money/ltcg").then((x) => live && setV(x)).catch((e) => { if (!live) return; setError((e as Error).message); fail(e); });
+    return () => { live = false; };
+  }, [fail, tries]);
+  if (!v) return error ? failedLoad("Your lots couldn't be read", error, () => setTries((n) => n + 1)) : loading("Checking your lots");
   if (!v.trades) {
     return <EmptyState title="No trades yet" action={{ label: "Open the tax report", to: "/tax-report" }}>Upload your tradebooks on the tax report to see the exemption used and your open lots.</EmptyState>;
   }

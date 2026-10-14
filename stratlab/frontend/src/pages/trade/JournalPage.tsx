@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -105,11 +105,14 @@ export function JournalPage() {
   const [segment, setSegment] = useState("all");
   // trades the tax report already has from the person's tradebooks: offered here, so an empty journal says so
   const [taxTrades, setTaxTrades] = useState(0);
+  const seq = useRef(0);
   useEffect(() => { api<{ trades: number }>("/tax").then((t) => setTaxTrades(t.trades ?? 0)).catch(() => undefined); }, []);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ segment, market });
-    return api<Journal>(`/trade/journal?${q}`).then((x) => { setJ(x); setError(null); }).catch((e) => { setError("Your journal couldn't be opened just now. Try again in a minute."); fail(e); });
+    const n = ++seq.current;     // the answer to the last filter picked is the one shown, whatever order they come in
+    return api<Journal>(`/trade/journal?${q}`).then((x) => { if (n === seq.current) { setJ(x); setError(null); } })
+      .catch((e) => { if (n !== seq.current) return; setJ(null); setError("Your journal couldn't be opened just now. Try again in a minute."); fail(e); });     // not the last filter's trades under this one's chips
   }, [fail, market, segment]);
   useEffect(() => { load(); }, [load]);
   /** What the server sends after a change is its default view; with a market or segment picked, the page asks again. */

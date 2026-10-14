@@ -82,9 +82,11 @@ export function HoldingsPage() {
   const [picked, setPicked] = useState("");        // the symbol picked from the suggestions (what the box shows until you type)
   const [boxes, setBoxes] = useState(0);           // a new number empties the stock box
 
+  const factsSeq = useRef(0);
   const loadFacts = useCallback((v: View) => {
+    const n = ++factsSeq.current;
     setFacts(null);
-    if (v.rows.length) api<FactsReply>("/holdings/facts").then(setFacts).catch(() => setFacts({ rows: {}, filings: true, filings_plan: "Basic", checked: 0, count: 0 }));
+    if (v.rows.length) api<FactsReply>("/holdings/facts").then((f) => n === factsSeq.current && setFacts(f)).catch(() => n === factsSeq.current && setFacts({ rows: {}, filings: true, filings_plan: "Basic", checked: 0, count: 0 }));
   }, []);
   const [actionsAt, setActionsAt] = useState(0);         // reload the corporate actions whenever the holdings change
   // the dividends card arrives a moment after the holdings: the cards below it wait for it (a few seconds at most), so

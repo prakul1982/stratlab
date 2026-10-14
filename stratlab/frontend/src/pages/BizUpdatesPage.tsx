@@ -55,7 +55,7 @@ export function BizUpdatesPage() {
   }, [tries]);
   useEffect(() => {
     let live = true;
-    setD(null); setError(null);
+    setD(null); setError(null); setLocked(false);
     api<Sector>(`/invest/business-updates?sector=${encodeURIComponent(sector)}`)
       .then((x) => live && setD(x))
       .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) setLocked(true); else setError((e as Error).message); });

@@ -183,6 +183,8 @@ export function PlansPage() {
               </ul>
               {cur ? <button className="btn outline" disabled>Current plan</button>
                 : p === "free" ? <span className="k-small k-muted">Included whenever a paid plan ends</span>
+                  // the current plan isn't known until /me answers: no "Upgrade to Pro" for a Pro reader meanwhile
+                  : !me ? <button className="btn outline" disabled>Checking your plan…</button>
                   : !billing ? <span className="lp-plan-note k-small k-muted">Opens soon</span>
                     // a plan the owner gave already includes everything below it: nothing to buy there (R6V-009)
                     : given && paid && RANK[p] <= RANK[paid as PlanId] ? <span className="k-small k-muted" data-testid="plan-included">Included in the {planName(paid as PlanId)} plan you were given</span>

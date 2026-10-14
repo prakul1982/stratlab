@@ -19,6 +19,8 @@ interface AppState {
   me: Me | null;
   meError: string | null;
   notebooks: NotebookItem[] | null;
+  /** the last read of the list failed: an empty `notebooks` is then not "no notebooks" */
+  notebooksFailed: boolean;
   markets: Market[];
   dataOffline: boolean;
   toast: Toast;
@@ -62,6 +64,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const [me, setMe] = useState<Me | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
   const [notebooks, setNotebooks] = useState<NotebookItem[] | null>(null);
+  const [notebooksFailed, setNotebooksFailed] = useState(false);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [dataOffline, setDataOffline] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
@@ -111,7 +114,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   }, []);
 
   const refreshNotebooks = useCallback(async () => {
-    try { setNotebooks(await api<NotebookItem[]>("/notebooks")); } catch (e) { setNotebooks((n) => n ?? []); fail(e); }
+    try { setNotebooks(await api<NotebookItem[]>("/notebooks")); setNotebooksFailed(false); } catch (e) { setNotebooks((n) => n ?? []); setNotebooksFailed(true); fail(e); }
   }, [fail]);
 
   useEffect(() => {
@@ -173,11 +176,11 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
   const space: SpaceView = spaceHere ?? viewFromSaved(me?.prefs?.space) ?? viewForFocus(me?.prefs?.focus) ?? "trade";
 
   const value = useMemo<AppState>(() => ({
-    session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
+    session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks,
     allIndicators: !!me?.plan_info.indicators, fno: !!me?.plan_info.fno, level: me?.prefs?.level ?? null, setLevel,
     focus: me?.prefs?.focus ?? null, setFocus, savePrefs, space, setSpace, theme, setTheme,
     viewAs: me?.is_admin ? me.view_as ?? null : null, setViewAs,
-  }), [session, ready, me, meError, notebooks, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
+  }), [session, ready, me, meError, notebooks, notebooksFailed, markets, dataOffline, toast, notify, fail, refreshMe, refreshNotebooks, setLevel, setFocus, savePrefs, space, setSpace, theme, setTheme, setViewAs]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
