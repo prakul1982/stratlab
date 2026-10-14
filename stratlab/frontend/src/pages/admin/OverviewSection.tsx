@@ -86,7 +86,7 @@ export function OverviewSection() {
         <CardHead title="This month" />
         <StatRow label="This month">
           <Stat item label="Experiments" value={st.experiments_month} note="this month, all users" />
-          <Stat item label="AI builds" value={st.ai_month} note="this month, all users" />
+          <Stat item label="AI builds" value={st.ai_month} note={`this month, all users${st.ai_reads_month != null ? `; ${st.ai_reads_month} AI reads` : ""}`} />
         </StatRow>
         {dash && (
           <div className="k-row">

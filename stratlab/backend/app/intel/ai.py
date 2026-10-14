@@ -288,7 +288,7 @@ def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], a
     sold (R10O-004)."""
     cash_facts = grounding.flow_facts(cash)
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
-    system = f"""You are a market reporter writing today's market read{' focused on ' + focus if focus else ''}. {where}
+    system = f"""You are a market reporter writing today's market read. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
 Never say the market is at record highs unless an index's from_high_pct is above -0.5. Describe where an index sits in its
 52-week range only with from_low_pct and from_high_pct (above its low when from_low_pct is positive). Quote only numbers
@@ -310,7 +310,7 @@ data, rates) from a headline that previews it or from the moves themselves.
 "hot" are 4 companies named in today's headlines, with what the news says (not why to buy them). 4 flows, 4 themes.
 No outlook: describe what happened, not what will happen. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
-    facts = {"today": ist_date().isoformat(), "indices": grounding.market_facts(indices),
+    facts = {"today": ist_date().isoformat(), **({"focus": focus} if focus else {}), "indices": grounding.market_facts(indices),
              # after the close the levels are the day's close: the read says the market closed, never "opened" (R6O-025)
              **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
              # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)

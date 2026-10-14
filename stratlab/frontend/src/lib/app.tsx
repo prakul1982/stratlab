@@ -123,7 +123,10 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       offline: () => setDataOffline(true),
     });
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((e, s) => {
+      if (e === "SIGNED_OUT") writeViewAs(null);          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
+      setSession(s);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
