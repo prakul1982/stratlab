@@ -43,11 +43,11 @@ def run_reminders(now: datetime | None = None) -> int:
         box = rec.get("inbox") or {}
         if not reminder_due(box, now):
             continue
-        state.update(uid, "inbox", reminded_at=now.isoformat(timespec="seconds"))
-        profile = sync.profile_for(uid)
-        if not profile:
-            continue
-        try:
+        try:                                         # one user's failure never stops the rest
+            state.update(uid, "inbox", reminded_at=now.isoformat(timespec="seconds"))
+            profile = sync.profile_for(uid)
+            if not profile:
+                continue
             alerts.notify(profile, REMINDER_SUBJECT, REMINDER_TEXT, background=False, url="/settings#accounts")
             sent += 1
         except Exception as e:

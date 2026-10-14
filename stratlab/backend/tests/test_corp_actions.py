@@ -297,6 +297,43 @@ def test_new_actions_are_announced_once_to_the_people_tracking_them(w):
     assert len([s for s in sent if "announced" in s[1]]) == 1
 
 
+class Killed(BaseException):
+    """A deploy killing the process mid-run."""
+
+
+def test_announcements_survive_one_bad_profile_and_resume_after_a_kill(w, monkeypatch):
+    from app import run_marks
+    watch("u-pro", ("IN", "TCS"))
+    watch("u-free", ("IN", "TCS"))
+    monkeypatch.setattr(C, "alerts_on", lambda uid: True)
+    first = [nse("INFY", "Dividend - Rs 2 Per Share", TODAY + timedelta(days=9))]
+    C.refresh("IN", {"in": FakeIndia(first)}, set(), TODAY)              # the first build
+    india = FakeIndia(first + [nse("TCS", "Bonus 1:1", TODAY + timedelta(days=9))])
+    sent, got = [], db.get_profile
+
+    def kill_first(p, subject, text, url):
+        if not sent:
+            sent.append(p["id"])
+            raise Killed()
+        sent.append(p["id"])
+    job = C.Job(lambda: {"in": india, "us": FakeUS()}, send=kill_first, can_alert=lambda p: True)
+    with pytest.raises(Killed):
+        job.tick(datetime(2026, 10, 5, 2, 0, tzinfo=timezone.utc))
+    assert any(r.get("fresh") for r in C.load("IN")["rows"])            # not unmarked: its messages didn't all go
+    monkeypatch.setattr(run_marks, "STALE", 0)                           # the cut-short run counts as unfinished
+    again = C.Job(lambda: {"in": india, "us": FakeUS()}, send=kill_first, can_alert=lambda p: True)
+    again.tick(datetime(2026, 10, 5, 2, 10, tzinfo=timezone.utc))
+    assert sorted(sent) == ["u-free", "u-pro"]                           # the first one isn't sent twice
+    assert not any(r.get("fresh") for r in C.load("IN")["rows"])
+
+    # the evening run: one person's profile failing skips just them
+    monkeypatch.setattr(db, "get_profile", lambda uid: (_ for _ in ()).throw(RuntimeError("boom")) if uid == sent[0] else got(uid))
+    C.refresh("IN", {"in": FakeIndia(first + [nse("TCS", "Bonus 1:1", TODAY + timedelta(days=1))])}, set(), TODAY)
+    j, out = job_with()
+    j.tick(IN_EVENING)
+    assert [uid for uid, *_ in out] == [sent[1]]
+
+
 def test_the_evening_before_an_ex_date_and_friday_for_monday(w):
     watch("u-pro", ("IN", "TCS"), ("IN", "RELIANCE"))
     C.refresh("IN", {"in": FakeIndia([nse("TCS", "Interim Dividend - Rs 11 Per Share", TODAY + timedelta(days=1)),

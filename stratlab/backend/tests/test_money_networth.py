@@ -1,5 +1,6 @@
 """Net worth: the deposit, provident fund and loan arithmetic, the page's totals and allocation, the history, the
 insurance register, the calendar hook, plan limits, privacy and deletion."""
+import json
 import math
 import sys
 import time
@@ -310,11 +311,36 @@ def test_snapshot_on_the_first_of_each_month_once(w):
     add(c, {"kind": "cash", "value": 7000})
     job = main.networth_job
     first = datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)                     # 4:30 pm in India
-    assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 0
     assert job.tick(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc)) == 0       # before 4 pm
     assert job.tick(first) == 1 and job.tick(first) == 0
+    assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 0      # the month is done
     snap = [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]
     assert snap and snap[0]["why"] == "month" and snap[0]["net"] == 7000
+
+
+def test_a_missed_first_is_caught_up_later_in_the_month_and_a_killed_run_resumes(w, monkeypatch):
+    from app import run_marks
+    c = w["client"]
+    add(c, {"kind": "cash", "value": 7000})
+    db.set_setting("networth:u-free", json.dumps({"items": []}))
+    job, seen = main.networth_job, []
+    value_of = job.value_of
+
+    def kill_after_first(uid):
+        seen.append(uid)
+        if len(seen) == 2:
+            raise KeyboardInterrupt                                                # a deploy kills it mid-run
+        return value_of(uid)
+    monkeypatch.setattr(job, "value_of", kill_after_first)
+    third = datetime(2026, 11, 3, 6, 0, tzinfo=timezone.utc)                       # the leader was down over the 1st
+    with pytest.raises(KeyboardInterrupt):
+        job.tick(third)
+    assert job.tick(third) == 0                                                    # still beating: left alone
+    monkeypatch.setattr(run_marks, "STALE", 0)
+    job.tick(third)
+    assert sorted(seen) == sorted([seen[0], seen[1], seen[1]])                     # the first user isn't valued again
+    assert [h["why"] for h in nw.history("u-pro") if h["d"] == "2026-11-03"] == ["month"]
+    assert job.tick(third) == 0
 
 
 def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monkeypatch):

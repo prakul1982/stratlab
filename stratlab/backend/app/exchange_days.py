@@ -450,7 +450,7 @@ class Runner:
         return r
 
     def catch_up(self, desk: Desk, now: datetime | None = None) -> dict:
-        """The recent trading days the store hasn't got, newest first; a newly stored newest day fires its alerts."""
+        """The recent trading days the store hasn't got, newest first; then the newest day's alerts (see alert)."""
         now = now or ist_now()
         exp = expected(now, desk.ready_at, desk.lag)
         if not exp:
@@ -482,16 +482,31 @@ class Runner:
         cut = stop.isoformat()
         desk.store.set_state(checked=stamp if res else st.get("checked"), error=bad if res else st.get("error"),
                              tries={k: v for k, v in tries.items() if k > cut})
-        if res.get(exp.isoformat()) == "ok":
-            rec = desk.store.get(exp.isoformat()) or {}
-            prev = desk.store.latest(before=exp.isoformat())
-            try:
-                events = desk.after(exp.isoformat(), rec.get("rows") or {}, (prev[1].get("rows") if prev else None))
-                if events:
-                    res["alerts"] = self.fire(events, now)
-            except Exception as e:
-                print(f"{desk.name}: alerts", str(e)[:160])
+        try:
+            n = self.alert(desk, exp, now, fresh=res.get(exp.isoformat()) == "ok")
+            if n:
+                res["alerts"] = n
+        except Exception as e:
+            print(f"{desk.name}: alerts", str(e)[:160])
         return res
+
+    def alert(self, desk: Desk, day: date, now: datetime, fresh: bool = False) -> int | None:
+        """Fire a stored day's alerts once (None: not stored, or already fired). Marked after firing, so a run that died
+        between storing the day and firing fires them on the next pass (each alert skips what it already sent). A store
+        from before the marker counts its newest day as fired, unless this run just stored it."""
+        key = day.isoformat()
+        st = desk.store.state()
+        rec = desk.store.get(key) if st.get("fired") != key else None
+        if rec is None:
+            return None
+        if "fired" not in st and not fresh:
+            desk.store.set_state(fired=key)
+            return None
+        prev = desk.store.latest(before=key)
+        events = desk.after(key, rec.get("rows") or {}, (prev[1].get("rows") if prev else None))
+        n = self.fire(events, now) if events else 0
+        desk.store.set_state(fired=key)
+        return n
 
     def backfill(self, desk: Desk, today: date, step: int = BACKFILL_STEP, days: int | None = None) -> dict:
         """Read up to `step` more past days, walking back from the oldest one tried; done when it reaches the desk's
@@ -569,6 +584,8 @@ class Job(news_job.Job):
                 if behind and time.time() - self._tried.get(name, 0.0) >= RETRY_MINUTES * 60:
                     self._tried[name] = time.time()
                     self.status["desks"][name] = {"catch_up": self.runner.catch_up(desk, now), "at": now.isoformat()}
+                elif exp is not None and not behind and desk.store.state().get("fired") != exp.isoformat():
+                    self.status["desks"].setdefault(name, {})["alerts"] = self.runner.alert(desk, exp, now)
                 elif not (QUIET[0] <= hhmm <= QUIET[1]) and not (desk.store.state().get("backfill") or {}).get("done"):
                     self.status["desks"].setdefault(name, {})["backfill"] = self.runner.backfill(desk, local.date())
             except Exception as e:

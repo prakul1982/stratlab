@@ -22,7 +22,7 @@ from typing import Callable, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from . import db, leader
+from . import db, leader, run_marks
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -906,8 +906,9 @@ def to_csv(view: dict, hist: list[dict] | None) -> str:
 
 # ---------- the 1st-of-the-month snapshot ----------
 class Job:
-    """Checks every half hour; on the 1st of each month (India time, after 4 pm, so stock prices are the day's close) it
-    records every user's net worth once. The month is marked in the database first, so a restart never records twice."""
+    """Checks every half hour; from the 1st of each month (India time, after 4 pm, so stock prices are the day's close)
+    it records every user's net worth once: a later day of the month catches up a run that was missed. Each user is
+    marked in the database once recorded, so a run a restart cut short resumes with the rest."""
 
     def __init__(self, value_of: Callable[[str], dict | None]):
         self.value_of = value_of
@@ -929,12 +930,14 @@ class Job:
     def tick(self, now: datetime) -> int:
         local = now.astimezone(IST)
         month = local.strftime("%Y-%m")
-        if local.day != 1 or local.hour < 16 or db.get_setting(RUN) == month:
+        if (local.day == 1 and local.hour < 16) or not (run := run_marks.claim(RUN, month)):
             return 0
-        db.set_setting(RUN, month)
         n = 0
         for key, _ in db.all_settings_with_prefix(KEY):
             uid = key[len(KEY):]
+            if run.seen(uid):
+                continue
+            run.beat()
             try:
                 v = self.value_of(uid)
                 if v:                                       # a partial total is stored flagged (see record)
@@ -942,6 +945,8 @@ class Job:
                     n += 1
             except Exception as e:                          # one user's data never stops the others'
                 print("net worth snapshot failed:", type(e).__name__)
+            run.record(uid)                                 # after: a kill in between records that one again, same day
+        run.done()
         self.status.update(last_run=now.isoformat(), recorded=n, last_error=None)
         return n
 

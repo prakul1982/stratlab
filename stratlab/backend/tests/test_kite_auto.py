@@ -95,6 +95,31 @@ def test_run_once_saves_token_then_calls_on_login(monkeypatch):
     assert al.last["ok"] is True
 
 
+def test_a_new_leader_uses_the_token_another_container_saved_today(monkeypatch):
+    calls = []
+
+    class FakeKite:
+        token_day = "2026-09-23"                                     # booted before today's login elsewhere
+
+        def load_saved_token(self):
+            self.token_day = saved[0]
+    saved = ["2026-09-24"]
+    al = kite_auto.AutoLogin(FakeKite(), lambda: calls.append("on_login"))
+    now = datetime(2026, 9, 24, 9, 0, tzinfo=IST)
+    assert not al.login_now(now) and calls == ["on_login"]           # no second login: it would cancel that token
+    al.kite.token_day, saved[0] = "2026-09-23", "2026-09-23"
+    assert al.login_now(now) and calls == ["on_login"]               # nobody logged in today: this one does
+
+
+def test_the_restart_after_a_login_hands_the_lease_over_first(monkeypatch):
+    steps = []
+    monkeypatch.setattr(kite_auto.leader.current, "release", lambda: steps.append("release"))
+    monkeypatch.setattr(kite_auto.os, "_exit", lambda code: steps.append(("exit", code)))
+    monkeypatch.setattr(kite_auto.threading, "Timer", lambda delay, fn: type("T", (), {"start": lambda self: fn()})())
+    kite_auto.restart_process()
+    assert steps == ["release", ("exit", 3)]
+
+
 def test_rejected_login_stops_retries_for_the_day(monkeypatch):
     def boom(url):
         raise AutoLoginError("bad password", retry=False)

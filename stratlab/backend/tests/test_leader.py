@@ -309,3 +309,24 @@ def test_a_follower_runs_none_of_the_jobs(monkeypatch):
         with pytest.raises(Stop):
             loop()
     assert ran == []
+
+
+def test_admin_run_now_refuses_on_a_container_that_doesnt_lead(monkeypatch):
+    from tests import world as W
+    from tests.fake_db import headers
+    world = W.build(monkeypatch)
+    try:
+        c, h = world["client"], headers("admin-token")
+        mem = MemLease(time.monotonic)
+        mem.rows[leader.NAME] = {"owner": "the-other-container", "until": time.monotonic() + 60}
+        monkeypatch.setattr(leader, "current", leader.Leader(lambda: mem))
+        for url in ("/admin/connect/run", "/admin/stock-desks/futures/run", "/admin/breadth/run", "/admin/redflags/run",
+                    "/admin/positioning/run", "/admin/rules/watch/run", "/admin/kite/auto-login-now"):
+            r = c.post(url, headers=h)
+            assert r.status_code == 409, url
+            assert "Another server is running the jobs right now; try again in a minute." in r.text
+        assert c.post("/admin/connect/run", headers=headers("pro-token")).status_code == 403     # not an admin: as before
+        monkeypatch.setattr(leader, "current", leader.Leader(lambda: None))                  # LEADER_LEASE=off: leads
+        assert c.post("/admin/connect/run?part=reminders", headers=h).status_code == 200
+    finally:
+        world["close"]()
