@@ -15,9 +15,10 @@ import { Onboarding, openTour } from "./Onboarding";
 import { gateFor, gatePlan } from "../lib/gates";
 import { PLAN_NAME } from "../lib/plans";
 import { watchSize } from "../lib/resize";
+import { importWithRetry } from "../lib/lazyRetry";
 
 // the pop-ups load when they first open, so they don't slow down the first page
-const SearchPalette = lazy(() => import("./SearchPalette").then((m) => ({ default: m.SearchPalette })));
+const SearchPalette = lazy(() => importWithRetry(() => import("./SearchPalette")).then((m) => ({ default: m.SearchPalette })));
 
 /** The menu lists this many notebooks (pinned first, then the latest) under Notebooks; the rest are one tap away on the notebooks page. */
 const SIDE_NOTEBOOKS = 6;

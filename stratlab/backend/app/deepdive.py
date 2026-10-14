@@ -209,11 +209,11 @@ def profit_note(p: dict) -> str | None:
     ratio = ttm * fx / owners
     u = p.get("unit")
     behind = money(owners, "$ million" if foreign else u)
-    if ratio > 1.25:
+    if ratio > 1.1:
         return (f"Net profit over the last 12 months ({money(ttm, u)}) is about {ratio:.1f}× the earnings the P/E is based on "
                 f"({behind}): it includes the share owned by minority shareholders of subsidiaries, or one-off gains. "
                 "Earnings per share growth shows what belongs to this company's shareholders.")
-    if ratio < 0.8:
+    if ratio < 0.9:
         return (f"Net profit over the last 12 months ({money(ttm, u)}) is well below the earnings the P/E is based on "
                 f"({behind}), usually because of one-off losses. Earnings per share growth is the cleaner guide.")
     return None

@@ -1,4 +1,5 @@
 import { checksRun } from "../lib/shareText";
+import { LOST_CHECKS, lostMoney } from "../lib/tradeUi";
 import { asDate, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
@@ -22,6 +23,7 @@ export interface CardData {
   reason: string;
   checks: { title: string; status: CheckStatus }[];
   passed: number; total: number;
+  lost?: boolean;          // lost money after costs: no pass count in the headline
   stats: [string, string][];
   equity: (number | null)[]; hold: (number | null)[]; split: number | null;
 }
@@ -51,7 +53,7 @@ export function cardFromExperiment(nb: Notebook, e: Experiment): CardData {
     tone: v.verdict === "edge" ? "blue" : v.verdict === "luck" || v.verdict === "no_edge" ? "orange" : "ink",
     reason: v.summary || nb.question || "",
     checks: v.checks.map((c) => ({ title: SHORT[c.id] ?? c.title, status: c.status })),
-    passed: v.passed, total: checksRun(v),
+    passed: v.passed, total: checksRun(v), lost: lostMoney(v.verdict, s.ret),
     stats,
     equity: e.series?.equity ?? [], hold: e.series?.buy_hold ?? [], split: e.series?.split ?? null,
   };
@@ -160,7 +162,7 @@ export async function renderCard(d: CardData, theme: "light" | "dark" = "light")
 
   // the four checks
   g.fillStyle = c.muted; g.font = "500 13px 'IBM Plex Mono', monospace";
-  g.fillText(`${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
+  g.fillText(d.lost ? LOST_CHECKS.toUpperCase() : `${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
   let bx = PAD;
   const badge: Record<CheckStatus, [string, string, string]> = {
     pass: [c.blueSoft, c.blue, "Passed"], fail: [c.orangeSoft, c.orange, "Failed"], warn: [c.chip, c.ink2, "Warning"], skip: [c.chip, c.muted, "Skipped"],

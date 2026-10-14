@@ -16,10 +16,11 @@ import { LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt } from "./lib/offer";
+import { importWithRetry } from "./lib/lazyRetry";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
-  lazy(() => load().then((m) => ({ default: m[name] })));
+  lazy(() => importWithRetry(load).then((m) => ({ default: m[name] })));
 const home = () => import("./pages/Home");
 const spaceHomes = () => import("./pages/SpaceHomes");
 const SpaceHome = page(spaceHomes, "SpaceHome");
@@ -35,9 +36,9 @@ const NotebooksHome = page(home, "NotebooksHome");
 const NewNotebook = page(home, "NewNotebook");
 // signed in but not allowed (Admin for someone else) and Help; the pages for a visitor are in visitor/VisitorApp.tsx
 const gates = () => import("./pages/AppGates");
-const NoAccess = lazy(() => gates().then((m) => ({ default: m.NoAccess })));
+const NoAccess = lazy(() => importWithRetry(gates).then((m) => ({ default: m.NoAccess })));
 const HelpPage = page(gates, "HelpPage");
-const NotFound = lazy(() => import("./pages/Gate").then((m) => ({ default: m.NotFound })));
+const NotFound = lazy(() => importWithRetry(() => import("./pages/Gate")).then((m) => ({ default: m.NotFound })));
 const notebook = () => import("./pages/NotebookPage");
 const NotebookPage = page(notebook, "NotebookPage");
 const experiment = () => import("./pages/ExperimentPage");

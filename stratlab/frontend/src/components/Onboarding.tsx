@@ -4,10 +4,11 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { useDialogsOpen } from "./kit/Dialog";
 import { askWelcome, autoTour, setGuideOpen, TOUR_SEEN, tourSeen } from "../lib/onboarding";
+import { importWithRetry } from "../lib/lazyRetry";
 
 // the pop-ups load when they first open, so they don't slow down the first page
-const LevelPrompt = lazy(() => import("./LevelPrompt").then((m) => ({ default: m.LevelPrompt })));
-const Tour = lazy(() => import("./Tour").then((m) => ({ default: m.Tour })));
+const LevelPrompt = lazy(() => importWithRetry(() => import("./LevelPrompt")).then((m) => ({ default: m.LevelPrompt })));
+const Tour = lazy(() => importWithRetry(() => import("./Tour")).then((m) => ({ default: m.Tour })));
 
 const OPEN_TOUR = "stratlab:tour";
 /** Open the tour from anywhere (Help in the account menu, the Help page). */
