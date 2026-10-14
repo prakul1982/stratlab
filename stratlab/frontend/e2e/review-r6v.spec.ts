@@ -41,7 +41,7 @@ test("a library strategy states its checks, buy and hold, its dates and its univ
   await expect(page.getByTestId("lib-tested")).toHaveText(/^Tested \d{1,2} \w{3} \d{4} to \d{1,2} \w{3} \d{4}$/);
   await expect(page.locator("main")).not.toContainText("T00:00:00");
   const eyebrow = await page.locator(".k-eyebrow").first().innerText();
-  expect(eyebrow.toLowerCase().split("20 us large caps").length - 1, eyebrow).toBe(1);
+  expect(eyebrow.toLowerCase().split("20 of the largest us companies").length - 1, eyebrow).toBe(1);
   // all four checks, each with its result in words; the one not run on a group says so
   const checks = page.getByRole("region", { name: "The four checks" }).or(page.locator("section.pub-checks"));
   await expect(checks.locator("h3")).toHaveText(["Unseen years", "Nearby settings", "Bad-luck drawdown", "Enough trades"]);
@@ -60,7 +60,9 @@ test("a library strategy's own HTML carries its own title and address before any
   // the built file the site's host serves at /library/seed-supertrend-us (the local preview server falls back to
   // index.html for every address, so the file is read as built)
   const raw = readFileSync(new URL("../dist/library/seed-supertrend-us/index.html", import.meta.url), "utf8");
-  expect(raw).toMatch(/<title>Supertrend flip · 20 of the largest US companies: rules and verdict · StratLab<\/title>/);
+  // the group's longer name ("20 of the largest US companies", R16) leaves the title at the strategy's short name, within its length
+  expect(raw).toMatch(/<title>Supertrend flip: rules and verdict · StratLab<\/title>/);
+  expect(raw).toMatch(/<meta name="description" content="Supertrend flip · 20 of the largest US companies: /);
   expect(raw).toMatch(/<link rel="canonical" href="https:\/\/stratlab\.studio\/library\/seed-supertrend-us">/);
   expect(raw).not.toMatch(/<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
   // and the app on that file still draws the strategy, with the same address in its tags

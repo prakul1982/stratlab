@@ -35,7 +35,7 @@ test("a library strategy's tab title and description lead with its result and na
   const desc = await page.locator('meta[name="description"]').getAttribute("content");
   expect(desc!.length).toBeLessThanOrEqual(160);
   expect(desc?.startsWith(String(v.fact_headline ?? v.headline).slice(0, 60))).toBe(true);
-  expect((desc ?? "").toLowerCase().split("20 us large caps").length - 1, desc ?? "").toBe(1);
+  expect((desc ?? "").toLowerCase().split("20 of the largest us companies").length - 1, desc ?? "").toBe(1);
   expect(desc).not.toMatch(/ on 20 of the largest US companies/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   expect(errors).toEqual([]);

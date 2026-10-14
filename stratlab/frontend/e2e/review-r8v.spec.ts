@@ -37,9 +37,9 @@ test("each landing address draws the h1 its own HTML carries, with the tagline b
     expect(rawH1(file), path).toEqual([heading]);
     await expect(h1(page)).toHaveCount(1);
   }
-  // /plans has no file of its own: the host serves index.html, whose h1 is the tagline the landing page draws there
+  // /plans opens on the prices themselves (R17-002), with the prices' heading
   await page.goto("/plans");
-  await expect(appH1(page)).toHaveText("Test it, research it, track it.", { timeout: 30_000 });
+  await expect(appH1(page)).toHaveText("Plans and prices", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 
