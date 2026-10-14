@@ -64,9 +64,9 @@ export function Rules({ s }: { s: Strategy }) {
   return (
     <div className="k-stack k-tight k-small">
       {parts.filter(([, cs]) => cs?.length).map(([label, cs]) => (
-        <span key={label}><b>{label}</b> {cs.map(line).join(s.entryJoin === "any" && label !== "Sell when" ? " or " : " and ")}</span>
+        <span key={label}><b>{label}</b> {cs.map(line).join(label === "Sell when" || label === "Cover when" || s.entryJoin === "any" ? " or " : " and ")}</span>
       ))}
-      {s.risk?.sl ? <span className="k-muted">Stop {s.risk.sl}{s.risk.stopType === "points" ? " points" : s.risk.stopType === "atr" ? "× ATR" : "%"}{s.risk.tgt ? ` · target ${s.risk.tgt}${s.risk.tgtType === "r" ? "R" : s.risk.tgtType === "points" ? " points" : "%"}` : ""}</span> : null}
+      {s.risk?.sl ? <span className="k-muted">Stop {s.risk.sl}{s.risk.stopType === "points" ? " points" : s.risk.stopType === "atr" ? "× ATR" : s.risk.stopType === "swing" ? " candles (swing)" : "%"}{s.risk.tgt ? ` · target ${s.risk.tgt}${s.risk.tgtType === "r" ? "R" : s.risk.tgtType === "points" ? " points" : "%"}` : ""}</span> : null}
     </div>
   );
 }

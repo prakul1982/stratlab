@@ -110,7 +110,14 @@ function marketName(inst: Instrument | null, markets: { id: string; name: string
   return markets.find((m) => m.id === inst.market)?.name ?? (inst.market === "IN" ? "India" : inst.market);
 }
 
+/** One notebook's page, started fresh for each notebook: what was typed for the run, the test period, the paper-session
+ * lookup and any open editor belong to the notebook they were set on. */
 export function NotebookPage() {
+  const { id } = useParams();
+  return <NotebookView key={id} />;
+}
+
+function NotebookView() {
   const { id } = useParams();
   const nav = useNavigate();
   const plansToast = usePlansToast();
@@ -122,6 +129,8 @@ export function NotebookPage() {
   const [days, setDays] = useState("");
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
+  const mounted = useRef(true);       // a run finishing after you've gone to another page doesn't take you back
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const starting = useRef(false);     // set before the flush, so a second click can't start another run
   // how long the run has taken so far, said on the button: a group's first run reads every stock's prices and can take a
   // minute or two (R11C-018: over 2 minutes with no sign of progress under "Takes a few seconds")
@@ -233,12 +242,13 @@ export function NotebookPage() {
       refreshNotebooks();
       // nothing was picked, so it ran on the default; say which, and where to change it
       if (out.defaulted) notify(`Tested on ${out.defaulted}, the default. Change it under Testing on.`, { label: "Change market", run: () => nav(`/n/${nb.id}/market`) });
-      nav(`/n/${nb.id}/e/${out.experiment.v}`);
+      if (mounted.current) nav(`/n/${nb.id}/e/${out.experiment.v}`);
+      else notify(`Experiment v${out.experiment.v} of "${nb.name}" finished.`, { label: `Open v${out.experiment.v}`, run: () => nav(`/n/${nb.id}/e/${out.experiment.v}`) });
     } catch (e) {
       const same = e instanceof ApiError && e.code === "unchanged" ? last : undefined;
       if (same) notify(e instanceof Error ? e.message : "Nothing has changed since the last run.", { label: `Open v${same.v}`, run: () => nav(`/n/${nb.id}/e/${same.v}`) });
       else fail(e);
-    } finally { starting.current = false; setRunning(false); }
+    } finally { starting.current = false; if (mounted.current) setRunning(false); }
   };
 
   runRef.current = run;
