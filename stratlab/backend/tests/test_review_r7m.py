@@ -332,21 +332,21 @@ def _result(name):
 
 
 def test_a_provider_is_working_out_of_credit_failing_or_untried_by_its_last_real_result(ai_clean, monkeypatch):
-    _keys(monkeypatch, "groq", "vercel", "github", "mistral")
-    assert [_result(n) for n in ("groq", "vercel", "github", "mistral", "cerebras")] == ["untested"] * 4 + [None]     # a key is not a result
+    _keys(monkeypatch, "groq", "vercel", "nvidia", "mistral")
+    assert [_result(n) for n in ("groq", "vercel", "nvidia", "mistral", "cerebras")] == ["untested"] * 4 + [None]     # a key is not a result
     ok = httpx.MockTransport(lambda req: _chat())
     P.complete("s", "t", transport=ok)                                               # whichever answers first
-    answered = next(n for n in ("groq", "vercel", "github", "mistral") if _result(n) == "working")
+    answered = next(n for n in ("groq", "vercel", "nvidia", "mistral") if _result(n) == "working")
     assert answered
     # the account needs a card (Vercel's 403): out of credit, not "answering"
     P.R.status("vercel").last_error = "the account needs a payment method on file (403: card)"
     P.R.status("vercel").last_error_at = 9e12
     P.R.status("vercel").last_error_kind = "auth"
     assert _result("vercel") == "quota"
-    # empty replies (GitHub Models): failing
-    gh = P.R.status("github")
-    gh.last_error, gh.last_error_at, gh.last_error_kind, gh.last_ok = "answered 200 without a chat reply (text/html)", 9e12, "bad_reply", None
-    assert _result("github") == "failed"
+    # replies that aren't a chat answer: failing
+    nv = P.R.status("nvidia")
+    nv.last_error, nv.last_error_at, nv.last_error_kind, nv.last_ok = "answered 200 without a chat reply (text/html)", 9e12, "bad_reply", None
+    assert _result("nvidia") == "failed"
     # a short rate limit after an answer still counts as working
     mi = P.R.status("mistral")
     mi.last_ok, mi.last_error, mi.last_error_at, mi.last_error_kind = 8e12, "rate limited (429)", 9e12, "rate"

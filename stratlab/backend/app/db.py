@@ -341,6 +341,7 @@ def delete_setting(key: str) -> None:
         ms = _market(key)
         if ms is not None:
             ms.delete(key)
+            _mirror_put(key, None)          # gone from the second database even if the main one's delete fails next
         sb().table("app_settings").delete().eq("key", key).execute()
         _mirror_put(key, None)
     finally:
@@ -400,7 +401,10 @@ def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
 def all_settings_with_prefix(prefix: str, page: int = 1000) -> list[tuple[str, str]]:
     """(key, value) for every setting under a prefix, read a page at a time by key (the server caps one read)."""
     if _mirrored(prefix):
-        return sorted((k, v) for k, v in _mirror_rows(_mirrored(prefix)).items() if k.startswith(prefix))
+        rows = _mirror_rows(_mirrored(prefix))
+        with _mirror_lock:                  # a write from another thread would change the dict mid-way through
+            items = [(k, v) for k, v in rows.items() if k.startswith(prefix)]
+        return sorted(items)
     return _all_from_db(prefix, page)
 
 

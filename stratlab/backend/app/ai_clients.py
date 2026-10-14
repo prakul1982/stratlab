@@ -255,9 +255,6 @@ def _ctx(item: dict) -> int | None:
         v = item.get(k)
         if isinstance(v, (int, float)) and v > 0:
             return int(v)
-    limits = item.get("limits")
-    if isinstance(limits, dict) and isinstance(limits.get("max_input_tokens"), (int, float)):
-        return int(limits["max_input_tokens"])
     for prop in item.get("properties") or []:
         if isinstance(prop, dict) and prop.get("property_id") == "context_window":
             try:
@@ -284,7 +281,7 @@ def parse_aliases(data) -> dict[str, str]:
 
 def parse_models(data) -> list[dict]:
     """[{"id", "ctx"}] from any provider's model list: OpenAI-style {"data": […]}, Cloudflare's {"result": […]},
-    Google's {"models": […]} or GitHub's plain list."""
+    Google's {"models": […]} or a plain list."""
     items = (data.get("data") or data.get("result") or data.get("models") or []) if isinstance(data, dict) else data
     out = []
     for it in items if isinstance(items, list) else []:
@@ -301,9 +298,6 @@ def parse_models(data) -> list[dict]:
         methods = it.get("supportedGenerationMethods")
         if methods is not None and "generateContent" not in methods:
             continue                                        # a Gemini model that can't write text
-        outs = it.get("supported_output_modalities")
-        if isinstance(outs, list) and outs and "text" not in outs:
-            continue                                        # a GitHub model that doesn't write text
         if it.get("type") not in (None, "language", "chat", "llm", "text"):
             continue                                        # Vercel: embedding and image models
         if mid:

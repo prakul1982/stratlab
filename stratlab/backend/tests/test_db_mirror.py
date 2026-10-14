@@ -139,3 +139,23 @@ def test_with_the_second_database_the_pages_live_there_and_the_copy_follows(fake
         assert fake.reads == 1                                    # one (now empty) read of the main database, then memory
     finally:
         market_store.use(None)
+
+
+def test_a_delete_reaches_the_copy_even_when_the_main_database_fails_after_the_second(fake, monkeypatch):
+    from app import market_store
+    from app.config import settings
+    from tests.test_storage import FakeStore
+    s = FakeStore()
+    monkeypatch.setattr(settings, "MARKET_DATABASE_URL", "postgresql://second")
+    market_store.use(s)
+    try:
+        db.set_setting("stocks:page:IN:GONE", "1")
+        assert db.get_setting("stocks:page:IN:GONE") == "1"
+        fake.fail = RuntimeError("main db down")
+        with pytest.raises(RuntimeError):
+            db.delete_setting("stocks:page:IN:GONE")
+        fake.fail = None
+        assert s.get("stocks:page:IN:GONE") is None
+        assert db.get_setting("stocks:page:IN:GONE") is None
+    finally:
+        market_store.use(None)

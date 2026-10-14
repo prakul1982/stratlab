@@ -66,13 +66,13 @@ test("Plans: the upgrade buttons are off under View as, with the reason, not a c
   assert.match(plans, /\{viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas">/);
 });
 
-test("Admin: the AI tile counts what worked last, not what is configured: 5 of 12 working, 6 out of credit (R7M-008)", async () => {
+test("Admin: the AI tile counts what worked last, not what is configured: 5 of 11 working, 5 out of credit (R7M-008)", async () => {
   const { aiTile } = await import("../src/pages/admin/attention.ts");
   const row = (label, result, extra = {}) => ({ label, configured: true, in_use: true, model: "m", last_error: null, answering: result === "working", result, ...extra });
   const ai = [...["Groq", "Gemini", "OpenRouter", "Cloudflare", "NVIDIA"].map((n) => row(n, "working")),
-    ...["Cerebras", "SambaNova", "Z.ai", "Vercel AI Gateway", "Hugging Face", "GitHub Models"].map((n) => row(n, "quota")), row("Mistral", "untested")];
+    ...["Cerebras", "SambaNova", "Z.ai", "Vercel AI Gateway", "Hugging Face"].map((n) => row(n, "quota")), row("Mistral", "untested")];
   const t = aiTile(ai);
-  assert.equal(t.detail, "5 of 12 working · 6 out of credit · 1 not tried yet");
+  assert.equal(t.detail, "5 of 11 working · 5 out of credit · 1 not tried yet");
   assert.equal(t.state, "warn");
   assert.equal(aiTile([row("Groq", "working"), row("Gemini", "failed")]).detail, "1 of 2 working · 1 failing");
   assert.equal(aiTile([row("Groq", "working"), row("HF", "paused", { answering: false })]).detail, "1 of 2 working · 1 paused");
