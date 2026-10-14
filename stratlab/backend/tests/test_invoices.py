@@ -13,6 +13,13 @@ def store(monkeypatch):
     saved = {}
     monkeypatch.setattr(invoices.db, "get_setting", lambda k: saved.get(k))
     monkeypatch.setattr(invoices.db, "set_setting", lambda k, v: saved.__setitem__(k, v))
+
+    def update(k, fn, tries=10):
+        new = fn(saved.get(k))
+        if new is not None:
+            saved[k] = new
+        return saved.get(k)
+    monkeypatch.setattr(invoices.db, "update_setting", update)
     return saved
 
 
@@ -276,3 +283,76 @@ def test_a_real_payment_saves_which_subscription_it_paid_for(store, monkeypatch)
     monkeypatch.setattr(billing.product_analytics, "payment_completed", lambda *a: None)
     billing.invoice_for({"id": "u7"}, {"id": "sub_7", "plan_id": "plan_inrB", "notes": {}}, {**PAY, "id": "pay_7"})
     assert json.loads(store["payment-sub:pay_7"]) == {"sub": "sub_7", "user": "u7"}
+
+
+# ---------- review fixes: refunds, concurrent invoices ----------
+def test_a_late_charge_for_a_fully_refunded_subscription_keeps_it_ended(store, monkeypatch):
+    refunded = {"id": "u", "plan": "free", "plan_status": "refunded", "razorpay_subscription_id": "sub_B"}
+    for name in ("subscription.charged", "subscription.activated", "subscription.resumed"):
+        assert _webhook(monkeypatch, refunded, {"id": "sub_B", "status": "active"}, name)[0] == []
+    assert _webhook(monkeypatch, refunded, {"id": "sub_C", "status": "active"})[0] == ["sub_C"]   # a new subscription still starts
+
+
+def test_the_refund_then_a_retried_charge_leaves_the_user_free(store, monkeypatch):
+    """Out of order: the full refund ends the plan, then Razorpay retries the charge for the same subscription."""
+    profile = dict(NOW_PRO)
+    _reversal(store, monkeypatch, _refund(), profile)
+    monkeypatch.setattr(billing.db, "update_profile", lambda uid, **f: profile.update(f))
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_PRO", "plan_p")
+    monkeypatch.setattr(billing.db, "profile_by_subscription", lambda sid: profile)
+    monkeypatch.setattr(billing, "invoice_for", lambda *a: None)
+    monkeypatch.setattr(billing.invite_rewards, "safe_paid", lambda *a: None)
+    profile.update(plan="free", plan_status="refunded")                        # what the refund saved
+    body = {"event": "subscription.charged", "payload": {"subscription": {"entity": {"id": "sub_B", "plan_id": "plan_p", "status": "active"}},
+                                                         "payment": {"entity": PAY}}}
+    billing.handle_webhook(json.dumps(body).encode(), "sig", "evt_late")
+    assert profile["plan"] == "free" and profile["plan_status"] == "refunded"
+
+
+def test_only_a_full_refund_or_a_dispute_takes_the_invite_reward_back(monkeypatch):
+    taken = []
+    monkeypatch.setattr(billing.invite_rewards, "safe_refunded", taken.append)
+    monkeypatch.setattr(billing, "_end_plan", lambda *a: None)
+    billing._act(_refund(amount=10000))                                         # a small goodwill refund
+    billing._act(_refund("refund.created"))
+    assert taken == []
+    billing._act(_refund())                                                     # the whole payment back
+    billing._act({"event": "payment.dispute.created", "payload": {"dispute": {"entity": {"id": "d", "payment_id": "pay_1"}}}})
+    billing._act(_refund(amount=None, status="refunded"))                       # no refund amount: the payment says all of it
+    billing._act(_refund(amount=50000, amount_refunded=50000))                  # half back so far
+    assert taken == ["pay_1", "pay_1", "pay_1"]
+
+
+def test_two_servers_issuing_at_once_get_distinct_numbers(monkeypatch):
+    """Two payments issued in parallel on a shared database (no shared process lock): distinct numbers, both listed."""
+    import threading
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(invoices.db, "_client", FakeSupabase())
+    invoices.save_seller(SELLER)
+    monkeypatch.setattr(invoices, "_lock", __import__("contextlib").nullcontext())   # as if each ran in its own container
+    real, gate = invoices.db.update_setting, threading.Barrier(2)
+
+    def both_read_first(key, fn, tries=10):                                     # both read the counter before either writes
+        def slow(raw):
+            if key.startswith("invoice:counter:") and not getattr(slow, "done", False):
+                slow.done = True
+                gate.wait(timeout=5)
+            return fn(raw)
+        return real(key, slow, tries)
+    monkeypatch.setattr(invoices.db, "update_setting", both_read_first)
+    out = {}
+    ts = [threading.Thread(target=lambda u=u: out.__setitem__(u, invoices.make({**PAY, "id": f"pay_{u}"}, {"id": u}, "pro", "month")))
+          for u in ("ua", "ub")]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert {out["ua"]["number"], out["ub"]["number"]} == {"SL/2026-27/0001", "SL/2026-27/0002"}
+    assert [i["payment_id"] for i in invoices.of_user("ua")] == ["pay_ua"] and [i["payment_id"] for i in invoices.of_user("ub")] == ["pay_ub"]
+    assert len(invoices.of_year("2026-27")) == 2
+    assert invoices.make({**PAY, "id": "pay_ua"}, {"id": "ua"}, "pro", "month")["number"] == out["ua"]["number"]   # one per payment
+
+
+def test_a_user_list_never_opens_another_buyers_invoice(store):
+    invoices.save_seller(SELLER)
+    theirs = invoices.make(PAY, {"id": "u1", "email": "a@b.c"}, "pro", "month")
+    store["invoices:u2"] = json.dumps([theirs["number"]])                      # a list pointing at someone else's number
+    assert invoices.of_user("u2") == [] and invoices.of_user("u1")[0]["number"] == theirs["number"]

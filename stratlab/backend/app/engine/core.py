@@ -326,7 +326,7 @@ class Engine:
         self.pend_entry = None
         if self.intraday and (date != sig_day or not self._may_enter(closes_at)):
             return None
-        if self.gate is not None and not self.gate():
+        if self.gate is not None and not self.gate(at_open=True):
             return None
         return self._open(bars, ctx, sig, d, self.r.slippage / 100, self.r.brokerage, at=i)
 
@@ -492,7 +492,9 @@ def stats(eq: list[float], trades: list[dict], capital: float, per_year: float, 
     n = len(trades)
     return {
         "ret": (end / capital - 1) * 100, "pnl": end - capital,
-        "cagr": ((end / capital) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else (-100.0 if years > 0 and end <= 0 else 0.0),
+        # under a year a compounded yearly figure says nothing (30 days at +1.45% read 19% a year): None, shown as "–" (a
+        # year of trading days a few short of 365 still counts)
+        "cagr": None if years < 350 / 365.25 else ((end / capital) ** (1 / years) - 1) * 100 if end > 0 else -100.0,
         "mdd": float(dd.min()), "dd": dd.tolist(),
         "sharpe": float(rets.mean() / sd * math.sqrt(per_year)) if sd > 0 else 0.0,
         "n": n, "win": len(wins) / n * 100 if n else 0.0,
@@ -613,7 +615,7 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
                   "emptied_on": eng.emptied_on},
         "trades": eng.trades, "open_trade": open_trade, "events": eng.events,
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
-        "costs": cost_summary(eng, cost_kind, equity[-1] - cap),
+        "costs": cost_summary(eng, eng.kind, equity[-1] - cap),       # intraday India equity: in_eq_mis
     }
 
 

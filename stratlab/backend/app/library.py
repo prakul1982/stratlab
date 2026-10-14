@@ -287,11 +287,34 @@ def mod_key(e: dict) -> str | None:
     return f"libmod:{e.get('owner')}:{src.get('nid')}:{src.get('v')}" if e.get("owner") and src.get("nid") else None
 
 
+def hide_key(e: dict) -> str | None:
+    """A hide is kept per author and notebook, so a later version published from it starts hidden too."""
+    src = e.get("source") or {}
+    return f"libhide:{e.get('owner')}:{src.get('nid')}" if e.get("owner") and src.get("nid") else None
+
+
 def remember(e: dict):
-    """Keep the entry's moderation state under its own key."""
+    """Keep the entry's moderation state under its own key (and its hide under the notebook's)."""
     k = mod_key(e)
     if k:
         db.set_setting(k, json.dumps({m: e[m] for m in MODERATION if m in e}))
+    h = hide_key(e)
+    if h and e.get("hidden"):
+        db.set_setting(h, json.dumps({m: e[m] for m in ("hidden", "hidden_by") if m in e}))
+
+
+def clear_hide(e: dict):
+    """The site owner restored it: later entries from the same notebook are no longer hidden."""
+    h = hide_key(e)
+    if h:
+        db.delete_setting(h)
+
+
+def remove_of_notebook(owner: str, nid: str):
+    """Take down every entry this user published from the notebook, whatever became of its experiment."""
+    for e in all_entries():
+        if e.get("owner") == owner and (e.get("source") or {}).get("nid") == nid:
+            remove(e.get("id"))
 
 
 def carry_moderation(old: dict | None, new: dict) -> dict:
@@ -299,7 +322,9 @@ def carry_moderation(old: dict | None, new: dict) -> dict:
     key (the entry may have been deleted): re-publishing can't be used to clear them."""
     k = mod_key(new)
     kept = db.json_value(db.get_setting(k), {}) if k else {}
-    for src in (kept, old or {}):
+    h = hide_key(new)
+    hid = db.json_value(db.get_setting(h), {}) if h else {}
+    for src in (kept, hid, old or {}):
         if src.get("reports"):
             new["reports"] = {**(new.get("reports") or {}), **src["reports"]}
         if src.get("hidden"):

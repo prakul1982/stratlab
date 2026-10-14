@@ -111,6 +111,28 @@ def test_unit_losses_set_off_within_their_own_rules():
     assert (y["units"]["lt"]["taxable"], y["units"]["slab"]["taxable"], y["units"]["carry_forward"]) == (0, 0, {"st": 0, "lt": 0})
 
 
+def test_unit_and_share_losses_set_off_together():
+    inputs = {2025: {"regime": "new", "other": 20 * 100000, "salary": 0}}
+    def y_for(trades):
+        return next(y for y in T.report(trades, {}, {}, {}, [], "2025-10-01", inputs=inputs)["years"] if y["fy"] == 2025)
+    plain = y_for([])["total"]["total"]
+    # an equity long-term loss of 1 lakh against a gold ETF long-term gain of 1 lakh (section 74)
+    y = y_for(lots("ITC", "", "2023-01-02", "2025-06-02", qty=1000, bp=300, sp=200) +
+              lots("GOLDBEES", "", "2023-01-01", "2025-06-02", qty=1000, bp=100, sp=200))
+    assert y["units"]["rows"][0]["head"] == "lt" and y["carry_forward"] == {"st": 0, "lt": 0}
+    assert y["total"]["special_tax"] == 0 and y["total"]["total"] == plain
+    # an equity short-term loss of 1 lakh against a gold ETF short-term gain at slab rates (section 70)
+    y = y_for(lots("ITC", "", "2025-05-01", "2025-08-01", qty=1000, bp=300, sp=200) +
+              lots("GOLDBEES", "", "2025-01-01", "2025-06-02", qty=1000, bp=100, sp=200))
+    assert y["units"]["rows"][0]["head"] == "slab" and y["carry_forward"] == {"st": 0, "lt": 0}
+    assert y["total"]["income"]["normal"] == 20 * 100000 and y["total"]["total"] == plain
+    # the reverse: a gold ETF short-term loss of 1 lakh against an equity long-term gain of 1 lakh above the exemption
+    y = y_for(lots("ITC", "", "2023-01-02", "2025-06-02", qty=1000, bp=100, sp=325) +
+              lots("GOLDBEES", "", "2025-01-01", "2025-06-02", qty=1000, bp=200, sp=100))
+    assert y["carry_forward"] == {"st": 0, "lt": 0} and y["exemption"]["used"] == 125000
+    assert y["total"]["special_tax"] == 0 and y["total"]["total"] == plain
+
+
 def test_reit_units_before_july_2024_needed_36_months():
     trades = lots("EMBASSY", "", "2022-01-03", "2024-03-01", name="Embassy Office Parks REIT")   # 26 months: short term then
     y = next(y for y in T.report(trades, {}, {}, {}, [], "2024-10-01")["years"] if y["fy"] == 2023)

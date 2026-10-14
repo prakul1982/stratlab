@@ -7,13 +7,14 @@ import { AdminData, SECTIONS, useAdmin } from "./admin/AdminContext";
 import { attention } from "./admin/attention";
 import { OverviewSection } from "./admin/OverviewSection";
 import "./admin/admin.css";
+import { importWithRetry } from "../lib/lazyRetry";
 
-const UsersSection = lazy(() => import("./admin/UsersSection").then((m) => ({ default: m.UsersSection })));
-const MoneySection = lazy(() => import("./admin/MoneySection").then((m) => ({ default: m.MoneySection })));
-const DataSection = lazy(() => import("./admin/DataSection").then((m) => ({ default: m.DataSection })));
-const QualitySection = lazy(() => import("./admin/QualitySection").then((m) => ({ default: m.QualitySection })));
-const SystemSection = lazy(() => import("./admin/SystemSection").then((m) => ({ default: m.SystemSection })));
-const EmailSection = lazy(() => import("./admin/EmailSection").then((m) => ({ default: m.EmailSection })));
+const UsersSection = lazy(() => importWithRetry(() => import("./admin/UsersSection")).then((m) => ({ default: m.UsersSection })));
+const MoneySection = lazy(() => importWithRetry(() => import("./admin/MoneySection")).then((m) => ({ default: m.MoneySection })));
+const DataSection = lazy(() => importWithRetry(() => import("./admin/DataSection")).then((m) => ({ default: m.DataSection })));
+const QualitySection = lazy(() => importWithRetry(() => import("./admin/QualitySection")).then((m) => ({ default: m.QualitySection })));
+const SystemSection = lazy(() => importWithRetry(() => import("./admin/SystemSection")).then((m) => ({ default: m.SystemSection })));
+const EmailSection = lazy(() => importWithRetry(() => import("./admin/EmailSection")).then((m) => ({ default: m.EmailSection })));
 
 /** Old links: /admin?tab=services and the like open the section that took over from that tab. */
 function OldTab() {

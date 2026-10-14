@@ -276,3 +276,28 @@ def test_a_reminder_run_killed_mid_way_resumes_with_the_readers_left(w, paid, mo
     assert sorted(sent) == ["u-basic", "u-pro"]
     clock[0] += run_marks.STALE + 1
     assert M.Job(send).tick(at) == 0 and len(sent) == 2
+
+
+def test_reminder_email_falls_back_to_the_sign_in_address(monkeypatch):
+    from app import alerts
+    got = []
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
+    monkeypatch.setattr(alerts, "send_message", lambda to, *a, **k: got.append(to))
+    assert M._send({"id": "u", "email": "Me@Example.com"}, "email", "s", "t") == ["email"] and got == ["me@example.com"]
+    assert M._send({"id": "u", "email": "Me@Example.com", "alert_email": "other@example.com"}, "email", "s", "t") == ["email"]
+    assert got[-1] == "other@example.com"
+
+
+def test_a_reminder_is_recorded_only_after_it_went(w, paid):
+    data = M.load("u-basic")
+    data["reminders"] = M.clean_reminders({"on": True, "days": 3, "channel": "email", "cats": ["tax"]})
+    M.save("u-basic", data)
+
+    class Run:
+        seen = lambda self, uid: False  # noqa: E731
+        recorded = []
+        record = lambda self, uid: self.recorded.append(uid)  # noqa: E731
+    run, today = Run(), date(2026, 6, 12)
+    assert M.send_reminders(today, lambda *a: [], run) == 0 and run.recorded == []        # no usable channel: not marked
+    assert M.send_reminders(today, lambda p, c, s, t: [c], run) == 1 and run.recorded == ["u-basic"]

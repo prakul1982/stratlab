@@ -1,5 +1,6 @@
 """Net worth: the deposit, provident fund and loan arithmetic, the page's totals and allocation, the history, the
 insurance register, the calendar hook, plan limits, privacy and deletion."""
+import json
 import math
 import sys
 import time
@@ -310,11 +311,36 @@ def test_snapshot_on_the_first_of_each_month_once(w):
     add(c, {"kind": "cash", "value": 7000})
     job = main.networth_job
     first = datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)                     # 4:30 pm in India
-    assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 0
     assert job.tick(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc)) == 0       # before 4 pm
     assert job.tick(first) == 1 and job.tick(first) == 0
+    assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 0      # the month is done
     snap = [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]
     assert snap and snap[0]["why"] == "month" and snap[0]["net"] == 7000
+
+
+def test_a_missed_first_is_caught_up_later_in_the_month_and_a_killed_run_resumes(w, monkeypatch):
+    from app import run_marks
+    c = w["client"]
+    add(c, {"kind": "cash", "value": 7000})
+    db.set_setting("networth:u-free", json.dumps({"items": []}))
+    job, seen = main.networth_job, []
+    value_of = job.value_of
+
+    def kill_after_first(uid):
+        seen.append(uid)
+        if len(seen) == 2:
+            raise KeyboardInterrupt                                                # a deploy kills it mid-run
+        return value_of(uid)
+    monkeypatch.setattr(job, "value_of", kill_after_first)
+    third = datetime(2026, 11, 3, 6, 0, tzinfo=timezone.utc)                       # the leader was down over the 1st
+    with pytest.raises(KeyboardInterrupt):
+        job.tick(third)
+    assert job.tick(third) == 0                                                    # still beating: left alone
+    monkeypatch.setattr(run_marks, "STALE", 0)
+    job.tick(third)
+    assert sorted(seen) == sorted([seen[0], seen[1], seen[1]])                     # the first user isn't valued again
+    assert [h["why"] for h in nw.history("u-pro") if h["d"] == "2026-11-03"] == ["month"]
+    assert job.tick(third) == 0
 
 
 def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monkeypatch):
@@ -337,6 +363,26 @@ def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monk
     assert nw.build([], {"in": 100.0, "us": 50.0, "count": 2}, None, nw.Prices())["totals"]["partial"] is None
 
 
+def test_stocks_without_a_price_make_the_total_partial(w, monkeypatch):
+    c = w["client"]
+    assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 10, "avg": 2500},
+                                                           {"symbol": "TCS", "qty": 3}]}).status_code == 200
+    before = nw.history("u-pro")
+    monkeypatch.setattr(main.kite, "ready", lambda: False)                      # no quotes: TCS has no cost either
+    v = add(c, {"kind": "cash", "value": 1000})
+    row = next(r for r in v["assets"] if r["kind"] == "stocks_in")
+    assert v["totals"]["partial"] == ["no price for 2 stocks"] and nw.history("u-pro") == before
+    assert row["value"] == 25000 and row["basis"] == "at cost" and "at cost" in row["rule"]
+    # some priced, some not: market price, and the rule says how many are at cost
+    t = nw.build([], {"in": 100.0, "us": 0, "count": 3, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 2, "us": 0}}, None, nw.Prices())
+    r = t["assets"][0]
+    assert r["basis"] == "market price" and "1 without a price counted at cost" in r["rule"]
+    assert t["totals"]["partial"] == ["no price for 1 stock"]
+    # every stock unpriced and none with a cost: no row, but the total says so (it used to be silently left out)
+    t = nw.build([], {"in": 0, "us": 0, "count": 1, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 0, "us": 0}}, None, nw.Prices())
+    assert t["assets"] == [] and t["totals"]["partial"] == ["no price for 1 stock"]
+
+
 def test_damaged_rows_never_break_the_page(w):
     db.set_setting("networth:u-pro", '{"items": [{"id": "x", "kind": "fd", "principal": "lots"}, {"kind": "cash"}, 5, null]}')
     db.set_setting("networthlog:u-pro", "not json")
@@ -356,3 +402,34 @@ def test_the_csv_does_not_hand_a_spreadsheet_a_formula(w):
     cells = [cell.strip('"') for line in text.splitlines() for cell in line.split(",")]
     assert not any(x.startswith(("=", "@")) for x in cells), text
     assert "'=HYPERLINK" in text and "'@SUM" in text
+
+
+def test_an_asset_without_a_price_makes_the_total_partial_and_is_named(w):
+    cash = {"id": "c1", "kind": "cash", "name": "Wallet", "value": 1000, "as_of": "2026-10-05"}
+    btc = {"id": "c2", "kind": "crypto", "name": "BTC", "coin": "BTC", "qty": 1}
+    t = nw.build([cash, btc], None, None, nw.Prices(), date(2026, 10, 5))
+    assert t["totals"]["assets"] == 1000 and t["totals"]["partial"] == ["no price for BTC"]
+    assert nw.record("u-x", t["totals"], "visit") == [] and nw.history("u-x") == []
+
+
+def test_allocation_percentages_add_to_exactly_100():
+    assert round(sum(nw.pct_split([1, 1, 1])), 1) == 100 and nw.pct_split([1, 1, 1]) == [33.4, 33.3, 33.3]
+    items = [{"id": f"i{n}", "kind": k, "value": 1000, "as_of": "2026-10-05"} for n, k in enumerate(["cash", "property", "other"])]
+    t = nw.build(items, None, None, nw.Prices(), date(2026, 10, 5))
+    assert round(sum(a["pct"] for a in t["allocation"]), 1) == 100.0
+
+
+def test_unnamed_entries_keep_their_own_calendar_ids_and_premiums_show_the_insurer(w):
+    c = w["client"]
+    for ins in ("Acme", "Zed"):
+        add(c, {"kind": "policy", "insurer": ins, "policy_type": "term", "premium": 1000, "frequency": "yearly", "due": "2026-11-01"})
+    rows = nw.upcoming_dates("u-pro", 60)
+    prem = [r for r in rows if r["kind"] == "premium"]
+    assert len(prem) == 2 and len({r["id"] for r in prem}) == 2 and all(r["id"] for r in prem)
+    assert {r["title"] for r in prem} == {"Acme: premium due", "Zed: premium due"}
+
+
+def test_ppf_yearly_deposit_is_capped_at_1_50_000():
+    assert nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=150000))["yearly"] == 150000
+    with pytest.raises(nw.EntryError, match="1,50,000"):
+        nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=500000))

@@ -6,7 +6,7 @@ Supertrend and since when, and whether both line up. It never says "buy": the us
 import json
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -127,8 +127,10 @@ def _why(e: Exception) -> str:
     return "not enough daily prices yet" if not text or "history" in text.lower() or isinstance(e, (IndexError, TypeError)) else text
 
 
-def run(registry, market: str, members: list[dict]) -> dict:
-    """Scan a group: members are {"symbol"} or {"id"}. Rows sorted with fresh ST S2 signals first."""
+def run(registry, market: str, members: list[dict], budget: float | None = None) -> dict:
+    """Scan a group: members are {"symbol"} or {"id"}. Rows sorted with fresh ST S2 signals first. With `budget`
+    (seconds), the stocks not read by then are left out and listed in "late" rather than waited for."""
+    t0 = time.monotonic()
     ids, missing = universes.resolve(registry, market, members[:MAX])
     prov = registry.provider(market)
     names = {}
@@ -142,8 +144,17 @@ def run(registry, market: str, members: list[dict]) -> dict:
         except Exception as e:     # one member's data problem mustn't sink the rest
             return iid, None, f"{_label(prov, iid)}: {_why(e)}"
 
-    rows, problems = [], []
-    for iid, res, problem in _pool.map(one, ids):
+    rows, problems, late = [], [], []
+    if budget is None:
+        done = list(_pool.map(one, ids))
+    else:
+        jobs = {iid: _pool.submit(one, iid) for iid in ids}
+        wait(jobs.values(), timeout=max(0.0, budget - (time.monotonic() - t0)))
+        done = [f.result() for f in jobs.values() if f.done()]
+        late = [_label(prov, iid) for iid, f in jobs.items() if not f.done()]
+        for f in jobs.values():
+            f.cancel()                # not started yet: leave the pool to others
+    for iid, res, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
             continue
@@ -151,7 +162,7 @@ def run(registry, market: str, members: list[dict]) -> dict:
         rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"),
                      "currency": inst.get("currency"), **res})
     rows.sort(key=lambda r: (RANK.get(r["signal"], 3), -(r["chg"] or 0)))
-    return {"rows": rows, "missing": missing, "problems": problems,
+    return {"rows": rows, "missing": missing, "problems": problems, **({"late": late} if budget is not None else {}),
             "counts": {k: sum(1 for r in rows if r["signal"] == k) for k in ("fresh", "st_s2", "stage2")}}
 
 

@@ -24,7 +24,9 @@ class OptionSession:
         self.id, self.user_id, self.name = row["id"], row["user_id"], row["name"]
         self.strategy = OptionStrategy(**row["strategy"])
         self.inst = row["instrument"]
-        self.market = self.inst.get("market", "IN")
+        # MCX and CDS sessions are reported after their own exchange's close
+        ex = self.strategy.exchange
+        self.market = ex if ex in ("MCX", "CDS") else self.inst.get("market", "IN")
         self.started_at = row["started_at"]
         state = row.get("state") or {}
         s = self.strategy
@@ -81,13 +83,18 @@ class OptionSession:
         s = self.strategy
         now = now.astimezone(IST)
         try:
-            if self._contracts_day != now.date() and not self.engine.pos:
+            if self.contracts is None or (self._contracts_day != now.date() and not self.engine.pos):   # also after a restart with a position open
                 self.contracts = self.data.contracts(s.exchange, s.underlying, s.expiry)
                 self._contracts_day = now.date()
             sk = self.data.spot_key(s.exchange, s.underlying, self.contracts.expiry if self.contracts else None)
             q = self.data.quotes(self._keys(sk))
             sq = q.get(sk) if sk else None
-            if sq and sq.get("ltp"):
+            spot_from = "quote"
+            if hasattr(self.data, "spot") and self.contracts:   # the same path as the chain: a currency future with no live quote gives way to the spot pair
+                px, sq, spot_from = self.data.spot(s.exchange, s.underlying, self.contracts.expiry)
+                if px:
+                    self.spot = float(px)
+            elif sq and sq.get("ltp"):
                 self.spot = float(sq["ltp"])
             q2 = self.data.quotes(self._keys(sk))   # strikes near the new spot, mostly from the cache
             q.update(q2)
@@ -100,7 +107,7 @@ class OptionSession:
             return
         with self.lock:
             self.quotes = q
-            self.fresh = self.data.fresh(sq, now)
+            self.fresh = spot_from == "spot" or self.data.fresh(sq, now)
             if self.fresh:
                 self.last_tick_at = now.isoformat()
             want = self.signal.want() if self.signal else None

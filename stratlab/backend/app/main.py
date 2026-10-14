@@ -76,7 +76,7 @@ from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
-from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
+from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
@@ -290,6 +290,11 @@ def lead():
     """This container holds the lease: start everything that must run in one place only, once."""
     global _jobs_started
     db.forget_mirror()           # the settings the old container wrote since this one booted
+    try:                         # ...among them today's Kite token, when it logged in after this one booted
+        if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
+            kite.load_saved_token()
+    except Exception as e:
+        print("leader: could not read the saved Kite token:", e)
     if _jobs_started:            # leading again after a lapse: the jobs are running; the live loop re-attaches the sessions
         return
     _jobs_started = True
@@ -910,7 +915,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
 def test_alert(profile=Depends(current_profile)):
     need(profile, "daily_report", "Alerts and the daily report")
     throttle(profile, "alert_test", 5, 3600, "You've sent 5 test alerts this hour. Try again later.")
-    sent, failed = alerts.test(profile)
+    sent, failed = alerts.test(profile, admin.is_admin(profile))
     if not sent and not failed:
         err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
             + (" or an email" if alerts.email_ready() else "") + ", first.")
@@ -991,7 +996,7 @@ def send_email_confirmation(profile=Depends(current_profile)):
         _, html, text = previews.confirm_email(to, link)
         alerts.send_email(to, "Confirm your StratLab email", text, html=html)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", "The email couldn't be sent right now." if not admin.is_admin(profile) else f"The email couldn't be sent: {str(e)[:200]}")
     return {"confirmed": False, "sent_to": to}
 
 
@@ -1062,10 +1067,10 @@ def ai_allowance(profile, held: int = 0) -> tuple[int, int | None]:
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used + held >= limit:
         err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
-    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
+    since = research_routes.ai_day_start()         # India's day, like the research cap
     # a safety cap on Pro's unlimited builds, said on Plans; the site's admins have none (R8O-002)
     if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) + held >= AI_BUILDS_PER_DAY:
-        err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. Try again tomorrow.")
+        err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. The count starts again at midnight India time.")
     return used, limit
 
 
@@ -1089,10 +1094,11 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     """Testable strategy ideas for anything typed into search. Shared cache; built-in ideas if the AI is down."""
     q = req.q.strip()
     try:
-        out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q))
+        out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q),
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
         return {"ideas": out["ideas"], "fallback": False}
     except HTTPException as e:
-        if e.status_code in (422, 503):
+        if e.status_code in (422, 429, 503):
             return {"ideas": ideas.fallback(q), "fallback": True}
         raise
 
@@ -1104,7 +1110,8 @@ def ask_route(req: IdeasReq, profile=Depends(current_profile)):
     if ask.looks_like_code(q):
         return {"action": "import", "text": q, "title": "Import this strategy", "fallback": False}
     try:
-        out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q))
+        out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q),
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
         return {**out, "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
@@ -1264,7 +1271,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps", "next_v")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -1386,6 +1393,9 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
     copy = {"name": f"{nb.get('name') or 'Notebook'} (copy)"[:80], "question": nb.get("question") or "",
             "notes": nb.get("notes") or "", "strategy": nb.get("strategy"), "instrument": nb.get("instrument"),
             "experiments": [], "summary": research.summary([])}
+    for k in ("group", "gaps"):
+        if nb.get(k):
+            copy[k] = nb[k]
     return ok(save_notebook(profile, copy))
 
 
@@ -1395,6 +1405,7 @@ def delete_notebook(nid: str, profile=Depends(current_profile)):
     if not row:
         err(404, "not_found", "Notebook not found.")
     library.take_down(notebook_from_row(row).get("experiments") or [])   # its public links and library entries go with it
+    library.remove_of_notebook(profile["id"], nid)                       # and entries whose experiment was deleted earlier
     db.delete_strategy(profile["id"], check_id(nid))
     return {"deleted": True}
 
@@ -1434,9 +1445,11 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over
     cur = get_notebook(profile, nid)
     prev = list(cur.get("experiments") or [])
-    rec["v"] = max((e["v"] for e in prev), default=0) + 1      # a run that finished meanwhile took the number counted at the start
+    # a run that finished meanwhile took the number counted at the start; a deleted version's number is never handed out again
+    rec["v"] = max(cur.get("next_v") or 1, max((e["v"] for e in prev), default=0) + 1)
+    cur["next_v"] = rec["v"] + 1
     full = prev + [rec]
-    public.unpublish_all(full[:-50])          # a dropped experiment's link could not be turned off any more
+    library.take_down(full[:-50])             # a dropped experiment's link and library entry could not be turned off any more
     experiments = research.slim(full[-50:])
     cur["experiments"], cur["summary"] = experiments, research.summary(experiments)
     if defaulted:
@@ -1512,10 +1525,20 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
     exp = next((e for e in exps if e["v"] == version), None)
     if exp is None:
         err(404, "not_found", "Experiment not found.")
+    had = exp.get("public")
     token = public.publish(nb, exp, req.image)
-    exp["public"] = token
-    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
-    save_notebook(profile, nb)
+    cur = get_notebook(profile, nid)          # a share made meanwhile keeps its token; ours is switched off again
+    now = next((e for e in cur.get("experiments") or [] if e["v"] == version), None)
+    if now is None:
+        if not had:
+            public.unpublish(token)
+        err(404, "not_found", "Experiment not found.")
+    if not had and now.get("public"):
+        public.unpublish(token)
+        token = now["public"]
+    else:
+        now["public"] = token
+        save_notebook(profile, cur)
     return {"token": token, "url": public.url(token)}
 
 
@@ -2177,12 +2200,15 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
-        # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
-        # last reported year's, so the deck's tile agrees with them
-        try:
-            dy = page_dividend_yield("IN", sym, snap.get("price"), datetime.now(IST).date().isoformat(), {"sym": sym, "bse": None})
-        except Exception:
-            dy = None
+    # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
+    # last reported year's, so the deck's tile agrees with them; without that list the source's figure stays, as on the page
+    try:
+        today = datetime.now(IST).date().isoformat()
+        dy = (page_dividend_yield("US", sym, snap.get("price"), today) if us
+              else page_dividend_yield("IN", sym, snap.get("price"), today, {"sym": sym, "bse": None}))
+    except Exception:
+        dy = None
+    if dy is not None:
         snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
@@ -2591,7 +2617,12 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             rows = holdings.merge(before["items"] + rows)
         elif rows:                        # a file replaces only the markets it covers: US holdings stay
             covered = {holdings.market_of(i) for i in rows}
-            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered]
+            # a held stock named on a line that didn't match stays as it was (as a sync keeps it)
+            names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
+            have = {(holdings.market_of(i), i["symbol"]) for i in rows}
+            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered
+                           or ((holdings.market_of(i), i["symbol"]) not in have
+                               and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
         out["n"] = len(rows) if n_read is None else min(n_read, len(rows))
         out["saved"] = bool(rows)
@@ -2634,6 +2665,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
+        # a quantity typed over a statement's per-account one replaces it (no hidden second quantity); the next statement
+        # sets it again, as it does any statement holding without one
+        found = [{k: v for k, v in f.items() if k != "accts"} if f.get("accts") and abs(sum(f["accts"].values()) - f["qty"]) > 1e-9
+                 else f for f in found]
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
             return with_sectors(found, known), before["source"] or "Manual"
@@ -2757,15 +2792,19 @@ def _nw_crypto(coin: str):
 
 def _nw_stocks(profile) -> dict:
     """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings).
-    `us_no_rate` when there are US stocks but no dollar rate to count them in rupees."""
+    `us_no_rate` when there are US stocks but no dollar rate to count them in rupees; `unpriced` the stocks without a
+    price, by market ("in", "us"), and `priced` those with one."""
     h = holdings_view(profile)
     worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
     rate = h.get("usd_inr")
     has_us = any(r.get("market") == "US" for r in h["rows"])
+    mkt = (lambda r: "us" if r.get("market") == "US" else "in")
     return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
             "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate,
-            "us_no_rate": has_us and not rate}
+            "us_no_rate": has_us and not rate,
+            "unpriced": {m: sum(r["value"] is None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")},
+            "priced": {m: sum(r["value"] is not None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")}}
 
 
 app.include_router(money_networth.make_router(
@@ -3028,7 +3067,8 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c, equity, units = money_routes.tax_computed(profile, i)
-    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
+    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None, units=instrument_kinds.bucket_rows(units, c["names"])),
+                            i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
@@ -3108,8 +3148,9 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if req.author.strip().casefold() == "stratlab" and not admin.is_admin(profile):
+    if "stratlab" in re.sub(r"[\W_]+", "", req.author.casefold()) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
+    throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
     e = library.entry(nb, exp, profile["id"], req.author, req.description,
                       entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
@@ -3117,9 +3158,18 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
     e = library.carry_moderation(old if old and old.get("owner") == profile["id"] else None, e)
     library.save(e)
-    exp["library"] = e["id"]
-    nb["experiments"] = [exp if x["v"] == version else x for x in exps]
-    save_notebook(profile, nb)
+    cur = get_notebook(profile, nid)          # an entry made meanwhile is kept; ours is taken down again
+    now = next((x for x in cur.get("experiments") or [] if x["v"] == version), None)
+    if now is None:
+        if not exp.get("library"):
+            library.remove(e["id"])
+        err(404, "not_found", "Experiment not found.")
+    if not exp.get("library") and now.get("library") and now["library"] != e["id"]:
+        library.remove(e["id"])
+        e = library.load(now["library"]) or e
+    else:
+        now["library"] = e["id"]
+        save_notebook(profile, cur)
     return library.public(e, profile["id"])
 
 
@@ -3936,7 +3986,7 @@ def breadth_alert_delete(aid: str, profile=Depends(current_profile)):
 
 
 @app.post("/admin/breadth/run")
-def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.admin_profile)):
+def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.leader_admin)):
     """Work out a market's breadth now, in the background (the whole two years with `full`)."""
     if region not in breadth.REGIONS:
         err(400, "bad_region", "India (IN) or the US.")
@@ -3957,7 +4007,7 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
 
 
 @app.post("/admin/redflags/run")
-def admin_redflags_run(region: str = "IN", _=Depends(admin.admin_profile)):
+def admin_redflags_run(region: str = "IN", _=Depends(admin.leader_admin)):
     """Read a region's red-flag filings now, in the background (India: the exchange's announcements; US: 8-K items and 13D/13G)."""
     if region not in redflags.REGIONS:
         err(400, "bad_region", "India (IN) or the US.")
@@ -4008,9 +4058,9 @@ def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     if not any(e["v"] == version for e in nb.get("experiments") or []):
         err(404, "not_found", "Experiment not found.")
-    for e in nb.get("experiments") or []:
-        if e["v"] == version and e.get("public"):
-            public.unpublish(e["public"])
+    exps = nb.get("experiments") or []
+    nb["next_v"] = max(nb.get("next_v") or 1, max(e["v"] for e in exps) + 1)     # the deleted number is not handed out again
+    library.take_down([e for e in exps if e["v"] == version])             # its public link and library entry go with it
     nb["experiments"] = [e for e in nb.get("experiments") or [] if e["v"] != version]
     nb["summary"] = research.summary(nb["experiments"])
     save_notebook(profile, nb)
@@ -4239,7 +4289,7 @@ def trade_positioning_history(kind: str = "participants", name: str = "NIFTY", r
 
 
 @app.post("/admin/positioning/run")
-def admin_positioning_run(backfill: bool = False, _=Depends(admin.admin_profile)):
+def admin_positioning_run(backfill: bool = False, _=Depends(admin.leader_admin)):
     """Read the newest trading day's files now (or walk the archives back a step), in the background."""
     if positioning_runner.running:
         err(409, "busy", "A positioning run is already going.")
@@ -4485,6 +4535,9 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
+    # each call creates a Razorpay subscription
+    throttle(profile, "subscribe", 5, 60, "That's a lot of checkouts in a minute. Try again in a minute.")
+    throttle(profile, "subscribe_day", 20, 86400, "You've started a lot of checkouts today. Try again tomorrow.")
     try:
         return billing.create_subscription(profile, req.plan, req.period, req.currency)
     except ValueError as e:
@@ -5132,7 +5185,7 @@ def admin_rules(_=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/rules/watch/run")
-def admin_rules_watch_run(_=Depends(admin.admin_profile)):
+def admin_rules_watch_run(_=Depends(admin.leader_admin)):
     """Read the official sources now (changes are emailed as on the daily run)."""
     rules_watch_job.run_now()
     return admin_rules()
@@ -5181,9 +5234,11 @@ def platform_checks() -> list:
     pc, today = platform_check, datetime.now(IST).date()
     checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m))) for m in markets.providers]
     checks += [(f"Backtest: {m}", "Backtests", (lambda m=m: pc.check_backtest(markets, m))) for m in markets.providers]
-    checks += [("Scan: NIFTY 50", "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
-               ("Scan: US large caps", "Scans", lambda: pc.check_scan(markets, "US", "us_mega")),
-               ("Sector rotation: IN", "Rotation", lambda: pc.check_rotation(markets, "IN")),
+    # named as the check names its result, so a failed scan is found again for the retry
+    scan_name = lambda m, sid: "Scan: " + next(p["name"] for p in universes.PRESETS[m] if p["id"] == sid)  # noqa: E731
+    checks += [(scan_name("IN", "nifty50"), "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
+               (scan_name("US", "us_mega"), "Scans", lambda: pc.check_scan(markets, "US", "us_mega"))]
+    checks += [("Sector rotation: IN", "Rotation", lambda: pc.check_rotation(markets, "IN")),
                ("Sector rotation: US", "Rotation", lambda: pc.check_rotation(markets, "US")),
                ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),
@@ -5294,10 +5349,9 @@ def weekly_facts(now: datetime) -> dict:
             if "mismatch" in levels or "error" in levels:
                 issues.append({"symbol": r.get("symbol"), "mismatches": levels.count("mismatch"), "errors": levels.count("error")})
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
-    origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
             "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
-            "admin_url": f"{origin}/admin" if origin else None}
+            "admin_url": email_kit.site("/admin")}
 
 
 def weekly_summary(now: datetime | None = None) -> tuple[str, str]:
@@ -5357,7 +5411,7 @@ def admin_end_promo(who=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/connect/run")
-def admin_connect_run(part: str = "all", _=Depends(admin.admin_profile)):
+def admin_connect_run(part: str = "all", _=Depends(admin.leader_admin)):
     """Run the connect-once work now: the daily IBKR read for users who are due, and/or the quiet-inbox reminders."""
     if part not in ("all", "ibkr", "reminders"):
         err(400, "bad_part", "Pick ibkr, reminders or all.")
@@ -5461,6 +5515,8 @@ def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_pro
         library.remember(library.moderate(e, "hide"))      # published again, it stays hidden
         library.remove(eid)
     else:
+        if req.action != "hide":
+            library.clear_hide(e)
         library.save(library.moderate(e, req.action))
     return {"ok": True}
 
@@ -5477,7 +5533,7 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
         _, html, text = previews.test_email()
         alerts.send_email(to, "StratLab test email", text, html=html)
     except Exception as e:
-        why = public_text(str(e))[:200]
+        why = str(e)[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():
             why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
@@ -5506,7 +5562,7 @@ def admin_review_link(profile=Depends(admin.admin_profile)):
     try:
         alerts.send_email(to, "StratLab reviewer sign-in link", text, html=html)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
     return {"sent_to": to}
 
 
@@ -5542,7 +5598,7 @@ def admin_lifecycle_test(kind: str, profile=Depends(admin.admin_profile)):
     try:
         subject = lifecycle.send_test(kind, profile, to)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
     return {"sent_to": to, "subject": subject}
 
 
@@ -5689,7 +5745,7 @@ def admin_kite_login_url(_=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/kite/auto-login-now")
-def admin_kite_auto_login(_=Depends(admin.admin_profile)):
+def admin_kite_auto_login(_=Depends(admin.leader_admin)):
     try:
         auto_login.run_once()
     except AutoLoginError as e:

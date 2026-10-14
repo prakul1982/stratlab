@@ -136,7 +136,8 @@ def test_nobody_but_the_owner_may_publish_as_stratlab(api, store, monkeypatch):
     for name in ("StratLab", " stratlab ", "STRATLAB"):
         r = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": name})
         assert r.status_code == 400 and r.json()["detail"]["code"] == "author_reserved"
-    assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "StratLab fan"}).status_code == 200
+    assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "StratLab fan"}).status_code == 400    # any name containing it
+    assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "Strategy fan"}).status_code == 200
     monkeypatch.setattr(settings, "ADMIN_EMAILS", "boss@x")
     main.app.dependency_overrides[main.current_profile] = lambda: {"id": "user-1", "_plan": "pro", "email": "boss@x", "_email_verified": True}
     assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "StratLab"}).status_code == 200
@@ -183,3 +184,73 @@ def test_a_copy_does_not_write_over_a_hide_made_meanwhile(api, store):
     finally:
         main.visible_entry = real
     assert library.load(e["id"])["hidden"] and library.load(e["id"])["copies"] == 1
+
+
+def _published(api, name="N"):
+    nb = api.post("/notebooks", json={"name": name, "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    e = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "d"}).json()
+    return nb["id"], e
+
+
+def test_deleting_an_experiment_or_notebook_takes_its_library_entry_down(api, store):
+    nid, e = _published(api)
+    assert api.delete(f"/notebooks/{nid}/experiments/1").status_code == 200
+    assert api.get(f"/library/{e['id']}").status_code == 404
+    nid, e = _published(api, "M")
+    orphan = dict(library.load(e["id"]))
+    nb = api.get(f"/notebooks/{nid}").json()
+    nb["experiments"][0].pop("library")                      # an entry no experiment points to any more
+    main.save_notebook({"id": "user-1"}, nb)
+    assert api.delete(f"/notebooks/{nid}").status_code == 200
+    assert library.load(orphan["id"]) is None
+
+
+def test_a_deleted_version_number_is_not_reused(api, store):
+    nid, _ = _published(api)
+    api.delete(f"/notebooks/{nid}/experiments/1")
+    nb = api.get(f"/notebooks/{nid}").json()
+    nb["strategy"]["entry"][0]["l"]["p"] = 7
+    api.put(f"/notebooks/{nid}", json={"strategy": nb["strategy"]})
+    assert api.post(f"/notebooks/{nid}/experiments", json={"days": 400}).json()["experiment"]["v"] == 2
+
+
+def test_duplicate_keeps_group_and_gaps(api, store):
+    nid, _ = _published(api)
+    nb = api.get(f"/notebooks/{nid}").json()
+    nb["group"], nb["gaps"] = {"id": "g", "name": "G", "members": []}, {"x": 1}
+    main.save_notebook({"id": "user-1"}, nb)
+    copy = api.post(f"/notebooks/{nid}/duplicate").json()
+    assert copy["group"]["id"] == "g" and copy["gaps"] == {"x": 1}
+
+
+def test_a_hide_carries_to_the_next_version_until_the_admin_restores_it(store):
+    first = {"id": "a1", "owner": "u", "source": {"nid": "n", "v": 1}, "hidden": True, "hidden_by": "reports"}
+    library.save(first)
+    nxt = library.carry_moderation(None, {"id": "a2", "owner": "u", "source": {"nid": "n", "v": 2}})
+    assert nxt["hidden"]
+    library.clear_hide(first)
+    assert not library.carry_moderation(None, {"id": "a3", "owner": "u", "source": {"nid": "n", "v": 3}}).get("hidden")
+
+
+def test_reserved_author_names_and_publish_throttle(api, store):
+    nid, _ = _published(api)
+    r = api.post(f"/notebooks/{nid}/experiments/1/library", json={"author": "Strat-Lab Official"})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "author_reserved"
+    main._recent.clear()
+    codes = [api.post(f"/notebooks/{nid}/experiments/1/library", json={"author": "x"}).status_code for _ in range(21)]
+    assert codes[:20] == [200] * 20 and codes[20] == 429
+
+
+def test_a_share_made_meanwhile_keeps_its_token(api, store, monkeypatch):
+    nid, _ = _published(api)
+    real = main.public.publish
+
+    def racing(nb, exp, image):
+        mine = real(nb, exp, image)
+        nb2 = main.get_notebook({"id": "user-1"}, nid)         # the other request lands first
+        nb2["experiments"][0]["public"] = "theirs-token"
+        main.save_notebook({"id": "user-1"}, nb2)
+        return mine
+    monkeypatch.setattr(main.public, "publish", racing)
+    assert api.post(f"/notebooks/{nid}/experiments/1/share", json={}).json()["token"] == "theirs-token"

@@ -330,11 +330,14 @@ class Job:
                 if run.seen(uid):
                     continue
                 run.beat()
-                profile = db.get_profile(uid)
-                if profile:
-                    globals()["_current"] = (d, n)
-                    run.record(uid)                # before the send: a kill in between drops one, never doubles
-                    sent += send(profile, subject, text)
+                try:                               # one subscriber's failure never stops the rest
+                    profile = db.get_profile(uid)
+                    if profile:
+                        globals()["_current"] = (d, n)
+                        run.record(uid)            # before the send: a kill in between drops one, never doubles
+                        sent += send(profile, subject, text)
+                except Exception as e:
+                    print("advance tax reminder failed:", type(e).__name__)
             run.done()
         self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
         return sent

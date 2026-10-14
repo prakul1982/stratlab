@@ -20,15 +20,18 @@ class SignalFeed:
         r = rules.model_copy(deep=True)
         rk = r.risk
         rk.capital, rk.maxAlloc, rk.brokerage, rk.slippage, rk.sizing, rk.perTrade, rk.leverage = 1e10, 100, 0, 0, "capital", 0, 1
-        from ..live import drop_forming      # live imports the options package, so import here
+        from ..live import drop_forming, split_missed      # live imports the options package, so import here
         self._drop = drop_forming
         st = state or {}
         self.engine = Engine(r, 1, state=st.get("engine") or None)
         self.engine.next_open = False        # live: a signal acts on the candle that just closed
         self.token = st.get("token") or self._token()
-        self.bars = self._drop(kite.history(self.token, self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)[-400:]
-        if len(self.bars) < 30:
+        bars = self._drop(kite.history(self.token, self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)
+        if len(bars) < 30:
             raise ValueError("Not enough price history of the underlying to run the rules.")
+        bars, missed = split_missed(bars, st.get("last_bar_t"))     # closed after the last save: run through the rules
+        self.bars = bars[-400:]
+        self.feed(missed)
         self.next_poll = 0.0
         self.ok = True
 
@@ -70,7 +73,7 @@ class SignalFeed:
         return {"dir": "short" if e.dir == -1 else "long", "key": str(e.entry_t)}
 
     def dump(self) -> dict:
-        return {"engine": self.engine.dump(), "token": self.token}
+        return {"engine": self.engine.dump(), "token": self.token, "last_bar_t": self.bars[-1]["t"] if self.bars else None}
 
     def view(self) -> dict:
         w = self.want()

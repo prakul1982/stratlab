@@ -97,15 +97,22 @@ def ai_reads_today(profile) -> int:
 LIMIT_CODE = "research_ai_limit"
 
 
-def read_slot(profile, limit: int | None):
+SEARCH_AI_PER_DAY = 40         # the search box's AI calls (ideas, ask) a day, every plan; apart from the company reads' cap
+SEARCH_KIND = "search_ai"
+
+
+def read_slot(profile, limit: int | None, kind: str = "research_ai"):
     """Holds one of the person's fresh AI reads while it's written, so parallel requests can't all pass the cap before
     any is counted. Record the usage inside the block; a read that fails leaves the cap untouched. No cap, no hold."""
     if limit is None:
         return contextlib.nullcontext()
     def check(held):
-        if ai_reads_today(profile) + held >= limit:
+        if db.count_usage(profile["id"], kind, ai_day_start()) + held >= limit:
+            if kind == SEARCH_KIND:
+                err(429, "search_ai_limit", f"You've used today's {limit} AI answers in the search box. "
+                    "The count starts again at midnight India time.")
             err(429, LIMIT_CODE, limit_words(limit))
-    return usage_slots.hold(profile["id"], "research_ai", check)
+    return usage_slots.hold(profile["id"], kind, check)
 
 
 def limit_words(limit: int) -> str:
@@ -117,12 +124,14 @@ _building: dict[str, threading.Lock] = {}
 _building_lock = threading.Lock()
 
 
-def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0):
+def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0,
+            kind_used: str = "research_ai", cap: int | None = None):
     """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
     `counted`: a fresh build counts against the person's daily cap and is refused past it; False for reads shared by
     everyone (the market mood) and a company read written as its page opens on a paid plan, which neither count nor are
     refused. `min_age`: a refresh of a shared read younger than this is the read already written (one person's "Ask
-    again" can't make everyone's read be written over and over)."""
+    again" can't make everyone's read be written over and over). `kind_used`, `cap`: count under another usage kind with
+    its own daily cap (the search box's), instead of the company reads' ones."""
     if not refresh and A.peek(kind, key):
         return A.cached(kind, key, ttl, False, build)[0]
     if refresh and min_age and (hit := A.get(kind, key)) and time.time() - float(hit.get("generated_at") or 0) < min_age:
@@ -130,7 +139,7 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
     k = repr((kind, key))
     with _building_lock:
         one = _building.setdefault(k, threading.Lock())
-    with read_slot(profile, ai_cap(profile) if counted else None):
+    with read_slot(profile, (cap if kind_used != "research_ai" else ai_cap(profile)) if counted else None, kind_used):
         try:
             with one:                     # two people opening the same company at once: one read, written once
                 if not refresh and A.peek(kind, key):
@@ -146,7 +155,7 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
                 if len(_building) > 2000:
                     _building.clear()
         if fresh and counted:
-            db.add_usage(profile["id"], "research_ai")
+            db.add_usage(profile["id"], kind_used)
     return out
 
 
@@ -488,7 +497,9 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     """The AI's read of the market's mood, from the index levels and headlines. It is written for the levels as they are:
     kept only while they stay in the same session and about the same moves (a read from before the open is written again
     after it, R7T-003), and never written while an index it would cite is still a previous session's level."""
-    r, f = region_of(region), focus.strip()[:60]
+    r, f = region_of(region), focus.strip()
+    if f:                          # the page sends none; free text would make a new uncached read for every wording
+        err(400, "bad_focus", "The market read has no focus option.")
     indices = source_call(lambda: hub.indices(r))
     stale = [i["name"] for i in indices if i.get("stale")]
     if stale:

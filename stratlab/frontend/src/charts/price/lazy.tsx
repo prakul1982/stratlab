@@ -3,6 +3,7 @@
 import { lazy, Suspense } from "react";
 import type { PriceChartProps } from "./PriceChart";
 import { api } from "../../lib/api";
+import { importWithRetry } from "../../lib/lazyRetry";
 import { settleLast, type QuoteReading } from "./settle";
 import type { BaseTf, Loader } from "./PriceChart";
 import type { RawCandle } from "./transforms";
@@ -12,7 +13,7 @@ export type { PriceChartProps, Tf, RangeKey, Loader } from "./PriceChart";
 export type { QuoteReading } from "./settle";
 
 const load = () => import("./PriceChart");
-const Chart = lazy(load);
+const Chart = lazy(() => importWithRetry(load));
 
 /** Start downloading the chart's code now, for a page that shows it once its own data is in. */
 export function preloadPriceChart() {

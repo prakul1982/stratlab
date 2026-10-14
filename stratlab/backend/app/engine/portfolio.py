@@ -6,6 +6,7 @@ once), and the daily loss cap applies to the whole portfolio: when the day's los
 position reaches it, everything is closed and nothing new opens until the next day. The capital is one account:
 each new trade is sized from the whole portfolio's value and can only use the cash the open positions leave free."""
 import copy
+import math
 from datetime import datetime
 
 from . import costs as C
@@ -38,18 +39,26 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         books.append({"inst": d["inst"], "bars": bars, "ctx": Ctx(bars, intraday=strategy.tf != "1d"), "eng": eng,
                       "idx": idx, "last": None, "first": None})
     timeline = sorted({k for b in books for k in b["idx"]})
-    state = {"halted": False, "emptied_on": None}
+    state = {"halted": False, "emptied_on": None, "free0": None, "value0": None, "k": None}
+    lev = strategy.risk.leverage
 
-    def free_slot() -> bool:
-        return not state["halted"] and not state["emptied_on"] and sum(1 for b in books if b["eng"].qty > 0) < max_open
+    def free_slot(at_open: bool = False) -> bool:
+        used = sum(1 for b in books if b["eng"].qty > 0)
+        if at_open:
+            # a fill at the candle's open: a slot freed later in this candle (a stop hit) was still taken at its open
+            used += sum(1 for b in books if b["eng"].qty == 0 and _closed_after_open(b, state["k"]))
+        return not state["halted"] and not state["emptied_on"] and used < max_open
 
     def funds() -> tuple[float, float]:
         """The pot's value (open positions at their last close) and its cash not tied up in an open position.
         Each engine keeps its own books from `capital`; only what it has made or lost counts toward the pot."""
-        value = cap_total + sum(_gain(b) for b in books)
-        cash = cap_total + sum(_cash(b["eng"]) for b in books)
-        tied = sum(b["eng"].qty * b["eng"].entry for b in books) / strategy.risk.leverage
-        return value, cash - tied
+        value = cap_total + sum(_gain(b) for b in books) if state["value0"] is None else state["value0"]
+        free = _free(books, cap_total, lev)
+        if state.get("free0") is not None:
+            # entries fill at the candle's open: they can use what was free then and what exits at that open freed, never
+            # what a position closed later in the same candle gives back (three Rs50,000 slots opened on Rs1,00,000)
+            free = min(free, state["free0"] + _freed_at_open(books, state["k"], lev) - _spent_at(books, state["k"], lev))
+        return value, free
 
     for b in books:
         b["eng"].gate = free_slot
@@ -65,6 +74,9 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         if date != day:
             day, state["halted"] = date, False
             realised_at_open = sum(t["pnl"] for b in books for t in b["eng"].trades)
+        state["free0"], state["k"] = _free(books, cap_total, lev), k
+        # entries fill at the open: the pot is valued at the last close, not at the close of instruments already stepped
+        state["value0"] = cap_total + sum(_gain(b) for b in books)
         for b in books:
             i = b["idx"].get(k)
             if i is None:
@@ -170,6 +182,58 @@ def _cash(e: Engine) -> float:
     """What this instrument's trades have added to or taken from the pot's cash: closed P&L less the open
     trade's entry charges (its money still counts as the pot's, tied up in the position)."""
     return e.cash + e.dir * e.qty * e.entry - e.r.capital
+
+
+def _free(books: list[dict], cap_total: float, lev: float) -> float:
+    """The pot's cash not tied up in an open position (a position ties up its value over the leverage)."""
+    cash = cap_total + sum(_cash(b["eng"]) for b in books)
+    return cash - sum(b["eng"].qty * b["eng"].entry for b in books) / lev
+
+
+def _spent_at(books: list[dict], k: datetime, lev: float) -> float:
+    """What the positions opened at candle `k` took from the free cash, those already closed again in it included (their
+    charges counted whole: never less than they took)."""
+    out = 0.0
+    for b in books:
+        e = b["eng"]
+        if e.qty > 0 and e.entry_t is not None and _key(e.entry_t) == k:
+            out += e.qty * e.entry / lev + e.entry_cost
+        for t in reversed(e.trades):
+            if _key(t["exit_t"]) != k:
+                break
+            if _key(t["entry_t"]) == k:
+                out += t["qty"] * t["entry"] / lev + t["costs"]
+    return out
+
+
+def _at_open(b: dict, t: dict, o: float) -> bool:
+    d = -1 if t["side"] == "short" else 1
+    return math.isclose(t["exit"], o * (1 - b["eng"].r.slippage / 100 * d), rel_tol=1e-9)
+
+
+def _closed_after_open(b: dict, k: datetime) -> bool:
+    """This instrument's latest trade closed in candle `k`, after its open (it held a slot at that open)."""
+    i, ts = b["idx"].get(k), b["eng"].trades
+    if i is None or not ts or _key(ts[-1]["exit_t"]) != k:
+        return False
+    return not _at_open(b, ts[-1], b["bars"][i]["o"])
+
+
+def _freed_at_open(books: list[dict], k: datetime, lev: float) -> float:
+    """What the trades closed at candle `k`'s open (an exit rule, a gap through the stop) gave back to the free cash, less
+    their entry charges (already spent): never more than they really freed."""
+    out = 0.0
+    for b in books:
+        i = b["idx"].get(k)
+        if i is None:
+            continue
+        o = b["bars"][i]["o"]
+        for t in reversed(b["eng"].trades):
+            if _key(t["exit_t"]) != k:
+                break
+            if _at_open(b, t, o):
+                out += t["qty"] * t["entry"] / lev + t["pnl"]
+    return out
 
 
 def _open_pnl(b: dict) -> float:

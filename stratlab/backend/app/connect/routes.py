@@ -152,9 +152,8 @@ async def upload_statement(req: StatementReq, profile=Depends(current_profile)):
     _limit(profile, "connect_statement", 30, "That's a lot of uploads in an hour. Try again a little later.")
     data = _decode(req.data, statements.MAX_PDF)
     pw = req.password.strip()
-    if pw and req.remember and vault.ready():
-        await run_in_threadpool(state.update, profile["id"], "inbox", pw=vault.seal(pw))
-    got = await run_in_threadpool(statements.process, profile["id"], data, req.filename, [pw] if pw else [], "upload")
+    keep = pw if pw and req.remember and vault.ready() else ""          # stored once it has opened the statement
+    got = await run_in_threadpool(statements.process, profile["id"], data, req.filename, [pw] if pw else [], "upload", keep)
     if not got["ok"]:
         code = "wrong_password" if got["status"] in ("wrong_password", "no_password") else "bad_file"
         err(400, code, got["detail"])

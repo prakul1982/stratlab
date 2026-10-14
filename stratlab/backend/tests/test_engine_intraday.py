@@ -139,6 +139,17 @@ def test_capital_sizing_with_leverage_and_intraday_costs():
     assert buy["stt"] == 0 and C.order_costs("in_eq_mis", "sell", 100, 100, 0)["stt"] == pytest.approx(10000 * 0.00025)
 
 
+def test_intraday_india_equity_backtest_has_no_capital_gains_estimate():
+    # the engine trades intraday (in_eq_mis); the tax line read the raw "in_eq" and showed a 20% short-term estimate
+    from app.engine.core import backtest
+    bars = day("2026-01-05", [100, 101, 102, 103, 104])
+    s = S(entry=[cond({"t": "price"}, "gt", {"t": "num", "v": 100.5})], risk={**RISK, "sizing": "capital", "perTrade": 20000},
+          session={"squareoff": "15:00"})
+    out = backtest(bars, s, 0, cost_kind="in_eq")
+    assert out["costs"]["tax"]["amount"] is None and "20%" not in out["costs"]["tax"]["note"]
+    assert "speculative business income" in out["costs"]["tax"]["note"]
+
+
 def test_old_strategies_behave_as_before():
     s = Strategy(entry=[cond({"t": "price"}, "gt", {"t": "num", "v": 0})], risk={**RISK, "sl": 5})
     daily = [{"t": f"2024-01-{d:02d}T00:00:00+05:30", "o": 100, "h": 101, "l": 99, "c": 100, "v": 1} for d in range(1, 6)]

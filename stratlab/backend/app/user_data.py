@@ -92,7 +92,11 @@ def _alerts(uid: str) -> int:
 
 def _prefs(uid: str) -> int:
     from . import alerts, daily_report, first_steps, lifecycle, plan_interest, push
-    return _setting_keys(daily_report.PREFS, lifecycle.PREFS, alerts.CONFIRMED, push.PREFIX, first_steps.KEY, plan_interest.KEY)(uid)
+    tips_off = not lifecycle.tips_on(uid)
+    n = _setting_keys(daily_report.PREFS, lifecycle.PREFS, alerts.CONFIRMED, push.PREFIX, first_steps.KEY, plan_interest.KEY)(uid)
+    if tips_off:
+        lifecycle.set_tips(uid, False)          # the account stays, so a "no tips" choice does too
+    return n
 
 
 def _journal(uid: str) -> None:

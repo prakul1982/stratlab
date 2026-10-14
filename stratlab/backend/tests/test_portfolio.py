@@ -75,8 +75,8 @@ def test_later_entries_get_what_is_left():
 
 def test_entries_are_sized_from_the_pot():
     # A's 100 shares double; B's next trade is sized from the whole pot (1,00,000 + A's 10,000), not B's own account
-    a = day("2026-01-05", [100, 100, 100, 100, 200, 200])     # A trades 09:45 and 10:15, when it doubles
-    b = day("2026-01-05", [10] * 6)
+    a = day("2026-01-05", [100, 100, 100, 100, 200, 200, 200, 200])     # A trades 09:45 and 10:15, when it doubles
+    b = day("2026-01-05", [10] * 8)                           # B's 10:45 trade is sized after that close (not its 10:15)
     s = S(risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "risk", "maxAlloc": 10, "maxBars": 1})
     out = portfolio.run([ds("A", a), ds("B", b)], s, max_open=2)
     qty = [t["qty"] for t in sorted(out["trades"] + out["open_trades"], key=lambda t: t["entry_t"]) if t["symbol"] == "B"]
@@ -115,3 +115,27 @@ def test_group_notebook_api(api):  # noqa: F811
     # picking one instrument again replaces the group
     api.put(f"/notebooks/{nb['id']}", json={"instrument": "CRYPTO:ETH-USD"})
     assert not api.get(f"/notebooks/{nb['id']}").json().get("group")
+
+
+@pytest.mark.parametrize("order", [("A", "B"), ("B", "A")])
+def test_slot_freed_inside_a_candle_is_not_free_at_its_open(order):
+    # one slot, A and B signal on the same close; A fills at 10:00's open (100) and its 1% stop is hit inside that
+    # candle: B can't also open at 10:00 (two positions at that open), whichever stock steps first
+    bars = {"A": day("2026-01-05", [100, 100, 95, 95, 95, 95]), "B": day("2026-01-05", [50.0] * 6)}
+    s = S(risk={"capital": 100000, "sl": 1, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "capital", "perTrade": 20000},
+          session={"maxTradesDay": 1})
+    out = portfolio.run([ds(k, bars[k]) for k in order], s, max_open=1)
+    held = sorted((t["entry_t"], t["exit_t"] or "~", t["symbol"]) for t in out["trades"] + out["open_trades"])
+    assert held[0][0] == bars[order[0]][2]["t"]          # the first in line takes the slot at 10:00's open
+    assert all(held[k][1] < held[k + 1][0] for k in range(len(held) - 1))
+
+
+@pytest.mark.parametrize("order", [("A", "B"), ("B", "A")])
+def test_entry_at_the_open_is_sized_on_the_pot_at_the_last_close(order):
+    # A doubles on 10:00's close; B fills at 10:00's open, so its 10% is of the pot then (1,00,000), whichever steps first
+    bars = {"A": day("2026-01-05", [100, 100, 100, 200, 200]), "B": day("2026-01-05", [10, 10, 11, 11, 11])}
+    s = S(entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 10.5}}],
+          risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "risk", "maxAlloc": 10, "maxBars": 0})
+    out = portfolio.run([ds(k, bars[k]) for k in order], s, max_open=2)
+    qty = {t["symbol"]: t["qty"] for t in out["open_trades"]}
+    assert qty == {"A": 100, "B": 909}

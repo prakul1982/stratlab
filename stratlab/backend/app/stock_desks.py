@@ -38,7 +38,7 @@ def desks_state(_=Depends(admin.admin_profile)):
 
 
 @admin_router.post("/{name}/run")
-def desks_run(name: str, backfill: bool = False, _=Depends(admin.admin_profile)):
+def desks_run(name: str, backfill: bool = False, _=Depends(admin.leader_admin)):
     """Read a desk's missing recent days now (or, with backfill, a few more archive days), in the background."""
     desk = runner.desks.get(name)
     if desk is None:

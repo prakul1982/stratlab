@@ -307,3 +307,20 @@ def test_roll_preview_is_pro_once_payments_are_live(monkeypatch):
 if __name__ == "__main__":
     FIXTURE.write_text(json.dumps(build_fixture(), separators=(",", ":")) + "\n")
     print("wrote", FIXTURE, f"{FIXTURE.stat().st_size // 1024} KB")
+
+
+def test_time_runs_to_each_exchanges_expiry_time():
+    mcx = datetime(2026, 10, 14, 18, 0, tzinfo=IST)
+    assert G.years_to("2026-10-14", mcx) < 0 and G.years_to("2026-10-14", mcx, "MCX") * 365 * 24 == pytest.approx(5.5)
+    assert G.years_to("2026-10-15", mcx, "MCX") * 365 * 24 == pytest.approx(29.5)
+    cds = datetime(2026, 10, 14, 11, 30, tzinfo=IST)
+    assert G.years_to("2026-10-14", cds, "CDS") * 365 * 24 == pytest.approx(1)
+    assert G.model(100, "2026-10-14", 100, None, None, mcx, exchange="MCX") is not None
+    assert G.model(100, "2026-10-14", 100, None, None, mcx) is None
+
+
+def test_a_chain_carries_its_exchange_into_the_model():
+    at = datetime(2026, 10, 14, 18, 0, tzinfo=IST)
+    chain = {"exchange": "MCX", "expiry": "2026-10-14", "spot": 100, "atm": 100, "rows": []}
+    assert G.add_to_chain(chain, at)["model"] is not None
+    assert G.add_to_chain({**chain, "exchange": "NFO"}, at)["model"] is None

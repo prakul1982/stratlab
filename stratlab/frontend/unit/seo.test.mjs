@@ -159,9 +159,13 @@ test("boot guard: a failed file reloads once, a second failure says so instead o
     return { listeners, ctx, root, win, tick: (ms) => { now += ms; } };
   };
   const a = make();
-  a.listeners["vite:preloadError"]({ preventDefault() {} });
+  let cancelled = false;
+  a.listeners["vite:preloadError"]({ preventDefault() { cancelled = true; } });
+  assert.ok(cancelled, "the import arrives empty so its loader can ask again");
+  assert.equal(a.ctx.reloads, 0, "no reload yet: the loader retries first (lib/lazyRetry.ts)");
+  a.win.__stratlabRecover();
   assert.equal(a.ctx.reloads, 1);
-  a.listeners["vite:preloadError"]({ preventDefault() {} });
+  a.win.__stratlabRecover();
   assert.equal(a.ctx.reloads, 1, "no reload loop");
   assert.equal(a.root.children.length, 1, "the message is drawn");
   const b = make();

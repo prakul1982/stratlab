@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 from ..engine import costs as C
 from ..models import OptionStrategy
+from . import greeks as G
 from . import strikes as SR
 
 TICK = 0.05
@@ -137,6 +138,12 @@ class OptionsEngine:
         if px is not None:
             leg["mark"] = px
         return leg.get("mark", leg["entry"])
+
+    def _stop_price(self, leg: dict, quotes: dict) -> float:
+        """What a leg stop judges: the bid-ask middle (the last price without a two-sided quote), not the ask a sold
+        leg's exit fills at, which sits a spread above where the leg was sold."""
+        px = G.mid(quotes.get(leg["key"]))
+        return px if px is not None else self._mark(leg, quotes)
 
     @staticmethod
     def _leg_pnl(leg: dict, px: float) -> float:
@@ -271,13 +278,22 @@ class OptionsEngine:
             self.note = f"Not enough capital for even one unit (needs about {one:,.0f} of margin)."
         return units
 
+    def _priced(self, contracts: Contracts, quotes: dict, opt: str, side: str, strike: float) -> bool:
+        """Whether a leg can open on these quotes: as `_open_leg` judges it."""
+        q = quotes.get(contracts.key(opt, strike))
+        if self.s.exchange == "CDS":
+            from .data import no_live_quote
+            if no_live_quote(q):
+                return False
+        return fill_price(q, side, 0) is not None
+
     def _enter(self, now, spot, contracts: Contracts, quotes, out, direction: str | None = None) -> bool:
         atm = contracts.atm(spot)
         plan = self._plan(contracts, atm, self.legs_for(direction), quotes, spot, now)
         if plan is None:
             self.note = self.plan_note
             return False
-        missing = [(o, sd, k) for o, sd, k, _, _ in plan if fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None]
+        missing = [(o, sd, k) for o, sd, k, _, _ in plan if not self._priced(contracts, quotes, o, sd, k)]
         if missing:
             legs = ", ".join(f"{k:g} {o} ({'buy' if sd == 'buy' else 'sell'})" for o, sd, k in missing)
             note = f"No price yet for {legs}, so no entry. It enters once every leg has a bid, ask or last price."
@@ -294,11 +310,23 @@ class OptionsEngine:
                     "units": units, "last_check": now.isoformat(), "credit": 0.0, "dir": direction}
         # buy the hedges first, as a broker would, so the sold legs get the margin benefit
         for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
-            self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out, why)
+            if not self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out, why):
+                self._abandon(now, quotes, "A leg couldn't open", out)    # never a structure with a leg missing
+                self.note = f"No price for {k:g} {opt} ({side}) at entry, so no entry."
+                return False
         p = self.pos
         p["credit"] = sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"] for l in p["legs"])
         self.entries_today += 1
         return True
+
+    def _abandon(self, now, quotes, why, out):
+        """Close whatever legs opened; the entry isn't counted and starts no gap between trades."""
+        if any(l["open"] for l in self.pos["legs"]):
+            cool = self.cool_until
+            self._exit(now, quotes, why, out)
+            self.cool_until = cool
+        else:
+            self.pos = None
 
     def _exit(self, now, quotes, why, out):
         p = self.pos
@@ -331,13 +359,15 @@ class OptionsEngine:
             return
         legs = [lg for lg in self.legs_for(p.get("dir")) if r.roll == "all" or lg.side == "sell"]
         plan = self._plan(contracts, atm, legs, quotes, spot, now)
-        if plan is None or any(fill_price(quotes.get(contracts.key(o, k)), sd, 0) is None for o, sd, k, _, _ in plan):
+        if plan is None or not all(self._priced(contracts, quotes, o, sd, k) for o, sd, k, _, _ in plan):
             return   # try again at the next check
         for leg in p["legs"]:
             if leg["open"] and (r.roll == "all" or leg["side"] == "sell"):
                 self._close_leg(now, leg, quotes, "Re-centre", out)
         for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
-            self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out, why)
+            if not self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out, why):
+                self._exit(now, quotes, "Re-centre: a leg couldn't open", out)    # never a structure with a leg missing
+                return
         p["center"] = atm
         p["rolls"] += 1
         p["credit"] = p["closed_pnl"] + sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"]
@@ -374,7 +404,7 @@ class OptionsEngine:
             if rk.legStopPct and any(l["side"] == "sell" for l in p["legs"]):
                 stopped = False
                 for leg in p["legs"]:
-                    if leg["open"] and leg["side"] == "sell" and self._mark(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
+                    if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
                         stopped = True
                 if stopped and not any(l["open"] and l["side"] == "sell" for l in p["legs"]):

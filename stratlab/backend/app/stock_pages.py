@@ -1465,13 +1465,13 @@ def cap_text(f: dict) -> str:
     if v is None:
         return "–"
     if f.get("currency") == "USD":                       # stored in $ million
-        if v >= 1e6:
+        if round(v / 1e3, 1) >= 1e3:                     # the unit is chosen after rounding
             return f"${v / 1e6:,.2f}T"
         if v >= 1e3:
             return f"${v / 1e3:,.1f}B"
         # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
         return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
-    if v >= 1e5:                                          # stored in ₹ crore
+    if round(v) >= 1e5:                                   # stored in ₹ crore
         return f"₹{v / 1e5:,.2f} lakh crore"
     return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
 
@@ -1581,9 +1581,10 @@ h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}.m
 .note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2)}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
 details.how summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-weight:600}details.how li{margin:6px 0}
-.tbl{overflow-x:auto;direction:rtl}.tbl table{direction:ltr}
+.tbl{overflow-x:auto;direction:rtl;scroll-snap-type:x proximity;scroll-padding-left:124px}.tbl table{direction:ltr}
+.tbl th:not(:first-child),.tbl td:not(:first-child){scroll-snap-align:end}
 table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
-th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
 @media (max-width:640px){.nav nav{display:none}.nav{justify-content:space-between}.scroll-cue{display:block}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
@@ -1646,7 +1647,7 @@ def _top(sign_in: str | None = None) -> str:
     sign_in = sign_in or f"{site}/mine"
     links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money")))
     return (f'<a class="skip" href="#main">Skip to the page</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
-            f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{links}<a href="{site}/pricing">Pricing</a>'
+            f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{links}<a href="{site}/pricing">Plans</a>'
             f'<a href="/stocks">Companies</a></nav><a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
 
 
@@ -1654,7 +1655,7 @@ def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Pricing")))
+                                                                ("/pricing", "Plans")))
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
@@ -1771,8 +1772,20 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
-            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of ₹{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
+            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
+
+
+def pe_profit_gap(f: dict):
+    """(P/E shown, market cap over the table's last-12-months net profit, that profit) for an Indian company whose two
+    differ by more than 10%; None otherwise (R16-004: P/E 21.3 beside a market cap and profit that give 18.0)."""
+    if f.get("region") != "IN":
+        return None
+    pe, cap, profit = shown_pe(f), shown_cap(f), _num(f.get("profit_ttm"))
+    if pe is None or not cap or not profit or profit <= 0:
+        return None
+    implied = cap / profit
+    return (pe, implied, profit) if abs(implied - pe) > 0.1 * pe else None
 
 
 def extreme(f: dict) -> bool:
@@ -1816,6 +1829,12 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-pe-old>P/E isn\'t shown: the latest reported earnings on this page are for the '
                    f'year to {e(_date(pe_period(f)[1]))}, more than 15 months before this price, and a newer annual '
                    "report's figures aren't on the page yet.</p>")
+    gap = pe_profit_gap(f)
+    if gap:
+        pe, implied, profit = gap
+        out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
+                   f'company\'s shareholders. Market cap divided by the net profit for the last 12 months in the table '
+                   f'(₹{profit:,.0f} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}.</p>')
     if behind(f):
         out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
                    "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
@@ -1829,7 +1848,7 @@ def _notes(f: dict) -> list[str]:
 # one definition of P/E and of the dividend yield on every page, India and the US, and in the app (R7V-002)
 PE_NOTE = ("P/E: the last close divided by earnings per share over the last four reported quarters, the profit that belongs "
            "to the company's shareholders per share, as the company reports it. So P/E can differ from market cap divided "
-           "by the net profit shown (a different share count, or the profit before minority interests). A company that "
+           "by the net profit shown (a different share count, or the profit before minority interests; where they differ by more than 10%, a note under the figures gives both). A company that "
            "reports only once a year has its latest year's earnings, and the P/E names that year; when that year ended "
            "more than about 15 months before the close, P/E is n/a. A loss has no P/E. Above 1,000 it is n/a.")
 YIELD_NOTE = ("Dividend yield: every dividend per share with an ex-date in the 12 months to the last close, special "

@@ -22,7 +22,7 @@ from typing import Callable, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from . import db, leader
+from . import db, leader, run_marks
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -41,6 +41,7 @@ PPF_RATE_NOTE = "7.1%, the PPF rate notified for October-December 2026"
 SGB_RATE = 2.5                       # fixed for every tranche, on the issue price
 SGB_YEARS = 8
 PPF_YEARS = 15
+PPF_YEARLY_MAX = 150000                 # the most a PPF account takes in a financial year
 
 ASSET_KINDS = ("epf", "ppf", "nps", "fd", "rd", "gold", "sgb", "cash", "property", "crypto", "other")
 KINDS = ASSET_KINDS + ("loan", "policy")
@@ -287,6 +288,16 @@ def next_due(due: date, frequency: str, at: date) -> date | None:
     return d
 
 
+def pct_split(values: list[float]) -> list[float]:
+    """Shares of the total in tenths of a percent, rounded by largest remainder so they add to exactly 100."""
+    total = sum(values)
+    raw = [v / total * 1000 for v in values]
+    out = [int(x) for x in raw]
+    for i in sorted(range(len(raw)), key=lambda i: raw[i] - out[i], reverse=True)[:1000 - sum(out)]:
+        out[i] += 1
+    return [x / 10 for x in out]
+
+
 def yearly_premium(premium: float, frequency: str) -> float:
     step = FREQUENCY.get(frequency, 12)
     return premium * 12 / step if step else 0.0
@@ -397,6 +408,8 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
         out.setdefault("rate", EPF_RATE)
     if k == "ppf":
         out.setdefault("rate", PPF_RATE)
+        if (out.get("yearly") or 0) > PPF_YEARLY_MAX:
+            raise EntryError(f"PPF: a year's deposit can't be more than {_inr(PPF_YEARLY_MAX)}.")
     if k in ("fd", "rd") and out["maturity"] <= out["start"]:
         raise EntryError("The maturity date has to be after the start date.")
     if k == "fd":
@@ -719,16 +732,34 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
         partial.append("mutual funds couldn't be read")
     if mf and mf.get("missing"):
         partial.append(f"{mf['missing']} mutual {'fund' if mf['missing'] == 1 else 'funds'} without a NAV or a cost")
+    unpriced = [r["name"] for r in assets if r["value"] is None]
+    if unpriced:
+        partial.append("no price for " + ", ".join(unpriced))
+    no_price = (stocks or {}).get("unpriced") or {}
+    n_np = sum(no_price.values())
+    if stocks and stocks.get("count") and n_np:          # counted at cost, or not at all without one
+        partial.append(f"no price for {n_np} {'stock' if n_np == 1 else 'stocks'}")
+
+    def stock_basis(m: str) -> tuple[str, str]:          # (basis, what the rule adds) for a market's row
+        n = no_price.get(m) or 0
+        if not n:
+            return "market price", ""
+        if not ((stocks.get("priced") or {}).get(m)):
+            return "at cost", ""
+        return "market price", f"; {n} without a price counted at cost where known"
     if stocks and stocks.get("count"):
         if stocks.get("in"):
+            basis, more = stock_basis("in")
             linked.append({"id": "stocks_in", "kind": "stocks_in", "label": "Indian stocks", "name": "My Holdings: Indian stocks", "class": "stocks_in",
-                           "value": _r(stocks["in"]), "as_of": stocks.get("as_of"), "basis": "market price", "rule": "From My Holdings, at today's prices",
+                           "value": _r(stocks["in"]), "as_of": stocks.get("as_of"), "basis": basis,
+                           "rule": ("From My Holdings, at today's prices" + more) if basis == "market price" else "From My Holdings, at cost (no price right now)",
                            "facts": {}, "linked": "/holdings"})
         if stocks.get("us"):
+            basis, more = stock_basis("us")
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
-                           "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": "market price",
-                           "rule": "From My Holdings, at today's prices in rupees"
-                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else ""),
+                           "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": basis,
+                           "rule": ("From My Holdings, at today's prices in rupees" if basis == "market price" else "From My Holdings, at cost in rupees (no price right now)")
+                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else "") + more,
                            "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
@@ -741,8 +772,9 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     by: dict[str, float] = {}
     for r in rows:
         by[r["class"]] = by.get(r["class"], 0) + (r["value"] or 0)
-    allocation = [{"class": c, "label": label, "value": _r(by[c]), "pct": _r(by[c] / total_assets * 100, 1) if total_assets else None}
-                  for c, label in CLASSES if by.get(c)]
+    classes = [(c, label) for c, label in CLASSES if by.get(c)]
+    pcts = pct_split([by[c] for c, _ in classes]) if total_assets else [None] * len(classes)
+    allocation = [{"class": c, "label": label, "value": _r(by[c]), "pct": p} for (c, label), p in zip(classes, pcts)]
     dated = [r["as_of"] for r in rows + loans if r.get("as_of")]
     upcoming_due = sorted((p for p in policies if p["due_in"] is not None), key=lambda p: p["due_in"])
     return {"as_of": data_day(rows, at).isoformat(), "computed_at": now_iso,
@@ -761,18 +793,21 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
 def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dict]:
     """This module's dates in the next `days` days, soonest first, for the money calendar: deposit, PPF and SGB
     maturities, SGB interest dates, premium due dates and EMI dates. Each is {"date", "kind", "title", "detail",
-    "amount", "url"}; amounts are what the user entered or the arithmetic on it."""
+    "amount", "url", "id"}; id is the entry's; amounts are what the user entered or the arithmetic on it."""
     at = at or today()
     end = at + timedelta(days=max(0, min(int(days), 3660)))
     out = []
 
+    eid = ""
+
     def add(d: date | None, kind: str, title: str, detail: str, amount=None):
         if d and at <= d <= end:
-            out.append({"date": d.isoformat(), "kind": kind, "title": title, "detail": detail,
+            out.append({"id": eid, "date": d.isoformat(), "kind": kind, "title": title, "detail": detail,
                         "amount": _r(amount) if amount is not None else None, "url": "/money/net-worth"})
     for i in load(uid)["items"]:
         try:
             k, name = i["kind"], i.get("name") or LABEL[i["kind"]]
+            eid = str(i.get("id") or "")
             if k == "fd":
                 mat = date.fromisoformat(i["maturity"])
                 add(mat, "fd_maturity", f"{name} matures", "Fixed deposit maturity",
@@ -795,7 +830,7 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dic
                 d = next_due(date.fromisoformat(i["due"]), i.get("frequency", "yearly"), at)
                 step = FREQUENCY.get(i.get("frequency", "yearly"), 12)
                 while d and d <= end:
-                    add(d, "premium", f"{name or i['insurer']}: premium due", f"{POLICY_TYPES.get(i.get('policy_type', 'other'))} policy, {i['insurer']}",
+                    add(d, "premium", f"{i.get('name') or i['insurer']}: premium due", f"{POLICY_TYPES.get(i.get('policy_type', 'other'))} policy, {i['insurer']}",
                         i["premium"])
                     d = add_months(d, step) if step else None
             elif k == "loan" and i.get("tenure_months") and _date(i.get("start")):
@@ -886,8 +921,9 @@ def to_csv(view: dict, hist: list[dict] | None) -> str:
 
 # ---------- the 1st-of-the-month snapshot ----------
 class Job:
-    """Checks every half hour; on the 1st of each month (India time, after 4 pm, so stock prices are the day's close) it
-    records every user's net worth once. The month is marked in the database first, so a restart never records twice."""
+    """Checks every half hour; from the 1st of each month (India time, after 4 pm, so stock prices are the day's close)
+    it records every user's net worth once: a later day of the month catches up a run that was missed. Each user is
+    marked in the database once recorded, so a run a restart cut short resumes with the rest."""
 
     def __init__(self, value_of: Callable[[str], dict | None]):
         self.value_of = value_of
@@ -909,12 +945,14 @@ class Job:
     def tick(self, now: datetime) -> int:
         local = now.astimezone(IST)
         month = local.strftime("%Y-%m")
-        if local.day != 1 or local.hour < 16 or db.get_setting(RUN) == month:
+        if (local.day == 1 and local.hour < 16) or not (run := run_marks.claim(RUN, month)):
             return 0
-        db.set_setting(RUN, month)
         n = 0
         for key, _ in db.all_settings_with_prefix(KEY):
             uid = key[len(KEY):]
+            if run.seen(uid):
+                continue
+            run.beat()
             try:
                 v = self.value_of(uid)
                 if v:                                       # a partial total is stored flagged (see record)
@@ -922,6 +960,8 @@ class Job:
                     n += 1
             except Exception as e:                          # one user's data never stops the others'
                 print("net worth snapshot failed:", type(e).__name__)
+            run.record(uid)                                 # after: a kill in between records that one again, same day
+        run.done()
         self.status.update(last_run=now.isoformat(), recorded=n, last_error=None)
         return n
 

@@ -338,3 +338,38 @@ def test_a_refund_that_arrives_before_its_charge_earns_the_referrer_nothing(w):
     assert R.refunded(p["id"], NOW + DAY) == "none"                # the refund event came first: nothing known yet
     assert R.paid(referrals._profile("u-a"), p, NOW + DAY) == "not_paid"
     assert R.row("u-a").get("payment_id") is None and R.row("u-a")["referrer_months"] == 0
+
+
+def test_a_replayed_checkout_after_a_refund_gets_nothing(w, monkeypatch):
+    user("u-ref")
+    _new = datetime.now(timezone.utc)
+    invite("u-ref", "u-a", now=_new - DAY, created=_new - DAY - timedelta(minutes=5))
+    p = payment(_new)
+    sub = {"id": "sub_9", "plan_id": "plan_b", "notes": {"user_id": "u-a", "plan": "basic", "period": "month"}}
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_b")
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(
+        utility=SimpleNamespace(verify_subscription_payment_signature=lambda d: True),
+        subscription=SimpleNamespace(fetch=lambda sid: sub), payment=SimpleNamespace(fetch=lambda pid: p)))
+    calls = []
+    monkeypatch.setattr(billing, "activate", lambda *a: calls.append("activate"))
+    monkeypatch.setattr(billing, "invoice_for", lambda *a: calls.append("invoice"))
+    monkeypatch.setattr(billing.invite_rewards, "safe_paid", lambda *a: calls.append("invite"))
+    profile = {**referrals._profile("u-a"), "plan": "free", "plan_status": "refunded", "razorpay_subscription_id": "sub_9"}
+    with pytest.raises(billing.SignatureVerificationError):
+        billing.verify_checkout(profile, p["id"], "sub_9", "abc123")
+    sub["status"] = "cancelled"                       # a subscription that has ended is refused too
+    with pytest.raises(billing.SignatureVerificationError):
+        billing.verify_checkout({**profile, "plan_status": "cancelled"}, p["id"], "sub_9", "abc123")
+    assert calls == []
+
+
+def test_two_containers_cannot_both_credit_one_invite(w, monkeypatch):
+    """The lock is per process: the marker is claimed in the database, so a second claimant credits nothing and tells no one."""
+    user("ref")
+    claimed = []
+    monkeypatch.setattr(plans, "add_free_basic", lambda who, days, now: claimed.append(who["id"]) or {"until": None, "banked": 0})
+    monkeypatch.setattr(plans, "free_basic", lambda uid: {"until": None, "banked": 0})
+    who = {"id": "ref"}
+    assert R._credit("rewardgrant:x:referrer", who, 30, NOW)[1] is True
+    assert R._credit("rewardgrant:x:referrer", who, 30, NOW) == ({"until": None, "banked": 0}, False)
+    assert claimed == ["ref"]

@@ -62,6 +62,13 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const nav = useNavigate();
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
+  // one stop or delete at a time: a second click while it is in flight is dropped
+  const acting = useRef(false);
+  const once = async (f: () => Promise<void>) => {
+    if (acting.current) return;
+    acting.current = true;
+    try { await f(); } finally { acting.current = false; }
+  };
 
   const [error, setError] = useState<string | null>(null);
 
@@ -92,8 +99,8 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   if ((snap as unknown as GroupSnapshot).kind === "group") {
     const g = snap as unknown as GroupSnapshot;
     return <GroupSession snap={g}
-      onStop={async () => { try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } }}
-      onDelete={async () => { try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } }} />;
+      onStop={() => once(async () => { try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } })}
+      onDelete={() => once(async () => { try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } })} />;
   }
   const running = snap.status === "running";
   const cur = snap.instrument.currency || (snap.instrument.market === "IN" || !snap.instrument.market ? "INR" : "");
@@ -110,14 +117,14 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const feed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: snap.last_tick_at, alwaysOpen,
     market: markets.find((m) => m.id === snap.instrument.market) });
 
-  const stop = async () => {
+  const stop = () => {
     setAsk(null);
-    try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); }
+    return once(async () => { try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); await load(); refreshMe(); onStopped(); } catch (e) { fail(e); } });
   };
 
-  const remove = async () => {
+  const remove = () => {
     setAsk(null);
-    try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); }
+    return once(async () => { try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } });
   };
 
   const rows: [string, string, number | null, string | null][] = [

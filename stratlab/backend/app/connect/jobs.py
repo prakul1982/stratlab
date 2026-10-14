@@ -27,7 +27,9 @@ def reminder_due(box: dict, now: datetime) -> bool:
     last 40 days."""
     if not box.get("local"):
         return False
-    ok_at = (box.get("last") or {}).get("at") if (box.get("last") or {}).get("status") == "ok" else None
+    last = box.get("last") or {}
+    # ok_at: the last statement read (a later mail without one leaves it); before it was kept, a last read that was OK
+    ok_at = box.get("ok_at") or (last.get("at") if last.get("status") == "ok" else None)
     quiet = _days_since(ok_at or box.get("created_at"), now)
     if quiet is None or quiet < REMIND_AFTER_DAYS:
         return False
@@ -36,20 +38,21 @@ def reminder_due(box: dict, now: datetime) -> bool:
 
 
 def run_reminders(now: datetime | None = None) -> int:
-    """Remind each user whose inbox is quiet. Each reminder is marked before it is sent, so it goes once. How many sent."""
+    """Remind each user whose inbox is quiet. Each reminder is marked once it has gone out, so it goes once (a user with
+    no usable channel isn't marked). How many sent."""
     now = now or datetime.now(timezone.utc)
     sent = 0
     for uid, rec in state.everyone():
         box = rec.get("inbox") or {}
         if not reminder_due(box, now):
             continue
-        state.update(uid, "inbox", reminded_at=now.isoformat(timespec="seconds"))
-        profile = sync.profile_for(uid)
-        if not profile:
-            continue
-        try:
-            alerts.notify(profile, REMINDER_SUBJECT, REMINDER_TEXT, background=False, url="/settings#accounts")
-            sent += 1
+        try:                                         # one user's failure never stops the rest
+            profile = sync.profile_for(uid)
+            if not profile:
+                continue
+            if alerts.notify(profile, REMINDER_SUBJECT, REMINDER_TEXT, background=False, url="/settings#accounts"):
+                state.update(uid, "inbox", reminded_at=now.isoformat(timespec="seconds"))
+                sent += 1
         except Exception as e:
             print("statement inbox reminder failed:", mask(type(e).__name__))
     return sent

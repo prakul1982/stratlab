@@ -1,6 +1,9 @@
 """Paper trading a group: one engine per member, shared slots, a group-wide loss cap, and restarts."""
 from datetime import datetime, timezone
 
+import pytest
+import time_machine
+
 from app import db, group_live
 from tests.test_live_polling import make_manager
 
@@ -8,6 +11,14 @@ STRAT = {"name": "Momentum", "tf": "5m", "side": "long", "entryJoin": "all",
          "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 0}}], "exit": [],
          "session": {"dailyLossPct": 1},
          "risk": {"capital": 1000000, "riskPct": 1, "maxAlloc": 100, "sl": 50, "sizing": "capital", "perTrade": 100000, "leverage": 1}}
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock():
+    """The candles below are dated 12 Oct 2026 from 09:30 UTC; the clock is pinned to that afternoon so they have closed
+    whatever the real date and time are."""
+    with time_machine.travel(datetime(2026, 10, 12, 15, 0, tzinfo=timezone.utc), tick=False):
+        yield
 
 
 def row(state=None):
@@ -186,3 +197,25 @@ def test_a_split_and_a_dividend_on_two_members_and_a_restart(monkeypatch):
     assert b2.engine.qty == qb and s2.corp_cash == 5.0 * qb and len(corp_events(b2.engine)) == 1
     assert group_live.stopped_snapshot({**grow, "status": "stopped", "state": s2.state()})["account"]["realised"] == s2.realised()
     assert corp_actions.paper_region(a2.inst) == "US"
+
+
+def test_members_are_sized_from_the_shared_pot(monkeypatch):
+    # a second position only gets the cash the first leaves free, as in the group backtest
+    mgr, _ = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    big = {**STRAT, "session": {}, "risk": {**STRAT["risk"], "perTrade": 600000}}
+    s = group_live.GroupLiveSession(mgr, fast_row({}, big))
+    a, b, _ = s.members
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    s._on_candle(b, candle("2999-01-01T10:00:00+00:00", 100.0))
+    assert a.engine.qty * 100 > 590000
+    assert 0 < b.engine.qty * 100 <= 1000000 - a.engine.qty * 100 - a.engine.entry_cost
+    value, free = s.funds()
+    assert abs(value - s.equity()) < 1e-6 and free >= 0
+
+
+def test_the_engines_open_fill_gate_takes_the_backtests_argument(monkeypatch):
+    # the engine asks its gate free_slot(at_open=True) when a pending entry fills at a candle's open (group backtests)
+    mgr, _ = make_manager()
+    s = group_live.GroupLiveSession(mgr, row())
+    assert s.free_slot(at_open=True) is True and s.members[0].engine.gate(at_open=True) is True

@@ -25,6 +25,7 @@ class FakeQuery:
     def select(self, *a, **k): return self
     def gte(self, *a): return self
     def eq(self, col, v): return FakeQuery([r for r in self.rows if r.get(col) == v])
+    def in_(self, col, vs): return FakeQuery([r for r in self.rows if r.get(col) in vs])
     def order(self, *a, **k): return self
     def limit(self, *a): return self
 
@@ -88,6 +89,7 @@ def test_me_says_who_is_admin(client, monkeypatch):
 
 
 def test_set_plan_grants_and_clears(monkeypatch):
+    monkeypatch.setattr(db, "sb", lambda: FakeSB())              # u1 has no subscription
     saved = {}
     monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.update(f) or {"id": uid, **f})
     admin.set_plan("u1", "basic", 30)
@@ -147,11 +149,66 @@ def test_a_plan_given_by_hand_after_a_cancelled_subscription_is_not_paying():
 
 
 def test_set_plan_records_that_it_was_given_by_hand(monkeypatch):
+    monkeypatch.setattr(db, "sb", lambda: FakeSB())              # u1 has no subscription
     saved, store = {}, {}
     monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.update(f) or {"id": uid, **f})
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "update_setting", lambda k, fn, tries=10: store.__setitem__(k, fn(store.get(k)) or store.get(k)) or store.get(k))
     admin.set_plan("u1", "pro", 30)
     assert "plan_source" not in saved and admin.granted() == {"u1"}      # no new profile column needed
     admin.set_plan("u1", "free", None)
     assert admin.granted() == set()
+
+
+def test_owner_ids_and_hand_given_marks_survive_a_write_in_between(monkeypatch):
+    """Two servers writing the shared maps at once: a compare-and-set, so neither change is lost."""
+    from tests.fake_db import FakeSupabase
+    from tests.test_atomic_settings import between
+    monkeypatch.setattr(db, "_client", FakeSupabase())
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "a@x.com,b@x.com")
+    admin.forget_owners()
+    between(monkeypatch, lambda: admin.mark_granted("u2", True))
+    admin.mark_granted("u1", True)
+    assert admin.granted() == {"u1", "u2"}
+    between(monkeypatch, lambda: admin.mark_granted("u2", False))
+    admin.mark_granted("u1", False)
+    assert admin.granted() == set()
+    db.set_setting(admin.OWNERS_KEY, "{}")
+    admin.forget_owners()
+    between(monkeypatch, lambda: db.set_setting(admin.OWNERS_KEY, '{"ob": "b@x.com"}'))
+    admin.remember_owner({"id": "oa", "email": "A@x.com", "_email_verified": True})
+    assert db.json_value(db.get_setting(admin.OWNERS_KEY), {}) == {"oa": "a@x.com", "ob": "b@x.com"}
+    admin.forget_owners()
+
+
+def test_users_read_usage_only_for_the_listed_users(client, monkeypatch):
+    c, _ = client
+    asked = []
+    real = FakeQuery.in_
+    monkeypatch.setattr(FakeQuery, "in_", lambda self, col, vs: asked.append((col, list(vs))) or real(self, col, vs))
+    c.get("/admin/users")
+    assert ("user_id", ["u1", "u2"]) in asked                       # not every event of the month
+
+
+def test_a_user_paying_through_razorpay_keeps_their_plan_until_it_is_cancelled(monkeypatch):
+    rows = {"u2": {"id": "u2", "plan_status": "active", "razorpay_subscription_id": "sub_1"},
+            "u3": {"id": "u3", "plan_status": "cancelled", "razorpay_subscription_id": "sub_2"}}
+    monkeypatch.setattr(db, "sb", lambda: type("S", (), {"table": lambda s, n: FakeQuery(list(rows.values()))})())
+    saved = []
+    monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.append(uid) or {"id": uid, **f})
+    monkeypatch.setattr(admin, "granted", lambda: set())
+    with pytest.raises(admin.HTTPException) as e:
+        admin.set_plan("u2", "pro", 30)
+    assert e.value.status_code == 409 and e.value.detail["message"] == (
+        "This user pays through Razorpay. Cancel their subscription in Razorpay first, then change the plan.")
+    assert saved == []
+    monkeypatch.setattr(admin, "mark_granted", lambda uid, on: None)
+    admin.set_plan("u3", "pro", 30)                                  # the subscription has ended: the plan can change
+    assert saved == ["u3"]
+
+
+def test_stats_count_research_ai_reads_apart_from_builds(monkeypatch):
+    monkeypatch.setattr(db, "sb", lambda: FakeSB())
+    st = admin.stats(main.month_start_iso())
+    assert "ai_reads_month" in st and st["ai_month"] == 1

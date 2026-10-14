@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -451,7 +451,7 @@ export function ExperimentPage() {
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
   if (!e) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
-  return <ExperimentView nb={nb} e={e} />;
+  return <ExperimentView key={e.v} nb={nb} e={e} />;
 }
 
 
@@ -469,7 +469,10 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
       if (r === "saved") notify("Share card saved (and copied, where your browser allows). Post it anywhere.");
     } catch (x) { fail(x); }
   };
+  const linking = useRef(false);
   const makeLink = async () => {
+    if (linking.current) return;
+    linking.current = true;
     try {
       const blob = await renderCard(cardFromExperiment(nb, e), "light");
       const b64 = await dataUrl(blob);
@@ -478,7 +481,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
       track("card shared", { kind: "verdict", channel: "link" });
       const url = `${siteUrl()}/v/${out.token}`;
       try { await navigator.clipboard.writeText(url); notify(`Public link copied: ${url}`); } catch { notify(`Public link: ${url}`); }
-    } catch (x) { fail(x); }
+    } catch (x) { fail(x); } finally { linking.current = false; }
   };
   const copy = async () => { if (!link) return; try { await navigator.clipboard.writeText(link); notify("Link copied."); } catch { notify(link); } };
   const off = async () => {
@@ -488,6 +491,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const nav = useNavigate();
   const [lib, setLib] = useState<string | null>(e.library ?? null);
   const [publishing, setPublishing] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [desc, setDesc] = useState("");
   const [author, setAuthor] = useState(() => { try { return localStorage.getItem("stratlab.libAuthor") ?? ""; } catch { return ""; } });
   const upload = e.instrument?.market === "CSV";
@@ -501,12 +505,14 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
     setPublishing(true);
   };
   const publish = async () => {
+    if (posting) return;
+    setPosting(true);
     try {
       try { localStorage.setItem("stratlab.libAuthor", author.trim()); } catch { /* private mode */ }
       const out = await api<{ id: string }>(`/notebooks/${nb.id}/experiments/${e.v}/library`, { method: "POST", body: { description: desc, author } });
       setLib(out.id); setPublishing(false);
       notify(lib ? "Updated in the library." : "Published to the strategy library.", { label: "View the library", run: () => nav("/library") });
-    } catch (x) { fail(x); }
+    } catch (x) { fail(x); } finally { setPosting(false); }
   };
   const unpublish = async () => {
     setAsk(null);
@@ -536,7 +542,7 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
               )}</Field>
               <Field label="Show it as by" optional wide maxLength={40} value={author} onChange={(x) => setAuthor(x.target.value)} placeholder="A StratLab user" />
               <FormActions>
-                <button type="button" className="btn" onClick={publish}>{lib ? "Update" : "Publish"}</button>
+                <button type="button" className="btn" disabled={posting} onClick={publish}>{lib ? "Update" : "Publish"}</button>
                 <button type="button" className="btn quiet" onClick={() => setPublishing(false)}>Cancel</button>
               </FormActions>
             </FormGrid>

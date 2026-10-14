@@ -118,12 +118,12 @@ def test_first_india_run_reads_back_45_days_and_the_next_overlaps_two(mem):
     runner = R.Runner(lambda: {"in": feed}, sleep=lambda s: None, pause=0)
     out = runner.run("IN", TODAY)
     assert out["ok"] and out["through"] == "2026-10-06" and out["new"] == 2
-    assert 0 <= (feed.days[0] - (TODAY - timedelta(days=45))).days <= 2 and feed.days[-1] == TODAY       # from 45 days back (the next weekday)
-    assert all(d.weekday() < 5 or d == TODAY for d in feed.days)                          # weekdays only (and today)
+    assert feed.days[0] == TODAY - timedelta(days=45) and feed.days[-1] == TODAY          # from 45 days back
+    assert date(2026, 10, 4) in feed.days and date(2026, 10, 3) in feed.days              # weekends are read too
     assert R.state("IN")["through"] == "2026-10-06" and R.state("IN")["days_read"] == len(feed.days)
     feed.days.clear()
     out = runner.run("IN", TODAY + timedelta(days=2))
-    assert feed.days[0] == date(2026, 10, 5) and out["ok"]                                  # read again from two days back (Sunday is skipped)
+    assert feed.days[0] == date(2026, 10, 4) and out["ok"]                                  # read again from two days back
     assert out["new"] == 0
 
 
@@ -474,3 +474,9 @@ def test_admin_can_start_a_read_and_sees_the_job(client, monkeypatch):
         assert job["name"] == "Red flags across companies" and {x["label"] for x in job["run"]} == {"Run India", "Run US"}
     finally:
         main.app.dependency_overrides.pop(admin.admin_profile, None)
+
+
+def test_a_weekend_filing_day_is_read(mem):
+    feed = FakeNSE({date(2026, 10, 3): [flag("ABC", "2026-10-03T18:00")]})        # a Saturday
+    out = R.Runner(lambda: {"in": feed}, sleep=lambda s: None, pause=0).run("IN", TODAY)
+    assert out["ok"] and out["new"] == 1 and date(2026, 10, 3) in feed.days and date(2026, 10, 4) in feed.days

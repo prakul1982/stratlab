@@ -120,8 +120,10 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
                 "Pass if within 1 point of three years ago or better; fail if down more than 4 points.", soft=grp == "cyclical" or realty)
 
         # balance sheet
-        add("Balance sheet", "Debt to equity", _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
-            "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}", "Pass at 0.5 or less; fail above 1.",
+        neg = s.get("debt_equity") is None and s.get("net_worth_negative")
+        add("Balance sheet", "Debt to equity", "watch" if neg else _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
+            "n/a, net worth is negative" if neg else "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}",
+            "Pass at 0.5 or less; fail above 1. Not meaningful when net worth is negative: watch.",
             soft=grp == "utility" or realty)
 
         # cash

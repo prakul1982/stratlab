@@ -188,6 +188,40 @@ def test_results_morning_message_goes_once_to_people_tracking_the_stock(w):
     assert len(sent) == 1 and sent2 == []
 
 
+class Killed(BaseException):
+    """A deploy killing the process mid-run."""
+
+
+def test_morning_run_survives_one_bad_profile_and_resumes_after_a_kill(w, monkeypatch):
+    from app import run_marks
+    watch("u-pro", ("IN", "RELIANCE"))
+    watch("u-free", ("IN", "RELIANCE"))
+    india = FakeIndia([meeting("RELIANCE", TODAY)])
+    sent, got, kills = [], db.get_profile, [1]
+
+    def kill_first(p, subject, text, url):
+        sent.append(p["id"])
+        if kills:
+            kills.pop()
+            raise Killed()
+    job = R.Job(lambda: {"in": india, "us": FakeUS(), "sec": None}, send=kill_first, can_alert=lambda p: True)
+    with pytest.raises(Killed):
+        job.tick(IN_MORNING)
+    again = R.Job(lambda: {"in": india, "us": FakeUS(), "sec": None}, send=kill_first, can_alert=lambda p: True)
+    again.tick(IN_MORNING + timedelta(minutes=5))
+    assert len(sent) == 1                                            # still being worked on: left alone
+    monkeypatch.setattr(run_marks, "STALE", 0)                       # now it counts as unfinished
+    again.tick(IN_MORNING + timedelta(minutes=15))
+    assert sorted(sent) == ["u-free", "u-pro"]                       # the rest, and the first not twice
+
+    first = sent[0]                                                  # the next day: one bad profile skips just them
+    monkeypatch.setattr(db, "get_profile", lambda uid: (_ for _ in ()).throw(RuntimeError("boom")) if uid == first else got(uid))
+    india.meetings.append(meeting("RELIANCE", TODAY + timedelta(days=1)))
+    sent.clear()
+    again.tick(IN_MORNING + timedelta(days=1))
+    assert sent == [x for x in ("u-free", "u-pro") if x != first]
+
+
 def test_people_who_turned_results_messages_off_dont_get_them(w):
     watch("u-pro", ("IN", "RELIANCE"))
     R.set_alerts("u-pro", False)
@@ -308,3 +342,16 @@ def test_admin_refresh(w):
     assert r.status_code == 200, r.text
     assert r.json()["IN"]["rows"] >= 2 and r.json()["US"]["rows"] >= 3
     assert c.post("/admin/results/refresh", headers=headers("pro-token")).status_code == 403
+
+
+def test_us_release_lookback_counts_from_the_us_date(monkeypatch):
+    import app.intel.sec as S
+    seen = []
+    monkeypatch.setattr(S, "documents", lambda subs, days: seen.append(days) or [])
+    monkeypatch.setattr(R, "local_today", lambda region: date(2026, 10, 20) if region == "US" else None)
+
+    class Sec:
+        def cik(self, s): return 1
+        def submissions(self, c, fresh=False): return {}
+    R.us_out(None, Sec(), {"symbol": "AAPL", "date": "2026-09-30"})
+    assert seen == [21]

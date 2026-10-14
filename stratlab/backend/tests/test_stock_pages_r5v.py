@@ -182,6 +182,9 @@ def test_market_caps_read_in_words():
     assert stock_pages.cap_text({"currency": "INR", "market_cap": 770345}) == "₹7.70 lakh crore"
     assert stock_pages.cap_text({"currency": "INR", "market_cap": 20345}) == "₹20,345 crore"
     assert stock_pages.cap_text({"currency": "INR", "market_cap": None}) == "–"
+    assert stock_pages.cap_text({"currency": "USD", "market_cap": 999960}) == "$1.00T"      # the unit follows the rounding
+    assert stock_pages.cap_text({"currency": "USD", "market_cap": 999940}) == "$999.9B"
+    assert stock_pages.cap_text({"currency": "INR", "market_cap": 99999.6}) == "₹1.00 lakh crore"
 
 
 def test_the_page_wears_the_sites_header_and_footer(w):
@@ -195,7 +198,7 @@ def test_the_page_wears_the_sites_header_and_footer(w):
         assert part in t, part
     assert "Market cap (" not in t and "Sign up free" not in t
     # the table opens on the newest years on a phone, with a cue that there are earlier ones
-    assert ".tbl{overflow-x:auto;direction:rtl}" in t and "scroll-cue" in t
+    assert ".tbl{overflow-x:auto;direction:rtl;" in t and "scroll-padding-left:124px" in t and "scroll-cue" in t
     # dark mode: the button's text is the page's own on-ink colour, not white on a light green
     assert "#7CC4A6" not in t
 

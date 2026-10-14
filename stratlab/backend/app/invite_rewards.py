@@ -94,13 +94,22 @@ def _save(uid: str, r: dict):
     db.set_setting(ROW + uid, json.dumps(r))
 
 
-def _credit(key: str, who: dict, days: int, now: datetime) -> dict:
-    """plans.add_free_basic once per key: a retry after a failed save finds the marker and doesn't credit again."""
-    if db.get_setting(key):
-        return plans.free_basic(who["id"])
-    db.set_setting(key, "1")
+def _credit(key: str, who: dict, days: int, now: datetime) -> tuple[dict, bool]:
+    """plans.add_free_basic once per key, and (balance, whether this call credited). The marker is claimed with a
+    compare-and-set, so two containers can't both credit (the lock above is per process): the one that loses, or a retry
+    after a failed save, finds the marker and doesn't credit again."""
+    won = []
+    def claim(cur):
+        won.clear()
+        if cur:
+            return None
+        won.append(1)
+        return "1"
+    db.update_setting(key, claim)
+    if not won:
+        return plans.free_basic(who["id"]), False
     try:
-        return plans.add_free_basic(who, days, now)
+        return plans.add_free_basic(who, days, now), True
     except Exception:
         db.set_setting(key, "")
         raise
@@ -177,11 +186,11 @@ def _referrer(uid: str, r: dict, now: datetime) -> list[tuple]:
     referrer = referrals._profile(r["by"])
     if due in CAPS and referrer:
         days = EXTRA_DAYS if due == "extra" else MONTH_DAYS
-        after = _credit(f"{GRANT}{uid}:referrer", referrer, days, now)
+        after, fresh = _credit(f"{GRANT}{uid}:referrer", referrer, days, now)
         r.update(referrer_months=1, kind=due, referrer_days=days, referrer_at=now.isoformat(timespec="seconds"),
                  referrer_pending=False)
         r.pop("capped", None)
-        return [(referrer, "referrer", after, f"invite_reward:{uid}:referrer", due)]
+        return [(referrer, "referrer", after, f"invite_reward:{uid}:referrer", due)] if fresh else []
     if due == "cap":
         r["capped"] = True
     r["referrer_pending"] = bool(r.get("status") == "given" and r.get("referrer_months") != 1
@@ -308,10 +317,10 @@ def check(uid: str, now: datetime | None = None) -> str:
 
 def _give(uid: str, r: dict, newcomer: dict, now: datetime) -> list[tuple]:
     """The newcomer's month and the referrer's reward when due, under the lock. Returns who to tell."""
-    after = _credit(f"{GRANT}{uid}:newcomer", newcomer, MONTH_DAYS, now)
+    after, fresh = _credit(f"{GRANT}{uid}:newcomer", newcomer, MONTH_DAYS, now)
     r["newcomer_months"] = 1
     r.update(status="given", given_at=now.isoformat(timespec="seconds"))
-    out = [(newcomer, "newcomer", after, f"invite_reward:{uid}:newcomer", "use")]
+    out = [(newcomer, "newcomer", after, f"invite_reward:{uid}:newcomer", "use")] if fresh else []   # the loser tells no one
     out += _referrer(uid, r, now)
     _save(uid, r)
     return out

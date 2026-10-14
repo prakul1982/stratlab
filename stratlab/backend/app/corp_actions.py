@@ -21,7 +21,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import db, leader, results
+from . import db, leader, results, run_marks
 from .intel.net import SourceError, TTLCache
 from .results import REGIONS, TZ, dates_in, local_today, parse_day
 
@@ -618,9 +618,13 @@ def _day(iso: str) -> str:
         return str(iso)
 
 
-def next_trading_day(day: date) -> date:
+def next_trading_day(day: date, region: str = "IN") -> date:
+    """The exchange's next session after `day`: weekends and its holidays skipped."""
+    from .data.calendar import is_trading_day
     d = day + timedelta(days=1)
-    while d.weekday() >= 5:
+    for _ in range(14):
+        if is_trading_day(region, d):
+            break
         d += timedelta(days=1)
     return d
 
@@ -650,7 +654,8 @@ EVE_AT = {"IN": "17:30", "US": "17:00"}
 class Job:
     """Refreshes each region's calendar (twice a day for India), tells the people tracking a company when it
     announces an action, and the evening before an ex-date. Also keeps the histories of tracked and held companies
-    fresh. Every run is marked in the database first, so it happens once."""
+    fresh. Every run is marked in the database (the sending ones per recipient), so it happens once and a run a
+    crash cut short resumes."""
 
     def __init__(self, sources, send=results.send, can_alert=can_alert):
         self.sources, self.send, self.can_alert = sources, send, can_alert
@@ -684,15 +689,29 @@ class Job:
         db.set_setting(f"corpactjob:{name}", mark)
         return local.date()
 
+    def claim(self, name: str, now: datetime, region: str, at: str):
+        """Like due(), for a run that sends: (local day, run marker), or (None, None) when it isn't due, is done or is
+        being worked on. The marker records each recipient, so a run a crash cut short resumes without doubling."""
+        local = now.astimezone(ZoneInfo(TZ[region]))
+        mark = local.strftime("%Y-%m-%d")
+        if local.strftime("%H:%M") < at or self.last.get(name) == mark:
+            return None, None
+        st = run_marks.status(f"corpactjob:{name}", mark)
+        if st == "done":                                    # already ran (before a restart)
+            self.last[name] = mark
+        run = run_marks.claim(f"corpactjob:{name}", mark) if st is None else None
+        return (local.date(), run) if run else (None, None)
+
     def tick(self, now: datetime) -> int:
         sent, ran, who = 0, False, None
         for region in REGIONS:
             for at in REFRESH_AT[region]:
-                day = self.due(f"refresh-{region}-{at}", now, region, at)
+                day, run = self.claim(f"refresh-{region}-{at}", now, region, at)
                 if day:
                     who = who if who is not None else results.trackers()
                     self.refresh(region, who, day)
-                    sent, ran = sent + self.announce(region, day, who), True
+                    sent, ran = sent + self.announce(region, day, who, run), True
+                    run.done()
             if region == "US" and self._universe_due(now):
                 self.start_universe(who if who is not None else results.trackers())
                 ran = True
@@ -701,10 +720,11 @@ class Job:
                 who = who if who is not None else results.trackers()
                 refresh_histories(region, self.sources(), {s for (r, s) in who if r == region}, day)
                 ran = True
-            day = self.due(f"eve-{region}", now, region, EVE_AT[region])
+            day, run = self.claim(f"eve-{region}", now, region, EVE_AT[region])
             if day:
                 who = who if who is not None else results.trackers()
-                sent, ran = sent + self.eve(region, day, who), True
+                sent, ran = sent + self.eve(region, day, who, run), True
+                run.done()
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
             from . import job_status
@@ -747,41 +767,52 @@ class Job:
         self.status["problems"] = out["problems"][:10]
         return out
 
-    def _send_each(self, per_user: dict[str, list[dict]], subject, text, url: str) -> int:
+    def _send_each(self, per_user: dict[str, list[dict]], subject, text, url: str, run) -> int:
         sent = 0
         for uid, rows in per_user.items():
-            profile = db.get_profile(uid)
-            if not profile or not self.can_alert(profile):
+            if run.seen(uid):
                 continue
+            run.beat()
             try:
+                profile = db.get_profile(uid)
+                if not profile or not self.can_alert(profile):
+                    continue
+                run.record(uid)                # before the send: a kill in between drops one, never doubles
                 self.send(profile, subject(rows), text(rows), url)
                 sent += 1
-            except Exception as e:
-                print("corporate actions message failed:", str(e)[:160])
+            except Exception as e:             # one person's failure doesn't stop the rest
+                print("corporate actions message failed:", uid, str(e)[:160])
         return sent
 
-    def announce(self, region: str, day: date, who: dict) -> int:
+    def announce(self, region: str, day: date, who: dict, run) -> int:
         """One message per person for the actions newly announced on their stocks; then the actions are unmarked."""
-        with _lock:
-            cal = load(region)
-            fresh = [r for r in cal["rows"] if r.get("fresh")]
-            if not fresh:
-                return 0
-            for r in cal["rows"]:
-                r.pop("fresh", None)
-            save(region, cal["rows"])
+        fresh = [r for r in load(region)["rows"] if r.get("fresh")]
+        if not fresh:
+            return 0
         per_user: dict[str, list[dict]] = {}
         for r in sorted(fresh, key=lambda r: (r["ex_date"], r["symbol"])):
             if r["ex_date"] < day.isoformat():
                 continue
             for uid in who.get((region, r["symbol"]), []):
                 per_user.setdefault(uid, []).append(r)
-        return self._send_each(per_user, lambda rows: "StratLab: corporate action announced", announce_text,
-                               f"/research/corporate-actions?region={region}")
+        sent = self._send_each(per_user, lambda rows: "StratLab: corporate action announced", announce_text,
+                               f"/research/corporate-actions?region={region}", run)
+        ids = {r["id"] for r in fresh}
+        with _lock:                            # unmarked only once their messages went out, so a crash before still sends them
+            rows = load(region)["rows"]
+            for r in rows:
+                if r["id"] in ids:
+                    r.pop("fresh", None)
+            save(region, rows)
+        return sent
 
-    def eve(self, region: str, day: date, who: dict) -> int:
-        """The evening before an ex-date (Friday for a Monday one): one message per person listing their stocks."""
-        nxt = next_trading_day(day)
+    def eve(self, region: str, day: date, who: dict, run) -> int:
+        """The evening before an ex-date (Friday for a Monday one): one message per person listing their stocks. Only on a
+        trading day: a weekend or holiday evening would tell them again about the same next session."""
+        from .data.calendar import is_trading_day
+        if not is_trading_day(region, day):
+            return 0
+        nxt = next_trading_day(day, region)
         per_user: dict[str, list[dict]] = {}
         for r in between(region, day + timedelta(days=1), nxt):
             for uid in who.get((region, r["symbol"]), []):
@@ -789,7 +820,7 @@ class Job:
         tomorrow = (day + timedelta(days=1)).isoformat()
         return self._send_each(per_user, lambda rows: "StratLab: ex-date tomorrow" if all(r["ex_date"] == tomorrow for r in rows)
                                else "StratLab: ex-dates coming up", lambda rows: eve_text(rows, day),
-                               f"/research/corporate-actions?region={region}")
+                               f"/research/corporate-actions?region={region}", run)
 
 
 # ---------- the pages ----------

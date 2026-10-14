@@ -120,3 +120,19 @@ def test_international_cards_is_an_info_row_not_an_error(monkeypatch):
     r = billing.international_status("rzp_live_x", "secret")
     assert r["enabled"] is None and r["info"] is True
     assert "Account & Settings → International payments" in r["detail"] and "Couldn't" not in r["detail"]
+
+
+def test_subscribe_is_throttled_per_user(monkeypatch):
+    """Each call creates a Razorpay subscription: 5 a minute, 20 a day per user."""
+    made = []
+    try:
+        c = client(monkeypatch, create_subscription=lambda *a: made.append(1) or {"subscription_id": "sub_1"})
+        assert [c.post("/billing/subscribe", json={"plan": "pro"}).status_code for _ in range(6)] == [200] * 5 + [429]
+        r = c.post("/billing/subscribe", json={"plan": "pro"})
+        assert r.json()["detail"]["code"] == "slow_down" and len(made) == 5
+        main._recent.clear()
+        now = main.datetime.now().timestamp()
+        main._recent[("u", "subscribe_day")] = [now - 3600] * 20                 # 20 earlier today
+        assert c.post("/billing/subscribe", json={"plan": "pro"}).status_code == 429 and len(made) == 5
+    finally:
+        main.app.dependency_overrides.clear()

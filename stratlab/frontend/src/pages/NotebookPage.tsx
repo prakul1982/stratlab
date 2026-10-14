@@ -122,6 +122,7 @@ export function NotebookPage() {
   const [days, setDays] = useState("");
   const [label, setLabel] = useState("");
   const [running, setRunning] = useState(false);
+  const starting = useRef(false);     // set before the flush, so a second click can't start another run
   // how long the run has taken so far, said on the button: a group's first run reads every stock's prices and can take a
   // minute or two (R11C-018: over 2 minutes with no sign of progress under "Takes a few seconds")
   const [elapsed, setElapsed] = useState(0);
@@ -208,7 +209,7 @@ export function NotebookPage() {
     ...(st.name !== s.name && st.name && isAutoNotebookName(nb.name, s.name) ? { name: st.name } : {}) });
 
   const run = async () => {
-    if (running) return;
+    if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
     if (!fno && inst?.fno) { plansToast("Indian F&O is on the Pro plan."); return; }
     if (!allIndicators && usesPro(s)) { plansToast("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them."); return; }
@@ -218,12 +219,13 @@ export function NotebookPage() {
       if (!up) { notify("Upload your CSV again: this browser no longer has it."); nav(`/n/${nb.id}/market`); return; }
       Object.assign(body, { bars: up.bars, upload: { name: up.name, currency: up.currency, step: up.step } });
     }
-    await flush();
+    starting.current = true;
     setRunning(true);
     try {
+      await flush();
       const out = await api<{ experiment: Experiment; defaulted?: string | null; instrument?: Instrument | null }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
       trackBacktest(group ? "group" : "notebook");
-      setNb({ ...nb, ...(out.instrument ? { instrument: out.instrument } : {}), experiments: [...(nb.experiments || []), out.experiment] });
+      setNb((cur) => (cur ? { ...cur, ...(out.instrument ? { instrument: out.instrument } : {}), experiments: [...(cur.experiments || []), out.experiment] } : cur));
       setLabel("");
       refreshMe();
       refreshNotebooks();
@@ -234,7 +236,7 @@ export function NotebookPage() {
       const same = e instanceof ApiError && e.code === "unchanged" ? last : undefined;
       if (same) notify(e instanceof Error ? e.message : "Nothing has changed since the last run.", { label: `Open v${same.v}`, run: () => nav(`/n/${nb.id}/e/${same.v}`) });
       else fail(e);
-    } finally { setRunning(false); }
+    } finally { starting.current = false; setRunning(false); }
   };
 
   runRef.current = run;

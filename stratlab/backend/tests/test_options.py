@@ -269,3 +269,104 @@ def test_greeks_and_roll_price_a_currency_option_at_its_own_tick(monkeypatch):
                        legs=[{"side": "sell", "opt": "CE", "strike": 96.0, "qty": 1000, "fill": 0.02}])
     main.options_greeks(req, profile={})
     assert seen[-1][0]["fill"] == 0.015              # not floored to 0.05
+
+
+def test_a_currency_structure_with_a_dead_hedge_does_not_enter():
+    # the sold call is live, the bought hedge has only a stale last price: no entry, none counted
+    s = cds_strategy().model_copy(update={"legs": cds_strategy().legs + [cds_strategy().legs[0].model_copy(update={"side": "buy", "offset": 1})]})
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5},
+         "CDS:USDINR97CE": {"ltp": 0.1, "bid": None, "ask": None, "volume": 0}}
+    e, c = OptionsEngine(s), cds_contracts("2026-09-30")
+    assert e.step(at("09:31"), 96.0, c, q, True) == []
+    assert e.pos is None and e.entries_today == 0 and "97 CE (buy)" in e.note
+
+
+def test_a_leg_that_fails_to_open_closes_the_others_and_the_entry_is_not_counted(monkeypatch):
+    e, c = OptionsEngine(straddle(timing={"cooldown": 30})), contracts()
+    real = e._open_leg
+    monkeypatch.setattr(e, "_open_leg", lambda now, cs, q, opt, *a, **k: opt != "PE" and real(now, cs, q, opt, *a, **k))
+    out = e.step(at("09:31"), 25000, c, quotes(25000), True)
+    assert [(x["side"], x["sym"]) for x in out] == [("sell", "NIFTY25000CE"), ("buy", "NIFTY25000CE")]
+    assert e.pos is None and e.entries_today == 0 and e.cool_until is None
+    assert e.trades[-1]["why"] == "A leg couldn't open"
+
+
+class StubData:
+    kite = None
+
+    def __init__(self):
+        self.loads = 0
+
+    def margin(self, legs):
+        return None
+
+    def expiries(self, exchange, underlying):
+        return ["2026-09-29"]
+
+    def contracts(self, exchange, underlying, expiry):
+        self.loads += 1
+        return contracts()
+
+    def spot_key(self, exchange, underlying, expiry):
+        return "NSE:NIFTY 50"
+
+    def quotes(self, keys):
+        return {"NSE:NIFTY 50": {"ltp": 25000.0}, **quotes(25000)}
+
+    def fresh(self, q, now):
+        return True
+
+
+def opt_row(strategy, state=None):
+    return {"id": "o1", "user_id": "u", "name": "x", "strategy": strategy.model_dump(), "instrument": {"market": "IN"},
+            "started_at": "2026-09-24T09:00:00+05:30", "state": state}
+
+
+def test_a_restarted_session_with_a_position_open_loads_its_contracts():
+    from app.options.session import OptionSession
+    e = OptionsEngine(straddle())
+    e.step(at("09:31"), 25000, contracts(), quotes(25000), True)
+    data = StubData()
+    s = OptionSession(None, opt_row(straddle(), e.dump()), data)
+    assert s.engine.pos and s.contracts is None
+    s.on_timer(at("09:40"))
+    assert data.loads == 1 and s.snapshot()["expiry"] == "2026-09-29" and s.snapshot()["lot"] == 75
+
+
+def test_mcx_and_cds_sessions_are_reported_at_their_own_exchange_close():
+    from app.options.session import OptionSession
+    assert OptionSession(None, opt_row(cds_strategy()), StubData()).market == "CDS"
+    assert OptionSession(None, opt_row(straddle()), StubData()).market == "IN"
+
+
+def test_a_sold_leg_stop_judges_the_middle_not_the_ask_it_exits_at():
+    s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 20})
+    e, c = OptionsEngine(s), contracts()
+    q = {"NFO:NIFTY25000CE": {"bid": 5.0, "ask": 6.0, "ltp": 5.5}}
+    e.step(at("09:31"), 25000, c, q, True)
+    assert e.pos["legs"][0]["entry"] == 5.0
+    assert e.step(at("09:36"), 25000, c, q, True) == [] and e.pos       # same quotes: no stop
+    q = {"NFO:NIFTY25000CE": {"bid": 6.0, "ask": 7.0, "ltp": 6.5}}      # middle 6.5 is +30%
+    out = e.step(at("09:41"), 25000, c, q, True)
+    assert out and out[0]["why"] == "Leg stop" and out[0]["px"] == 7.0  # still exits at the ask
+
+
+class SettleData:
+    """OptionsData.settlement_price's collaborators."""
+    kite = type("K", (), {"by_symbol": lambda self, sym, ex: {"symbol": sym, "token": 1}})()
+
+    def spot_key(self, exchange, name, expiry):
+        return "MCX:CRUDEOILFUT"
+
+    def spot(self, exchange, name, expiry):
+        return 6500.0, {}, "quote"
+
+
+def test_mcx_and_cds_settle_at_the_expiry_days_close_when_checked_long_after_it(monkeypatch):
+    from app.options.data import OptionsData
+    from app import live
+    monkeypatch.setattr(live, "official_close", lambda kite, inst, day: 6400.0 if day == "2026-09-24" else None)
+    d = SettleData()
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-24") == 6400.0       # expiry passed days ago
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-23") is None         # no candle: hold the leg
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2099-01-29") == 6500.0       # at the time: the live price

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
 
-from . import db, referrals
+from . import db, leader, referrals
 from .auth import current_profile
 from .config import settings
 from .kite_service import IST
@@ -61,8 +61,10 @@ def remember_owner(profile: dict) -> None:
     known = _owner_map()
     if known.get(profile["id"]) == email:
         return
-    known = {**known, profile["id"]: email}
-    db.set_setting(OWNERS_KEY, json.dumps(known))
+    def add(raw):                          # compare-and-set: another server's owner id isn't lost
+        d = db.json_value(raw, {})
+        return None if d.get(profile["id"]) == email else json.dumps({**d, profile["id"]: email})
+    known = db.json_value(db.update_setting(OWNERS_KEY, add), {})
     with _owners_lock:
         _owners.update(until=time.monotonic() + OWNERS_TTL, map=known)
 
@@ -78,6 +80,13 @@ def recorded_owner(profile: dict) -> bool:
 def admin_profile(profile=Depends(current_profile)) -> dict:
     if not is_admin(profile):
         raise HTTPException(403, {"code": "not_admin", "message": "This page is only for the site owner."})
+    return profile
+
+
+def leader_admin(profile=Depends(admin_profile)) -> dict:
+    """An admin's Run now, on the container that runs the jobs: anywhere else it would run beside the leader's run."""
+    if not leader.leading():
+        raise HTTPException(409, {"code": "not_leader", "message": "Another server is running the jobs right now; try again in a minute."})
     return profile
 
 
@@ -102,9 +111,13 @@ def _count_since(kind: str, since_iso: str) -> int:
     return r.count or 0
 
 
-def _usage_since(since_iso: str) -> dict[str, Counter]:
-    """usage_events since a time, as {user_id: Counter(kind)}."""
-    rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind").gte("created_at", since_iso))
+def _usage_since(since_iso: str, ids: list[str]) -> dict[str, Counter]:
+    """usage_events since a time for the given users, as {user_id: Counter(kind)} (only their rows are read)."""
+    rows = []
+    for i in range(0, len(ids), 100):
+        part = ids[i:i + 100]
+        rows += _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind").in_("user_id", part)
+                       .in_("kind", ["backtest", "ai"]).gte("created_at", since_iso))
     out: dict[str, Counter] = defaultdict(Counter)
     for r in rows:
         out[r["user_id"]][r["kind"]] += 1
@@ -137,15 +150,16 @@ def granted() -> set:
 
 
 def mark_granted(uid: str, on: bool) -> None:
-    d = db.json_value(db.get_setting(GRANTED_KEY), {})
-    d = d if isinstance(d, dict) else {}
-    if bool(d.get(uid)) == on:
-        return
-    if on:
-        d[uid] = True
-    else:
-        d.pop(uid, None)
-    db.set_setting(GRANTED_KEY, json.dumps(d))
+    def change(raw):                       # compare-and-set: a mark set at the same time isn't lost
+        d = db.json_value(raw, {})
+        if bool(d.get(uid)) == on:
+            return None
+        if on:
+            d[uid] = True
+        else:
+            d.pop(uid, None)
+        return json.dumps(d)
+    db.update_setting(GRANTED_KEY, change)
 
 
 def _paying(r: dict, given: set = frozenset()) -> bool:
@@ -172,7 +186,7 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
         if q:
             query = query.ilike("email", f"%{q.strip()}%")
         rows = query.order("created_at", desc=True).limit(limit).execute().data
-    usage = _usage_since(month_start)
+    usage = _usage_since(month_start, [r["id"] for r in rows])
     try:
         invited = referrals.counts()
     except Exception as e:           # invite counts are extra: the list still shows without them
@@ -212,7 +226,8 @@ def stats(month_start: str) -> dict:
             "signups_today": sum(1 for t in made if t >= today),
             "paying": {p: paying.get(p, 0) for p in ("basic", "pro")},
             "given": {p: plans.get(p, 0) - paying.get(p, 0) for p in ("basic", "pro")},
-            "experiments_month": _count_since("backtest", month_start), "ai_month": _count_since("ai", month_start)}
+            "experiments_month": _count_since("backtest", month_start), "ai_month": _count_since("ai", month_start),
+            "ai_reads_month": _count_since("research_ai", month_start)}
 
 
 def week_stats(since: datetime) -> dict:
@@ -235,6 +250,10 @@ def set_plan(user_id: str, plan: str, days: int | None) -> dict:
     """Grant a plan by hand. Paid plans run for `days` (or with no end); "free" clears it."""
     if plan not in PLANS:
         raise HTTPException(400, {"code": "bad_plan", "message": "Unknown plan."})
+    found = db.sb().table("profiles").select("id,plan_status,razorpay_subscription_id").eq("id", user_id).limit(1).execute().data
+    if found and _paying(found[0], granted()):
+        raise HTTPException(409, {"code": "pays_razorpay", "message": "This user pays through Razorpay. "
+                                  "Cancel their subscription in Razorpay first, then change the plan."})
     if plan == "free":
         fields = {"plan": "free", "plan_status": None, "current_period_end": None, "cancel_at_period_end": False}
     else:

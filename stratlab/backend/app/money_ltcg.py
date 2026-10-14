@@ -41,9 +41,9 @@ def _gain(lot: dict, price: float) -> tuple[float, float, bool]:
 
 def tracker(c: dict, quotes: dict[str, dict], today: str, full: bool = True) -> dict:
     """This year's exemption used and left, open long-term lots with their gain at today's price, and lots turning
-    long-term soon. `c` is tax_lots.compute's output."""
+    long-term soon. `c` is tax_lots.compute's output, with the ETF and gold bond sales as `unit_rows` when there are any."""
     fy = T.fy_of(today)
-    y = T.year(fy, c["realised"], c["intraday"], limit=0)
+    y = T.year(fy, c["realised"], c["intraday"], limit=0, units=c.get("unit_rows"))
     long_rows, soon, unpriced = [], [], 0
     t = date.fromisoformat(today)
     for lot in c["open"]:

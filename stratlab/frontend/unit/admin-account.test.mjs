@@ -146,3 +146,10 @@ test("Invite: plain words, and a paying user is never offered a month of Basic n
   for (const [k, val] of inviteRows(v, "free")) assert.doesNotMatch(`${k} ${val}`, /Use:|Extra:|weeks/);
   assert.equal(Object.fromEntries(inviteRows({ ...v, free_basic_until: "2026-11-01T00:00:00Z" }, "free"))["Free Basic"], "Until 1 Nov 2026");
 });
+
+test("signing out clears the owner's \"View as\" and Overview says AI reads apart from builds", async () => {
+  const { readFileSync } = await import("node:fs");
+  const app = readFileSync(new URL("../src/lib/app.tsx", import.meta.url), "utf8");
+  assert.match(app, /"SIGNED_OUT"\) writeViewAs\(null\)/);
+  assert.match(readFileSync(new URL("../src/pages/admin/OverviewSection.tsx", import.meta.url), "utf8"), /AI reads/);
+});

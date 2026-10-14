@@ -314,8 +314,9 @@ def notify(profile: dict, subject: str, text: str, background: bool = True, url:
     return channels
 
 
-def test(profile: dict) -> tuple[list[str], dict[str, str]]:
-    """Send a test on each channel separately: which worked, and why the others didn't."""
+def test(profile: dict, admin: bool = False) -> tuple[list[str], dict[str, str]]:
+    """Send a test on each channel separately: which worked, and why the others didn't. The mail service's own words
+    are for admins; everyone else gets a plain line."""
     sent, failed = [], {}
     for channel, job in jobs_for(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", "/account", force_email=True):
         try:
@@ -323,5 +324,7 @@ def test(profile: dict) -> tuple[list[str], dict[str, str]]:
             sent.append(channel)
         except Exception as e:
             # Telegram's own words say whether a chat id exists, and any chat id can be typed in: not passed on
-            failed[channel] = "Telegram couldn't deliver to that chat" if channel == "telegram" else str(e)[:200]
+            print(f"alert test on {channel} failed:", str(e)[:200])
+            failed[channel] = ("Telegram couldn't deliver to that chat" if channel == "telegram"
+                               else str(e)[:200] if admin else "The email couldn't be sent right now.")
     return sent, failed

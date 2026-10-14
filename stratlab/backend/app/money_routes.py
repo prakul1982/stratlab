@@ -208,7 +208,8 @@ def advance_view(profile, fy: int | None = None) -> dict:
         rows = [r for r in equity if cut is None or r["sold"] <= cut]
         other = [r for r in units if cut is None or r["sold"] <= cut]
         div = sum(a for d, a in div_events if cut is None or d <= cut)
-        y = tax_lots.with_total(tax_lots.year(fy, rows, c["intraday"], limit=0), i["business"], inputs, div,
+        y = tax_lots.with_total(tax_lots.year(fy, rows, c["intraday"], limit=0, units=instrument_kinds.bucket_rows(other, c["names"])),
+                                i["business"], inputs, div,
                                 instrument_kinds.other_year(fy, other, c["names"]))
         return (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
     full_tax = tax_by(None)
@@ -255,9 +256,10 @@ def long_term(profile=Depends(current_profile)):
     lots turning long-term in the next 30, 60 or 90 days, and the open lots below cost."""
     M = _m()
     i = M.tax_inputs(profile)
-    c, equity, _ = tax_computed(profile, i)
+    c, equity, units = tax_computed(profile, i)
     full = allows(profile["_plan"], "tax_tools")
-    out = ltcg.tracker({**c, "realised": equity, "open": c["equity_open"]}, i["quotes"], i["today"], full)
+    out = ltcg.tracker({**c, "realised": equity, "open": c["equity_open"], "unit_rows": instrument_kinds.bucket_rows(units, c["names"])},
+                       i["quotes"], i["today"], full)
     below = tax_lots.below_cost(c["open"], i["quotes"], i["today"])
     return M.ok({**out, "below_cost": below if full else {**below, "rows": []}, "names": c["names"],
                  "prices": i["live"], "trades": len(i["trades"])})
