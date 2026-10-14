@@ -252,14 +252,13 @@ def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: fl
     """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
     figure on the same inputs, as a fact), and the return and audit facts. `dividends`: the year's dividend income
     the user included (from Tax tools). `units` is the year's gold, silver, international and debt ETFs and gold bonds
-    (instrument_kinds.other_year), taxed under their own heads."""
+    (instrument_kinds.other_year), shown as their own rows; their gains are already in y's buckets (year() with
+    `units`)."""
     biz = business_year(y["fy"], business)
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
-    extra = [{"key": "lt_112", "rate": instrument_kinds.LT_RATE, "taxable": units["lt"]["taxable"], "exempt": 0.0}] if units and units["lt"]["taxable"] else []
-    slab = (units or {}).get("slab", {}).get("taxable") or 0.0
-    total = tax_total.estimate(y["fy"], v, y["buckets"] + extra, y["intraday"]["pnl"], biz["net"], dividends=dividends, slab_gains=slab)
-    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"] + extra,
-                               y["intraday"]["pnl"], biz["net"], dividends=dividends, slab_gains=slab)
+    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], dividends=dividends)
+    other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
+                               y["intraday"]["pnl"], biz["net"], dividends=dividends)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
     return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
@@ -496,9 +495,13 @@ BUCKETS = [("st_new", "Short-term, sold from 23 Jul 2024", IN_STCG), ("st_old", 
            # US and other foreign shares (money_us_tax.py): unlisted in India, so section 112 after 24 months
            ("st_us", "Short-term, foreign shares, at your slab rate", 0.0),
            ("lt_us", "Long-term, foreign shares, 12.5% (section 112)", 0.125),
-           ("lt_usi", "Long-term, foreign shares sold before 23 Jul 2024, 20% with indexation", 0.20)]
-SLAB = {"st_slab", "st_us"}
-ST_ORDER, LT_ORDER = ["st_new", "st_old", "st_slab", "st_us"], ["lt_112i", "lt_usi", "lt_new", "lt_112", "lt_us", "lt_old"]
+           ("lt_usi", "Long-term, foreign shares sold before 23 Jul 2024, 20% with indexation", 0.20),
+           # gold, silver, international and debt ETFs and gold bonds (instrument_kinds.bucket_rows)
+           ("st_unit", "Short-term at your slab rate (ETFs and gold bonds)", 0.0),
+           ("lt_unit", "Long-term, ETFs and gold bonds, 12.5% (section 112)", 0.125)]
+SLAB = {"st_slab", "st_us", "st_unit"}
+ST_ORDER = ["st_new", "st_old", "st_slab", "st_us", "st_unit"]
+LT_ORDER = ["lt_112i", "lt_usi", "lt_new", "lt_112", "lt_us", "lt_unit", "lt_old"]
 
 
 STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)", "st_old": "short-term gains taxed at 15% (sold before 23 Jul 2024)",
@@ -507,7 +510,9 @@ STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)",
               "lt_112i": "long-term fund gains taxed at 20% with indexation",
               "st_us": "short-term gains on foreign shares taxed at your slab rate",
               "lt_us": "long-term gains on foreign shares taxed at 12.5%",
-              "lt_usi": "long-term gains on foreign shares taxed at 20% with indexation"}
+              "lt_usi": "long-term gains on foreign shares taxed at 20% with indexation",
+              "st_unit": "short-term gains on ETFs and gold bonds taxed at your slab rate",
+              "lt_unit": "long-term gains on ETFs and gold bonds taxed at 12.5%"}
 
 
 def _bucket(r: dict) -> str | None:
@@ -529,13 +534,15 @@ def money(v: float) -> str:
     return f"{'-' if neg else ''}₹{s}"
 
 
-def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None = MAX_ROWS) -> dict:
+def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None = MAX_ROWS,
+         units: list[dict] | None = None) -> dict:
     """One financial year: gains and losses by kind and rate, set-off in the order that leaves the least tax (losses
-    against the highest-rate gains first), the exemption, the estimated tax and what is left to carry forward."""
+    against the highest-rate gains first), the exemption, the estimated tax and what is left to carry forward.
+    `units` are the ETF and gold bond sales from instrument_kinds.bucket_rows: set off with the rest, not listed."""
     rows = [r for r in realised if r["fy"] == fy]
     gains = {b: 0.0 for b, _, _ in BUCKETS}
     st_loss = lt_loss = exempt_gain = 0.0
-    for r in rows:
+    for r in rows + [u for u in units or [] if u["fy"] == fy]:
         b = _bucket(r)
         if b is None:
             exempt_gain += r["gain"]
@@ -669,7 +676,8 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
         cur = unmatched.setdefault(u["key"], {"key": u["key"], "qty": 0.0, "first": u["d"]})
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
-    return {"years": [with_total(year(y, equity, c["intraday"]), business, inputs.get(y), (dividends or {}).get(y, 0.0),
+    unit_rows = instrument_kinds.bucket_rows(units, c["names"])
+    return {"years": [with_total(year(y, equity, c["intraday"], units=unit_rows), business, inputs.get(y), (dividends or {}).get(y, 0.0),
                                  instrument_kinds.other_year(y, units, c["names"]))
                       for y in fys], "current_fy": fy_of(today), "kinds": kinds(c["names"]),
             "unit_notes": instrument_kinds.NOTES if any(kinds(c["names"]).values()) else [],

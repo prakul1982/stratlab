@@ -58,9 +58,12 @@ SECTIONS = {
     "st_us": ("Short-term, foreign shares (unlisted in India)", "slab rate"),
     "lt_us": ("Long-term, section 112, foreign shares (unlisted in India), without indexation", "12.5%"),
     "lt_usi": ("Long-term, section 112, foreign shares, with indexation, sold before 23 Jul 2024", "20%"),
+    "st_unit": ("Short-term, ETFs and gold bonds (section 50AA where it applies)", "slab rate"),
+    "lt_unit": ("Long-term, section 112, ETFs and gold bonds, without indexation", "12.5%"),
 }
 F_GROUPS = [("111A at 20%", {"st_new"}), ("111A at 15%", {"st_old"}), ("112A at 12.5%", {"lt_new"}), ("112A at 10%", {"lt_old"}),
-            ("112 at 12.5%", {"lt_112", "lt_us"}), ("112 at 20%", {"lt_112i", "lt_usi"}), ("At slab rates", {"st_slab", "st_us"})]
+            ("112 at 12.5%", {"lt_112", "lt_us", "lt_unit"}), ("112 at 20%", {"lt_112i", "lt_usi"}),
+            ("At slab rates", {"st_slab", "st_us", "st_unit"})]
 
 
 def _m():
@@ -86,8 +89,9 @@ def gather(profile, fy: int) -> dict:
     c, equity, units = money_routes.tax_computed(profile, i)
     mf, usr = c["mf"], c["us"]
     dv_total = money_routes.dividends_for_tax(profile).get(fy, 0.0)
-    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy), dv_total,
-                            instrument_kinds.other_year(fy, units, c["names"]))
+    unit_rows = instrument_kinds.bucket_rows(units, c["names"])
+    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None, units=unit_rows), i["business"], i["income"].get(fy),
+                            dv_total, instrument_kinds.other_year(fy, units, c["names"]))
     # dividends: the year's lines, from the user's files or the estimate (as Tax tools shows them)
     stored, est, ahead, rate = money_routes.dividend_parts(uid, fetch=False)
     dview = divs.view(stored, est, ahead, rate, money_routes.today())
@@ -95,7 +99,7 @@ def gather(profile, fy: int) -> dict:
     src = (dyear or {}).get("source") or "none"
     lines = [r for r in (stored["rows"] if src == "files" else est) if tax_lots.fy_of(r["d"]) == fy and r["cur"] == "INR"]
     saved = adv.load(uid)["years"].get(fy) or adv.clean_year({})
-    return {"fy": fy, "y": y, "rows": [r for r in equity if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
+    return {"fy": fy, "y": y, "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
             "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear,
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
             "us_count": usr["count"], "us_allowed": usr["allowed"], "tds": saved["tds"], "paid": saved["paid"],
@@ -226,7 +230,7 @@ def bucket_sums(rows: list[dict]) -> dict[str, dict]:
 
 def t_cg(g: dict) -> dict:
     y = g["y"]
-    sums = bucket_sums(g["rows"])
+    sums = bucket_sums(g["rows"] + g.get("unit_rows", []))
     after = {b["key"]: b for b in y["buckets"]}
     rows = []
     for key, (label, rate) in SECTIONS.items():
@@ -237,14 +241,10 @@ def t_cg(g: dict) -> dict:
         rows.append([label, rate, s["count"], r2(s["sale"]), r2(s["cost"]), r2(s["exp"]), r2(s["gain"]), r2(b.get("after_setoff")),
                      r2(b.get("exempt")), r2(b.get("taxable"))])
     units = y.get("units") or {}
-    if units:
-        for head, label in (("slab", "ETFs and gold bonds, short-term at slab rates"), ("lt", "ETFs and gold bonds, long-term, section 112 at 12.5%"),
-                            ("exempt", "Gold bonds redeemed with the RBI (exempt)")):
-            part = [r for r in units.get("rows") or [] if r["head"] == head]
-            if part:
-                rows.append([label, "slab rate" if head == "slab" else "12.5%" if head == "lt" else "exempt", len(part),
-                             r2(sum(r["sale"] for r in part)), r2(sum(r["cost"] for r in part)), 0.0, r2(sum(r["gain"] for r in part)),
-                             None, None, r2((units.get(head) or {}).get("taxable")) if head != "exempt" else 0.0])
+    part = [r for r in units.get("rows") or [] if r["head"] == "exempt"]     # the slab and 12.5% heads are in the rows above
+    if part:
+        rows.append(["Gold bonds redeemed with the RBI (exempt)", "exempt", len(part), r2(sum(r["sale"] for r in part)),
+                     r2(sum(r["cost"] for r in part)), 0.0, r2(sum(r["gain"] for r in part)), None, None, 0.0])
     notes = list(y["steps"]) + [f"Short-term loss left to carry forward: {money(y['carry_forward']['st'])}; long-term: "
                                 f"{money(y['carry_forward']['lt'])}. Losses carry forward only when the return is filed by its due date.",
                                 f"Exemption under section 112A used: {money(y['exemption']['used'])} of {money(y['exemption']['limit'])}."]
@@ -255,17 +255,32 @@ def t_cg(g: dict) -> dict:
                   "Expenditure on transfer", "Gain or loss", "After set-off", "Exempt (112A)", "Taxable"], rows, notes)
 
 
+def spread(raw: list[float], total: float) -> list[float]:
+    """A row's after set-off total over the five periods: each period's own gains and losses, a negative period
+    carried into the next, none below zero, and no more than the total by the end (the last period makes it up)."""
+    out, carry, run = [], 0.0, 0.0
+    for x in raw[:-1]:
+        v = max(0.0, min(x + carry, total - run))
+        carry = min(0.0, x + carry)
+        run += v
+        out.append(v)
+    return out + [max(0.0, total - run)]
+
+
 def t_cg_periods(g: dict) -> dict:
-    sums = bucket_sums(g["rows"])
+    sums = bucket_sums(g["rows"] + g.get("unit_rows", []))
+    after = {b["key"]: b for b in g["y"]["buckets"]}
     rows = []
     for label, keys in F_GROUPS:
-        p = [sum(sums[k]["periods"][i] for k in keys if k in sums) for i in range(5)]
-        if any(abs(x) > 0.005 for x in p):
+        raw = [sum(sums[k]["periods"][i] for k in keys if k in sums) for i in range(5)]
+        total = sum(max(0.0, (after.get(k) or {}).get("after_setoff") or 0.0) - ((after.get(k) or {}).get("exempt") or 0.0) for k in keys)
+        if any(abs(x) > 0.005 for x in raw):
+            p = spread(raw, max(0.0, total))
             rows.append([label] + [r2(x) for x in p] + [r2(sum(p))])
     return table("cg_periods", "Schedule CG Table F (gains by when they arose)", ["Rate"] + PERIODS + ["Total"], rows,
-                 ["Each sale's gain or loss in the period it was sold, before set-off and the exemption. The return wants the "
-                  "figures after set-off and takes no negative cells: a negative period is rolled into the next one, so the "
-                  "row still adds up. These periods drive interest under section 234C."])
+                 ["Each row is the gain after set-off (and, for section 112A, after the exemption), spread over the periods by "
+                  "sale date: a negative period is carried into the next one, no cell is below zero, and the last period makes "
+                  "the row add up to that total. These periods drive interest under section 234C."])
 
 
 def t_os(g: dict) -> dict:

@@ -28,7 +28,7 @@ from . import db
 
 KEY = "taxinputs:"                # taxinputs:<uid> = {"2025": {"regime", "other", "salary", "deductions", "age", "resident"}}
 CESS = 0.04
-SPECIAL_SC_CAP = 0.15             # surcharge on the tax on 111A and 112A gains is capped at 15%
+SPECIAL_SC_CAP = 0.15             # surcharge on the tax on 111A and 112A gains, and on dividends (Finance Act 2020), is capped at 15%
 MAX_AMOUNT = 1e11                 # ₹10,000 crore: anything typed above this is a mistake
 FIRST_FY, LAST_FY = 2020, 2026
 
@@ -118,7 +118,7 @@ def basic_exemption(slabs: list[tuple[float, float]]) -> float:
 
 def surcharge_rate(total: float, special: float, cap: float) -> float:
     """The surcharge rate on the slab part: by total income, but the 25% and 37% rates only when income other than
-    111A and 112A gains is itself over ₹2 crore and ₹5 crore."""
+    111A and 112A gains and dividends (`special`) is itself over ₹2 crore and ₹5 crore."""
     for above, rate in SURCHARGE:
         rate = min(rate, cap)
         if total > above and (above < 20000000 or total - special > above):
@@ -184,8 +184,9 @@ def _pct(r: float) -> str:
     return f"{r * 100:g}%"
 
 
-def _base(normal: float, gains: dict[str, float], g_rates: dict[str, float], total: float, r: dict) -> dict:
-    """Slab tax, special-rate tax and the 87A rebate for one set of incomes (before surcharge and cess)."""
+def _base(normal: float, gains: dict[str, float], g_rates: dict[str, float], total: float, r: dict, div: float = 0.0) -> dict:
+    """Slab tax, special-rate tax and the 87A rebate for one set of incomes (before surcharge and cess). `div`: the
+    dividends within `normal`; their slab tax (the top of it) is `div_tax`."""
     gains = dict(gains)
     shortfall = max(0.0, basic_exemption(r["slabs"]) - normal) if r.get("bel_on_gains", True) else 0.0
     used_bel = {}
@@ -196,6 +197,7 @@ def _base(normal: float, gains: dict[str, float], g_rates: dict[str, float], tot
             shortfall -= take
             used_bel[b] = take
     slab = slab_tax(normal, r["slabs"])
+    div_tax = slab - slab_tax(normal - min(div, normal), r["slabs"])
     special = {b: gains[b] * g_rates[b] for b in gains}
     st_tax = sum(v for b, v in special.items() if b.startswith("st"))
     eligible = slab + (st_tax if r["rebate_special"] else 0.0)
@@ -207,15 +209,16 @@ def _base(normal: float, gains: dict[str, float], g_rates: dict[str, float], tot
             rebate = max(0.0, eligible - (total - r["rebate_limit"]))
     rebate_slab = min(rebate, slab)
     return {"slab": slab, "special": special, "special_total": sum(special.values()), "rebate": rebate,
-            "rebate_slab": rebate_slab, "used_bel": used_bel, "gains": gains}
+            "rebate_slab": rebate_slab, "used_bel": used_bel, "gains": gains, "div_tax": div_tax}
 
 
 def _with_surcharge(b: dict, total: float, special_income: float, cap: float) -> tuple[float, float, float]:
-    """(tax before surcharge, surcharge, rate on the slab part)."""
+    """(tax before surcharge, surcharge, rate on the slab part). `special_income` includes dividends."""
     rate = surcharge_rate(total, special_income, cap)
     tax_slab = b["slab"] - b["rebate_slab"]
+    tax_div = min(b.get("div_tax", 0.0), tax_slab)
     tax_special = b["special_total"] - (b["rebate"] - b["rebate_slab"])
-    sc = tax_slab * rate + tax_special * min(rate, SPECIAL_SC_CAP)
+    sc = (tax_slab - tax_div) * rate + (tax_div + tax_special) * min(rate, SPECIAL_SC_CAP)
     return tax_slab + tax_special, sc, rate
 
 
@@ -225,8 +228,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
     speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges;
-    `dividends` the year's dividend income (income from other sources, at slab rates), when the user includes it; `slab_gains` short-term gains taxed at slab rates (gold, debt and other
-    non-equity ETFs and gold bonds, after their own set-off). Returns the steps in plain words, a breakdown table and
+    `dividends` the year's dividend income (income from other sources, at slab rates, surcharge capped at 15%), when the user includes it; `slab_gains` other short-term
+    gains taxed at slab rates, already set off (the report sends ETF and gold bond gains as the st_unit bucket instead). Returns the steps in plain words, a breakdown table and
     the total."""
     v = clean(inputs)
     r = rules(fy, v["regime"], v["age"], v["resident"])
@@ -272,15 +275,19 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         steps.append(f"Standard deduction of {money(std)} on salary ({v['regime']} regime, {money(r['std'])} at most).")
 
     # mutual fund gains taxed at the slab rate (money_mf.py) are slab income, not special-rate gains
-    slab_mf = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] != "st_us")
+    slab_mf = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] not in ("st_us", "st_unit"))
     slab_us = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] == "st_us")
-    slab_cg = slab_mf + slab_us
+    slab_unit = sum(max(0.0, b.get("taxable") or 0.0) for b in buckets if b.get("slab") and b["key"] == "st_unit")
+    slab_cg = slab_mf + slab_us + slab_unit
     buckets = [b for b in buckets if not b.get("slab")]
     if slab_mf:
         steps.append(f"Mutual fund gains taxed at your slab rate (debt funds and the like, after set-off): {money(slab_mf)}, "
                      "added to the income taxed at slab rates.")
     if slab_us:
         steps.append(f"Short-term gains on foreign shares (held 24 months or less), after set-off: {money(slab_us)}, "
+                     "added to the income taxed at slab rates.")
+    if slab_unit:
+        steps.append(f"Short-term gains on ETFs and gold bonds taxed at slab rates, after set-off: {money(slab_unit)}, "
                      "added to the income taxed at slab rates.")
     rest += slab_cg
     g_rates = {b["key"]: b["rate"] for b in buckets}
@@ -344,13 +351,14 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     elif v["deductions"] and not r["deductions"]:
         steps.append("The new regime allows almost no deductions, so the deductions you entered aren't used.")
     normal = max(0.0, normal_gross - ded)
+    div_left = min(div, normal)           # dividends in slab income (surcharge on their tax capped at 15%)
     special_income = sum(taxable.values())
     total = normal + special_income + sum(lt_exempt.values())
     steps.append(f"Income taxed at slab rates: {money(normal)}. Share gains taxed at special rates: {money(special_income)}"
                  + (f" (plus {money(sum(lt_exempt.values()))} of long-term gains within the exemption)" if sum(lt_exempt.values()) > 0.5 else "")
                  + f". Total income: {money(total)}.")
 
-    b = _base(normal, taxable, g_rates, total, r)
+    b = _base(normal, taxable, g_rates, total, r, div_left)
     if not v["resident"] and special_income > 0 and normal < bel:
         steps.append(f"Slab income is below the {money(bel)} basic exemption limit, but as a non-resident the unused part "
                      "can't be used against share gains, so they are taxed in full.")
@@ -371,10 +379,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     elif b["special"] and any(k.startswith("lt") and t > 0 for k, t in b["special"].items()) and r["rebate_limit"] and total <= r["rebate_limit"]:
         steps.append("The 87A rebate can't be used against tax on long-term gains (section 112A).")
 
-    tax, sc, rate = _with_surcharge(b, total, special_income, r["sc_cap"])
+    tax, sc, rate = _with_surcharge(b, total, special_income + div_left, r["sc_cap"])
     relief = 0.0
     for above, _ in SURCHARGE:           # marginal relief: just over a threshold, the extra tax is at most the extra income
-        above_rate = surcharge_rate(above, min(special_income, above), r["sc_cap"])
+        above_rate = surcharge_rate(above, min(special_income + div_left, above), r["sc_cap"])
         if total > above and rate > above_rate:
             cut = total - above
             n2 = max(0.0, normal - cut)
@@ -384,13 +392,15 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                 take = min(g2[k], left)
                 g2[k] -= take
                 left -= take
-            b2 = _base(n2, g2, g_rates, above, r)
-            t2, sc2, _ = _with_surcharge(b2, above, sum(g2.values()), r["sc_cap"])
+            d2 = min(div_left, n2)
+            b2 = _base(n2, g2, g_rates, above, r, d2)
+            t2, sc2, _ = _with_surcharge(b2, above, sum(g2.values()) + d2, r["sc_cap"])
             relief = max(0.0, (tax + sc) - (t2 + sc2 + cut))
             relief = min(relief, sc)
             break
     if sc > 0:
-        steps.append(f"Surcharge: {_pct(rate)} on the slab tax" + (f" and {_pct(min(rate, SPECIAL_SC_CAP))} on the special-rate tax" if b["special_total"] else "")
+        capped = [w for w, on in (("the tax on dividends", rate > SPECIAL_SC_CAP and b["div_tax"] > 0), ("the special-rate tax", b["special_total"])) if on]
+        steps.append(f"Surcharge: {_pct(rate)} on the {'other ' if capped and capped[0] == 'the tax on dividends' else ''}slab tax" + (f" and {_pct(min(rate, SPECIAL_SC_CAP))} on {' and '.join(capped)}" if capped else "")
                      + f" as total income is over {money(next(a for a, _ in SURCHARGE if total > a))}: {money(sc)}"
                      + (f", less marginal relief of {money(relief)}" if relief > 0.5 else "") + ".")
     before_cess = tax + sc - relief
@@ -400,11 +410,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
 
     # each source's share: the special-rate tax is the gains'; the slab tax is split by each source's slab income
     special_after = b["special_total"] - (b["rebate"] - b["rebate_slab"])
-    slab_after = b["slab"] - b["rebate_slab"]
     sc_special = special_after * min(rate, SPECIAL_SC_CAP)
-    sc_slab = slab_after * rate
-    total_sc = sc_special + sc_slab
-    rel_special = relief * (sc_special / total_sc) if total_sc else 0.0
+    rel_special = relief * (sc_special / sc) if sc else 0.0
     cg_tax = (special_after + sc_special - rel_special) * (1 + CESS)
     slab_total = max(0.0, final - cg_tax)
     slab_left = min(slab_cg, rest)        # what's left of the slab-rate fund gains after any business loss set-off
@@ -428,6 +435,8 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         line("Mutual fund gains taxed at slab rates", slab_mf)
     if slab_us:
         line("Foreign share gains taxed at slab rates", slab_us)
+    if slab_unit:
+        line("Non-equity short-term gains at slab rates (ETFs, gold bonds), after set-off", slab_unit)
     if spec_cf:
         line("Intraday loss carried forward (not set off this year)", spec_cf, "note")
     if biz_cf:

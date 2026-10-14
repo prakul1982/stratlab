@@ -33,12 +33,12 @@ export function UnitsCard({ units, notes, name, label }: { units: Units | null |
     <Card label="ETFs and gold bonds">
       <CardHead title="ETFs and gold bonds under other rules" actions={<span className="k-note">{units.count} sale{units.count === 1 ? "" : "s"} in {label}</span>} />
       <p className="k-small">
-        Gold, silver, international and debt ETFs and Sovereign Gold Bonds aren't taxed like shares. Short-term gains taxed at your slab
-        rate: <b>{inr(units.slab.taxable)}</b>{units.slab.losses > 0 && <> (after {inr(units.slab.losses)} of losses)</>}. Long-term gains at 12.5% (section
-        112, no exemption): <b>{inr(units.lt.taxable)}</b>, tax {inr(units.lt.tax)} before cess. Both are in the total tax estimate.
+        Gold, silver, international and debt ETFs and Sovereign Gold Bonds aren't taxed like shares. Short-term at your slab
+        rate: <b>{inr(units.slab.gains)}</b> of gains{units.slab.losses > 0 && <>, {inr(units.slab.losses)} of losses</>}. Long-term at 12.5% (section
+        112, no exemption): <b>{inr(units.lt.gains)}</b> of gains{units.lt.losses > 0 && <>, {inr(units.lt.losses)} of losses</>}. They are set off with your
+        share gains and losses in the year's set-off, which gives the taxable amounts, the total tax estimate and what's carried forward.
         {units.exempt ? <> Exempt (gold bonds redeemed at maturity): {inr(units.exempt)}.</> : null}
         {units.old != null && <> Sold before 23 Jul 2024 under the old long-term rules (indexation), not worked out here: {inr(units.old)}.</>}
-        {(units.carry_forward.st > 0 || units.carry_forward.lt > 0) && <> Left to carry forward: {inr(units.carry_forward.st)} short-term and {inr(units.carry_forward.lt)} long-term loss.</>}
       </p>
       <DataTable label="ETF and gold bond sales" columns={cols} rows={rows} rowKey={(r) => String(r.i)} />
       {units.rows.length > 20 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {units.rows.length}</button>}
