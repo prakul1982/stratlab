@@ -477,7 +477,7 @@ def _whole(q: float) -> bool:
 
 def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | None]:
     """The quantity and average price after a bonus or split. The total cost doesn't change, so the average is the
-    old one divided by the same factor. Whole shares only: a fractional entitlement is paid out in cash by the
+    old cost over the new quantity (the old average divided by the factor, unless a fraction was paid out). Whole shares only: a fractional entitlement is paid out in cash by the
     company, so it isn't added (a fractional holding is scaled exactly)."""
     f = a["factor"]
     if a.get("kind") == "bonus" and a.get("ratio"):
@@ -487,7 +487,7 @@ def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | Non
     else:
         new = qty * f
         new = math.floor(new + 1e-9) if _whole(qty) else new
-    return round(new, 4), (round(avg / f, 4) if avg else None)
+    return round(new, 4), (round(qty * avg / new, 4) if avg and new > 0 else None)
 
 
 def _included(a: dict, item: dict, since: str) -> bool:
