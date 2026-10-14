@@ -1378,9 +1378,7 @@ def delete_notebook(nid: str, profile=Depends(current_profile)):
     row = db.get_strategy(profile["id"], check_id(nid))
     if not row:
         err(404, "not_found", "Notebook not found.")
-    for e in notebook_from_row(row).get("experiments") or []:
-        if e.get("public"):
-            public.unpublish(e["public"])   # its public links go with it
+    library.take_down(notebook_from_row(row).get("experiments") or [])   # its public links and library entries go with it
     db.delete_strategy(profile["id"], check_id(nid))
     return {"deleted": True}
 
@@ -1401,7 +1399,7 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
             err(400, "no_instrument", "Pick an instrument or upload candles first.")
         nb["instrument"] = instrument_summary(first["id"])
         defaulted = first.get("symbol") or first["id"]
-    same = research.unchanged(experiments, strategy, None if group else (nb.get("instrument") or {}).get("id"),
+    same = research.unchanged(experiments, strategy, f"GROUP:{group.get('id') or 'custom'}" if group else (nb.get("instrument") or {}).get("id"),
                               req.days, db.now_iso()) if not req.bars and not req.instrument else None
     if same is not None:
         err(409, "unchanged", f"Nothing has changed since v{same}: the same rules, market and period, already run "
@@ -1414,13 +1412,29 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
             req.instrument = (nb.get("instrument") or {}).get("id")
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
+    rec["req_days"] = req.days
     if not req.label.strip():
         rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
-    experiments = research.slim((experiments + [rec])[-50:])
-    nb["experiments"], nb["summary"] = experiments, research.summary(experiments)
-    save_notebook(profile, nb)
+    # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over
+    cur = get_notebook(profile, nid)
+    full = list(cur.get("experiments") or []) + [rec]
+    public.unpublish_all(full[:-50])          # a dropped experiment's link could not be turned off any more
+    experiments = research.slim(full[-50:])
+    cur["experiments"], cur["summary"] = experiments, research.summary(experiments)
+    if defaulted:
+        cur["instrument"] = nb["instrument"]
+    nb = save_notebook(profile, cur)
     return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"], "defaulted": defaulted,
                "instrument": nb.get("instrument") if defaulted else None})
+
+
+def merge_run(profile, nid: str, version: int, key: str, out: dict):
+    """Keep a check's result on its experiment in the notebook as it is now (it was edited while the check ran)."""
+    cur = get_notebook(profile, nid)
+    exps = cur.get("experiments") or []
+    if any(e["v"] == version for e in exps):
+        cur["experiments"] = [{**e, key: out} if e["v"] == version else e for e in exps]
+        save_notebook(profile, cur)
 
 
 @app.post("/notebooks/{nid}/experiments/{version}/basket")
@@ -1443,8 +1457,7 @@ def run_basket(nid: str, version: int, profile=Depends(current_profile)):
         err(e.status, e.code, e.message)
     db.add_usage(profile["id"], "backtest")
     exp["basket"] = out
-    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
-    save_notebook(profile, nb)
+    merge_run(profile, nid, version, "basket", out)
     return ok({"basket": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
 
 
@@ -1469,8 +1482,7 @@ def run_walkforward(nid: str, version: int, profile=Depends(current_profile)):
     out = walkforward.run(data["bars"], strategy, data["start"], data["lot"], data["kind"])
     db.add_usage(profile["id"], "backtest")
     exp["walkforward"] = out
-    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
-    save_notebook(profile, nb)
+    merge_run(profile, nid, version, "walkforward", out)
     return ok({"walkforward": out, "usage": {"backtests_used": backtests_used(profile), "backtests_limit": limit}})
 
 
@@ -3053,6 +3065,8 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
+    if req.author.strip().casefold() == "stratlab" and not admin.is_admin(profile):
+        err(400, "author_reserved", "That name is StratLab's own. Pick another.")
     old = library.load(exp.get("library") or "")
     e = library.entry(nb, exp, profile["id"], req.author, req.description,
                       entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)

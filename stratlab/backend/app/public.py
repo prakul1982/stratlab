@@ -45,7 +45,7 @@ def snapshot(nb: dict, exp: dict) -> dict:
         "side": (exp.get("strategy") or {}).get("side", "long"), "created_at": exp.get("created_at"),
         "verdict": {k: v.get(k) for k in ("verdict", "headline", "summary", "passed", "total")}
                    | {"checks": [{k: c.get(k) for k in ("id", "title", "status", "detail")} for c in v.get("checks") or []]},
-        "stats": exp.get("stats"),
+        "stats": {k: (exp.get("stats") or {}).get(k) for k in ("ret", "buy_hold_ret", "mdd", "n")},      # no pnl: it would show the capital
         "series": {"t": s.get("t") or [], "equity": s.get("equity") or [], "buy_hold": s.get("buy_hold") or [], "split": s.get("split")},
         "group": None if not g else {"name": g.get("name"), "max_open": g.get("max_open"),
                                       "members": [{k: m.get(k) for k in ("symbol", "trades", "pnl", "win", "buy_hold")} for m in g.get("members") or []]},
@@ -88,6 +88,11 @@ def unpublish(token: str | None):
     if token and TOKEN.match(token):
         db.delete_setting(f"share:{token}")
         db.delete_setting(f"shareimg:{token}")
+
+
+def unpublish_all(experiments: list[dict]):
+    for e in experiments:
+        unpublish(e.get("public"))
 
 
 def load(token: str) -> dict | None:

@@ -1,3 +1,4 @@
+import { checksRun } from "../lib/shareText";
 import { asDate, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
@@ -50,7 +51,7 @@ export function cardFromExperiment(nb: Notebook, e: Experiment): CardData {
     tone: v.verdict === "edge" ? "blue" : v.verdict === "luck" || v.verdict === "no_edge" ? "orange" : "ink",
     reason: v.summary || nb.question || "",
     checks: v.checks.map((c) => ({ title: SHORT[c.id] ?? c.title, status: c.status })),
-    passed: v.passed, total: v.checks.length || v.total,
+    passed: v.passed, total: checksRun(v),
     stats,
     equity: e.series?.equity ?? [], hold: e.series?.buy_hold ?? [], split: e.series?.split ?? null,
   };

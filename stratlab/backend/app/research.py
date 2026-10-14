@@ -266,7 +266,7 @@ def _setup(strategy: dict | None) -> dict:
 
 def unchanged(experiments: list[dict], strategy, inst_id: str | None, days: int, now: str) -> int | None:
     """The version of the last experiment when running again would repeat it exactly: the same rules, instrument and
-    period, run today (on a later day there are newer candles, so that run is a new one). None when something differs."""
+    period (as asked for, not as capped to what the source holds), run today (on a later day there are newer candles, so that run is a new one). None when something differs."""
     if not experiments:
         return None
     last = experiments[-1]
@@ -274,7 +274,7 @@ def unchanged(experiments: list[dict], strategy, inst_id: str | None, days: int,
         return None
     if _setup(last.get("strategy")) != _setup(strategy.model_dump()):
         return None
-    if (last.get("instrument") or {}).get("id") != inst_id or last.get("days") != days:
+    if (last.get("instrument") or {}).get("id") != inst_id or last.get("req_days", last.get("days")) != days:
         return None
     return last.get("v")
 
