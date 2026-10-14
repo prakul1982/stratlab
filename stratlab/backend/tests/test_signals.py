@@ -368,10 +368,10 @@ def test_the_pages_api_plan_gates_and_bad_input(w, monkeypatch):
 
 
 def test_guard_limits_hooks_per_url_not_per_shared_address():
-    one = guard.caller({"path": "/hooks/signal/" + "a" * 43, "headers": [(b"x-real-ip", b"52.89.214.238")]})
-    two = guard.caller({"path": "/hooks/signal/" + "b" * 43, "headers": [(b"x-real-ip", b"52.89.214.238")]})
+    one = guard.caller({"path": "/hooks/signal/" + "a" * 43, "headers": [(b"x-forwarded-for", b"52.89.214.238")]})
+    two = guard.caller({"path": "/hooks/signal/" + "b" * 43, "headers": [(b"x-forwarded-for", b"52.89.214.238")]})
     assert one[0].startswith("h:") and one[0] != two[0]
-    assert guard.caller({"path": "/trade/signals", "headers": [(b"x-real-ip", b"1.2.3.4")]})[0] == "a:1.2.3.4"
+    assert guard.caller({"path": "/trade/signals", "headers": [(b"x-forwarded-for", b"1.2.3.4")]})[0] == "a:1.2.3.4"
 
 
 def test_a_signal_sessions_open_position_follows_a_split_and_a_dividend_once(monkeypatch):

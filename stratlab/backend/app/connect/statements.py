@@ -11,6 +11,7 @@ Used by the inbox (inbound.py) and by the manual upload, so both do exactly the 
 import io
 import math
 import re
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 
 from .. import money_mf, money_networth
@@ -96,6 +97,8 @@ def _period_end(cas) -> str | None:
 def read(data: bytes, passwords: list[str]) -> Parsed:
     cas = open_statement(data, passwords)
     asof = _period_end(cas)
+    if asof and asof > (datetime.now(timezone.utc) + timedelta(days=1)).date().isoformat():     # a day's slack for IST
+        raise StatementError("future_dated", "This statement is dated in the future, so it was ignored.")
     if hasattr(cas, "folios"):
         try:
             got = money_mf.from_cas(cas)

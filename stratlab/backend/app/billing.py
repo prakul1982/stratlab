@@ -214,6 +214,8 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
     sub = client().subscription.fetch(sub_id)
     if (sub.get("notes") or {}).get("user_id") != profile["id"]:
         raise SignatureVerificationError("Subscription belongs to another user.")
+    if _stale(profile, sub) or (profile.get("plan_status") == "refunded" and profile.get("razorpay_subscription_id") == sub_id):
+        raise SignatureVerificationError("This subscription has ended or was refunded.")     # a replayed checkout gets nothing
     activate(profile, sub)
     try:
         payment = client().payment.fetch(payment_id)
