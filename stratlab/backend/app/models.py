@@ -260,6 +260,7 @@ class AlertsReq(BaseModel):
     telegram_chat_id: Optional[str] = Field(None, max_length=40, pattern=r"^$|^-?[0-9]{1,20}$|^@[A-Za-z0-9_]{4,32}$")
     alert_email: Optional[str] = Field(None, max_length=200, pattern=r"^$|^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[A-Za-z]{2,}$")
     daily_report: Optional[bool] = None
+    alert_emails: Optional[bool] = None      # True: turn alert emails back on after an unsubscribe
 
 
 class LibraryReq(BaseModel):

@@ -206,7 +206,7 @@ def refresh(uid: str) -> dict:
         state.update(uid, "kite", status="error", detail="Zerodha didn't answer. Try again in a few minutes.")
         raise KiteConnectError("Zerodha didn't answer. Try again in a few minutes.") from None
     got = sync.sync_holdings(profile, rows_from(holdings, positions), "kite", "Zerodha Kite")
-    state.update(uid, "kite", refreshed_at=state.now(), status="ok", detail=None, count=got["count"])
+    state.update(uid, "kite", refreshed_at=state.now(), status="ok", detail=sync.note(got, "Zerodha"), count=got["count"])
     return {"count": got["count"], "unmatched": got["unmatched_count"], "added": got["added"], "changed": got["changed"]}
 
 
@@ -219,10 +219,11 @@ def status(uid: str, profile: dict) -> dict:
 
 
 def disconnect(uid: str) -> None:
-    """Forget the connection: the stored token is deleted (and ended at Zerodha when it still lives)."""
+    """Forget the connection: the stored token is deleted (and ended at Zerodha when it still lives). A token shared
+    with the app's own data login is only dropped here: ending it at Zerodha would end the data login for everyone."""
     box = state.section(uid, "kite")
     token = vault.unseal(box.get("token"))
-    if token and token_valid(box.get("day")) and configured():
+    if token and token_valid(box.get("day")) and configured() and not box.get("shared"):
         try:
             k = factory(api_key())
             k.invalidate_access_token(token)

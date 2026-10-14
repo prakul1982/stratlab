@@ -94,3 +94,11 @@ def test_no_report_on_a_holiday():
                               send=lambda *x: sent.append(x)) == [] and not sent
     us = single("u1", "SPY dips", "US", [], tick="2026-09-24T20:05:00+00:00")   # 16:05 New York
     assert R.traded_today([us], "US", "2026-09-24") and not R.traded_today([us], "US", "2026-09-25")
+
+
+def test_a_non_indian_session_without_a_currency_reports_in_dollars():
+    s = single("u1", "US paper", "US", [])
+    s.inst = {}
+    assert R.summarise(s, "2026-09-24")["currency"] == "USD"
+    s.market = "IN"
+    assert R.summarise(s, "2026-09-24")["currency"] == "INR"

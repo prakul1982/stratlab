@@ -188,3 +188,24 @@ def test_a_filing_alert_is_not_repeated_when_a_kill_comes_after_the_send(monkeyp
     store["filingalert-day"] = json.dumps({**json.loads(store["filingalert-day"]), "beat": 0})     # quiet long ago
     F.Alerts(FakeFeed(rows), notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True).tick(evening)
     assert len(sent) == 1 and run_marks.status("filingalert-day", evening.date().isoformat()) == "done"
+
+
+def test_one_subscribers_failure_does_not_stop_the_other_filing_alerts(monkeypatch, store):
+    from datetime import timedelta
+    rows = {"ABC": [row("Qualified Institutions Placement", when=recent(40), seq="old")]}
+    for u in ("u1", "u2"):
+        store[f"watchlist:{u}"] = json.dumps({"items": [{"region": "IN", "symbol": "ABC"}]})
+        F.set_alert(u, True)
+    rows["ABC"].append(row("Creation of pledge by promoter", when=recent(0, hour=0), seq="new"))
+    rows["ABC"][-1]["sort_date"] = (F.ist_now() + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+    real = F.db.get_profile
+
+    def flaky(uid):
+        if uid == "u1":
+            raise RuntimeError("database hiccup")
+        return real(uid)
+    monkeypatch.setattr(F.db, "get_profile", flaky)
+    sent = []
+    evening = datetime.now(F.IST).replace(hour=20, minute=45)
+    F.Alerts(FakeFeed(rows), notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True).tick(evening)
+    assert len(sent) == 1

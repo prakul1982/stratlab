@@ -344,3 +344,21 @@ def test_the_brief_keeps_a_headlines_publisher_but_never_an_aggregator_as_one():
     rows = [{"headline": "Sensex ends 879 points higher as IT stocks rally", "url": LONG, "source": "Google News", "at": "2026-10-09T10:00:00+00:00"}]
     got = content.pick_headlines("IN", rows, "0000-00-00", "9999-99-99")
     assert got and got[0]["source"] is None and got[0]["url"] == LONG
+
+
+def test_saving_the_same_address_after_an_unsubscribe_keeps_alert_emails_off(monkeypatch):
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        body = {"alerts_enabled": False, "alert_email": "pro@example.com"}
+        c.put("/me/alerts", headers=headers("pro-token"), json=body)
+        alerts.set_alert_emails("u-pro", False)                                  # "Turn off alert emails"
+        c.put("/me/alerts", headers=headers("pro-token"), json={**body, "daily_report": True})   # any other setting saved
+        assert not alerts.alert_emails_on("u-pro")
+        c.put("/me/alerts", headers=headers("pro-token"), json={**body, "alert_email": "new@example.com"})
+        assert alerts.alert_emails_on("u-pro")                                   # a different address turns them back on
+        alerts.set_alert_emails("u-pro", False)
+        c.put("/me/alerts", headers=headers("pro-token"), json={**body, "alert_email": "new@example.com", "alert_emails": True})
+        assert alerts.alert_emails_on("u-pro")                                   # so does the "turn them back on" button
+    finally:
+        w["close"]()

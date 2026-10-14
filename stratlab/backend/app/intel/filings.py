@@ -1581,27 +1581,30 @@ class Alerts:
                 continue
             if not sub.get("on"):
                 continue
-            profile = db.get_profile(sub["uid"])
-            symbols = followed_symbols(sub["uid"])
-            if not symbols or not self.can_alert(profile):
-                continue
-            seen, newest, new = sub.get("seen") or "", sub.get("seen") or "", []
-            for sym in symbols:
-                try:
-                    items = self.feed.announcements(sym)
-                except SourceError:
+            try:
+                profile = db.get_profile(sub["uid"])
+                symbols = followed_symbols(sub["uid"])
+                if not symbols or not self.can_alert(profile):
                     continue
-                for i in items:
-                    if i["at"] > seen and i["severity"] != "info":
-                        new.append((sym, i))
-                    newest = max(newest, i["at"])
-            run.beat()
-            sub["seen"] = newest               # saved before the alert: a kill in between drops it, never repeats it
-            db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
-            if new:
-                new.sort(key=lambda x: (x[1]["severity"] != "red", x[1]["at"]))
-                self.notify(profile, "StratLab: new filings to look at", alert_text(new), url="/research/filings")
-                sent += 1
+                seen, newest, new = sub.get("seen") or "", sub.get("seen") or "", []
+                for sym in symbols:
+                    try:
+                        items = self.feed.announcements(sym)
+                    except SourceError:
+                        continue
+                    for i in items:
+                        if i["at"] > seen and i["severity"] != "info":
+                            new.append((sym, i))
+                        newest = max(newest, i["at"])
+                run.beat()
+                sub["seen"] = newest               # saved before the alert: a kill in between drops it, never repeats it
+                db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
+                if new:
+                    new.sort(key=lambda x: (x[1]["severity"] != "red", x[1]["at"]))
+                    self.notify(profile, "StratLab: new filings to look at", alert_text(new), url="/research/filings")
+                    sent += 1
+            except Exception as e:                 # one subscriber's failure mustn't stop the rest
+                print("filing alerts:", sub.get("uid"), e)
         run.done()
         self.last_day = day
         self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)

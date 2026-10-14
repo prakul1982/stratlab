@@ -135,10 +135,13 @@ def read(data: bytes, passwords: list[str]) -> Parsed:
 def save_nps(uid: str, figures: dict, asof: str | None, plan: str, how: str = "statement") -> str:
     """The NPS balance as a Net worth entry marked as read from a statement; one the user typed in is left alone."""
     items = money_networth.load(uid)["items"]
-    mine = [i for i in items if i["kind"] == "nps" and i.get("auto") == how]
+    # one read from any statement (the depository's or NPS's own) is the same balance: updated, never added twice
+    mine = [i for i in items if i["kind"] == "nps" and i.get("auto")]
     typed = [i for i in items if i["kind"] == "nps" and not i.get("auto")]
     if typed and not mine:
         return "You already have an NPS entry in Net worth, so the statement's balance was not added."
+    if mine and asof and str(mine[0].get("as_of") or "") > asof:
+        return "Net worth already has a newer NPS balance, so this statement's balance was not added."
     entry = money_networth.clean(money_networth.ItemReq(kind="nps", name="NPS", tier1=figures.get("tier1") or 0,
                                                         tier2=figures.get("tier2") or None, as_of=asof))
     entry["auto"] = how
@@ -165,14 +168,16 @@ def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:
     notes = []
     stale = bool(parsed.asof and box.get("cas_asof") and parsed.asof < box["cas_asof"])
     if parsed.rows and not stale:
-        got = sync.sync_holdings(profile, parsed.rows, "cas", "Statement")
+        got = sync.sync_holdings(profile, parsed.rows, "cas", "Statement", since=parsed.asof)
         out.update(stocks=got["count"], unmatched=got["unmatched_count"])
         notes.append(f"{got['count']} holdings read" + (f", {got['unmatched_count']} not matched to a listed company" if got["unmatched_count"] else "") + ".")
+        if got.get("kept"):
+            notes.append(f"{got['kept']} holdings read from an earlier statement are kept as they were until every line matches.")
         if parsed.asof:
             state.update(uid, "inbox", cas_asof=parsed.asof)
     elif stale:
         notes.append(STALE_NOTE)
-    if parsed.nps:
+    if parsed.nps and not stale:                    # an older statement's balance never replaces a newer one
         why = save_nps(uid, parsed.nps, parsed.asof, profile["_plan"])
         notes.append(why or "NPS balance added to Net worth.")
     if parsed.other:
