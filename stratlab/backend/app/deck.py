@@ -205,7 +205,7 @@ def plan(v: dict) -> tuple[list[Slide], str]:
         s = Slide("Revenue and net profit" if bank else "Sales and net profit", f"{word}, financial years ending {month}")
         s.add("columns", (M, 1.6, 8.7, 5.1), cats=[y["year"].replace("Mar ", "FY") for y in years],
               series=[("Revenue" if bank else "Sales", [y["sales"] / k for y in years], NAVY),
-                      ("Net profit", [(y["profit"] or 0) / k for y in years], TEAL)])
+                      ("Net profit", [None if y["profit"] is None else y["profit"] / k for y in years], TEAL)])
         g = n["growth"]
         s.add("stack", (9.75, 1.75, W_IN - M - 9.75, 4.9), items=[
             ("Sales growth a year, 3 years", _pc(g.get("sales_cagr_3y"), True)), ("Sales growth a year, 5 years", _pc(g.get("sales_cagr_5y"), True)),
@@ -298,16 +298,20 @@ def plan(v: dict) -> tuple[list[Slide], str]:
     if cl.get("checks"):
         c = cl["counts"]
         ind = (cl.get("industry") or {}).get("label")
-        s = Slide("Investor checklist", f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail"
-                  + (f" · rules for: {ind}" if ind and ind != "General" else ""))
-        rows, tint = [], {}
-        for i, x in enumerate(cl["checks"][:14]):
-            label, color = STATE[x["state"]]
-            rows.append([x["group"], x["label"], x["value"], label])
-            tint[(i, 3)] = color
-        s.add("table", (M, 1.6, W_IN - 2 * M, 5.15), head=["Area", "Check", "Value", "Result"], rows=rows, widths=[1.6, 4.2, 3.6, 1.2],
-              colors=tint, numeric=[False, False, False, False])
-        slides.append(s)
+        checks = cl["checks"]
+        per = 10 if len(checks) > 14 else 14        # every row shown, over two slides when there are many
+        pages = [checks[i:i + per] for i in range(0, len(checks), per)]
+        for pg, chunk in enumerate(pages):
+            s = Slide("Investor checklist" + (f" ({pg + 1} of {len(pages)})" if len(pages) > 1 else ""),
+                      f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail" + (f" · rules for: {ind}" if ind and ind != "General" else ""))
+            rows, tint = [], {}
+            for i, x in enumerate(chunk):
+                label, color = STATE[x["state"]]
+                rows.append([x["group"], x["label"], x["value"], label])
+                tint[(i, 3)] = color
+            s.add("table", (M, 1.6, W_IN - 2 * M, 5.15), head=["Area", "Check", "Value", "Result"], rows=rows, widths=[1.6, 4.2, 3.6, 1.2],
+                  colors=tint, numeric=[False, False, False, False])
+            slides.append(s)
 
     # 11. say what's missing, so a deck without document reads isn't mistaken for a complete one
     if not b or not card.get("rows"):
@@ -514,7 +518,7 @@ class PptxRenderer:
         plot.has_data_labels = True
         dl = plot.data_labels
         dl.font.size, dl.font.color.rgb = Pt(8), self.rgb(SLATE)
-        dl.number_format, dl.number_format_is_linked = "#,##0.0;-#,##0.0" if max(abs(v) for _, vs, _ in b["series"] for v in vs) < 100 else "#,##0", False
+        dl.number_format, dl.number_format_is_linked = "#,##0.0;-#,##0.0" if max(abs(v) for _, vs, _ in b["series"] for v in vs if v is not None) < 100 else "#,##0", False
         dl.position = XL_LABEL_POSITION.OUTSIDE_END
         for series, (_, _, color) in zip(ch.series, b["series"]):
             series.format.fill.solid()
@@ -777,10 +781,10 @@ class PdfRenderer:
         ch = VerticalBarChart()
         ch.x, ch.y, ch.width, ch.height = 40, 26, w * 72 - 52, h * 72 - 64
         ch.data = [list(vs) for _, vs, _ in b["series"]]
-        small = max(abs(v) for _, vs, _ in b["series"] for v in vs) < 100
+        small = max(abs(v) for _, vs, _ in b["series"] for v in vs if v is not None) < 100
         self._chart_axes(ch, b["cats"])
         ch.valueAxis.labelTextFormat = (lambda v: f"{v:,.1f}") if small else (lambda v: f"{v:,.0f}")
-        if min(v for _, vs, _ in b["series"] for v in vs) >= 0:
+        if min(v for _, vs, _ in b["series"] for v in vs if v is not None) >= 0:
             ch.valueAxis.valueMin = 0
         ch.groupSpacing, ch.barSpacing = 8, 1
         for i, (_, _, color) in enumerate(b["series"]):

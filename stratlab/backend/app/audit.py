@@ -239,7 +239,7 @@ def _plant(p: dict, n: int) -> bool:
 def _usd_rate(p: dict) -> float | None:
     """Dollars to one unit of the company's reporting currency (US filings), so a market value in dollars can be set
     against its reported profit; 1 for everything reported in the market's own currency."""
-    if p.get("currency") in (None, "USD", "INR"):
+    if p.get("currency") in (None, "USD") or p.get("region") != "US":
         return 1.0
     return (p.get("fx") or {}).get("rate")
 

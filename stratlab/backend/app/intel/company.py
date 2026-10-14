@@ -132,7 +132,7 @@ def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=
     out = dict(s, price=live)
     if s.get("pe") is not None:
         out["pe"] = s["pe"] * k
-    if s.get("book_value"):
+    if s.get("book_value") and s["book_value"] > 0:
         out["pb"] = live / s["book_value"]
     if s.get("div_yield") is not None:
         out["div_yield"] = s["div_yield"] / k

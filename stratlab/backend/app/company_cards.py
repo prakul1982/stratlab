@@ -34,11 +34,13 @@ def card(f: dict, region: str, symbol: str) -> dict:
     ind = stock_pages._dedupe(f.get("industry"))
     growth = (f.get("growth") or {}).get("sales_cagr_3y")
     whole = region == "IN" and stock_pages._whole([f.get("opm")])
+    old = stock_pages.figures_stale(f)       # the newest year's own figures are n/a beside a much later price, as on the page
+    year = lambda text: "–" if old else text      # noqa: E731
     rows = [("Market cap", stock_pages.cap_text(f)), ("P/E", stock_pages._fmt(stock_pages.shown_pe(f))),
-            ("Return on equity", stock_pages._fmt(f.get("roe"), 1, "%")),
-            ("Sales growth a year, 3 years", stock_pages._fmt(growth, 1, "%")),
-            ("EBITDA margin", "–" if f.get("bank") else stock_pages._pct(f.get("opm"), whole)),
-            ("Net margin", stock_pages._fmt(f.get("net_margin"), 1, "%")),
+            ("Return on equity", year(stock_pages._fmt(f.get("roe"), 1, "%"))),
+            ("Sales growth a year, 3 years", year(stock_pages._fmt(growth, 1, "%"))),
+            ("EBITDA margin", "–" if f.get("bank") else year(stock_pages._pct(f.get("opm"), whole))),
+            ("Net margin", year(stock_pages._fmt(f.get("net_margin"), 1, "%"))),
             ("Dividend yield", stock_pages._fmt(stock_pages.shown_yield(f), 2, "%"))]
     low, high = stock_pages._num(f.get("low52")), stock_pages._num(f.get("high52"))
     return {

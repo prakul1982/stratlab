@@ -251,7 +251,7 @@ def settle(out: dict, pairs: list[tuple[dict, str]], ai, name: str, fye: int, to
     lines = []
     for tid, i, end in due:
         g = out["guidance"][i]
-        tgt = f"{g['low']}" + (f" to {g['high']}" if g.get("high") is not None else "") + (" %" if g.get("unit") == "%" else f" {g.get('unit') or ''}")
+        tgt = f"{g['low']}" + (f" to {g['high']}" if g.get("high") is not None else "") + (" %" if g["metric"] in TOLERANCE else " (money, in the company's currency units)" if g["metric"] == "capex" else "")
         lines.append(f"{tid}: {g['what']} | target {tgt} | period {g['period']} (ended {end.isoformat()})")
     try:
         raw = complete(SETTLE, f"COMPANY: {name}\n\nTARGETS:\n" + "\n".join(lines) + "\n\nEXCERPTS:\n" + "\n\n".join(parts),
@@ -330,11 +330,13 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
         res["result"] = "pending" if (today - period_end(per, nums.get("fye") or 3)).days < 75 else "unchecked"
         return res
     res["actual"] = round(a, 1)
-    target = g["low"]
+    # met: within tolerance of the target (both sides), or within the range, its ends widened by the tolerance
+    high = g["high"] if g.get("high") is not None else g["low"]
     if g["metric"] == "capex":
-        ok = a >= target * 0.9
+        lo, hi = g["low"] * 0.9, high * 1.1
     else:
-        ok = a >= target - TOLERANCE[g["metric"]]
+        lo, hi = g["low"] - TOLERANCE[g["metric"]], high + TOLERANCE[g["metric"]]
+    ok = lo <= a <= hi
     res["result"] = "met" if ok else "missed"
     return res
 

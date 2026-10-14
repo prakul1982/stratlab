@@ -151,7 +151,7 @@ def valuation(p: dict, snap: dict, group: str, measure_key: str) -> dict:
     # a loss for the shareholders: the group's profit can be positive while their share of it (EPS) isn't
     loss = (ttm is not None and ttm <= 0) or (eps is not None and eps <= 0)
     mcap = snap.get("market_cap_cr")
-    if mcap and p.get("currency") not in (None, "USD", "INR"):
+    if mcap and p.get("region") == "US" and p.get("currency") not in (None, "USD"):
         # a US-listed company reporting in another currency: its market value (dollars) in that currency, at today's
         # rate, to set against its reported profit, book, debt and EBITDA
         rate = (p.get("fx") or {}).get("rate")

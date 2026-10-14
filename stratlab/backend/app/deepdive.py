@@ -176,7 +176,7 @@ def numbers(p: dict) -> dict:
         "growth": {"sales_cagr_3y": _cagr(sales, 3), "sales_cagr_5y": _cagr(sales, 5),
                    "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5),
                    "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
-        "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None,
+        "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None, "capex_years": len(recent_capex),     # of the last 3
         "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
         "no_revenue": list(p.get("no_revenue") or []),
     }
@@ -201,7 +201,7 @@ def profit_note(p: dict) -> str | None:
     if not ttm or ttm <= 0:
         return None
     # a US-listed company reporting in another currency: its profit in dollars at today's rate, as the P/E has it
-    foreign = p.get("currency") not in (None, "USD", "INR")
+    foreign = p.get("region") == "US" and p.get("currency") not in (None, "USD")   # an INR-reporting ADR too
     fx = (p.get("fx") or {}).get("rate") if foreign else 1.0
     if not fx:
         return None

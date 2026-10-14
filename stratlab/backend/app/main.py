@@ -2177,12 +2177,15 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
-        # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
-        # last reported year's, so the deck's tile agrees with them
-        try:
-            dy = page_dividend_yield("IN", sym, snap.get("price"), datetime.now(IST).date().isoformat(), {"sym": sym, "bse": None})
-        except Exception:
-            dy = None
+    # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
+    # last reported year's, so the deck's tile agrees with them; without that list the source's figure stays, as on the page
+    try:
+        today = datetime.now(IST).date().isoformat()
+        dy = (page_dividend_yield("US", sym, snap.get("price"), today) if us
+              else page_dividend_yield("IN", sym, snap.get("price"), today, {"sym": sym, "bse": None}))
+    except Exception:
+        dy = None
+    if dy is not None:
         snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
