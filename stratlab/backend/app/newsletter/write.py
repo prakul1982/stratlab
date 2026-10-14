@@ -269,6 +269,7 @@ SYSTEM = """You write the two-to-three sentence summary at the top of a market n
 Use ONLY the FACTS given. Restate what happened; never say what to do or what may happen next.
 Never: buy, sell, hold or accumulate; targets or price levels to watch; picks, "hot" names or favourites; outlook,
 forecasts, expectations or predictions; any company or ticker that is not in the facts; numbers not in the facts.
+A scan names its own fixed list of stocks: call it by that name, never "large caps" or the market, and never say a stock was the only one in the market.
 Plain English, no markdown, no emojis. Reply with ONLY this JSON: {"summary": "..."}"""
 
 

@@ -3,6 +3,9 @@
 import { CRORE, inrCompact, minus, currencySymbol } from "./format";
 import type { MetricItem } from "./research";
 
+/** What a price read between a market's close and its settle point is called (the company header, the scans, Pulse). */
+export const SETTLING = "Latest, closing prints still settling";
+
 /** "&focus=..." for a focus that was typed; nothing for none (an empty parameter is no focus). */
 export function focusParam(focus: string): string {
   const f = focus.trim();
@@ -110,12 +113,13 @@ export function newsAge(iso: string | null | undefined, now: Date = new Date()):
 
 /** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
  * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
-export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined, closedDay?: string | null): string {
+export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined, closedDay?: string | null, settling = false): string {
   const extra = [ai?.hot?.length ? "the companies in today's headlines" : "", ai?.flows?.length ? "where money is flowing" : "",
     ai?.themes?.length ? "the themes in play" : ""].filter(Boolean);
   const list = extra.length > 1 ? `${extra.slice(0, -1).join(", ")} and ${extra[extra.length - 1]}` : extra[0];
   // after the close the levels are the close's: "Last close, 9 Oct", never "Live" (R13-007)
-  const lead = closedDay ? `Last close, ${closedDay}: index levels and headlines` : "Live index levels and headlines";
+  const lead = closedDay && settling ? `${SETTLING} · ${closedDay}: index levels and headlines`
+    : closedDay ? `Last close, ${closedDay}: index levels and headlines` : "Live index levels and headlines";
   return `${lead}, with an AI read of the mood${list ? `, ${list}` : ""}.`;
 }
 

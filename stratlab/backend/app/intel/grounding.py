@@ -392,6 +392,13 @@ _DII = r"diis?|domestic\b[^.,;]{0,30}?\b(?:investors?|institutions?|funds?|flows
 _FLOWY = re.compile(rf"\b(?:{_FII}|{_DII}|institutional|flows?|inflows?|outflows?|exodus)\b", re.I)
 _FII_RX, _DII_RX = re.compile(rf"\b(?:{_FII})\b", re.I), re.compile(rf"\b(?:{_DII})\b", re.I)
 _SELL = re.compile(r"\b(sell\w*|sold|outflows?|exodus|withdr\w+|pull\w* out|pulled|exit\w*|dump\w*|offload\w*|net sellers?)\b", re.I)
+
+
+def flow_text(s: str) -> bool:
+    """Whether a text is about the institutions' flows (FIIs, DIIs), the one kind the day's figures can back."""
+    return bool(re.search(rf"\b(?:{_FII}|{_DII})\b", s, re.I))
+
+
 _BUY = re.compile(r"\b(buy\w*|bought|inflows?|net buyers?|purchas\w+|pour\w*|accumulat\w*)\b", re.I)
 _INFER = re.compile(r"\b(revers\w*|stabili[sz]\w*|indicat\w*|suggest\w*|signal\w*|reflect\w*|impl\w*|point(?:s|ing)? to|hint\w*|"
                     r"reveal\w*|interest|appetite|confidence|sentiment)\b", re.I)

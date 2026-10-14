@@ -305,9 +305,12 @@ Give a reason for a move only when a headline reports that reason as having happ
 data, rates) from a headline that previews it or from the moves themselves.
 {{"tone": "3-4 sentences on how the market moved today, citing the live levels, and what the headlines report",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
- "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION"}}],
+ "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION" | ""}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
 "hot" are 4 companies named in today's headlines, with what the news says (not why to buy them). 4 flows, 4 themes.
+A "flow" is a headline's market fact about money, prices or a sector (a price move, a fund or ETF flow, a sector's move);
+leave out a story with no such fact (politics, a company's product news, an interview). "direction" only when the FACTS'
+"institutional_flows" give it, else "".
 No outlook: describe what happened, not what will happen. Tickers are {'NSE symbols' if region == 'IN' else 'US tickers'}.
 {RULES}"""
     facts = {"today": ist_date().isoformat(), **({"focus": focus} if focus else {}), "indices": grounding.market_facts(indices),
@@ -326,7 +329,9 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
         return [{k: str(i.get(k) or "")[:400] for k in keys} for i in (x or []) if isinstance(i, dict)][:n]
     flows = rows(r.get("flows"), ("title", "detail", "direction"))
     for f in flows:
-        f["direction"] = f["direction"].upper() if f["direction"].upper() in ("INFLOW", "OUTFLOW", "ROTATION") else "ROTATION"
+        # inflow or outflow only for a flow in the day's institutional figures, never for a story a headline tells (R16B-003)
+        d = f["direction"].upper()
+        f["direction"] = d if d in ("INFLOW", "OUTFLOW", "ROTATION") and cash_facts and grounding.flow_text(f["title"] + " " + f["detail"]) else ""
     read = {"tone": str(r.get("tone") or "")[:900], "hot": rows(r.get("hot"), ("name", "ticker", "why")),
             "flows": flows, "themes": rows(r.get("themes"), ("theme", "detail", "example"))}
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)

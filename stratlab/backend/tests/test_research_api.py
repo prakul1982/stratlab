@@ -143,7 +143,7 @@ def test_sector_pulse_compare(api):
     p = api.get("/research/pulse?region=IN").json()
     assert p["indices"][0]["name"] == "NIFTY 50" and p["headlines"]
     pa = api.get("/research/pulse/ai?region=IN").json()
-    assert pa["flows"][0]["direction"] == "OUTFLOW" and pa["flows"][1]["direction"] == "ROTATION"
+    assert pa["flows"][0]["direction"] == "" and pa["flows"][1]["direction"] == ""      # no institutional figures behind them (R16B-003)
     cmp = api.get("/research/compare?region=US&a=NVDA&b=AAPL").json()
     assert cmp["a"]["name"] == "NVIDIA Corp" and cmp["ai"]["winner"] == "SPLIT" and cmp["ai"]["b"]["valuation"] is None
     assert "without saying which to own" in api.calls[-1] and "never advice" in api.calls[-1]

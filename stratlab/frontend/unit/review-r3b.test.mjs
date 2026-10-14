@@ -57,7 +57,7 @@ test("one name for the person's own space, and the company lookup and the Invest
 test("library groups say what they hold, and ST S2 is spelled out (R3-014)", async () => {
   const { groupLabel, plainTerms } = await import("../src/lib/plainTerms.ts");
   assert.equal(groupLabel("NIFTY 50 stocks", 5), "5 of the NIFTY 50 stocks");
-  assert.equal(groupLabel("20 US large caps", 5), "5 of the 20 US large caps");
+  assert.equal(groupLabel("20 of the largest US companies", 5), "5 of the 20 of the largest US companies");
   assert.equal(groupLabel("NIFTY 50 stocks", 50), "NIFTY 50 stocks");
   assert.equal(groupLabel("My banks", 3), "My banks · 3 in the test");
   assert.equal(groupLabel("NIFTY 50 stocks", undefined), "NIFTY 50 stocks");

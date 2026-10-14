@@ -48,7 +48,7 @@ test("a library strategy states its checks, buy and hold, its dates and its univ
   await expect(checks.locator(".k-card", { hasText: "Nearby settings" })).toContainText("Not run");
   // the library card for the same strategy: the same label as the page's headline starts with
   await page.goto("/library");
-  const card = page.locator(".k-card", { hasText: entry.name.split(" · ")[0] }).filter({ hasText: "20 US large caps" }).first();
+  const card = page.locator(".k-card", { hasText: entry.name.split(" · ")[0] }).filter({ hasText: "20 of the largest US companies" }).first();
   await expect(card.locator(".badge").first()).toHaveText(v.label);
   // the shortfall against buy and hold leads when there is one (R6V-005, round 7); the label follows it
   expect(v.fact_headline.toLowerCase()).toContain(v.label.toLowerCase());
@@ -60,7 +60,7 @@ test("a library strategy's own HTML carries its own title and address before any
   // the built file the site's host serves at /library/seed-supertrend-us (the local preview server falls back to
   // index.html for every address, so the file is read as built)
   const raw = readFileSync(new URL("../dist/library/seed-supertrend-us/index.html", import.meta.url), "utf8");
-  expect(raw).toMatch(/<title>Supertrend flip · 20 US large caps: rules and verdict · StratLab<\/title>/);
+  expect(raw).toMatch(/<title>Supertrend flip · 20 of the largest US companies: rules and verdict · StratLab<\/title>/);
   expect(raw).toMatch(/<link rel="canonical" href="https:\/\/stratlab\.studio\/library\/seed-supertrend-us">/);
   expect(raw).not.toMatch(/<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
   // and the app on that file still draws the strategy, with the same address in its tags

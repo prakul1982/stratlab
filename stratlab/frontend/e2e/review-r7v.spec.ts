@@ -36,14 +36,14 @@ test("a library strategy's tab title and description lead with its result and na
   expect(desc!.length).toBeLessThanOrEqual(160);
   expect(desc?.startsWith(String(v.fact_headline ?? v.headline).slice(0, 60))).toBe(true);
   expect((desc ?? "").toLowerCase().split("20 us large caps").length - 1, desc ?? "").toBe(1);
-  expect(desc).not.toMatch(/ on 20 US large caps/);
+  expect(desc).not.toMatch(/ on 20 of the largest US companies/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   expect(errors).toEqual([]);
 });
 
 test("the library and policy pages' own HTML has their heading and words, one h1 each, and /faq its FAQ markup (R7V-008)", async () => {
   const pages: [string, string, RegExp][] = [
-    ["library/seed-supertrend-us/index.html", "Supertrend flip · 20 US large caps", /Enters when the price crosses above the Supertrend \(10, 3\)/],
+    ["library/seed-supertrend-us/index.html", "Supertrend flip · 20 of the largest US companies", /Enters when the price crosses above the Supertrend \(10, 3\)/],
     ["library/index.html", "StratLab's own strategies", /verdict it earned/],
     ["terms/index.html", "Terms of service", /No real orders are ever placed/],
     ["privacy/index.html", "Privacy policy", /What StratLab collects and why/],

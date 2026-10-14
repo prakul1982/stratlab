@@ -293,7 +293,7 @@ def test_a_capped_search_says_first_n(w, monkeypatch):
 
 
 # ---------- R6V-005: verdicts say what the checks showed, and the card and the page agree ----------
-SEED = {"id": "seed-supertrend-us", "name": "Supertrend flip · 20 US large caps", "group": {"id": "us_mega", "name": "20 US large caps"},
+SEED = {"id": "seed-supertrend-us", "name": "Supertrend flip · 20 of the largest US companies", "group": {"id": "us_mega", "name": "20 of the largest US companies"},
         "verdict": {"verdict": "edge", "headline": "Likely a real edge.", "passed": 3, "total": 3,
                     "summary": "It made money after costs, kept working on unseen data, and doesn't depend on one exact setting."},
         "stats": {"ret": 55.83, "buy_hold": 172.93, "mdd": -13.7, "trades": 250, "unseen": 19.05}}

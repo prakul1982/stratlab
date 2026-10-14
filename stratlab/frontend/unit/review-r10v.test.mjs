@@ -58,7 +58,7 @@ test("every verdict page's title is about 60 characters and leads with the short
 test("the title is the shortfall, a short strategy name, then StratLab; it gives up words in a fixed order to fit (R10V-005)", () => {
   const { libraryTitle } = seo;
   const fact = "117.1 points behind buy and hold after costs; passed all 3 checks run.";
-  assert.equal(libraryTitle("Supertrend flip · 20 US large caps", fact, "x"), "117.1 points behind buy and hold: Supertrend flip · StratLab");
+  assert.equal(libraryTitle("Supertrend flip · 20 of the largest US companies", fact, "x"), "117.1 points behind buy and hold: Supertrend flip · StratLab");
   // too long as written: "points" becomes "pts"
   assert.equal(libraryTitle("ST S2: Stage 2 + Supertrend · NIFTY 50 stocks", fact, "x"), "117.1 pts behind buy and hold: Stage 2 + Supertrend · StratLab");
   // ...then the name loses its bracket
@@ -67,18 +67,18 @@ test("the title is the shortfall, a short strategy name, then StratLab; it gives
   const long = libraryTitle("An extraordinarily long strategy name that cannot possibly fit in a title", fact, "x");
   assert.ok(long.length <= seo.TITLE_MAX && long.includes("…") && long.endsWith(" · StratLab"), long);
   // no headline: the verdict's label leads, and with neither, the name alone
-  assert.equal(libraryTitle("Supertrend flip · 20 US large caps", null, "Probably luck."), "Probably luck: Supertrend flip · StratLab");
-  assert.equal(libraryTitle("Supertrend flip · 20 US large caps", null, null), "Supertrend flip · StratLab");
+  assert.equal(libraryTitle("Supertrend flip · 20 of the largest US companies", null, "Probably luck."), "Probably luck: Supertrend flip · StratLab");
+  assert.equal(libraryTitle("Supertrend flip · 20 of the largest US companies", null, null), "Supertrend flip · StratLab");
   // a long label (an entry the server gave no fact headline for) is cut to its first clause
-  assert.equal(libraryTitle("Supertrend flip · 20 US large caps", null, "Passed all 3 checks run, and returned more than buy and hold"), "Passed all 3 checks run: Supertrend flip · StratLab");
+  assert.equal(libraryTitle("Supertrend flip · 20 of the largest US companies", null, "Passed all 3 checks run, and returned more than buy and hold"), "Passed all 3 checks run: Supertrend flip · StratLab");
 });
 
 test("the description keeps the headline and the strategy, then what still fits, never more than 160 (R10V-005)", () => {
   const { libraryDescription } = seo;
   const fact = "117.1 points behind buy and hold after costs; passed all 3 checks run.";
-  const d = libraryDescription({ name: "Supertrend flip · 20 US large caps", where: "20 US large caps", group: "20 US large caps", factHeadline: fact, headline: "x", reason: null });
-  assert.ok(d.startsWith(`${fact} Supertrend flip · 20 US large caps.`) && d.length <= 160, d);
-  assert.equal(d.match(/20 US large caps/g).length, 1, d);
+  const d = libraryDescription({ name: "Supertrend flip · 20 of the largest US companies", where: "20 of the largest US companies", group: "20 of the largest US companies", factHeadline: fact, headline: "x", reason: null });
+  assert.ok(d.startsWith(`${fact} Supertrend flip · 20 of the largest US companies.`) && d.length <= 160, d);
+  assert.equal(d.match(/20 of the largest US companies/g).length, 1, d);
   // a reason is kept when it fits, dropped when it doesn't
   const short = libraryDescription({ name: "Golden cross", where: "NIFTY 50 stocks", factHeadline: "4.0 points ahead of buy and hold after costs.", reason: "Few trades." });
   assert.match(short, /^4\.0 points ahead of buy and hold after costs\. Golden cross on NIFTY 50 stocks\. Few trades\. /);

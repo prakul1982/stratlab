@@ -520,7 +520,9 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             sectors = hub.sector_moves(r)
         except Exception:
             sectors = None
-        return A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors, cash=cash)
+        read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors, cash=cash)
+        # the time of the levels the text quotes, so a read kept while the tiles move on says what its numbers are of (R16B-002)
+        return {**read, "levels_at": max((i["at"] for i in indices if i.get("at")), default=None)}
     try:
         # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
@@ -557,10 +559,11 @@ def stale_words(names: list[str]) -> str:
 
 
 def mood_key(indices: list[dict], is_open: bool) -> tuple:
-    """What a mood read is written for: whether the market is open, and each index's session and its move to the nearest
-    half percent. A read is kept while these stay the same and written again when they change (the open, a turn)."""
+    """What a mood read is written for: whether the market is open, whether the close is still settling, and each index's
+    session and its move to the nearest half percent. A read is kept while these stay the same and written again when they
+    change (the open, a turn, the settled close: R16B-002 kept 7,719.51 beside tiles of 7,718.94)."""
     import math
-    return (is_open, tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
+    return (is_open, any(i.get("settling") for i in indices), tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
 
 
 @router.get("/sector")

@@ -894,6 +894,18 @@ def shown_yield(f: dict | None):
     return dy
 
 
+def shown_industry(parts) -> list[str]:
+    """The industry path as a page shows it: a filing category that starts with the division before it, "Services" then
+    "Services-Prepackaged Software", without that word again."""
+    out: list[str] = []
+    for x in _dedupe(parts):
+        for o in out:
+            if x.lower().startswith(o.lower() + "-"):
+                x = x[len(o) + 1:].strip()
+        out.append(x)
+    return out
+
+
 def _dedupe(parts) -> list[str]:
     """An industry path without repeats ("Information Technology · Information Technology" once)."""
     out: list[str] = []
@@ -1675,11 +1687,31 @@ def _find_form(region: str | None, q: str = "") -> str:
             '<button class="btn" type="submit">Find</button></form>')
 
 
+_KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
+               "REIT", "ADR", "II", "III", "IV"}
+
+
+def proper_name(name: str | None) -> str | None:
+    """A company name that arrives in capitals from a filing ("MICROSOFT CORP") in title case ("Microsoft Corp"); acronyms
+    (IBM, AT&T, a short run of consonants like CVS) and a name that already has lower case are left as they are."""
+    if not name or name != name.upper() or not re.search(r"[A-Z]{2}", name):
+        return name
+
+    def word(w: str) -> str:
+        core = re.sub(r"[^A-Za-z&]", "", w)
+        if core in ("LTD", "CO", "INC", "CORP"):
+            return w[:1] + w[1:].lower()
+        if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
+            return w
+        return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
+    return " ".join(word(w) for w in name.split(" "))
+
+
 def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index."""
     site = settings.PUBLIC_SITE_URL
     canonical = site + path(region, symbol)
-    name = (f or {}).get("name") or name or symbol
+    name = proper_name((f or {}).get("name") or name or symbol)
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(symbol, safe='')}"
     deep = app + "/deep"
@@ -1713,7 +1745,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}])
-    ind = " · ".join(_dedupe(f.get("industry")))
+    ind = " · ".join(shown_industry(f.get("industry")))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
@@ -1768,7 +1800,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
            ("Market cap", cap), (pe_label(f), _fmt(pe) if pe is not None else "n/a"),
            (f"Net profit, last 12 months ({unit})", _fmt(f.get("profit_ttm"), 0)),
-           ("Return on equity", year(_pct(f.get("roe"))))]
+           (f"Return on equity{of_year}", year(_pct(f.get("roe"))))]
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
