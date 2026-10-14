@@ -4898,14 +4898,28 @@ def admin_sessions(_=Depends(admin.admin_profile)):
                     "equity": account.get("equity"), "trades": account.get("trades"),
                     # the account's currency, so its money is grouped as that currency writes it (Rs47,53,636, $10,000)
                     "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", s.inst.get("market")) == "IN" else "USD")})
+    if not out:      # live sessions run on the leader only: a follower lists the running rows from the database
+        for r in db.running_sessions():
+            inst = r.get("instrument") or {}
+            try:
+                if r.get("user_id") not in emails:
+                    emails[r.get("user_id")] = (db.get_profile(r.get("user_id")) or {}).get("email")
+            except Exception as e:
+                print("admin sessions:", r.get("id"), e)
+            market = inst.get("market")
+            out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
+                        "market": market, "kind": (r.get("strategy") or {}).get("kind") or "rules", "started_at": r.get("started_at"),
+                        "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
+                        "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
     return out
 
 
 @app.post("/admin/sessions/{sid}/stop")
 def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
-    if sid not in manager.sessions:
+    if sid in manager.sessions:
+        manager.stop(sid, "Stopped by the site owner.")
+    elif not db.stop_running_session(check_id(sid), "Stopped by the site owner."):   # running on the leader: its row says stop
         err(404, "not_found", "That session isn't running.")
-    manager.stop(sid, "Stopped by the site owner.")
     return {"ok": True}
 
 

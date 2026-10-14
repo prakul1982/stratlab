@@ -118,19 +118,26 @@ def all_profiles(page: int = 1000) -> list[dict]:
     return paged(lambda: sb().table("profiles").select("*"), page)
 
 
-def paged(query, page: int = 1000) -> list[dict]:
-    """Every row of a query, read a page at a time by id (the server caps one read); `query()` gives a fresh one
-    selecting at least id."""
-    out, after = [], ""
+def pages(query, page: int = 1000):
+    """A query's rows one page at a time by id (the server caps one read), each page a list, so a caller that only
+    totals or forwards them never holds them all; `query()` gives a fresh one selecting at least id."""
+    after = ""
     while True:
         q = query()
         if after:
             q = q.gt("id", after)
         rows = q.order("id").limit(page).execute().data
-        out += rows
+        if rows:
+            yield rows
         if len(rows) < page:
-            return out
+            return
         after = rows[-1]["id"]
+
+
+def paged(query, page: int = 1000) -> list[dict]:
+    """Every row of a query, read a page at a time by id (the server caps one read); `query()` gives a fresh one
+    selecting at least id."""
+    return [r for rows in pages(query, page) for r in rows]
 
 
 def profile_by_subscription(sub_id: str) -> dict | None:
@@ -194,6 +201,19 @@ def create_session(row: dict) -> dict:
 
 def update_session(sid: str, **fields) -> None:
     sb().table("live_sessions").update(fields).eq("id", sid).execute()
+
+
+def stop_running_session(sid: str, reason: str) -> bool:
+    """Mark a running session's row stopped (the leader, which runs it, follows the database); False when it isn't running."""
+    rows = (sb().table("live_sessions").update({"status": "stopped", "stopped_at": now_iso(), "stop_reason": reason})
+            .eq("id", sid).eq("status", "running").execute().data)
+    return bool(rows)
+
+
+def stop_user_sessions(user_id: str, reason: str) -> None:
+    """Mark every running session of a user's stopped, wherever it runs."""
+    (sb().table("live_sessions").update({"status": "stopped", "stopped_at": now_iso(), "stop_reason": reason}, returning="minimal")
+     .eq("user_id", user_id).eq("status", "running").execute())
 
 
 def running_sessions() -> list[dict]:
