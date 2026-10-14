@@ -200,7 +200,8 @@ def test_every_index_and_sector_has_its_own_line():
         assert sum(1 for x, y in zip(la, lb) if abs(x - y) > 0.05) >= 20, (a, b)
         # nor the same change on the day (at the close: mid-session both broad indices have only moved a few hours on
         # NIFTY's shared wave, so the two changes can round alike for a while, which says nothing about the lines)
-        assert round(P.last(a, end) / P.prev(a, end), 4) != round(P.last(b, end) / P.prev(b, end), 4), (a, b)
+        # to 6 places: two near-equal changes can round alike at 4 on some days (14 Oct 2026: 1.00127 and 1.00130)
+        assert round(P.last(a, end) / P.prev(a, end), 6) != round(P.last(b, end) / P.prev(b, end), 6), (a, b)
     assert statistics.correlation(line("NIFTY 50"), line("SENSEX")) > 0.9                     # the two Indian indices still go together
     from app import rotation
     names = sorted({x for g in rotation.SECTORS.values() for v in (g.values() if isinstance(g, dict) else [g])
