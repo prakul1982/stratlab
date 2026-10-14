@@ -133,10 +133,36 @@ def test_fifo_across_lots_and_charges():
 
 def test_intraday_is_apart_and_only_the_overlap():
     c = T.compute([b("2024-09-02", 30, 100), s("2024-09-02", 20, 105), s("2024-12-02", 10, 90)], today=TODAY)
-    assert c["intraday"] == [{"key": "A", "d": "2024-09-02", "fy": 2024, "qty": 20, "buy": 2000, "sell": 2100, "pnl": 100}]
+    assert c["intraday"] == [{"key": "A", "d": "2024-09-02", "fy": 2024, "qty": 20, "buy": 2000, "sell": 2099.475, "pnl": pytest.approx(99.475),
+                               "stt": 0.525, "stt_est": True}]            # no STT in the trades: 0.025% of 2100, estimated
     assert [(x["qty"], x["gain"]) for x in c["realised"]] == [(10, -100)]                # the rest was delivery
     y = T.year(2024, c["realised"], c["intraday"])
-    assert y["intraday"]["pnl"] == 100 and y["stcg"]["losses"] == 100                   # not mixed into capital gains
+    assert y["intraday"]["pnl"] == 99.47 and y["stcg"]["losses"] == 100                   # not mixed into capital gains
+
+
+def test_intraday_deducts_the_stt_in_the_file_for_the_matched_quantity_only():
+    c = T.compute([b("2024-09-02", 30, 100, stt=0), s("2024-09-02", 20, 105, stt=4), s("2024-09-02", 10, 105, stt=2)], today=TODAY)
+    [i] = c["intraday"]
+    assert (i["qty"], i["stt"], i["stt_est"], i["sell"], i["pnl"]) == (30, 6, False, 3144, 144)
+    c = T.compute([b("2024-09-02", 20, 100), s("2024-09-02", 30, 105, stt=6), s("2024-12-02", 5, 90)], today=TODAY)
+    [i] = c["intraday"]
+    assert (i["qty"], i["stt"], i["stt_est"]) == (20, 4, False)                          # 20 of the 30 sold
+    assert T.year(2024, c["realised"], c["intraday"])["intraday"]["stt_estimated"] is False
+
+
+def test_delivery_gains_never_deduct_stt():
+    base = [b("2023-01-02", 10, 100), s("2024-06-01", 10, 120)]
+    with_stt = [dict(t, stt=50) for t in base]
+    assert realised(with_stt) == realised(base) and realised(base)[0]["gain"] == 200
+    assert T.compute(with_stt, today=TODAY)["intraday"] == []
+
+
+def test_a_mixed_day_takes_stt_off_the_intraday_part_only():
+    c = T.compute([b("2023-01-02", 10, 100), b("2024-09-02", 5, 100, stt=0), s("2024-09-02", 15, 110, stt=3.3)], today=TODAY)
+    [i] = c["intraday"]
+    assert (i["qty"], round(i["stt"], 6), i["pnl"]) == (5, 1.1, pytest.approx(48.9))               # 5 of the 15 sold
+    [r] = c["realised"]
+    assert r["qty"] == 10 and r["gain"] == 100 and r["sale"] == 1100                     # delivery part: no STT off
 
 
 def test_a_sale_with_no_buy_in_the_files():
@@ -253,8 +279,9 @@ def test_the_sample_files_are_what_the_maker_writes(tmp_path, monkeypatch):
 def test_charges_without_stt_and_values_without_prices():
     angel = hf.parse_trades((FIX / "angel_one_tradebook.xlsx").read_bytes())["trades"]
     assert angel[0]["charges"] == 27.5                         # 52.30 in all less 24.80 STT
+    assert angel[0]["stt"] == 24.8                             # kept apart, for intraday income
     icici = hf.parse_trades((FIX / "icici_direct_tradebook.csv").read_bytes())["trades"]
-    assert icici[0]["charges"] == 42.7 and icici[0]["isin"] == "INE062A01020"
+    assert icici[0]["charges"] == 42.7 and "stt" in icici[0] and icici[0]["isin"] == "INE062A01020"
     groww = hf.parse_trades((FIX / "groww_order_history.xlsx").read_bytes())["trades"]
     assert groww[0]["price"] == 410.2 and groww[0]["t"] == "10:15 AM"
     assert not any(t["symbol"] == "TATASTEEL" and t["side"] == "S" for t in groww)   # the cancelled order
@@ -305,7 +332,7 @@ def test_every_broker_combined_into_one_report(w):
     rep = c.get("/tax", headers=PRO).json()
     assert rep["trades"] == 27 and len(rep["files"]) == 8 and rep["disclaimer"].startswith("An estimate")
     y = next(y for y in rep["years"] if y["fy"] == 2024)
-    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36300.0, "pnl": 300.0, "turnover": 300.0}       # INFY bought and sold the same day
+    assert y["intraday"] == {"count": 1, "buy": 36000.0, "sell": 36290.93, "pnl": 290.93, "turnover": 290.93, "stt": 9.08, "stt_estimated": True}       # INFY bought and sold the same day
     rel = [r for r in y["rows"] if r["key"] == "RELIANCE"]
     assert [(r["qty"], r["term"], r["rate"]) for r in rel] == [(8, "LT", 0.10), (2, "LT", 0.125), (5, "LT", 0.125)]
     wipro = next(r for r in y["rows"] if r["key"] == "WIPRO")
