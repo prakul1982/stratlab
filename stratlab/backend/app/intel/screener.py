@@ -282,6 +282,8 @@ def summary(p: dict) -> dict:
         # a change from a loss isn't a growth rate: none then
         "profit_yoy": ((p_now / p_prev - 1) * 100) if p_now is not None and p_prev is not None and p_prev > 0 else None,
         "debt_cr": borrow_now,
+        # the balance sheet column the debt is from (a half-year column can be newer than the last annual one)
+        "debt_as_of": (str(bal["cols"][-1]).strip() or None) if borrow_now is not None and (bal or {}).get("cols") else None,
         "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth else None,
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
     }

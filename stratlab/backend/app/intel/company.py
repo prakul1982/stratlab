@@ -98,10 +98,12 @@ def inr(v: float) -> str:
     return ("-" if v < 0 else "") + (head + "," + tail if head else tail)
 
 
-def _item(label, value, unit="x"):
+def _item(label, value, unit="x", note=None):
     """One Key numbers figure. A percentage the source gives in whole numbers ("-12%": its compounded growth rates
     and price returns) says so with `dp` 0, so it is never shown as a precise "-12.0%"."""
     out = {"label": label, "value": num(value), "unit": unit}
+    if note:
+        out["note"] = note
     if unit in ("%", "%±") and isinstance(value, str) and re.fullmatch(r"\s*[-+−]?\d+\s*%?\s*", value):
         out["dp"] = 0
     return out
@@ -884,7 +886,7 @@ class Research:
                 ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
                                          _item("Net margin", s.get("net_margin"), "%"),
                                          _item("EBITDA margin", None if lender else s.get("opm"), "%"),
-                                         _item("Debt", s.get("debt_cr"), "cr"), _item("Debt / equity", None if lender else s.get("debt_equity"))]),
+                                         _item("Debt", s.get("debt_cr"), "cr", f"as of {s['debt_as_of']}" if s.get("debt_as_of") else None), _item("Debt / equity", None if lender else s.get("debt_equity"))]),
                 ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
                                   _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
                 ("Profit growth", [_item("Latest YoY", s.get("profit_yoy"), "%±"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
