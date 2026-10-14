@@ -4,7 +4,9 @@ import { candleSpan, money, price, signCls, when } from "../lib/format";
  * re-centre, a stop) under one line with their P&L added up, each order a row: side, contract, quantity × price. */
 
 export type PaperOrder = { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number | null;
-  slices?: number; strike?: number; opt?: "CE" | "PE"; pick?: string };
+  slices?: number; strike?: number; opt?: "CE" | "PE"; pick?: string;
+  /** "corp": a bonus, split or dividend applied to the open position on its ex-date, a line in the log and not an order */
+  kind?: "corp" | "skip" };
 
 /** The orders a rule sends on a closed candle: they fill at the candle's close, and carry the candle's start as their time. */
 const CANDLE_ORDER = /^(Entry rule|Short entry|Exit rule|Stop loss|Trailing stop|Target|Time exit|Square-off|Daily loss cap)$/;
@@ -25,14 +27,14 @@ export function OrderList({ events, cur, tz, newest = false, tf, close }: { even
       <div key={g.key} className="order-group">
         <div className="order-head small"><span><b>{g.why}</b> <span className="muted">· {orderWhen(g.t, g.why, tz, tf, close)}</span></span>
           {g.pnl != null && <span className={`order-num ${signCls(g.pnl)}`}>{money(g.pnl, cur)}</span>}</div>
-        <ul className="orders order-rows">{g.rows.map((e, i) => (
+        {g.rows[0].kind !== "corp" && <ul className="orders order-rows">{g.rows.map((e, i) => (
           <li key={i} title={e.slices && e.slices > 1 ? `Sent in ${e.slices} slices (the exchange's freeze limit)` : undefined}>
             <span className={`side-chip ${e.side}`} aria-label={e.side === "buy" ? "Buy" : "Sell"} role="img">{e.side === "buy" ? "B" : "S"}</span>
             <span className="order-sym">{contract(e)}</span>
             <span className="order-num small muted">{e.qty.toLocaleString("en-IN", { maximumFractionDigits: 4 })} × {price(e.px, cur)}</span>
             {e.pick && <span className="order-pick tiny muted" data-testid="order-pick">{e.pick}</span>}
           </li>
-        ))}</ul>
+        ))}</ul>}
       </div>
     ))}</div>
   );

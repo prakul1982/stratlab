@@ -171,7 +171,9 @@ export interface Offer {
   free_now: Record<string, number | null>; free_trial_days: number | null;
 }
 
-export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number }
+export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: number; why: string; pnl?: number;
+  /** "corp": a bonus, split or dividend applied on its ex-date (a log line: no side, quantity or price) */
+  kind?: "corp" }
 export interface LiveOrder { side: "buy" | "sell"; qty: number; price: number; reason: string | null; pnl: number | null; ts: string }
 export interface LiveSnapshot {
   id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
