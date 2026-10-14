@@ -293,7 +293,8 @@ def lead():
     if _jobs_started:            # leading again after a lapse: the jobs are running; the live loop re-attaches the sessions
         return
     _jobs_started = True
-    start_jobs()
+    # on its own thread: resuming sessions reads history and can take a while; the lease thread must keep renewing
+    threading.Thread(target=start_jobs, daemon=True, name="start-jobs").start()
 
 
 def follow():
