@@ -83,6 +83,41 @@ def test_other_stocks_to_1530_and_derivatives_to_1540():
     assert closed[-1]["c"] == 102                                 # the 15:30-15:40 candle, cut at the close
 
 
+def test_late_and_stale_ticks_make_no_candle():
+    b = CandleBuilder("5m", "cash")
+    out = []
+    for hm, s, px in (("10:00", 10, 100), ("10:05", 1, 101), ("10:04", 59, 99), ("10:05", 30, 102)):
+        out += b.on_tick(px, at(AFTER, hm, s), None)
+    assert [c["t"][11:16] for c in out] == ["10:00"] and out[0]["c"] == 100      # the late 10:04:59 tick is dropped
+    assert b.cur["o"] == 101 and b.cur["c"] == 102 and b.cur["l"] == 101          # the 10:05 candle stays whole
+    # the timer closed 10:05 on the clock; a tick that lags behind it can't open it again
+    [c] = b.flush(at(AFTER, "10:10"))
+    assert c["t"][11:16] == "10:05" and b.on_tick(98, at(AFTER, "10:09", 58), None) == [] and b.cur is None
+    # yesterday's close sent as a snapshot on subscribe: before the newest closed candle, so dropped
+    b = CandleBuilder("5m", "fo")
+    b.resume({"t": f"{AFTER}T09:15:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0})
+    assert b.on_tick(100, at("2026-10-02", "15:32"), None) == [] and b.cur is None
+    assert b.on_tick(100, at(AFTER, "09:20", 5), None) == [] and b.cur["start"] == at(AFTER, "09:20")
+
+
+def test_a_restart_mid_candle_keeps_the_candle_so_far():
+    b = CandleBuilder("5m", "cash")
+    b.resume({"t": f"{AFTER}T09:55:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0},
+             {"t": f"{AFTER}T10:00:00+05:30", "o": 100, "h": 160, "l": 99, "c": 150, "v": 700})
+    b.on_tick(152, at(AFTER, "10:03", 30), 10000)
+    b.on_tick(149, at(AFTER, "10:04", 50), 10050)
+    [c] = b.flush(at(AFTER, "10:05"))
+    assert (c["o"], c["h"], c["l"], c["c"], c["v"]) == (100, 160, 99, 149, 750)
+    # the next candle counts from the last tick before it, so the trade that printed its first tick is in it
+    b.on_tick(150, at(AFTER, "10:05", 3), 10080)
+    assert b.cur["v"] == 30
+    # a forming candle that doesn't follow the newest closed one is not taken
+    b = CandleBuilder("5m", "cash")
+    b.resume({"t": f"{AFTER}T10:00:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0},
+             {"t": f"{AFTER}T10:00:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0})
+    assert b.cur is None
+
+
 def test_daily_candle_waits_for_the_auction_close():
     calls = []
 
@@ -232,3 +267,26 @@ def test_rules_register_lists_the_closing_auction():
     row = next(r for r in rules.registry() if r["id"] == "closing_auction")
     assert row["since"] == "2026-08-03" and "15:15-15:35" in row["value"] and "15:40" in row["value"]
     assert "2765/2026" in row["source"] and "74466" in row["source"]
+
+
+# ---------- a US half day: the session closes at 13:00 ----------
+def test_an_early_close_squares_off_at_the_last_candle_and_ends_manual_fills():
+    from types import SimpleNamespace
+    from app.live import LiveSession, day_close_minutes
+    ny = ZoneInfo("America/New_York")
+    s = Strategy(tf="5m", entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 0}}],
+                 risk={"capital": 100000, "riskPct": 1, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0},
+                 session={"squareoff": "15:55"})
+    bars = [{"t": f"2026-11-27T12:{m:02d}:00-05:00", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1} for m in (45, 50, 55)]
+    for close, held in ((None, True), (day_close_minutes("US"), False)):
+        e = Engine(s, 1)
+        e.next_open, e.day_close = False, close
+        e.step(bars, Ctx(bars, intraday=True), 1)                 # enters on the candle closing at 12:55
+        assert e.qty > 0
+        e.step(bars, Ctx(bars, intraday=True), 2)                 # the day's last candle, closing at 13:00
+        assert (e.qty > 0) is held
+    assert e.trades[-1]["why"] == "Square-off" and e.trades[-1]["exit_t"].startswith("2026-11-27T12:55")
+    assert day_close_minutes("US")("2026-11-25") == 16 * 60       # an ordinary day keeps the strategy's 15:55
+    sess = SimpleNamespace(market="US", last_tick_at=datetime(2026, 11, 27, 12, 58, tzinfo=ny).isoformat())
+    assert LiveSession.price_problem(sess, datetime(2026, 11, 27, 12, 59, tzinfo=ny)) is None
+    assert "closed" in LiveSession.price_problem(sess, datetime(2026, 11, 27, 13, 30, tzinfo=ny))

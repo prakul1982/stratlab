@@ -318,6 +318,10 @@ async def lifespan(app: FastAPI):
     holders_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
+    try:
+        manager.persist(only_dirty=False)     # a restart or deploy keeps every live session's latest state
+    except Exception as e:
+        print("shutdown: could not save live sessions:", e)
 
 
 log = logging.getLogger("stratlab")

@@ -114,7 +114,27 @@ class CandleBuilder:
         self.minutes = MINUTES.get(tf)
         self.cur: dict | None = None
         self.vol0: float | None = None
+        self.last_vol: float | None = None   # the day's traded volume at the last tick
+        self.last_end: datetime | None = None   # the end of the last candle emitted: a tick before it is late or stale
         self._retry = 0.0
+
+    def resume(self, last: dict | None, forming: dict | None = None):
+        """Pick up after the history: ticks before `last` (the newest closed candle) are dropped, and `forming`, the
+        history's candle still in progress, becomes the current candle so its open, high, low and volume aren't lost."""
+        try:
+            if last:
+                t = datetime.fromisoformat(str(last["t"]))
+                end = t + timedelta(days=1) if self.minutes is None else datetime.fromisoformat(candle_end(last, self.tf))
+                self.last_end = end.replace(tzinfo=IST) if end.tzinfo is None else end
+            if forming:
+                t = datetime.fromisoformat(str(forming["t"]))
+                t = t.replace(tzinfo=IST) if t.tzinfo is None else t.astimezone(IST)
+                b = self._bucket(_session_bounds(t, self.kind)[0] if self.minutes is None else t)
+                if b and (self.minutes is None or b[0] == t) and (self.last_end is None or b[0] >= self.last_end):
+                    self.cur = {"start": b[0], "end": b[1], "o": forming["o"], "h": forming["h"], "l": forming["l"],
+                                "c": forming["c"], "v": float(forming.get("v") or 0)}
+        except (KeyError, TypeError, ValueError) as e:
+            print("candle builder resume:", e)
 
     def _bucket(self, ts: datetime):
         open_, close = _session_bounds(ts, self.kind)
@@ -132,17 +152,24 @@ class CandleBuilder:
         if b is None:
             return closed
         start, end = b
+        if (self.last_end and start < self.last_end) or (self.cur and start < self.cur["start"]):
+            return closed                    # a late or stale tick: its candle has already closed
         if self.cur and self.cur["start"] != start:
             closed.append(self._close())
+        vol = float(cum_vol) if cum_vol is not None else None
         if self.cur is None:
             self.cur = {"start": start, "end": end, "o": price, "h": price, "l": price, "c": price, "v": 0.0}
-            self.vol0 = cum_vol
+            # counted from the last tick before it, so what traded before its first tick is in it (not across days)
+            self.vol0 = self.last_vol if vol is not None and self.last_vol is not None and self.last_vol <= vol else None
         else:
             self.cur["h"] = max(self.cur["h"], price)
             self.cur["l"] = min(self.cur["l"], price)
             self.cur["c"] = price
-        if cum_vol is not None and self.vol0 is not None:
-            self.cur["v"] = max(0.0, float(cum_vol) - float(self.vol0))
+        if vol is not None:
+            if self.vol0 is None:
+                self.vol0 = vol - self.cur["v"]   # a resumed candle keeps the volume it had
+            self.cur["v"] = max(0.0, vol - self.vol0)
+            self.last_vol = vol
         return closed
 
     def flush(self, now: datetime) -> list[dict]:
@@ -171,6 +198,7 @@ class CandleBuilder:
 
     def _close(self) -> dict:
         c, self.cur = self.cur, None
+        self.last_end, self.vol0 = c["end"], None
         # "t" names the candle by its start, as the engine and the backtest do; "end" is when it closed, the moment its
         # close (the price a rule's order fills at) was the price (R11C-011)
         return {"t": c["start"].isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"], "v": c["v"],
@@ -188,6 +216,45 @@ def candle_end(c: dict, tf: str) -> str:
         return (datetime.fromisoformat(str(c["t"])) + timedelta(minutes=MINUTES[tf])).isoformat()
     except ValueError:
         return c["t"]
+
+
+def _ts(t) -> float:
+    d = datetime.fromisoformat(str(t))
+    return (d.replace(tzinfo=IST) if d.tzinfo is None else d).timestamp()
+
+
+def split_missed(bars: list[dict], last_t: str | None) -> tuple[list[dict], list[dict]]:
+    """The history up to the last candle the session processed, and the closed candles after it (the server was down
+    when they closed). With no saved last candle (a new session, or state saved before this was kept) nothing is missed."""
+    if not last_t:
+        return bars, []
+    last = _ts(last_t)
+    i = len(bars)
+    while i and _ts(bars[i - 1]["t"]) > last:
+        i -= 1
+    if i < 30:                     # down longer than the history reaches: too few candles before the gap to run rules on
+        return bars, []
+    return bars[:i], bars[i:]
+
+
+def tick_time(ts: datetime) -> str:
+    """When a tick's price was the price: its own time, or now if that is later (a snapshot of yesterday's close
+    sent on subscribe is not a fresh price)."""
+    now = datetime.now(IST)
+    return min(ts, now).isoformat() if ts.tzinfo else now.isoformat()
+
+
+def day_close_minutes(market: str):
+    """For the engine: the minute a day's session closes, from the exchange calendar (an early close), or None."""
+    from .data.calendar import day_close
+
+    def close(day: str) -> int | None:
+        try:
+            hm = day_close(market, datetime.fromisoformat(day).date())
+        except ValueError:
+            return None
+        return int(hm[:2]) * 60 + int(hm[3:]) if hm else None
+    return close
 
 
 class LiveSession:
@@ -208,16 +275,20 @@ class LiveSession:
                 raise ValueError("That market isn't connected.")
             bars = self.prov.history(self.inst, self.tf, self.prov.warmup_days(self.tf, 300))
             bars = [b for b in bars if _closed(b, self.tf)]
+            forming = None
         else:
-            bars = drop_forming(mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf,
-                                self.session_kind)
-        self.bars = bars[-400:]
-        if len(self.bars) < 30:
+            raw = mgr.kite.history(self.inst["token"], self.tf, KiteService.warmup_days(self.tf, 300))
+            bars = drop_forming(raw, self.tf, self.session_kind)
+            forming = raw[-1] if len(bars) < len(raw or []) else None
+        if len(bars) < 30:
             raise ValueError("Not enough price history to start this strategy.")
         state = row.get("state") or {}
+        bars, missed = split_missed(bars, state.get("last_bar_t"))
+        self.bars = bars[-400:]
         lot = self.inst.get("step") or (self.inst.get("lot", 1) if self.inst.get("fno") else 1)
         self.engine = Engine(self.strategy, lot, state=state or None, cost_kind=C.kind_of(self.inst))
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
+        self.engine.day_close = day_close_minutes(self.market)
         self.next_poll = 0.0
         self.poll_ok = True
         self.equity_curve: list[dict] = state.get("equity_curve", [])
@@ -228,6 +299,11 @@ class LiveSession:
         self.started_at = row["started_at"]
         self.lock = threading.Lock()
         self.dirty = False
+        self.replaying: list[dict] | None = None    # the orders of candles being caught up on, alerted as one
+        if missed:
+            self.mgr.replay(self, lambda: [self._on_candle(c) for c in missed])
+            self.last_price = self.bars[-1]["c"]
+        self.builder.resume(self.bars[-1], forming)
 
     def on_tick(self, tick: dict):
         price = tick.get("last_price")
@@ -237,7 +313,7 @@ class LiveSession:
         ts = ts.replace(tzinfo=IST) if ts.tzinfo is None else ts.astimezone(IST)
         with self.lock:
             self.last_price = float(price)
-            self.last_tick_at = datetime.now(IST).isoformat()
+            self.last_tick_at = tick_time(ts)
             for c in self.builder.on_tick(float(price), ts, tick.get("volume_traded")):
                 self._on_candle(c)
 
@@ -274,9 +350,9 @@ class LiveSession:
         with self.lock:
             for c in new:
                 self._on_candle(c)
-            if px is not None:
+            if px is not None:                # no price: the last one stays, and ages
                 self.last_price = float(px)
-            self.last_tick_at = datetime.now(IST).isoformat()
+                self.last_tick_at = datetime.now(IST).isoformat()
 
     def _on_candle(self, c: dict):
         self.bars.append(c)
@@ -296,14 +372,15 @@ class LiveSession:
     def price_problem(self, now: datetime | None = None) -> str | None:
         """Why the latest price can't be used to fill a paper order now (the market is shut, or no price has arrived
         in the last few minutes), or None when it can."""
-        from .data.calendar import is_trading_day
+        from .data.calendar import day_close, is_trading_day
         from .data.markets import BY_ID
         now = now or datetime.now(IST)
         m = BY_ID.get(self.market) or {}
         hours = m.get("hours") or {}
         local = now.astimezone(ZoneInfo(m.get("tz") or "UTC"))
+        close = day_close(self.market, local.date()) or hours.get("close")      # the calendar knows early closes
         if not is_trading_day(self.market, local.date()) or (
-                hours.get("open") and not hours["open"] <= local.strftime("%H:%M") < hours["close"]):
+                hours.get("open") and not hours["open"] <= local.strftime("%H:%M") < close):
             return f"{m.get('name') or self.market} is closed now, so there's no live price to fill a paper order at."
         if not self.last_tick_at:
             return "No live price has arrived for this session yet. Try again in a minute."
@@ -362,6 +439,7 @@ class LiveSession:
         d["equity_curve"] = self.equity_curve
         d["day_equity"] = self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
         d["last_price"], d["last_tick_at"] = self.last_price, self.last_tick_at
+        d["last_bar_t"] = self.bars[-1]["t"]       # the last candle run: a restart catches up on the ones after it
         return d
 
     def final_state(self, now: datetime | None = None) -> dict:
@@ -499,6 +577,8 @@ class LiveManager:
             s = LiveSession(self, row)
         with self._lock:
             self.sessions[s.id] = s
+        if s.dirty:                    # caught up on candles missed while the server was down
+            self.persist([s])
         if hasattr(s, "attach"):
             s.attach(self.hub)
         elif not s.polled:
@@ -537,15 +617,47 @@ class LiveManager:
         db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
 
     # ---------- orders and alerts ----------
-    def on_order(self, s: LiveSession, ev: dict):
+    def replay(self, s, run):
+        """Catch a resumed session up on the candles that closed while the server was down (`run` steps them): their
+        orders are logged as usual, with one alert for them all."""
+        s.replaying = evs = []
+        try:
+            run()
+        finally:
+            s.replaying = None
+        if not evs:
+            return
+
         def work():
             try:
+                profile = db.get_profile(s.user_id)
+                if alerts_on(profile):
+                    lines = [f"{ev['side'].upper()} {ev['qty']:g} {ev.get('sym') or s.inst['symbol']} at {ev['px']:,.2f} "
+                             f"({ev.get('why') or 'order'}, candle {str(ev['t'])[:16].replace('T', ' ')})" for ev in evs]
+                    notify(profile, f"{s.name}: {len(evs)} paper trade{'s' if len(evs) > 1 else ''} while offline",
+                           f"StratLab caught up on candles that closed while the server was down ({s.name}):\n" + "\n".join(lines),
+                           background=False, url=f"/paper/{s.id}")
+            except Exception as e:
+                print("catch-up alert failed:", e)
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_order(self, s: LiveSession, ev: dict):
+        caught_up = getattr(s, "replaying", None)
+        if caught_up is not None:             # a candle missed while the server was down: one alert for them all
+            caught_up.append(ev)
+
+        def work():
+            try:
+                # the session's state is saved first, so a restart can't lose an order that was logged (or alerted)
+                if s.id in self.sessions:
+                    s.dirty = True
+                    self.persist([s])
                 if isinstance(ev["qty"], int):  # the orders table stores whole quantities; the session keeps every order
                     db.add_order({"session_id": s.id, "user_id": s.user_id, "side": ev["side"], "qty": ev["qty"],
                                   "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
                                   "candle_time": ev["t"]})
                 profile = db.get_profile(s.user_id)
-                if alerts_on(profile):
+                if caught_up is None and alerts_on(profile):
                     sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
                     head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}"
                     if ev.get("pnl") is None:      # opening a trade (a buy, a short sale or a written option)

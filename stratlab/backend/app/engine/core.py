@@ -113,6 +113,8 @@ class Engine:
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
         self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
+        self.day_close = None     # live only: (date) -> the minute that day's session closes (an early close), or None
+        self.sq = self.t_sq       # the current day's square-off minute
         # a backtest fills a rule's signal at the next candle's open; live sets this off and fills at the latest price
         self.next_open = True
         self.pend_entry, self.pend_exit = None, False
@@ -253,6 +255,7 @@ class Engine:
         date, closes_at = bar_clock(b["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        self.sq = self._squareoff(date)
         new = []
         if self.pend_entry is not None:
             ev = self._fill_entry(bars, ctx, i, date, closes_at)
@@ -267,7 +270,7 @@ class Engine:
             if px is None and self.t_sq is not None:
                 if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
                     px, why = b["o"], "Square-off"
-                elif closes_at >= self.t_sq:
+                elif closes_at >= self.sq:
                     px, why = b["c"], "Square-off"
             if px is None and self._hit_exit(ctx, i):
                 if self.next_open:
@@ -335,6 +338,7 @@ class Engine:
         date, closes_at = bar_clock(bars[i]["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        self.sq = self._squareoff(date)
         return self._try_enter(bars, ctx, i, closes_at)
 
     # --- paper orders placed by hand (the AI assistant's paper tools), live only ---
@@ -377,7 +381,12 @@ class Engine:
             return False
         if self.t_end is not None and closes_at > self.t_end:
             return False
-        return not (self.t_sq is not None and closes_at >= self.t_sq)
+        return not (self.sq is not None and closes_at >= self.sq)
+
+    def _squareoff(self, date: str) -> int | None:
+        """The strategy's square-off, or the day's close when the session ends earlier (a half day)."""
+        close = self.day_close(date) if self.t_sq is not None and self.day_close is not None else None
+        return self.t_sq if close is None else min(self.t_sq, close)
 
     def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float, at: int | None = None) -> dict | None:
         """Open on the signal candle `i`: at its close, or at candle `at`'s open. The stop uses what was known at `i`."""

@@ -14,7 +14,8 @@ from . import risk
 from .engine import costs as C
 from .engine.core import Ctx, Engine, write_off
 from .kite_service import IST, KiteService
-from .live import CandleBuilder, _closed, candle_end, close_at_auction, drop_forming, official_close, session_kind
+from .live import (CandleBuilder, _closed, _ts, candle_end, close_at_auction, day_close_minutes, drop_forming, official_close,
+                   session_kind, split_missed, tick_time)
 from .models import Strategy
 
 POLL_SECONDS = 60          # each polled member is checked this often for a newly closed candle
@@ -25,13 +26,16 @@ _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="group-live")
 
 
 class Member:
-    def __init__(self, sess: "GroupLiveSession", inst: dict, bars: list[dict], state: dict | None):
+    def __init__(self, sess: "GroupLiveSession", inst: dict, bars: list[dict], state: dict | None, forming: dict | None = None):
         self.s, self.inst = sess, inst
         self.sym = inst.get("symbol") or inst["id"]
+        bars, self.missed = split_missed(bars, (state or {}).get("last_bar_t"))   # closed while the server was down
         self.bars = bars[-400:]
+        self.forming = forming
         lot = inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1)
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
+        self.engine.day_close = day_close_minutes(sess.market)
         self.engine.gate = sess.free_slot
         self.engine.veto = self.filtered
         # India: the member's session timetable (a stock with derivatives closes through the auction)
@@ -74,7 +78,7 @@ class Member:
             self.last_price = float(px)
             if bid and ask:
                 self.bid, self.ask, self.quote_at = float(bid), float(ask), time.time()
-            self.s.last_tick_at = datetime.now(IST).isoformat()
+            self.s.last_tick_at = tick_time(ts)
             for c in self.builder.on_tick(float(px), ts, tick.get("volume_traded")):
                 self.s._on_candle(self, c)
             if self.s.fast.get("ticks"):
@@ -132,26 +136,37 @@ class GroupLiveSession:
             raise ValueError("That market isn't connected.")
         saved = state.get("members") or {}
         loaded = list(_pool.map(self._load, self.inst.get("members") or []))
-        self.members: list[Member] = [Member(self, inst, bars, saved.get(inst["id"])) for inst, bars in loaded if inst and bars]
-        self.skipped = [iid.split(":", 1)[-1] for iid, (inst, bars) in zip(self.inst.get("members") or [], loaded) if not (inst and bars)]
+        self.members: list[Member] = [Member(self, inst, bars, saved.get(inst["id"]), forming)
+                                      for inst, bars, forming in loaded if inst and bars]
+        self.skipped = [iid.split(":", 1)[-1] for iid, (inst, bars, _) in zip(self.inst.get("members") or [], loaded) if not (inst and bars)]
         if len(self.members) < 2:
             raise ValueError("Fewer than two of the group's instruments have enough live price history to start.")
         self.lids: list[str] = []
+        self.replaying: list[dict] | None = None    # the orders of candles being caught up on, alerted as one
+        # candles that closed while the server was down, in time order across the members, as live would have run them
+        missed = sorted(((_ts(c["t"]), i, c) for i, m in enumerate(self.members) for c in m.missed), key=lambda x: x[:2])
+        if missed:
+            self.mgr.replay(self, lambda: [self._on_candle(self.members[i], c) for _, i, c in missed])
+        for m in self.members:
+            m.missed = []
+            m.builder.resume(m.bars[-1], m.forming)
 
     def _load(self, iid: str):
         try:
             prov, inst = self.mgr.markets.resolve(iid)
             if not inst:
-                return None, None
+                return None, None, None
+            forming = None
             if self.polled:
                 bars = [b for b in prov.history(inst, self.tf, prov.warmup_days(self.tf, 300)) if _closed(b, self.tf)]
             else:
-                bars = drop_forming(self.mgr.kite.history(inst["token"], self.tf, KiteService.warmup_days(self.tf, 300)), self.tf,
-                                    session_kind(self.mgr.kite, inst))
-            return (inst, bars) if len(bars) >= 30 else (inst, None)
+                raw = self.mgr.kite.history(inst["token"], self.tf, KiteService.warmup_days(self.tf, 300))
+                bars = drop_forming(raw, self.tf, session_kind(self.mgr.kite, inst))
+                forming = raw[-1] if len(bars) < len(raw or []) else None
+            return (inst, bars, forming) if len(bars) >= 30 else (inst, None, None)
         except Exception as e:
             print("group member failed to load:", iid, e)
-            return None, None
+            return None, None, None
 
     # ---------- the shared book ----------
     def free_slot(self) -> bool:
@@ -252,13 +267,14 @@ class GroupLiveSession:
             with self.lock:
                 for c in new:
                     self._on_candle(m, c)
-                if px is not None:
+                if px is not None:            # no price: the last one stays, and ages
                     m.last_price = float(px)
-                self.last_tick_at = datetime.now(IST).isoformat()
+                    self.last_tick_at = datetime.now(IST).isoformat()
 
     # ---------- saving and showing ----------
     def state(self) -> dict:
-        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym}
+        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
+                                           "last_bar_t": m.bars[-1]["t"]}      # a restart catches up from here
                             for m in self.members}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
                 "day_equity": self._days()}

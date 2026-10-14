@@ -119,3 +119,36 @@ def test_fast_entries_use_the_forming_candle(monkeypatch):
     b = s2.members[0]
     b.on_tick({"last_price": 100.0, "exchange_timestamp": datetime(2999, 1, 1, 10, 1, tzinfo=ist)})
     assert b.engine.qty == 0                                                 # off: waits for the candle to close
+
+
+def test_a_restart_runs_missed_candles_across_the_group_in_time_order(monkeypatch):
+    from tests.test_live_polling import bar5, run_threads_now
+    mgr, reg = make_manager()
+    hist = {iid: [bar5(i) for i in range(40)] for iid in row()["instrument"]["members"]}
+    prov = mgr.markets.provider("CRYPTO")
+    monkeypatch.setattr(prov, "history", lambda inst, tf, days, ttl=None: list(hist[inst["id"]]))
+    run_threads_now(monkeypatch)
+    alerts = []
+    monkeypatch.setattr(db, "get_profile", lambda uid: {"id": uid})
+    monkeypatch.setattr("app.live.alerts_on", lambda p: True)
+    monkeypatch.setattr("app.live.notify", lambda p, subj, body, **k: alerts.append((subj, body)))
+    monkeypatch.setattr(db, "update_session", lambda *a, **k: None)
+    s = group_live.GroupLiveSession(mgr, row())
+    a, b, c = s.members
+    s._on_candle(a, bar5(40))                                     # BTC opens at 10:00 (the only member stepped)
+    assert a.engine.qty > 0
+    alerts.clear()
+    saved = s.state()
+    # down from 10:00: ETH and SOL's 10:00 candles and everyone's 10:05 one closed meanwhile; BTC falls 10% at 10:05
+    hist["CRYPTO:BTC-USD"] += [bar5(40), bar5(41, 90.0)]
+    for iid in ("CRYPTO:ETH-USD", "CRYPTO:SOL-USD"):
+        hist[iid] += [bar5(40), bar5(41)]
+    s2 = group_live.GroupLiveSession(mgr, row(saved))
+    a, b, c = s2.members
+    assert len(a.engine.events) == 2                              # BTC's 10:00 candle isn't run again
+    assert [ev["t"] for ev in b.engine.events if ev["side"] == "buy"] == [bar5(40)["t"]]   # the second slot
+    assert not c.engine.events                                    # no third slot at 10:00, the cap had hit at 10:05
+    assert s2.halted and all(m.engine.qty == 0 for m in s2.members)
+    assert {t["why"] for m in (a, b) for t in m.engine.trades} == {"Daily loss cap"}
+    assert all(m.bars[-1]["t"] == bar5(41)["t"] for m in s2.members) and a.last_price == 90.0
+    assert len(alerts) == 1 and "3 paper trades while offline" in alerts[0][0]
