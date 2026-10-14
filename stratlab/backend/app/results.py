@@ -327,7 +327,7 @@ def us_out(fh, sec, r: dict) -> dict | None:
     if sec is not None:
         try:
             subs = sec.submissions(sec.cik(r["symbol"]), fresh=True)
-            back = max(14, (date.today() - date.fromisoformat(r["date"])).days + 1)     # back to the results day
+            back = max(14, (local_today("US") - date.fromisoformat(r["date"])).days + 1)     # back to the results day
             rel = next((d for d in sorted(documents(subs, days=back), key=lambda d: d["at"])
                         if d["kind"] == "earnings_release" and d["at"] >= r["date"]), None)
         except SourceError:

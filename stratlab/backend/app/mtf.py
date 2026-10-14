@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from . import exchange_days as X
+from . import corp_actions, exchange_days as X
 from .auth import current_profile
 from .intel.net import num
 from .plans import FEATURE_PLAN, PLANS, allows
@@ -180,10 +180,16 @@ def _back(series: list[list], day: str, days: int) -> list | None:
     return older[-1] if older else None
 
 
-def _chg(now: list, then: list | None) -> dict | None:
+def _splits(sym: str) -> list[str]:
+    """Ex-dates of the splits and bonuses stored for the stock (read from what is stored, nothing fetched)."""
+    return [a["ex_date"] for a in corp_actions.actions_for("IN", sym, fetch=False) if corp_actions.adjusts(a)]
+
+
+def _chg(now: list, then: list | None, splits: list[str] = ()) -> dict | None:
     if not then:
         return None
-    return {"from": then[0], "shares": now[1] - then[1], "crore": round((now[2] - then[2]) / 100, 2),
+    cut = any(then[0] < d <= now[0] for d in splits)          # a split or bonus between: raw share counts don't compare
+    return {"from": then[0], "shares": None if cut else now[1] - then[1], "crore": round((now[2] - then[2]) / 100, 2),
             "pct": round(100 * (now[2] / then[2] - 1), 2) if then[2] else None}
 
 
@@ -199,16 +205,17 @@ def for_symbol(symbol: str, full: bool = False, rng: str = "1y") -> dict:
         return out
     issued = (shares().get("shares") or {}).get(sym)
     ser = DESK.store.series(sym)
+    sp = _splits(sym)
     now = [day, r[0], r[1], r[2]]
     out.update(funded=True, shares=r[0], crore=round(r[1] / 100, 2), close=r[2], issued=issued,
                pct_shares=pct_shares(r[0], issued), pct_mcap=pct_mcap(r[1], issued, r[2]),
-               d30=_chg(now, _back(ser, day, 30)), d90=_chg(now, _back(ser, day, 90)))
+               d30=_chg(now, _back(ser, day, 30), sp), d90=_chg(now, _back(ser, day, 90), sp))
     prev = [p for p in ser if p[0] < day]
-    out["day"] = _chg(now, prev[-1]) if prev else None
+    out["day"] = _chg(now, prev[-1], sp) if prev else None
     if full:
         since = (date.fromisoformat(day) - timedelta(days=RANGES[rng])).isoformat()
         out["history"] = [{"day": p[0], "shares": p[1], "crore": round(p[2] / 100, 2), "close": p[3] if len(p) > 3 else None,
-                           "pct_shares": pct_shares(p[1], issued)} for p in ser if p[0] >= since]
+                           "pct_shares": None if any(p[0] < d for d in sp) else pct_shares(p[1], issued)} for p in ser if p[0] >= since]
     return out
 
 

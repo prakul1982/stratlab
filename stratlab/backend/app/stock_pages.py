@@ -1465,13 +1465,13 @@ def cap_text(f: dict) -> str:
     if v is None:
         return "–"
     if f.get("currency") == "USD":                       # stored in $ million
-        if v >= 1e6:
+        if round(v / 1e3, 1) >= 1e3:                     # the unit is chosen after rounding
             return f"${v / 1e6:,.2f}T"
         if v >= 1e3:
             return f"${v / 1e3:,.1f}B"
         # $0.5M rounds to "$0M" (TAOP, R6V-011): anything under a whole million is "<$1M"
         return f"${v:,.0f}M" if round(v) >= 1 else "<$1M"
-    if v >= 1e5:                                          # stored in ₹ crore
+    if round(v) >= 1e5:                                   # stored in ₹ crore
         return f"₹{v / 1e5:,.2f} lakh crore"
     return f"₹{_inr_group(v)} crore" if round(v) >= 1 else "<₹1 crore"
 
