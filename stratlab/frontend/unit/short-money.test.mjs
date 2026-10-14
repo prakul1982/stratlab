@@ -37,7 +37,7 @@ test("a company's size rounds up to the next unit too, and a negative keeps its 
   assert.equal(bigMoney(4_310_000_000_000, "USD"), "$4.31T");
   assert.equal(bigMoney(12_400_000_000, "USD"), "$12.4B");
   assert.equal(bigMoney(85_000_000, "USD"), "$85M");
-  assert.equal(bigMoney(-1_500_000_000, "USD"), "-$1.5B");
+  assert.equal(bigMoney(-1_500_000_000, "USD"), "−$1.5B");
   assert.equal(bigMoney(950_000, "USD"), "$950,000");
 });
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
-import { candleSpan, charge, fall, fmtDate, money, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { CHECKS, checkTone, checksLine, tradeListFacts, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
@@ -22,7 +22,7 @@ import "./trade/trade.css";
 /* /n/:id/e/:v: one experiment's verdict, its four checks, the money, every trade and the extra tests. Built from the
  * kit (components/kit); the big verdict headline and the checks grid keep their own layout. */
 
-const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+const shortDate = monthYear;
 
 /** Re-tune on the past, trade the next unseen block, slide forward, repeat. */
 function WalkForwardCheck({ nb, e }: { nb: Notebook; e: Experiment }) {
@@ -323,7 +323,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Spans the split: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
     { key: "close", header: intraday ? "Closed (candle)" : "Closed", cell: (t) => (t.exit_t ? at(t.exit_t) : "Still open") },
     ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
-    { key: "qty", header: "Qty", numeric: true, cell: (t) => qty(t.qty, step) },
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => qty(t.qty, step, e.instrument.market) },
     { key: "in", header: "In", numeric: true, cell: (t) => price(t.entry, cur, dp) },
     { key: "out", header: "Out", numeric: true, cell: (t) => price(t.exit, cur, dp) },
     { key: "pnl", header: "P&L", numeric: true, cell: (t) => <span className={upDown(t.pnl)}>{money(t.pnl, cur)}</span> },

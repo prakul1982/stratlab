@@ -43,7 +43,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
   const holdCols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
     { key: "side", header: "Side", cell: (m) => (m.position!.side === "short" ? "Short" : "Long") },
-    { key: "qty", header: "Qty", numeric: true, cell: (m) => qty(m.position!.qty) },
+    { key: "qty", header: "Qty", numeric: true, cell: (m) => qty(m.position!.qty, undefined, snap.instrument.market) },
     { key: "entry", header: "Entry", numeric: true, cell: (m) => price(m.position!.entry, cur) },
     { key: "now", header: "Now", numeric: true, cell: (m) => price(m.price, cur) },
     { key: "stop", header: "Stop", numeric: true, cell: (m) => (m.position!.stop ? price(m.position!.stop, cur) : "–") },

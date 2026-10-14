@@ -103,7 +103,7 @@ test("rupees in Indian grouping, dollars in international, whatever the reader's
   const { bigMoney, money } = await import("../src/lib/format.ts");
   assert.equal(money(4753636, "INR"), "₹47,53,636");                 // an admin paper account, was 4,753,636
   assert.equal(money(10000, "USD"), "$10,000");
-  assert.match(read("src/lib/format.ts"), /Math\.round\(v\)\.toLocaleString\("en-US"\)/);
+  assert.match(read("src/lib/format.ts"), /Math\.round\(a\)\.toLocaleString\("en-US"\)/);
   assert.equal(bigMoney(999_000, "USD"), "$999,000");
   assert.match(read("src/pages/admin/UsersSection.tsx"), /money\(s\.equity, s\.currency \?\? "INR"\)/);
 });
