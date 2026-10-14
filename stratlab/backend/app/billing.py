@@ -168,6 +168,9 @@ def _stale(profile: dict, sub: dict) -> bool:
                 and sub["id"] != profile.get("pending_subscription_id"))
 
 
+PAYMENT_SUB = "payment-sub:"
+
+
 def invoice_for(profile: dict, sub: dict, payment: dict | None):
     """The payment's invoice; a failure here never stops the plan switching on (the webhook tries again)."""
     if not payment or not payment.get("id") or payment.get("status") not in (None, "captured", "authorized"):
@@ -179,6 +182,10 @@ def invoice_for(profile: dict, sub: dict, payment: dict | None):
     except Exception as e:
         print("invoice failed:", e)
         return None
+    try:   # which subscription and user a payment belongs to, for a later refund or chargeback
+        db.set_setting(PAYMENT_SUB + payment["id"], json.dumps({"sub": sub.get("id"), "user": profile.get("id")}))
+    except Exception as e:
+        print("payment mapping failed:", str(e)[:160])
     lifecycle.later(lifecycle.receipt, profile, inv, plan, period)      # once per payment, however often this runs
     try:
         product_analytics.payment_completed(profile, payment, plan, period)   # usage analytics, once per payment
@@ -228,7 +235,7 @@ def handle_webhook(body: bytes, signature: str, event_id: str = ""):
     db.set_setting(seen, "1")                  # marked only once handled, so Razorpay's retry of a failed one still runs
 
 
-REVERSALS = ("refund.created", "refund.processed", "payment.dispute.created")
+REVERSALS = ("refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.lost")
 
 
 def _entity(event: dict, name: str) -> dict:
@@ -244,10 +251,53 @@ def _reversed_payment(event: dict) -> str | None:
             or _entity(event, "payment").get("id"))
 
 
+def _payment_owner(event: dict, payment_id: str) -> tuple[str | None, dict | None]:
+    """The subscription a payment paid for and its user's profile: from the saved mapping, else from the payment's invoice."""
+    try:
+        saved = db.json_value(db.get_setting(PAYMENT_SUB + payment_id), {})
+        sub_id, uid = saved.get("sub"), saved.get("user")
+        if not sub_id:                          # an older payment, made before the mapping was kept
+            inv_id = _entity(event, "payment").get("invoice_id")
+            sub_id = (client().invoice.fetch(inv_id) or {}).get("subscription_id") if inv_id else None
+        profile = db.profile_by_subscription(sub_id) if sub_id else None       # none when it's no longer their current one
+        return sub_id, profile if profile and (not uid or profile["id"] == uid) else None
+    except Exception as e:
+        print("could not find the subscription of a reversed payment:", str(e)[:160])
+        return None, None
+
+
+def _paid_in_full(event: dict, payment_id: str) -> bool:
+    amount = _entity(event, "refund").get("amount")
+    paid = _entity(event, "payment").get("amount")
+    if paid is None:
+        try:
+            paid = client().payment.fetch(payment_id).get("amount")
+        except Exception as e:
+            print("could not fetch the refunded payment:", str(e)[:160])
+    return bool(amount) and amount == paid
+
+
+def _end_plan(event: dict, payment_id: str):
+    """A full refund or a lost chargeback ends the plan, if the payment was for the current subscription."""
+    sub_id, profile = _payment_owner(event, payment_id)
+    if not sub_id or not profile or profile.get("razorpay_subscription_id") != sub_id or profile.get("plan_status") == "refunded":
+        return
+    try:
+        client().subscription.cancel(sub_id, {"cancel_at_cycle_end": 0})
+    except Exception as e:
+        print("could not cancel the refunded subscription:", e)
+    db.update_profile(profile["id"], plan="free", plan_status="refunded", cancel_at_period_end=False)
+    if profile.get("plan") in ("basic", "pro"):
+        lifecycle.later(lifecycle.plan_ended, profile, sub_id, profile.get("plan"))
+
+
 def _act(event: dict):
     name = event.get("event", "")
-    if name in REVERSALS:                      # these carry no subscription: only invite rewards care
-        invite_rewards.safe_refunded(_reversed_payment(event))
+    if name in REVERSALS:                      # these carry no subscription: invite rewards, and a full refund or lost dispute
+        pid = _reversed_payment(event)
+        invite_rewards.safe_refunded(pid)
+        if pid and (name == "payment.dispute.lost" or (name == "refund.processed" and _paid_in_full(event, pid))):
+            _end_plan(event, pid)
         return
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")
     if not sub:
@@ -266,7 +316,7 @@ def _act(event: dict):
             invoice_for(profile, sub, payment)
             invite_rewards.safe_paid(profile, payment)      # an invited friend's first real payment
     elif name in ("subscription.cancelled", "subscription.completed", "subscription.halted", "subscription.paused"):
-        if profile.get("razorpay_subscription_id") == sub["id"]:
+        if profile.get("razorpay_subscription_id") == sub["id"] and profile.get("plan_status") != "refunded":   # a refund already ended it
             db.update_profile(profile["id"], plan="free", plan_status=sub.get("status", "cancelled"),
                               cancel_at_period_end=False)
             if profile.get("plan") in ("basic", "pro"):

@@ -197,3 +197,82 @@ def test_a_subscription_is_charged_in_the_currency_plans_showed(monkeypatch):
     assert made[-1]["plan_id"] == "inr_b"
     assert billing.create_subscription({"id": "u"}, "pro", "month", "EUR")["currency"] == "EUR"
     assert made[-1]["plan_id"] == "eur_p"
+
+
+# ---------- a full refund or a lost chargeback ends the current plan ----------
+def _reversal(store, monkeypatch, event, profile, mapping="default", invoice=None, fetched=None):
+    """Runs a refund/dispute event; returns (profile updates, cancelled subscriptions, plan_ended sends)."""
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "w")
+    cancelled, updates, ended = [], [], []
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(
+        utility=SimpleNamespace(verify_webhook_signature=lambda *a: True),
+        subscription=SimpleNamespace(cancel=lambda sid, d: cancelled.append((sid, d))),
+        invoice=SimpleNamespace(fetch=lambda i: invoice or {}),
+        payment=SimpleNamespace(fetch=lambda i: fetched or {})))
+    if mapping == "default":
+        store["payment-sub:pay_1"] = json.dumps({"sub": "sub_B", "user": "u"})
+    monkeypatch.setattr(billing.db, "profile_by_subscription", lambda sid: profile if sid == profile.get("razorpay_subscription_id") else None)
+    monkeypatch.setattr(billing.db, "update_profile", lambda uid, **f: updates.append(f))
+    monkeypatch.setattr(billing.invite_rewards, "safe_refunded", lambda pid: None)
+    monkeypatch.setattr(billing.lifecycle, "later", lambda fn, *a: ended.append(a))
+    billing.handle_webhook(json.dumps(event).encode(), "sig", f"evt_{next(_ids)}")
+    return updates, cancelled, ended
+
+
+def _refund(name="refund.processed", amount=99900, **payment):
+    return {"event": name, "payload": {"refund": {"entity": {"id": "rfnd_1", "payment_id": "pay_1", "amount": amount}},
+                                       "payment": {"entity": {"id": "pay_1", "amount": 99900, **payment}}}}
+
+
+NOW_PRO = {"id": "u", "plan": "pro", "plan_status": "active", "razorpay_subscription_id": "sub_B"}
+
+
+def test_a_full_refund_of_the_current_payment_ends_the_plan(store, monkeypatch):
+    updates, cancelled, ended = _reversal(store, monkeypatch, _refund(), NOW_PRO)
+    assert cancelled == [("sub_B", {"cancel_at_cycle_end": 0})]
+    assert updates == [{"plan": "free", "plan_status": "refunded", "cancel_at_period_end": False}]
+    assert ended == [(NOW_PRO, "sub_B", "pro")]
+
+
+def test_a_partial_refund_or_one_just_created_changes_nothing(store, monkeypatch):
+    assert _reversal(store, monkeypatch, _refund(amount=50000), NOW_PRO) == ([], [], [])
+    assert _reversal(store, monkeypatch, _refund("refund.created"), NOW_PRO) == ([], [], [])
+    assert _reversal(store, monkeypatch, _refund("payment.dispute.created"), NOW_PRO) == ([], [], [])
+
+
+def test_a_refund_of_an_old_subscriptions_payment_keeps_the_current_plan(store, monkeypatch):
+    store["payment-sub:pay_1"] = json.dumps({"sub": "sub_A", "user": "u"})
+    assert _reversal(store, monkeypatch, _refund(), NOW_PRO, mapping="own") == ([], [], [])
+
+
+def test_a_lost_dispute_ends_the_plan(store, monkeypatch):
+    event = {"event": "payment.dispute.lost", "payload": {"dispute": {"entity": {"id": "disp_1", "payment_id": "pay_1"}}}}
+    updates, cancelled, ended = _reversal(store, monkeypatch, event, {**NOW_PRO, "plan": "basic"})
+    assert cancelled == [("sub_B", {"cancel_at_cycle_end": 0})] and updates[0]["plan_status"] == "refunded"
+    assert ended[0][2] == "basic"
+
+
+def test_without_a_saved_mapping_the_invoice_finds_the_subscription(store, monkeypatch):
+    event = _refund()
+    event["payload"]["payment"]["entity"]["invoice_id"] = "inv_1"
+    updates, cancelled, _ = _reversal(store, monkeypatch, event, NOW_PRO, mapping="none", invoice={"subscription_id": "sub_B"})
+    assert cancelled == [("sub_B", {"cancel_at_cycle_end": 0})] and updates[0]["plan"] == "free"
+    # nothing to go on: the webhook still succeeds and the plan stays
+    assert _reversal(store, monkeypatch, _refund(), NOW_PRO, mapping="none") == ([], [], [])
+
+
+def test_the_cancelled_webhook_after_a_refund_changes_nothing_more(store, monkeypatch):
+    refunded = {"id": "u", "plan": "free", "plan_status": "refunded", "razorpay_subscription_id": "sub_B"}
+    done = []
+    monkeypatch.setattr(billing.db, "update_profile", lambda *a, **k: done.append(k))
+    _webhook(monkeypatch, refunded, {"id": "sub_B", "status": "cancelled"}, "subscription.cancelled")
+    assert done == []
+
+
+def test_a_real_payment_saves_which_subscription_it_paid_for(store, monkeypatch):
+    invoices.save_seller(SELLER)
+    monkeypatch.setattr(settings, "RAZORPAY_PLAN_BASIC", "plan_inrB")
+    monkeypatch.setattr(billing.lifecycle, "later", lambda *a: None)
+    monkeypatch.setattr(billing.product_analytics, "payment_completed", lambda *a: None)
+    billing.invoice_for({"id": "u7"}, {"id": "sub_7", "plan_id": "plan_inrB", "notes": {}}, {**PAY, "id": "pay_7"})
+    assert json.loads(store["payment-sub:pay_7"]) == {"sub": "sub_7", "user": "u7"}
