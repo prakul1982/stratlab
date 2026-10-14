@@ -594,3 +594,12 @@ def test_debt_to_equity_takes_debt_and_equity_from_the_latest_balance_column():
     assert screener.summary(ind)["debt_equity"] is None
     ind["balance"]["rows"]["Reserves"] = [90.0, 190.0]
     assert screener.summary(ind)["debt_equity"] == pytest.approx(20.0 / 200.0)
+
+
+def test_the_debt_figure_names_the_balance_sheet_column_it_is_from():
+    bal = {"cols": ["Mar 2025", "Sep 2025"], "rows": {"Borrowings": [11283.0, 11808.0], "Equity": [500.0, 600.0]}}
+    p = {"pl": {"cols": ["Mar 2025"], "rows": {"Sales": [10.0], "Net Profit": [1.0]}}, "balance": bal, "ratios": {}}
+    got = screener.summary(p)
+    assert got["debt_cr"] == 11808.0 and got["debt_as_of"] == "Sep 2025"
+    bal["rows"]["Borrowings"] = [11283.0, None]
+    assert screener.summary(p)["debt_as_of"] is None
