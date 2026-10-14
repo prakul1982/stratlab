@@ -135,6 +135,15 @@ def test_replacing_with_an_indian_file_keeps_the_us_holdings(w):
     assert r.json()["imported"] == 6
 
 
+def test_replacing_keeps_a_held_stock_whose_line_didnt_match(w):
+    holdings.save("u-pro", [{"symbol": "NOTASTOCK", "exchange": "NSE", "name": "Was matched", "qty": 5.0, "avg": 10.0},
+                            {"symbol": "OLDCO", "exchange": "NSE", "name": "Old Co", "qty": 1.0, "avg": 30.0}], "Manual")
+    r = upload(w["client"], "generic.csv")                                       # its NOTASTOCK line matches nothing now
+    assert r.status_code == 200 and r.json()["unmatched"][0]["text"] == "NOTASTOCK"
+    items = {i["symbol"]: i for i in holdings.load("u-pro")["items"]}
+    assert items["NOTASTOCK"]["qty"] == 5 and "OLDCO" not in items and "RELIANCE" in items   # kept as it was; a sold one leaves
+
+
 def test_zerodha_console_import_nse_series_and_bse_only(w):
     r = upload(w["client"], "zerodha_console_holdings.xlsx")
     assert r.status_code == 200, r.text

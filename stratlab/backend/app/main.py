@@ -2594,7 +2594,12 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
             rows = holdings.merge(before["items"] + rows)
         elif rows:                        # a file replaces only the markets it covers: US holdings stay
             covered = {holdings.market_of(i) for i in rows}
-            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered]
+            # a held stock named on a line that didn't match stays as it was (as a sync keeps it)
+            names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
+            have = {(holdings.market_of(i), i["symbol"]) for i in rows}
+            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered
+                           or ((holdings.market_of(i), i["symbol"]) not in have
+                               and (i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names))]
         rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
         out["n"] = len(rows) if n_read is None else min(n_read, len(rows))
         out["saved"] = bool(rows)
@@ -2637,6 +2642,10 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
+        # a quantity typed over a statement's per-account one replaces it (no hidden second quantity); the next statement
+        # sets it again, as it does any statement holding without one
+        found = [{k: v for k, v in f.items() if k != "accts"} if f.get("accts") and abs(sum(f["accts"].values()) - f["qty"]) > 1e-9
+                 else f for f in found]
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
             return with_sectors(found, known), before["source"] or "Manual"
@@ -2760,15 +2769,19 @@ def _nw_crypto(coin: str):
 
 def _nw_stocks(profile) -> dict:
     """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings).
-    `us_no_rate` when there are US stocks but no dollar rate to count them in rupees."""
+    `us_no_rate` when there are US stocks but no dollar rate to count them in rupees; `unpriced` the stocks without a
+    price, by market ("in", "us"), and `priced` those with one."""
     h = holdings_view(profile)
     worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
     rate = h.get("usd_inr")
     has_us = any(r.get("market") == "US" for r in h["rows"])
+    mkt = (lambda r: "us" if r.get("market") == "US" else "in")
     return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
             "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate,
-            "us_no_rate": has_us and not rate}
+            "us_no_rate": has_us and not rate,
+            "unpriced": {m: sum(r["value"] is None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")},
+            "priced": {m: sum(r["value"] is not None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")}}
 
 
 app.include_router(money_networth.make_router(

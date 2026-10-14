@@ -27,7 +27,9 @@ def reminder_due(box: dict, now: datetime) -> bool:
     last 40 days."""
     if not box.get("local"):
         return False
-    ok_at = (box.get("last") or {}).get("at") if (box.get("last") or {}).get("status") == "ok" else None
+    last = box.get("last") or {}
+    # ok_at: the last statement read (a later mail without one leaves it); before it was kept, a last read that was OK
+    ok_at = box.get("ok_at") or (last.get("at") if last.get("status") == "ok" else None)
     quiet = _days_since(ok_at or box.get("created_at"), now)
     if quiet is None or quiet < REMIND_AFTER_DAYS:
         return False
