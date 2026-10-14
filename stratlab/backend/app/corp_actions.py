@@ -618,9 +618,13 @@ def _day(iso: str) -> str:
         return str(iso)
 
 
-def next_trading_day(day: date) -> date:
+def next_trading_day(day: date, region: str = "IN") -> date:
+    """The exchange's next session after `day`: weekends and its holidays skipped."""
+    from .data.calendar import is_trading_day
     d = day + timedelta(days=1)
-    while d.weekday() >= 5:
+    for _ in range(14):
+        if is_trading_day(region, d):
+            break
         d += timedelta(days=1)
     return d
 
@@ -803,8 +807,12 @@ class Job:
         return sent
 
     def eve(self, region: str, day: date, who: dict, run) -> int:
-        """The evening before an ex-date (Friday for a Monday one): one message per person listing their stocks."""
-        nxt = next_trading_day(day)
+        """The evening before an ex-date (Friday for a Monday one): one message per person listing their stocks. Only on a
+        trading day: a weekend or holiday evening would tell them again about the same next session."""
+        from .data.calendar import is_trading_day
+        if not is_trading_day(region, day):
+            return 0
+        nxt = next_trading_day(day, region)
         per_user: dict[str, list[dict]] = {}
         for r in between(region, day + timedelta(days=1), nxt):
             for uid in who.get((region, r["symbol"]), []):

@@ -348,6 +348,10 @@ def test_the_evening_before_an_ex_date_and_friday_for_monday(w):
     friday = TODAY + timedelta(days=4)
     job.tick(datetime.combine(friday, datetime.min.time(), timezone.utc) + timedelta(hours=12, minutes=15))
     assert sent[-1][1] == "StratLab: ex-dates coming up" and "RELIANCE" in sent[-1][2]
+    n = len(sent)
+    for later in (5, 6):                                               # Saturday and Sunday: told once, on Friday
+        job.tick(datetime.combine(TODAY + timedelta(days=later), datetime.min.time(), timezone.utc) + timedelta(hours=12, minutes=15))
+    assert len(sent) == n
 
 
 def test_people_who_turned_the_messages_off_dont_get_them(w):
