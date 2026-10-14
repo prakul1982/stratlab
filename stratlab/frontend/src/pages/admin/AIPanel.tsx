@@ -215,7 +215,8 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
   p: Provider; test?: TestRow; busy: string | null; rerank: (name: string) => void;
   pin: (p: Provider, model: string | null) => void; block: (p: Provider, model: string, on: boolean) => void;
 }) {
-  const [light, word] = STATE[p.state];
+  const [light, stateWord] = STATE[p.state];
+  const word = p.state === "idle" && p.ranked_at ? "Measured" : stateWord;
   const skipped = Object.entries(p.skipped || {}).map(([why, n]) => `${n} ${SKIPPED[why] ?? why}`).join(", ");
   const left = p.quota.remaining;
   return (

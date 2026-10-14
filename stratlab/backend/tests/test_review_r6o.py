@@ -545,3 +545,49 @@ def test_a_us_companys_dividends_in_cents_are_not_looked_up_abroad():
     rows = [CA.row("US", "AAPL", {"kind": "dividend", "sub": "dividend", "label": "Dividend", "text": "x", "amount": a}, date.fromisoformat(d))
             for d, a in (("2026-02-09", 0.26), ("2026-05-11", 0.26), ("2026-08-10", 0.27))]
     assert CA._home_missing("AAPL", rows, NoCalls(), date(2026, 10, 8)) == []
+
+
+def test_a_us_payout_ratio_is_the_twelve_months_dividends_over_the_twelve_months_earnings():
+    from app.intel.company import with_dividend_yield
+    c = {"region": "US", "quote": {"price": 190.0},
+         "metrics": [{"title": "Per share and returns", "items": [
+             {"label": "EPS TTM", "value": 7.91, "unit": "money"}, {"label": "Div yield", "value": 0.02, "unit": "%"},
+             {"label": "Payout ratio", "value": 3.5, "unit": "%"}]}]}
+    divs = [{"kind": "dividend", "amount": 0.13, "ex_date": d} for d in ("2025-12-04", "2026-03-12", "2026-06-11", "2026-09-10")]
+    items = {i["label"]: i for i in with_dividend_yield(c, divs, "2026-10-08")["metrics"][0]["items"]}
+    assert items["Payout ratio"]["value"] == 6.6 and "$0.52" in items["Payout ratio"]["note"]
+
+
+def test_a_dividend_with_todays_ex_date_is_in_the_twelve_months_not_coming_up():
+    from datetime import date
+    from app import corp_actions
+    rows = [{"kind": "dividend", "amount": a, "ex_date": d, "sub": "special" if a == 46 else "interim"} for d, a in
+            (("2025-10-14", 100), ("2025-10-15", 65), ("2026-01-10", 46), ("2026-10-14", 12), ("2026-10-20", 7))]
+    orig = corp_actions.actions_for
+    corp_actions.actions_for = lambda *a, **k: rows
+    try:
+        got = corp_actions.company("IN", "TCS", None, date(2026, 10, 14))
+    finally:
+        corp_actions.actions_for = orig
+    assert got["dividends_12m"]["amount"] == 65 + 46 + 12 and got["dividends_12m"]["count"] == 3
+    assert [r["ex_date"] for r in got["ahead"]] == ["2026-10-20"]
+    assert got["past"][0]["ex_date"] == "2026-10-14"
+
+
+def test_the_public_pages_special_dividend_is_named_beside_its_yield():
+    from app import stock_pages
+    divs = stock_pages.dividend_list([{"kind": "dividend", "ex_date": "2026-01-10", "amount": 46, "sub": "special"},
+                                      {"kind": "dividend", "ex_date": "2026-10-14", "amount": 12, "sub": "interim"}])
+    assert stock_pages.special_in_year(divs, "2026-10-14") == 46
+    assert stock_pages.special_in_year(divs, "2027-02-01") is None
+    f = {"region": "IN", "price": 2300, "div_yield": 2.52, "div_special": 46, "unit": "₹ crore"}
+    assert ("Dividend yield", "2.52% (incl. a special dividend of ₹46)") in stock_pages._stats(f)
+
+
+def test_a_uuid_in_a_providers_error_is_shown_as_the_models_name():
+    from types import SimpleNamespace
+    from app import ai_providers
+    u = "0f2a81b6-1c3d-4e5f-8a9b-0c1d2e3f4a5b"
+    st = SimpleNamespace(aliases={u: "@cf/meta/llama-3.1-8b"})
+    assert ai_providers.named(st, f"model {u} is gone") == "model @cf/meta/llama-3.1-8b is gone"
+    assert ai_providers.named(SimpleNamespace(aliases={}), f"model {u} is gone") == "model unnamed model (0f2a81b6…) is gone"

@@ -203,7 +203,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
       {rows.map((r) => (
         <button type="button" key={r.id} className="k-sess" onClick={() => open(r)} aria-current={r.id === sid}>
           <b>{r.name}</b>
-          <span className="k-note">{r.instrument.symbol} · {fmtDate(r.started_at, { year: false })}</span>
+          <span className="k-note">{r.instrument.symbol} · started {fmtDate(r.started_at, { year: false })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <Badge tone={statusTone(r.status)}>{r.status}</Badge>

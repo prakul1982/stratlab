@@ -3297,7 +3297,8 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # the close, specials included, over the close (R7O-004, R7V-002: TCS 3.08% here against 5.35% in the app);
         # n/a when the dividends couldn't be read, never the last reported year's (another definition)
         dy = page_dividend_yield("IN", sym, close, (prices or {}).get("price_at"), co)
-        snap = {**snap, "div_yield": dy}
+        spec = stock_pages.special_in_year(india_page_dividends(sym, co, False) or [], (prices or {}).get("price_at")) if dy else None
+        snap = {**snap, "div_yield": dy, "div_special": spec}
     return stock_pages.facts(region, sym, p, nums, snap, trend, prices, items, exchange, red, checks)
 
 

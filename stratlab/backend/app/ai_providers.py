@@ -258,6 +258,14 @@ def model_name(st, model: str) -> str:
     return (st.aliases or {}).get(model) or f"unnamed model ({model[:8]}…)"
 
 
+_UUID_IN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
+
+
+def named(st, text):
+    """An error text with any model UUID in it given the model's name (or shortened, as model_name does)."""
+    return _UUID_IN.sub(lambda m: model_name(st, m.group(0)), text) if isinstance(text, str) else text
+
+
 QUOTA_TEXT = "Free quota used up for now; it resets on its own."
 TEST_SYSTEM = 'Reply with ONLY this JSON object and nothing else: {"ok": true}'
 
@@ -281,7 +289,7 @@ def test_all(gemini=None, anthropic=None, transport=None) -> list[dict]:
                 model, error = m, None
                 break
             except CallError as e:
-                error, quota = e.detail, e.kind in ("rate", "credit")
+                error, quota = named(status(name), e.detail), e.kind in ("rate", "credit")
                 if e.scope == "provider":
                     break
             except BadReply as e:
@@ -428,7 +436,7 @@ def _provider_view(name: str, now: float) -> dict:
     elif st.last_ok or st.order:
         state, text = "ok", "Working."
     else:
-        state, text = "idle", "Key set. Press Test to check it, or Re-rank to measure its models."
+        state, text = "idle", "Key set. Press Test to check it." if st.ranked_at else "Key set. Press Test to check it, or Re-rank to measure its models."
     pin = pin_admin or pin_env
     if pin and R.pin_gone(name, pin):
         text += (f" The pinned model {pin} isn't available any more ({R.stats(name, pin).last_error}), so the measured models "
@@ -442,13 +450,13 @@ def _provider_view(name: str, now: float) -> dict:
     reset_at = st.quota_reset if (st.quota_reset or 0) > now else (st.cooldown_until if cooling else None)
     return {"name": name, "label": p.label, "configured": is_on, "missing": missing(name), "key_url": p.key_url,
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
-            "state": state, "state_text": text, "answering": answering, "result": result, "paused_models": paused_models,
+            "state": state, "state_text": named(st, text), "answering": answering, "result": result, "paused_models": paused_models,
             "quota": {"limited": bool(st.quota and (cooling or all_closed)) or result == "quota", "reset_at": reset_at,
                       "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
                       "remaining_at": st.remaining.get("at")},
-            "last_ok": st.last_ok, "last_error": st.last_error, "last_used_model": st.model,
+            "last_ok": st.last_ok, "last_error": named(st, st.last_error), "last_used_model": st.model,
             "pinned": pin_admin or pin_env or None, "pinned_by": "admin" if pin_admin else "railway" if pin_env else None,
-            "ranked_at": st.ranked_at or None, "rank_error": st.rank_error, "discovered": st.discovered, "skipped": st.skipped,
+            "ranked_at": st.ranked_at or None, "rank_error": named(st, st.rank_error), "discovered": st.discovered, "skipped": st.skipped,
             "probing": st.probing, "models": models,
             "blocked": [b.split("/", 1)[1] for b in R.blocks() if b.startswith(name + "/")],
             "blocked_info": {b.split("/", 1)[1]: R.block_info(name, b.split("/", 1)[1]) or {} for b in R.blocks() if b.startswith(name + "/")}}

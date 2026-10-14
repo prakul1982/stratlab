@@ -436,8 +436,19 @@ def dividend_list(rows, restate: bool = False) -> list[dict]:
             continue
         day, amt = str(d.get("date") or d.get("ex_date") or "")[:10], _num(d.get("amount"))
         if day and amt and amt > 0:
-            out.append({"date": day, "amount": amt / restated_by(later, day)})
+            out.append({"date": day, "amount": amt / restated_by(later, day), **({"special": True} if d.get("sub") == "special" else {})})
     return out
+
+
+def special_in_year(dividends: list[dict], as_of: str | None) -> float | None:
+    """The special dividends among those dividend_yield counts (ex-date in the year to `as_of`), per share; None when none."""
+    try:
+        end = date.fromisoformat((as_of or "")[:10])
+    except ValueError:
+        return None
+    start = (end - timedelta(days=365)).isoformat()
+    total = sum(_num(d.get("amount")) or 0 for d in dividends or [] if d.get("special") and start < str(d.get("date") or "") <= end.isoformat())
+    return round(total, 2) if total else None
 
 
 def restating_actions(rows) -> list[tuple[str, float]]:
@@ -925,7 +936,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "price_basis": prices.get("price_basis"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
-        "div_yield": snap.get("div_yield"), "profit_ttm": _ttm_profit(p),
+        "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
         "bank": bool(nums.get("bank")), "years": years, "currency_note": p.get("currency_note"),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
@@ -1753,7 +1764,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
-            ("Dividend yield", _fmt(dy, 2, "%") if dy is not None else "n/a")]
+            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of ₹{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
 
 
