@@ -361,3 +361,15 @@ def test_a_replayed_checkout_after_a_refund_gets_nothing(w, monkeypatch):
     with pytest.raises(billing.SignatureVerificationError):
         billing.verify_checkout({**profile, "plan_status": "cancelled"}, p["id"], "sub_9", "abc123")
     assert calls == []
+
+
+def test_two_containers_cannot_both_credit_one_invite(w, monkeypatch):
+    """The lock is per process: the marker is claimed in the database, so a second claimant credits nothing and tells no one."""
+    user("ref")
+    claimed = []
+    monkeypatch.setattr(plans, "add_free_basic", lambda who, days, now: claimed.append(who["id"]) or {"until": None, "banked": 0})
+    monkeypatch.setattr(plans, "free_basic", lambda uid: {"until": None, "banked": 0})
+    who = {"id": "ref"}
+    assert R._credit("rewardgrant:x:referrer", who, 30, NOW)[1] is True
+    assert R._credit("rewardgrant:x:referrer", who, 30, NOW) == ({"until": None, "banked": 0}, False)
+    assert claimed == ["ref"]

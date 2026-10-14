@@ -1067,10 +1067,10 @@ def ai_allowance(profile, held: int = 0) -> tuple[int, int | None]:
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used + held >= limit:
         err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
-    since = (datetime.now(IST) - timedelta(days=1)).isoformat()
+    since = research_routes.ai_day_start()         # India's day, like the research cap
     # a safety cap on Pro's unlimited builds, said on Plans; the site's admins have none (R8O-002)
     if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) + held >= AI_BUILDS_PER_DAY:
-        err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. Try again tomorrow.")
+        err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. The count starts again at midnight India time.")
     return used, limit
 
 
@@ -1094,10 +1094,11 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     """Testable strategy ideas for anything typed into search. Shared cache; built-in ideas if the AI is down."""
     q = req.q.strip()
     try:
-        out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q))
+        out = research_routes.ai_call(profile, "ideas", ideas.key(q), 7 * 86400, False, lambda: ideas.build(ask_json, q),
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
         return {"ideas": out["ideas"], "fallback": False}
     except HTTPException as e:
-        if e.status_code in (422, 503):
+        if e.status_code in (422, 429, 503):
             return {"ideas": ideas.fallback(q), "fallback": True}
         raise
 
@@ -1109,7 +1110,8 @@ def ask_route(req: IdeasReq, profile=Depends(current_profile)):
     if ask.looks_like_code(q):
         return {"action": "import", "text": q, "title": "Import this strategy", "fallback": False}
     try:
-        out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q))
+        out = research_routes.ai_call(profile, "ask", ask.key(q), 7 * 86400, False, lambda: ask.build(ask_json, q),
+                                      kind_used=research_routes.SEARCH_KIND, cap=research_routes.SEARCH_AI_PER_DAY)
         return {**out, "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):

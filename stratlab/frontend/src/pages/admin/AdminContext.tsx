@@ -28,7 +28,7 @@ export interface Overview {
     calendar?: CalendarStatus; invoice_seller?: InvoiceSeller; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
-  stats: { users: number; plans: Record<Plan, number>; new_7d: number; signups_today: number; experiments_month: number; ai_month: number;
+  stats: { users: number; plans: Record<Plan, number>; new_7d: number; signups_today: number; experiments_month: number; ai_month: number; ai_reads_month?: number;
     /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
     paying?: Record<"basic" | "pro", number>; given?: Record<"basic" | "pro", number>;
     /** people who pressed "Tell me when plans open" (older servers don't send it) */
