@@ -252,7 +252,7 @@ export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | nu
 /** A landing-page address's own heading ("Plans and prices" at /pricing), the h1 the landing page shows there, so the
  * address's own HTML and the drawn page agree (R8V-008); none for the home page and addresses without their own page. */
 export const landingHeading = (path: string): string | undefined => {
-  const p = pageMeta(path);
+  const p = pageMeta(PAGE_ALIASES[tidy(path)] ?? path);
   return p && p.path !== "/" && p.heading !== TAGLINE ? p.heading : undefined;
 };
 
@@ -262,6 +262,10 @@ export const NOT_FOUND_DESCRIPTION = "There is no page at this address on StratL
 export const VERDICT_DESCRIPTION = "A strategy's verdict on past prices, shared by link: the result after costs and the four checks it was put through.";
 
 const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/");
+
+/** Addresses that open another page's words (the signed-in Plans page's address for a visitor): the build writes /plans as
+ * /pricing's page, so a visitor sees the prices' heading from the first frame and not the home page's hero (R17-002). */
+export const PAGE_ALIASES: Record<string, string> = { "/plans": "/pricing" };
 
 /** The table's entry for an address, if it has one. */
 export const pageMeta = (path: string): PageMeta | undefined => PAGES.find((p) => p.path === tidy(path));

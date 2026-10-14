@@ -167,6 +167,9 @@ def test_billing_and_the_stored_plan_are_untouched(w, monkeypatch):
     # /me shows the viewed plan's billing, not the owner's own
     m = me(c, OWNER, "free")
     assert m["billing"] == {"subscribed_plan": None, "status": None, "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": False}
+    # a paid plan viewed as is not "given by the owner": that row is the owner's own, not what a paying user sees (R17-005)
+    for view in ("basic", "pro"):
+        assert me(c, OWNER, view)["billing"]["given_by_owner"] is False
     # and no billing action can run while viewing
     started = []
     monkeypatch.setattr(main.billing, "create_subscription", lambda *a, **k: started.append(a) or {"subscription_id": "sub_1"})

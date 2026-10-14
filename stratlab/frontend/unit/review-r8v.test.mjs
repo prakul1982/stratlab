@@ -80,11 +80,14 @@ test("the build reads the public library from the API once, and carries on witho
 
 test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", () => {
   const files = Object.fromEntries(pageFiles(template));
-  // the home page (and /plans, /upgrade, /features, which are index.html): the tagline the landing page draws
+  // the home page (and /upgrade, /features, which are index.html; /plans is /pricing's page, R17-002): the tagline the landing page draws
   assert.equal(seo.pageMeta("/").heading, seo.TAGLINE);
   assert.deepEqual(h1s(files["index.html"]), ["Test it, research it, track it."]);
   assert.deepEqual(h1s(template), ["Test it, research it, track it."]);
-  for (const p of ["/plans", "/upgrade", "/features", "/"]) assert.equal(seo.landingHeading(p), undefined, p);
+  for (const p of ["/upgrade", "/features", "/"]) assert.equal(seo.landingHeading(p), undefined, p);
+  assert.equal(seo.landingHeading("/plans"), "Plans and prices");
+  assert.deepEqual(h1s(files["plans/index.html"]), ["Plans and prices"]);
+  assert.match(files["plans/index.html"], /<title>Plans · StratLab<\/title>/);
   // an address with a page of its own: that page's heading, which the landing page then draws as its h1
   const own = { "/pricing": "Plans and prices", "/faq": "Questions", "/about": "About StratLab", "/help": "Help",
     "/login": "Sign in to StratLab", "/signup": "Sign up for StratLab" };

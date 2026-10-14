@@ -465,7 +465,7 @@ function Pricing() {
           {PLAN_IDS.map((p) => {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
-            const per = year ? "year" : "month";
+            const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
             // the amount a card is really charged, when it is not the amount shown (a currency that is charged in rupees)
             const chargedInRupees = p !== "free" && !!local && (year ? local.yearly_charged_in : local.charged_in) === "INR";
             const save = p !== "free" && year ? yearlySaving(amount(p), amount(p, true)) : null;
