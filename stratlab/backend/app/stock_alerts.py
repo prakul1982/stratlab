@@ -14,7 +14,6 @@ alerts that fire while they're over the limit wait and go out together in the ne
 import json
 import math
 import secrets
-import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -45,8 +44,6 @@ PER_DAY = 20                         # and in a day
 MAX_PENDING = 50                     # fired alerts waiting for the next message
 KEEP_TRIGGERED = 50                  # triggered alerts kept on the Alerts page
 QUOTE_BATCH = 24
-
-_lock = threading.Lock()             # one read-modify-write of a user's row at a time (the API and the checker)
 
 
 class AlertError(ValueError):
@@ -185,9 +182,9 @@ def clean(req: dict) -> dict:
 
 
 # ---------- storage ----------
-def _read(uid: str) -> dict:
+def _read(uid: str, raw: str | None = None) -> dict:
     try:
-        row = json.loads(db.get_setting(KEY + uid) or "{}")
+        row = json.loads((db.get_setting(KEY + uid) if raw is None else raw) or "{}")
     except (ValueError, TypeError):
         row = {}
     if not isinstance(row, dict):
@@ -200,16 +197,34 @@ def _read(uid: str) -> dict:
     return row
 
 
-def _write(uid: str, row: dict) -> None:
+def _trim(row: dict) -> str:
     triggered = [a for a in row["items"] if a.get("status") == "triggered"]
     if len(triggered) > KEEP_TRIGGERED:             # the oldest triggered ones go
         old = {a["id"] for a in sorted(triggered, key=lambda a: a.get("triggered_at") or "")[:len(triggered) - KEEP_TRIGGERED]}
         row["items"] = [a for a in row["items"] if a["id"] not in old]
-    db.set_setting(KEY + uid, json.dumps(row))
+    return json.dumps(row)
+
+
+def _change(uid: str, fn):
+    """Change a user's row atomically (db.update_setting): fn(row) edits it and returns False to leave it as it was.
+    It runs again on the new row when another writer got in first, so it keeps its results in the return value."""
+    out = []
+
+    def go(raw):
+        row = _read(uid, raw or "")
+        out[:] = [fn(row)]
+        return _trim(row) if out[0][0] else None
+    db.update_setting(KEY + uid, go)
+    return out[0][1]
 
 
 def items(uid: str) -> list[dict]:
     return _read(uid)["items"]
+
+
+def _seen(a: dict) -> tuple:
+    """What an alert looked like when a check read it: if it differs when the check is applied, someone applied first."""
+    return a.get("state") or {}, int(a.get("fired") or 0)
 
 
 def _now() -> str:
@@ -219,43 +234,39 @@ def _now() -> str:
 def create(uid: str, req: dict, limit: int, seed: dict | None = None) -> dict:
     """Add an alert. `seed` is the stock's quote now, so a price alert knows which side of its level it starts on."""
     a = clean(req)
-    with _lock:
-        row = _read(uid)
+    def add(row):
         if sum(1 for x in row["items"] if x.get("status") == "active") >= limit:
             raise LimitReached(limit)
         a.update(id=secrets.token_hex(6), status="active", created_at=_now(), triggered_at=None, fired=0,
                  last_text=None, rev=1, state=_seed(a, seed))
         row["items"].append(a)
-        _write(uid, row)
-    return a
+        return True, a
+    return _change(uid, add)
 
 
 def update(uid: str, aid: str, req: dict, limit: int, seed: dict | None = None) -> dict | None:
     """Change an alert's condition; it starts afresh (active again, its crossing state reset). None if not found."""
     a = clean(req)
-    with _lock:
-        row = _read(uid)
+    def edit(row):
         old = next((x for x in row["items"] if x["id"] == aid), None)
         if not old:
-            return None
+            return False, None
         others = sum(1 for x in row["items"] if x.get("status") == "active" and x["id"] != aid)
         if others >= limit:
             raise LimitReached(limit)
         old.update(a, status="active", triggered_at=None, rev=int(old.get("rev") or 0) + 1, state=_seed(a, seed))
-        _write(uid, row)
-        return old
+        return True, old
+    return _change(uid, edit)
 
 
 def delete(uid: str, aid: str | None = None, triggered: bool = False) -> int:
     """Remove one alert, or every triggered one. Returns how many went."""
-    with _lock:
-        row = _read(uid)
+    def drop(row):
         keep = [a for a in row["items"] if not (a["id"] == aid or (triggered and a.get("status") == "triggered"))]
         gone = len(row["items"]) - len(keep)
-        if gone:
-            row["items"] = keep
-            _write(uid, row)
-    return gone
+        row["items"] = keep
+        return bool(gone), gone
+    return _change(uid, drop)
 
 
 class LimitReached(Exception):
@@ -521,7 +532,7 @@ class Checker:
                 continue
             todo[uid] = [a for a in mine[:self.limit(profiles[uid])] if a.get("region") in days and a.get("kind") not in EVENTS
                          and self.kind_ok(profiles[uid], a.get("kind"))]
-        fired: dict[str, dict[str, tuple]] = {}      # uid -> alert id -> (text, new state, rev)
+        fired: dict[str, dict[str, tuple]] = {}      # uid -> alert id -> (text, new state, rev, _seen)
         checked = 0
         for region, today in days.items():
             mine = [(uid, a) for uid, xs in todo.items() for a in xs if a["region"] == region]
@@ -551,12 +562,12 @@ class Checker:
                     continue
                 checked += 1
                 if text or st != (a.get("state") or {}):
-                    fired.setdefault(uid, {})[a["id"]] = (text, st, a.get("rev"))
+                    fired.setdefault(uid, {})[a["id"]] = (text, st, a.get("rev"), _seen(a))
         n_fired = n_sent = 0
         for uid in users:
             changes = fired.get(uid, {})
             texts = apply(uid, changes, now)
-            n_fired += sum(1 for t, _, _ in changes.values() if t)
+            n_fired += sum(1 for t, *_ in changes.values() if t)
             if texts and uid in profiles and flush(uid, profiles[uid], texts, now, self.send):
                 n_sent += 1
         self.status.update(last_run=now.isoformat(), checked=checked, fired=n_fired, sent=n_sent)
@@ -586,29 +597,30 @@ def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver
     except Exception as e:
         print("stock alert failed:", uid, str(e)[:120])
         reached = False
-    with _lock:
-        row = _read(uid)
+    def done(row):
         if reached:
             row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
             row.pop("retry_at", None)
         else:
             row["pending"] = (texts + row["pending"])[-MAX_PENDING:]
             row["retry_at"] = (now + RETRY_AFTER).isoformat()
-        _write(uid, row)
+        return True, None
+    _change(uid, done)
     return reached
 
 
 def apply(uid: str, changes: dict, now: datetime) -> list[str]:
     """Save each alert's new state, mark the fired ones triggered (or keep repeating ones on), and return the texts
     to send now: everything waiting, when the user is under the message limits."""
-    with _lock:
-        row = _read(uid)
+    def go(row):
         dirty = False
         for a in row["items"]:
             hit = changes.get(a["id"])
             if not hit or hit[2] != a.get("rev") or a.get("status") != "active":
                 continue                # edited or deleted while this check ran: leave it
-            text, st, _ = hit
+            if len(hit) > 3 and hit[3] != _seen(a):
+                continue                # moved on since this check read it (another check applied first)
+            text, st = hit[0], hit[1]
             a["state"] = st
             dirty = True
             if text:
@@ -620,9 +632,8 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
         if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now):
             texts, row["pending"] = row["pending"], []
             dirty = True
-        if dirty:
-            _write(uid, row)
-    return texts
+        return dirty, texts
+    return _change(uid, go)
 
 
 # ---------- alerts on exchange disclosures (insider trades, bulk and block deals) ----------
@@ -703,7 +714,7 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
                 continue
             text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
             if text or st != (a.get("state") or {}):
-                changes[a["id"]] = (text, st, a.get("rev"))
+                changes[a["id"]] = (text, st, a.get("rev"), _seen(a))
         texts = apply(uid, changes, now)
         if texts and flush(uid, p, texts, now, send):
             sent += 1

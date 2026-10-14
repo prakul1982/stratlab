@@ -60,7 +60,6 @@ WHATS_NEW = [
 ]
 
 BACKGROUND = True                # tests turn this off to send in the calling thread
-_lock = threading.Lock()
 
 
 def _now(now: datetime | None) -> datetime:
@@ -101,19 +100,25 @@ def sent(uid: str) -> dict:
 
 def _claim(uid: str, key: str, now: datetime) -> bool:
     """Record the email as sent, unless it already was. True when this caller should send it."""
-    with _lock:
-        have = sent(uid)
+    won = []
+
+    def mark(raw):
+        have = db.json_value(raw, {})
+        won.clear()
         if key in have:
-            return False
-        db.set_setting(SENT + uid, json.dumps({**have, key: now.isoformat()}))
-        return True
+            return None
+        won.append(1)
+        return json.dumps({**have, key: now.isoformat()})
+    db.update_setting(SENT + uid, mark)           # atomic, so two containers can't both claim it
+    return bool(won)
 
 
 def _release(uid: str, key: str):
-    with _lock:
-        have = sent(uid)
+    def drop(raw):
+        have = db.json_value(raw, {})
         have.pop(key, None)
-        db.set_setting(SENT + uid, json.dumps(have))
+        return json.dumps(have)
+    db.update_setting(SENT + uid, drop)
 
 
 def address(profile: dict) -> str | None:

@@ -105,6 +105,29 @@ class Store:
             cur.executemany("insert into app_settings (key, value, updated_at) values (%s, %s, now()) "
                             "on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at", rows)
 
+    def update(self, key: str, fn):
+        """Change one setting in a transaction with its row locked: fn(current or None) returns the new value, None to
+        leave it, or db.REMOVE. Returns what the setting holds afterwards."""
+        from .db import REMOVE
+        with self.pool().connection() as c, c.transaction():
+            while True:
+                rows = c.execute("select value from app_settings where key = %s for update", (key,)).fetchall()
+                old = rows[0][0] if rows else None
+                new = fn(old)
+                if new is None:
+                    return old
+                if rows or new is REMOVE:
+                    break
+                if c.execute("insert into app_settings (key, value, updated_at) values (%s, %s, now()) "
+                             "on conflict (key) do nothing returning key", (key, new)).fetchall():
+                    return new
+                # another writer inserted it first: lock theirs and decide again
+            if new is REMOVE:
+                c.execute("delete from app_settings where key = %s", (key,))
+                return None
+            c.execute("update app_settings set value = %s, updated_at = now() where key = %s", (new, key))
+            return new
+
     def delete(self, key: str) -> None:
         self._run("delete from app_settings where key = %s", (key,))
 

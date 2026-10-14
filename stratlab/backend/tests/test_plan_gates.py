@@ -175,6 +175,7 @@ def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
     assert main.lift("free", "live_limit", "paper sessions") == " Basic gives 2." and main.lift("free", "stock_alerts", "x") == " Basic gives 25."
     monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
     monkeypatch.setattr(main.holdings, "load", lambda uid: {"items": [], "source": None})   # the refusal compares with the saved list
+    monkeypatch.setattr(main.holdings, "update", lambda uid, fn: fn({"items": [], "source": None}))   # (no database here)
     try:
         c = as_plan("free")
         r = c.put("/holdings", json={"items": [{"symbol": f"S{i}", "qty": 1} for i in range(31)]})

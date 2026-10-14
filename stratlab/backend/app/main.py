@@ -2574,20 +2574,29 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         err(400, "bad_file", str(e))
     found, missed = holdings.match_all(parsed["rows"], holdings_matcher())
     missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
-    before = holdings.load(profile["id"])
-    n_read = len(found) if req.mode == "replace" else None
-    if req.mode == "add":
-        found = holdings.merge(before["items"] + found)
-    elif found:                           # a file replaces only the markets it covers: US holdings stay
-        covered = {holdings.market_of(i) for i in found}
-        found = found + [i for i in before["items"] if holdings.market_of(i) not in covered]
     limit = holdings_limit(profile["_plan"])
-    found, over = holdings.cap(found, before["items"], limit)
-    if found:                            # nothing matched: the saved holdings stay as they were
+    out = {}
+
+    def merged(before):                   # runs again on the newer holdings if another save lands first
+        n_read = len(found) if req.mode == "replace" else None
+        rows = found
+        if req.mode == "add":
+            rows = holdings.merge(before["items"] + rows)
+        elif rows:                        # a file replaces only the markets it covers: US holdings stay
+            covered = {holdings.market_of(i) for i in rows}
+            rows = rows + [i for i in before["items"] if holdings.market_of(i) not in covered]
+        rows, out["over"] = holdings.cap(rows, before["items"], limit)   # a downgrade deletes nothing
+        out["n"] = len(rows) if n_read is None else min(n_read, len(rows))
+        out["saved"] = bool(rows)
+        if not rows:                      # nothing matched: the saved holdings stay as they were
+            return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
+        return with_sectors(rows, known), parsed["broker"]
+    holdings.update(profile["id"], merged)
+    if out["saved"]:
         invite_rewards.safe_touch(profile, "holdings")
-    return ok({"broker": parsed["broker"], "imported": len(found) if n_read is None else min(n_read, len(found)), "saved": bool(found), "unmatched": missed[:200],
+    over = out["over"]
+    return ok({"broker": parsed["broker"], "imported": out["n"], "saved": out["saved"], "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -2597,31 +2606,33 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     that match no listed company are sent back and left out."""
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     limit = holdings_limit(profile["_plan"])
-    before = holdings.load(profile["id"])
-    saved = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
-    # over the limit after a downgrade: a list of stocks already held, no longer than the saved one, still saves, so
-    # stocks come off one at a time
-    new = any((i.market, i.symbol.strip().upper()) not in saved for i in req.items)
-    if len(req.items) > limit and (new or len(req.items) > len(before["items"])):
-        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
-    kept, rows, us_rows = [], [], []
-    for n, i in enumerate(req.items, 1):
-        old = saved.get((i.market, i.symbol.strip().upper()))
-        if old:                           # already matched: kept as it is, even while market data is offline
-            kept.append({**old, "qty": i.qty, "avg": i.avg or None})
-        else:
-            (us_rows if i.market == "US" else rows).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
-    found, missed = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
-    if us_rows:
-        us_found, us_missed = holdings.match_us(us_rows, _us_find)
-        found, missed = found + us_found, missed + us_missed
-    found = holdings.merge(kept + found)
-    if found:
-        known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        holdings.save(profile["id"], with_sectors(found, known), before["source"] or "Manual")
-    elif not missed:
-        holdings.delete(profile["id"])    # every row removed
-    return ok({"unmatched": missed, "holdings": holdings_view(profile)})
+    out = {}
+
+    def edited(before):                   # runs again on the newer holdings if another save lands first
+        saved = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
+        # over the limit after a downgrade: a list of stocks already held, no longer than the saved one, still saves,
+        # so stocks come off one at a time
+        new = any((i.market, i.symbol.strip().upper()) not in saved for i in req.items)
+        if len(req.items) > limit and (new or len(req.items) > len(before["items"])):
+            upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
+        kept, rows, us_rows = [], [], []
+        for n, i in enumerate(req.items, 1):
+            old = saved.get((i.market, i.symbol.strip().upper()))
+            if old:                       # already matched: kept as it is, even while market data is offline
+                kept.append({**old, "qty": i.qty, "avg": i.avg or None})
+            else:
+                (us_rows if i.market == "US" else rows).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
+        found, out["missed"] = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
+        if us_rows:
+            us_found, us_missed = holdings.match_us(us_rows, _us_find)
+            found, out["missed"] = found + us_found, out["missed"] + us_missed
+        found = holdings.merge(kept + found)
+        if found:
+            known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
+            return with_sectors(found, known), before["source"] or "Manual"
+        return None if out["missed"] else db.REMOVE      # every row removed
+    holdings.update(profile["id"], edited)
+    return ok({"unmatched": out["missed"], "holdings": holdings_view(profile)})
 
 
 HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetched while the page waits; the rest after
@@ -2672,26 +2683,28 @@ def holdings_corp_actions(profile=Depends(current_profile)):
 def holdings_corp_action(req: CorpActionReq, profile=Depends(current_profile)):
     """Apply a bonus or split to one holding's quantity and average price, set it aside, or undo the last one."""
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
-    h = holdings.load(profile["id"])
     sym = req.symbol.strip().upper()
-    item = next((i for i in holdings.indian(h["items"]) if i["symbol"] == sym), None)
-    if not item:
-        err(404, "not_held", f"{sym} isn't in your holdings.")
-    today = datetime.now(IST).date()
-    saved = (h["updated_at"] or today.isoformat())[:10]
-    if req.action == "undo":
-        if not item.get("adjusted"):
-            err(409, "nothing_to_undo", f"{sym} has no adjustment to undo.")
-        new = corp_actions.undo(item)
-    else:
-        acts = corp_actions.actions_for("IN", sym, None, today, fetch=False)
-        wait = corp_actions.pending(item, acts, str(item.get("since") or saved)[:10], today)
-        a = next((a for a in wait if a["id"] == req.id), None)
-        if not a or (req.action == "apply" and a is not wait[0]):
-            err(409, "nothing_to_apply", f"There's no bonus or split waiting to be applied to {sym}. Reload the page.")
-        new = corp_actions.apply(item, a) if req.action == "apply" else corp_actions.dismiss(item, a)
-    items = [{**(new if i is item else i), "since": (new if i is item else i).get("since") or saved} for i in h["items"]]
-    holdings.save(profile["id"], items, h["source"] or "Manual", stamped=True)
+
+    def adjusted(h):                      # runs again on the newer holdings if another save lands first
+        item = next((i for i in holdings.indian(h["items"]) if i["symbol"] == sym), None)
+        if not item:
+            err(404, "not_held", f"{sym} isn't in your holdings.")
+        today = datetime.now(IST).date()
+        saved = (h["updated_at"] or today.isoformat())[:10]
+        if req.action == "undo":
+            if not item.get("adjusted"):
+                err(409, "nothing_to_undo", f"{sym} has no adjustment to undo.")
+            new = corp_actions.undo(item)
+        else:
+            acts = corp_actions.actions_for("IN", sym, None, today, fetch=False)
+            wait = corp_actions.pending(item, acts, str(item.get("since") or saved)[:10], today)
+            a = next((a for a in wait if a["id"] == req.id), None)
+            if not a or (req.action == "apply" and a is not wait[0]):
+                err(409, "nothing_to_apply", f"There's no bonus or split waiting to be applied to {sym}. Reload the page.")
+            new = corp_actions.apply(item, a) if req.action == "apply" else corp_actions.dismiss(item, a)
+        items = [{**(new if i is item else i), "since": (new if i is item else i).get("since") or saved} for i in h["items"]]
+        return items, h["source"] or "Manual", True
+    holdings.update(profile["id"], adjusted)
     return ok({"holdings": holdings_view(profile), "actions": holdings_corp_view(profile, fetch=False)})
 
 
