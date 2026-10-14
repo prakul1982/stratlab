@@ -286,7 +286,7 @@ def summary(p: dict) -> dict:
         "debt_as_of": (str(bal["cols"][-1]).strip() or None) if borrow_now is not None and (bal or {}).get("cols") else None,
         # no ratio on a negative net worth (-2.0 would read as the least leveraged)
         "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth and net_worth > 0 else None,
-        "net_worth_negative": net_worth is not None and net_worth <= 0 or (book is not None and book <= 0),
+        "net_worth_negative": net_worth is not None and net_worth < 0 or (book is not None and book < 0),
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
     }
 

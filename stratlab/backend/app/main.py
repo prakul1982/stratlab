@@ -2200,16 +2200,15 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
-    # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
-    # last reported year's, so the deck's tile agrees with them; without that list the source's figure stays, as on the page
+    # the yield as the public page works it out (ex-dated dividends of the year to the last close): the source's own
+    # figure never stays, so a missing list is n/a here as there, not the source's 0.00%
+    as_of = candle_day((base.get("trend") or {}).get("t")) or datetime.now(IST).date().isoformat()
     try:
-        today = datetime.now(IST).date().isoformat()
-        dy = (page_dividend_yield("US", sym, snap.get("price"), today) if us
-              else page_dividend_yield("IN", sym, snap.get("price"), today, {"sym": sym, "bse": None}))
+        dy = (us_page_dividend_yield(sym, snap.get("price"), as_of) if us
+              else page_dividend_yield("IN", sym, snap.get("price"), as_of, {"sym": sym, "bse": None}))
     except Exception:
         dy = None
-    if dy is not None:
-        snap = {**snap, "div_yield": dy}
+    snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -3399,13 +3398,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
         p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
         # the app's own dividends list first (its Corporate actions card), so both pages have one yield (R7O-004)
-        dy = page_dividend_yield("US", sym, close, prices.get("price_at"))
-        if dy is None:
-            try:
-                divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
-                dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
-            except Exception:
-                dy = None
+        dy = us_page_dividend_yield(sym, close, prices.get("price_at"))
         if dy is None:
             p["ratios"].pop("Dividend Yield", None)
         else:
@@ -3525,6 +3518,19 @@ def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dic
     if not divs:
         return None
     return stock_pages.dividend_yield(divs, close, as_of)
+
+
+def us_page_dividend_yield(sym: str, close, as_of: str | None) -> float | None:
+    """A US company's yield as the public page shows it: the app's own dividends list, else the price history's
+    dividends for the year, else None (n/a)."""
+    dy = page_dividend_yield("US", sym, close, as_of)
+    if dy is None and close and as_of:
+        try:
+            divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
+            dy = stock_pages.dividend_yield(divs, close, as_of)
+        except Exception:
+            dy = None
+    return dy
 
 
 def us_cap_checks(p: dict, sym: str) -> dict:

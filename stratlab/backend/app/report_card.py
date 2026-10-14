@@ -332,7 +332,7 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     res["actual"] = round(a, 1)
     # met: at the target or the range's low end, less the tolerance (beating it is met too)
     if g["metric"] == "capex":
-        ok = a >= g["low"] * 0.9
+        ok = g["low"] * 0.9 <= a <= (g.get("high") or g["low"]) * 1.1      # a spend target is a band: overspending misses it
     else:
         ok = a >= g["low"] - TOLERANCE[g["metric"]]
     res["result"] = "met" if ok else "missed"
