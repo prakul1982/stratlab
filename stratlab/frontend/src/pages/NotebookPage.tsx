@@ -208,6 +208,8 @@ export function NotebookPage() {
   const setStrategy = (st: Strategy) => patch({ strategy: st,
     ...(st.name !== s.name && st.name && isAutoNotebookName(nb.name, s.name) ? { name: st.name } : {}) });
 
+  // this month's experiments are used up on the plan (also when viewing as a smaller plan than the owner's own use, R17-004)
+  const outOfRuns = me?.usage.backtests_limit != null && me.usage.backtests_used >= me.usage.backtests_limit;
   const run = async () => {
     if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
@@ -416,14 +418,15 @@ export function NotebookPage() {
           <FormGrid label="Run an experiment" onSubmit={(e) => { e.preventDefault(); void run(); }}>
             <Field label="What's different this time?" optional wide maxLength={120} value={label} placeholder={nextV === 1 ? "e.g. First try" : "e.g. Tighter stop loss"} onChange={(e) => setLabel(e.target.value)} />
             <FormActions>
-              <button type="submit" className="btn" disabled={running}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
+              <button type="submit" className="btn" disabled={running || outOfRuns} title={outOfRuns ? "This month's experiments are used up on your plan" : undefined}>{running ? `Running 4 honesty checks…${elapsed >= 3 ? ` ${runTime(elapsed)}` : ""}` : `Run experiment v${nextV}`}</button>
               <span className="k-small k-muted kbd-hint">or press <kbd>{navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd></span>
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
           </FormGrid>
           <p className="k-note">
-            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month. ` : ""}
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month${outOfRuns ? ", limit reached" : ""}. ` : ""}
             {runCopy(group?.members.length ?? 0, running, elapsed)}
+            {outOfRuns && <> <Link className="link" to="/plans">Plans</Link></>}
           </p>
           {experiments.length === 0
             ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>

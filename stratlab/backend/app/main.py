@@ -707,7 +707,7 @@ def me(profile=Depends(current_profile)):
         "promo": {"until": until.isoformat()} if not seen and (until := promo_until()) and promo_active() else None,
         "free_basic_until": fb.isoformat() if not seen and profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": ({"subscribed_plan": None if seen == "free" else seen, "status": None if seen == "free" else "active",
-                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": seen != "free"} if seen else
+                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": False} if seen else
                     {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                      "renews_or_ends": profile.get("current_period_end"),
                      "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
