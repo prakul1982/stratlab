@@ -16,6 +16,19 @@ USERS = {
 }
 
 
+def _instants(a, b):
+    """Two timestamps compared as the database does: as moments, not as text. 19:00 UTC on 31 March is after the start of
+    1 April in India (00:00+05:30), though as text it sorts before it. Anything that isn't a pair of timestamps compares as is."""
+    from datetime import datetime, timezone
+    try:
+        x, y = datetime.fromisoformat(a), datetime.fromisoformat(b)
+    except (TypeError, ValueError):
+        return a, b
+    if (x.tzinfo is None) != (y.tzinfo is None):
+        return a, b
+    return (x, y) if x.tzinfo else (x.replace(tzinfo=timezone.utc), y.replace(tzinfo=timezone.utc))
+
+
 def _get(row: dict, path: str):
     """'body->>kind' or 'body->instrument' or a plain column."""
     if "->" not in path:
@@ -70,10 +83,10 @@ class Query:
 
     def eq(self, c, v): return self._f(lambda r: r.get(c) == v)
     def neq(self, c, v): return self._f(lambda r: r.get(c) != v)
-    def gte(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) >= v)
-    def gt(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) > v)
-    def lte(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) <= v)
-    def lt(self, c, v): return self._f(lambda r: r.get(c) is not None and r.get(c) < v)
+    def gte(self, c, v): return self._f(lambda r: r.get(c) is not None and (lambda p: p[0] >= p[1])(_instants(r.get(c), v)))
+    def gt(self, c, v): return self._f(lambda r: r.get(c) is not None and (lambda p: p[0] > p[1])(_instants(r.get(c), v)))
+    def lte(self, c, v): return self._f(lambda r: r.get(c) is not None and (lambda p: p[0] <= p[1])(_instants(r.get(c), v)))
+    def lt(self, c, v): return self._f(lambda r: r.get(c) is not None and (lambda p: p[0] < p[1])(_instants(r.get(c), v)))
     def in_(self, c, vs): return self._f(lambda r, vs=set(vs): r.get(c) in vs)
     def like(self, c, p): return self._f(lambda r: fnmatch.fnmatchcase(str(r.get(c) or ""), p.replace("%", "*")))
     def ilike(self, c, p): return self._f(lambda r: fnmatch.fnmatch(str(r.get(c) or "").lower(), p.lower().replace("%", "*")))

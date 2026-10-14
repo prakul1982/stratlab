@@ -1,7 +1,9 @@
 import json
 import re
+from datetime import datetime, timezone
 
 import pytest
+import time_machine
 from fastapi.testclient import TestClient
 
 from app import db, main
@@ -39,6 +41,14 @@ US_LIST = [{"symbol": "NVDA", "name": "NVIDIA CORP"}, {"symbol": "VRT", "name": 
 
 @pytest.fixture
 def api(monkeypatch):
+    """The app's clock and the fake market's clock both stand at Monday 5 October 2026, 10:30 IST (India open): the market
+    mood is only written from levels of the session that is open, so a run that crossed the open (the fake market still
+    at 09:14, the app at 09:16) got "stale" levels and no read."""
+    from tests import fake_prices
+    day = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(fake_prices, "FROZEN", day)
+    clock = time_machine.travel(day)
+    clock.start()
     monkeypatch.setattr(settings, "FINNHUB_API_KEY", "k")
     monkeypatch.setattr(settings, "RESEARCH_AI_PER_DAY", 3)
     hub = Research(KiteService(), finnhub=Finnhub(transport=fake_finnhub()), yahoo=Yahoo(transport=fake_yahoo()),
@@ -70,6 +80,7 @@ def api(monkeypatch):
     c.calls, c.usage = calls, usage
     yield c
     main.app.dependency_overrides.clear()
+    clock.stop()
 
 
 def test_company_and_chart_and_quotes(api):

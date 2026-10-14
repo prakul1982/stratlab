@@ -181,7 +181,7 @@ def us_calendar(today=None) -> list[dict]:
             {"symbol": "NVDA", "date": day(8), "hour": "amc", "quarter": 3, "year": 2026},
             {"symbol": "MSFT", "date": day(-2), "hour": "amc", "quarter": 1, "year": 2027,
              "epsActual": 3.21, "epsEstimate": 3.1, "revenueActual": 69_400_000_000, "revenueEstimate": 68e9},
-            {"symbol": "bad symbol!", "date": t.isoformat()}, {"symbol": "XYZ", "date": "someday"}]
+            {"symbol": "bad symbol!", "date": day(0)}, {"symbol": "XYZ", "date": "someday"}]
 
 
 def fake_screener() -> httpx.MockTransport:
