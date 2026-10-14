@@ -61,8 +61,10 @@ def remember_owner(profile: dict) -> None:
     known = _owner_map()
     if known.get(profile["id"]) == email:
         return
-    known = {**known, profile["id"]: email}
-    db.set_setting(OWNERS_KEY, json.dumps(known))
+    def add(raw):                          # compare-and-set: another server's owner id isn't lost
+        d = db.json_value(raw, {})
+        return None if d.get(profile["id"]) == email else json.dumps({**d, profile["id"]: email})
+    known = db.json_value(db.update_setting(OWNERS_KEY, add), {})
     with _owners_lock:
         _owners.update(until=time.monotonic() + OWNERS_TTL, map=known)
 
@@ -144,15 +146,16 @@ def granted() -> set:
 
 
 def mark_granted(uid: str, on: bool) -> None:
-    d = db.json_value(db.get_setting(GRANTED_KEY), {})
-    d = d if isinstance(d, dict) else {}
-    if bool(d.get(uid)) == on:
-        return
-    if on:
-        d[uid] = True
-    else:
-        d.pop(uid, None)
-    db.set_setting(GRANTED_KEY, json.dumps(d))
+    def change(raw):                       # compare-and-set: a mark set at the same time isn't lost
+        d = db.json_value(raw, {})
+        if bool(d.get(uid)) == on:
+            return None
+        if on:
+            d[uid] = True
+        else:
+            d.pop(uid, None)
+        return json.dumps(d)
+    db.update_setting(GRANTED_KEY, change)
 
 
 def _paying(r: dict, given: set = frozenset()) -> bool:

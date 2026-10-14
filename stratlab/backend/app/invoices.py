@@ -131,7 +131,8 @@ def tax_lines(total: float, s: dict, buyer: dict) -> tuple[list[dict], str, str]
 
 
 def make(payment: dict, user: dict, plan: str, period: str) -> dict:
-    """The invoice for one payment, created once (a second call for the same payment returns the first)."""
+    """The invoice for one payment, created once (a second call for the same payment returns the first). The number,
+    the payment's claim and the lists are compare-and-set writes, so two servers never share or overwrite one."""
     pid = payment["id"]
     with _lock:
         existing = _get(f"invoice-of:{pid}")
@@ -140,8 +141,7 @@ def make(payment: dict, user: dict, plan: str, period: str) -> dict:
         s = seller()
         at = datetime.fromtimestamp(int(payment.get("created_at") or datetime.now(timezone.utc).timestamp()), timezone.utc)
         year = fy(at)
-        counter_key = f"invoice:counter:{year}"
-        n = int(_get(counter_key, 0) or 0) + 1
+        n = json.loads(db.update_setting(f"invoice:counter:{year}", lambda raw: json.dumps(int(json.loads(raw) if raw else 0) + 1)))
         number = f"{s['prefix']}/{year}/{n:04d}"
         billing = _get(f"billing:{user['id']}", {}) or {}
         country = billing.get("country") or ("XX" if payment.get("international") else "IN")
@@ -160,14 +160,20 @@ def make(payment: dict, user: dict, plan: str, period: str) -> dict:
                         "sac": SAC, "taxable": round(total - tax, 2)},
                "taxes": lines, "total": total,
                "place_of_supply": "Outside India" if country != "IN" else STATES.get(buyer["state"] or s.get("state"), "India")}
-        db.set_setting(counter_key, json.dumps(n))
         db.set_setting(f"invoice:{number}", json.dumps(inv))
-        db.set_setting(f"invoice-of:{pid}", json.dumps(number))
-        mine = _get(f"invoices:{user['id']}", []) or []
-        db.set_setting(f"invoices:{user['id']}", json.dumps(mine + [number]))
-        index = _get(f"invoices:fy:{year}", []) or []
-        db.set_setting(f"invoices:fy:{year}", json.dumps(index + [number]))
+        won = json.loads(db.update_setting(f"invoice-of:{pid}", lambda raw: None if raw else json.dumps(number)))
+        if won != number:          # another server issued this payment's invoice first (its record is already saved)
+            return _get(f"invoice:{won}")
+        _append(f"invoices:{user['id']}", number)
+        _append(f"invoices:fy:{year}", number)
         return inv
+
+
+def _append(key: str, number: str) -> None:
+    def add(raw):
+        have = json.loads(raw) if raw else []
+        return None if number in have else json.dumps(have + [number])
+    db.update_setting(key, add)
 
 
 def get(number: str) -> dict | None:
@@ -175,7 +181,8 @@ def get(number: str) -> dict | None:
 
 
 def of_user(uid: str) -> list[dict]:
-    return [i for i in (get(n) for n in reversed(_get(f"invoices:{uid}", []) or [])) if i]
+    """Only invoices billed to `uid`, whatever their list holds."""
+    return [i for i in (get(n) for n in reversed(_get(f"invoices:{uid}", []) or [])) if i and i.get("user_id") == uid]
 
 
 def of_year(year: str) -> list[dict]:
