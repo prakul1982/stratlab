@@ -330,13 +330,11 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
         res["result"] = "pending" if (today - period_end(per, nums.get("fye") or 3)).days < 75 else "unchecked"
         return res
     res["actual"] = round(a, 1)
-    # met: within tolerance of the target (both sides), or within the range, its ends widened by the tolerance
-    high = g["high"] if g.get("high") is not None else g["low"]
+    # met: at the target or the range's low end, less the tolerance (beating it is met too)
     if g["metric"] == "capex":
-        lo, hi = g["low"] * 0.9, high * 1.1
+        ok = a >= g["low"] * 0.9
     else:
-        lo, hi = g["low"] - TOLERANCE[g["metric"]], high + TOLERANCE[g["metric"]]
-    ok = lo <= a <= hi
+        ok = a >= g["low"] - TOLERANCE[g["metric"]]
     res["result"] = "met" if ok else "missed"
     return res
 

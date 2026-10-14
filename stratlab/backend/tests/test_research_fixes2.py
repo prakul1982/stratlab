@@ -81,11 +81,11 @@ def test_the_share_card_drops_figures_the_page_marks_stale():
     assert "Return on equity" in [k for k, _ in company_cards.card(fresh, "IN", "X")["facts"]]
 
 
-def test_met_means_within_tolerance_of_the_target_or_range():
+def test_met_means_at_or_above_the_target_less_the_tolerance():
     nums = deepdive.numbers(company())       # FY25 sales growth 17.6%
     def result(low, high):
         g = {"metric": "revenue_growth", "low": low, "high": high, "period": "FY25", "what": "x", "quote": "", "said_at": "2024-05-10T10:00",
              "source": {"title": "t", "at": "2024-05-10T10:00", "url": "u"}}
         return rc.view({"guidance": [g], "at": "x"}, nums, today=date(2026, 9, 30))["rows"][0]["result"]
-    assert result(17.0, None) == "met" and result(10.0, None) == "missed"       # outgrowing the target isn't "met"
-    assert result(15.0, 18.0) == "met" and result(10.0, 15.0) == "missed" and result(18.0, 20.0) == "met"
+    assert result(17.0, None) == "met" and result(10.0, None) == "met"          # beating the target is met
+    assert result(19.0, None) == "missed" and result(15.0, 18.0) == "met" and result(18.0, 20.0) == "met"

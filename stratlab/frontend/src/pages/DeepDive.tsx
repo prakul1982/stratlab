@@ -296,7 +296,7 @@ export function DeepDivePage() {
           <Panel title="Capex and cash" info={n.capex_reported
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
-            {n.capex_3y_total != null && <p className="k-small">{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over {(n.capex_years ?? 3) >= 3 ? "the last three years" : `${n.capex_years} of the last three years (the other has no figure)`}. Figures in {capS.unit}.</p>}
+            {n.capex_3y_total != null && <p className="k-small">{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over {(n.capex_years ?? 3) >= 3 ? "the last three years" : `${n.capex_years} of the last three years (no figure for the rest)`}. Figures in {capS.unit}.</p>}
             <DataTable label="Capex and cash by year" rows={[...years].reverse().slice(0, 8)} rowKey={(y) => y.year}
               columns={[{ key: "y", header: <>Year <span className="k-note">({capS.unit})</span></>, rowHeader: true, cell: (y) => y.year },
                 { key: "s", header: "Sales", numeric: true, cell: (y) => capS.fmt(y.sales) }, { key: "c", header: "Capex", numeric: true, cell: (y) => capS.fmt(y.capex) },

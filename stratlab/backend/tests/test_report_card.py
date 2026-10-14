@@ -63,7 +63,7 @@ def test_quarterly_targets_use_the_quarter_a_year_earlier():
     nums = {"years": [], "quarters": [{"quarter": q, "sales": s, "profit": 5, "opm": o} for q, s, o in
                                       [("Jun 2024", 40, 18), ("Sep 2024", 45, 19), ("Dec 2024", 50, 19), ("Mar 2025", 52, 20),
                                        ("Jun 2025", 48, 19), ("Sep 2025", 54, 20)]]}
-    row = rc.check({"metric": "revenue_growth", "low": 19.5, "high": None, "period": "Q2 FY26"}, nums, date(2026, 1, 1))
+    row = rc.check({"metric": "revenue_growth", "low": 18.0, "high": None, "period": "Q2 FY26"}, nums, date(2026, 1, 1))
     assert row["actual"] == 20.0 and row["result"] == "met"
     assert rc.check({"metric": "margin", "low": 21.0, "high": None, "period": "Q2 FY26"}, nums)["result"] == "missed"
     assert rc.check({"metric": "revenue_growth", "low": 18.0, "high": None, "period": "Q3 FY26"}, nums, date(2026, 1, 20))["result"] == "pending"
