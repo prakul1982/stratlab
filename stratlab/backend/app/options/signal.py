@@ -24,6 +24,7 @@ class SignalFeed:
         self._drop = drop_forming
         st = state or {}
         self.engine = Engine(r, 1, state=st.get("engine") or None)
+        self.engine.next_open = False        # live: a signal acts on the candle that just closed
         self.token = st.get("token") or self._token()
         self.bars = self._drop(kite.history(self.token, self.tf, KiteService.warmup_days(self.tf, 300)), self.tf)[-400:]
         if len(self.bars) < 30:

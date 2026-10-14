@@ -217,6 +217,7 @@ class LiveSession:
         state = row.get("state") or {}
         lot = self.inst.get("step") or (self.inst.get("lot", 1) if self.inst.get("fno") else 1)
         self.engine = Engine(self.strategy, lot, state=state or None, cost_kind=C.kind_of(self.inst))
+        self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.next_poll = 0.0
         self.poll_ok = True
         self.equity_curve: list[dict] = state.get("equity_curve", [])

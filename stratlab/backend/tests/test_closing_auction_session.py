@@ -126,6 +126,7 @@ def intraday(squareoff: str) -> Engine:
                  risk={"capital": 100000, "riskPct": 1, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0},
                  session={"squareoff": squareoff})
     e = Engine(s, 1)
+    e.next_open = False                                           # as live runs it
     bars = [{"t": f"{AFTER}T15:05:00+05:30", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1},
             {"t": f"{AFTER}T15:10:00+05:30", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1}]
     e.step(bars, Ctx(bars, intraday=True), 1)                     # enters on the candle closing at 15:15
@@ -152,6 +153,7 @@ def test_delivery_positions_are_left_alone():
     s = Strategy(tf="5m", entry=[{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 0}}],
                  risk={"capital": 100000, "riskPct": 1, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0})
     e = Engine(s, 1)
+    e.next_open = False
     bars = [{"t": f"{AFTER}T15:05:00+05:30", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1}] * 2
     e.step(bars, Ctx(bars, intraday=True), 1)
     assert e.qty > 0 and close_at_auction(e, "cas", at(AFTER, "15:40"), lambda: 1.0) is None
