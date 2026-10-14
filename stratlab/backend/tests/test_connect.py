@@ -9,6 +9,7 @@ import io
 import json
 import logging
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -1173,6 +1174,22 @@ def test_ibkr_fifo_pairs_shorts_and_partial_fills():
     assert [(t["side"], t["qty"], t["entry"], t["exit"]) for t in got] == [("short", 4.0, 50.0, 40.0), ("short", 6.0, 50.0, 45.0)]
     assert sum(t["charges"] for t in got) == pytest.approx(2.0)
     assert len({t["id"] for t in got}) == 2 and got == ibkr.closed_trades(fs)             # ids don't change between reads
+
+
+def test_ibkr_fifo_counts_a_split_between_the_buy_and_the_sale():
+    fs = [{"id": "a", "sym": "X", "side": "B", "qty": 10, "price": 400.0, "d": "2026-01-01", "t": "10:00:00", "fee": 1.0},
+          {"id": "b", "sym": "X", "side": "S", "qty": 40, "price": 110.0, "d": "2026-03-01", "t": "10:00:00", "fee": 4.0}]
+    root = ET.fromstring('<FlexStatement><CorporateActions>'
+                         '<CorporateAction assetCategory="STK" symbol="X" type="FS" dateTime="20260210;202500" reportDate="20260211" '
+                         'actionDescription="X(US0000000001) SPLIT 4 FOR 1 (X, X INC, US0000000001)"/>'
+                         '<CorporateAction assetCategory="STK" symbol="X" type="TC" dateTime="20260110;202500" actionDescription="X MERGED"/>'
+                         '</CorporateActions></FlexStatement>')
+    sp = ibkr.splits(root)
+    assert sp == {"X": [("2026-02-10", 4.0)]}
+    assert [(t["side"], t["qty"], t["entry"], t["exit"]) for t in ibkr.closed_trades(fs, sp)] == [("long", 40.0, 100.0, 110.0)]
+    assert sum(t["charges"] for t in ibkr.closed_trades(fs, sp)) == pytest.approx(5.0)
+    assert ibkr.closed_trades(fs, sp) == ibkr.closed_trades(fs, sp) and ibkr.closed_trades(fs)[0]["qty"] == 10.0     # without the data, as before
+    assert ibkr.closed_trades(fs, {"X": [("2026-03-02", 4.0)]})[0]["qty"] == 10.0                  # a split after the sale changes nothing
 
 
 # ---------- EPF, NPS, AIS ----------

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app import db, journal as J, journal_routes, plans, tax_lots
+from app import corp_actions, db, journal as J, journal_routes, plans, tax_lots
 from app.config import settings
 from app.engine import costs as C
 from tests import world
@@ -77,6 +77,54 @@ def test_intraday_short_and_an_unmatched_sale():
 def test_open_position_keeps_what_its_closed_part_made():
     got, open_, _ = pair([fill("2026-01-01", "B", 100, 400, sym="ITC"), fill("2026-02-01", "S", 40, 450, sym="ITC")])
     assert not got and open_ == [{"symbol": "ITC", "side": "long", "qty": 60, "since": "2026-01-01", "avg": 400.0, "realised": 2000.0}]
+
+
+SPLIT = {"ABC": [{"kind": "split", "factor": 10.0, "ex_date": "2024-06-01", "id": "s1"}]}
+
+
+def test_a_split_between_the_buy_and_the_sale_does_not_make_a_loss_and_a_short():
+    fs = [fill("2024-01-02", "B", 100, 1000.0, sym="ABC", isin="INE000A01010"), fill("2024-09-02", "S", 1000, 110.0, sym="ABC", isin="INE000A01010")]
+    got, open_, unmatched = J.pair_fills(fs, S, TODAY, SPLIT)
+    assert not open_ and not unmatched and len(got) == 1
+    t = got[0]
+    assert t["qty"] == 1000 and t["entry"] == pytest.approx(100) and t["exit"] == pytest.approx(110) and t["gross"] == pytest.approx(10000)
+    assert J.pair_fills(fs, S, TODAY, SPLIT)[0][0]["id"] == J.pair_fills(fs, S, TODAY, {})[0][0]["id"]    # a split read later keeps the id
+    assert J.pair_fills(fs[:1], S, TODAY, SPLIT)[1] == [dict(symbol="ABC", side="long", qty=1000, since="2024-01-02", avg=100.0, realised=0)]
+    assert J.pair_fills(fs[:1], S, TODAY, {})[1][0]["qty"] == 100
+
+
+def test_a_split_between_part_exits_and_a_buy_on_the_ex_date():
+    fs = [fill("2024-01-02", "B", 100, 1000.0, sym="ABC"), fill("2024-03-02", "S", 40, 1100.0, sym="ABC"),
+          fill("2024-06-01", "B", 100, 100.0, sym="ABC"), fill("2024-09-02", "S", 700, 120.0, sym="ABC")]
+    got, open_, _ = J.pair_fills(fs, S, TODAY, SPLIT)
+    assert len(got) == 1 and not open_
+    assert got[0]["qty"] == 1100 and got[0]["gross"] == pytest.approx(40 * 1100 + 700 * 120 - 100 * 1000 - 100 * 100)
+
+
+def test_a_bonus_adds_whole_shares_and_a_split_after_the_sale_changes_nothing():
+    bonus = {"ABC": [{"kind": "bonus", "ratio": [1, 2], "factor": 1.5, "ex_date": "2024-06-01", "id": "b"},
+                     {"kind": "split", "factor": 5.0, "ex_date": "2025-06-01", "id": "s"}]}
+    fs = [fill("2024-01-02", "B", 101, 300.0, sym="ABC"), fill("2024-09-02", "S", 151, 220.0, sym="ABC")]
+    got, open_, _ = J.pair_fills(fs, S, TODAY, bonus)
+    assert len(got) == 1 and not open_ and got[0]["qty"] == 151
+    assert got[0]["gross"] == pytest.approx(151 * 220 - 101 * 300)
+
+
+def test_a_split_leaves_a_short_and_other_shares_alone():
+    fs = [fill("2024-01-02", "S", 10, 1000.0, sym="ABC"), fill("2024-09-02", "B", 100, 100.0, sym="ABC"),
+          fill("2024-01-02", "B", 5, 50.0, sym="XYZ"), fill("2024-09-02", "S", 5, 60.0, sym="XYZ")]
+    got, _, _ = J.pair_fills(fs, S, TODAY, SPLIT)
+    assert {t["symbol"]: (t["side"], t["qty"], t["gross"]) for t in got} == {"ABC": ("short", 100, pytest.approx(0)), "XYZ": ("long", 5, pytest.approx(50))}
+
+
+def test_the_journal_adjusts_for_the_splits_stored_for_the_shares(w):
+    corp_actions.hist_save("IN", "ABC", SPLIT["ABC"] + [{"kind": "dividend", "ex_date": "2024-07-01", "id": "d", "amount": 2.0}])
+    fs = [fill("2024-01-02", "B", 100, 1000.0, sym="ABC", exchange="NSE"), fill("2024-09-02", "S", 1000, 110.0, sym="ABC", exchange="NSE")]
+    assert J.corporate_actions(fs, TODAY) == SPLIT
+    data = {"updated_at": "v1", "settings": S, "fills": fs, "lines": [], "manual": [], "practice": [], "hidden": [], "notes": {}}
+    got = J.trades("u-split", data, TODAY)
+    assert [(t["side"], t["qty"], round(t["net"] - t["gross"] + t["charges"])) for t in got["trades"]] == [("long", 1000, 0)]
+    assert got["trades"][0]["gross"] == pytest.approx(10000) and not got["open"] and not got["unmatched"]
 
 
 def test_options_left_open_past_expiry_close_at_zero():
