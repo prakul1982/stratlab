@@ -665,12 +665,13 @@ def test_one_users_failing_reminder_doesnt_stop_the_others(monkeypatch):
     sent = []
     monkeypatch.setattr(jobs.state, "everyone", lambda: [("u-bad", {"inbox": box}), ("u-ok", {"inbox": box})])
 
-    def update(uid, part, **kw):
+    def profile_for(uid):
         if uid == "u-bad":
-            raise RuntimeError("the setting changed underneath")
-    monkeypatch.setattr(jobs.state, "update", update)
-    monkeypatch.setattr(jobs.sync, "profile_for", lambda uid: {"id": uid})
-    monkeypatch.setattr(jobs.alerts, "notify", lambda profile, subject, text, background=True, url="": sent.append(profile["id"]))
+            raise RuntimeError("the profile read failed")
+        return {"id": uid}
+    monkeypatch.setattr(jobs.state, "update", lambda uid, part, **kw: None)
+    monkeypatch.setattr(jobs.sync, "profile_for", profile_for)
+    monkeypatch.setattr(jobs.alerts, "notify", lambda profile, subject, text, background=True, url="": sent.append(profile["id"]) or True)
     assert jobs.run_reminders(now) == 1 and sent == ["u-ok"]
 
 
