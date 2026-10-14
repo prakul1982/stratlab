@@ -16,7 +16,7 @@ import pytest
 from cryptography.fernet import Fernet
 from reportlab.pdfgen import canvas
 
-from app import db, holdings, journal, money_mf, money_networth, money_advance_tax as adv, money_dividends as divs
+from app import db, holdings, journal, money_mf, money_networth, plans, money_advance_tax as adv, money_dividends as divs
 from app.config import settings
 from app.connect import docs, ibkr, inbound, jobs, kite_user, redact, state, statements, sync, vault
 from tests import world
@@ -293,6 +293,19 @@ def test_a_read_with_an_unmatched_line_keeps_what_the_source_gave_before(w, on, 
     items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
     assert items["INFY"]["qty"] == 12 and items["ITC"]["qty"] == 5 and items["ITC"]["avg"] == 380.0   # kept as it was
     assert got["unmatched_count"] == 1 and got["kept"] == 1 and "ITC" in sync.note(got, "Zerodha")
+
+
+def test_a_sync_over_the_limit_after_a_downgrade_deletes_nothing(w, on, monkeypatch):
+    profile = sync.profile_for(PRO_ID)
+    infy = {"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 10.0, "avg": 1400.0}
+    itc = {"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": 380.0}
+    sync.sync_holdings(profile, [infy, itc], "kite", "Zerodha Kite")
+    monkeypatch.setitem(plans.PLANS[profile["_plan"]], "holdings", 1)
+    rel = {"symbol": "RELIANCE", "isin": "INE002A01018", "name": "RELIANCE", "qty": 3.0, "avg": None}
+    got = sync.sync_holdings(profile, [{**infy, "qty": 12.0}, {**itc, "qty": 7.0}, rel], "kite", "Zerodha Kite")
+    items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
+    assert set(items) == {"INFY", "ITC"} and items["INFY"]["qty"] == 12 and items["ITC"]["qty"] == 7
+    assert got["over_limit"] == ["RELIANCE"]
 
 
 def test_a_line_that_never_matches_doesnt_stop_a_sold_stock_leaving(w, on):

@@ -308,3 +308,57 @@ def test_pin_and_duplicate(api):
     assert copy["name"] == "First (copy)" and copy["experiments"] == [] and copy["id"] != a["id"]
     assert copy["strategy"]["entry"] == api.get(f"/notebooks/{a['id']}").json()["strategy"]["entry"]
     assert copy["instrument"]["symbol"] == "BTC/USD"
+
+
+def test_an_edit_made_while_a_run_is_in_progress_is_kept(api, monkeypatch):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    real = main.run_test
+
+    def slow(profile, strategy, req):
+        out = real(profile, strategy, req)
+        api.put(f"/notebooks/{nb['id']}", json={"name": "x", "notes": "edited meanwhile", "strategy": {**EMA, "name": "edited"}})
+        return out
+
+    monkeypatch.setattr(main, "run_test", slow)
+    assert api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365}).status_code == 200
+    got = api.get(f"/notebooks/{nb['id']}").json()
+    assert got["notes"] == "edited meanwhile" and got["strategy"]["name"] == "edited"
+    assert [e["v"] for e in got["experiments"]] == [1] and got["summary"]["experiments"] == 1
+
+
+def test_basket_and_walkforward_results_keep_an_edit_made_meanwhile(api, monkeypatch):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})
+    edit = lambda *a, **k: api.put(f"/notebooks/{nb['id']}", json={"name": "x", "notes": "edited meanwhile", "strategy": EMA})  # noqa: E731
+    real_basket, real_wf = main.basket.run, main.walkforward.run
+
+    def basket_run(*a, **k):
+        out = real_basket(*a, **k)
+        edit()
+        return out
+
+    def wf_run(*a, **k):
+        out = real_wf(*a, **k)
+        edit()
+        return out
+
+    monkeypatch.setattr(main.basket, "run", basket_run)
+    monkeypatch.setattr(main.walkforward, "run", wf_run)
+    for path, key in (("basket", "basket"), ("walkforward", "walkforward")):
+        api.put(f"/notebooks/{nb['id']}", json={"name": "x", "notes": "before", "strategy": EMA})
+        r = api.post(f"/notebooks/{nb['id']}/experiments/1/{path}")
+        assert r.status_code == 200, r.text
+        got = api.get(f"/notebooks/{nb['id']}").json()
+        assert got["notes"] == "edited meanwhile" and got["experiments"][0][key]
+
+
+def test_unchanged_compares_a_group_and_the_period_as_asked_for():
+    from app import research
+    s = Strategy(**EMA)
+    now = datetime.now().isoformat()
+    group = {"v": 1, "created_at": now, "strategy": s.model_dump(), "instrument": {"id": "GROUP:g1"}, "days": 365, "req_days": 365}
+    assert research.unchanged([group], s, "GROUP:g1", 365, now) == 1
+    assert research.unchanged([group], s, None, 365, now) is None
+    capped = {**group, "instrument": {"id": "CRYPTO:BTC-USD"}, "days": 90, "req_days": 1825}      # 5 years asked, 90 days held
+    assert research.unchanged([capped], s, "CRYPTO:BTC-USD", 1825, now) == 1
+    assert research.unchanged([capped], s, "CRYPTO:BTC-USD", 90, now) is None

@@ -13,6 +13,7 @@ import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, DataTable, EmptyState
 import { HELP } from "../lib/help";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import { cardFromExperiment, renderCard, shareVerdict } from "../components/shareImage";
+import { libraryDraft } from "../lib/shareText";
 import { MoreMenu } from "../components/MoreMenu";
 import { track } from "../lib/analytics";
 import { siteUrl } from "../lib/share";
@@ -490,6 +491,15 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
   const [desc, setDesc] = useState("");
   const [author, setAuthor] = useState(() => { try { return localStorage.getItem("stratlab.libAuthor") ?? ""; } catch { return ""; } });
   const upload = e.instrument?.market === "CSV";
+  const openPublish = async () => {
+    if (lib) {          // an update starts from what the entry says now, so saving it unchanged keeps its description
+      try {
+        const d = libraryDraft(await api<{ description?: string; author?: string }>(`/library/${lib}`), author);
+        setDesc(d.desc); setAuthor(d.author);
+      } catch { /* the form opens empty */ }
+    }
+    setPublishing(true);
+  };
   const publish = async () => {
     try {
       try { localStorage.setItem("stratlab.libAuthor", author.trim()); } catch { /* private mode */ }
@@ -512,9 +522,9 @@ function ShareMenu({ nb, e }: { nb: Notebook; e: Experiment }) {
           { label: "Turn off the public link", run: () => setAsk("link"), danger: true },
         ] : [{ label: "Make a public link", run: makeLink }]),
         ...(upload ? [] : lib ? [
-          { label: "Update it in the strategy library", run: () => setPublishing(true) },
+          { label: "Update it in the strategy library", run: openPublish },
           { label: "Take it out of the library", run: () => setAsk("library"), danger: true },
-        ] : [{ label: "Publish to the strategy library", run: () => setPublishing(true) }]),
+        ] : [{ label: "Publish to the strategy library", run: openPublish }]),
       ]} />
       {publishing && (
         <Modal title={lib ? "Update in the strategy library" : "Publish to the strategy library"} onClose={() => setPublishing(false)}>

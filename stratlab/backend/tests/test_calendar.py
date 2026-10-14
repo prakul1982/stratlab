@@ -89,3 +89,16 @@ def test_next_login_says_when_indian_data_returns(monkeypatch):
     assert al.next_login(datetime(2025, 10, 4, 9, 0, tzinfo=IST)) is None          # past it: if still offline, it failed
     monkeypatch.setattr(settings, "KITE_TOTP_SECRET", "")
     assert al.next_login(datetime(2025, 10, 4, 6, 30, tzinfo=IST)) is None          # no auto-login set up
+
+
+def test_a_database_error_is_not_kept_as_no_holidays(monkeypatch):
+    import time
+    from app import db
+    calendar._extra.clear()
+    monkeypatch.setattr(db, "get_setting", lambda k: (_ for _ in ()).throw(RuntimeError("down")))
+    assert calendar.extra_holidays("IN") == set()
+    assert time.time() - calendar._extra["IN"][0] > 500        # asked again within about 30 s, not ten minutes
+    monkeypatch.setattr(db, "get_setting", lambda k: '["2027-03-22"]' if k == calendar.SETTING + "IN" else None)
+    calendar._extra["IN"] = (time.time() - 40 - 570, set())
+    assert calendar.extra_holidays("IN") == {"2027-03-22"}
+    calendar._extra.clear()

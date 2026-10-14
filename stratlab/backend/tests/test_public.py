@@ -57,3 +57,30 @@ def test_bad_images_and_tokens_are_refused(api, store):
     # deleting the notebook turns its links off
     api.delete(f"/notebooks/{nb['id']}")
     assert api.get(f"/public/v/{token}").status_code == 404
+
+
+def test_snapshot_keeps_only_the_stats_the_page_shows(api, store):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={}).json()["token"]
+    assert set(api.get(f"/public/v/{token}").json()["stats"]) == {"ret", "buy_hold_ret", "mdd", "n"}      # no pnl (it shows the capital)
+
+
+def test_the_51st_experiment_turns_off_the_link_of_the_one_it_drops(api, store):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={}).json()["token"]
+    body = api.rows[nb["id"]]["body"]
+    first = body["experiments"][0]
+    body["experiments"] = [first] + [{**first, "v": v, "public": None} for v in range(2, 51)]
+    assert api.get(f"/public/v/{token}").status_code == 200
+    assert api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 730}).status_code == 200
+    assert api.get(f"/public/v/{token}").status_code == 404
+
+
+def test_deleting_a_notebook_turns_off_its_links(api, store):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={}).json()["token"]
+    api.delete(f"/notebooks/{nb['id']}")
+    assert api.get(f"/public/v/{token}").status_code == 404

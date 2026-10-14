@@ -102,6 +102,11 @@ def current_profile(authorization: str | None = Header(None), x_view_as: str | N
     # the site owner uses every feature (what they pay for is unchanged); only a Google-proved admin address counts
     from . import admin
     owner = admin.is_admin(profile)
+    if owner:
+        try:
+            admin.remember_owner(profile)       # so background jobs know the owner too (plans.access_plan)
+        except Exception as e:
+            print("owner record failed:", str(e)[:160])
     # "View as": the owner, and nobody else, can see the app as Free, Basic or Pro (the X-View-As header). It is ignored
     # for every other account, so it can't be used to look at paid features; access_plan honours it first.
     if owner and (seen := view_as_of(x_view_as)):

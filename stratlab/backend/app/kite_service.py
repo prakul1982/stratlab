@@ -509,6 +509,9 @@ class KiteService:
         hit = self._cache.get(key)
         own = self.session_close.get(int(token))
         out_at = self._close_out(now) if not own else self._close_out_at(now, own)
+        # a daily bar stored today before the close landed holds a partial day: reused for a minute at most
+        if tf == "1d" and hit and hit[0] < out_at and datetime.fromtimestamp(hit[0], IST).date() == now.date():
+            ttl = min(ttl, 60)
         if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()):
             return self._official_days(token, tf, self._with_tail(token, tf, hit[1], continuous=continuous))
         start = now - timedelta(days=days)

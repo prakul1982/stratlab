@@ -235,19 +235,25 @@ def settle(region: str | None) -> int:
     return SETTLE_BY.get(region or "", SETTLE)
 
 
+def close_of(region: str, d: date) -> str | None:
+    """The market's closing time ("HH:MM") on a day: the calendar's (early closes included), else its usual hours."""
+    from .data.calendar import day_close
+    from .data.markets import BY_ID
+    return day_close(region, d) or ((BY_ID.get(region) or {}).get("hours") or {}).get("close")
+
+
 def next_settle(region: str, now: datetime | None = None) -> datetime | None:
     """When the market's next close settles (its close plus settle(region)), after `now`; None without its hours."""
     from .data.calendar import is_trading_day
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
-    close = (m.get("hours") or {}).get("close")
-    if not close:
+    if not (m.get("hours") or {}).get("close"):
         return None
     tz = ZoneInfo(m.get("tz") or "UTC")
-    hh, mm = close.split(":")
     local = (now or datetime.now(timezone.utc)).astimezone(tz)
     d = local.date()
     for _ in range(15):
+        hh, mm = (close_of(region, d) or m["hours"]["close"]).split(":")
         at = datetime.combine(d, dtime(int(hh), int(mm)), tz) + timedelta(seconds=settle(region))
         if at > local and is_trading_day(region, d):
             return at
@@ -290,14 +296,15 @@ def last_close(region: str, now: datetime | None = None) -> tuple[date, datetime
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
     tz = ZoneInfo(m.get("tz") or "UTC")
-    hh, mm = ((m.get("hours") or {}).get("close") or "23:59").split(":")
     local = (now or datetime.now(timezone.utc)).astimezone(tz)
     d = local.date()
     for _ in range(15):
+        hh, mm = (close_of(region, d) or "23:59").split(":")
         at = datetime.combine(d, dtime(int(hh), int(mm)), tz)
         if is_trading_day(region, d) and at + timedelta(seconds=settle(region)) <= local:
             return d, at
         d -= timedelta(days=1)
+    hh, mm = (close_of(region, d) or "23:59").split(":")
     return d, datetime.combine(d, dtime(int(hh), int(mm)), tz)
 
 
@@ -314,11 +321,11 @@ def settling(region: str, now: datetime | None = None) -> str | None:
     from .data.markets import BY_ID
     m = BY_ID.get(region) or {}
     tz = ZoneInfo(m.get("tz") or "UTC")
-    close = (m.get("hours") or {}).get("close")
+    local = (now or datetime.now(timezone.utc)).astimezone(tz)
+    close = close_of(region, local.date())
     if not close:
         return None
     hh, mm = close.split(":")
-    local = (now or datetime.now(timezone.utc)).astimezone(tz)
     at = datetime.combine(local.date(), dtime(int(hh), int(mm)), tz)
     try:
         trading = is_trading_day(region, local.date())
@@ -342,12 +349,12 @@ def day_due(region: str, have: str | None, now: datetime | None = None, due: str
         return None
     m = BY_ID.get(region) or {}
     tz = ZoneInfo(m.get("tz") or "UTC")
-    hh, mm = ((m.get("hours") or {}).get("close") or "23:59").split(":")
     oh, om = ((m.get("hours") or {}).get("open") or "00:00").split(":")
     local = (now or datetime.now(timezone.utc)).astimezone(tz)
     d = local.date()
     if not is_trading_day(region, d) or str(have)[:10] >= d.isoformat():
         return None
+    hh, mm = (close_of(region, d) or "23:59").split(":")
     closed = local >= datetime.combine(d, dtime(int(hh), int(mm)), tz)
     if not closed and not (during and local >= datetime.combine(d, dtime(int(oh), int(om)), tz)):
         return None

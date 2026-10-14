@@ -275,6 +275,19 @@ def test_free_keeps_five_entries_and_no_history_once_payments_are_live(w, monkey
     assert plans.networth_items("free") == 5 and plans.networth_items("basic") is None and plans.allows("basic", "networth")
 
 
+def test_free_gets_no_history_in_the_export_or_its_delete(w, monkeypatch):
+    payments_live(monkeypatch)
+    c = w["client"]
+    v = add(c, {"kind": "cash", "value": 100}, FREE)
+    assert v["history_count"] == 1
+    day = nw.history("u-free")[0]["d"]
+    assert "History," not in c.get("/money/net-worth/export", headers=FREE).text
+    r = c.delete(f"/money/net-worth/history/{day}", headers=FREE)
+    assert r.status_code == 402 and r.json()["detail"]["code"] == "networth_history"
+    add(c, {"kind": "cash", "value": 100}, PRO)
+    assert "History," in c.get("/money/net-worth/export", headers=PRO).text
+
+
 def test_net_worth_is_private_and_deleted_in_one_step(w):
     c = w["client"]
     v = add(c, {"kind": "cash", "value": 5000})

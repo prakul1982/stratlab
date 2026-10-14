@@ -205,3 +205,19 @@ def test_admin_pages_stay_reachable(w, view):
     r = c.post("/admin/promo", headers=h, json={"days": 2})
     assert r.status_code == 200 and plans.promo_active()
     assert c.delete("/admin/promo", headers=h).json() == {"until": None}
+
+
+def test_background_jobs_know_the_owner_by_a_google_proved_sign_in(w):
+    """Background jobs read profiles from the database: the owner counts as Pro there once they signed in with a
+    Google-proved admin address. An account with the same stored address from an email sign-up never does."""
+    from app import admin, live
+    c = w["client"]
+    owner = {**db.get_profile("u-admin"), "plan": "free"}
+    imposter = db.get_profile("u-imposter", "owner@example.com")
+    assert plans.plan_of(owner) == "free" and plans.plan_of(imposter) == "free"     # nobody signed in yet
+    assert me(c, OWNER)["plan"] == "pro" and me(c, "email-signup-admin-token")["plan"] == "free"
+    admin.forget_owners()                                    # read from settings again, as another process would
+    assert plans.plan_of(owner) == "pro" and live.alerts_on({**owner, "alerts_enabled": True})
+    assert imposter["email"] == "owner@example.com" and plans.plan_of(imposter) == "free"
+    settings.ADMIN_EMAILS = "someone-else@example.com"       # no longer an admin address: no longer Pro
+    assert plans.plan_of(owner) == "free"

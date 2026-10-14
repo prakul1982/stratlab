@@ -124,3 +124,17 @@ def test_endpoint_unknown_or_odd_ids(w):
     c = w["client"]
     assert c.post("/admin/users/u-nobody/delete-data", headers=ADMIN).status_code == 404
     assert c.post("/admin/users/a%20b%3B/delete-data", headers=ADMIN).status_code == 404
+
+
+def test_erase_takes_down_share_links_and_library_entries(w):
+    from app import library
+    db.save_strategy(ME, "Shared", {"kind": "notebook", "experiments": [{"v": 1, "public": "tok-share-1", "library": "lib-entry-1"}]}, None)
+    db.set_setting("share:tok-share-1", "{}")
+    db.set_setting("shareimg:tok-share-1", "png")
+    library.save({"id": "lib-entry-1", "owner": ME, "name": "n"})
+    library.save({"id": "lib-orphan-1", "owner": ME, "name": "its experiment was dropped"})
+    library.save({"id": "lib-theirs-1", "owner": OTHER, "name": "someone else's"})
+    assert user_data.erase(ME)["failed"] == []
+    assert db.get_setting("share:tok-share-1") is None and db.get_setting("shareimg:tok-share-1") is None
+    assert library.load("lib-entry-1") is None and library.load("lib-orphan-1") is None
+    assert library.load("lib-theirs-1") is not None

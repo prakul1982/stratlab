@@ -55,10 +55,12 @@ def still_market_clock():
 @pytest.fixture(autouse=True)
 def fresh_settings_mirror():
     """The in-memory copy of the stored company pages (app/db.py) doesn't carry over from one test to the next."""
-    from app import db
+    from app import admin, db
     db.forget_mirror()
+    admin.forget_owners()               # the owner ids read from settings too
     yield
     db.forget_mirror()
+    admin.forget_owners()
 
 
 def _forget_company_lists():

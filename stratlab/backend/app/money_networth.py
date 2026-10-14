@@ -1031,13 +1031,16 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
     def export(profile=Depends(current_profile)):
         """Everything on the page as a CSV file."""
         p = page(profile)
-        return Response(to_csv(p, history(profile["id"])), media_type="text/csv; charset=utf-8",
+        hist = history(profile["id"]) if has_history(profile["_plan"]) else None      # the history is Basic and up, as on the page
+        return Response(to_csv(p, hist), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="stratlab-net-worth-{today().isoformat()}.csv"'})
 
     @r.delete("/history/{day}")
     def delete_snapshot(day: str, profile=Depends(current_profile)):
         """Remove one day's snapshot from the history chart; the entries and the other days stay."""
         throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
+        if not has_history(profile["_plan"]):
+            bad(402, "networth_history", "The net worth history is on Basic and up.")
         if not _date(day):
             bad(400, "bad_day", "Pick a day from the history.")
         left = drop_snapshot(profile["id"], day[:10])

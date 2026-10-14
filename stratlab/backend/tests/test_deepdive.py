@@ -488,6 +488,20 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
     assert c.get("/research/deep/ZZZ").status_code == 200 and c.get("/me").json()["usage"]["deepdive_limit"] is None
 
 
+def test_a_refused_deck_uses_no_deep_dive(api, monkeypatch):
+    """Free at its 1 deck with a deep dive left: a deck for a new company is refused and the deep dive stays unused."""
+    from app import main
+    c, who, _calls, usage = api
+    monkeypatch.setattr(main, "deep_base", lambda sym, region="IN", years=2, trades=True: {"sym": sym})
+    monkeypatch.setattr(main, "deep_view", lambda sym, base: {"symbol": sym})
+    monkeypatch.setattr(main.deck, "build", lambda view: b"PK")
+    assert c.get("/research/deep/AAA/deck").status_code == 200
+    r = c.get("/research/deep/BBB/deck")
+    assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
+    assert usage.count("deepdive") == 1 and usage.count("deck") == 1
+    assert c.get("/research/deep/BBB").status_code == 200                       # the second deep dive is still there
+
+
 def test_deep_dive_cap_applies_before_payments_go_live(api, monkeypatch):
     """The owner's decision (7 Oct): Free's 2 deep dives a month apply whether or not plans can be bought yet. (This
     test used to check the deep dive was unlimited until payments went live.)"""
