@@ -230,14 +230,27 @@ def test_view_math():
     assert rows["B"]["pnl"] is None and rows["B"]["value"] == 200                         # no average price: no gain or loss
     assert rows["C"]["value"] is None and rows["C"]["invested"] == 100                    # no price: counted at cost
     t = v["totals"]
-    # R5O-004: value, cost, gain or loss and the day's change are of the same positions. B has no buy price, so it is
-    # named under the totals and not in them (this expected 1,500 and a day of 15 before: value minus cost was 400
-    # while the gain or loss said 200, the mismatch the owner saw)
+    # R5O-004: value, cost and gain or loss are of the same positions. B has no buy price, so it is named under the
+    # totals and not in them (this expected 1,500 before: value minus cost was 400 while the gain or loss said 200, the
+    # mismatch the owner saw). The day's change needs only a price and a change, so B's -5 is in it
+    # (R3D: it was left out, and the day's 20 was on yesterday's 1,180)
     assert t["value"] == 1300 and t["invested"] == 1100 and t["value"] - t["invested"] == t["pnl"] == 200 and t["pnl_pct"] == 20
-    assert t["day"] == 20 and t["day_pct"] == 1.69                                                  # 20 on yesterday's 1,180
+    assert t["day"] == 15 and t["day_pct"] == 1.08                                                  # 15 on yesterday's 1,385 (A 1,180, B 205)
     assert t["no_cost"] == {"count": 1, "symbols": ["B"], "value": 200}
     # the sector mix is still a share of everything held
     assert v["allocation"][0] == {"sector": "IT", "value": 1300, "pct": 86.7, "count": 2}
+
+
+def test_a_position_with_no_buy_price_is_in_the_days_change_only():
+    items = [{"symbol": "INFY", "exchange": "NSE", "name": "Infosys", "qty": 10, "avg": None},
+             {"symbol": "TCS", "exchange": "NSE", "name": "TCS", "qty": 5, "avg": 3000.0}]
+    q = {"INFY": {"price": 1500.0, "change": -30.0, "change_pct": -2.0, "at": "2026-10-14T10:00:00+05:30"},
+         "TCS": {"price": 3200.0, "change": 20.0, "change_pct": 0.6, "at": "2026-10-14T10:00:00+05:30"}}
+    t = holdings.view(items, q)["totals"]
+    assert t["value"] == 16000 and t["invested"] == 15000 and t["pnl"] == 1000 and t["no_cost"]["symbols"] == ["INFY"]
+    assert t["day"] == -200 and t["day_pct"] == pytest.approx(-200 / 31200 * 100, abs=0.01)             # -300 + 100 on yesterday's 31,200
+    only = holdings.view(items[:1], q)["totals"]
+    assert only["value"] == 0 and only["pnl"] is None and only["day"] == -300 and only["day_pct"] == pytest.approx(-300 / 15300 * 100, abs=0.01)
 
 
 def test_upcoming_results_from_the_board_meeting_intimation():

@@ -22,7 +22,7 @@ import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
-import { fyLink, movedYearNote, openFy, yearHasTrades } from "../lib/fy";
+import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -333,7 +333,7 @@ type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: nu
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
   total?: { available: boolean; total?: number; income?: { business?: number; intraday?: number } }; audit?: string | null };
-type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number };
+type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number };
 
 
 export function MoneyHome() {
@@ -390,7 +390,7 @@ function HoldingsSummary() {
                 note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
             {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
-            {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}).</p>}
+            {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
             {usNote && <p className="small muted" data-testid="us-today">{usNote}</p>}
             {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
@@ -412,7 +412,7 @@ function TaxSummary() {
     <Panel title={year ? `Tax, ${year.label}` : "Tax this year"} right={<Link to={year ? fyLink("/tax-report", year.fy) : "/tax-report"} className="link" data-money="/tax-report">Open Tax report →</Link>}>
       {t === null ? <PanelSkel figs label="Working out this year's gains" />
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
-        : !t.trades ? (
+        : !taxHasData(t) ? (
           <div className="k-stack start">
             <p className="small muted">Upload your broker's tradebooks to see this financial year's capital gains and the tax on them.</p>
             <Link to="/tax-report" className="btn sm">Add your tradebooks</Link>
