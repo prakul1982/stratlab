@@ -366,7 +366,7 @@ def check_out(region: str, sources: dict, symbols: set[str], today: date | None 
             rows = load(region)["rows"]
             for r in rows:
                 if (r["symbol"], r["date"]) in done:
-                    r["out"] = done[(r["symbol"], r["date"])]
+                    r["out"], r["told"] = done[(r["symbol"], r["date"])], False    # told once its people have it
             save(region, rows)
     return found
 
@@ -531,7 +531,8 @@ class Job:
         check_out(region, self.sources(), symbols, day)
         frm = (day - timedelta(days=OUT_DAYS)).isoformat()
         told = [r for r in load(region)["rows"] if frm <= r["date"] <= day.isoformat() and r.get("out")
-                and not r.get("told") and r["symbol"] in symbols]       # filed but not (fully) told: a cut-short run resumes
+                and r.get("told") is False and r["symbol"] in symbols]  # filed but not (fully) told: a cut-short run resumes
+        # (a row filed before "told" was kept has no flag: it was told then)
         for r in told:
             for uid in who.get((region, r["symbol"]), []):
                 if run.seen(f"{uid}:{r['symbol']}"):

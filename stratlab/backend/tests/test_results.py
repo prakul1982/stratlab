@@ -392,3 +392,21 @@ def test_results_and_corp_actions_refresh_only_run_on_the_leader(w, monkeypatch)
     monkeypatch.setattr(admin.leader, "leading", lambda: False)
     assert c.post("/admin/results/refresh", headers=headers("admin-token")).status_code == 409
     assert c.post("/admin/corp-actions/refresh", headers=headers("admin-token")).status_code == 409
+
+
+def test_a_row_filed_before_the_told_flag_is_not_told_again(w):
+    # a row saved before "told" existed has "out" and no flag: its people were told then, so a deploy sends nothing
+    watch("u-a", ("IN", "RELIANCE"))
+    india = FakeIndia([meeting("RELIANCE", TODAY)])
+    R.refresh("IN", {"in": india}, set(), TODAY)
+    rows = R.load("IN")["rows"]
+    for r in rows:
+        if r["symbol"] == "RELIANCE":
+            r["out"] = {"title": "Financial Results", "url": "https://example.com/r.pdf"}
+    R.save("IN", rows)
+    sent = []
+    job = R.Job(lambda: {"in": india, "us": FakeUS(), "sec": None},
+                send=lambda p, subject, text, url: sent.append(subject) if "results are out" in subject else None,
+                can_alert=lambda p: True)
+    job.tick(datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc))
+    assert sent == []
