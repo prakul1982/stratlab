@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import httpx
 import pytest
+import time_machine
 
 from app import checklist, db, deals, main, screens, stock_alerts as sa
 from app.intel import filings as F
@@ -16,7 +17,13 @@ from tests.fake_db import headers
 
 PROVIDERS = re.compile(r"kite|zerodha|yahoo|screener|finnhub|edgar|nseindia|bseindia", re.I)
 ADVICE = re.compile(r"\b(buy|sell|hold|accumulate|avoid|signal|smart money|bullish|bearish)\b", re.I)
-TODAY = date.today()
+TODAY = date(2026, 10, 14)                  # a fixed Wednesday: the clock is pinned to its midday, so no run depends on the date or the hour
+
+
+@pytest.fixture(autouse=True)
+def _pinned_clock():
+    with time_machine.travel(datetime(TODAY.year, TODAY.month, TODAY.day, 6, 30, tzinfo=timezone.utc), tick=False):
+        yield
 
 
 def ago(days: int) -> str:

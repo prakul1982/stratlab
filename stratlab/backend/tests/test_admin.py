@@ -1,13 +1,20 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import time_machine
 from fastapi.testclient import TestClient
 
 from app import admin, db, main
 from app.config import settings
 from app.plans import effective_plan
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime(2026, 10, 14, 10, 0, tzinfo=timezone.utc)      # a fixed Wednesday midday, so no run depends on the date or the hour
+
+
+@pytest.fixture(autouse=True)
+def _pinned_clock():
+    with time_machine.travel(NOW, tick=False):
+        yield
 PROFILES = [
     {"id": "u1", "email": "owner@x.com", "plan": "free", "plan_status": None, "current_period_end": None,
      "razorpay_subscription_id": None, "created_at": (NOW - timedelta(days=30)).isoformat()},
