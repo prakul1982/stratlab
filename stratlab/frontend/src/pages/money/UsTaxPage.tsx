@@ -214,6 +214,9 @@ export function UsTaxPage() {
             ))}
           </div>
         )}
+        {v && v.missing_history.length > 0 && (
+          <p className="k-small">The split history of {v.missing_history.join(", ")} couldn't be read, so no splits are applied to {v.missing_history.length === 1 ? "its" : "their"} trades; check them against your broker's statement.</p>
+        )}
         {v && Object.keys(v.short).length > 0 && (
           <p className="k-small">Sold with no purchase in your trades: {Object.entries(v.short).map(([s, q]) => `${s} (${qtyText(q)} shares)`).join(", ")}. Their gain isn't counted; add the purchases.</p>
         )}

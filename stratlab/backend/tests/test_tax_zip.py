@@ -294,7 +294,7 @@ def test_upload_the_zip_as_the_body(w):
     j = r.json()
     assert (j["broker"], j["kind"], j["added"]) == ("Zerodha", "pnl", 18)
     assert all(x["ok"] for x in j["check"]) and len(j["skipped"]) == 0 and len(j["files"]) == 7
-    assert j["business"] == {"lines": 7, "added": 3, "replaced": 0, "same": 0, "years": [2024]}
+    assert j["business"] == {"lines": 7, "added": 3, "replaced": 0, "same": 0, "overlap": 0, "years": [2024]}
     y = next(y for y in j["report"]["years"] if y["fy"] == 2024)
     assert y["intraday"]["count"] == 2 and y["stcg"]["net"] < 4300 and y["ltcg"]["net"] < 13000      # less charges and grandfathering
     assert [s["seg"] for s in y["business"]["segments"]] == ["fno", "commodity", "currency"]

@@ -102,7 +102,8 @@ def gather(profile, fy: int) -> dict:
     return {"fy": fy, "y": y, "rows": [r for r in equity if r["fy"] == fy], "unit_rows": [r for r in unit_rows if r["fy"] == fy], "names": c["names"], "files": i["data"]["files"],
             "fmv_src": i["fmv_src"], "div_lines": lines, "div_source": src, "div_year": dyear,
             "us_div": money_us_routes.us_dividends(profile, fy, y), "fa": money_us_routes.fa_for(profile, fy),
-            "us_count": usr["count"], "us_allowed": usr["allowed"], "tds": saved["tds"], "paid": saved["paid"],
+            "us_count": usr["count"], "us_allowed": usr["allowed"], "us_warning": ((usr.get("years") or {}).get(fy) or {}).get("warning"),
+            "tds": saved["tds"], "paid": saved["paid"],
             "mf_count": len(mf["rows"]), "made": datetime.now(timezone.utc)}
 
 
@@ -250,6 +251,8 @@ def t_cg(g: dict) -> dict:
                                 f"Exemption under section 112A used: {money(y['exemption']['used'])} of {money(y['exemption']['limit'])}."]
     if g["us_count"] and not g["us_allowed"]:
         notes.append("US share sales aren't included: they are on the " + PLANS[FEATURE_PLAN["us_tax"]]["name"] + " plan.")
+    elif g.get("us_warning"):
+        notes.append("US shares: " + g["us_warning"])
     return table("cg", "Schedule CG (capital gains by section)",
                  ["Head", "Rate", "Sales", "Full value of consideration", "Cost of acquisition (after grandfathering or indexation)",
                   "Expenditure on transfer", "Gain or loss", "After set-off", "Exempt (112A)", "Taxable"], rows, notes)
