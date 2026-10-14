@@ -270,6 +270,28 @@ def test_free_plan_keeps_fewer_holdings_once_payments_are_live(w, monkeypatch):
     assert c.put("/holdings", headers=PRO, json={"items": items}).status_code == 200
 
 
+def test_a_downgrade_never_deletes_saved_holdings(w, monkeypatch):
+    """Over the limit after a downgrade: an import keeps every saved stock and adds none; an edit can take stocks off."""
+    for k, v in (("RAZORPAY_KEY_ID", "rzp_live_x"), ("RAZORPAY_KEY_SECRET", "s"), ("RAZORPAY_PLAN_BASIC", "b"), ("RAZORPAY_PLAN_PRO", "p")):
+        monkeypatch.setattr(settings, k, v)
+    from app import holdings, plans
+    c = w["client"]
+    first = set(held(upload(c, "icici_direct_portfolio.csv", headers=FREE)))
+    assert len(first) == 4
+    monkeypatch.setitem(plans.PLANS["free"], "holdings", 2)
+    r = upload(c, "upstox_holdings.csv", headers=FREE, mode="add").json()
+    stored = lambda: {i["symbol"] for i in holdings.load("u-free")["items"]}
+    assert stored() == first and set(r["over_limit"]) and not set(r["over_limit"]) & first
+    upload(c, "icici_direct_portfolio.csv", headers=FREE)                                     # a replace keeps all 4 too
+    assert stored() == first
+    keep = sorted(first)
+    assert c.put("/holdings", headers=FREE, json={"items": [{"symbol": s, "qty": 1} for s in keep[:3]]}).status_code == 200
+    swap = [{"symbol": s, "qty": 1} for s in keep[:2]] + [{"symbol": "TCS", "qty": 1}]         # a new stock still needs room
+    assert c.put("/holdings", headers=FREE, json={"items": swap}).status_code == 402
+    assert c.put("/holdings", headers=FREE, json={"items": [{"symbol": s, "qty": 2} for s in keep[:2]]}).status_code == 200
+    assert stored() == set(keep[:2])
+
+
 def test_manual_add_edit_remove_and_delete(w):
     c = w["client"]
     r = c.put("/holdings", headers=PRO, json={"items": [{"symbol": "reliance", "qty": 5, "avg": 2500}, {"symbol": "543210", "qty": 10},

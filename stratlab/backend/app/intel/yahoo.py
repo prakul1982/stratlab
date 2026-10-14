@@ -45,6 +45,17 @@ def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     return before[-1] if before else (meta.get("previousClose") or meta.get("chartPreviousClose"))
 
 
+def _partial(out: dict, now: float | None = None) -> bool:
+    """Whether the last daily candle is of a session still trading (the answer's own session end is ahead)."""
+    try:
+        end = out["meta"]["currentTradingPeriod"]["regular"]["end"]
+        tz = ZoneInfo(out["meta"].get("exchangeTimezoneName") or "UTC")
+        day = datetime.fromtimestamp(now or time.time(), tz).date().isoformat()
+        return (now or time.time()) < end and out["candles"][-1]["t"][:10] == day
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+
+
 class Yahoo(Source):
     name = "Yahoo Finance"
 
@@ -65,10 +76,14 @@ class Yahoo(Source):
         # a copy kept here is as old as when the source answered it (it may have come from the source's cache), never
         # older than this caller allows (R7V-005: candles read in the minutes after the close, before the close was
         # final, given to the page that asked for a read after it)
+        if recent and ttl is None and time.time() - recent[0] >= 60 and _partial(recent[2]):
+            recent = None             # a daily candle of a session still trading is reused for a minute at most
         if recent and recent[1] >= days and time.time() - recent[0] < keep:
             cut = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
             return {"meta": recent[2]["meta"], "candles": [b for b in recent[2]["candles"] if b["t"][:10] >= cut]}
         out, at = self._chart(symbol, tf, days, interval, ttl, with_time=True)
+        if tf == "1d" and ttl is None and time.time() - at >= 60 and _partial(out):
+            out, at = self._chart(symbol, tf, days, interval, 60, with_time=True)
         if tf == "1d" and not exact and (not recent or days >= recent[1] or time.time() - recent[0] >= keep):
             if len(self._recent) > 500:
                 self._recent.clear()

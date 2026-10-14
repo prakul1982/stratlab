@@ -1,6 +1,9 @@
 """Owner-only admin: who's signed up, what they use, and granting plans by hand.
 
 Access is by Google account: verified emails listed in ADMIN_EMAILS. (The old ?key= admin URLs are gone.)"""
+import json
+import threading
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -18,6 +21,57 @@ def admin_emails() -> set[str]:
 
 def is_admin(profile: dict) -> bool:
     return bool(profile.get("_email_verified")) and (profile.get("email") or "").strip().lower() in admin_emails()
+
+
+# Background jobs read profiles from the database, with no sign-in to prove the address. Sign-in records here the ids
+# that Google proved an admin address for ({uid: email}); only the server writes app_settings, and a stored profile email
+# alone proves nothing (it is whatever address created the account).
+OWNERS_KEY = "admin_owner_ids"
+OWNERS_TTL = 300.0
+_owners: dict = {"until": 0.0, "map": {}}
+_owners_lock = threading.Lock()
+
+
+def forget_owners() -> None:
+    with _owners_lock:
+        _owners.update(until=0.0, map={})
+
+
+def _owner_map() -> dict:
+    with _owners_lock:
+        if _owners["until"] > time.monotonic():
+            return _owners["map"]
+    try:
+        got = db.json_value(db.get_setting(OWNERS_KEY), {})
+        got, ttl = (got if isinstance(got, dict) else {}), OWNERS_TTL
+    except Exception as e:                  # keep what was read before; try again soon
+        print("owner ids read failed:", str(e)[:160])
+        got, ttl = _owners["map"], 30.0
+    with _owners_lock:
+        _owners.update(until=time.monotonic() + ttl, map=got)
+    return got
+
+
+def remember_owner(profile: dict) -> None:
+    """Record a signed-in admin's id (auth.current_profile calls this only after is_admin passed)."""
+    if not is_admin(profile):
+        return
+    email = profile["email"].strip().lower()
+    known = _owner_map()
+    if known.get(profile["id"]) == email:
+        return
+    known = {**known, profile["id"]: email}
+    db.set_setting(OWNERS_KEY, json.dumps(known))
+    with _owners_lock:
+        _owners.update(until=time.monotonic() + OWNERS_TTL, map=known)
+
+
+def recorded_owner(profile: dict) -> bool:
+    """The profile's id signed in with a Google-proved address that is still in ADMIN_EMAILS (for background jobs)."""
+    emails = admin_emails()
+    if not emails or not profile.get("id"):
+        return False
+    return _owner_map().get(profile["id"]) in emails
 
 
 def admin_profile(profile=Depends(current_profile)) -> dict:

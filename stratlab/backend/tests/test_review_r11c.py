@@ -353,7 +353,7 @@ def test_a_backtest_never_decides_on_a_candle_still_forming():
     now = datetime(2026, 10, 9, 13, 37, tzinfo=timezone(timedelta(hours=-4)))
     assert research.closed_only(bars, "5m", "US", now)[-1]["t"].endswith("13:30:00-04:00")
     assert research.closed_only(bars, "5m", "US", now + timedelta(minutes=3)) == bars
-    assert research.closed_only(bars, "1d", "US", now) == bars
+    assert research.closed_only(bars, "1d", "US", now) == bars[:-1]       # a daily candle is cut too while its market trades
     last_hour = [{"t": "2026-10-09T15:15:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}]      # 15:15 to the 15:30 close
     assert research.closed_only(last_hour, "1h", "IN", datetime(2026, 10, 9, 15, 31, tzinfo=IST)) == last_hour
     assert research.closed_only(last_hour, "1h", "IN", datetime(2026, 10, 9, 15, 29, tzinfo=IST)) == []
@@ -383,3 +383,16 @@ def test_the_underlying_list_shows_the_lot_of_its_nearest_expiry(monkeypatch):
                          "exchange": "NFO"} for e, lot in ((far, 65), (near, 75))], "BFO": [], "MCX": [], "CDS": []}
     monkeypatch.setattr(opt_data, "keep_listed", lambda ex, name, xs: xs)
     assert next(u for u in od.underlyings() if u["name"] == "NIFTY")["lot"] == 75
+
+
+def test_a_daily_backtest_drops_todays_candle_until_its_market_has_closed():
+    day = lambda d: {"t": f"2026-10-{d:02d}T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}      # noqa: E731
+    bars = [day(8), day(9)]
+    et = timezone(timedelta(hours=-4))
+    assert research.closed_only(bars, "1d", "US", datetime(2026, 10, 9, 11, 0, tzinfo=et)) == bars[:1]
+    assert research.closed_only(bars, "1d", "US", datetime(2026, 10, 9, 16, 1, tzinfo=et)) == bars
+    assert research.closed_only(bars, "1d", "US", datetime(2026, 10, 10, 9, 0, tzinfo=et)) == bars
+    assert research.closed_only(bars, "1d", "CRYPTO", datetime(2026, 10, 9, 23, 0, tzinfo=timezone.utc)) == bars[:1]
+    # live paper trading reads its own candles (live.py, group_live.py), never through closed_only
+    import inspect
+    assert "closed_only" not in inspect.getsource(live) and "closed_only" not in inspect.getsource(group_live)

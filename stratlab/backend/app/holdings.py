@@ -206,6 +206,16 @@ def merge(rows: list[dict]) -> list[dict]:
     return list(out.values())
 
 
+def cap(items: list[dict], before: list[dict], limit: int) -> tuple[list[dict], list[str]]:
+    """(kept, symbols left out) for a list about to be saved under the plan's limit. Stocks already held are always
+    kept (a downgrade never deletes them); new ones fill only the room left under the limit."""
+    held = {(market_of(i), i["symbol"]) for i in before}
+    old = [i for i in items if (market_of(i), i["symbol"]) in held]
+    new = [i for i in items if (market_of(i), i["symbol"]) not in held]
+    room = max(0, limit - len(old))
+    return old + new[:room], [i["symbol"] for i in new[room:]]
+
+
 def match_all(rows: list[dict], matcher: Matcher) -> tuple[list[dict], list[dict]]:
     """(holdings, unmatched lines) for a file's rows."""
     found, missed = [], []

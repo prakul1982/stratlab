@@ -240,3 +240,40 @@ def test_ebitda_margin_is_the_last_full_year_beside_the_net_margin():
                                                                      "Net Profit": [80.0, 100.0, 90.0]}}}
     s = scr.summary(p)
     assert s["opm"] == 24.0 and s["net_margin"] == pytest.approx(10.0)
+
+
+def test_a_401_or_403_is_a_source_that_is_busy_not_a_missing_company():
+    from app.intel.net import Source
+    s = Source("http://x.test", transport=httpx.MockTransport(lambda r: httpx.Response(403)))
+    for code in (401, 403):
+        with pytest.raises(SourceError) as e:
+            s.check(httpx.Response(code))
+        assert e.value.busy
+    with pytest.raises(SourceError) as e:
+        s.check(httpx.Response(404))
+    assert not e.value.busy
+
+
+def test_a_daily_candle_of_a_session_still_trading_is_reused_for_a_minute_only():
+    import time_machine
+    from datetime import datetime, timezone
+    from app.intel.yahoo import Yahoo
+    start = datetime(2026, 10, 14, 14, 0, tzinfo=timezone.utc)
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        ts = int(start.timestamp())
+        meta = {"exchangeTimezoneName": "America/New_York", "currentTradingPeriod": {"regular": {"end": ts + 6 * 3600}}}
+        q = {"open": [1.0], "high": [2.0], "low": [1.0], "close": [1.5], "volume": [10]}
+        return httpx.Response(200, json={"chart": {"result": [{"meta": meta, "timestamp": [ts], "indicators": {"quote": [q]}}]}})
+    y = Yahoo(transport=httpx.MockTransport(handler))
+    y.limit.take = lambda: True
+    with time_machine.travel(start, tick=False) as t:
+        y.chart("AAPL")
+        t.shift(30)
+        y.chart("AAPL")
+        assert len(calls) == 1
+        t.shift(120)
+        y.chart("AAPL")
+        assert len(calls) == 2

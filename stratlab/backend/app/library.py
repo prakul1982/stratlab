@@ -28,18 +28,32 @@ def _unseen(exp: dict) -> float | None:
     return None
 
 
+def _group_of(nb: dict, exp: dict) -> dict | None:
+    """The group an experiment ran on, from the experiment itself. The notebook's group is used only when it is that
+    same group; the notebook may have been switched since."""
+    inst = exp.get("instrument") or {}
+    g = exp.get("group")
+    if not g and inst.get("type") != "GROUP":
+        return None
+    ng = nb.get("group") or {}
+    if ng and inst.get("id") == f"GROUP:{ng.get('id')}":
+        return ng
+    members = [{k: m[k] for k in ("id", "symbol") if m.get(k)} for m in (g or {}).get("members") or []]
+    return {"id": str(inst.get("id") or "GROUP:custom")[6:] or "custom", "name": (g or {}).get("name") or inst.get("name"),
+            "market": inst.get("market"), "maxOpen": (g or {}).get("max_open"), "members": members}
+
+
 def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_id: str | None = None) -> dict:
     v = exp.get("verdict") or {}
     st = exp.get("stats") or {}
     inst = exp.get("instrument") or {}
-    g = exp.get("group")
-    ngroup = nb.get("group")
+    ngroup = _group_of(nb, exp)
     return {
         "id": entry_id or secrets.token_urlsafe(8),
         "name": nb.get("name") or "Untitled", "question": nb.get("question") or "", "description": description.strip(),
         "author": author.strip() or "A StratLab user",
         "market": inst.get("market") or (ngroup or {}).get("market") or "IN",
-        "instrument": None if g else {k: inst.get(k) for k in ("id", "symbol", "name", "market", "currency")},
+        "instrument": None if ngroup else {k: inst.get(k) for k in ("id", "symbol", "name", "market", "currency")},
         "group": None if not ngroup else {k: ngroup.get(k) for k in ("id", "name", "market", "maxOpen", "members")},
         "tf": exp.get("tf"), "side": (exp.get("strategy") or {}).get("side", "long"),
         "range": exp.get("range"), "strategy": exp.get("strategy"),
@@ -254,7 +268,7 @@ def report(e: dict, viewer: str, reason: str) -> dict:
     reports = dict(e.get("reports") or {})
     reports[viewer] = {"reason": reason if reason in REASONS else "other", "at": datetime.now(timezone.utc).isoformat()}
     e = {**e, "reports": reports}
-    if len(reports) >= HIDE_AFTER and not e.get("hidden"):
+    if len(reports) >= HIDE_AFTER and not e.get("hidden") and not e.get("official"):      # hiding StratLab's own is the owner's call
         e["hidden"], e["hidden_by"] = True, "reports"
     return e
 
@@ -293,6 +307,14 @@ def remove(eid: str):
     if ID.match(eid or ""):
         db.delete_setting(PREFIX + eid)
         _official_cache[0] = 0.0
+
+
+def take_down(experiments: list[dict]):
+    """Remove the public links and library entries that experiments point to."""
+    from . import public
+    for e in experiments:
+        public.unpublish(e.get("public"))
+        remove(e.get("library"))
 
 
 def public_entries() -> list[dict]:

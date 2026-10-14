@@ -2010,6 +2010,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 }
 /* R13S-006: a switch's long label ("Yearly · about 2 months free") wraps inside its button instead of spilling out of the pill */
 .k-form > .k-field > .k-seg button { min-width: 0; height: auto; min-height: 32px; padding-block: 5px; white-space: normal; line-height: 1.25; }
+/* the switch's buttons share its width evenly and none gets narrower than its longest word: the long one wrapping took
+   the room, and "Monthly" ran under it */
+.k-form > .k-field > .k-seg button { flex: 1 1 0; min-width: min-content; }
 /* R13S-011: on a touch screen the controls the review measured under 44px are 44px: the switch, the screener's sort
    headers, the links in a table, a tick in a row, the admin sections */
 @media (pointer: coarse) {

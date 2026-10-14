@@ -494,3 +494,16 @@ def test_a_money_claim_is_held_to_the_series_it_names():
     page = _page([(25, 1185)], [(25, 120)])
     assert page.check("Net profit was ₹120 crore in FY25.") and page.check("Revenue was ₹1,185 crore in FY25.")
     assert not page.check("Net profit was ₹1,185 crore in FY25.")
+
+
+def test_a_daily_candle_stored_in_the_session_is_reused_for_a_minute_only(monkeypatch, mem):
+    import time_machine
+    ks, calls = _kite(monkeypatch, _bars())
+    with time_machine.travel(datetime(2026, 10, 14, 9, 20, tzinfo=IST), tick=False) as t:
+        ks.history(2953217, "1d", 30)
+        t.shift(timedelta(seconds=30))
+        ks.history(2953217, "1d", 30)
+        assert len(calls) == 1                                  # inside the minute: the stored one
+        t.shift(timedelta(minutes=5))
+        ks.history(2953217, "1d", 30)
+        assert len(calls) == 2                                  # the partial day is read again

@@ -93,3 +93,59 @@ def test_reports_hide_an_entry_until_the_owner_of_the_site_reviews_it(api, store
     as_user("r9")
     assert api.get("/library").json()["total"] == 1
     assert admin_mod.is_admin({"email": "boss@x", "_email_verified": True})
+
+
+def _official(store):
+    e = {"id": "seed-golden", "owner": library.OFFICIAL_OWNER, "official": True, "name": "Golden cross", "verdict": {"verdict": "mixed"}}
+    library.save(e)
+    return e
+
+
+def test_reports_never_hide_an_official_entry(api, store):
+    e = _official(store)
+    for uid in ("r1", "r2", "r3", "r4"):
+        as_user(uid)
+        r = api.post(f"/library/{e['id']}/report", json={"reason": "spam"}).json()
+    assert r == {"reported": True, "hidden": False}
+    assert library.is_public(library.load(e["id"])) and len(library.load(e["id"])["reports"]) == 4       # recorded, not hidden
+
+
+def test_an_entry_takes_its_group_from_the_experiment_not_the_notebook_now(api, store):
+    nb = api.post("/notebooks", json={"name": "Basket", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    body = api.rows[nb["id"]]["body"]
+    grp = {"id": "g1", "name": "Majors", "market": "CRYPTO", "maxOpen": 2, "members": [{"symbol": "BTC"}, {"symbol": "ETH"}]}
+    inst = {"id": "GROUP:g1", "symbol": "Majors", "name": "Majors", "market": "CRYPTO", "type": "GROUP"}
+    ran_on_group = {"v": 1, "strategy": EMA, "instrument": inst, "tf": "1d", "stats": {}, "verdict": {},
+                    "group": {"name": "Majors", "max_open": 2, "members": [{"symbol": "BTC", "id": "CRYPTO:BTC-USD"}, {"symbol": "ETH", "id": "CRYPTO:ETH-USD"}]}}
+    ran_on_stock = {"v": 2, "strategy": EMA, "instrument": {"id": "CRYPTO:BTC-USD", "symbol": "BTC/USD", "market": "CRYPTO"}, "tf": "1d", "stats": {}, "verdict": {}}
+    body["experiments"] = [ran_on_group, ran_on_stock]
+    body.pop("group", None)                                  # A: the notebook was switched to one stock
+    a = library.entry(api.get(f"/notebooks/{nb['id']}").json(), ran_on_group, "user-1", "", "")
+    assert a["instrument"] is None and a["group"]["id"] == "g1" and [m["symbol"] for m in a["group"]["members"]] == ["BTC", "ETH"]
+    body["group"] = grp                                      # B: the notebook was switched to a group
+    nbk = api.get(f"/notebooks/{nb['id']}").json()
+    b = library.entry(nbk, ran_on_stock, "user-1", "", "")
+    assert b["group"] is None and b["instrument"]["id"] == "CRYPTO:BTC-USD"
+    assert library.entry(nbk, ran_on_group, "user-1", "", "")["group"] == {k: grp[k] for k in ("id", "name", "market", "maxOpen", "members")}
+
+
+def test_nobody_but_the_owner_may_publish_as_stratlab(api, store, monkeypatch):
+    from app.config import settings
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    for name in ("StratLab", " stratlab ", "STRATLAB"):
+        r = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": name})
+        assert r.status_code == 400 and r.json()["detail"]["code"] == "author_reserved"
+    assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "StratLab fan"}).status_code == 200
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "boss@x")
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "user-1", "_plan": "pro", "email": "boss@x", "_email_verified": True}
+    assert api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"author": "StratLab"}).status_code == 200
+
+
+def test_deleting_a_notebook_takes_its_library_entries_out(api, store):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    e = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={}).json()
+    assert library.load(e["id"])
+    api.delete(f"/notebooks/{nb['id']}")
+    assert library.load(e["id"]) is None

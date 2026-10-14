@@ -37,7 +37,8 @@ def market_open(region: str, now: datetime | None = None) -> bool:
     if not m or not m.get("hours"):
         return False
     local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(m["tz"]))
-    return is_trading_day(region, local.date()) and m["hours"]["open"] <= local.strftime("%H:%M") < m["hours"]["close"]
+    from ..stock_pages import close_of
+    return is_trading_day(region, local.date()) and m["hours"]["open"] <= local.strftime("%H:%M") < close_of(region, local.date())
 
 
 def market_today(region: str, now: datetime | None = None) -> str:
