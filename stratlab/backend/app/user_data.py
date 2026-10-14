@@ -50,7 +50,13 @@ def _connect(uid: str) -> int:
 
 
 def _notebooks(uid: str) -> int:
-    rows = db.list_notebook_rows(uid)
+    from . import library
+    rows = db.sb().table("strategies").select("id,body").eq("user_id", uid).execute().data
+    for r in rows:                            # their share links and library entries are public: they go first
+        library.take_down((r.get("body") or {}).get("experiments") or [])
+    for e in library.all_entries():           # also entries whose experiment is already gone
+        if e.get("owner") == uid:
+            library.remove(e.get("id"))
     if rows:
         db.sb().table("strategies").delete().eq("user_id", uid).execute()
     return len(rows)

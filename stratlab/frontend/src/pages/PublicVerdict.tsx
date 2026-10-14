@@ -5,6 +5,7 @@ import { upDown, checkTone } from "../lib/tradeUi";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { moneyCompact } from "../lib/chartFormat";
+import { checksRun } from "../lib/shareText";
 import { PublicFrame } from "../components/PublicFrame";
 import { STATUS_NAME } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
@@ -70,7 +71,7 @@ export function PublicVerdict({ token }: { token: string }) {
             </div>
 
             <Card label="Return after costs">
-              <CardHead title="Return after costs" actions={<span className="k-note">{v.checks.length} honesty checks · {v.passed} passed</span>} />
+              <CardHead title="Return after costs" actions={<span className="k-note">{checksRun(v)} honesty checks · {v.passed} passed</span>} />
               {snap.series.t.length > 1 && (
                 <XYChart ariaLabel="Strategy against buy and hold" height={240} split={snap.series.split} times={snap.series.t} compare
                   splitNotes={["tuned on these years", "never seen"]}
