@@ -190,7 +190,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
 
 # ---------- the daily watchlist alert ----------
 ALERT_KEY = "scanalert:"          # app_settings: scanalert:<uid> = {"uid", "on"}
-SEND_AT = {"IN": ("Asia/Kolkata", "16:05"), "US": ("America/New_York", "16:20")}
+SEND_AT = {"IN": ("Asia/Kolkata", "16:05"), "US": ("America/New_York", "16:50")}
 
 
 def alert_on(uid: str) -> bool:
@@ -272,12 +272,15 @@ class Alerts:
                     continue
                 if not sub.get("on"):
                     continue
-                profile = db.get_profile(sub["uid"])
-                members = watchlist_members(sub["uid"], market)
-                if not members or not self.can_alert(profile):
-                    continue
-                fresh = [r for r in run(self.registry, market, members)["rows"] if r["signal"] == "fresh" and r["st_days"] == 1]
-                if fresh:
-                    self.notify(profile, "StratLab: Stage 2 + Supertrend signals", alert_text(market, fresh), url="/research/scan")
-                    sent += 1
+                try:
+                    profile = db.get_profile(sub["uid"])
+                    members = watchlist_members(sub["uid"], market)
+                    if not members or not self.can_alert(profile):
+                        continue
+                    fresh = [r for r in run(self.registry, market, members)["rows"] if r["signal"] == "fresh" and r["st_days"] == 1]
+                    if fresh:
+                        self.notify(profile, "StratLab: Stage 2 + Supertrend signals", alert_text(market, fresh), url="/research/scan")
+                        sent += 1
+                except Exception as e:             # one user's trouble must not stop the others' alerts
+                    print("scan alert failed:", sub.get("uid"), str(e)[:120])
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)

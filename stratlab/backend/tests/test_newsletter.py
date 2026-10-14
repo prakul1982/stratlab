@@ -360,3 +360,17 @@ def test_briefs_stored_before_the_indices_field_are_rebuilt_too(w, monkeypatch):
     assert fixed["indices"] == [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.6}]   # from 1 Oct, over the 2 Oct holiday
     assert fixed["subject"].endswith("NIFTY 50 +0.60%") and not fixed["ai"] and "0.99" not in fixed["html"] + fixed["text"]
     assert [s["title"] for s in fixed["sections"]] == ["Indices", "Headlines"]
+
+
+def test_the_weekly_brief_is_tried_again_for_a_region_whose_sources_were_down(w, monkeypatch, outbox):
+    up = {"on": False}
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day) if up["on"] else {"kind": "market"})
+    reader("u-basic", "basic@example.com", plan="basic", market_in="weekly")
+    j = job.Job()
+    j.tick(SATURDAY)                                                                # every source down at 08:30 IST
+    assert outbox == []
+    up["on"] = True
+    j.tick(SATURDAY + timedelta(minutes=10))
+    assert [to for to, *_ in outbox] == ["basic@example.com"]
+    j.tick(SATURDAY + timedelta(minutes=20))
+    assert len(outbox) == 1

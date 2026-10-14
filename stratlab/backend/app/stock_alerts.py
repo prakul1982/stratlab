@@ -448,7 +448,8 @@ def deliver(profile: dict, subject: str, text: str) -> list[str]:
         if channel == "email":
             continue
         try:
-            job()
+            if job() == 0 and channel == "push":        # push.send's count of devices reached
+                continue
             sent.append(channel)
         except Exception as e:
             print("stock alert failed:", channel, str(e)[:120])
@@ -564,13 +565,35 @@ class Checker:
         return apply(uid, changes, now)
 
 
+RETRY_AFTER = timedelta(hours=1)    # a message nobody could be reached with waits this long before the next try
+
+
+def _waiting(row: dict, now: datetime) -> bool:
+    """Whether the user's last message reached no channel less than RETRY_AFTER ago."""
+    try:
+        return datetime.fromisoformat(row["retry_at"]) > now
+    except (KeyError, ValueError, TypeError):
+        return False
+
+
 def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver) -> bool:
-    """Send the texts waiting for one user in one message, and count it against their limits."""
+    """Send the texts waiting for one user in one message, and count it against their limits. When no channel got it,
+    the texts go back to waiting (tried again after RETRY_AFTER, so a user with no channel isn't retried every check)
+    and nothing is counted."""
     subject, body = message(texts)
-    reached = bool(send(profile, subject, body))
+    try:
+        reached = bool(send(profile, subject, body))
+    except Exception as e:
+        print("stock alert failed:", uid, str(e)[:120])
+        reached = False
     with _lock:
         row = _read(uid)
-        row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
+        if reached:
+            row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
+            row.pop("retry_at", None)
+        else:
+            row["pending"] = (texts + row["pending"])[-MAX_PENDING:]
+            row["retry_at"] = (now + RETRY_AFTER).isoformat()
         _write(uid, row)
     return reached
 
@@ -594,7 +617,7 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
                     a["status"] = "triggered"
                 row["pending"] = (row["pending"] + [text])[-MAX_PENDING:]
         texts = []
-        if row["pending"] and may_send(row["sent"], now):
+        if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now):
             texts, row["pending"] = row["pending"], []
             dirty = True
         if dirty:
