@@ -157,3 +157,18 @@ def test_stats_bars_a_year_follow_the_span():
     # Sharpe annualised with 365 returns a year, not 252
     assert st["sharpe"] / old["sharpe"] == pytest.approx(math.sqrt(365 / 252), rel=0.01)
     assert span_years("2024-01-01T09:15", "2024-01-01T15:30") is None and span_years(None, "x") is None
+
+
+def test_walkforward_with_sub_day_tuning_stretches_does_not_overflow(monkeypatch):
+    # a big return over a stretch of a few hours, raised to its yearly rate, is past a float: no yearly figure is made
+    import math
+    from app.engine import walkforward
+    from app.models import Strategy
+    from tests.test_notebooks import EMA
+    s = Strategy(**{k: EMA[k] for k in ("entry", "exit", "risk")})
+    closes = [100 * 1.003 ** i * (1 + 0.1 * math.sin(i / 8)) for i in range(1500)]
+    monkeypatch.setattr(walkforward, "_years", lambda bars, a, b: 1 / 36525)
+    with pytest.raises(OverflowError):
+        walkforward._yearly(900, 1 / 36525)
+    out = walkforward.run(bars_from(closes), s, 50)
+    assert out["efficiency"] is None and "under half a year" in out["detail"]

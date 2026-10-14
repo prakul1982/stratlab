@@ -1,4 +1,5 @@
 """Group (portfolio) backtests: shared slots, a portfolio-wide daily loss cap, the API."""
+import itertools
 import pandas as pd
 import pytest
 
@@ -139,3 +140,37 @@ def test_entry_at_the_open_is_sized_on_the_pot_at_the_last_close(order):
     out = portfolio.run([ds(k, bars[k]) for k in order], s, max_open=2)
     qty = {t["symbol"]: t["qty"] for t in out["open_trades"]}
     assert qty == {"A": 100, "B": 909}
+
+
+def _daily(closes):
+    return [{"t": f"2026-01-{5 + i:02d}", "o": c, "h": c, "l": c, "c": c, "v": 1} for i, c in enumerate(closes)]
+
+
+def _dds(sym, bars, start):
+    return {**ds(sym, bars), "start": start}
+
+
+def test_an_exit_at_the_open_frees_its_slot_whatever_the_order():
+    # max 2: A's exit rule fires on the 4th close and fills at the 5th open, where B and C also enter
+    low = [{"l": {"t": "price"}, "op": "lt", "r": {"t": "num", "v": 95}}]
+    s = S(tf="1d", exit=low, risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0,
+                                   "sizing": "capital", "perTrade": 20000, "maxBars": 0})
+    data = {"A": _dds("A", _daily([100, 100, 100, 90, 90, 90, 90]), 0), "B": _dds("B", _daily([100] * 7), 2),
+            "C": _dds("C", _daily([100] * 7), 2)}
+    seen = set()
+    for order in itertools.permutations("ABC"):
+        out = portfolio.run([data[k] for k in order], s, max_open=2)
+        assert out["most_open"] <= 2
+        seen.add(str(sorted((t["symbol"], t["entry_t"]) for t in out["trades"] + out["open_trades"])))
+    assert len(seen) == 1
+    assert sum(1 for t in out["open_trades"] if t["symbol"] in "BC") == 2
+
+
+def test_a_time_exit_on_a_flat_candle_does_not_free_a_slot_at_the_open():
+    # flat bars: a close exit has the same price as the open, but the slot was still held at that open
+    s = S(tf="1d", exit=[], risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0,
+                                  "sizing": "capital", "perTrade": 20000, "maxBars": 2})
+    flat = _daily([100] * 10)
+    out = portfolio.run([_dds(k, flat, i) for i, k in enumerate("XAB")], s, max_open=2)
+    assert out["most_open"] <= 2
+    assert all(t["at_open"] is False for t in out["trades"] if t["why"] == "Time exit")

@@ -94,7 +94,8 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
         wf_growth *= 1 + test_ret / 100
         fixed_growth *= 1 + fixed_ret / 100
         train_years.append(_years(bars, tr_a, te_a))
-        is_yearly.append(_yearly(train_ret, train_years[-1]))
+        if train_years[-1] >= MIN_TRAIN_YEARS:          # a shorter stretch has no efficiency figure (and the power can overflow)
+            is_yearly.append(_yearly(train_ret, train_years[-1]))
         windows.append({
             "train_from": _date(bars, tr_a), "train_to": _date(bars, te_a),
             "test_from": _date(bars, te_a), "test_to": _date(bars, te_b),
@@ -107,10 +108,9 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
     wf_ret, fixed_ret = (wf_growth - 1) * 100, (fixed_growth - 1) * 100
     bh_ret = (bars[-1]["c"] / bars[oos_a]["c"] - 1) * 100
     oos_years = _years(bars, oos_a, len(bars) - 1)
-    oos_yearly = _yearly(wf_ret, oos_years)
-    avg_is = sum(is_yearly) / len(is_yearly)
     short_train = min(train_years) < MIN_TRAIN_YEARS
-    efficiency = round(oos_yearly / avg_is, 2) if avg_is > 0 and not short_train else None
+    avg_is = sum(is_yearly) / len(is_yearly) if not short_train else 0.0
+    efficiency = round(_yearly(wf_ret, oos_years) / avg_is, 2) if avg_is > 0 else None
     profitable = sum(1 for w in windows if w["test_ret"] > 0)
     settings_used = len({tuple(c["value"] for c in w["chosen"]) for w in windows})
     n = len(windows)
@@ -135,7 +135,7 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
                      if efficiency is not None else "") + ".")
 
     if short_train and wf_ret > 0:
-        detail += " Each tuning stretch is under half a year, so yearly returns aren't compared."
+        detail += " At least one tuning stretch is under half a year, so yearly returns aren't compared."
     if status == "pass" and trades < 10:
         status = "warn"
         detail += f" Only {trades} trades happened in the unseen periods."

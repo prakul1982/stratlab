@@ -209,7 +209,7 @@ class Engine:
             return b["c"], "Time exit"
         return None, ""
 
-    def _close(self, b: dict, px: float, why: str) -> dict:
+    def _close(self, b: dict, px: float, why: str, at_open: bool = False) -> dict:
         d = self.dir
         close_side = "sell" if d == 1 else "buy"
         fill = px * (1 - self.r.slippage / 100 * d)      # selling a long fills lower, buying back a short fills higher
@@ -221,7 +221,8 @@ class Engine:
         self.cash += d * self.qty * px - exit_cost
         self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
                             "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
-                            "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why})
+                            "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why,
+                            "at_open": at_open})
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
         self.qty, self.pend_exit = 0, False
@@ -248,6 +249,17 @@ class Engine:
     def _loss_cap(self) -> float:
         return self.r.capital * self.sess.dailyLossPct / 100 if self.sess and self.sess.dailyLossPct else 0.0
 
+    def open_exit(self, b: dict) -> bool:
+        """Whether the open trade certainly closes at this candle's open (the checks step() makes before the candle trades)."""
+        if self.qty <= 0 or self.emptied_on:
+            return False
+        if self.pend_exit:
+            return True
+        px, why = self._exit_price(b)
+        if px is None:
+            return self.t_sq is not None and str(self.entry_t)[:10] != bar_clock(b["t"], self.tf_min)[0]
+        return px == b["o"] and why != "Time exit"
+
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
         if self.emptied_on:
@@ -267,9 +279,10 @@ class Engine:
             # an exit rule seen on the last candle's close fills at this candle's open
             at_open = self.pend_exit
             px, why = (b["o"], "Exit rule") if at_open else self._exit_price(b)
+            now = bool(at_open) or (px is not None and px == b["o"] and why != "Time exit")      # filled at the open
             if px is None and self.t_sq is not None:
                 if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
-                    px, why = b["o"], "Square-off"
+                    px, why, now = b["o"], "Square-off", True
                 elif closes_at >= self.sq:
                     px, why = b["c"], "Square-off"
             if px is None and self._hit_exit(ctx, i):
@@ -292,7 +305,7 @@ class Engine:
                         self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
                 self.check_empty(b, new)
                 return new
-            new.append(self._close(b, px, why))
+            new.append(self._close(b, px, why, at_open=now))
             self.check_empty(b, new)
             if not at_open or self.emptied_on:
                 return new
