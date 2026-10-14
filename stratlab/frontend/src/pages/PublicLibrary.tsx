@@ -86,6 +86,7 @@ export function PublicLibrary() {
                     </div>
                     <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                     <HoldLine e={e} />
+                    {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
                       {([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], ["Unseen years", sh.unseen]] as [string, number | null][])

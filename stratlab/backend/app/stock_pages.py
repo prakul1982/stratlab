@@ -1302,7 +1302,7 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
     if cap is None:
         cap = next((_num(r.get("market_cap")) for r in sized if r.get("symbol") == symbol), None)
     rows = _fresh_rows([r for r in sized if r.get("symbol") != symbol])
-    name = lambda r: str(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"])        # noqa: E731
+    name = lambda r: str(proper_name(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"]))        # noqa: E731
     out: list[dict] = []
     same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()]
     large = bool(cap and cap >= LARGE_CAP.get(region, float("inf")))
@@ -1688,12 +1688,15 @@ def _find_form(region: str | None, q: str = "") -> str:
 
 
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
-               "REIT", "ADR", "II", "III", "IV"}
+               "REIT", "ADR", "II", "III", "IV", "NVIDIA"}
 
 
 def proper_name(name: str | None) -> str | None:
     """A company name that arrives in capitals from a filing ("MICROSOFT CORP") in title case ("Microsoft Corp"); acronyms
-    (IBM, AT&T, a short run of consonants like CVS) and a name that already has lower case are left as they are."""
+    (IBM, AT&T, a short run of consonants like CVS) and a name that already has lower case are left as they are; a filing's
+    state suffix ("APPLIED MATERIALS INC /DE", "REALTY /MD/") is dropped."""
+    if name:
+        name = re.sub(r"\s*/[A-Za-z]{2}/?$", "", name.strip()) or name
     if not name or name != name.upper() or not re.search(r"[A-Z]{2}", name):
         return name
 

@@ -30,3 +30,11 @@ def test_company_names_in_capitals_and_the_sector_word():
     assert stock_pages.proper_name("AT&T INC") == "AT&T Inc"
     assert stock_pages.proper_name("IBM") == "IBM" and stock_pages.proper_name("Apple Inc.") == "Apple Inc."
     assert stock_pages.shown_industry(["Services", "Services-Prepackaged Software"]) == ["Services", "Prepackaged Software"]
+
+
+def test_peer_names_lose_the_filing_state_suffix_and_all_caps():
+    assert stock_pages.proper_name("APPLIED MATERIALS INC /DE") == "Applied Materials Inc"
+    assert stock_pages.proper_name("EQUITY RESIDENTIAL /MD/") == "Equity Residential"
+    assert stock_pages.proper_name("NVIDIA CORP") == "NVIDIA Corp"
+    assert stock_pages.proper_name("ADVANCED MICRO DEVICES INC") == "Advanced Micro Devices Inc"
+    assert stock_pages.proper_name("Broadcom Inc.") == "Broadcom Inc."
