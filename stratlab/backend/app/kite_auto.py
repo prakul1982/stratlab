@@ -158,10 +158,14 @@ class AutoLogin:
             self._thread = threading.Thread(target=self._loop, daemon=True)
             self._thread.start()
 
-    def run_once(self) -> bool:
+    def run_once(self, only_if_due: bool = False, now: datetime | None = None) -> bool:
+        """Log in now (Admin's button). With `only_if_due` (the daily loop) a login another run finished while this one
+        waited for the lock is not repeated: a second login cancels the first one's token."""
         if not configured():
             raise AutoLoginError("Set KITE_USER_ID, KITE_PASSWORD and KITE_TOTP_SECRET first.", retry=False)
         with self._lock:  # never run two logins at once
+            if only_if_due and not login_due(now or datetime.now(IST), self.kite.token_day):
+                return False
             try:
                 request_token = fetch_request_token(self.kite.kite.login_url())
                 self.kite.accept_request_token(request_token)
@@ -235,7 +239,7 @@ class AutoLogin:
             if not self._gave_up and self._attempts < MAX_ATTEMPTS and leader.leading() and self.login_now(now):
                 self._attempts += 1
                 try:
-                    self.run_once()
+                    self.run_once(only_if_due=True)
                 except Exception as e:
                     if self._gave_up or self._attempts >= MAX_ATTEMPTS:
                         self._alert(f"StratLab: Kite auto-login failed and won't retry today. {e} "

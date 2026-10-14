@@ -102,3 +102,30 @@ def test_a_database_error_is_not_kept_as_no_holidays(monkeypatch):
     calendar._extra["IN"] = (time.time() - 40 - 570, set())
     assert calendar.extra_holidays("IN") == {"2027-03-22"}
     calendar._extra.clear()
+
+
+def test_a_fresh_exchange_list_replaces_the_days_inside_its_span(monkeypatch):
+    import json
+    from app import db
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    store[calendar.AUTO + "IN"] = json.dumps({"days": ["2025-11-05", "2026-03-04", "2026-08-15", "2026-10-02"], "at": "x"})
+    state = calendar.refresh_from_exchange(lambda: ["2026-01-26", "2026-03-03", "2026-10-02", "2026-12-25"], "IN")
+    # 4 Mar and 15 Aug fall inside the span of the new list (26 Jan to 25 Dec) and are not in it: dropped (moved or withdrawn);
+    # 5 Nov 2025 is before the span: kept
+    assert state["days"] == ["2025-11-05", "2026-01-26", "2026-03-03", "2026-10-02", "2026-12-25"]
+    assert json.loads(store[calendar.AUTO + "IN"])["days"] == state["days"]
+    later = calendar.refresh_from_exchange(lambda: ["2027-01-26", "2027-03-22"], "IN")      # next year's list: this year's days stay
+    assert later["days"] == state["days"] + ["2027-01-26", "2027-03-22"]
+
+
+def test_an_empty_or_failed_exchange_list_keeps_the_last_good_one(monkeypatch):
+    import json
+    from app import db
+    store = {calendar.AUTO + "IN": json.dumps({"days": ["2026-10-02"], "at": "x"})}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    for fetch in (lambda: [], lambda: (_ for _ in ()).throw(RuntimeError("busy"))):
+        state = calendar.refresh_from_exchange(fetch, "IN")
+        assert state["days"] == ["2026-10-02"] and state["error"]

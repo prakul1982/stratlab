@@ -7,6 +7,7 @@ RENEW seconds; the old container releases it on shutdown, so the new one takes o
 
 No market database (local dev, tests) or LEADER_LEASE=off: this process always leads.
 """
+import logging
 import os
 import secrets
 import socket
@@ -14,6 +15,8 @@ import threading
 import time
 
 from . import market_store
+
+log = logging.getLogger("stratlab")
 
 NAME = "main"
 LEASE, RENEW, RETRY = 60.0, 15.0, 5.0
@@ -81,6 +84,14 @@ class Leader:
             self.held = False
         return self.held
 
+    @staticmethod
+    def _call(fn, what: str) -> None:
+        """A callback that raises never ends the lease loop (the container would then lead, or not, for good)."""
+        try:
+            fn()
+        except Exception:
+            log.exception("leader: %s failed", what)
+
     def run(self, on_gain, on_lose) -> None:
         """Wait for the lease (try now, then every RETRY s), then keep renewing it; on_gain/on_lose on each change."""
         was = False
@@ -88,10 +99,10 @@ class Leader:
             now = self.renew()
             if now and not was:
                 print(f"leader: {self.me} leads")
-                on_gain()
+                self._call(on_gain, "on_gain")
             elif was and not now:
                 print(f"leader: {self.me} STEPPED DOWN; jobs and live sessions stop here")
-                on_lose()
+                self._call(on_lose, "on_lose")
             was = now
             wait = self.renew_every if now else self.retry
             if now and self.backend() is not None:      # wake in time to step down at the lease's end

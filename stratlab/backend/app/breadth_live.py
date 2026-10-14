@@ -28,6 +28,7 @@ IST = ZoneInfo("Asia/Kolkata")
 OPEN_AT, CLOSE_AT = "09:15", "15:30"
 FIELDS = ("adv", "dec", "unch", "a20", "n20", "a50", "n50", "a200", "n200", "idx")
 LIVE_REGIONS = ("IN",)
+SPLIT_GAP = 0.3                      # a previous close this far (as a share) from the stored last close is another basis (a split, a bonus)
 
 
 def is_open(region: str, now: datetime) -> bool:
@@ -41,7 +42,9 @@ def is_open(region: str, now: datetime) -> bool:
 
 def count(base: dict[str, list], quotes: dict[str, dict], symbols: list[str]) -> dict[str, int]:
     """One group's live counts. A stock needs a price and a previous close; an average counts the stock only when it has
-    that many closes. Today's price is the latest close in each average."""
+    that many closes. Today's price is the latest close in each average. A stock whose previous close is over 30% from
+    the stored last close (it went ex a split or bonus today; the stored averages are of the old prices) is counted for
+    its day's move but left out of the averages."""
     out = dict.fromkeys(FIELDS[:-1], 0)
     for s in symbols:
         q = quotes.get(s) or {}
@@ -56,6 +59,8 @@ def count(base: dict[str, list], quotes: dict[str, dict], symbols: list[str]) ->
         out["adv" if px > prev else "dec" if px < prev else "unch"] += 1
         if not b:
             continue
+        if b[0] and abs(prev / b[0] - 1) > SPLIT_GAP:
+            continue            # a split or bonus went ex today: the stored sums are of the old prices (the stock isn't below them)
         for k, total in ((20, b[2]), (50, b[3]), (200, b[4])):
             if total is None:
                 continue

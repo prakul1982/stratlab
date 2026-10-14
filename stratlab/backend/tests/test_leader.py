@@ -346,3 +346,65 @@ def test_admin_run_now_refuses_on_a_container_that_doesnt_lead(monkeypatch):
         assert c.post("/admin/connect/run?part=reminders", headers=h).status_code == 200
     finally:
         world["close"]()
+
+
+def test_a_callback_that_raises_never_ends_the_lease_loop():
+    mem = MemLease(time.monotonic)
+    mem.rows[leader.NAME] = {"owner": "old-container", "until": time.monotonic() + 60}
+    me = leader.Leader(lambda: mem, renew=0.01, retry=0.01)
+    events = []
+
+    def gain():
+        events.append("gain")
+        raise RuntimeError("start-up blew up")
+
+    def lose():
+        events.append("lose")
+        raise RuntimeError("drop_all blew up")
+    t = threading.Thread(target=me.run, args=(gain, lose), daemon=True)
+    t.start()
+    mem.release(leader.NAME, "old-container")
+    _wait(lambda: events == ["gain"])
+    mem.rows[leader.NAME] = {"owner": "intruder", "until": time.monotonic() + 60}
+    _wait(lambda: events == ["gain", "lose"])
+    assert t.is_alive()                      # on_lose raised, the loop lives
+    mem.release(leader.NAME, "intruder")
+    _wait(lambda: events == ["gain", "lose", "gain"])        # ...and takes the lease back when it is free
+    assert t.is_alive() and me.held
+    me._stop.set()
+    t.join(1)
+
+
+def test_one_job_that_fails_to_start_doesnt_stop_the_rest_and_is_tried_again_on_the_next_gain(monkeypatch):
+    from app import main
+    monkeypatch.setattr(main, "_failed_starts", {})
+    started, broken = [], [True]
+
+    def flaky():
+        if broken[0]:
+            raise RuntimeError("cannot start")
+        started.append("flaky")
+    main._start("a", lambda: started.append("a"))
+    main._start("flaky", flaky)
+    main._start("b", lambda: started.append("b"))
+    assert started == ["a", "b"] and list(main._failed_starts) == ["flaky"]
+    main._start("flaky", flaky)                       # still broken: stays on the list, nothing raised
+    assert list(main._failed_starts) == ["flaky"]
+    broken[0] = False
+    main.start_failed_jobs()
+    assert started == ["a", "b", "flaky"] and main._failed_starts == {}
+    main.start_failed_jobs()
+    assert started == ["a", "b", "flaky"]             # a job started is not started twice
+
+
+def test_leading_again_after_a_lapse_restarts_only_the_jobs_that_failed(monkeypatch):
+    from app import main
+    calls = []
+    monkeypatch.setattr(main, "_jobs_started", True)
+    monkeypatch.setattr(main, "_failed_starts", {"x": lambda: calls.append("x")})
+    monkeypatch.setattr(db, "forget_mirror", lambda: None)
+    monkeypatch.setattr(main.kite, "token_day", main.kite_today())
+    monkeypatch.setattr(main, "start_jobs", lambda: calls.append("all"))
+    main.lead()
+    _wait(lambda: calls == ["x"])
+    assert calls == ["x"]

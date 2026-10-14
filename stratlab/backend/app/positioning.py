@@ -519,7 +519,8 @@ WHAT = {"participants": "participant files", "cash": "FII/DII numbers"}
 def run_sentence(res) -> tuple[str, bool]:
     """(a sentence, waiting) for an evening run's result {"participants", "cash", "chains"}: "Participant files not out yet;
     FII/DII numbers in; 5 option chains summarised." `waiting` is True while a file hasn't been published, so Admin shows
-    it as Check rather than a green OK (R9R-006: the raw dict beside OK while participants were missing)."""
+    it as Check rather than a green OK (R9R-006: the raw dict beside OK while participants were missing). A file that
+    couldn't be read is a Check too."""
     if not isinstance(res, dict):
         return (str(res or ""), False)
     waiting = False
@@ -534,6 +535,7 @@ def run_sentence(res) -> tuple[str, bool]:
             waiting = True
             parts.append(f"{label} not out yet")
         else:
+            waiting = True                      # couldn't be read: a Check too, not a green OK
             parts.append(f"{label} couldn't be read ({str(v)[:80]})")
     n = res.get("chains")
     if isinstance(n, int) and not isinstance(n, bool):

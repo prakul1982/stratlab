@@ -50,3 +50,43 @@ def test_records_current_and_next_in_hours_only():
     assert saved[0]["chain"][0][:5] == [25000.0, 100, 101, 100.5, 5000] and saved[0]["spot"] == 25010.5
     assert r.status["today"] == 2 and "BROKEN" in r.status["last_error"]
     assert Recorder(Data(ready=False), saved.append, [("NFO", "NIFTY")]).run_once(utc(2026, 9, 24, 4, 0)) == 0
+
+
+class Flaky(Data):
+    fail = True
+
+    def chain(self, ex, name, choice, around=10):
+        if self.fail:
+            raise RuntimeError("quote failed")
+        return super().chain(ex, name, choice, around)
+
+
+def test_last_error_clears_once_a_pass_saves_everything():
+    saved = []
+    d = Flaky()
+    r = Recorder(d, saved.append, [("NFO", "NIFTY")])
+    assert r.run_once(utc(2026, 9, 24, 4, 0)) == 0 and "quote failed" in r.status["last_error"]
+    d.fail = False
+    assert r.run_once(utc(2026, 9, 24, 4, 5)) == 2
+    assert r.status["last_error"] is None
+    # a pass that saved something but also failed on a target keeps the error
+    both = Recorder(Data(), saved.append, [("NFO", "NIFTY"), ("NFO", "BROKEN")])
+    assert both.run_once(utc(2026, 9, 24, 4, 0)) == 2 and "BROKEN" in both.status["last_error"]
+    assert both.run_once(utc(2026, 9, 24, 4, 5)) == 2 and "BROKEN" in both.status["last_error"]
+
+
+def test_a_deploy_inside_the_closing_window_takes_no_second_closing_snapshot(monkeypatch):
+    from app import db
+    store: dict = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    saved = []
+    first = Recorder(Data(), saved.append, [("NFO", "NIFTY")])
+    close = utc(2026, 9, 24, 10, 11)                                  # 15:41 IST: a minute after the derivatives segment closes
+    assert first.close_due(close) and first.run_once(close) == 2
+    assert not first.close_due(close)
+    assert '"close_day":"2026-09-24"' in store["jobstatus:option-chains"].replace(" ", "")      # stored with the status
+    again = Recorder(Data(), saved.append, [("NFO", "NIFTY")])       # the new container after the deploy
+    assert not again.close_due(utc(2026, 9, 24, 10, 15)) and again.run_once(utc(2026, 9, 24, 10, 15)) == 0
+    assert len(saved) == 2
+    assert again.close_due(utc(2026, 9, 25, 10, 11))                  # the next day's read is still due

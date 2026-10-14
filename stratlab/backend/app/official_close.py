@@ -152,9 +152,54 @@ def quote_close(symbol: str, day, now: datetime | None = None) -> float | None:
     return None
 
 
+BASIS_SLACK = 0.25            # an official close this far (as a share) from the candle's close is another basis: left alone
+EX_FOR = 600                  # how long the calendar's bonus and split ex-dates are reused
+
+
+def same_basis(official_close: float | None, candle_close) -> bool:
+    """Whether the exchange's close can stand in for the candle's close. The bhavcopy keeps each day's traded close; a
+    candle adjusted for a split or bonus is on the new basis, so laying the traded close over it plants a jump (a 1:10
+    split's 1,010 over an adjusted 101). A close more than BASIS_SLACK from the candle's is such a mismatch (the same idea
+    as RANGE_SLACK for the 52-week report), and the candle's own close stands."""
+    try:
+        c, b = float(official_close), float(candle_close)
+    except (TypeError, ValueError):
+        return True
+    if not (c > 0 and b > 0):
+        return True
+    return abs(c / b - 1) <= BASIS_SLACK
+
+
+def _ex_dates() -> dict[str, str]:
+    """{symbol: the latest ex-date of a bonus or split in the corporate-actions calendar}, reused for a few minutes."""
+    hit = _mem.get(("exd",))
+    if hit is not None:
+        return hit
+    got: dict[str, str] = {}
+    try:
+        from . import corp_actions
+        for r in corp_actions.load("IN")["rows"]:
+            if corp_actions.adjusts(r):
+                sym = base_symbol(r.get("symbol"))
+                got[sym] = max(got.get(sym, ""), str(r["ex_date"])[:10])
+    except Exception as e:                         # no calendar: the closes are judged by the candle alone
+        print("official closes: ex-dates:", str(e)[:120])
+    _mem.set(("exd",), got, EX_FOR)
+    return got
+
+
+def before_ex_date(symbol: str, day) -> bool:
+    """Whether `day` is before a known bonus or split ex-date of the stock: its stored close is the unadjusted traded
+    one, while the broker's candles of such a day are adjusted back, so it is not laid over them."""
+    ex = _ex_dates().get(base_symbol(symbol))
+    return bool(ex) and _day(day) < ex
+
+
 def official(symbol: str, day, use_quote: bool = True, now: datetime | None = None) -> float | None:
     """The exchange's close of one stock on one day: the bhavcopy's, else (with `use_quote`) a same-day quote's."""
     sym = str(symbol or "").upper()
+    if before_ex_date(sym, day):
+        return None
     got = closes(day, now)
     if got and got.get(sym):
         return got[sym]
@@ -169,7 +214,7 @@ def overlay_bars(bars: list[dict], symbol: str, use_quote: bool = True, now: dat
     last = bars[-1]
     day = str(last.get("t") or "")[:10]
     c = official(symbol, day, use_quote, now) if day else None
-    if c is None or c == last.get("c"):
+    if c is None or c == last.get("c") or not same_basis(c, last.get("c")):
         return bars
     fixed = {**last, "c": c, "h": max(c, last.get("h") or c), "l": min(c, last.get("l") or c), "official": True}
     return bars[:-1] + [fixed]
@@ -185,7 +230,7 @@ def with_reference(bars: list[dict], symbol: str, ref_day, now: datetime | None 
         d = str(bars[i].get("t") or "")[:10]
         if d and d <= ref:
             c = official(symbol, d, use_quote=False, now=now)
-            if c is None or c == bars[i].get("c"):
+            if c is None or c == bars[i].get("c") or not same_basis(c, bars[i].get("c")):
                 return bars
             b = bars[i]
             out = list(bars)
@@ -289,6 +334,8 @@ def day_close(symbol: str, day, kind: str = "cas", exchange: str = "NSE", now: d
     except ValueError:
         return None
     sym = base_symbol(symbol) if exchange == "NSE" else str(symbol or "").upper()
+    if exchange == "NSE" and before_ex_date(sym, d):
+        return None                                   # a day before a split or bonus: the file's close is unadjusted
     got = None
     if exchange == "NSE":                             # the exchange's file names NSE's stocks
         got = _stored_quick(d)
@@ -418,7 +465,7 @@ def _closes_in(bars: list[dict], symbol: str, kind: str = "cas", exchange: str =
         if not d or d < cut:
             break
         c = day_close(symbol, d, kind, exchange, now, fetch=i == len(bars) - 1)
-        if c is None or (c == b.get("c") and b.get("official")):
+        if c is None or (c == b.get("c") and b.get("official")) or not same_basis(c, b.get("c")):
             continue
         if out is None:
             out = list(bars)

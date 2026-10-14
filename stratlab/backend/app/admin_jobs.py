@@ -290,10 +290,13 @@ def rows() -> list[dict]:
     def ibkr_daily():
         st = dict(m.connect_job.status or {})
         r = st.get("ibkr") or {}
-        return _row("ibkr-daily", "IBKR daily pull", "Every 30 minutes from 7 AM IST until each connected account has its day's read",
-                    st.get("ibkr_at"), st.get("last_error"),
-                    [f"{r['users']} accounts due, {r['ok']} read, {r['failed']} failed" if r else ""],
-                    [{"label": "Run now", "path": "/admin/connect/run?part=ibkr"}], running=m.connect_job.running)
+        row = _row("ibkr-daily", "IBKR daily pull", "Every 30 minutes from 7 AM IST until each connected account has its day's read",
+                   st.get("ibkr_at"), st.get("last_error"),
+                   [f"{r['users']} accounts due, {r['ok']} read, {r['failed']} failed" if r else ""],
+                   [{"label": "Run now", "path": "/admin/connect/run?part=ibkr"}], running=m.connect_job.running)
+        if row["state"] == "ok" and r.get("failed"):      # a run that read some accounts and not others is a Check, not "OK"
+            row = {**row, "state": "warn", "note": f"{plural(int(r['failed']), 'account')} could not be read in the last run"}
+        return row
     add("IBKR daily pull", ibkr_daily)
 
     def inbox_reminder():

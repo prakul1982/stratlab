@@ -416,3 +416,33 @@ def test_a_reported_loss_per_share_reads_minus_dollar_not_dollar_minus():
     got = R.reported({"epsActual": -0.35, "revenueActual": 2_500_000})
     assert got[0] == {"label": "EPS", "value": "-$0.35"}
     assert R.reported({"epsActual": -0.001})[0]["value"] == "$0.00"
+
+
+def test_a_refresh_that_read_nothing_is_an_error_and_keeps_its_slot_free(w):
+    from app import admin_jobs
+    job = R.Job(lambda: {"in": FakeIndia(down=True), "us": FakeUS(down=True), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    job.tick(IN_MORNING)                                          # 08:15 IST: the 07:15 slot; US 06:00 slot is at 22:45 UTC
+    assert job.status["last_error"] and "IN:" in job.status["last_error"]
+    assert job.status["last_run"] and job.status["problems"]
+    row = admin_jobs._row("results", "Results calendar", "", job.status["last_run"], job.status["last_error"], admin_jobs._problems(job.status))
+    assert row["state"] == "bad" and row["error"]
+    assert db.get_setting("resultsjob:refresh-IN-07:15") is None and "refresh-IN-07:15" not in job.last      # the slot is not used up
+    asked = []
+
+    class Back(FakeIndia):
+        def board_meetings(self, f, t):
+            asked.append(1)
+            return super().board_meetings(f, t)
+    job.sources = lambda: {"in": Back(), "us": FakeUS(), "sec": None}
+    job.tick(IN_MORNING + timedelta(minutes=10))
+    assert not asked                                              # it waits half an hour, not on every five-minute check
+    later = IN_MORNING + timedelta(minutes=R.RETRY_MINUTES + 1)
+    job.tick(later)
+    assert asked and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"
+    assert job.status["last_error"] is None and "IN" not in job.down
+
+
+def test_a_refresh_that_read_is_not_an_error_and_uses_its_slot(w):
+    job = R.Job(lambda: {"in": FakeIndia([meeting("RELIANCE", TODAY)]), "us": FakeUS(), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    job.tick(IN_MORNING)
+    assert job.status["last_error"] is None and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"

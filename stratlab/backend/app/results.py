@@ -419,6 +419,7 @@ def send(profile: dict, subject: str, text: str, url: str):
 REFRESH_AT = {"IN": ("07:15", "18:30"), "US": ("06:00",)}
 MORNING_AT = {"IN": "08:00", "US": "07:30"}
 CHECK_FROM = {"IN": "10:00", "US": "07:00"}          # hourly from then until midnight, local time
+RETRY_MINUTES = 30                                   # a refresh that read nothing is asked again after this long
 
 
 class Job:
@@ -430,6 +431,8 @@ class Job:
         self.sources, self.send, self.can_alert = sources, send, can_alert
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None, "problems": []}
+        self.down: dict[str, str] = {}               # region -> why its last refresh read nothing (shown until one does)
+        self.retry: dict[str, datetime] = {}         # refresh slot -> not asked again before this time
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="results-calendar").start()
@@ -474,10 +477,20 @@ class Job:
         sent, ran, who = 0, False, None
         for region in REGIONS:
             for at in REFRESH_AT[region]:
-                day = self.due(f"refresh-{region}-{at}", now, region, at)
+                name = f"refresh-{region}-{at}"
+                if now < self.retry.get(name, now):
+                    continue
+                day = self.due(name, now, region, at)
                 if day:
                     who = who if who is not None else trackers()
-                    self.refresh(region, who, day)
+                    try:
+                        out = self.refresh(region, who, day)
+                    except Exception:
+                        self.unmark(name)
+                        raise
+                    if out["rows"] is None:      # every feed failed: the slot isn't used up, it is asked again in half an hour
+                        self.unmark(name)
+                        self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
                     ran = True
             day, run = self.claim(f"morning-{region}", now, region, MORNING_AT[region])
             if day:
@@ -490,15 +503,25 @@ class Job:
                 sent, ran = sent + self.follow_up(region, day, who, run), True
                 run.done()
         if ran:
-            self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            self.status.update(last_run=now.isoformat(), sent=sent, last_error=next(iter(self.down.values()), None))
             from . import job_status
             job_status.keep("results", self)       # Admin shows this run after a restart too
         return sent
+
+    def unmark(self, name: str) -> None:
+        """Take a slot's day mark back (a read that got nothing must not use the slot up)."""
+        self.last.pop(name, None)
+        db.delete_setting(f"resultsjob:{name}")
 
     def refresh(self, region: str, who: dict | None = None, day: date | None = None) -> dict:
         who = who if who is not None else trackers()
         out = refresh(region, self.sources(), {s for (r, s) in who if r == region}, day)
         self.status["problems"] = out["problems"][:10]
+        if out["rows"] is None:                      # no feed answered: Admin says so, not "OK"
+            self.down[region] = f"{region}: {(out['problems'] or ['no feed answered'])[0]}"[:200]
+        else:
+            self.down.pop(region, None)
+        self.status["last_error"] = next(iter(self.down.values()), None)
         return out
 
     def morning(self, region: str, day: date, who: dict, run) -> int:
