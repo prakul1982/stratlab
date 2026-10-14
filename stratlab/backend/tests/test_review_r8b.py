@@ -499,6 +499,7 @@ def test_a_money_claim_is_held_to_the_series_it_names():
 def test_a_daily_candle_stored_in_the_session_is_reused_for_a_minute_only(monkeypatch, mem):
     import time_machine
     ks, calls = _kite(monkeypatch, _bars(last_day="2026-10-14"))      # in the session the candles end with today's
+    ks.token_day = "2026-10-14"                                     # the login is that day's, whatever today is
     with time_machine.travel(datetime(2026, 10, 14, 9, 20, tzinfo=IST), tick=False) as t:
         ks.history(2953217, "1d", 30)
         t.shift(timedelta(seconds=30))
