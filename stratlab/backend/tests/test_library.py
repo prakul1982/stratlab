@@ -254,3 +254,45 @@ def test_a_share_made_meanwhile_keeps_its_token(api, store, monkeypatch):
         return mine
     monkeypatch.setattr(main.public, "publish", racing)
     assert api.post(f"/notebooks/{nid}/experiments/1/share", json={}).json()["token"] == "theirs-token"
+
+
+def test_a_look_alike_stratlab_author_is_refused(api, store):
+    nid, _ = _published(api)
+    for name in ("ＳｔｒａｔＬａｂ", "ｓｔｒａｔｌａｂ fan", "Strat－Lab"):     # full-width letters and dash
+        r = api.post(f"/notebooks/{nid}/experiments/1/library", json={"author": name})
+        assert r.status_code == 400 and r.json()["detail"]["code"] == "author_reserved"
+
+
+def test_publishing_again_after_taking_it_down_leaves_one_entry_even_when_two_land_at_once(api, store, monkeypatch):
+    nid, e = _published(api)
+    assert api.delete(f"/library/{e['id']}").status_code == 200       # the notebook still points at the removed entry
+    real = main.library.save
+    state = {"n": 0}
+
+    def racing(entry):
+        real(entry)
+        if state["n"] == 0:                                            # a second publish lands while the first is mid-way
+            state["n"] = 1
+            api.post(f"/notebooks/{nid}/experiments/1/library", json={"description": "second"})
+    monkeypatch.setattr(main.library, "save", racing)
+    first = api.post(f"/notebooks/{nid}/experiments/1/library", json={"description": "first"}).json()
+    monkeypatch.setattr(main.library, "save", real)
+    mine = [x for x in library.all_entries() if x["owner"] == "user-1"]
+    linked = api.get(f"/notebooks/{nid}").json()["experiments"][0]["library"]
+    assert [x["id"] for x in mine] == [linked] == [first["id"]]
+
+
+def test_refreshing_a_link_keeps_a_new_one_made_meanwhile(api, store, monkeypatch):
+    nid, _ = _published(api)
+    old = api.post(f"/notebooks/{nid}/experiments/1/share", json={}).json()["token"]
+    real = main.public.publish
+
+    def racing(nb, exp, image):
+        mine = real(nb, exp, image)
+        nb2 = main.get_notebook({"id": "user-1"}, nid)                # another tab turned it off and on again
+        nb2["experiments"][0]["public"] = "newer-token"
+        main.save_notebook({"id": "user-1"}, nb2)
+        return mine
+    monkeypatch.setattr(main.public, "publish", racing)
+    assert api.post(f"/notebooks/{nid}/experiments/1/share", json={}).json()["token"] == "newer-token"
+    assert main.public.load(old) is None

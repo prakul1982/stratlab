@@ -125,3 +125,15 @@ def test_a_link_shared_before_shows_no_amounts_either(monkeypatch):
     monkeypatch.setattr(db, "get_setting", lambda k: json.dumps(old))
     snap = public.load("a" * 22)
     assert snap["series"]["equity"] == [100.0, 110.0] and "pnl" not in snap["group"]["members"][0]
+
+
+def test_a_link_shared_before_shows_only_the_stats_the_page_shows(api, store):
+    legacy = {"name": "x", "question": "", "instrument": {"symbol": "BTC"}, "tf": "1d", "range": None,
+              "verdict": {"verdict": "edge", "headline": "h", "summary": "s", "passed": 3, "total": 4, "checks": []},
+              "stats": {"ret": 25.0, "pnl": 25000.0, "avg": 1200.0, "buy_hold_ret": 10, "mdd": -5, "n": 20},
+              "series": {"t": ["a", "b"], "equity": [100000, 125000], "buy_hold": [100000, 110000], "split": None},
+              "group": {"name": "g", "max_open": 2, "members": [{"symbol": "A", "trades": 3, "pnl": 500, "avg": 9, "win": 50, "buy_hold": 1}]}}
+    store["share:abcdef12"] = json.dumps(legacy)
+    snap = api.get("/public/v/abcdef12").json()
+    assert set(snap["stats"]) == {"ret", "buy_hold_ret", "mdd", "n"}          # pnl / ret would give the capital
+    assert snap["group"]["members"] == [{"symbol": "A", "trades": 3, "win": 50, "buy_hold": 1}]

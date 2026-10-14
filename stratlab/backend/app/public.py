@@ -33,6 +33,10 @@ def own_question(q: str | None) -> str:
     return "" if _RULES_QUESTION.match(q) else q
 
 
+STATS = ("ret", "buy_hold_ret", "mdd", "n")              # what a public link shows: no amount that reveals the capital
+MEMBER = ("symbol", "trades", "win", "buy_hold")
+
+
 def _indexed(equity: list, hold: list) -> dict:
     """Both lines as the growth of 100 from the strategy's start: the account's own amounts would show the capital."""
     base = next((x for x in equity if x), None)
@@ -52,10 +56,10 @@ def snapshot(nb: dict, exp: dict) -> dict:
         "side": (exp.get("strategy") or {}).get("side", "long"), "created_at": exp.get("created_at"),
         "verdict": {k: v.get(k) for k in ("verdict", "headline", "summary", "passed", "total")}
                    | {"checks": [{k: c.get(k) for k in ("id", "title", "status", "detail")} for c in v.get("checks") or []]},
-        "stats": {k: (exp.get("stats") or {}).get(k) for k in ("ret", "buy_hold_ret", "mdd", "n")},      # no pnl, here or in the members: the amounts divided by the return would show the capital
+        "stats": {k: (exp.get("stats") or {}).get(k) for k in STATS},      # no pnl, here or in the members: the amounts divided by the return would show the capital
         "series": {"t": s.get("t") or [], **_indexed(s.get("equity") or [], s.get("buy_hold") or []), "split": s.get("split")},
         "group": None if not g else {"name": g.get("name"), "max_open": g.get("max_open"),
-                                      "members": [{k: m.get(k) for k in ("symbol", "trades", "win", "buy_hold")} for m in g.get("members") or []]},
+                                      "members": [{k: m.get(k) for k in MEMBER} for m in g.get("members") or []]},
     }
 
 
@@ -115,9 +119,10 @@ def load(token: str) -> dict | None:
     if isinstance(snap, dict) and isinstance(snap.get("series"), dict) and not snap["series"].get("indexed"):
         s = snap["series"]                                       # a link shared with the account's own amounts
         snap["series"] = {**s, **_indexed(s.get("equity") or [], s.get("buy_hold") or [])}
+    if isinstance(snap, dict) and isinstance(snap.get("stats"), dict):
+        snap["stats"] = {k: snap["stats"].get(k) for k in STATS}   # a link shared with every stat (P&L over the return is the capital)
     if isinstance(snap, dict) and isinstance(snap.get("group"), dict):
-        for m in snap["group"].get("members") or []:
-            m.pop("pnl", None)                                   # and with each member's P&L
+        snap["group"]["members"] = [{k: m.get(k) for k in MEMBER} for m in snap["group"].get("members") or [] if isinstance(m, dict)]
     return snap
 
 

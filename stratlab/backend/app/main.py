@@ -5,6 +5,7 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import math
+import unicodedata
 import logging
 from html import escape as html_escape
 import re
@@ -1414,12 +1415,13 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
 
 @app.delete("/notebooks/{nid}")
 def delete_notebook(nid: str, profile=Depends(current_profile)):
-    row = db.get_strategy(profile["id"], check_id(nid))
+    nid = check_id(nid)                                   # the stored entries name the canonical id
+    row = db.get_strategy(profile["id"], nid)
     if not row:
         err(404, "not_found", "Notebook not found.")
     library.take_down(notebook_from_row(row).get("experiments") or [])   # its public links and library entries go with it
     library.remove_of_notebook(profile["id"], nid)                       # and entries whose experiment was deleted earlier
-    db.delete_strategy(profile["id"], check_id(nid))
+    db.delete_strategy(profile["id"], nid)
     return {"deleted": True}
 
 
@@ -1546,7 +1548,7 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
         if not had:
             public.unpublish(token)
         err(404, "not_found", "Experiment not found.")
-    if not had and now.get("public"):
+    if now.get("public") and now["public"] not in (had, token):    # another tab's link (or one made again meanwhile) stays
         public.unpublish(token)
         token = now["public"]
     else:
@@ -3157,25 +3159,26 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if "stratlab" in re.sub(r"[\W_]+", "", req.author.casefold()) and not admin.is_admin(profile):
+    if "stratlab" in re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", req.author).casefold()) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
     throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
-    e = library.entry(nb, exp, profile["id"], req.author, req.description,
-                      entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
-    if old and old.get("owner") == profile["id"]:
+    had = old["id"] if old and old.get("owner") == profile["id"] else None   # a pointer to a removed entry isn't one
+    e = library.entry(nb, exp, profile["id"], req.author, req.description, entry_id=had)
+    if had:
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
-    e = library.carry_moderation(old if old and old.get("owner") == profile["id"] else None, e)
+    e = library.carry_moderation(old if had else None, e)
     library.save(e)
     cur = get_notebook(profile, nid)          # an entry made meanwhile is kept; ours is taken down again
     now = next((x for x in cur.get("experiments") or [] if x["v"] == version), None)
     if now is None:
-        if not exp.get("library"):
+        if not had:
             library.remove(e["id"])
         err(404, "not_found", "Experiment not found.")
-    if not exp.get("library") and now.get("library") and now["library"] != e["id"]:
+    other = now.get("library")
+    if not had and other and other != e["id"] and library.load(other):
         library.remove(e["id"])
-        e = library.load(now["library"]) or e
+        e = library.load(other) or e
     else:
         now["library"] = e["id"]
         save_notebook(profile, cur)
