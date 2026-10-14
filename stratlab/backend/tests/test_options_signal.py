@@ -109,3 +109,21 @@ def test_feed_runs_the_rules_on_new_candles_only(monkeypatch):
     g = SignalFeed(k, Strategy(**EMA7), "NSE:NIFTY 50", saved)                    # after a restart
     assert g.want() == f.want() and g.token == 256265
     assert f.view()["position"] == "long" and f.view()["tf"] == "5m"
+
+
+def test_a_restart_runs_the_candles_that_closed_after_the_last_save(monkeypatch):
+    import app.live as live
+    monkeypatch.setattr(live, "drop_forming", lambda bars, tf: bars)
+    k = FakeKite()
+    for i in range(104, 120):                                                     # the rise turns into a fall
+        px = k.bars[103]["c"] - 30 * (i - 103)
+        k.bars[i] = {**k.bars[i], "o": px, "h": px + 2, "l": px - 2, "c": px}
+    k.shown = 100
+    f = SignalFeed(k, Strategy(**EMA7), "NSE:NIFTY 50")
+    f.feed(k.bars[100:104])
+    assert f.want()["dir"] == "long"
+    saved = f.dump()
+    k.shown = 110                                                                 # closed while the server was down
+    g = SignalFeed(k, Strategy(**EMA7), "NSE:NIFTY 50", saved)
+    f.feed(k.bars[104:110])
+    assert f.want() is None and g.want() is None and g.bars[-1]["t"] == k.bars[109]["t"]       # the rules exited

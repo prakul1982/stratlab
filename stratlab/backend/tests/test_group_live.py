@@ -186,3 +186,18 @@ def test_a_split_and_a_dividend_on_two_members_and_a_restart(monkeypatch):
     assert b2.engine.qty == qb and s2.corp_cash == 5.0 * qb and len(corp_events(b2.engine)) == 1
     assert group_live.stopped_snapshot({**grow, "status": "stopped", "state": s2.state()})["account"]["realised"] == s2.realised()
     assert corp_actions.paper_region(a2.inst) == "US"
+
+
+def test_members_are_sized_from_the_shared_pot(monkeypatch):
+    # a second position only gets the cash the first leaves free, as in the group backtest
+    mgr, _ = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    big = {**STRAT, "session": {}, "risk": {**STRAT["risk"], "perTrade": 600000}}
+    s = group_live.GroupLiveSession(mgr, fast_row({}, big))
+    a, b, _ = s.members
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    s._on_candle(b, candle("2999-01-01T10:00:00+00:00", 100.0))
+    assert a.engine.qty * 100 > 590000
+    assert 0 < b.engine.qty * 100 <= 1000000 - a.engine.qty * 100 - a.engine.entry_cost
+    value, free = s.funds()
+    assert abs(value - s.equity()) < 1e-6 and free >= 0

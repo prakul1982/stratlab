@@ -55,9 +55,25 @@ def test_stopping_with_a_position_open_keeps_it_valued_at_the_last_price(monkeyp
     worth = st["cash"] + e.qty * 335.88
     assert a["qty"] == e.qty and a["equity"] == pytest.approx(worth) and a["valued_at"] == 335.88
     assert a["equity"] > 9900 and a["equity"] / 10000 - 1 > -0.05                # never "-97%": the shares are counted
-    assert a["unrealised"] == pytest.approx(e.qty * (335.88 - e.entry))
+    assert a["unrealised"] == pytest.approx(e.qty * (335.88 - e.entry) - e.entry_cost)
     assert snap["equity_curve"][-1]["eq"] == pytest.approx(round(worth, 2))     # the curve ends where the account is
     assert snap["bars"] and snap["last_price"] == 335.88                        # and the chart stays
+
+
+def test_unrealised_is_net_of_the_entry_cost_so_equity_adds_up(monkeypatch):
+    # equity = capital + realised + unrealised, running and stopped, as on a group's page
+    mgr, reg = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    s, row = _session(mgr, reg)
+    s._on_candle({"t": "2999-01-01T14:00:00+00:00", "o": 335.0, "h": 335.4, "l": 334.8, "c": 335.18, "v": 1})
+    e = s.engine
+    assert e.qty > 0 and e.entry_cost > 0
+    s.last_price = 335.88
+    a = s.snapshot()["account"]
+    assert a["equity"] == pytest.approx(a["capital"] + a["realised"] + a["unrealised"])
+    st = {**e.dump(), "last_price": 335.88}
+    b = live.stopped_snapshot({**row, "status": "stopped", "state": st})["account"]
+    assert b["equity"] == pytest.approx(b["capital"] + b["realised"] + b["unrealised"]) and b["unrealised"] == pytest.approx(a["unrealised"])
 
 
 def test_a_session_stopped_before_the_last_price_was_kept_is_valued_where_its_curve_ends():
