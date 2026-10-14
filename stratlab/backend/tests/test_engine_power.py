@@ -37,26 +37,27 @@ def test_short_profits_when_price_falls():
     st = s(side="short", exit=[{"l": {"t": "price"}, "op": "lt", "r": {"t": "num", "v": 91}}])
     eng = run(st, bars)
     t = eng.trades[0]
-    assert t["side"] == "short" and t["entry"] == 100 and t["exit"] == 90
-    assert t["pnl"] == pytest.approx(t["qty"] * 10) and t["ret"] == pytest.approx(10)
-    assert eng.equity(90) == pytest.approx(100000 + t["pnl"])   # the entry rule has already re-opened a short
+    # the signal on the 2nd candle fills at the 3rd's open (95); the exit seen at its close fills at the 4th's open (90)
+    assert t["side"] == "short" and t["entry"] == 95 and t["exit"] == 90
+    assert t["pnl"] == pytest.approx(t["qty"] * 5) and t["ret"] == pytest.approx(5 / 95 * 100)
+    assert eng.equity(90) == pytest.approx(100000 + t["pnl"])   # the last candle's entry signal has no next open
     assert eng.events[0]["side"] == "sell" and eng.events[0]["why"] == "Short entry" and eng.events[1]["side"] == "buy"
 
 
 def test_short_stop_is_above_entry_and_equity_marks_to_market():
     bars = [bar(1, 100, 100, 100, 100), bar(2, 100, 100, 100, 100), bar(3, 101, 104, 100, 103), bar(4, 103, 108, 103, 107)]
     eng = run(s(side="short", exit=NEVER), bars[:3])
-    assert eng.sl == pytest.approx(105) and eng.qty > 0
-    assert eng.equity(103) == pytest.approx(100000 - eng.qty * 3)
+    assert eng.sl == pytest.approx(101 * 1.05) and eng.qty > 0    # filled at the 3rd candle's open, 101
+    assert eng.equity(103) == pytest.approx(100000 - eng.qty * 2)
     eng2 = run(s(side="short", exit=NEVER), bars)
     t = eng2.trades[0]
-    assert t["why"] == "Stop loss" and t["exit"] == pytest.approx(105) and t["pnl"] < 0
+    assert t["why"] == "Stop loss" and t["exit"] == pytest.approx(101 * 1.05) and t["pnl"] < 0
 
 
 def test_short_target_below_entry():
     bars = [bar(1, 100, 100, 100, 100), bar(2, 100, 100, 100, 100), bar(3, 99, 99, 93, 94)]
     eng = run(s(side="short", risk={**NO_COSTS, "tgt": 5}), bars)
-    assert eng.trades[0]["why"] == "Target" and eng.trades[0]["exit"] == pytest.approx(95)
+    assert eng.trades[0]["why"] == "Target" and eng.trades[0]["exit"] == pytest.approx(99 * 0.95)   # filled at 99
 
 
 def test_trailing_stop_follows_the_high_and_locks_in_gains():
@@ -76,7 +77,7 @@ def test_short_trailing_stop_follows_the_low():
     # rises straight away: the untouched first stop is a plain loss, not a "trailing stop"
     up = [bar(1, 100, 100, 100, 100), bar(2, 100, 100, 100, 100), bar(3, 101, 107, 100, 106)]
     t = run(s(side="short", exit=NEVER, risk={**NO_COSTS, "sl": 0, "trail": 5}), up).trades[0]
-    assert t["why"] == "Stop loss" and t["exit"] == pytest.approx(105) and t["pnl"] < 0
+    assert t["why"] == "Stop loss" and t["exit"] == pytest.approx(101 * 1.05) and t["pnl"] < 0
 
 
 def test_trailing_stop_never_moves_down():

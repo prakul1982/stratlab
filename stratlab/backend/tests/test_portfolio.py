@@ -75,7 +75,7 @@ def test_later_entries_get_what_is_left():
 
 def test_entries_are_sized_from_the_pot():
     # A's 100 shares double; B's next trade is sized from the whole pot (1,00,000 + A's 10,000), not B's own account
-    a = day("2026-01-05", [100, 100, 200, 200, 200, 200])
+    a = day("2026-01-05", [100, 100, 100, 100, 200, 200])     # A trades 09:45 and 10:15, when it doubles
     b = day("2026-01-05", [10] * 6)
     s = S(risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "risk", "maxAlloc": 10, "maxBars": 1})
     out = portfolio.run([ds("A", a), ds("B", b)], s, max_open=2)

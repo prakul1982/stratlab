@@ -119,9 +119,9 @@ def test_leverage_raises_the_cap_on_risk_sized_trades():
         eng = Engine(strat(risk={**risk, "leverage": lev}))
         for i in range(1, len(bars)):
             eng.step(bars, ctx, i)
-            if eng.qty:
+            if eng.events:
                 break
-        qty[lev] = eng.qty
+        qty[lev] = eng.events[0]["qty"]         # the 0.5% stop is hit on the fill candle itself
     assert qty[1] == math.floor(50000 / 110)
     assert qty[5] == math.floor(1000 / (110 * 0.005))       # the stop's risk binds once the cap is 2,50,000
 

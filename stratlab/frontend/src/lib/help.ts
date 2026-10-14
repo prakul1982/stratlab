@@ -37,7 +37,7 @@ export const HELP = {
   shuffle: "We reshuffle the order of your trades 1,000 times, each trade keeping its own day-by-day ups and downs. The same trades in a worse order can fall much deeper. Falls are measured day by day from the highest point, as Worst fall is, so yours is the backtest's Worst fall. A group's trades overlap, so for a group the account's day-by-day changes are reshuffled instead.",
   sample: "Under 15 trades, a couple of lucky trades can decide the whole result. 30 or more trades is a fair sample.",
   equity: "How the test account's value moved over time. The dashed line is what simply buying and holding would have done. The shaded part is the unseen data.",
-  keep: "Profit after every cost of trading in this market: slippage (fills a little worse than the candle's price, as set in the rules; profit before costs is before it too), brokerage, taxes like STT and stamp duty, exchange fees and GST, plus an estimate of tax on the gains.",
+  keep: "Profit after every cost of trading in this market: slippage (fills a little worse than the candle's price, as set in the rules; profit before costs is before it too), brokerage, taxes like STT and stamp duty, exchange fees and GST, plus an estimate of tax on the gains. Signals fill at the next candle's open.",
   priceChart: "The price over the test, with your indicators drawn on top. Blue triangles mark buys; orange ones mark sells.",
   totalReturn: "Profit or loss on your starting capital over the whole test, after costs.",
   buyHold: "What buying at the start and holding to the end returned over the same period, from the prices alone: dividends are not added (US stocks included). For a group, the average of its stocks.",

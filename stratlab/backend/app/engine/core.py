@@ -112,6 +112,9 @@ class Engine:
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
         self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
+        # a backtest fills a rule's signal at the next candle's open; live sets this off and fills at the latest price
+        self.next_open = True
+        self.pend_entry, self.pend_exit = None, False
         if state:
             self.load(state)
 
@@ -217,7 +220,7 @@ class Engine:
                             "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why})
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
-        self.qty = 0
+        self.qty, self.pend_exit = 0, False
         self.day_pnl += pnl
         self.cool = self.sess.cooldown if self.sess else 0
         if self._loss_cap() and self.day_pnl <= -self._loss_cap():
@@ -233,32 +236,44 @@ class Engine:
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
         new = []
+        if self.pend_entry is not None:
+            ev = self._fill_entry(bars, ctx, i, date, closes_at)
+            if ev:
+                new.append(ev)
         if self.qty > 0:
             self.held += 1
             d = self.dir
-            px, why = self._exit_price(b)
+            # an exit rule seen on the last candle's close fills at this candle's open
+            at_open = self.pend_exit
+            px, why = (b["o"], "Exit rule") if at_open else self._exit_price(b)
             if px is None and self.t_sq is not None:
                 if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
                     px, why = b["o"], "Square-off"
                 elif closes_at >= self.t_sq:
                     px, why = b["c"], "Square-off"
             if px is None and self._hit_exit(ctx, i):
-                px, why = b["c"], "Exit rule"
+                if self.next_open:
+                    self.pend_exit = True
+                else:
+                    px, why = b["c"], "Exit rule"
             cap = self._loss_cap()
             if px is None and cap and self.day_pnl + d * self.qty * (b["c"] - self.entry) - self.entry_cost <= -cap:
                 px, why = b["c"], "Daily loss cap"
-            if px is not None:
-                new.append(self._close(b, px, why))
-            elif r.trail > 0:
-                # ratchet the trailing stop with the best price so far; it applies from the next candle
-                t = r.trail / 100
-                if d == 1:
-                    self.best = max(self.best, b["h"])
-                    self.sl = max(self.sl, self.best * (1 - t))
-                else:
-                    self.best = min(self.best, b["l"])
-                    self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
-            return new
+            if px is None:
+                if r.trail > 0:
+                    # ratchet the trailing stop with the best price so far; it applies from the next candle
+                    t = r.trail / 100
+                    if d == 1:
+                        self.best = max(self.best, b["h"])
+                        self.sl = max(self.sl, self.best * (1 - t))
+                    else:
+                        self.best = min(self.best, b["l"])
+                        self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
+                return new
+            new.append(self._close(b, px, why))
+            if not at_open:
+                return new
+            # closed at the open: this candle's close can signal the next entry
         if self.cool > 0:
             self.cool -= 1
             return new
@@ -275,9 +290,22 @@ class Engine:
                 continue
             if self.veto is not None and self.veto():
                 return []
+            if self.next_open:
+                self.pend_entry = (d, i, bar_clock(bars[i]["t"], self.tf_min)[0])
+                return []
             ev = self._open(bars, ctx, i, d, slip, brok)
             return [ev] if ev else []
         return []
+
+    def _fill_entry(self, bars: list[dict], ctx: Ctx, i: int, date: str, closes_at: int) -> dict | None:
+        """Fill the entry signalled on the last candle's close at this candle's open, if this candle may still trade."""
+        d, sig, sig_day = self.pend_entry
+        self.pend_entry = None
+        if self.intraday and (date != sig_day or not self._may_enter(closes_at)):
+            return None
+        if self.gate is not None and not self.gate():
+            return None
+        return self._open(bars, ctx, sig, d, self.r.slippage / 100, self.r.brokerage, at=i)
 
     def enter_now(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         """Live only: check the entry rules on the candle that is still forming (its close is the latest
@@ -331,14 +359,17 @@ class Engine:
             return False
         return not (self.t_sq is not None and closes_at >= self.t_sq)
 
-    def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float) -> dict | None:
-        b, r = bars[i], self.r
+    def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float, at: int | None = None) -> dict | None:
+        """Open on the signal candle `i`: at its close, or at candle `at`'s open. The stop uses what was known at `i`."""
+        r = self.r
+        b = bars[i if at is None else at]
+        base = b["c"] if at is None else b["o"]
         open_side = "buy" if d == 1 else "sell"
-        px = b["c"] * (1 + slip * d)
+        px = base * (1 + slip * d)
         dist = self._stop_distance(bars, ctx, i, px, d)
         # flat, the engine's cash is the account's value; in a group it is the shared pot's
         pot = self.funds() if self.funds is not None else None
-        worth = pot[0] if pot else self.equity(b["c"])
+        worth = pot[0] if pot else self.equity(base)
         if r.sizing == "capital":
             per = r.perTrade or r.capital * r.maxAlloc / 100
             cap = min(per, max(worth, 0)) * r.leverage       # margin can't exceed what you have
@@ -362,7 +393,7 @@ class Engine:
             self.skipped_size += 1
             return None
         self.dir = d
-        self._slip(q, px, b["c"])
+        self._slip(q, px, base)
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
         self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
@@ -468,6 +499,8 @@ def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot
         j = len(equity) - 1
         if was and len(eng.trades) > closed:
             eng.spans[-1][1] = j
+        elif not was and len(eng.trades) > closed:
+            eng.spans.append([j - 1, j, i])         # filled at this candle's open and stopped out on it
         if eng.qty > 0 and (not was or len(eng.trades) > closed):
             eng.spans.append([j - 1, None, i])
     return eng, equity

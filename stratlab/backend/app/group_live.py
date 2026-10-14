@@ -31,6 +31,7 @@ class Member:
         self.bars = bars[-400:]
         lot = inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1)
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
+        self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.engine.gate = sess.free_slot
         self.engine.veto = self.filtered
         # India: the member's session timetable (a stock with derivatives closes through the auction)
