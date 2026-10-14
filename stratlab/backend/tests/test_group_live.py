@@ -1,6 +1,9 @@
 """Paper trading a group: one engine per member, shared slots, a group-wide loss cap, and restarts."""
 from datetime import datetime, timezone
 
+import pytest
+import time_machine
+
 from app import db, group_live
 from tests.test_live_polling import make_manager
 
@@ -8,6 +11,14 @@ STRAT = {"name": "Momentum", "tf": "5m", "side": "long", "entryJoin": "all",
          "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 0}}], "exit": [],
          "session": {"dailyLossPct": 1},
          "risk": {"capital": 1000000, "riskPct": 1, "maxAlloc": 100, "sl": 50, "sizing": "capital", "perTrade": 100000, "leverage": 1}}
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock():
+    """The candles below are dated 12 Oct 2026 from 09:30 UTC; the clock is pinned to that afternoon so they have closed
+    whatever the real date and time are."""
+    with time_machine.travel(datetime(2026, 10, 12, 15, 0, tzinfo=timezone.utc), tick=False):
+        yield
 
 
 def row(state=None):

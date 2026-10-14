@@ -92,13 +92,13 @@ def test_names_lose_their_legal_form_and_punctuation():
 
 def test_a_keystroke_stays_fast_on_a_full_list():
     rows = [{"symbol": f"S{i}", "name": f"Company{i % 997} Word{i % 113} Thing{i}"} for i in range(12000)]
-    t = time.time()
+    t = time.perf_counter()
     idx = NameIndex(rows)
-    built = time.time() - t
-    t = time.time()
+    built = time.perf_counter() - t
+    t = time.perf_counter()
     for q in ("company5", "word1 thing", "compani51", "s11", "thing 99", "c"):
         idx.search(q, 25)
-    assert built < 3 and (time.time() - t) / 6 < 0.05
+    assert built < 3 and (time.perf_counter() - t) / 6 < 0.05
 
 
 def test_rows_from_elsewhere_are_ranked_the_same_way():

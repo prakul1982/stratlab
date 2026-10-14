@@ -1,11 +1,22 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+import time_machine
+
 from app import live
 from app.data import Registry
 from app.data.coinbase import CoinbaseProvider
 from app.kite_service import KiteService, TickHub
 from tests.test_notebooks import EMA, wavy_coinbase
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock():
+    """The candles below are dated 12 Oct 2026 from 09:30 UTC; the clock is pinned to that afternoon so they have closed
+    whatever the real date and time are."""
+    with time_machine.travel(datetime(2026, 10, 12, 15, 0, tzinfo=timezone.utc), tick=False):
+        yield
 
 
 def make_manager():
