@@ -483,9 +483,12 @@ def test_the_pdf_is_not_kept_anywhere(w, brevo, tmp_path, monkeypatch):
     c = w["client"]
     c.put("/connect/inbox/password", headers=PRO, json={"password": PAN})
     brevo["tok1"] = nsdl()
-    before = set(os.listdir("/tmp"))
+    import tempfile
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))     # its own temp folder: other processes write to /tmp too
+    pdfs = lambda: {f for f in os.listdir("/tmp") if f.lower().endswith(".pdf")}
+    before = pdfs()
     post(c, brevo_body([address_of(c)], [("cas.pdf", "tok1")]))
-    assert set(os.listdir("/tmp")) == before
+    assert os.listdir(tmp_path) == [] and pdfs() == before
     assert "%PDF" not in json.dumps([v for _, v in db.all_settings_with_prefix("")], default=str)
 
 
