@@ -1,4 +1,5 @@
 """A running options paper-trading session, polled every few seconds by the live manager."""
+import json
 import threading
 import time
 from datetime import datetime
@@ -51,6 +52,10 @@ class OptionSession:
         if s.signal:
             sk = data.spot_key(s.exchange, s.underlying, data.pick_expiry(s.exchange, s.underlying, s.expiry))
             self.signal = SignalFeed(data.kite, s.signal.rules, sk, state.get("signal"))
+
+    def _saved(self) -> str:
+        """What a save would write from the engine, as one string: two of them equal means nothing needs saving."""
+        return json.dumps(self.engine.dump(), sort_keys=True, default=str)
 
     def _keys(self, spot_key: str | None) -> list[str]:
         keys = [spot_key] if spot_key else []
@@ -111,14 +116,18 @@ class OptionSession:
             if self.fresh:
                 self.last_tick_at = now.isoformat()
             want = self.signal.want() if self.signal else None
+            before, n_trades = self._saved(), len(self.engine.trades)
             new = self.engine.step(now, self.spot, self.contracts, q, self.fresh, want)
             minute = now.replace(second=0, microsecond=0).isoformat()
             if self.fresh and (not self.equity_curve or self.equity_curve[-1]["t"] != minute):
                 self.equity_curve.append({"t": minute, "eq": round(self.engine.equity(q), 2)})
                 self.equity_curve = self.equity_curve[-800:]
-            self.dirty = True
-        for ev in new:
-            self.mgr.on_order(self, ev)
+                self.dirty = True
+            if new or self._saved() != before:        # a quiet poll leaves nothing to save
+                self.dirty = True
+            closed = self.engine.trades[n_trades:]
+        if new:       # one alert for the step's orders: a structure's legs open or close together
+            self.mgr.on_orders(self, new, closed[-1]["pnl"] if closed else None)
 
     def state(self) -> dict:
         d = self.engine.dump()

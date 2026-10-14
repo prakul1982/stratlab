@@ -40,6 +40,54 @@ def test_due_times():
     assert R.due("CSV", utc(2026, 9, 24, 10, 15)) is None
 
 
+def ist(*a):
+    from zoneinfo import ZoneInfo
+    return datetime(*a, tzinfo=ZoneInfo("Asia/Kolkata"))
+
+
+def test_the_mcx_report_follows_its_close_even_past_midnight():
+    # October (Wed 14th): MCX closes 23:30, the report goes out from 23:40
+    assert R.due("MCX", ist(2026, 10, 14, 23, 35)) is None
+    assert R.due("MCX", ist(2026, 10, 14, 23, 40)) == "2026-10-14"
+    assert R.due("MCX", ist(2026, 10, 14, 23, 46)) == "2026-10-14"
+    assert R.due("MCX", ist(2026, 10, 15, 0, 5)) == "2026-10-14"        # the window doesn't collapse at midnight
+    assert R.due("MCX", ist(2026, 10, 15, 1, 0)) == "2026-10-14"
+    assert R.due("MCX", ist(2026, 10, 15, 2, 41)) is None               # past the 3 hours
+    # from the first Sunday of November (1 Nov) MCX closes at 23:55 (options/data.py expiry_time): after it, past midnight
+    assert R.due("MCX", ist(2026, 11, 11, 23, 40)) is None
+    assert R.due("MCX", ist(2026, 11, 11, 23, 46)) is None              # the old 23:45 send came before the close
+    assert R.due("MCX", ist(2026, 11, 11, 23, 59)) is None
+    assert R.due("MCX", ist(2026, 11, 12, 0, 5)) == "2026-11-11"
+    assert R.due("MCX", ist(2026, 11, 12, 1, 0)) == "2026-11-11"
+    assert R.due("MCX", ist(2026, 11, 12, 3, 6)) is None
+    # a Friday's report after midnight is on Saturday; there is none for the Saturday itself
+    assert R.due("MCX", ist(2026, 11, 14, 0, 5)) == "2026-11-13"
+    assert R.due("MCX", ist(2026, 11, 14, 23, 50)) is None and R.due("MCX", ist(2026, 11, 15, 0, 10)) is None
+
+
+def test_the_crypto_report_runs_into_the_next_utc_day():
+    assert R.due("CRYPTO", utc(2026, 10, 14, 23, 50)) is None
+    assert R.due("CRYPTO", utc(2026, 10, 14, 23, 56)) == "2026-10-14"
+    assert R.due("CRYPTO", utc(2026, 10, 15, 0, 10)) == "2026-10-14"
+    assert R.due("CRYPTO", utc(2026, 10, 15, 1, 0)) == "2026-10-14"
+    assert R.due("CRYPTO", utc(2026, 10, 15, 2, 56)) is None
+
+
+def test_a_report_sent_after_midnight_still_counts_the_day_that_ended_and_goes_once():
+    day = "2026-10-14"
+    trades = [{"exit_t": f"{day}T10:15:00+00:00", "pnl": 300.0}, {"exit_t": "2026-10-15T00:02:00+00:00", "pnl": 999.0}]
+    s = single("u1", "BTC", "CRYPTO", trades, tick="2026-10-15T00:09:30+00:00")      # prices already of the new day
+    sent = []
+    rep = R.Reporter(FakeDB({"u1": {}}))
+    run = lambda now: rep.run([s], now, can_alert=lambda p: True, market_name=str, send=lambda p, subj, body: sent.append(body))
+    assert run(utc(2026, 10, 14, 23, 56)) == [("u1", "CRYPTO")]
+    assert "1 trade closed (1 won), +₹300" in sent[0]
+    assert run(utc(2026, 10, 15, 0, 10)) == [] and len(sent) == 1
+    late = R.Reporter(FakeDB({"u1": {}}))                                             # the server was down at 23:56
+    assert late.run([s], utc(2026, 10, 15, 0, 10), can_alert=lambda p: True, market_name=str, send=lambda p, subj, body: sent.append(body)) \
+        == [("u1", "CRYPTO")] and "+₹300" in sent[1]
+
+
 def test_report_sent_once_with_the_days_numbers():
     day = "2026-09-24"
     trades = [{"exit_t": f"{day}T10:15:00+05:30", "pnl": 300.0}, {"exit_t": f"{day}T13:00:00+05:30", "pnl": -100.0},

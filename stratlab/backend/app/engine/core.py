@@ -118,6 +118,7 @@ class Engine:
         # a backtest fills a rule's signal at the next candle's open; live sets this off and fills at the latest price
         self.next_open = True
         self.pend_entry, self.pend_exit = None, False
+        self.early_t = None       # live only: the candle (its t) an early entry filled inside; its stop, target and trail wait for the next one
         if state:
             self.load(state)
 
@@ -128,7 +129,8 @@ class Engine:
                 "entry_cost": self.entry_cost, "cost_items": self.cost_items,
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
-                "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:]}
+                "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:],
+                **({"early_t": self.early_t} if self.early_t else {})}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
@@ -144,6 +146,7 @@ class Engine:
         self.day_pnl, self.cool, self.halted = st.get("day_pnl", 0.0), st.get("cool", 0), st.get("halted", False)
         self.trades, self.events = st.get("trades", []), st.get("events", [])
         self.emptied_on = st.get("emptied_on")
+        self.early_t = st.get("early_t")
 
     def _pay(self, side: str, qty: float, px: float) -> float:
         items = C.order_costs(self.kind, side, qty, px, self.r.brokerage)
@@ -273,12 +276,16 @@ class Engine:
             ev = self._fill_entry(bars, ctx, i, date, closes_at)
             if ev:
                 new.append(ev)
+        # an early entry filled inside this candle: its high and low are mostly from before the fill, so they
+        # can't hit the stop or target or move the trail (all judged from the next candle)
+        early = self.early_t is not None and self.early_t == b["t"]
+        self.early_t = None
         if self.qty > 0:
             self.held += 1
             d = self.dir
             # an exit rule seen on the last candle's close fills at this candle's open
             at_open = self.pend_exit
-            px, why = (b["o"], "Exit rule") if at_open else self._exit_price(b)
+            px, why = (b["o"], "Exit rule") if at_open else (None, "") if early else self._exit_price(b)
             now = bool(at_open) or (px is not None and px == b["o"] and why != "Time exit")      # filled at the open
             if px is None and self.t_sq is not None:
                 if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
@@ -294,7 +301,7 @@ class Engine:
             if px is None and cap and self.day_pnl + d * self.qty * (b["c"] - self.entry) - self.entry_cost <= -cap:
                 px, why = b["c"], "Daily loss cap"
             if px is None:
-                if r.trail > 0:
+                if r.trail > 0 and not early:
                     # ratchet the trailing stop with the best price so far; it applies from the next candle
                     t = r.trail / 100
                     if d == 1:
@@ -352,7 +359,10 @@ class Engine:
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
         self.sq = self._squareoff(date)
-        return self._try_enter(bars, ctx, i, closes_at)
+        new = self._try_enter(bars, ctx, i, closes_at)
+        if new and self.qty > 0:
+            self.early_t = bars[i]["t"]
+        return new
 
     # --- paper orders placed by hand (the AI assistant's paper tools), live only ---
     def manual_cost(self, side: str, q: float, px: float) -> float:

@@ -187,10 +187,14 @@ class FakeSession:
 def mgr(monkeypatch):
     m = live.LiveManager(types.SimpleNamespace(ready=lambda: True), None)
     monkeypatch.setattr(m, "_build", FakeSession)
-    rows, writes = {}, []
+    rows, writes, fetched = {}, [], []
     monkeypatch.setattr(db, "running_sessions", lambda: [r for r in rows.values() if r["status"] == "running"])
+    # what a reconcile reads: the light index, then the full rows of the sessions it isn't running yet
+    monkeypatch.setattr(db, "running_index", lambda: [{k: r[k] for k in ("id", "user_id", "status")} for r in rows.values() if r["status"] == "running"])
+    monkeypatch.setattr(db, "sessions_by_ids", lambda ids: fetched.append(list(ids)) or [r for r in rows.values() if r["id"] in ids and r["status"] == "running"])
     monkeypatch.setattr(db, "update_session", lambda sid, **f: writes.append((sid, f)))
     monkeypatch.setattr(leader, "current", leader.Leader(lambda: None))      # leading
+    m.fetched = fetched
     return m, rows, writes
 
 
@@ -204,6 +208,18 @@ def test_reconcile_attaches_sessions_started_elsewhere_and_detaches_stopped_ones
     m.reconcile()
     assert m.sessions == {} and not s.attached
     assert writes == [("a", {"state": {"cash": 1, "final": True}})]      # its final state kept, its status left alone
+
+
+def test_reconcile_reads_full_rows_only_for_sessions_it_does_not_run_yet(mgr):
+    m, rows, writes = mgr
+    rows["a"] = {"id": "a", "user_id": "u", "status": "running", "instrument": {"market": "CRYPTO"}, "state": {"big": "x" * 10}}
+    m.reconcile()
+    assert m.fetched == [["a"]] and set(m.sessions) == {"a"}
+    rows["b"] = {"id": "b", "user_id": "u", "status": "running", "instrument": {"market": "CRYPTO"}}
+    m.reconcile()
+    assert m.fetched == [["a"], ["b"]]              # "a" is attached: its row isn't read again
+    m.reconcile()
+    assert m.fetched == [["a"], ["b"]] and set(m.sessions) == {"a", "b"}
 
 
 def test_reconcile_never_reattaches_a_session_just_stopped_here(mgr):
@@ -224,7 +240,7 @@ def test_a_follower_neither_resumes_nor_saves_and_starts_sessions_for_the_leader
     monkeypatch.setattr(leader, "current", leader.Leader(lambda: mem, clock))
     m.resume()
     assert m.sessions == {}
-    monkeypatch.setattr(db, "user_sessions", lambda uid: [r for r in rows.values() if r["user_id"] == uid])
+    monkeypatch.setattr(db, "count_running", lambda uid: sum(r["user_id"] == uid and r["status"] == "running" for r in rows.values()))
     monkeypatch.setattr(db, "create_session", lambda r: rows.setdefault("b", {**r, "id": "b"}))
     s = m.start({"id": "u"}, "pro", types.SimpleNamespace(name="x", model_dump=lambda: {}), {"market": "CRYPTO"})
     assert s.snapshot()["pending"] is True and m.sessions == {} and rows["b"]["status"] == "running"

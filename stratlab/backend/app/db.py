@@ -220,6 +220,24 @@ def running_sessions() -> list[dict]:
     return sb().table("live_sessions").select("*").eq("status", "running").execute().data
 
 
+def running_index() -> list[dict]:
+    """Every running session's id, owner and status: the light read a reconcile makes every half minute."""
+    return sb().table("live_sessions").select("id,user_id,status").eq("status", "running").execute().data
+
+
+def sessions_by_ids(ids: list[str]) -> list[dict]:
+    """The full rows (state and all) of these sessions, those still running."""
+    ids = [i for i in ids if isinstance(i, str)]
+    if not ids:
+        return []
+    return sb().table("live_sessions").select("*").eq("status", "running").in_("id", ids).execute().data or []
+
+
+def count_running(user_id: str) -> int:
+    """How many sessions the user has running (one light read, for the plan limit)."""
+    return len(sb().table("live_sessions").select("id").eq("user_id", user_id).eq("status", "running").execute().data or [])
+
+
 def stopped_among(ids: list[str]) -> set[str]:
     """Which of these sessions are stored as anything but running (one light read, for Admin's count)."""
     ids = [i for i in ids if isinstance(i, str)]
@@ -229,10 +247,19 @@ def stopped_among(ids: list[str]) -> set[str]:
     return {r["id"] for r in rows if r.get("status") != "running"}
 
 
-def user_sessions(user_id: str, limit: int = 20) -> list[dict]:
-    return (sb().table("live_sessions")
-            .select("id,name,instrument,status,started_at,stopped_at,stop_reason")
-            .eq("user_id", user_id).order("started_at", desc=True).limit(limit).execute().data)
+def user_sessions(user_id: str, limit: int = 20, running: bool = True) -> list[dict]:
+    """The user's newest `limit` sessions, newest first. With `running`, every running one too, however old: a page
+    that lists only the newest would hide a session that is still trading (and counting against the plan's limit)."""
+    cols = "id,name,instrument,status,started_at,stopped_at,stop_reason"
+    rows = sb().table("live_sessions").select(cols).eq("user_id", user_id).order("started_at", desc=True).limit(limit).execute().data
+    if running:
+        have = {r["id"] for r in rows}
+        older = (sb().table("live_sessions").select(cols).eq("user_id", user_id).eq("status", "running")
+                 .order("started_at", desc=True).execute().data)
+        extra = [r for r in older if r["id"] not in have]
+        if extra:
+            rows = sorted(rows + extra, key=lambda r: str(r.get("started_at") or ""), reverse=True)
+    return rows
 
 
 def get_session_row(user_id: str, sid: str) -> dict | None:

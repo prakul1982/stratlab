@@ -735,7 +735,9 @@ def me(profile=Depends(current_profile)):
                   "ai_builds_per_day": AI_BUILDS_PER_DAY if info["ai_builds_per_month"] is None else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
-        "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
+        # a follower runs no sessions: the running rows are in the database
+        "live_running": len(manager.user_running(profile["id"])) if leader.leading() else db.count_running(profile["id"]),
+        "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},

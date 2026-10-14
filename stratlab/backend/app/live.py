@@ -25,6 +25,7 @@ MINUTES = {"1h": 60, "15m": 15, "5m": 5}
 POLL_SECONDS = 15          # how often polled markets (crypto) are checked for a newly closed candle
 OFFICIAL_WAIT = timedelta(minutes=30)   # a daily candle waits this long past the close for the official close
 FRESH_SECONDS = 180        # a paper order placed by hand fills only at a price this recent
+RESUME_TRIES = 10            # a running session whose attach keeps failing for another reason than a permanent one is stopped after this many tries
 MANUAL_WHY = "Opened from your AI assistant"
 MANUAL_CLOSE_WHY = "Closed from your AI assistant"
 
@@ -428,6 +429,13 @@ class LiveSession:
             return "The last price for this session is more than a few minutes old. Try again once prices are flowing."
         return None
 
+    def _stamp(self) -> str:
+        """Now as the candles are stamped: in the instrument's own zone (India's for a stock, the exchange's for a US one).
+        The engine compares this date with a candle's to see whether a position is from an earlier day."""
+        from .data.markets import BY_ID
+        tz = self.inst.get("tz") or (BY_ID.get(self.market) or {}).get("tz") or "Asia/Kolkata"
+        return datetime.now(ZoneInfo(tz)).isoformat(timespec="seconds")
+
     def manual_open(self, side: str, qty: float, now: datetime | None = None) -> dict:
         """Open a paper position at the latest price. Raises ValueError with a plain reason when it can't."""
         d = 1 if side == "buy" else -1
@@ -450,7 +458,7 @@ class LiveSession:
             need = e.manual_cost(side, q, px)
             if need > e.cash:
                 raise ValueError(f"That needs about {need:,.2f} and the session has {e.cash:,.2f} in cash.")
-            ev = e.open_manual(datetime.now(IST).isoformat(timespec="seconds"), px, d, q, MANUAL_WHY)
+            ev = e.open_manual(self._stamp(), px, d, q, MANUAL_WHY)
             self.dirty = True
         self.mgr.on_order(self, ev)
         return ev
@@ -465,7 +473,7 @@ class LiveSession:
         with self.lock:
             if self.engine.qty <= 0:
                 raise ValueError("This session has no open position to close.")
-            ev = self.engine.close_manual(datetime.now(IST).isoformat(timespec="seconds"), float(self.last_price), MANUAL_CLOSE_WHY)
+            ev = self.engine.close_manual(self._stamp(), float(self.last_price), MANUAL_CLOSE_WHY)
             self.dirty = True
         self.mgr.on_order(self, ev)
         return ev
@@ -582,6 +590,7 @@ class LiveManager:
         self._thread: threading.Thread | None = None
         self._stopped: set[str] = set()     # stopped here: a reconcile that read the row before the stop mustn't re-attach it
         self._last_sync = time.time()       # resume() has just read the rows: the first reconcile comes 30 s on
+        self._attach_fails: dict[str, int] = {}     # consecutive failed attaches of a running row (a transient error is retried)
 
     # ---------- lifecycle ----------
     def start_loop(self):
@@ -599,9 +608,18 @@ class LiveManager:
                 continue  # resumes after today's Kite login; shown as paused until then
             try:
                 self._attach(row)
-            except Exception as e:
+                self._attach_fails.pop(row["id"], None)
+            except ValueError as e:        # what the builders raise for good: no history, the market isn't connected
+                self._attach_fails.pop(row["id"], None)
                 db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(),
                                   stop_reason=f"Could not resume after restart: {e}")
+            except Exception as e:         # a timeout or a 503: the row stays running and the next reconcile tries again
+                n = self._attach_fails[row["id"]] = self._attach_fails.get(row["id"], 0) + 1
+                print(f"live resume of {row['id']} failed ({n}/{RESUME_TRIES}):", e)
+                if n >= RESUME_TRIES:
+                    self._attach_fails.pop(row["id"], None)
+                    db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(),
+                                      stop_reason=f"Could not resume after restart ({RESUME_TRIES} tries in a row): {e}")
 
     def _attach(self, row: dict):
         s = self._build(row)
@@ -640,7 +658,7 @@ class LiveManager:
         limit = PLANS[plan]["live_limit"]
         lead = leader.leading()
         running = (len(self.user_running(profile["id"])) if lead else
-                   sum(r.get("status") == "running" for r in db.user_sessions(profile["id"])))
+                   db.count_running(profile["id"]))
         if running >= limit:
             raise LimitError(f"Your plan runs {limit} live strateg{'y' if limit == 1 else 'ies'} at a time. Stop one first.")
         row = db.create_session({
@@ -685,15 +703,17 @@ class LiveManager:
         (keeping their final state, as a stop here would)."""
         with self._lock:
             before = set(self.sessions)          # sessions attached after the read below are left alone
-        rows = db.running_sessions()
-        running = {r["id"] for r in rows}
+        index = db.running_index()           # id, owner and status only; the full rows (state and all) only for the new ones
+        running = {r["id"] for r in index}
         for sid in before - running:
             s = self._detach(sid)
             if s:
                 with s.lock:
                     st = s.final_state() if hasattr(s, "final_state") else s.state()
                 db.update_session(sid, state=st)
-        self.resume(rows)
+        with self._lock:
+            new = [i for i in running if i not in self.sessions and i not in self._stopped]
+        self.resume(db.sessions_by_ids(new) if new else [])
 
     def drop_all(self):
         """Leadership lost: stop running every session here without saving (the new leader owns their rows)."""
@@ -733,9 +753,14 @@ class LiveManager:
         threading.Thread(target=work, daemon=True).start()
 
     def on_order(self, s: LiveSession, ev: dict):
+        self.on_orders(s, [ev])
+
+    def on_orders(self, s: LiveSession, evs: list[dict], net: float | None = None):
+        """Record orders placed together. An options session's legs open or close in one step: one alert for them, with
+        the trade's net P&L (`net`) when the step closed it, so a four-leg structure doesn't use up the day's alerts."""
         caught_up = getattr(s, "replaying", None)
         if caught_up is not None:             # a candle missed while the server was down: one alert for them all
-            caught_up.append(ev)
+            caught_up.extend(evs)
 
         def work():
             if not leader.leading():
@@ -745,20 +770,26 @@ class LiveManager:
                 if s.id in self.sessions:
                     s.dirty = True
                     self.persist([s])
-                if isinstance(ev["qty"], int):  # the orders table stores whole quantities; the session keeps every order
-                    db.add_order({"session_id": s.id, "user_id": s.user_id, "side": ev["side"], "qty": ev["qty"],
-                                  "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
-                                  "candle_time": ev["t"]})
+                for ev in evs:
+                    if isinstance(ev["qty"], int):  # the orders table stores whole quantities; the session keeps every order
+                        db.add_order({"session_id": s.id, "user_id": s.user_id, "side": ev["side"], "qty": ev["qty"],
+                                      "price": round(ev["px"], 2), "reason": ev.get("why"), "pnl": ev.get("pnl"),
+                                      "candle_time": ev["t"]})
                 profile = db.get_profile(s.user_id)
                 if caught_up is None and alerts_on(profile):
-                    sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
-                    head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}"
-                    if ev.get("pnl") is None:      # opening a trade (a buy, a short sale or a written option)
-                        text = f"{head} ({s.name})"
-                    else:                          # closing one
-                        why = f"{str(ev.get('why') or 'closed').lower()}, " if ev.get("why") else ""
-                        text = f"{head}, {why}P&L {ev['pnl']:,.0f} {cur} ({s.name})"
-                    trade_notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
+                    if getattr(s, "kind", "") == "options":
+                        subject, text = structure_alert(s, evs, net)
+                        trade_notify(profile, subject, text, background=False, url=f"/paper/{s.id}")
+                        return
+                    for ev in evs:
+                        sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
+                        head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}"
+                        if ev.get("pnl") is None:      # opening a trade (a buy, a short sale or a written option)
+                            text = f"{head} ({s.name})"
+                        else:                          # closing one
+                            why = f"{str(ev.get('why') or 'closed').lower()}, " if ev.get("why") else ""
+                            text = f"{head}, {why}P&L {ev['pnl']:,.0f} {cur} ({s.name})"
+                        trade_notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
             except Exception as e:
                 print("order record failed:", e)
         threading.Thread(target=work, daemon=True).start()
@@ -911,6 +942,23 @@ def trade_notify(profile: dict, subject: str, text: str, **kw):
         except Exception as e:
             print("alert failed:", e)
     return [] if not sends else ["push"]
+
+
+def structure_alert(s, evs: list[dict], net: float | None) -> tuple[str, str]:
+    """(subject, text) of the one alert for an options structure's orders in a step: its legs, and the trade's net P&L
+    (after charges) when the step closed it, else the closed legs' P&L."""
+    cur = s.inst.get("currency", "INR")
+    opened, closed = [e for e in evs if e.get("pnl") is None], [e for e in evs if e.get("pnl") is not None]
+    word = "re-centred" if opened and closed else "opened" if opened else "closed"
+    legs = "; ".join(f"{e['side'].upper()} {e['qty']:g} {e.get('sym') or s.inst['symbol']} at {e['px']:,.2f}" for e in evs)
+    text = f"StratLab paper trade: {s.name} {word} ({len(evs)} order{'s' if len(evs) != 1 else ''}): {legs} {cur}"
+    if closed:
+        why = str(closed[0].get("why") or "").lower()
+        if net is not None:
+            text += f". {why.capitalize() + ': ' if why else ''}net P&L {net:,.0f} {cur} after charges"
+        else:
+            text += f". {why.capitalize() + ': ' if why else ''}P&L of the closed legs {sum(e['pnl'] for e in closed):,.0f} {cur}"
+    return f"{s.name}: {word}", text
 
 
 def report_on(profile: dict) -> bool:
