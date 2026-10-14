@@ -6,7 +6,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import db, sector_members, universes
+from . import db, leader, sector_members, universes
 from .kite_service import not_company
 
 KEY = "audit:last"
@@ -1054,6 +1054,9 @@ class MarketAudit:
                 print("market audit: couldn't start the first full check:", e)
                 time.sleep(60)
         while True:
+            if not leader.leading():      # another container leads: it runs this pass
+                time.sleep(60)
+                continue
             try:
                 did = self.step()
             except Exception as e:

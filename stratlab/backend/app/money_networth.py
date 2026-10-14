@@ -22,7 +22,7 @@ from typing import Callable, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from . import db
+from . import db, leader
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -478,12 +478,16 @@ def history(uid: str) -> list[dict]:
 
 def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[dict]:
     """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total (a source that
-    couldn't be read or valued) is never stored: it would show as a fall that didn't happen."""
-    if totals.get("partial"):
+    couldn't be read or valued) is stored only as the month's snapshot, flagged with what's missing: a fund with neither
+    NAV nor cost may never be valued, and history mustn't stop for it; any other partial total isn't stored, it would
+    show as a fall that didn't happen."""
+    if totals.get("partial") and why != "month":
         return history(uid)
     d = (day or today()).isoformat()
     rows = [h for h in history(uid) if h["d"] != d]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
+    if totals.get("partial"):
+        snap["partial"] = list(totals["partial"])
     rows = sorted(rows + [snap], key=lambda h: h["d"])[-MAX_LOG:]
     db.set_setting(LOG + uid, json.dumps(rows))
     return rows
@@ -895,7 +899,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("net worth snapshots:", type(e).__name__)
@@ -912,7 +917,7 @@ class Job:
             uid = key[len(KEY):]
             try:
                 v = self.value_of(uid)
-                if v and not v["totals"].get("partial"):  # a partial total isn't a snapshot (see record)
+                if v:                                       # a partial total is stored flagged (see record)
                     record(uid, v["totals"], "month", local.date())
                     n += 1
             except Exception as e:                          # one user's data never stops the others'

@@ -25,7 +25,7 @@ from xml.etree import ElementTree
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from . import db
+from . import db, leader
 from .auth import current_profile
 from .intel.net import SourceError, TTLCache
 from .plans import FEATURE_PLAN, PLANS, allows, plan_of
@@ -656,7 +656,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("named holders:", e)

@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from .. import alerts
+from .. import alerts, leader
 from . import ibkr, kite_user, state, sync
 from .redact import mask
 
@@ -106,8 +106,9 @@ class Job:
         time.sleep(120)                              # after start-up traffic
         while True:
             try:
-                with self.lock:
-                    self.tick()
+                if leader.leading():      # another container leads: it runs this pass
+                    with self.lock:
+                        self.tick()
                 self.status["last_error"] = None
             except Exception as e:
                 self.status["last_error"] = mask(str(e))[:200]

@@ -15,7 +15,7 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import breadth, db
+from . import breadth, db, leader
 
 LIVE_KEY = "breadth:live:"           # breadth:live:<group> = {"day", "fields", "points": [[HH:MM, ...], ...]}
 LIVE_STATUS_KEY = "breadth:livestatus"
@@ -173,7 +173,8 @@ class LiveJob:
         time.sleep(900)
         while True:
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("breadth live:", str(e)[:160])

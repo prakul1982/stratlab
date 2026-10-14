@@ -20,7 +20,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import db, deals, sector_members, stock_pages, surveillance
+from . import db, deals, leader, sector_members, stock_pages, surveillance
 from .newsletter import job as news_job
 
 INDEX_KEY = "screens:index:"          # screens:index:IN = {"at", "rows": [...]}
@@ -880,7 +880,8 @@ class Indexer:
     def loop(self):
         time.sleep(300)                          # after startup traffic and the company lists
         while True:
-            self.run_once()
+            if leader.leading():      # another container leads: it runs this pass
+                self.run_once()
             time.sleep(self.every)
 
 
