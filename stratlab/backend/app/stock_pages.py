@@ -1888,9 +1888,16 @@ def index_page(region: str | None, q: str = "") -> str:
 
 
 # ---------- robots and sitemaps ----------
+# SEO-tool and scraper crawlers bring no visitors and walk every company page (the hosting's monthly request
+# allowance): they're asked to stay out. Search engines are welcome. Kept the same as frontend/public/robots.txt.
+SCRAPER_BOTS = ("AhrefsBot", "SemrushBot", "MJ12bot", "DotBot", "DataForSeoBot", "BLEXBot", "serpstatbot", "Barkrowler",
+                "PetalBot", "Bytespider")
+SCRAPERS = "".join(f"User-agent: {b}\n" for b in SCRAPER_BOTS) + "Disallow: /\n\n"
+
+
 def robots() -> str:
     site = settings.PUBLIC_SITE_URL
-    return f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
+    return SCRAPERS + f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\n\nSitemap: {site}/sitemap.xml\n"
 
 
 def sitemap_index() -> str:
