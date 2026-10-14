@@ -176,3 +176,18 @@ def test_nearby_check_nudges_the_vix_cut_off():
     assert _values(("india_vix_chg", 5.0)) == [3.0, 4.0, 5.0, 6.0, 7.0]
     s2 = _with(s, {("india_vix", 17.0): 20.5})
     assert s2.entry[0].r.v == 20.5 and s.entry[0].r.v == 17
+
+
+def test_walkforward_tunes_the_vix_cut_off_over_its_own_steps(monkeypatch):
+    # "India VIX change % < -1" was tuned over [2] (the length steps of -1), never the user's own -1
+    from app.engine import walkforward
+    from tests.test_engine import bars_from
+    monkeypatch.setattr(V, "closes", lambda: CLOSES)
+    s = Strategy(**{"name": "x", "tf": "1d", "entry": [{"l": {"t": "india_vix_chg"}, "op": "lt", "r": {"t": "num", "v": -1}},
+                                                       {"l": {"t": "price"}, "op": "xa", "r": {"t": "sma", "p": 20}}],
+                    "exit": [{"l": {"t": "price"}, "op": "xb", "r": {"t": "sma", "p": 20}}]})
+    out = walkforward.run(bars_from([100 + (i % 30) for i in range(400)]), s, 50)
+    assert out["grid_size"] == len(_values(("india_vix_chg", -1.0))) * len(_values(("sma", 20))) == 25
+    assert all(w["chosen"][0]["value"] in (-3.0, -2.0, -1.0, 0.0, 1.0) for w in out["windows"])
+    # nothing trades (no VIX history on these days): ties go to the user's own settings
+    assert all([c["value"] for c in w["chosen"]] == [-1.0, 20] for w in out["windows"])

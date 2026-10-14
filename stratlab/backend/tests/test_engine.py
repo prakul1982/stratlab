@@ -138,6 +138,15 @@ def test_cagr_and_sharpe_come_from_the_calendar():
     assert st["cagr"] == pytest.approx(st["ret"], rel=0.01) and st["ret"] > 40
 
 
+def test_no_yearly_return_under_a_year():
+    # 30 days at +1.45% compounded to 19% a year; 5 days of 5-minute candles to hundreds of %
+    from app.engine.core import span_years, stats
+    month = stats([100, 101.45], [], 100, 252, span_years("2024-01-01T00:00:00+00:00", "2024-01-31T00:00:00+00:00"))
+    assert month["cagr"] is None and month["ret"] == pytest.approx(1.45)
+    assert stats([100.0] * 375 + [103.0], [], 100, 252 * 75, span_years("2024-01-01T09:15", "2024-01-05T15:30"))["cagr"] is None
+    assert stats([100, 50], [], 100, 252, 2.0)["cagr"] == pytest.approx(-29.29, abs=0.01)
+
+
 def test_stats_bars_a_year_follow_the_span():
     from app.engine.core import span_years, stats
     eq = [100 * 1.001 ** k for k in range(366)]
