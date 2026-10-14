@@ -115,6 +115,11 @@ def image(token: str) -> bytes | None:
         return None
 
 
+def has_image(token: str) -> bool:
+    """Whether a picture is kept for the card, without decoding it (a preview page only needs to know)."""
+    return bool(TOKEN.match(token or "")) and bool(db.get_setting(f"cardimg:{token}"))
+
+
 def url(token: str) -> str:
     return f"{settings.PUBLIC_SITE_URL}/c/{token}"
 
@@ -148,7 +153,6 @@ def preview_html(token: str, c: dict, has_image: bool) -> str:
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="noindex,follow">
-<link rel="canonical" href="{e(site + stock_pages.path(c['region'], c['symbol']))}">
 <meta property="og:type" content="website"><meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{e(url(token))}"><meta property="og:image" content="{e(img)}">
