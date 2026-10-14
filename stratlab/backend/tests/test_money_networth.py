@@ -363,6 +363,26 @@ def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monk
     assert nw.build([], {"in": 100.0, "us": 50.0, "count": 2}, None, nw.Prices())["totals"]["partial"] is None
 
 
+def test_stocks_without_a_price_make_the_total_partial(w, monkeypatch):
+    c = w["client"]
+    assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 10, "avg": 2500},
+                                                           {"symbol": "TCS", "qty": 3}]}).status_code == 200
+    before = nw.history("u-pro")
+    monkeypatch.setattr(main.kite, "ready", lambda: False)                      # no quotes: TCS has no cost either
+    v = add(c, {"kind": "cash", "value": 1000})
+    row = next(r for r in v["assets"] if r["kind"] == "stocks_in")
+    assert v["totals"]["partial"] == ["no price for 2 stocks"] and nw.history("u-pro") == before
+    assert row["value"] == 25000 and row["basis"] == "at cost" and "at cost" in row["rule"]
+    # some priced, some not: market price, and the rule says how many are at cost
+    t = nw.build([], {"in": 100.0, "us": 0, "count": 3, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 2, "us": 0}}, None, nw.Prices())
+    r = t["assets"][0]
+    assert r["basis"] == "market price" and "1 without a price counted at cost" in r["rule"]
+    assert t["totals"]["partial"] == ["no price for 1 stock"]
+    # every stock unpriced and none with a cost: no row, but the total says so (it used to be silently left out)
+    t = nw.build([], {"in": 0, "us": 0, "count": 1, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 0, "us": 0}}, None, nw.Prices())
+    assert t["assets"] == [] and t["totals"]["partial"] == ["no price for 1 stock"]
+
+
 def test_damaged_rows_never_break_the_page(w):
     db.set_setting("networth:u-pro", '{"items": [{"id": "x", "kind": "fd", "principal": "lots"}, {"kind": "cash"}, 5, null]}')
     db.set_setting("networthlog:u-pro", "not json")

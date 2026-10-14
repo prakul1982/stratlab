@@ -735,16 +735,31 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     unpriced = [r["name"] for r in assets if r["value"] is None]
     if unpriced:
         partial.append("no price for " + ", ".join(unpriced))
+    no_price = (stocks or {}).get("unpriced") or {}
+    n_np = sum(no_price.values())
+    if stocks and stocks.get("count") and n_np:          # counted at cost, or not at all without one
+        partial.append(f"no price for {n_np} {'stock' if n_np == 1 else 'stocks'}")
+
+    def stock_basis(m: str) -> tuple[str, str]:          # (basis, what the rule adds) for a market's row
+        n = no_price.get(m) or 0
+        if not n:
+            return "market price", ""
+        if not ((stocks.get("priced") or {}).get(m)):
+            return "at cost", ""
+        return "market price", f"; {n} without a price counted at cost where known"
     if stocks and stocks.get("count"):
         if stocks.get("in"):
+            basis, more = stock_basis("in")
             linked.append({"id": "stocks_in", "kind": "stocks_in", "label": "Indian stocks", "name": "My Holdings: Indian stocks", "class": "stocks_in",
-                           "value": _r(stocks["in"]), "as_of": stocks.get("as_of"), "basis": "market price", "rule": "From My Holdings, at today's prices",
+                           "value": _r(stocks["in"]), "as_of": stocks.get("as_of"), "basis": basis,
+                           "rule": ("From My Holdings, at today's prices" + more) if basis == "market price" else "From My Holdings, at cost (no price right now)",
                            "facts": {}, "linked": "/holdings"})
         if stocks.get("us"):
+            basis, more = stock_basis("us")
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
-                           "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": "market price",
-                           "rule": "From My Holdings, at today's prices in rupees"
-                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else ""),
+                           "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": basis,
+                           "rule": ("From My Holdings, at today's prices in rupees" if basis == "market price" else "From My Holdings, at cost in rupees (no price right now)")
+                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else "") + more,
                            "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),

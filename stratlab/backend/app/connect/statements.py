@@ -8,13 +8,14 @@ on the statement are never copied out.
   depository statement (NSDL, CDSL) -> My Holdings, through sync.sync_holdings; an NPS balance on it -> Net worth
 
 Used by the inbox (inbound.py) and by the manual upload, so both do exactly the same."""
+import hashlib
 import io
 import math
 import re
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 
-from .. import money_mf, money_networth
+from .. import money_mf, money_networth, plans
 from . import pdfsandbox, state, sync, vault
 
 MAX_PDF = money_mf.MAX_PDF
@@ -38,6 +39,7 @@ class Parsed:
     rows: list[dict] = field(default_factory=list)   # demat equities: {symbol, isin, name, qty, avg}
     nps: dict | None = None                     # {"tier1", "tier2"} from the depository statement, if it carries NPS
     other: int = 0                              # demat funds and bonds, not copied to holdings
+    accounts: list[str] = field(default_factory=list)   # the demat accounts it covers (account_key)
 
 
 def _open(data: bytes, password: str):
@@ -94,6 +96,14 @@ def _period_end(cas) -> str | None:
     return money_mf._day(getattr(p, "to", "") or "") if p else None
 
 
+def account_key(acct, cas) -> str:
+    """Which demat account a statement's holdings are in: the depository and a hash of the DP and client (BO) ids it
+    prints, or the depository alone when it prints none. Kept on the holding to add accounts up; never shown."""
+    dep = (str(getattr(acct, "type", "") or "").split() or [str(getattr(cas, "file_type", "") or "demat")])[0].upper()
+    ids = f"{getattr(acct, 'dp_id', '') or ''}:{getattr(acct, 'client_id', '') or ''}"
+    return dep if ids == ":" else f"{dep}:{hashlib.sha256(ids.encode()).hexdigest()[:12]}"
+
+
 def read(data: bytes, passwords: list[str]) -> Parsed:
     cas = open_statement(data, passwords)
     asof = _period_end(cas)
@@ -105,17 +115,19 @@ def read(data: bytes, passwords: list[str]) -> Parsed:
         except money_mf.FileError as e:
             raise StatementError("summary_only", str(e)) from None
         return Parsed("mf", asof, mf={**got, "kind": "cas"})
-    rows, other = [], 0
+    rows, other, accounts = [], 0, []
     for acct in getattr(cas, "accounts", None) or []:
+        key = account_key(acct, cas)
+        accounts.append(key)
         for eq in acct.equities or []:
             qty = _f(eq.num_shares)
             if qty and qty > 0:
                 rows.append({"symbol": eq.symbol or "", "isin": eq.isin, "name": " ".join(str(eq.name or "").split())[:80], "qty": qty,
-                             "avg": None})
+                             "avg": None, "acct": key})
         for mf in acct.mutual_funds or []:
             qty = _f(mf.balance)
             if qty and qty > 0 and ETF_RX.search(str(mf.name or "")):       # an exchange-traded fund is a share on My Holdings
-                rows.append({"symbol": "", "isin": mf.isin, "name": " ".join(str(mf.name or "").split())[:80], "qty": qty, "avg": None})
+                rows.append({"symbol": "", "isin": mf.isin, "name": " ".join(str(mf.name or "").split())[:80], "qty": qty, "avg": None, "acct": key})
             else:
                 other += 1
         other += len(getattr(acct, "bonds", None) or [])
@@ -131,7 +143,7 @@ def read(data: bytes, passwords: list[str]) -> Parsed:
             nps = {"tier1": round(t1, 2), "tier2": round(t2, 2)}
     if not rows and not nps and not other:
         raise StatementError("empty", "No holdings were found in this statement.")
-    return Parsed("demat", asof, rows=rows, nps=nps, other=other)
+    return Parsed("demat", asof, rows=rows, nps=nps, other=other, accounts=list(dict.fromkeys(accounts)))
 
 
 # ---------- saving ----------
@@ -174,17 +186,26 @@ def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:
     box = state.section(uid, "inbox")
     out: dict = {"kind": "demat", "detail": ""}
     notes = []
-    stale = bool(parsed.asof and box.get("cas_asof") and parsed.asof < box["cas_asof"])
-    if parsed.rows and not stale:
-        got = sync.sync_holdings(profile, parsed.rows, "cas", "Statement", since=parsed.asof)
+    # each demat account has its own last statement day (one saved before that kept a single day: it stands for every account)
+    seen = box.get("cas_asof_by") or {}
+    accounts = parsed.accounts or sorted({r["acct"] for r in parsed.rows if r.get("acct")})
+    fresh = [a for a in accounts if not (parsed.asof and (seen.get(a) or box.get("cas_asof") or "") > parsed.asof)]
+    stale = bool(accounts) and not fresh
+    rows = [r for r in parsed.rows if r.get("acct") in fresh]
+    if rows:
+        got = sync.sync_holdings(profile, rows, "cas", "Statement", since=parsed.asof, accounts=set(fresh))
         out.update(stocks=got["count"], unmatched=got["unmatched_count"])
         notes.append(f"{got['count']} holdings read" + (f", {got['unmatched_count']} not matched to a listed company" if got["unmatched_count"] else "") + ".")
+        if got.get("over_limit"):
+            out["not_saved"] = len(got["over_limit"])
+            lim = plans.holdings_limit(profile["_plan"])
+            notes.append(f"{len(got['over_limit'])} not saved: your plan keeps {lim} {'stock' if lim == 1 else 'stocks'}.")
         if got.get("kept"):
             notes.append(f"{got['kept']} holdings read from an earlier statement are kept as they were until every line matches.")
         if parsed.asof:
-            state.update(uid, "inbox", cas_asof=parsed.asof)
-    elif stale:
-        notes.append(STALE_NOTE)
+            state.update(uid, "inbox", cas_asof_by={**seen, **{a: parsed.asof for a in fresh}})
+    if stale or len(fresh) < len(accounts):
+        notes.append(STALE_NOTE if stale else "Some accounts in this statement are older than one already read, so their holdings were left as they are.")
     if parsed.nps and not stale:                    # an older statement's balance never replaces a newer one
         why = save_nps(uid, parsed.nps, parsed.asof, profile["_plan"])
         notes.append(why or "NPS balance added to Net worth.")
@@ -194,9 +215,11 @@ def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:
     return out
 
 
-def process(uid: str, data: bytes, filename: str = "", passwords: list[str] | None = None, via: str = "email") -> dict:
+def process(uid: str, data: bytes, filename: str = "", passwords: list[str] | None = None, via: str = "email",
+            remember: str = "") -> dict:
     """Read and save one statement for a user; records the outcome on their inbox card. Never raises: {"ok", "status",
-    "kind", "detail"}. `passwords` are tried first; the stored statement password after them."""
+    "kind", "detail"}. `passwords` are tried first; the stored statement password after them. `remember` is a typed
+    password to store, only once it has opened this statement (a wrong one never replaces the stored one)."""
     profile = sync.profile_for(uid)
     result: dict
     try:
@@ -206,7 +229,16 @@ def process(uid: str, data: bytes, filename: str = "", passwords: list[str] | No
         stored = vault.unseal(state.section(uid, "inbox").get("pw"))
         if stored and stored not in pws:
             pws.append(stored)
-        parsed = read(data, pws)
+        parsed = None
+        if remember:
+            try:
+                parsed = read(data, [remember])
+                state.update(uid, "inbox", pw=vault.seal(remember))
+            except StatementError as e:
+                if e.code != "wrong_password":
+                    raise
+                pws = [p for p in pws if p != remember]
+        parsed = parsed or read(data, pws)
         got = apply(profile, parsed, filename)
         result = {"ok": True, "status": "ok", **got}
     except StatementError as e:
@@ -215,6 +247,8 @@ def process(uid: str, data: bytes, filename: str = "", passwords: list[str] | No
         result = {"ok": False, "status": "unreadable", "kind": None, "detail": "Something went wrong reading this statement."}
     finally:
         data = b""                              # the statement's bytes are not kept anywhere
-    state.update(uid, "inbox", last={"at": state.now(), "status": result["status"], "kind": result.get("kind"), "via": via,
-                                     "detail": result.get("detail", "")[:300]})
+    at = state.now()
+    # ok_at: the last statement read, which the 40-day reminder counts from (a later mail without one doesn't reset it)
+    state.update(uid, "inbox", last={"at": at, "status": result["status"], "kind": result.get("kind"), "via": via,
+                                     "detail": result.get("detail", "")[:300]}, **({"ok_at": at} if result["ok"] else {}))
     return result

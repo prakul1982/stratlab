@@ -223,10 +223,10 @@ def test_a_future_dated_statement_is_ignored_and_blocks_nothing(w, on):
     r = upload(w["client"], dated(99, "31-Dec-2099"))
     assert r.status_code == 400 and state.section(PRO_ID, "inbox")["last"]["status"] == "future_dated"
     assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}["INFY"] == 12
-    assert state.section(PRO_ID, "inbox")["cas_asof"] == "2026-09-30"             # the far date was not recorded
+    assert set(state.section(PRO_ID, "inbox")["cas_asof_by"].values()) == {"2026-09-30"}   # the far date was not recorded
     assert upload(w["client"], dated(15, "10-Oct-2026")).status_code == 200      # a real later statement still applies
     assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}["INFY"] == 15
-    assert state.section(PRO_ID, "inbox")["cas_asof"] == "2026-10-10"
+    assert set(state.section(PRO_ID, "inbox")["cas_asof_by"].values()) == {"2026-10-10"}
 
 
 def test_upload_wrong_password_and_garbage(w, on):
@@ -363,9 +363,95 @@ def test_a_statement_dates_its_holdings_by_its_own_last_day(w, on):
 def test_a_sync_keeps_the_average_price_the_user_has(w, on):
     profile = sync.profile_for(PRO_ID)
     sync.sync_holdings(profile, [{"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": 380.0}], "kite", "Zerodha Kite")
+    sync.sync_holdings(profile, [{"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": None}], "kite", "Zerodha Kite")
+    assert holdings.load(PRO_ID)["items"][0]["avg"] == 380.0                     # the same quantity: the same average
     sync.sync_holdings(profile, [{"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 8.0, "avg": None}], "kite", "Zerodha Kite")
     it = holdings.load(PRO_ID)["items"][0]
-    assert it["qty"] == 8 and it["avg"] == 380.0
+    assert it["qty"] == 8 and it["avg"] is None                                  # 3 more at an unknown price: no known average
+
+
+# ---------- two demat accounts ----------
+def cdsl_infy(shares=4, period=("01-Sep-2026", "30-Sep-2026")) -> bytes:
+    """A second demat account (CDSL) that also holds Infosys."""
+    return make_cdsl(PAN, [{"broker": "OTHER BROKING LTD", "dp_id": "12345678", "client_id": "87654321",
+                            "equities": [("INE009A01021", "Infosys Limited", shares, 1500.0),
+                                         ("INE467B01029", "Tata Consultancy Services Limited", 40, 3500.25)]}], period=period)
+
+
+def nsdl_itc_only(period=("01-Oct-2026", "10-Oct-2026")) -> bytes:
+    return make_nsdl(PAN, [{"broker": "EXAMPLE BROKING LTD", "dp_id": "IN300001", "client_id": "12345678",
+                            "equities": [("INE154A01025", "ITC", "ITC Limited", 25.5, 400.0)]}], period=period)
+
+
+def qtys() -> dict:
+    return {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]}
+
+
+@pytest.mark.parametrize("first,second", [(nsdl, cdsl_infy), (cdsl_infy, nsdl)])
+def test_two_demat_accounts_both_stay_and_a_shared_stock_adds_up(w, on, first, second):
+    assert upload(w["client"], first()).status_code == 200
+    assert upload(w["client"], second()).status_code == 200
+    assert qtys() == {"INFY": 14, "ITC": 25.5, "TCS": 40}
+    items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
+    assert sorted(items["INFY"]["accts"].values()) == [4, 10] and len(items["TCS"]["accts"]) == 1
+    assert not any("12345678" in a or "IN300001" in a for a in items["INFY"]["accts"])     # the account ids aren't stored
+    upload(w["client"], second())                                                # the same statement again: nothing doubles
+    assert qtys() == {"INFY": 14, "ITC": 25.5, "TCS": 40}
+
+
+def test_a_later_statement_takes_out_only_its_own_accounts_part(w, on):
+    c = w["client"]
+    upload(c, nsdl())                                                            # NSDL, 30 Sep: INFY 10, ITC 25.5
+    r = upload(c, cdsl_infy(period=("01-Aug-2026", "31-Aug-2026")))              # CDSL, older but its first: applied
+    assert r.status_code == 200 and "older" not in r.json()["detail"]
+    assert qtys() == {"INFY": 14, "ITC": 25.5, "TCS": 40}
+    upload(c, nsdl_itc_only())                                                   # NSDL, 31 Oct: INFY sold there
+    assert qtys() == {"INFY": 4, "ITC": 25.5, "TCS": 40}
+    r = upload(c, cdsl_infy(shares=9, period=("01-Jul-2026", "31-Jul-2026")))   # older than CDSL's last: left alone
+    assert "older" in r.json()["detail"] and qtys() == {"INFY": 4, "ITC": 25.5, "TCS": 40}
+    upload(c, cdsl_infy(shares=0, period=("01-Oct-2026", "10-Oct-2026")))        # CDSL sold its INFY too: gone
+    assert qtys() == {"ITC": 25.5, "TCS": 40}
+
+
+def test_statement_holdings_saved_before_accounts_were_kept_are_replaced_as_before(w, on):
+    holdings.save(PRO_ID, [{"symbol": "INFY", "exchange": "NSE", "name": "Infosys", "qty": 7.0, "avg": None, "via": "cas"},
+                           {"symbol": "RELIANCE", "exchange": "NSE", "name": "Reliance", "qty": 3.0, "avg": None, "via": "cas"}], "Statement")
+    state.update(PRO_ID, "inbox", cas_asof="2026-10-05")                         # the single day kept before: every account's
+    r = upload(w["client"], nsdl())
+    assert "older" in r.json()["detail"] and qtys() == {"INFY": 7, "RELIANCE": 3}
+    state.update(PRO_ID, "inbox", cas_asof="2026-08-31")
+    upload(w["client"], nsdl())
+    assert qtys() == {"INFY": 10, "ITC": 25.5}                                   # replaced, as one statement did before
+    upload(w["client"], cdsl_infy())
+    assert qtys() == {"INFY": 14, "ITC": 25.5, "TCS": 40}
+
+
+def test_a_hand_edit_clears_the_accounts_and_the_next_statement_sets_it(w, on):
+    c = w["client"]
+    upload(c, nsdl())
+    upload(c, cdsl_infy())
+    r = c.put("/holdings", headers=PRO, json={"items": [{"symbol": "INFY", "qty": 20}, {"symbol": "ITC", "qty": 25.5}, {"symbol": "TCS", "qty": 40}]})
+    assert r.status_code == 200, r.text
+    items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
+    assert items["INFY"]["qty"] == 20 and "accts" not in items["INFY"] and items["TCS"]["accts"]   # no hidden second quantity
+    upload(c, cdsl_infy(shares=5, period=("01-Oct-2026", "10-Oct-2026")))        # as before: a statement sets what it reads
+    assert qtys() == {"INFY": 5, "ITC": 25.5, "TCS": 40}
+
+
+def test_a_statement_over_the_plan_limit_says_how_many_were_not_saved(w, on, monkeypatch):
+    monkeypatch.setattr(plans, "holdings_limit", lambda plan: 1)
+    r = upload(w["client"], nsdl())
+    assert r.status_code == 200 and "1 not saved: your plan keeps 1 stock." in r.json()["detail"] and r.json()["not_saved"] == 1
+    assert len(holdings.load(PRO_ID)["items"]) == 1
+
+
+def test_a_wrong_password_to_remember_never_replaces_the_stored_one(w, on):
+    c = w["client"]
+    assert upload(c, nsdl(), password="WRONGPASS1", remember=True).status_code == 400
+    assert not state.section(PRO_ID, "inbox").get("pw")                          # nothing stored from a wrong password
+    assert upload(c, nsdl(), password=PAN, remember=True).status_code == 200
+    assert upload(c, nsdl(), password="WRONGPASS1", remember=True).status_code == 200   # opened with the stored one
+    assert vault.unseal(state.section(PRO_ID, "inbox")["pw"]) == PAN
 
 
 # ---------- the inbox: addresses ----------
@@ -657,6 +743,18 @@ def test_reminder_rules():
     assert jobs.reminder_due({"local": "u-x", "created_at": iso(100), "last": {"at": iso(1), "status": "wrong_password"}}, now)
     assert not jobs.reminder_due({"local": "u-x", "created_at": iso(100), "reminded_at": iso(3)}, now)
     assert jobs.reminder_due({"local": "u-x", "created_at": iso(100), "reminded_at": iso(41)}, now)
+    # a statement read 5 days ago, then a mail without one: the last read counts, not the last mail
+    assert not jobs.reminder_due({"local": "u-x", "created_at": iso(100), "ok_at": iso(5), "last": {"at": iso(1), "status": "no_pdf"}}, now)
+    assert jobs.reminder_due({"local": "u-x", "created_at": iso(100), "ok_at": iso(45), "last": {"at": iso(1), "status": "no_pdf"}}, now)
+
+
+def test_the_last_good_read_is_kept_apart_from_the_last_mail(w, on):
+    assert upload(w["client"], nsdl()).status_code == 200
+    assert state.section(PRO_ID, "inbox")["ok_at"]
+    state.update(PRO_ID, "inbox", ok_at="2026-09-01T00:00:00+00:00")
+    assert upload(w["client"], b"%PDF-1.4 junk").status_code == 400
+    box = state.section(PRO_ID, "inbox")
+    assert box["ok_at"] == "2026-09-01T00:00:00+00:00" and box["last"]["status"] != "ok"
 
 
 def test_one_users_failing_reminder_doesnt_stop_the_others(monkeypatch):
