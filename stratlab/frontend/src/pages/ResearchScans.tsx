@@ -4,7 +4,8 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { REGION_NAME, useRegion, type Region } from "../lib/research";
+import { REGION_NAME, closeLabel, sessionClosed, useRegion, type Region } from "../lib/research";
+import { marketState } from "../lib/marketHours";
 import { RegionSwitch } from "../components/Research";
 import { homeRegion } from "../lib/homeMarket";
 import { Info } from "../components/ui";
@@ -20,7 +21,8 @@ interface ScanRow {
   id: string; symbol: string; name: string | null; currency: string | null; price: number; chg: number | null;
   stage: number | null; stage_days: number | null; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
 }
-interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number> }
+interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number>;
+  price_day?: string | null; settling?: boolean }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
 interface PresetOut {
   kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
@@ -41,7 +43,7 @@ const sessions = (n: number) => (n === 0 ? "On the latest close" : `${n} session
 export function ScanPage() {
   const [region, setRegion] = useRegion();
   const [params, setParams] = useSearchParams();
-  const { fail, notify, refreshNotebooks, me } = useApp();
+  const { fail, notify, refreshNotebooks, me, markets } = useApp();
   const nav = useNavigate();
   const [sets, setSets] = useState<ScanSets | null>(null);
   const [setId, setSetId] = useState(() => new URLSearchParams(window.location.search).get("set") || "watchlist");
@@ -164,6 +166,14 @@ export function ScanPage() {
           <CardHead title={st2.name} actions={<>
             <CheckField label="Only Stage 2 + Supertrend" checked={only} onChange={setOnly} />
             <button className="btn quiet sm" onClick={testIt}>Backtest Stage 2 + Supertrend on this group</button></>} />
+          {(() => {
+            // the session the prices are of: "Last close, 9 Oct", or still settling just after the close (R13-005, R13-007)
+            const m = markets.find((x) => x.id === region);
+            const today = new Date().toLocaleDateString("en-CA", { timeZone: marketTz(region) });
+            const shut = sessionClosed(st2.price_day, today, !!m && marketState(m).open);
+            const label = shut || st2.settling ? closeLabel(st2.price_day, { settling: st2.settling, dayText: (d) => fmtDate(d, { year: false }) }) : null;
+            return label && <p className="k-note" data-testid="scan-price-day">Prices: {label}</p>;
+          })()}
           <StatRow>
             <Stat label="Fresh Stage 2 + Supertrend" value={String(st2.counts.fresh)} note={`Supertrend turned up in the last ${sets?.fresh_days ?? 5} days`} />
             <Stat label="Already in Stage 2 + Supertrend" value={String(st2.counts.st_s2)} />

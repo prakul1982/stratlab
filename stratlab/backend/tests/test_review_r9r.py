@@ -326,7 +326,9 @@ def test_during_the_us_session_the_stored_day_is_called_the_latest_close():
 
 def test_the_us_count_is_due_at_the_time_the_job_runs():
     from app import breadth
-    assert breadth.due_label("US") == "5:45 PM ET" and breadth.RUN_AT["US"][1] == "17:45" and breadth.due_label("IN") is None
+    # R13-009 changed this on purpose: the time given is when the count is in (the run starts at 17:45 and takes minutes),
+    # not when the run starts; it landed at 17:51 under "due about 5:45 PM ET"
+    assert breadth.due_label("US") == "5:55 PM ET" and breadth.RUN_AT["US"][1] == "17:45" and breadth.due_label("IN") is None
 
 
 def test_the_breadth_page_says_so_in_the_user_interface_text():

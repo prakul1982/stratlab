@@ -72,12 +72,15 @@ def market_sections(f: dict) -> list[dict]:
             _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart (weekly)", f"{origin()}/research/rotation")
             for r in f["rotation"]]})
     scan = f.get("scan") or {}
-    if scan.get("st_s2") or scan.get("stage2"):
-        items = [_item(f"{r['symbol']} matches the Stage 2 rule with the price above its Supertrend (ST S2)", stock_url(region, r["symbol"]))
-                 for r in scan.get("st_s2") or []]
-        items += [_item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule)", stock_url(region, r["symbol"]))
-                  for r in scan.get("stage2") or []]
-        out.append({"title": f"New on the Stage 2 scan ({scan['group']})", "items": items})
+    # the whole rule and Stage 2 alone are two lists, so the lead's count is the first list's (R13-003)
+    if scan.get("st_s2"):
+        out.append({"title": f"New on Stage 2 + Supertrend ({scan['group']})", "items": [
+            _item(f"{r['symbol']} matches the Stage 2 rule with the price above its Supertrend (ST S2)", stock_url(region, r["symbol"]))
+            for r in scan["st_s2"]]})
+    if scan.get("stage2"):
+        out.append({"title": f"New in Stage 2 only ({scan['group']})", "items": [
+            _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]))
+            for r in scan["stage2"]]})
     heads = [h for h in f.get("headlines") or [] if not banned(h["headline"])]
     if heads:
         out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source")) for h in heads]})
@@ -184,6 +187,9 @@ def template(f: dict) -> str:
         if scan.get("st_s2"):
             n = len(scan["st_s2"])
             parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the Stage 2 + Supertrend rule.")
+        if scan.get("stage2"):
+            n = len(scan["stage2"])
+            parts.append(f"{n} {'other ' if scan.get('st_s2') else ''}stock{'s' if n != 1 else ''} newly entered Stage 2 without the Supertrend.")
         return " ".join(parts) or f"Here is the {REGION_NAME[f['region']]} market {span}."
     n = len(f.get("stocks") or [])
     flags = sum(len(r.get("filings") or []) for r in f.get("stocks") or [])
@@ -301,6 +307,22 @@ TYPE_LABEL = {"market": "Market brief", "my_stocks": "My stocks"}
 DOT = " · "
 
 
+CLOSE_AT = {"IN": "15:30 IST", "US": "16:00 ET"}
+
+
+def close_stamp(issue: dict) -> str | None:
+    """A Market Brief's numbers are the day's close, so its stamp names the close, not the moment it was built (R13-003:
+    "Prices and numbers as of 9 Oct 2026, 16:32 ET" over the 16:00 ET close): "the 16:00 ET close of 9 Oct 2026". None for
+    My Stocks, whose stamp stays its build time."""
+    if issue.get("kind") != "market" or issue.get("region") not in CLOSE_AT or not issue.get("day"):
+        return None
+    try:
+        d = datetime.fromisoformat(str(issue["day"])[:10])
+    except ValueError:
+        return None
+    return f"the {CLOSE_AT[issue['region']]} close of {d.day} {d:%b %Y}"
+
+
 def as_of(iso: str | None, region: str | None = None) -> str | None:
     """When an issue's numbers were gathered, in words: "3 Oct 2026, 16:15 IST". A US brief is in New York time, as its page
     writes it ("8 Oct 2026, 16:34 ET"), not India's (R7M-002: "9 Oct 2026, 02:04 IST" in the email beside "16:34 ET" on the page)."""
@@ -356,12 +378,24 @@ def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
     return out
 
 
-def _row(it: dict) -> kit.Row:
+def _row(it: dict, text_url: str | None = None) -> kit.Row:
     lines = tuple((ln["text"], ln.get("url")) for ln in it.get("lines") or [])
     if it.get("change_pct") is not None or it.get("price") is not None:
         return kit.Row(it["text"], value=kit.num(it["price"]) if it.get("price") is not None else None, change=it.get("change_pct"),
                        since=it.get("since"), url=it.get("url"), lines=lines)
-    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
+    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"), text_url=text_url)
+
+
+def link_path(issue_id: str, n: int) -> str:
+    """A short address on the site for a brief's nth headline, which forwards to the story (main.news_link): the plain-text
+    part prints it where the story's own address is a news aggregator's redirect of ~500 characters (R13-003: no address
+    at all for the two Reuters headlines)."""
+    return f"/news-link/{issue_id}/{n}"
+
+
+def headline_urls(issue: dict) -> list[str | None]:
+    """The brief's headline links in order, as link_path numbers them."""
+    return [i.get("url") for s in issue.get("sections") or [] if s.get("title") == "Headlines" for i in s.get("items") or []]
 
 
 def render(issue: dict) -> tuple[str, str]:
@@ -386,11 +420,20 @@ def render(issue: dict) -> tuple[str, str]:
     if issue.get("ai_summary"):
         # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007)
         blocks.insert(0, kit.para(issue["ai_summary"]))
+    n = 0
     for sec in issue.get("sections") or []:
         if tiles and sec["title"] == "Indices":
             continue                                         # already shown as tiles
-        blocks.append(kit.card(sec["title"], [_row(it) for it in sec["items"]]))
-    when = as_of(issue.get("at"), region)
+        rows = []
+        for it in sec["items"]:
+            short = None
+            if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
+                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):
+                    short = kit.site(link_path(issue["id"], n))
+                n += 1
+            rows.append(_row(it, short))
+        blocks.append(kit.card(sec["title"], rows))
+    when = close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
     if when:
         blocks.append(kit.note(f"Prices and numbers as of {when}"))
     name = {"market_in": "India briefs", "market_us": "US briefs", "my_stocks": "My stocks"}[unsubscribe_type({**issue, "kind": kind, "region": region})]

@@ -55,6 +55,20 @@ export const CONDITIONS: { key: string; label: string; kind: AlertKind; op: Aler
 export const EVENT_KINDS: AlertKind[] = ["insider", "deal", "surveillance", "bizupdate", "mwpl", "mtf"];
 export const MA_PERIODS = [20, 50, 100, 150, 200];
 
+/** The market being shut when an alert is set: the session its price is the close of ("9 Oct") and when the alert is next
+ * checked ("Mon 12 Oct, market open"). */
+export interface Shut { day: string | null; next: string | null }
+
+/** The price beside the alert form: "AAPL is at $336.64 now" while the market trades; once it has closed, the last close
+ * with its day and when the alert is next checked (R13-007: "AAPL is at $336.64 now" 28 minutes after the US close).
+ * `short` is the one-line form after a fixed stock's name. */
+export function alertPriceHint(sym: string | null, px: string, shut: Shut | null, short = false): string {
+  if (!shut) return sym ? `${sym} is at ${px} now` : short ? `now ${px}` : `Now ${px}`;
+  const close = `${short ? "last close" : "Last close"}${shut.day ? `, ${shut.day}` : ""}: ${px}`;
+  const next = `Market closed${shut.next ? ` · next check ${shut.next}, market open` : ""}`;
+  return `${sym ? `${sym}, ` : ""}${sym ? close[0].toLowerCase() + close.slice(1) : close} · ${next}`;
+}
+
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>
   CONDITIONS.find((c) => c.kind === a.kind && (c.op === a.op || c.op === null))?.key ?? "price_above";
 

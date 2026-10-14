@@ -15,6 +15,12 @@ from ..kite_service import ist_date
 
 ROLL_DAYS = 3
 
+
+def frozen_series(bars: list[dict] | None, n: int = 5) -> bool:
+    """The last `n` daily candles one standing price with no volume: not trading (options/data.frozen_series)."""
+    from ..options.data import frozen_series as frozen
+    return frozen(bars, n)
+
 # commodity: (name, price units in one lot, what one price unit is)
 CONTRACTS = {
     "GOLD": ("Gold", 100, "10 g"), "GOLDM": ("Gold mini", 10, "10 g"), "GOLDPETAL": ("Gold petal", 1, "1 g"),
@@ -116,10 +122,14 @@ class MCXProvider:
                 mark(int(inst["token"]), ((BY_ID.get(self.market) or {}).get("hours") or {}).get("close"))
         try:
             bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
-            if tf == "1d" and not bars:
+            if tf == "1d" and (not bars or frozen_series(bars)):
                 # the broker keeps no stitched series for some segments (currency futures): the current contract's own
-                # daily prices instead, which go back to its listing (about a year for monthly currency contracts)
-                bars = self.kite.history(int(inst["token"]), tf, days, continuous=False)
+                # daily prices instead, which go back to its listing (about a year for monthly currency contracts). A
+                # stitched series that is one standing price with no volume (R13-002: USDINR o=h=l=c=96.135, volume 0,
+                # every day for a month) is no series either: the contract's own candles are read, and kept when they move
+                own = self.kite.history(int(inst["token"]), tf, days, continuous=False)
+                if own and (not bars or not frozen_series(own)):
+                    bars = own
             return bars
         except Exception as e:
             if tf == "1d":

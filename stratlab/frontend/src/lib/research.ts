@@ -36,7 +36,7 @@ export interface Company {
   as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
   market_open?: boolean;                                   // false: the price is the last close (the market is shut)
   /** "pre_open": India's pre-open price, read between 09:00 and 09:15 IST: indicative, not a close (R7T-004) */
-  phase?: "pre_open" | null;
+  phase?: "pre_open" | "settling" | null;
   /** what a lean company answer left out (news, about, peers): fetched with `companyMore` (R10O-009) */
   lazy?: string[];
 }
@@ -76,6 +76,47 @@ export interface IndexLevel {
   at?: string | null; day?: string | null; live?: boolean; stale?: boolean;
 }
 
+/** What a price read between a market's close and its settle point is called (R13-005: "Last close $336.68" at 16:12 ET,
+ * the final close being $336.64): the company header, the scans and the watchlist say it the same way. */
+export const SETTLING = "Latest, closing prints still settling";
+
+/** A US share class with a dash, the one way the app writes it (R13-001: /research/US/BRK.B had no chart and a market value
+ * $120B too low; the public pages already send BRK.B to BRK-B). Other tickers upper-cased, as typed. */
+export function canonTicker(region: string, symbol: string): string {
+  const s = String(symbol ?? "").trim().toUpperCase();
+  if (String(region).toUpperCase() !== "US") return s;
+  const m = /^([A-Z][A-Z0-9]{0,5})[./]([A-Z])$/.exec(s);
+  return m ? `${m[1]}-${m[2]}` : s;
+}
+
+/** "Last close, 9 Oct" over prices of a closed session; "Latest, closing prints still settling" while they settle; null for
+ * a session still trading (R13-007: the US scan's prices had no date). `day` is the session's ISO date. */
+export function closeLabel(day: string | null | undefined, opts: { settling?: boolean; open?: boolean; dayText: (iso: string) => string }): string | null {
+  if (!day) return null;
+  if (opts.settling) return `${SETTLING} · ${opts.dayText(day)}`;
+  if (opts.open) return null;
+  return `Last close, ${opts.dayText(day)}`;
+}
+
+/** Whether a price is a closed session's: the market isn't trading now, or the price's day is before today in its zone. */
+export function sessionClosed(day: string | null | undefined, today: string, open: boolean): boolean {
+  return !open || (!!day && day < today);
+}
+
+/** Whether a market's closing prints are still settling now: a trading day, between its close and 45 minutes after
+ * (the public pages' and the server's settle step), in a market whose prices say so (the US). */
+export function settlingNow(m: { id: string; tz: string; hours?: { close?: string | null } | null; holidays?: string[] } | null | undefined, now = new Date()): boolean {
+  if (!m || m.id !== "US" || !m.hours?.close) return false;
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: m.tz, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const wd = get("weekday"), iso = `${get("year")}-${get("month")}-${get("day")}`;
+  if (wd === "Sat" || wd === "Sun" || (m.holidays ?? []).includes(iso)) return false;
+  const [h, mi] = m.hours.close.split(":").map(Number);
+  const mins = (+get("hour") % 24) * 60 + +get("minute"), close = h * 60 + mi;
+  return mins >= close && mins < close + 45;
+}
+
 /** Whether a 52-week range can be this share's: the price within a third below its low or half above its high, as the
  * server checks it (R7T-001: Class A's $698,000-$806,102 beside BRK-B's $511). */
 export const plausibleRange = (px: number, low: number, high: number) => low > 0 && high >= low && px >= low * 0.67 && px <= high * 1.5;
@@ -84,6 +125,8 @@ export const plausibleRange = (px: number, low: number, high: number) => low > 0
  * price from the pre-open auction, never a close, R7T-004), "Last close" while the market is shut, else the live price. */
 export function priceLabel(c: Pick<Company, "market_open" | "phase">): { label: string | null; since: string } {
   if (c.phase === "pre_open") return { label: "Pre-open (indicative)", since: "against the last close" };
+  // between the US close and its settle point the price is the day's last prints, not yet its close (R13-005)
+  if (c.phase === "settling") return { label: SETTLING, since: "on the day" };
   if (c.market_open === false) return { label: "Last close", since: "on the day" };
   return { label: null, since: "today" };
 }
@@ -192,7 +235,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, pulseLede, resultsFiled, scaleFor, staleQuarter, trendValue, type Scale } from "./researchFormat";
+export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, staleQuarter, trendValue, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

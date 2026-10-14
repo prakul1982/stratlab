@@ -80,7 +80,7 @@ export function NewslettersCard() {
           ))}
         </div>
         {/* the first issue after turning one on is the next close's, never today's if the close has passed (R7M-005) */}
-        <p className="k-note">A daily brief goes out after each market's close: India about 4:15 PM IST, the US about 4:30 PM New York time, on trading days. If you turn one on after that, the first one comes after the next close. The weekly digest comes on Saturday morning.</p>
+        <p className="k-note">A daily brief goes out after each market's close: India about 4:15 PM IST, the US about 4:50 PM New York time once the closing prices have settled, on trading days. If you turn one on after that, the first one comes after the next close. The weekly digest comes on Saturday morning.</p>
         {prefs.email ? (
           <div className="k-row">
             <span className="k-small">Sent to <b>{prefs.email}</b></span>

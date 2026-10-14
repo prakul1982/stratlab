@@ -104,6 +104,9 @@ class YahooProvider:
         key = key.strip().upper()
         if self.market == "CMDTY":
             key = CMDTY_ALIASES.get(key, key)
+        if self.market == "US":           # BRK.B is the source's BRK-B: one instrument for notebooks, charts and scans (R13-001)
+            from ..us_ticker import canon_us
+            key = canon_us(key)
         hit = self._known.get(key)
         if hit:
             return hit

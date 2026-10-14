@@ -189,7 +189,8 @@ test("Admin: the email previews say the briefs are real, and Data and jobs has a
   errors = errors.concat(await open(page, "/admin/data"));
   const row = page.locator("main").getByText("Newsletters", { exact: true }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("main")).toContainText("India 4:15 PM IST and US 4:30 PM New York time");
+  // R13-003 changed this on purpose: the US brief goes once the closing prints have settled, at 16:50 New York time
+  await expect(page.locator("main")).toContainText("India 4:15 PM IST and US 4:50 PM New York time");
   expect(errors).toEqual([]);
 });
 

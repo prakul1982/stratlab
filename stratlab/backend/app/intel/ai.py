@@ -301,7 +301,9 @@ institutions (FIIs) or domestic institutions (DIIs) bought or sold only from the
 figures, in rupees crore, with their date), with their direction exactly as the net figure has it; with no
 "institutional_flows", say nothing about who is buying or selling beyond what a headline reports.
 Return ONLY this JSON:
-{{"tone": "3-4 sentences on how the market moved today and what the headlines say is driving it, citing the live levels",
+Give a reason for a move only when a headline reports that reason as having happened; never infer one (earnings,
+data, rates) from a headline that previews it or from the moves themselves.
+{{"tone": "3-4 sentences on how the market moved today, citing the live levels, and what the headlines report",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
  "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION"}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}

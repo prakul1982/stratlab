@@ -183,7 +183,8 @@ def test_a_page_is_read_from_prices_fetched_after_the_close_settled(w, monkeypat
 
     class Prov:
         def history(self, inst, tf, days, ttl=None):
-            seen.update(tf=tf, ttl=ttl)
+            seen.setdefault("ttl", ttl)
+            seen.update(tf=tf, last_ttl=ttl)
             return [{"t": "2026-10-07T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1}]
     monkeypatch.setattr(main.universes, "resolve", lambda reg, region, members: (["US:ACME"], []))
     monkeypatch.setattr(main.markets, "resolve", lambda iid: (Prov(), {"token": "ACME"}))
@@ -191,6 +192,8 @@ def test_a_page_is_read_from_prices_fetched_after_the_close_settled(w, monkeypat
     monkeypatch.setattr(stock_pages, "last_close", lambda region, n=None: (settled.date(), settled - timedelta(seconds=stock_pages.settle(region))))
     main.stock_page_bars("US", {"sym": "ACME", "bse": None})
     assert seen["tf"] == "1d" and 7000 <= seen["ttl"] <= 7300           # a cached copy only if it was read after the settle
+    # R13-006 (added): that copy lacks the settled close, so it is read again fresh rather than kept for every retry
+    assert seen["last_ttl"] == 60.0
 
 
 def test_the_price_job_moves_stale_pages_to_the_new_close(w, monkeypatch):

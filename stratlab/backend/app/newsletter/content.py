@@ -19,6 +19,8 @@ HEADLINES = 6
 MOVE = {False: 3.0, True: 5.0}       # a price move this big (%, daily or weekly) counts as news on its own
 EQUITY = {None, "", "EQ", "ETF"}
 CLOSE = {"IN": ("Asia/Kolkata", time(15, 30)), "US": ("America/New_York", time(16, 0))}
+# the US day's prints are final this long after the bell, the public pages' settle step (stock_pages.SETTLE, R13-003)
+SETTLE_MIN = {"US": 45}
 _cache = TTLCache(max_items=5000)
 
 
@@ -40,6 +42,9 @@ def closed(region: str, day: date, now: datetime | None = None) -> bool:
     admin preview) are never reused for the issue after the close."""
     tz, at = CLOSE[region]
     local = (now or datetime.now(ZoneInfo(tz))).astimezone(ZoneInfo(tz))
+    if SETTLE_MIN.get(region):
+        # the closing prints settle after the bell: a US day is over for the brief once they have (R13-003)
+        at = (datetime.combine(day, at) + timedelta(minutes=SETTLE_MIN[region])).time()
     if region == "IN":
         # India's day is over once its closing auction has matched and derivatives have stopped trading (15:40 since
         # 3 Aug 2026): facts read between 15:30 and then held the stocks' pre-auction prices (R8B-001)
@@ -104,7 +109,9 @@ def rotation_shifts(region: str, weekly: bool, day: date | None = None) -> list[
 
 
 def stage2_names(region: str, weekly: bool) -> dict:
-    """Stocks in the region's broad group that newly match the ST S2 rule, and ones that newly entered Stage 2."""
+    """Stocks in the region's broad group that newly match the whole ST S2 rule (Stage 2 and the Supertrend up), and ones
+    that newly entered Stage 2 without it, kept apart (R13-003: UNH, Stage 2 with its Supertrend down, was listed with the
+    two that matched the rule under a lead that said two). Read from candles taken after the close settled."""
     group = universes.PRESETS[region][0]
     res = scan.run(_main().markets, region, [{"symbol": s} for s in group["symbols"]])
     window = 5 if weekly else 1
@@ -112,7 +119,8 @@ def stage2_names(region: str, weekly: bool) -> dict:
     def row(r):
         return {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2),
                 "change_pct": None if r.get("chg") is None else round(r["chg"], 2)}
-    st_s2 = [row(r) for r in res["rows"] if r["signal"] == "fresh" and r["st_days"] <= window]
+    st_s2 = [row(r) for r in res["rows"] if r["signal"] == "fresh" and r["st_days"] <= window and r.get("stage") == 2
+             and r.get("st_up", True)]
     named = {r["symbol"] for r in st_s2}
     stage2 = [row(r) for r in res["rows"] if r["stage"] == 2 and (r.get("stage_days") or 99) <= window and r["symbol"] not in named]
     return {"group": group["name"], "st_s2": st_s2[:12], "stage2": stage2[:12]}
@@ -155,6 +163,24 @@ def _local_day(iso: str | None, region: str) -> str | None:
     if at.tzinfo is None:
         return at.date().isoformat()
     return at.astimezone(ZoneInfo(CLOSE[region][0])).date().isoformat()
+
+
+# a story about another region's market, which a brief for this one leaves out unless it names this market too (R13-003:
+# "London stocks post weekly gains as gilt yields retreat; telecom stocks fall" in the US brief)
+OTHER_MARKETS = {
+    "US": re.compile(r"\b(london|ftse|gilts?|uk stocks|british stocks|europe(an)? (stocks|shares|markets?)|stoxx|dax|cac|euro ?zone|"
+                     r"nikkei|topix|japan(ese)? (stocks|shares)|hang seng|china stocks|chinese stocks|shanghai|shenzhen|asian (stocks|shares|markets?)|"
+                     r"sensex|nifty|dalal street|indian (stocks|shares|markets?)|asx|tsx|canad\w+ stocks|bovespa)\b", re.I),
+    "IN": re.compile(r"\b(london stocks|ftse|gilts?|stoxx|dax|cac|nikkei|topix|hang seng|asx|tsx|bovespa)\b", re.I),
+}
+OWN_MARKET = {"US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|u\.s\.|us stocks|american)\b", re.I),
+              "IN": re.compile(r"\b(sensex|nifty|dalal street|india\w*|rupee)\b", re.I)}
+
+
+def other_region(region: str, title: str) -> bool:
+    """A headline about another region's market that doesn't name this one's."""
+    rx, own = OTHER_MARKETS.get(region), OWN_MARKET.get(region)
+    return bool(rx and rx.search(title or "") and not (own and own.search(title or "")))
 
 
 # not a market story whatever market word it carries (R7O-005: "'I'm getting fed up': voters line up before dawn as
@@ -234,6 +260,8 @@ def headline_ok(region: str, title: str, frm: str | None = None, to: str | None 
     contradicting the brief's own index moves (R6O-004, R7O-005)."""
     from ..intel.news import plain_headline
     if not title or not MARKET_WORDS[region].search(title) or OFF_TOPIC.search(title) or not plain_headline(title):
+        return False
+    if other_region(region, title):
         return False
     if frm and to:
         year = int(to[:4])
