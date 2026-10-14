@@ -78,6 +78,52 @@ def test_short_squeeze_closes_the_account_at_zero():
     assert not out["open_trade"]
 
 
+def _wipe(start):
+    """A stock that falls to almost nothing in a morning, then recovers the next day."""
+    return day("2026-01-05", [start, start, start * 0.3, start * 0.01, start * 0.0001, start * 0.0001]) + \
+        day("2026-01-06", [1.0 + i for i in range(8)])
+
+
+def test_a_losing_cash_group_stops_at_zero_never_below():
+    """Long only, cash (leverage 1), fixed sizing: the group can't lose more than the account had (the live run showed
+    -352.6% and a -336.6% drawdown). It stops at zero, says on which day, and nothing trades after it."""
+    data = [ds(s, _wipe(100.0)) for s in "ABC"]
+    # the charges on the last near-worthless positions take it to zero
+    out = portfolio.run(data, _group_strategy(perTrade=CAP / 2, brokerage=200, leverage=1, maxBars=1), max_open=3)
+    assert out["stats"]["ret"] == -100.0 and out["stats"]["mdd"] == -100.0
+    assert min(out["equity"]) == 0.0 and out["equity"][-1] == 0.0
+    assert out["stats"]["emptied_on"] == "2026-01-05"
+    assert all(t["entry_t"][:10] == "2026-01-05" for t in out["trades"])
+    assert math.isclose(sum(t["pnl"] for t in out["trades"]), -CAP, abs_tol=0.01)
+
+
+def test_a_cash_group_never_holds_more_than_its_cash():
+    """Entries fill at the candle's open, so they can't use cash a position stepped earlier gives back at that candle's
+    close: two Rs50,000 slots take all the cash, and the third opened on Rs29,800 the first two only got back at 10:00
+    (Rs1,29,800 in positions on Rs1,00,000)."""
+    data = [ds(s, _wipe(100.0)) for s in "ABC"]
+    out = portfolio.run(data, _group_strategy(perTrade=CAP / 2, brokerage=20, leverage=1, maxBars=1), max_open=3)
+    for at in {t["entry_t"] for t in out["trades"]}:
+        assert sum(t["qty"] * t["entry"] + t["costs"] / 2 for t in out["trades"] if t["entry_t"] == at) <= CAP
+    assert -100.0 <= out["stats"]["ret"] < -90 and min(out["equity"]) > 0
+    assert out["stats"]["emptied_on"] is None
+
+
+def test_a_cash_group_opens_nothing_without_cash():
+    up = day("2026-01-05", [100 + i for i in range(10)])
+    out = portfolio.run([ds(s, up) for s in "ABC"], _group_strategy(perTrade=CAP / 2, leverage=1), max_open=3)
+    assert out["most_open"] == 2
+    assert sum(t["qty"] * t["entry"] for t in out["open_trades"]) <= CAP
+
+
+def test_a_normal_cash_group_run_is_unchanged():
+    a, b = day("2026-01-05", [100 + i for i in range(10)]), day("2026-01-05", [50 + i for i in range(10)])
+    out = portfolio.run([ds("A", a), ds("B", b)], _group_strategy(perTrade=40000, maxBars=3), max_open=2)
+    assert out["stats"]["emptied_on"] is None and out["most_open"] == 2
+    assert [round(t["pnl"], 2) for t in out["trades"]] == [1188.0, 2352.0, 1140.0, 2181.0]
+    assert out["equity"][-1] == 106861.0 and round(out["stats"]["ret"], 3) == 6.861
+
+
 # ---- R13S-002: the watchlist filings answer within a bound, and say which company they couldn't read ----
 
 class _SlowFeed:

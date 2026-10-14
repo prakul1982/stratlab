@@ -5181,9 +5181,11 @@ def platform_checks() -> list:
     pc, today = platform_check, datetime.now(IST).date()
     checks = [(f"Prices: {m}", "Prices", (lambda m=m: pc.check_market(markets, m))) for m in markets.providers]
     checks += [(f"Backtest: {m}", "Backtests", (lambda m=m: pc.check_backtest(markets, m))) for m in markets.providers]
-    checks += [("Scan: NIFTY 50", "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
-               ("Scan: US large caps", "Scans", lambda: pc.check_scan(markets, "US", "us_mega")),
-               ("Sector rotation: IN", "Rotation", lambda: pc.check_rotation(markets, "IN")),
+    # named as the check names its result, so a failed scan is found again for the retry
+    scan_name = lambda m, sid: "Scan: " + next(p["name"] for p in universes.PRESETS[m] if p["id"] == sid)  # noqa: E731
+    checks += [(scan_name("IN", "nifty50"), "Scans", lambda: pc.check_scan(markets, "IN", "nifty50")),
+               (scan_name("US", "us_mega"), "Scans", lambda: pc.check_scan(markets, "US", "us_mega"))]
+    checks += [("Sector rotation: IN", "Rotation", lambda: pc.check_rotation(markets, "IN")),
                ("Sector rotation: US", "Rotation", lambda: pc.check_rotation(markets, "US")),
                ("Option chain: NIFTY", "Options", lambda: pc.check_options(options_data, today)),
                ("Exchange filings", "Filings", lambda: pc.check_filings(filings_feed)),

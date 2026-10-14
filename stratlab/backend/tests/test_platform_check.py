@@ -138,3 +138,125 @@ def test_a_scan_has_the_time_a_cold_read_of_its_stocks_needs(monkeypatch):
 def test_the_scan_limit_covers_the_broker_rate_limit_twice_over():
     from app import platform_check as pc, scan
     assert pc.TIMEOUTS["Scans"] >= scan.MAX * 0.36 * 2 and pc.TIMEOUTS["Scans"] > pc.TIMEOUT
+
+
+def test_a_check_keeps_the_name_it_was_run_under():
+    """A scan's result was named "Scan: NIFTY 50 stocks" while it ran as "Scan: NIFTY 50": a scan that failed on its
+    coverage was never found again for the retry, and the history listed two names for one check."""
+    from app import platform_check as pc
+    out = pc.run_all([("Scan: NIFTY 50 stocks", "Scans", lambda: pc._result("Scan: other", "Scans", "fail", "x"))])["checks"]
+    assert out[0]["name"] == "Scan: NIFTY 50 stocks"
+
+
+def test_the_limit_counts_from_when_a_check_starts(monkeypatch):
+    """Six slow checks of another area hold every worker past their own limit: the scan queued behind them is timed
+    from its start, not failed while it hasn't begun."""
+    import threading
+    from app import platform_check as pc
+    monkeypatch.setattr(pc, "TIMEOUT", 0.05)
+    monkeypatch.setattr(pc, "TIMEOUTS", {"Scans": 1})
+    gate = threading.Event()
+    held = lambda: (gate.wait(10), pc._result("held", "a", "pass", "ok"))[1]
+    order = [(f"Prices: {k}", "Prices", held) for k in range(6)]
+    scan_ran = []
+    quick = lambda: (scan_ran.append(1), pc._result("q", "Scans", "pass", "ok"))[1]
+    timer = threading.Timer(2.5, gate.set)     # the slow checks finish well after the scan's turn comes
+    timer.start()
+    out = pc.run_all(order + [("Scan: q", "Scans", quick)])["checks"]
+    timer.cancel()
+    assert [c["state"] for c in out[:6]] == ["fail"] * 6 and "timed out" in out[0]["detail"]
+    assert out[6]["state"] == "pass" and scan_ran
+
+
+def test_a_check_error_says_it_was_an_error():
+    from app import platform_check as pc
+
+    def boom():
+        raise RuntimeError("source said no")
+    out = pc.run_all([("Prices: X", "Prices", boom)])["checks"][0]
+    assert out["state"] == "fail" and out["detail"].startswith("Error (RuntimeError): source said no")
+
+
+class _Reg:
+    def __init__(self, ready=True):
+        self.ok = ready
+
+    def provider(self, market):
+        reg = self
+
+        class P:
+            def ready(self):
+                return reg.ok
+
+            def instrument(self, key):
+                return {"symbol": key}
+        return P()
+
+
+def _scan_out(monkeypatch, out):
+    from app import scan
+    monkeypatch.setattr(scan, "run", lambda reg, market, members, budget=None: out)
+
+
+def test_a_slow_scan_says_how_far_it_got(monkeypatch):
+    from app import platform_check as pc
+    _scan_out(monkeypatch, {"rows": [{}] * 30, "missing": [], "problems": [], "late": [f"S{k}" for k in range(20)]})
+    r = pc.check_scan(_Reg(), "IN", "nifty50")
+    assert r["state"] == "fail" and r["name"] == "Scan: NIFTY 50 stocks"
+    assert r["detail"].startswith("30 of 50 stocks scanned") and "timed out on 20 still being read after 120 s" in r["detail"]
+
+
+def test_a_refused_or_empty_scan_says_so(monkeypatch):
+    from app import platform_check as pc
+    _scan_out(monkeypatch, {"rows": [], "missing": [], "late": [],
+                            "problems": ["AAPL: Yahoo Finance is busy (our rate limit). Try again in a minute."] * 20})
+    r = pc.check_scan(_Reg(), "US", "us_mega")
+    assert r["state"] == "fail" and r["detail"].startswith("Empty: no stock scanned")
+    assert "20 refused by the price source (rate limit or outage)" in r["detail"]
+    _scan_out(monkeypatch, {"rows": [], "missing": [], "problems": [], "late": []})
+    assert pc.check_scan(_Reg(), "US", "us_mega")["detail"].startswith("Empty: the scan returned no rows")
+    assert pc.check_scan(_Reg(ready=False), "IN", "nifty50")["state"] == "warn"
+
+
+def test_a_scan_with_a_budget_leaves_out_what_it_could_not_read(monkeypatch):
+    """scan.run stops waiting at its budget: the stocks still being read are listed as late, the rest are scanned."""
+    import threading
+    from app import scan
+    stuck = threading.Event()
+    monkeypatch.setattr(scan.universes, "resolve", lambda reg, market, members: ([f"IN:{m['symbol']}" for m in members], []))
+
+    def bars(reg, iid):
+        if iid == "IN:SLOW":
+            stuck.wait(10)
+        return [{"t": "2026-01-01", "o": 1, "h": 1, "l": 1, "c": 1}]
+    monkeypatch.setattr(scan, "_bars", bars)
+    monkeypatch.setattr(scan, "analyse", lambda b: {"signal": None, "chg": 0})
+    try:
+        out = scan.run(_Reg(), "IN", [{"symbol": "A"}, {"symbol": "SLOW"}, {"symbol": "B"}], budget=0.3)
+    finally:
+        stuck.set()
+    assert sorted(r["symbol"] for r in out["rows"]) == ["A", "B"] and out["late"] == ["SLOW"]
+    assert "late" not in scan.run(_Reg(), "IN", [{"symbol": "A"}])
+
+
+def test_bad_candles_are_named_with_their_prices():
+    from datetime import date
+    from app import platform_check as pc
+
+    class Prov:
+        def ready(self):
+            return True
+
+        def defaults(self):
+            return [{"symbol": "ISF.L", "token": "ISF.L"}]
+
+        def history(self, inst, tf, days):
+            good = [{"t": f"2026-10-{d:02d}T00:00:00+01:00", "o": 8.0, "h": 8.2, "l": 7.9, "c": 8.1} for d in (12, 13)]
+            return good + [{"t": "2026-10-14T00:00:00+01:00", "o": 8.1, "h": 8.15, "l": 8.0, "c": 8.3}]
+
+    class Reg:
+        def provider(self, m):
+            return Prov()
+    r = pc.check_market(Reg(), "UK", date(2026, 10, 14))
+    assert r["state"] == "fail"
+    assert "14 Oct (o 8.10 h 8.15 l 8.00 c 8.30), today's candle while the session is still trading" in r["detail"]

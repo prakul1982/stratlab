@@ -16,6 +16,7 @@ TIMEOUT = 45          # seconds a single check may take before it counts as fail
 # the global source's bucket is 90 a minute after a burst of 15 (35 more reads = 23 s). Sharing those limits with the
 # run's other checks and the evening jobs, that is more than 45 s on a healthy server (every automatic run since 12 Oct).
 TIMEOUTS = {"Scans": 150}
+SCAN_BUDGET = 120     # a scan check stops reading here, inside its limit, and reports what it got
 
 
 def _day(d) -> str:
@@ -96,7 +97,12 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
     last = datetime.fromisoformat(bars[-1]["t"]).date()
     expected = last_session(market, today)
     if bad:
-        return _result(f"Prices: {market}", "Prices", "fail", f"{len(bad)} candles of {inst['symbol']} have high/low outside open/close.")
+        # which candles, and whether the only one is the session still trading (the source's live candle)
+        live = len(bad) == 1 and bad[0] is bars[-1] and datetime.fromisoformat(bars[-1]["t"]).date() == today
+        shown = ", ".join(f"{_day(b['t'])} (o {b['o']:,.2f} h {b['h']:,.2f} l {b['l']:,.2f} c {b['c']:,.2f})" for b in bad[-3:])
+        return _result(f"Prices: {market}", "Prices", "fail",
+                       f"{len(bad)} candles of {inst['symbol']} have high/low outside open/close: {shown}"
+                       + (", today's candle while the session is still trading" if live else "") + "." + _why_stale(prov, inst))
     if last < expected:
         return _result(f"Prices: {market}", "Prices", "fail",
                        f"{inst['symbol']}: last daily candle {_day(last)}, but {_day(expected)} was a trading day." + _why_stale(prov, inst))
@@ -155,14 +161,42 @@ def check_backtest(registry, market: str) -> dict:
 
 
 def check_scan(registry, market: str, set_id: str) -> dict:
+    """One preset scan, read live. It stops short of the check's own limit (SCAN_BUDGET), so a slow run says how far it
+    got and what held it up (stocks not read in time, the source busy, no data) instead of a bare timeout."""
     from . import scan, universes
     preset = next(p for p in universes.PRESETS[market] if p["id"] == set_id)
-    out = scan.run(registry, market, [{"symbol": s} for s in preset["symbols"]])
+    name, total = f"Scan: {preset['name']}", len(preset["symbols"])
+    prov = registry.provider(market)
+    if prov is not None and not prov.ready():
+        return _result(name, "Scans", "warn", "Offline right now (for India: the day's broker login isn't done).")
+    t = time.monotonic()
+    out = scan.run(registry, market, [{"symbol": s} for s in preset["symbols"]], budget=SCAN_BUDGET)
+    secs = time.monotonic() - t
     rows, missing = out.get("rows") or [], out.get("missing") or []
-    share = len(rows) / max(1, len(preset["symbols"]))
+    late, problems = out.get("late") or [], out.get("problems") or []
+    share = len(rows) / max(1, total)
     state = "pass" if share >= 0.95 else "warn" if share >= 0.8 else "fail"
-    extra = f"; missing {', '.join(missing[:6])}" if missing else ""
-    return _result(f"Scan: {preset['name']}", "Scans", state, f"{len(rows)} of {len(preset['symbols'])} stocks scanned{extra}.")
+    if not rows:
+        lead = (f"Empty: no stock scanned in {secs:.0f} s" if problems or late or missing else "Empty: the scan returned no rows")
+    else:
+        lead = f"{len(rows)} of {total} stocks scanned in {secs:.0f} s"
+    parts = [lead]
+    if late:
+        parts.append(f"timed out on {len(late)} still being read after {SCAN_BUDGET:g} s ({', '.join(late[:6])})")
+    busy = [p for p in problems if _busy(p)]
+    if busy:
+        parts.append(f"{len(busy)} refused by the price source (rate limit or outage): {busy[0][:100]}")
+    other = [p for p in problems if not _busy(p)]
+    if other:
+        parts.append(f"{len(other)} errors: {'; '.join(x[:60] for x in other[:3])}")
+    if missing:
+        parts.append(f"not found {', '.join(missing[:6])}")
+    return _result(name, "Scans", state, "; ".join(parts) + ".")
+
+
+def _busy(problem: str) -> bool:
+    text = problem.lower()
+    return any(w in text for w in ("rate limit", "busy", "isn't answering", "couldn't reach", "too many"))
 
 
 def check_rotation(registry, market: str) -> dict:
@@ -304,26 +338,48 @@ def check_fund_costs(ter) -> dict:
 
 def run_all(checks: list[tuple[str, callable]]) -> dict:
     """Run every check in parallel, each with a time limit; a check that raises or runs out of time is a failure,
-    never the end of the run."""
+    never the end of the run. The limit counts from when the check starts, not while it waits for a free worker behind
+    slower checks, and a result keeps the name it was run under (a retry finds it by that name)."""
     out = []
     with ThreadPoolExecutor(max_workers=6, thread_name_prefix="check") as pool:
-        futures = [(name, area, pool.submit(_timed, fn)) for name, area, fn in checks]
-        for name, area, f in futures:
+        futures = []
+        for name, area, fn in checks:
+            box: dict = {"made": time.monotonic()}
+            futures.append((name, area, box, pool.submit(_timed, fn, box)))
+        for name, area, box, f in futures:
+            limit = TIMEOUTS.get(area, TIMEOUT)
             try:
-                res, secs = f.result(timeout=TIMEOUTS.get(area, TIMEOUT))
-                res["seconds"] = secs
+                res, secs = _wait(f, box, limit)
+                res["name"], res["seconds"] = name, secs
                 out.append(res)
             except FutureTimeout:
-                out.append(_result(name, area, "fail", f"Took longer than {TIMEOUTS.get(area, TIMEOUT)} seconds."))
+                out.append(_result(name, area, "fail", f"Took longer than {limit:g} seconds: no answer yet, timed out "
+                                   f"(it waited {box.get('queued', 0):.0f} s for a free worker first)."))
             except Exception as e:
                 msg = getattr(e, "detail", None)
                 msg = msg.get("message") if isinstance(msg, dict) else (str(e) or e.__class__.__name__)
-                out.append(_result(name, area, "fail", str(msg)[:240]))
+                out.append(_result(name, area, "fail", f"Error ({e.__class__.__name__}): {str(msg)[:220]}"))
     counts = {k: sum(1 for r in out if r["state"] == k) for k in ("pass", "warn", "fail")}
     return {"at": datetime.now(timezone.utc).isoformat(), "counts": counts, "checks": out}
 
 
-def _timed(fn):
+def _wait(f, box: dict, limit: float):
+    """The check's answer, or FutureTimeout once it has run `limit` seconds since it started."""
+    while True:
+        started = box.get("start")
+        left = limit if started is None else limit - (time.monotonic() - started)
+        if left <= 0:
+            raise FutureTimeout()
+        try:
+            return f.result(timeout=min(left, 0.5) if started is None else left)
+        except FutureTimeout:
+            if box.get("start") is not None and time.monotonic() - box["start"] >= limit:
+                raise
+
+
+def _timed(fn, box: dict | None = None):
     t = time.monotonic()
+    if box is not None:
+        box["queued"], box["start"] = t - box.get("made", t), t
     res = fn()
     return res, round(time.monotonic() - t, 1)
