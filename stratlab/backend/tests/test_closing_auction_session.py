@@ -290,3 +290,15 @@ def test_an_early_close_squares_off_at_the_last_candle_and_ends_manual_fills():
     sess = SimpleNamespace(market="US", last_tick_at=datetime(2026, 11, 27, 12, 58, tzinfo=ny).isoformat())
     assert LiveSession.price_problem(sess, datetime(2026, 11, 27, 12, 59, tzinfo=ny)) is None
     assert "closed" in LiveSession.price_problem(sess, datetime(2026, 11, 27, 13, 30, tzinfo=ny))
+
+
+def test_an_mcx_paper_order_can_fill_until_its_winter_close():
+    from types import SimpleNamespace
+    from app.live import LiveSession
+    at = lambda m, d, h, mi: datetime(2026, m, d, h, mi, tzinfo=IST)
+    sess = SimpleNamespace(market="MCX", last_tick_at=at(12, 1, 23, 44).isoformat())
+    assert LiveSession.price_problem(sess, at(12, 1, 23, 45)) is None           # winter: open until 23:55
+    assert "closed" in LiveSession.price_problem(sess, at(12, 1, 23, 56))
+    sess.last_tick_at = at(10, 1, 23, 28).isoformat()
+    assert LiveSession.price_problem(sess, at(10, 1, 23, 29)) is None
+    assert "closed" in LiveSession.price_problem(sess, at(10, 1, 23, 35))       # summer: closed at 23:30

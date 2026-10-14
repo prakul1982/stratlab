@@ -4146,6 +4146,14 @@ def live_overview(profile=Depends(current_profile)):
             snaps.append(s.snapshot())
         except Exception as e:
             print("overview: snapshot failed:", s.id, e)
+    if not leader.leading():      # another container runs the sessions: their last saved state
+        for r in db.user_sessions(profile["id"]):
+            row = db.get_session_row(profile["id"], r["id"]) if r["status"] == "running" else None
+            if row and row.get("status") == "running":
+                try:
+                    snaps.append(stored_snapshot(row))
+                except Exception as e:
+                    print("overview: stored snapshot failed:", r["id"], e)
     return risk.summary(snaps, datetime.now(IST).date().isoformat())
 
 
@@ -4154,8 +4162,8 @@ def list_live(profile=Depends(current_profile)):
     running = {s.id for s in manager.user_running(profile["id"])}
     rows = db.user_sessions(profile["id"])
     for r in rows:
-        if r["status"] == "running" and r["id"] not in running:
-            r["status"] = "paused"   # server restarted and the session could not reattach yet
+        if r["status"] == "running" and r["id"] not in running and leader.leading():
+            r["status"] = "paused"   # server restarted and the session could not reattach yet (another container: it runs there)
     return rows
 
 
@@ -4169,18 +4177,27 @@ def get_live(sid: str, profile=Depends(current_profile)):
         row = db.get_session_row(profile["id"], sid)
         if not row:
             err(404, "not_found", "Session not found.")
-        if (row.get("instrument") or {}).get("type") == "GROUP":
-            from .group_live import stopped_snapshot as group_stopped
-            snap = group_stopped(row)
-            snap["orders"] = orders_from(snap["events"])
-            return ok(snap)
-        if (row.get("instrument") or {}).get("type") == "OPTIONS":
-            snap = options_stopped(row)
-            snap["orders"] = orders_from(snap["events"])
-            return ok(snap)
-        snap = live_stopped(row)
+        snap = stored_snapshot(row)
     snap["orders"] = orders_from(snap.get("events") or [])
     return ok(snap)
+
+
+STORED_NOTICE = "Updating: these figures are from the session's last saved state."
+
+
+def stored_snapshot(row: dict) -> dict:
+    """A session not running here, from its saved state. A running one runs on another container (or is reattaching)."""
+    kind = (row.get("instrument") or {}).get("type")
+    if kind == "GROUP":
+        from .group_live import stopped_snapshot as group_stopped
+        snap = group_stopped(row)
+    elif kind == "OPTIONS":
+        snap = options_stopped(row)
+    else:
+        snap = live_stopped(row)
+    if row.get("status") == "running":
+        snap["notice"] = STORED_NOTICE
+    return snap
 
 
 def orders_from(events: list[dict]) -> list[dict]:

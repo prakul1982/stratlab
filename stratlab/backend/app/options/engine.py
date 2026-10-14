@@ -189,7 +189,7 @@ class OptionsEngine:
             return False
         sym = key.split(":", 1)[1]
         leg = {"key": key, "sym": sym, "opt": opt, "side": side, "strike": strike, "qty": qty, "entry": px,
-               "mark": px, "open": True}
+               "mark": px, "open": True, "entry_mid": G.mid(quotes.get(key)) or px}   # the leg stop's base
         self.pos["legs"].append(leg)
         out.append(self._order(now, leg, side, px, why, picked=picked))
         return True
@@ -386,13 +386,20 @@ class OptionsEngine:
             self.day, self.entries_today, self.day_realised, self.halted = today, 0, 0.0, False
         p = self.pos
         if p:
+            if spot and p.get("expiry") == today:
+                p["expiry_spot"] = spot          # an MCX/CDS estimate when no settlement price can be had later
             if self.settle_fn and p.get("expiry") and self._expired(now, p["expiry"]):
                 px = self.settle_fn(p["expiry"])
+                est = {"CDS": " (estimate: the last underlying price; the RBI reference rate isn't available)",
+                       "MCX": " (estimate: the last futures price, not the final settlement price)"}.get(self.s.exchange, "")
+                if px is None and est and p.get("expiry_spot"):
+                    px, est = p["expiry_spot"], " (estimate: the last underlying price seen on the expiry day)"
                 if px is not None:
-                    est = {"CDS": " (estimate: the last underlying price; the RBI reference rate isn't available)",
-                           "MCX": " (estimate: the last futures price, not the final settlement price)"}.get(self.s.exchange, "")
                     self._settle_expiry(now, float(px), out, est)
                     return out
+                # an expired leg is never closed at market prices: it waits for the settlement price
+                p["held"] = "Settlement price not available yet; the expired position is held until it is."
+                return out
             if not fresh:
                 return out   # without live prices no stop can be judged; hold and wait
             if now >= _at(now, t.squareoff) or p["opened"][:10] != today:
@@ -404,7 +411,7 @@ class OptionsEngine:
             if rk.legStopPct and any(l["side"] == "sell" for l in p["legs"]):
                 stopped = False
                 for leg in p["legs"]:
-                    if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
+                    if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg.get("entry_mid", leg["entry"]) * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
                         stopped = True
                 if stopped and not any(l["open"] and l["side"] == "sell" for l in p["legs"]):

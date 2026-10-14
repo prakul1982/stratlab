@@ -155,6 +155,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
         </div>
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {snap.notice && <Notice tone="warn">{snap.notice}</Notice>}
       {a.emptied_on && <Notice tone="warn"><b>Account emptied on {fmtDate(a.emptied_on)}.</b> The account reached zero, so the position was closed and nothing opens again; the loss stops at −100%.</Notice>}
       {!running && a.qty > 0 && (
         <Notice className="stopped-open">

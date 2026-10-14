@@ -331,3 +331,27 @@ def test_trade_alerts_are_capped_per_user_per_day_on_email_and_telegram(monkeypa
     assert [x for x in over if x[0] == "push"] == [("push", "trade 3"), ("push", "trade 4"), ("push", "trade 5")]
     assert [x for x in over if x[0] != "push"] == [("telegram", "StratLab: trade alert limit for today"),
                                                    ("email", "StratLab: trade alert limit for today")]     # one last message
+
+
+def test_a_follower_shows_running_sessions_from_their_saved_state_and_passes_a_stop_on(monkeypatch):
+    from app import leader, main  # noqa: F401
+    from tests import world as W
+    from tests.test_mcp_server import PRO, start_session
+    built = W.build(monkeypatch)
+    try:
+        c, mgr = built["client"], built["manager"]
+        sid = start_session(c)
+        mgr.persist(only_dirty=False)
+        mgr.drop_all()                                          # this container lost the lease: another one runs it
+        monkeypatch.setattr(leader, "leading", lambda: False)
+        rows = c.get("/live/sessions", headers=PRO).json()
+        assert [r["status"] for r in rows if r["id"] == sid] == ["running"]          # not "paused"
+        ov = c.get("/live/overview", headers=PRO).json()
+        assert [x["id"] for x in ov["sessions"]] == [sid]
+        snap = c.get(f"/live/sessions/{sid}", headers=PRO).json()
+        assert snap["status"] == "running" and snap["notice"].startswith("Updating")
+        assert c.post(f"/live/sessions/{sid}/stop", headers=PRO).json() == {"stopped": True}
+        rows = c.get("/live/sessions", headers=PRO).json()
+        assert [r["status"] for r in rows if r["id"] == sid] == ["stopped"]          # the leader's next reconcile detaches it
+    finally:
+        built["close"]()
