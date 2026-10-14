@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException
 from . import db, referrals
 from .auth import current_profile
 from .config import settings
+from .kite_service import IST
 from .plans import PLANS, effective_plan
 
 
@@ -26,28 +27,71 @@ def admin_profile(profile=Depends(current_profile)) -> dict:
     return profile
 
 
+def _paged(query, page: int = 1000) -> list[dict]:
+    """Every row of a query, read a page at a time by id (the server caps one read); `query()` gives a fresh one
+    selecting at least id."""
+    out, after = [], ""
+    while True:
+        q = query()
+        if after:
+            q = q.gt("id", after)
+        rows = q.order("id").limit(page).execute().data
+        out += rows
+        if len(rows) < page:
+            return out
+        after = rows[-1]["id"]
+
+
+def _count_since(kind: str, since_iso: str) -> int:
+    r = (db.sb().table("usage_events").select("id", count="exact").eq("kind", kind).gte("created_at", since_iso)
+         .limit(1).execute())
+    return r.count or 0
+
+
 def _usage_since(since_iso: str) -> dict[str, Counter]:
     """usage_events since a time, as {user_id: Counter(kind)}."""
-    rows = (db.sb().table("usage_events").select("user_id,kind").gte("created_at", since_iso)
-            .limit(50000).execute().data)
+    rows = _paged(lambda: db.sb().table("usage_events").select("id,user_id,kind").gte("created_at", since_iso))
     out: dict[str, Counter] = defaultdict(Counter)
     for r in rows:
         out[r["user_id"]][r["kind"]] += 1
     return out
 
 
+def _profiles(cols: str, plan: str | None = None, q: str = "") -> list[dict]:
+    def build():
+        query = db.sb().table("profiles").select(cols)
+        if q:
+            query = query.ilike("email", f"%{q.strip()}%")
+        if plan in ("basic", "pro"):
+            query = query.eq("plan", plan)          # narrowed in the database; an ended plan is dropped by the caller
+        return query
+    return _paged(build)
+
+
+def _paying(r: dict) -> bool:
+    """On a paid plan by a live subscription, not one the owner gave by hand (set_plan) after it ended."""
+    return bool(r.get("razorpay_subscription_id")) and r.get("plan_status") == "active" and r.get("plan_source") != "admin"
+
+
+def _at(s) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -> list[dict]:
     """The newest `limit` users: those whose email contains `q`, and on `plan` when given (the plan they have now, so
     a paid plan that ended counts as Free)."""
-    query = db.sb().table("profiles").select(
-        "id,email,plan,plan_status,current_period_end,razorpay_subscription_id,created_at")
-    if q:
-        query = query.ilike("email", f"%{q.strip()}%")
-    if plan in ("basic", "pro"):
-        query = query.eq("plan", plan)              # narrowed in the database; an ended plan is dropped below
-    rows = query.order("created_at", desc=True).limit(100000 if plan in PLANS else limit).execute().data
+    cols = "id,email,plan,plan_status,plan_source,current_period_end,razorpay_subscription_id,created_at"
     if plan in PLANS:
+        rows = sorted(_profiles(cols, plan, q), key=lambda r: r.get("created_at") or "", reverse=True)
         rows = [r for r in rows if effective_plan(r) == plan][:limit]
+    else:
+        query = db.sb().table("profiles").select(cols)
+        if q:
+            query = query.ilike("email", f"%{q.strip()}%")
+        rows = query.order("created_at", desc=True).limit(limit).execute().data
     usage = _usage_since(month_start)
     try:
         invited = referrals.counts()
@@ -63,38 +107,41 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
     return [{
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
-        "plan_until": r.get("current_period_end"), "paying": bool(r.get("razorpay_subscription_id")),
+        "plan_until": r.get("current_period_end"), "paying": _paying(r),
         "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
         "free_months": months.get(r["id"], 0),
     } for r in rows]
 
 
+_COUNT_COLS = "id,plan,plan_status,plan_source,current_period_end,created_at,razorpay_subscription_id"
+
+
 def stats(month_start: str) -> dict:
-    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at,razorpay_subscription_id").limit(100000).execute().data
-    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    rows = _profiles(_COUNT_COLS)
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    today = now.astimezone(IST).replace(hour=0, minute=0, second=0, microsecond=0)     # the India day
     plans = Counter(effective_plan(r) for r in rows)
     # on a paid plan by paying (a subscription), or given by the owner by hand: Overview tells them apart
-    paying = Counter(effective_plan(r) for r in rows if r.get("razorpay_subscription_id"))
-    new = sum(1 for r in rows if r.get("created_at") and datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")) >= week_ago)
-    usage = Counter()
-    for c in _usage_since(month_start).values():
-        usage.update(c)
+    paying = Counter(effective_plan(r) for r in rows if _paying(r))
+    made = [t for t in (_at(r.get("created_at")) for r in rows) if t]
+    new = sum(1 for t in made if t >= week_ago)
     return {"users": len(rows), "plans": {p: plans.get(p, 0) for p in PLANS}, "new_7d": new,
+            "signups_today": sum(1 for t in made if t >= today),
             "paying": {p: paying.get(p, 0) for p in ("basic", "pro")},
             "given": {p: plans.get(p, 0) - paying.get(p, 0) for p in ("basic", "pro")},
-            "experiments_month": usage["backtest"], "ai_month": usage["ai"]}
+            "experiments_month": _count_since("backtest", month_start), "ai_month": _count_since("ai", month_start)}
 
 
 def week_stats(since: datetime) -> dict:
     """Users joined since a time, everyone so far, paid users by plan, and experiments and AI builds since then."""
-    rows = db.sb().table("profiles").select("plan,plan_status,current_period_end,created_at,razorpay_subscription_id").limit(100000).execute().data
+    rows = _profiles(_COUNT_COLS)
     plans = Counter(effective_plan(r) for r in rows)
     # paying (a subscription) apart from given by the owner, as Overview counts them (R6V-010)
-    paying = Counter(effective_plan(r) for r in rows if r.get("razorpay_subscription_id"))
-    new = sum(1 for r in rows if r.get("created_at") and datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")) >= since)
-    usage = Counter()
-    for c in _usage_since(since.astimezone(timezone.utc).isoformat()).values():
-        usage.update(c)
+    paying = Counter(effective_plan(r) for r in rows if _paying(r))
+    new = sum(1 for r in rows if (t := _at(r.get("created_at"))) and t >= since)
+    since_iso = since.astimezone(timezone.utc).isoformat()
+    usage = {"backtest": _count_since("backtest", since_iso), "ai": _count_since("ai", since_iso)}
     paid = [p for p in PLANS if p != "free"]
     return {"users": len(rows), "new": new, "paid": {p: plans[p] for p in paid if plans[p]},
             "paying": {p: paying[p] for p in paid if paying[p]}, "given": {p: plans[p] - paying[p] for p in paid if plans[p] - paying[p]},
@@ -106,10 +153,11 @@ def set_plan(user_id: str, plan: str, days: int | None) -> dict:
     if plan not in PLANS:
         raise HTTPException(400, {"code": "bad_plan", "message": "Unknown plan."})
     if plan == "free":
-        fields = {"plan": "free", "plan_status": None, "current_period_end": None, "cancel_at_period_end": False}
+        fields = {"plan": "free", "plan_status": None, "plan_source": None, "current_period_end": None, "cancel_at_period_end": False}
     else:
         until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat() if days else None
-        fields = {"plan": plan, "plan_status": "active", "current_period_end": until, "cancel_at_period_end": False}
+        fields = {"plan": plan, "plan_status": "active", "plan_source": "admin", "current_period_end": until,
+                  "cancel_at_period_end": False}      # plan_source: given by hand, so never counted as paying
     row = db.update_profile(user_id, **fields)
     if row is None:
         raise HTTPException(404, {"code": "no_user", "message": "No user with that ID."})

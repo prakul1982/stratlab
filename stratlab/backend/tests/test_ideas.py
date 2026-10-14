@@ -35,3 +35,9 @@ def test_route_uses_ai_then_falls_back(monkeypatch):
         assert r["fallback"] and len(r["ideas"]) == 4 and r["ideas"][0]["market"] == "CRYPTO"
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_long_queries_sharing_a_prefix_get_their_own_answers():
+    a, b = "x" * 300 + " semis", "x" * 300 + " banks"
+    assert ideas.key(a) == ideas.key(b)                                    # the AI is sent only the first 300: the same text
+    assert ideas.key("y" * 250 + "a") != ideas.key("y" * 250 + "b")        # but within them, different queries differ

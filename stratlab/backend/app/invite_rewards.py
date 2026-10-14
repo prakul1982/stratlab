@@ -41,6 +41,8 @@ from .plans import IST, _dt
 ROW = "reward:"
 DAYS = "actdays:"
 PAY = "rewardpay:"
+REFUNDED = "rewardrefund:"           # a payment refunded before its charge was seen
+GRANT = "rewardgrant:"               # free time already credited for one invite and person
 MARK = "rewardjob:last"
 WINDOW = timedelta(days=14)          # the newcomer's first 14 days
 ACTIVE_DAYS = 3                      # different days with a real action
@@ -90,6 +92,18 @@ def row(uid: str) -> dict | None:
 
 def _save(uid: str, r: dict):
     db.set_setting(ROW + uid, json.dumps(r))
+
+
+def _credit(key: str, who: dict, days: int, now: datetime) -> dict:
+    """plans.add_free_basic once per key: a retry after a failed save finds the marker and doesn't credit again."""
+    if db.get_setting(key):
+        return plans.free_basic(who["id"])
+    db.set_setting(key, "1")
+    try:
+        return plans.add_free_basic(who, days, now)
+    except Exception:
+        db.set_setting(key, "")
+        raise
 
 
 def all_rows() -> dict[str, dict]:
@@ -163,7 +177,7 @@ def _referrer(uid: str, r: dict, now: datetime) -> list[tuple]:
     referrer = referrals._profile(r["by"])
     if due in CAPS and referrer:
         days = EXTRA_DAYS if due == "extra" else MONTH_DAYS
-        after = plans.add_free_basic(referrer, days, now)
+        after = _credit(f"{GRANT}{uid}:referrer", referrer, days, now)
         r.update(referrer_months=1, kind=due, referrer_days=days, referrer_at=now.isoformat(timespec="seconds"),
                  referrer_pending=False)
         r.pop("capped", None)
@@ -294,7 +308,7 @@ def check(uid: str, now: datetime | None = None) -> str:
 
 def _give(uid: str, r: dict, newcomer: dict, now: datetime) -> list[tuple]:
     """The newcomer's month and the referrer's reward when due, under the lock. Returns who to tell."""
-    after = plans.add_free_basic(newcomer, MONTH_DAYS, now)
+    after = _credit(f"{GRANT}{uid}:newcomer", newcomer, MONTH_DAYS, now)
     r["newcomer_months"] = 1
     r.update(status="given", given_at=now.isoformat(timespec="seconds"))
     out = [(newcomer, "newcomer", after, f"invite_reward:{uid}:newcomer", "use")]
@@ -345,6 +359,8 @@ def paid(profile: dict, payment: dict, now: datetime | None = None) -> str:
     uid = profile.get("id")
     if not uid or not real_payment(payment):
         return "not_paid"
+    if db.get_setting(REFUNDED + payment["id"][:80]):
+        return "not_paid"                        # its refund arrived before the charge did
     with _lock:
         r = row(uid)
         if not r:
@@ -370,6 +386,7 @@ def refunded(payment_id, now: datetime | None = None) -> str:
         return "none"
     uid = db.get_setting(PAY + payment_id[:80])
     if not uid:
+        db.set_setting(REFUNDED + payment_id[:80], "1")   # the charge may still arrive: paid() skips it
         return "none"
     with _lock:
         r = row(uid)

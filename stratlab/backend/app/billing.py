@@ -150,7 +150,7 @@ def activate(profile: dict, sub: dict):
     # Save the new subscription first, so the "cancelled" webhook for the old one is ignored
     db.update_profile(profile["id"], plan=plan, plan_status="active", razorpay_subscription_id=sub["id"],
                       current_period_end=_ts(sub.get("current_end")), pending_subscription_id=None,
-                      cancel_at_period_end=False)
+                      cancel_at_period_end=False, **({"plan_source": None} if profile.get("plan_source") else {}))
     if old and old != sub["id"] and profile.get("plan_status") == "active":
         try:  # switching plans: stop billing the old subscription now
             client().subscription.cancel(old, {"cancel_at_cycle_end": 0})

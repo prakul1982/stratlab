@@ -3,6 +3,7 @@
 Ideas come from the AI chain (cached, so the same question is answered once for everyone) and fall back
 to a built-in set when the AI can't be reached. Every idea is a plain-English rule the idea builder can
 turn into a notebook: an entry, an exit and a stop, on a named market."""
+import hashlib
 import re
 
 MARKETS = {"IN", "US", "UK", "EU", "JP", "CRYPTO", "FX", "MCX", "CDS", "CMDTY"}
@@ -70,4 +71,5 @@ def build(ask_json, q: str) -> dict:
 
 
 def key(q: str) -> tuple:
-    return (re.sub(r"\s+", " ", q.strip().lower())[:200],)
+    """Keyed on the text the AI is sent (the first 300 characters), so a longer query never gets another's answer."""
+    return (hashlib.sha1(re.sub(r"\s+", " ", q.strip()[:300].lower()).encode()).hexdigest(),)

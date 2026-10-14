@@ -12,6 +12,8 @@ How a request is answered:
 
 Providers and models are described in ai_catalog.py, requests are sent by ai_clients.py. Error texts never name a
 provider (users may see them); the details are on the Admin page."""
+import contextlib
+import contextvars
 import hashlib
 import json
 import re
@@ -146,6 +148,19 @@ def _override(fn, name: str, system: str, text: str, max_tokens: int, want_json:
     raise err
 
 
+_asking_again: contextvars.ContextVar[bool] = contextvars.ContextVar("asking_again", default=False)
+
+
+@contextlib.contextmanager
+def ask_again():
+    """Inside the block complete() skips its answer cache: a "Refresh" asks the provider again."""
+    tok = _asking_again.set(True)
+    try:
+        yield
+    finally:
+        _asking_again.reset(tok)
+
+
 def complete(system: str, text: str, gemini=None, anthropic=None, transport=None, max_tokens: int = 1500,
              kind: str = "quick", want_json: bool = True, use_cache: bool = True) -> str:
     """Ask the best available models in turn and return the first checked reply (a JSON object, unless
@@ -157,6 +172,7 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
         raise AIConfig("The AI isn't set up on the server yet.",
                        detail="No AI provider has a key. Add a free one such as GROQ_API_KEY or GEMINI_API_KEY in Railway → Variables.")
     key = AnswerCache.key(task, system, text, max_tokens, want_json)
+    use_cache = use_cache and not _asking_again.get()
     if use_cache:
         hit = cache.get(key)
         if hit is not None:

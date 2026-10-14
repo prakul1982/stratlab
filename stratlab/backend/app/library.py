@@ -266,10 +266,30 @@ def moderate(e: dict, action: str) -> dict:
     return {**{k: v for k, v in e.items() if k not in MODERATION}, "reports": {}}
 
 
+def mod_key(e: dict) -> str | None:
+    """Where an entry's reports and hiding are kept apart from the entry: by who published which notebook version, so
+    they outlive the entry (deleted and published again)."""
+    src = e.get("source") or {}
+    return f"libmod:{e.get('owner')}:{src.get('nid')}:{src.get('v')}" if e.get("owner") and src.get("nid") else None
+
+
+def remember(e: dict):
+    """Keep the entry's moderation state under its own key."""
+    k = mod_key(e)
+    if k:
+        db.set_setting(k, json.dumps({m: e[m] for m in MODERATION if m in e}))
+
+
 def carry_moderation(old: dict | None, new: dict) -> dict:
-    """Publishing again keeps the reports and any hiding: re-publishing can't be used to clear them."""
-    if old:
-        new.update({k: old[k] for k in MODERATION if k in old})
+    """Publishing again keeps the reports and any hiding, from the earlier entry and from the state kept under its own
+    key (the entry may have been deleted): re-publishing can't be used to clear them."""
+    k = mod_key(new)
+    kept = db.json_value(db.get_setting(k), {}) if k else {}
+    for src in (kept, old or {}):
+        if src.get("reports"):
+            new["reports"] = {**(new.get("reports") or {}), **src["reports"]}
+        if src.get("hidden"):
+            new.update({m: src[m] for m in ("hidden", "hidden_by") if m in src})
     return new
 
 
@@ -278,6 +298,7 @@ OFFICIAL_TTL = 60.0          # seconds a visitor's list is reused: the public ro
 
 
 def save(e: dict):
+    remember(e)
     db.set_setting(PREFIX + e["id"], json.dumps(e))
     _official_cache[0] = 0.0
 
@@ -287,6 +308,14 @@ def load(eid: str) -> dict | None:
         return None
     raw = db.get_setting(PREFIX + eid)
     return json.loads(raw) if raw else None
+
+
+def add_copy(eid: str):
+    """Count one copy on a fresh read of the entry, so a hide or report made meanwhile isn't written over."""
+    e = load(eid)
+    if e:
+        e["copies"] = (e.get("copies") or 0) + 1
+        db.set_setting(PREFIX + eid, json.dumps(e))
 
 
 def remove(eid: str):

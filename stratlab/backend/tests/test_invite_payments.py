@@ -329,3 +329,12 @@ def test_account_shows_this_years_counts_and_admin_shows_the_reward_type(w):
     assert sorted(v for k, v in shown.items() if k != "u-x3") == [
         ("pending_payment", "Waiting to subscribe"), ("use", "Use"), ("use", "Use")]
     assert view["waiting_to_subscribe"] == 1 and view["extras_given"] == 0
+
+
+def test_a_refund_that_arrives_before_its_charge_earns_the_referrer_nothing(w):
+    user("u-ref")
+    invite("u-ref", "u-a")
+    p = payment(NOW + DAY)
+    assert R.refunded(p["id"], NOW + DAY) == "none"                # the refund event came first: nothing known yet
+    assert R.paid(referrals._profile("u-a"), p, NOW + DAY) == "not_paid"
+    assert R.row("u-a").get("payment_id") is None and R.row("u-a")["referrer_months"] == 0

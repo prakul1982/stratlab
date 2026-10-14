@@ -227,7 +227,8 @@ class Docs:
         try:
             got = fn(data)
         except Exception as e:
-            raise SourceError("the exchange", f"The PDF is a scan and couldn't be read ({str(e)[:80]}).", busy=True) from None
+            print("scanned PDF not read:", str(e)[:160])      # which service failed stays in the log, never on the page
+            raise SourceError("the exchange", "The PDF is a scan and couldn't be read (the reading service was busy).", busy=True) from None
         if got and got.strip():
             self.scans += 1
             return _tidy(got)
