@@ -9,7 +9,7 @@ const locale = (c?: string | null) => (c === "INR" ? "en-IN" : "en-US");
 export function money(v: number | null | undefined, currency?: string | null, dp = 0): string {
   if (v == null || !Number.isFinite(v)) return "–";
   const s = Math.abs(v).toLocaleString(locale(currency), { maximumFractionDigits: dp, minimumFractionDigits: dp });
-  return (v < 0 ? "−" : "") + currencySymbol(currency) + s;
+  return (v < 0 && /[1-9]/.test(s) ? "−" : "") + currencySymbol(currency) + s;
 }
 
 /** Prices keep more decimals when they're small (crypto pairs, forex). `dp` fixes the decimals (see `priceDp`). */
@@ -59,10 +59,11 @@ export function shortStep(a: number, steps: [number, string, number][]): [number
 
 /** Short money for chart axes: ₹5.2L, $12.4k, $1.2M. */
 export function moneyShort(v: number, currency?: string | null): string {
-  const a = Math.abs(v), sign = v < 0 ? "−" : "", s = currencySymbol(currency);
+  if (!Number.isFinite(v)) return "–";
+  const a = Math.abs(v), s = currencySymbol(currency);
   const step = shortStep(a, currency === "INR" ? SHORT_INR : SHORT_INTL);
-  if (step) return `${sign}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
-  return `${sign}${s}${a.toFixed(a < 10 ? 2 : 0)}`;
+  const body = step ? `${(a / step[0]).toFixed(step[2])}${step[1]}` : a.toFixed(a < 10 ? 2 : 0);
+  return `${v < 0 && /[1-9]/.test(body) ? "−" : ""}${s}${body}`;
 }
 
 /** Big money in the units people say: $4.31T, $12.4B, ₹1.51 lakh cr, ₹8,500 cr. */
@@ -72,8 +73,9 @@ export function bigMoney(v: number | null | undefined, currency: string): string
   if (currency === "INR") return inrCompact(v);
   const a = Math.abs(v);
   const step = shortStep(a, [[1e12, "T", 2], [1e9, "B", 1], [1e6, "M", 0]]);      // $999.96B reads $1.00T, not $1000.0B
-  if (step) return `${v < 0 ? "-" : ""}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
-  return `${s}${Math.round(v).toLocaleString("en-US")}`;            // a dollar figure is grouped the international way, whatever the reader's locale
+  const sign = v < 0 ? "−" : "";
+  if (step) return `${sign}${s}${(a / step[0]).toFixed(step[2])}${step[1]}`;
+  return `${Math.round(v) === 0 ? "" : sign}${s}${Math.round(a).toLocaleString("en-US")}`;            // a dollar figure is grouped the international way, whatever the reader's locale
 }
 
 export function pct(v: number | null | undefined, dp = 1): string {
@@ -86,12 +88,14 @@ export const signClass = (v: number | null | undefined) => (v == null ? "" : v >
 
 /** A quantity. With `step` (the instrument's smallest unit, 0.00000001 BTC) a fractional quantity keeps that many
  *  decimals, so a column lines up (0.05013551, 0.05091380). */
-export function qty(v: number, step?: number): string {
+export function qty(v: number, step?: number, market?: string | null): string {
+  if (!Number.isFinite(v)) return "–";
+  if (v === 0) return "0";
   if (step && step < 1) {
     const dp = Math.min(8, Math.max(0, Math.ceil(-Math.log10(step) - 1e-9)));
     return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   }
-  if (Number.isInteger(v)) return v.toLocaleString("en-IN");
+  if (Number.isInteger(v)) return grouped(v, 0, market);
   return String(+v.toFixed(8));
 }
 
@@ -403,6 +407,13 @@ export function changeDir(v: number | null | undefined, text?: string): "up" | "
  * `k-${signTone(v)}` as a class. Nothing for zero or a missing value. Never use it on a market-wide change. */
 export function signTone(v: number | null | undefined): "up" | "down" | undefined {
   return ok(v) ? (v > 0 ? "up" : v < 0 ? "down" : undefined) : undefined;
+}
+
+/** A month and two-digit year from a date as written: "Mar 26". A plain "YYYY-MM-DD" is a calendar day, so no zone moves it. */
+export function monthYear(iso: string | null | undefined): string {
+  if (!iso) return "–";
+  const d = asDate(iso);
+  return Number.isNaN(d.getTime()) ? "–" : d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }
 
 /** The colour class for a signed figure: `k-up` (green) above zero, `k-down` (red) below it, "" for zero or a missing

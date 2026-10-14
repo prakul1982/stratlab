@@ -63,21 +63,31 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
 
-  const load = useCallback(async () => {
-    try { setSnap(withLists(await api<LiveSnapshot>(`/live/sessions/${sid}`))); } catch (e) { fail(e); }
+  const [error, setError] = useState<string | null>(null);
+
+  // `live` is false once the effect is cleaned up (another session, or the page left): a late answer is dropped
+  const load = useCallback(async (live: () => boolean = () => true) => {
+    try {
+      const s = withLists(await api<LiveSnapshot>(`/live/sessions/${sid}`));
+      if (live()) { setSnap(s); setError(null); }
+    } catch (e) { if (live()) { setError((e as Error)?.message || "Something went wrong. Try again."); fail(e); } }
   }, [sid, fail]);
 
   useEffect(() => {
+    let live = true;
+    const on = () => live;
     setSnap(null);
-    load();
-    const t = window.setInterval(() => { if (!document.hidden) load(); }, 3000);
-    return () => window.clearInterval(t);
+    setError(null);
+    void load(on);
+    const t = window.setInterval(() => { if (!document.hidden) void load(on); }, 3000);
+    return () => { live = false; window.clearInterval(t); };
   }, [load]);
 
   // an options or signal session's id here opens its own page (R7T-011)
   const own = snap ? sessionPath({ id: sid, kind: (snap as unknown as { kind?: string }).kind, instrument: snap.instrument as { type?: string; signal?: boolean } }) : null;
   useEffect(() => { if (own && own !== `/paper/${sid}`) nav(own, { replace: true }); }, [own, sid, nav]);
 
+  if (!snap && error) return <Card><ErrorState title="The session didn't load" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState></Card>;
   if (!snap || (own && own !== `/paper/${sid}`)) return <Card><Skeleton label="Connecting to the session" /></Card>;
   if ((snap as unknown as GroupSnapshot).kind === "group") {
     const g = snap as unknown as GroupSnapshot;
@@ -114,7 +124,7 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     ["Equity", money(a.equity, cur), null, HELP.equityLive],
     ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
     ["Cash", money(a.cash, cur), null, HELP.cash],
-    ["Open position", a.qty ? `${qty(a.qty)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
+    ["Open position", a.qty ? `${qty(a.qty, undefined, snap.instrument.market)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
     ["Unrealised P&L", money(a.unrealised, cur), a.unrealised, HELP.unrealised],
     ["Realised P&L", money(a.realised, cur), a.realised, HELP.realised],
     ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
