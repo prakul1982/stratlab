@@ -204,8 +204,10 @@ def test_confirming_the_newsletter_address(monkeypatch):
         db.update_profile("u-pro", alert_email="new@example.com")          # a new address needs confirming again
         assert not alerts.email_confirmed(db.get_profile("u-pro"))
 
-        for _ in range(4):
+        for i in range(4):                                      # a new address each time: one address can only be sent 3 a day
+            db.update_profile("u-free", alert_email=f"free{i}@example.com")
             c.post("/me/email/confirm", headers=W.headers("free-token"))
+        db.update_profile("u-free", alert_email="free4@example.com")
         r = c.post("/me/email/confirm", headers=W.headers("free-token"))
         assert r.status_code == 200
         assert c.post("/me/email/confirm", headers=W.headers("free-token")).status_code == 429   # 5 an hour
@@ -224,3 +226,41 @@ def test_brevo_ip_block_says_where_to_turn_it_off():
                                                                   "If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips"})
     msg = str(alerts._refused("Brevo", r))
     assert "Authorized IPs" in msg and "turn IP blocking off" in msg and "https://app.brevo.com/security/authorised_ips" in msg
+
+
+def test_one_address_is_sent_only_a_few_confirmations_a_day_whoever_asks(monkeypatch):
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        sent = []
+        monkeypatch.setattr(alerts, "send_email", lambda to, subject, body, html=None, headers=None: sent.append(to))
+        monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+        monkeypatch.setattr(settings, "SMTP_USER", "bot@example.com")
+        monkeypatch.setattr(settings, "SMTP_PASSWORD", "pw")
+        for uid in ("u-pro", "u-basic", "u-free"):                           # three accounts type in the same stranger's address
+            db.update_profile(uid, alert_email="Victim@Example.com")
+        tokens = ["pro-token", "basic-token", "free-token"]
+        codes = [c.post("/me/email/confirm", headers=W.headers(t)).status_code for t in tokens * 2]
+        assert codes == [200, 200, 200, 429, 429, 429]
+        assert sent == ["Victim@Example.com"] * 3
+        db.update_profile("u-pro", alert_email="other@example.com")          # another address is a separate count
+        assert c.post("/me/email/confirm", headers=W.headers("pro-token")).status_code == 200
+    finally:
+        w["close"]()
+
+
+def test_the_alert_test_does_not_pass_on_telegrams_own_error(monkeypatch):
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        monkeypatch.setattr(alerts, "telegram_ready", lambda: True)
+
+        def refuse(chat, text):
+            raise RuntimeError("Telegram 400: Bad Request: chat not found (token 123:SECRET)")
+        monkeypatch.setattr(alerts, "send_telegram", refuse)
+        db.update_profile("u-pro", telegram_chat_id="123456789")
+        r = c.post("/me/alerts/test", headers=W.headers("pro-token"))
+        assert r.status_code == 502
+        assert "chat not found" not in r.text and "SECRET" not in r.text and "Telegram couldn't deliver to that chat" in r.text
+    finally:
+        w["close"]()

@@ -1,6 +1,7 @@
 """Rule evaluation, the trading engine and backtest statistics.
 The same Engine drives backtests and live paper trading."""
 import math
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from . import costs as C
@@ -98,6 +99,7 @@ class Engine:
             cost_kind = "in_eq_mis"
         self.kind = cost_kind
         self.cash = self.r.capital
+        self.emptied_on: str | None = None     # the day the account hit zero: nothing opens after it (R13S-001)
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
         self.init_sl, self.best, self.held = 0.0, 0.0, 0
         self.entry_t = None
@@ -110,6 +112,12 @@ class Engine:
         self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
+        self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
+        self.day_close = None     # live only: (date) -> the minute that day's session closes (an early close), or None
+        self.sq = self.t_sq       # the current day's square-off minute
+        # a backtest fills a rule's signal at the next candle's open; live sets this off and fills at the latest price
+        self.next_open = True
+        self.pend_entry, self.pend_exit = None, False
         if state:
             self.load(state)
 
@@ -120,7 +128,7 @@ class Engine:
                 "entry_cost": self.entry_cost, "cost_items": self.cost_items,
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
-                "halted": self.halted, "trades": self.trades[-500:], "events": self.events[-1000:]}
+                "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:]}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
@@ -135,6 +143,7 @@ class Engine:
         self.day, self.day_trades = st.get("day"), st.get("day_trades", 0)
         self.day_pnl, self.cool, self.halted = st.get("day_pnl", 0.0), st.get("cool", 0), st.get("halted", False)
         self.trades, self.events = st.get("trades", []), st.get("events", [])
+        self.emptied_on = st.get("emptied_on")
 
     def _pay(self, side: str, qty: float, px: float) -> float:
         items = C.order_costs(self.kind, side, qty, px, self.r.brokerage)
@@ -215,48 +224,79 @@ class Engine:
                             "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why})
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
-        self.qty = 0
+        self.qty, self.pend_exit = 0, False
         self.day_pnl += pnl
         self.cool = self.sess.cooldown if self.sess else 0
         if self._loss_cap() and self.day_pnl <= -self._loss_cap():
             self.halted = True
         return ev
 
+    def check_empty(self, b: dict, new: list[dict]) -> None:
+        """An account can't lose more than it has: when its value reaches zero (a leveraged or short position that moved
+        too far), the position is closed at the candle's close, the loss is held to what the account had, and nothing
+        opens afterwards (R13S-001: a long-only run showed -352.6%)."""
+        if self.emptied_on:
+            return
+        if self.qty > 0 and self.equity(b["c"]) <= 0:
+            new.append(self._close(b, b["c"], "Account emptied"))
+        if self.qty == 0 and self.cash <= 0:
+            self.emptied_on = str(b["t"])[:10]
+            if self.cash < 0:
+                self.cash += write_off(self.trades, -self.cash)
+            self.cash = max(self.cash, 0.0)
+
     def _loss_cap(self) -> float:
         return self.r.capital * self.sess.dailyLossPct / 100 if self.sess and self.sess.dailyLossPct else 0.0
 
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
+        if self.emptied_on:
+            return []
         date, closes_at = bar_clock(b["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        self.sq = self._squareoff(date)
         new = []
+        if self.pend_entry is not None:
+            ev = self._fill_entry(bars, ctx, i, date, closes_at)
+            if ev:
+                new.append(ev)
         if self.qty > 0:
             self.held += 1
             d = self.dir
-            px, why = self._exit_price(b)
+            # an exit rule seen on the last candle's close fills at this candle's open
+            at_open = self.pend_exit
+            px, why = (b["o"], "Exit rule") if at_open else self._exit_price(b)
             if px is None and self.t_sq is not None:
                 if str(self.entry_t)[:10] != date:          # a gap in the data: close at this candle's open
                     px, why = b["o"], "Square-off"
-                elif closes_at >= self.t_sq:
+                elif closes_at >= self.sq:
                     px, why = b["c"], "Square-off"
             if px is None and self._hit_exit(ctx, i):
-                px, why = b["c"], "Exit rule"
+                if self.next_open:
+                    self.pend_exit = True
+                else:
+                    px, why = b["c"], "Exit rule"
             cap = self._loss_cap()
             if px is None and cap and self.day_pnl + d * self.qty * (b["c"] - self.entry) - self.entry_cost <= -cap:
                 px, why = b["c"], "Daily loss cap"
-            if px is not None:
-                new.append(self._close(b, px, why))
-            elif r.trail > 0:
-                # ratchet the trailing stop with the best price so far; it applies from the next candle
-                t = r.trail / 100
-                if d == 1:
-                    self.best = max(self.best, b["h"])
-                    self.sl = max(self.sl, self.best * (1 - t))
-                else:
-                    self.best = min(self.best, b["l"])
-                    self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
-            return new
+            if px is None:
+                if r.trail > 0:
+                    # ratchet the trailing stop with the best price so far; it applies from the next candle
+                    t = r.trail / 100
+                    if d == 1:
+                        self.best = max(self.best, b["h"])
+                        self.sl = max(self.sl, self.best * (1 - t))
+                    else:
+                        self.best = min(self.best, b["l"])
+                        self.sl = min(self.sl, self.best * (1 + t)) if self.sl > 0 else self.best * (1 + t)
+                self.check_empty(b, new)
+                return new
+            new.append(self._close(b, px, why))
+            self.check_empty(b, new)
+            if not at_open or self.emptied_on:
+                return new
+            # closed at the open: this candle's close can signal the next entry
         if self.cool > 0:
             self.cool -= 1
             return new
@@ -273,9 +313,22 @@ class Engine:
                 continue
             if self.veto is not None and self.veto():
                 return []
+            if self.next_open:
+                self.pend_entry = (d, i, bar_clock(bars[i]["t"], self.tf_min)[0])
+                return []
             ev = self._open(bars, ctx, i, d, slip, brok)
             return [ev] if ev else []
         return []
+
+    def _fill_entry(self, bars: list[dict], ctx: Ctx, i: int, date: str, closes_at: int) -> dict | None:
+        """Fill the entry signalled on the last candle's close at this candle's open, if this candle may still trade."""
+        d, sig, sig_day = self.pend_entry
+        self.pend_entry = None
+        if self.intraday and (date != sig_day or not self._may_enter(closes_at)):
+            return None
+        if self.gate is not None and not self.gate():
+            return None
+        return self._open(bars, ctx, sig, d, self.r.slippage / 100, self.r.brokerage, at=i)
 
     def enter_now(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         """Live only: check the entry rules on the candle that is still forming (its close is the latest
@@ -285,6 +338,7 @@ class Engine:
         date, closes_at = bar_clock(bars[i]["t"], self.tf_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        self.sq = self._squareoff(date)
         return self._try_enter(bars, ctx, i, closes_at)
 
     # --- paper orders placed by hand (the AI assistant's paper tools), live only ---
@@ -327,23 +381,38 @@ class Engine:
             return False
         if self.t_end is not None and closes_at > self.t_end:
             return False
-        return not (self.t_sq is not None and closes_at >= self.t_sq)
+        return not (self.sq is not None and closes_at >= self.sq)
 
-    def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float) -> dict | None:
-        b, r = bars[i], self.r
+    def _squareoff(self, date: str) -> int | None:
+        """The strategy's square-off, or the day's close when the session ends earlier (a half day)."""
+        close = self.day_close(date) if self.t_sq is not None and self.day_close is not None else None
+        return self.t_sq if close is None else min(self.t_sq, close)
+
+    def _open(self, bars: list[dict], ctx: Ctx, i: int, d: int, slip: float, brok: float, at: int | None = None) -> dict | None:
+        """Open on the signal candle `i`: at its close, or at candle `at`'s open. The stop uses what was known at `i`."""
+        r = self.r
+        b = bars[i if at is None else at]
+        base = b["c"] if at is None else b["o"]
         open_side = "buy" if d == 1 else "sell"
-        px = b["c"] * (1 + slip * d)
+        px = base * (1 + slip * d)
         dist = self._stop_distance(bars, ctx, i, px, d)
+        # flat, the engine's cash is the account's value; in a group it is the shared pot's
+        pot = self.funds() if self.funds is not None else None
+        worth = pot[0] if pot else self.equity(base)
         if r.sizing == "capital":
             per = r.perTrade or r.capital * r.maxAlloc / 100
-            cap = min(per, max(self.equity(b["c"]), 0)) * r.leverage       # margin can't exceed what you have
+            cap = min(per, max(worth, 0)) * r.leverage       # margin can't exceed what you have
+        else:
+            cap = max(worth, 0) * r.maxAlloc / 100 * r.leverage
+        if pot:
+            cap = min(cap, max(pot[1], 0) * r.leverage)     # the pot's other positions tie up part of its cash
+        if r.sizing == "capital":
             q = cap / px
         else:
-            cap = self.cash * r.maxAlloc / 100
             # the stated risk is a share of the capital ("1% of Rs5,00,000, that is Rs5,000 if the stop loss is hit"): a
             # stop hit never costs more, however much the account has grown (11 units x 2% x Rs24,187 = Rs5,321 did,
             # from 1% of the grown account); after losses the smaller account's share is risked
-            q = min(self.cash, r.capital) * r.riskPct / 100 / dist if dist > 0 else math.inf
+            q = min(worth, r.capital) * r.riskPct / 100 / dist if dist > 0 else math.inf
             q = min(q, (cap - brok) / px)
         q = C.floor_to(q, self.qty_step)
         # percentage costs (STT, exchange fees) must fit in the budget too
@@ -353,7 +422,7 @@ class Engine:
             self.skipped_size += 1
             return None
         self.dir = d
-        self._slip(q, px, b["c"])
+        self._slip(q, px, base)
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
         self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
@@ -370,21 +439,60 @@ class Engine:
         return ev
 
 
-def stats(eq: list[float], trades: list[dict], capital: float, per_year: float) -> dict:
+def write_off(trades: list[dict], shortfall: float, owners: list | None = None) -> float:
+    """The loss past an emptied account is nobody's to pay: take `shortfall` back off the losses of the newest trades
+    (newest first), so the trades still add up to the account's change, which is then exactly -100%. Each trade
+    touched notes how much (`capped_loss`). `owners[k]` is the engine of trades[k]: its cash is raised by the same
+    amount, so its own books still add up. Returns what was taken back."""
+    left = shortfall
+    for k in range(len(trades) - 1, -1, -1):
+        if left <= 1e-9:
+            break
+        t = trades[k]
+        if t["pnl"] >= 0:
+            continue
+        back = min(left, -t["pnl"])
+        t["pnl"] += back
+        t["capped_loss"] = round(t.get("capped_loss", 0.0) + back, 2)
+        if t.get("qty") and t.get("entry"):
+            t["ret"] = t["pnl"] / (t["qty"] * t["entry"]) * 100
+        if owners is not None:
+            owners[k].cash += back
+        left -= back
+    return shortfall - left
+
+
+def span_years(t0, t1) -> float | None:
+    """Calendar years from one bar's time to another's, or None when they can't be read or are under a day apart."""
+    try:
+        a, b = (datetime.fromisoformat(str(t)[:19]) for t in (t0, t1))
+    except (TypeError, ValueError):
+        return None
+    days = (b - a).total_seconds() / 86400
+    return days / 365.25 if days >= 1 else None
+
+
+def stats(eq: list[float], trades: list[dict], capital: float, per_year: float, years: float | None = None) -> dict:
+    """`years` is the test's span in calendar years; bars a year then come from the data (a coin trades 365 days, a
+    stock 252). Without it, `per_year` from the timeframe stands in for both."""
     arr = np.asarray(eq, dtype=float)
     end = float(arr[-1])
     peak = np.maximum.accumulate(arr)
     dd = (arr / peak - 1) * 100
-    rets = np.diff(arr) / arr[:-1] if len(arr) > 1 else np.array([0.0])
+    # once the account is empty it stays at zero: no change, rather than 0 / 0
+    rets = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0) if len(arr) > 1 else np.array([0.0])
     sd = float(rets.std())
-    years = len(arr) / per_year
+    if years:
+        per_year = max(len(arr) - 1, 1) / years
+    else:
+        years = len(arr) / per_year
     wins = [t for t in trades if t["pnl"] > 0]
     gw = sum(t["pnl"] for t in wins)
     gl = -sum(t["pnl"] for t in trades if t["pnl"] <= 0)
     n = len(trades)
     return {
         "ret": (end / capital - 1) * 100, "pnl": end - capital,
-        "cagr": ((end / capital) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else 0.0,
+        "cagr": ((end / capital) ** (1 / years) - 1) * 100 if years > 0 and end > 0 else (-100.0 if years > 0 and end <= 0 else 0.0),
         "mdd": float(dd.min()), "dd": dd.tolist(),
         "sharpe": float(rets.mean() / sd * math.sqrt(per_year)) if sd > 0 else 0.0,
         "n": n, "win": len(wins) / n * 100 if n else 0.0,
@@ -440,10 +548,12 @@ def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot
     for i in range(start + 1, end):
         was, closed = eng.qty > 0, len(eng.trades)
         eng.step(bars, ctx, i)
-        equity.append(eng.equity(bars[i]["c"]))
+        equity.append(max(eng.equity(bars[i]["c"]), 0.0))
         j = len(equity) - 1
         if was and len(eng.trades) > closed:
             eng.spans[-1][1] = j
+        elif not was and len(eng.trades) > closed:
+            eng.spans.append([j - 1, j, i])         # filled at this candle's open and stopped out on it
         if eng.qty > 0 and (not was or len(eng.trades) > closed):
             eng.spans.append([j - 1, None, i])
     return eng, equity
@@ -458,7 +568,7 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
     open_trade = None
     if eng.qty > 0:
         open_trade = open_position(eng, bars[-1]["c"])
-    st = stats(equity, eng.trades, cap, PER_YEAR[tf])
+    st = stats(equity, eng.trades, cap, PER_YEAR[tf], span_years(bars[start]["t"], bars[-1]["t"]))
     first = view[0]["c"]
     bh = [cap * b["c"] / first for b in view]
     # period returns
@@ -468,10 +578,10 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         k = period_key(t, tf)
         if k != cur:
             if cur is not None:
-                periods.append({"k": cur, "ret": (equity[j - 1] / s_eq - 1) * 100})
+                periods.append({"k": cur, "ret": (equity[j - 1] / s_eq - 1) * 100 if s_eq > 0 else 0.0})
                 s_eq = equity[j - 1]
             cur = k
-    periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100})
+    periods.append({"k": cur, "ret": (equity[-1] / s_eq - 1) * 100 if s_eq > 0 else 0.0})
     overlays, osc = chart_series(strategy, ctx, start)
     rng = range(start + 1, len(bars))
     entries = [*strategy.entry, *(strategy.shortEntry if strategy.side == "both" else [])]
@@ -499,7 +609,8 @@ def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: 
         "_paths": [np.diff(np.asarray(equity[a:(len(equity) - 1 if b is None else b) + 1], dtype=float)) for a, b, _ in eng.spans],
         "bars": [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"]} for b in view],
         "equity": clean(equity), "buy_hold": clean(bh), "drawdown": clean(st.pop("dd")),
-        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size},
+        "stats": {**st, "buy_hold_ret": (view[-1]["c"] / first - 1) * 100, "skipped_size": eng.skipped_size,
+                  "emptied_on": eng.emptied_on},
         "trades": eng.trades, "open_trade": open_trade, "events": eng.events,
         "overlays": overlays, "oscillators": osc, "periods": periods[-60:],
         "costs": cost_summary(eng, cost_kind, equity[-1] - cap),

@@ -1,5 +1,6 @@
 """StratLab API."""
 import base64
+from contextlib import contextmanager
 import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
@@ -44,7 +45,7 @@ from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes
-from . import market_store, storage
+from . import market_store, storage, usage_slots
 from . import official_close
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -317,6 +318,10 @@ async def lifespan(app: FastAPI):
     holders_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
     yield
+    try:
+        manager.persist(only_dirty=False)     # a restart or deploy keeps every live session's latest state
+    except Exception as e:
+        print("shutdown: could not save live sessions:", e)
 
 
 log = logging.getLogger("stratlab")
@@ -944,6 +949,9 @@ def send_email_confirmation(profile=Depends(current_profile)):
     if not alerts.email_ready():
         err(503, "email_off", "Email isn't set up on the server yet.")
     throttle(profile, "email_confirm", 5, 3600, "You've asked for 5 confirmation emails this hour. Try again later.")
+    # the address can be anyone's (alert_email is typed in): each gets a few of these a day, whoever asks
+    throttle({"id": "to:" + to.strip().lower()}, "email_confirm_to", 3, 86400,
+             "That address has already been sent several confirmation emails today. Try again tomorrow.")
     link = alerts.confirm_url(profile["id"], to)
     from . import email_previews as previews
     try:
@@ -1014,17 +1022,30 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 
-def ai_allowance(profile) -> tuple[int, int | None]:
-    """AI builds used this month and the plan's limit; errors out when either cap is reached."""
+def ai_allowance(profile, held: int = 0) -> tuple[int, int | None]:
+    """AI builds used this month and the plan's limit; errors out when either cap is reached. `held`: builds running
+    right now that will be counted when they finish."""
     limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
     used = db.count_usage(profile["id"], "ai", month_start_iso())
-    if limit is not None and used >= limit:
+    if limit is not None and used + held >= limit:
         err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
     since = (datetime.now(IST) - timedelta(days=1)).isoformat()
     # a safety cap on Pro's unlimited builds, said on Plans; the site's admins have none (R8O-002)
-    if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) >= AI_BUILDS_PER_DAY:
+    if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) + held >= AI_BUILDS_PER_DAY:
         err(429, "ai_daily_limit", f"You've used the AI builder {AI_BUILDS_PER_DAY} times today. Try again tomorrow.")
     return used, limit
+
+
+@contextmanager
+def ai_slot(profile):
+    """Holds one AI build for the length of the call (checked against the caps with the builds already running), so
+    parallel requests can't all pass the check before any is counted. Yields (used, limit); record the usage inside the
+    block. A call that fails leaves the allowance untouched."""
+    box = {}
+    def check(held):
+        box["used"], box["limit"] = ai_allowance(profile, held)
+    with usage_slots.hold(profile["id"], "ai", check):
+        yield box["used"], box["limit"]
 
 
 AI_BUILDS_PER_DAY = 200
@@ -1072,10 +1093,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
             if fmt == "stratlab":
                 err(400, "bad_import", str(e))
             # a config from another system: the AI reads it as a strategy spec
-    used, limit = ai_allowance(profile)
     try:
-        out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
-        db.add_usage(profile["id"], "ai")
+        with ai_slot(profile) as (used, limit):
+            out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
+            db.add_usage(profile["id"], "ai")
         used_ai, usage = True, {"ai_used": used + 1, "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
             out, used_ai = importer.pine(req.text), False
@@ -1093,15 +1114,15 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
 
 @app.post("/ai/strategy")
 def ai_strategy(req: AIReq, profile=Depends(current_profile)):
-    used, limit = ai_allowance(profile)
-    try:
-        out = write_strategy(req.text, pro=all_indicators(profile))
-    except AIBusy as e:
-        err(503, "ai_busy", str(e))
-    except AIError as e:
-        err(422, "ai_failed", str(e))
-    out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
-    db.add_usage(profile["id"], "ai")
+    with ai_slot(profile) as (used, limit):
+        try:
+            out = write_strategy(req.text, pro=all_indicators(profile))
+        except AIBusy as e:
+            err(503, "ai_busy", str(e))
+        except AIError as e:
+            err(422, "ai_failed", str(e))
+        out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
+        db.add_usage(profile["id"], "ai")
     out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
     return out
 
@@ -2093,7 +2114,14 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
-        snap = at_live_price(snap, (base.get("trend") or {}).get("price"))
+        snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
+        # last reported year's, so the deck's tile agrees with them
+        try:
+            dy = page_dividend_yield("IN", sym, snap.get("price"), datetime.now(IST).date().isoformat(), {"sym": sym, "bse": None})
+        except Exception:
+            dy = None
+        snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -2115,11 +2143,10 @@ def company_hosts(p: dict) -> tuple[str, ...]:
     return (d,) if d else ()
 
 
-def deep_ai_allowed(profile) -> None:
-    """The deep dive's AI reads count against the same daily cap as the research pages' (none for admins and Pro)."""
-    limit = research_routes.ai_cap(profile)
-    if limit is not None and research_routes.ai_reads_today(profile) >= limit:
-        err(429, research_routes.LIMIT_CODE, research_routes.limit_words(limit))
+def deep_ai_slot(profile):
+    """The deep dive's AI reads count against the same daily cap as the research pages' (none for admins and Pro);
+    held while the read is written, and the usage recorded inside the block."""
+    return research_routes.read_slot(profile, research_routes.ai_cap(profile))
 
 
 DEEP_KINDS = {"deepdive": ("deepdives_per_month", deepdives_limit), "deck": ("decks_per_month", decks_limit)}
@@ -2190,23 +2217,23 @@ def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", years
     if not base["docs"] and not base["p"].get("about"):
         err(404, "no_documents", f"No annual report or earnings release was found for this company in the last {years} years." if region == "US"
             else f"No investor presentation or call transcript was found for this company in the last {years} years.")
-    deep_ai_allowed(profile)
     p = base["p"]
-    try:
-        if region == "US":
-            reads = deepdive.read_us(sym, p.get("name") or sym, p.get("about") or "", base["docs"], sec_feed, (_gemini, _anthropic),
-                                     industry.measures(p, sym), years=years)
-        else:
-            reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
-                                  industry.measures(p, sym), company_hosts(p), years=years)
-    except AIBusy as e:
-        err(503, "ai_busy", str(e))
-    except AIError as e:
-        err(422, "ai_failed", str(e))
-    reads["problems"] = [public_text(x) for x in reads["problems"]]
-    reads["years"] = years
-    deepdive.store(key, reads)
-    db.add_usage(profile["id"], "research_ai")
+    with deep_ai_slot(profile):
+        try:
+            if region == "US":
+                reads = deepdive.read_us(sym, p.get("name") or sym, p.get("about") or "", base["docs"], sec_feed, (_gemini, _anthropic),
+                                         industry.measures(p, sym), years=years)
+            else:
+                reads = deepdive.read(sym, p.get("name") or sym, p.get("about") or "", base["docs"], deep_docs, (_gemini, _anthropic),
+                                      industry.measures(p, sym), company_hosts(p), years=years)
+        except AIBusy as e:
+            err(503, "ai_busy", str(e))
+        except AIError as e:
+            err(422, "ai_failed", str(e))
+        reads["problems"] = [public_text(x) for x in reads["problems"]]
+        reads["years"] = years
+        deepdive.store(key, reads)
+        db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
 
 
@@ -2909,13 +2936,7 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     """One financial year's report as a CSV (every realised line) or a PDF summary."""
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
-    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    mf = tax_mf(profile)
-    usr = money_us_routes.for_tax(profile)
-    c["realised"] += mf["rows"] + usr["rows"]
-    c["names"].update(mf["names"])
-    c["names"].update(usr["names"])
-    equity, units = tax_lots.split_units(c)
+    c, equity, units = money_routes.tax_computed(profile, i)
     y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
@@ -2961,24 +2982,24 @@ def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years
     if not any(d["kind"] == kind for d in base["docs"]):
         err(404, "no_calls", f"No earnings release was found for this company in the last {years} years." if us
             else f"No earnings-call transcript was found for this company in the last {years} years.")
-    deep_ai_allowed(profile)
     p = base["p"]
-    try:
-        if us:
-            card = report_card.read_us(sym, p.get("name") or sym, base["docs"], sec_feed, (_gemini, _anthropic), deepdive._fye(p), years)
-        else:
-            card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p), years)
-    except report_card.NoCalls as e:          # nothing read, nothing charged
-        detail = "; ".join(public_text(x) for x in e.problems[:3])
-        err(422, "no_readable_calls", ("None of the earnings releases could be read. " if us
-                                       else "None of the earnings-call transcripts could be read. ") + (detail or "")[:400])
-    except AIBusy as e:
-        err(503, "ai_busy", str(e))
-    except AIError as e:
-        err(422, "ai_failed", str(e))
-    card["problems"] = [public_text(x) for x in card["problems"]]
-    report_card.store(key, card)
-    db.add_usage(profile["id"], "research_ai")
+    with deep_ai_slot(profile):
+        try:
+            if us:
+                card = report_card.read_us(sym, p.get("name") or sym, base["docs"], sec_feed, (_gemini, _anthropic), deepdive._fye(p), years)
+            else:
+                card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p), years)
+        except report_card.NoCalls as e:          # nothing read, nothing charged
+            detail = "; ".join(public_text(x) for x in e.problems[:3])
+            err(422, "no_readable_calls", ("None of the earnings releases could be read. " if us
+                                           else "None of the earnings-call transcripts could be read. ") + (detail or "")[:400])
+        except AIBusy as e:
+            err(503, "ai_busy", str(e))
+        except AIError as e:
+            err(422, "ai_failed", str(e))
+        card["problems"] = [public_text(x) for x in card["problems"]]
+        report_card.store(key, card)
+        db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
 
 
@@ -3271,7 +3292,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             close = (prices or {}).get("price")
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
-        snap = at_live_price(snap, close)
+        snap = at_live_price(snap, close, sym, p.get("fetched_at"))
         # the dividend yield as the company page in the app works it out: every dividend with an ex-date in the year to
         # the close, specials included, over the close (R7O-004, R7V-002: TCS 3.08% here against 5.35% in the app);
         # n/a when the dividends couldn't be read, never the last reported year's (another definition)
@@ -3322,7 +3343,7 @@ def india_page_dividends(sym: str, co: dict, fetch: bool = True, listed: bool | 
         known = bool(corp_actions.hist_load("IN", sym)["at"])
     except Exception:
         rows, known = [], False
-    divs = stock_pages.dividend_list(rows)
+    divs = stock_pages.dividend_list(rows, restate=True)
     if divs or known:
         return divs
     if not (fetch if listed is None else listed):
@@ -4339,16 +4360,16 @@ def import_options(text: str, profile) -> dict:
     exact = opt_importer.from_json(text)
     if exact:
         return {"kind": "options", "strategy": exact.model_dump(), "notes": [], "used_ai": False}
-    used, limit = ai_allowance(profile)
-    try:
-        data = ai_writer.ask_json(opt_importer.SYSTEM, text[:30000])
-        strategy, notes = opt_importer.parse_ai(data if isinstance(data, dict) else {})
-    except AIError as e:
-        err(503 if isinstance(e, AIBusy) else 422, "ai_busy" if isinstance(e, AIBusy) else "ai_failed",
-            "The AI translator couldn't run just now, so this options strategy couldn't be imported. Try again in a minute.")
-    except ValueError as e:
-        err(422, "nothing_imported", str(e))
-    db.add_usage(profile["id"], "ai")
+    with ai_slot(profile) as (used, limit):
+        try:
+            data = ai_writer.ask_json(opt_importer.SYSTEM, text[:30000])
+            strategy, notes = opt_importer.parse_ai(data if isinstance(data, dict) else {})
+        except AIError as e:
+            err(503 if isinstance(e, AIBusy) else 422, "ai_busy" if isinstance(e, AIBusy) else "ai_failed",
+                "The AI translator couldn't run just now, so this options strategy couldn't be imported. Try again in a minute.")
+        except ValueError as e:
+            err(422, "nothing_imported", str(e))
+        db.add_usage(profile["id"], "ai")
     return {"kind": "options", "strategy": strategy.model_dump(), "notes": notes, "used_ai": True,
             "usage": {"ai_used": used + 1, "ai_limit": limit}}
 

@@ -92,7 +92,7 @@ def classify(name: str, r: httpx.Response, model: str) -> CallError:
     if code == 401:
         return CallError("auth", f"rejected the key (401: {msg})" if msg else "rejected the key (401)", scope="provider")
     if re.search(r"credit card|payment method on file|billing (details|information)", body, re.I):
-        # an account setting, not a used-up allowance: nothing resets on its own (Vercel's gateway: a card on file)
+        # an account setting, not a used-up allowance: nothing resets on its own (a gateway that wants a card on file)
         return CallError("auth", f"the account needs a payment method on file ({code}: {msg})", scope="provider")
     if code == 402 or re.search(r"credit balance|insufficient (credit|balance|quota)|out of credits|payment required", body, re.I):
         return CallError("credit", "the free credit is used up", wait=6 * 3600, scope="provider", daily=True)

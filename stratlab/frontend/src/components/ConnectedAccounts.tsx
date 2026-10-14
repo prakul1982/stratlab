@@ -30,7 +30,12 @@ function useConnect() {
   const { fail } = useApp();
   const [c, setC] = useState<Conn | null | undefined>(undefined);
   const load = useCallback(() => { api<Conn>("/connect").then(setC).catch((e) => { setC(null); fail(e); }); }, [fail]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // back from Zerodha with a login to confirm: the confirm answers with the connections, so a load started alongside it
+    // can't land after it with a half-done view (connected, holdings not read yet)
+    const q = new URLSearchParams(window.location.search);
+    if (!(q.get("kite") === "confirm" && q.get("ks") && q.get("kc"))) load();
+  }, [load]);
   return { c, set: setC, load };
 }
 
@@ -41,10 +46,16 @@ export function ConnectCards() {
     const q = new URLSearchParams(window.location.search);
     const k = q.get("kite");
     if (!k) return;
-    notify(k === "ok" ? "Zerodha is connected and your holdings are read." : k === "cancelled" ? "The Zerodha login was cancelled." : "The Zerodha login didn't work. Try again.");
-    q.delete("kite");
+    const [ks, kc] = [q.get("ks"), q.get("kc")];
+    for (const name of ["kite", "ks", "kc"]) q.delete(name);
     window.history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
-  }, [notify]);
+    const say = (r: string) => notify(r === "ok" ? "Zerodha is connected and your holdings are read." : r === "cancelled" ? "The Zerodha login was cancelled." : "The Zerodha login didn't work. Try again.");
+    if (k !== "confirm") { say(k); return; }
+    // back from Zerodha: the login is only attached to the account that is signed in here, and only if it started there
+    if (!ks || !kc) { say("failed"); return; }
+    api<{ connect: Conn }>("/connect/kite/confirm", { method: "POST", body: { state: ks, claim: kc } })
+      .then((r) => { set(r.connect); say("ok"); }).catch(() => { say("failed"); load(); });
+  }, [notify, set, load]);
   if (c === undefined) return <Card label="Connecting your accounts"><Skeleton label="Loading your connections" /></Card>;
   if (c === null) return null;
   return (
@@ -114,7 +125,7 @@ function InboxCard({ c, set, load }: P) {
         <FormGrid onSubmit={(e) => { e.preventDefault(); if (pw.trim()) void call(async () => { const r = await api<Conn>("/connect/inbox/password", { method: "PUT", body: { password: pw } }); setPw(""); return r; }, "Password saved."); }}
           label="Statement password">
           <Field label="Your statement password" type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)}
-            placeholder={i.has_password ? "Saved. Type a new one to change it" : ""}
+            placeholder={i.has_password ? "Saved. Type to replace it" : ""}
             info="Statements arrive locked. NSDL and CDSL use your PAN in capital letters. CAMS and KFintech use the password you chose when you asked for the statement, so choose the same one every time. It is kept encrypted, never shown again, and used only to open your statements." />
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !pw.trim()}>{i.has_password ? "Change password" : "Set your statement password"}</button>

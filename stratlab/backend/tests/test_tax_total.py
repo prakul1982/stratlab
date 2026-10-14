@@ -86,6 +86,14 @@ def test_rebate_fy2025_new_not_against_special_rate_gains():
     assert over["income"]["total"] == 13 * L and over["rebate"] == 0
 
 
+def test_buckets_with_the_same_key_add_up():
+    one = est(other=30 * L, salary=0, buckets=[{"key": "lt_112", "rate": 0.125, "taxable": 1.5 * L, "exempt": 0.0}])
+    two = est(other=30 * L, salary=0, buckets=[{"key": "lt_112", "rate": 0.125, "taxable": 1 * L, "exempt": 0.0},
+                                               {"key": "lt_112", "rate": 0.125, "taxable": 0.5 * L, "exempt": 0.0}])
+    assert two["special_tax"] == one["special_tax"] == 18750 and two["total"] == one["total"]
+    assert two["income"]["special"] == 1.5 * L
+
+
 def test_rebate_fy2024_against_short_term_gains_not_long_term():
     st = est(fy=2024, other=5 * L, salary=0, buckets=bk(st_new=1 * L))           # total 6L <= 7L
     assert (st["slab_tax"], st["special_tax"], st["rebate"]) == (10000, 20000, 25000)
@@ -297,6 +305,16 @@ def test_inputs_are_saved_per_user_and_year_and_change_the_estimate(w):
     assert db.get_setting("taxinputs:u-pro")
     c.delete("/tax", headers=PRO)
     assert db.get_setting("taxinputs:u-pro") is None
+
+
+def test_fno_file_inside_a_saved_range_is_already_counted(w):
+    c = w["client"]
+    full = [line("2024-04-02", -150000), line("2025-03-28", -50000)]
+    send(c, fno(full), EXITS + "F&O.csv")
+    q3 = send(c, fno([line("2024-10-10", -50000)]), "Tradewise Exits Q3-F&O.csv").json()    # inside the year: ignored
+    assert q3["business"]["same"] == 1 and q3["business"]["replaced"] == 0
+    y = year_of(q3["report"], 2024)
+    assert y["business"]["pnl"] == -200000 and y["business"]["trades"] == 2
 
 
 def test_fno_files_merge_by_their_dates(w):

@@ -145,6 +145,8 @@ def make(payment: dict, user: dict, plan: str, period: str) -> dict:
         number = f"{s['prefix']}/{year}/{n:04d}"
         billing = _get(f"billing:{user['id']}", {}) or {}
         country = billing.get("country") or ("XX" if payment.get("international") else "IN")
+        if country == "IN" and payment.get("international") and not billing.get("gstin") and not billing.get("state"):
+            country = "XX"       # the form pre-fills India: a payer abroad with no GSTIN or state isn't a domestic buyer
         buyer = {"name": billing.get("name") or user.get("email") or "", "email": user.get("email") or payment.get("email") or "",
                  "address": billing.get("address") or "", "state": billing.get("state") or "", "country": country,
                  "gstin": billing.get("gstin") or ""}
@@ -190,6 +192,11 @@ def save_billing(uid: str, data: dict) -> dict:
         raise ValueError("That GSTIN doesn't look right: 15 characters, like 27ABCDE1234F1Z5.")
     if out["country"] == "IN" and out["state"] and out["state"] not in STATES:
         raise ValueError("Pick your state from the list.")
+    if out["country"] == "IN" and out["gstin"]:
+        if not out["state"]:
+            out["state"] = out["gstin"][:2]
+        elif out["gstin"][:2] != out["state"]:
+            raise ValueError(f"The GSTIN starts with {out['gstin'][:2]}, which is {STATES.get(out['gstin'][:2], 'another state')}, not the state chosen.")
     if out["country"] != "IN":
         out["state"] = ""
     db.set_setting(f"billing:{uid}", json.dumps(out))

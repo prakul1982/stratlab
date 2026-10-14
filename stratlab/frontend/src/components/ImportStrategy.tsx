@@ -105,7 +105,7 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
     <div className="k-stack">
       <div className="k-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); readFile(e.dataTransfer.files[0]); }}>
         <Upload size={22} />
-        <span className="k-small">{file ? <b>{file}</b> : <>Drop a strategy file here, or</>}</span>
+        <span className="k-small">{file ? <b>{file}</b> : <span className="k-drop-hint">Drop a strategy file here, or</span>}</span>
         <button type="button" className="btn quiet sm" onClick={() => input.current?.click()}>{file ? "Choose another file" : "Choose a file"}</button>
         <input ref={input} type="file" accept={ACCEPT} hidden onChange={(e) => readFile(e.target.files?.[0])} />
       </div>

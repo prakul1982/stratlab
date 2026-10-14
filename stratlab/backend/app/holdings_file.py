@@ -592,6 +592,13 @@ def _charges(row: list[str], header: list[str]) -> float:
     return sum(abs(number(_cell(row, i)) or 0) for i, k in enumerate(keys) if k in CHARGE_PARTS)
 
 
+def _stt(row: list[str], header: list[str]) -> float | None:
+    """The STT on one line when the file has the column (kept apart: intraday income can deduct it, capital gains can't)."""
+    cells = [number(_cell(row, i)) for i, c in enumerate(header) if key(c) in STT]
+    cells = [c for c in cells if c is not None]
+    return round(sum(abs(c) for c in cells), 2) if cells else None
+
+
 def _fmv(v: float | None, qty: float, buy_price: float) -> float | None:
     """The 31 Jan 2018 value a share, from a column that may hold it a share or for the whole line: whichever is
     nearer the buy price."""
@@ -645,6 +652,7 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
         base = {"isin": isin if ISIN.match(isin) else "", "symbol": sym.upper()[:40], "name": nm[:80],
                 "exchange": _cell(row, cols.get("exchange")).upper()[:6], "text": text, "line": n}
         charges = round(_charges(row, header), 2)
+        stt = _stt(row, header)
         if kind == "pnl":
             bd, sd = day(_cell(row, cols.get("buy_date"))), day(_cell(row, cols.get("sell_date")))
             bp = number(_cell(row, cols.get("buy_price")))
@@ -664,7 +672,7 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
             # a sale and its own buy, which the tax report keeps together (the ids end :b and :s); prices to 6 places,
             # so a line adds up to what the broker shows
             out.append({**base, "d": bd, "t": "", "side": "B", "qty": qty, "price": round(bp, 6), "charges": 0.0, "tid": pid + ":b", "fmv": fmv, "src": "pnl"})
-            out.append({**base, "d": sd, "t": "", "side": "S", "qty": qty, "price": round(sp, 6), "charges": charges, "tid": pid + ":s", "fmv": None, "src": "pnl"})
+            out.append({**base, "d": sd, "t": "", "side": "S", "qty": qty, "price": round(sp, 6), "charges": charges, "stt": stt, "tid": pid + ":s", "fmv": None, "src": "pnl"})
         else:
             d, sd_ = day(_cell(row, cols.get("date"))), side(_cell(row, cols.get("side")))
             if not d:
@@ -685,7 +693,7 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
                 hit = re.search(r"\d{1,2}:\d{2}(:\d{2})?(\s*[AP]M)?", _cell(row, cols.get("date")), re.I)
                 tm = hit.group(0) if hit else ""
             fmv = _fmv(number(_cell(row, cols.get("fmv"))), qty, price) if sd_ == "B" and d <= "2018-01-31" else None
-            out.append({**base, "d": d, "t": tm[:20], "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges,
+            out.append({**base, "d": d, "t": tm[:20], "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges, "stt": stt,
                         "tid": _cell(row, cols.get("trade_id"))[:40], "fmv": fmv, "src": "trades", **({"seg": seg[:20]} if derivatives else {})})
         if len(out) >= MAX_TRADES:
             break

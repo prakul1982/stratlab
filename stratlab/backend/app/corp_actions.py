@@ -477,7 +477,7 @@ def _whole(q: float) -> bool:
 
 def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | None]:
     """The quantity and average price after a bonus or split. The total cost doesn't change, so the average is the
-    old one divided by the same factor. Whole shares only: a fractional entitlement is paid out in cash by the
+    old cost over the new quantity (the old average divided by the factor, unless a fraction was paid out). Whole shares only: a fractional entitlement is paid out in cash by the
     company, so it isn't added (a fractional holding is scaled exactly)."""
     f = a["factor"]
     if a.get("kind") == "bonus" and a.get("ratio"):
@@ -487,7 +487,7 @@ def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | Non
     else:
         new = qty * f
         new = math.floor(new + 1e-9) if _whole(qty) else new
-    return round(new, 4), (round(avg / f, 4) if avg else None)
+    return round(new, 4), (round(qty * avg / new, 4) if avg and new > 0 else None)
 
 
 def _included(a: dict, item: dict, since: str) -> bool:
@@ -941,3 +941,159 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
             "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] < t), key=lambda r: r["ex_date"], reverse=True)[:30]],
             "dividends_12m": {"amount": round(sum(r["amount"] for r in divs), 4), "count": len(divs), "currency": CUR[region]} if divs else None,
             "ahead_known": region == "IN", "note": NOTE}
+
+
+# ---------- open paper positions ----------
+# A live paper position held over an ex-date is adjusted as the account would be: a bonus or split changes the
+# quantity and every price level of the trade, a dividend pays cash to a long and is paid by a short.
+_paper = TTLCache(max_items=2000)    # (region, symbol, day) -> the stored actions looked up for that day
+
+
+def paper_region(inst: dict | None) -> str | None:
+    """The region of a stock or ETF whose paper positions follow its corporate actions, or None: futures, options,
+    commodities, currencies and crypto are left alone (the exchange adjusts a derivative contract itself)."""
+    inst = inst or {}
+    if inst.get("fno") or inst.get("exchange") in ("NFO", "BFO", "MCX", "CDS"):
+        return None
+    region = inst.get("market", "IN")
+    return region if region in REGIONS and inst.get("type", "EQ") in ("EQ", "ETF") else None
+
+
+def paper_actions(inst: dict, day: str) -> list[dict]:
+    """The company's stored bonuses, splits and dividends with ex-dates up to `day`, looked up once a day from the
+    stored history and calendar (never the network); nothing stored means nothing until the next day's look."""
+    region, sym = paper_region(inst), str(inst.get("symbol") or "").upper()
+    if not region or not sym:
+        return []
+    hit = _paper.get((region, sym, day))
+    if hit is None:
+        try:
+            hit = [a for a in actions_for(region, sym, None, fetch=False) if a["ex_date"] <= day
+                   and (adjusts(a) or (a["kind"] == "dividend" and (a.get("amount") or 0) > 0))]
+        except Exception as e:
+            print("paper corporate actions:", sym, str(e)[:120])
+            hit = []
+        _paper.set((region, sym, day), hit, 12 * 3600)
+    return hit
+
+
+def paper_due(acts: list[dict], entry_t, day: str, applied: list[str]) -> list[dict]:
+    """The actions a position opened at `entry_t` hasn't had yet: ex-date after the day it opened, up to `day`."""
+    since = str(entry_t or "")[:10]
+    return [a for a in acts if since and since < a["ex_date"] <= day and a["id"] not in applied]
+
+
+def _ratio_label(a: dict) -> str:
+    if a["kind"] == "bonus" and a.get("ratio"):
+        return a["label"]
+    f = a["factor"]
+    return f"{a['label']} 1:{_n(round(f, 4))}" if f > 1 else f"{a['label']} {_n(round(1 / f, 4))}:1"
+
+
+def paper_apply(qty: float, d: int, entry: float, a: dict, region: str) -> tuple[float, float, float, str]:
+    """What one action does to a position of `qty` shares (d 1 long, -1 short) at `entry`: (new quantity, the factor
+    its prices are divided by, cash to the account, the event's text). A fraction of a share the company doesn't
+    issue is paid in cash at the adjusted entry price."""
+    cur = CUR[region]
+    held = f"{_qty_text(qty)} share{'s' if qty != 1 else ''}{' short' if d == -1 else ''}"
+    if a["kind"] == "dividend":
+        cash = round(d * qty * a["amount"], 2)
+        return qty, 1.0, cash, (f"Dividend {money(a['amount'], cur)} a share: {money(abs(cash), cur)} "
+                                f"{'credited' if d == 1 else 'paid'} for {held}")
+    f = a["factor"]
+    new, _ = adjusted(qty, entry, a)
+    px = entry / f
+    cash = round(d * max(qty * f - new, 0.0) * px, 2)
+    text = f"{_ratio_label(a)} applied: {held} at {money(round(entry, 2), cur)} are now {_qty_text(new)} at {money(round(px, 2), cur)}"
+    if abs(cash) >= 0.005:
+        text += f", {money(abs(cash), cur)} {'paid' if d == 1 else 'charged'} for the fractional share"
+    return new, f, cash, text
+
+
+def paper_event(a: dict, region: str, text: str, cash: float) -> dict:
+    """The line in the session's log: at the start of the ex-date, not an order (no side)."""
+    t = datetime.combine(date.fromisoformat(a["ex_date"]), datetime.min.time(), ZoneInfo(TZ[region]))
+    return {"t": t.isoformat(), "kind": "corp", "why": text, "id": a["id"], "cash": cash}
+
+
+def paper_bars(bars: list[dict], a: dict) -> bool | None:
+    """The candles before a bonus or split's ex-date put in the prices after it, in place, when they aren't already:
+    the broker's daily candles and Yahoo's come adjusted back in time, the broker's intraday candles and candles built
+    from ticks don't. Told apart by the jump across the ex-date (nearer the factor than no jump: not adjusted). True
+    when they were adjusted, False when nothing was needed, None while no candle on or after the ex-date is in yet."""
+    i = next((k for k, b in enumerate(bars) if str(b["t"])[:10] >= a["ex_date"]), None)
+    if i is None:
+        return None
+    f = a["factor"]
+    prev, nxt = bars[i - 1]["c"] if i else 0, bars[i]["o"]
+    if not prev or not nxt or prev <= 0 or nxt <= 0 or abs(math.log(prev / nxt / f)) >= abs(math.log(prev / nxt)):
+        return False
+    for k in range(i):                   # new dicts: the price source may keep the same ones in its cache
+        b = bars[k]
+        bars[k] = {**b, **{x: b[x] / f for x in ("o", "h", "l", "c")}, **({"v": b["v"] * f} if b.get("v") else {})}
+    return True
+
+
+class PaperActions:
+    """One live position's corporate actions: the ids in effect (saved with the session, so none is applied twice), the
+    day last looked at, and the bonuses and splits whose older candles wait for the first candle after the ex-date."""
+
+    def __init__(self, inst: dict, state: dict | None = None):
+        self.inst, self.region = inst, paper_region(inst)
+        self.applied: list[str] = list((state or {}).get("corp_applied") or [])
+        self.day: str | None = None
+        self.waiting: list[dict] = []
+
+    def dump(self) -> dict:
+        return {"corp_applied": self.applied[-50:]}
+
+    def today(self, now: datetime | None = None) -> str:
+        """The market's own date."""
+        return (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(TZ[self.region or "IN"])).date().isoformat()
+
+    def new_day(self, day: str) -> list[dict] | None:
+        """The day's actions the first time `day` is seen (once a day, before its first candle), else None."""
+        if not self.region or day == self.day:
+            return None
+        self.day = day
+        return paper_actions(self.inst, day)
+
+    def resume(self, bars: list[dict], day: str) -> list[dict]:
+        """At a start or restart, before any missed candle is run: the fetched candles are put in today's prices, so
+        every bonus and split up to the newest candle is in effect from here on. Returns those not yet applied (to the
+        open position: see apply); all of them count as applied, so a position opened while catching up isn't adjusted
+        again. One with its ex-date after the newest candle is left to the day's check."""
+        if not self.region or not bars:
+            return []
+        acts = [a for a in paper_actions(self.inst, day) if adjusts(a)]
+        self.bars(bars, acts)
+        last = str(bars[-1]["t"])[:10]
+        todo = [a for a in acts if a["id"] not in self.applied and a["ex_date"] <= last]
+        self.applied += [a["id"] for a in todo]
+        return todo
+
+    def bars(self, bars: list[dict], acts: list[dict]):
+        if bars:
+            first = str(bars[0]["t"])[:10]
+            for a in acts:
+                if adjusts(a) and a["ex_date"] > first and a not in self.waiting and paper_bars(bars, a) is None:
+                    self.waiting.append(a)
+
+    def on_bar(self, bars: list[dict]):
+        """A new candle is in: the older candles of a waiting bonus or split are checked against it."""
+        self.waiting = [a for a in self.waiting if paper_bars(bars, a) is None]
+
+    def apply(self, e, acts: list[dict], day: str, todo: bool = False) -> float:
+        """Apply the actions due to the engine's open position (quantity, entry, stop, target, trailing levels) and log
+        each. `todo`: the list resume returned, already marked applied. Returns the cash they pay (negative: paid out)
+        and the factor the prices were divided by."""
+        cash, moved = 0.0, 1.0
+        for a in paper_due(acts, e.entry_t, day, [] if todo else self.applied) if e.qty > 0 else []:
+            q, f, c, text = paper_apply(e.qty, e.dir, e.entry, a, self.region)
+            e.qty = int(round(q)) if _whole(q) else q
+            e.entry, e.sl, e.tg, e.best, e.init_sl = e.entry / f, e.sl / f, e.tg / f, e.best / f, e.init_sl / f
+            e.events.append(paper_event(a, self.region, text, c))
+            if not todo:
+                self.applied.append(a["id"])
+            cash, moved = cash + c, moved * f
+        return cash, moved

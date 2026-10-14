@@ -6,6 +6,7 @@ own data only (the user id comes from the sign-in, never from the request)."""
 import base64
 import binascii
 import re
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
@@ -182,17 +183,34 @@ def _kite_done(request_token: str, status: str, st: str) -> RedirectResponse:
     if status != "success" or not request_token:
         return RedirectResponse(where.format("cancelled"), status_code=303)
     try:
-        kite_user.complete(request_token, st)
+        claim = kite_user.stage(request_token, st)
     except kite_user.KiteConnectError:
         return RedirectResponse(where.format("failed"), status_code=303)
-    return RedirectResponse(where.format("ok"), status_code=303)
+    # nothing is linked yet: the page this lands on, signed in, confirms it with the state and the claim
+    return RedirectResponse(where.format("confirm&" + urlencode({"ks": st, "kc": claim})), status_code=303)
 
 
 @router.get("/kite/callback")
 def kite_callback(request_token: str = "", status: str = "", state: str = ""):
-    """Where Zerodha sends the user back (set as the redirect address of the Kite app); no sign-in is needed, the signed
-    state says who started the login and for how long."""
+    """Where Zerodha sends the user back (set as the redirect address of the Kite app). No sign-in is needed here, so
+    nothing is linked: the login is kept aside and the signed-in person confirms it (POST /connect/kite/confirm)."""
     return _kite_done(request_token, status, state)
+
+
+class KiteConfirmReq(BaseModel):
+    state: str = Field(..., max_length=2000)
+    claim: str = Field(..., max_length=200)
+
+
+@router.post("/kite/confirm")
+async def kite_confirm(req: KiteConfirmReq, profile=Depends(current_profile)):
+    """Finish a Zerodha login: only the user whose login it was, signed in on the browser that came back from Zerodha."""
+    _limit(profile, "connect_kite_confirm", 30)
+    try:
+        got = await run_in_threadpool(kite_user.confirm, profile["id"], req.state, req.claim)
+    except kite_user.KiteConnectError as e:
+        err(400, "kite_confirm_failed", e.message)
+    return ok({**got, "connect": await run_in_threadpool(view, profile)})
 
 
 @router.post("/kite/refresh")

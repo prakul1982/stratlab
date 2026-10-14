@@ -145,16 +145,22 @@ BONUS = {"id": "TCS|bonus|2026-10-05|1:1", "kind": "bonus", "ratio": [1, 1], "fa
 
 @pytest.mark.parametrize("qty,avg,a,want", [
     (12, 3520.0, BONUS, (24, 1760.0)),
-    (15, 300.0, {"kind": "bonus", "ratio": [1, 2], "factor": 1.5}, (22, 200.0)),       # 7.5 new shares: 7 allotted, the half paid in cash
-    (7, 99.0, {"kind": "bonus", "ratio": [3, 2], "factor": 2.5}, (17, 39.6)),
+    (15, 300.0, {"kind": "bonus", "ratio": [1, 2], "factor": 1.5}, (22, 204.5455)),    # 7.5 new shares: 7 allotted, the half paid in cash
+    (7, 99.0, {"kind": "bonus", "ratio": [3, 2], "factor": 2.5}, (17, 40.7647)),
     (10, 1500.0, {"kind": "split", "factor": 5.0}, (50, 300.0)),
     (10, 1500.0, {"kind": "split", "factor": 2.5}, (25, 600.0)),
-    (25, 10.0, {"kind": "split", "factor": 0.1}, (2, 100.0)),                           # a consolidation: 2.5 becomes 2
+    (25, 10.0, {"kind": "split", "factor": 0.1}, (2, 125.0)),                           # a consolidation: 2.5 becomes 2
     (12.5, 100.0, {"kind": "split", "factor": 2.0}, (25.0, 50.0)),                       # a fractional holding scales exactly
     (12, None, BONUS, (24, None)),                                                       # no average price: none after
 ])
 def test_bonus_and_split_adjustments(qty, avg, a, want):
     assert C.adjusted(qty, avg, a) == want
+
+
+def test_cost_is_kept_when_a_fractional_entitlement_is_paid_out():
+    q, avg = C.adjusted(10, 100.0, {"kind": "bonus", "ratio": [1, 3], "factor": 4 / 3})   # 3.33 new shares: 3 allotted
+    assert (q, avg) == (13, 76.9231)
+    assert q * avg == pytest.approx(1000, abs=0.01)
 
 
 def test_cost_is_kept_by_a_whole_number_split():

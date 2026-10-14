@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { STOP_DIALOG } from "../lib/paperText";
 import { useApp } from "../lib/app";
-import { money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
+import { fmtDate, money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
 import { upDown } from "../lib/tradeUi";
 import { ChartEmpty, LineChart } from "./Charts";
@@ -20,10 +20,10 @@ export interface GroupSnapshot {
   strategy: { tf: string; risk: { capital: number } }; started_at: string; last_tick_at?: string | null; feed_connected?: boolean;
   members: { symbol: string; id: string; price: number; trades: number; pnl: number; skipped?: number; spread?: number | null;
     position: { side: "long" | "short"; qty: number; entry: number; unrealised: number; stop: number | null; target: number | null } | null }[];
-  skipped: string[]; events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number }[];
+  skipped: string[]; events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; kind?: "corp" }[];
   equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; realised: number; unrealised: number; open: number; max_open: number; halted: boolean;
-    today: number; trades: number; wins: number; skipped?: { spread: number; price: number } };
+    today: number; trades: number; wins: number; skipped?: { spread: number; price: number }; emptied_on?: string | null };
   fast?: { ticks?: boolean; maxSpreadPct?: number; minPrice?: number };
 }
 type Member = GroupSnapshot["members"][number];
@@ -76,6 +76,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
       {!running && a.open > 0 && <Notice className="stopped-open">{a.open === 1 ? "1 position was" : `${a.open} positions were`} open at the stop and stay open, each valued at its last price before the stop. Nothing more is traded.</Notice>}
+      {a.emptied_on && <Notice tone="warn"><b>Account emptied on {fmtDate(a.emptied_on)}.</b> The account reached zero, so every position was closed and nothing opens again; the loss stops at −100%.</Notice>}
       {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</Notice>}
       {snap.skipped.length > 0 && <p className="k-note">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
       {on.length > 0 && <p className="k-note">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>}

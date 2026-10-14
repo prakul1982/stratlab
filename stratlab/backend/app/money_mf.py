@@ -343,8 +343,8 @@ CSV_COLS = {
     "folio": ("folio", "folio no", "folio number"),
 }
 CSV_TYPES = [(r"stamp", "stamp"), (r"\bstt\b", "stt"), (r"\btds\b", "tds"), (r"reinvest", "div_reinvest"),
-             (r"dividend|idcw|payout", "div_payout"), (r"switch.*in|stp.*in", "switch_in"), (r"switch.*out|stp.*out", "switch_out"),
-             (r"\bsip\b|systematic", "sip"), (r"redeem|redemption|sell|sale|\bswp\b|withdraw", "redeem"),
+             (r"dividend|idcw|payout", "div_payout"), (r"(switch|stp)[\s_-]*in\b", "switch_in"), (r"(switch|stp)[\s_-]*out\b", "switch_out"),
+             (r"redeem|redemption|sell|sale|\bswp\b|withdraw", "redeem"), (r"\bsip\b|systematic", "sip"),
              (r"purchase|buy|invest|lump", "purchase")]
 
 

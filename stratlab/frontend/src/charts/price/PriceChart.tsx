@@ -605,7 +605,7 @@ export default function PriceChart(props: PriceChartProps) {
       {!phone && <DrawRail {...drawProps} />}
       <div ref={stageRef} className="pc-stage" tabIndex={0} role="group" aria-label={`${symbol} price chart. Arrow keys move it, plus and minus zoom, letters pick drawing tools, Delete removes the selected drawing.`}>
         <div ref={canvasRef} className="pc-canvas" role="img" aria-label={summary} />
-        <div className="pc-legend" aria-label="Legend">
+        <div className="pc-legend" role="group" aria-label="Legend">
           <div aria-hidden="true">
             <span className="title">{symbol}</span><span className="k">{TF_LONG[tf]}</span>
             {h && <>

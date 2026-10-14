@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { usePopover } from "./kit/Dialog";
 import "../pages/trade/trade.css";
 
@@ -10,13 +10,20 @@ export function MoreMenu({ items, label = "More", icon, buttonClass = "btn quiet
   const box = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState(false);
+  // a menu that would run past the screen's edge opens to the other side of its button instead (R13S-007)
+  useLayoutEffect(() => {
+    if (!open || !pop.current) { setFlip(false); return; }
+    const r = pop.current.getBoundingClientRect();
+    setFlip(align === "right" ? r.left < 8 : r.right > document.documentElement.clientWidth - 8);
+  }, [open, align]);
   // focus onto the first item; Esc or a click outside closes, and focus goes back to the button
   usePopover(open, setOpen, btn, pop, { outside: box });
   return (
     <div className="more-menu" ref={box}>
       <button ref={btn} className={buttonClass} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{icon}{label}<span className="more-caret" aria-hidden /></button>
       {open && (
-        <div ref={pop} className={`more-pop${align === "right" ? " right" : ""}`} role="menu">
+        <div ref={pop} className={`more-pop${(align === "right") !== flip ? " right" : ""}`} role="menu">
           {items.map((it) => (
             <button key={it.label} role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.icon}{it.label}</button>
           ))}

@@ -13,6 +13,7 @@ from app.intel.finnhub import Finnhub
 from app.intel.news import GoogleNews, Wikipedia
 from app.intel.screener import Screener
 from app.intel.yahoo import Yahoo
+from app import suggest
 from app.kite_service import KiteService
 from tests.fake_intel import fake_finnhub, fake_news, fake_screener, fake_wiki
 from tests.fake_yahoo import fake_yahoo
@@ -32,6 +33,9 @@ PULSE_AI = {"tone": "Calm.", "hot": [{"name": "Reliance", "ticker": "RELIANCE", 
 COMPARE_AI = {"verdict": "NVDA is stronger.", "winner": "nvda", "differences": ["Margins"], "a": {"composite": 80, "valuation": "RICH"},
               "b": {"composite": 60, "valuation": "fair"}}
 
+US_LIST = [{"symbol": "NVDA", "name": "NVIDIA CORP"}, {"symbol": "VRT", "name": "Vertiv Holdings Co"},
+           {"symbol": "AAPL", "name": "Apple Inc."}, {"symbol": "MSFT", "name": "MICROSOFT CORP"}]
+
 
 @pytest.fixture
 def api(monkeypatch):
@@ -40,6 +44,9 @@ def api(monkeypatch):
     hub = Research(KiteService(), finnhub=Finnhub(transport=fake_finnhub()), yahoo=Yahoo(transport=fake_yahoo()),
                    screener=Screener(transport=fake_screener()), news=GoogleNews(transport=fake_news()),
                    wiki=Wikipedia(transport=fake_wiki()))
+    # its own list of US companies: the app's list is whatever other tests loaded (the SEC list or the stored pages)
+    own = suggest.Suggester({"US": lambda: suggest.us_rows(US_LIST), "IN": lambda: []}, {"US": dict, "IN": dict})
+    hub.local_search = lambda q, region: own.search_ranked(q, region, 10)
     routes.setup(hub, None, None)
     A._cache.clear()
     calls, usage, settings_store = [], [], {}

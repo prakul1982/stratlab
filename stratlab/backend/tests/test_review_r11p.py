@@ -187,3 +187,32 @@ def test_who_is_asked_puts_a_provider_out_of_credit_last_and_marks_it(ai_clean, 
         assert flags == sorted(flags), task                              # the ones out of credit come after the others
         assert all(s["out_of_credit"] == (s["provider"] == "huggingface") for s in r["steps"]), task
     assert any(s["out_of_credit"] for r in routes.values() for s in r["steps"])
+
+
+# ---------- a US stock's move in the India-dated My Stocks email is measured from the session before its own last bar ----------
+def _us_bars(n=40, last_day="2026-10-13", last_close=140.0):
+    end, days, d = date.fromisoformat(last_day), [], date.fromisoformat(last_day)
+    while len(days) < n:
+        if d.weekday() < 5:
+            days.append(d)
+        d -= timedelta(days=1)
+    days.reverse()
+    return [{"t": f"{d.isoformat()}T00:00:00-04:00", "o": 100.0, "h": 101.0, "l": 99.0, "c": last_close if d == end else 100.0, "v": 1000.0}
+            for d in days]
+
+
+def _us_row(monkeypatch, bars, weekly=False):
+    monkeypatch.setattr(content, "_symbol_data", lambda r, s, d: {"bars": bars, "filings": [], "news": []})
+    return content.stock_row("US", "AAPL", date(2026, 10, 14), weekly, "2026-10-13T16:15")
+
+
+def test_a_us_stock_is_measured_from_the_session_before_its_last_bar(monkeypatch, mem):
+    row = _us_row(monkeypatch, _us_bars())                                   # last bar: the 13 Oct US session, issue dated 14 Oct IST
+    assert row["price"] == 140.0 and row["change_pct"] == 40.0 and row["changed"] is True
+    week = _us_row(monkeypatch, _us_bars(), weekly=True)                    # a week before the 13 Oct bar is 6 Oct
+    assert week["change_pct"] == 40.0
+
+
+def test_a_stock_with_no_new_session_reads_as_unchanged(monkeypatch, mem):
+    row = _us_row(monkeypatch, _us_bars(last_day="2026-10-09"))             # last bar older than the 13 Oct reference
+    assert row["price"] == 140.0 and row["change_pct"] is None and row["changed"] is False

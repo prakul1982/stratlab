@@ -44,11 +44,13 @@ def kind_of(inst: dict | None) -> str:
     """Which cost model applies to an instrument."""
     inst = inst or {}
     market = inst.get("market", "IN")
+    opt = inst.get("type") in ("CE", "PE")
     if market == "MCX":
-        return "in_mcx_fut"
+        return "in_mcx_opt" if opt else "in_mcx_fut"
     if market == "CDS":
         cur = inst.get("currency") or "INR"
-        return f"in_cds_fut_{cur.lower()}" if cur in ("USD", "JPY") else "in_cds_fut"
+        base = "in_cds_opt" if opt else "in_cds_fut"
+        return f"{base}_{cur.lower()}" if cur in ("USD", "JPY") else base
     if market == "IN":
         t = inst.get("type")
         if t in ("CE", "PE"):
@@ -75,9 +77,9 @@ def rupees_per(currency: str) -> float:
 def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float) -> dict[str, float]:
     """Itemised costs of one order, in the market's currency. Currency cross pairs (EURUSD, USDJPY) are priced in
     dollars or yen while brokerage is set in rupees, so it's converted at the day's rate."""
-    if kind in ("in_cds_fut_usd", "in_cds_fut_jpy"):
+    if kind.startswith("in_cds_") and kind[-4:] in ("_usd", "_jpy"):
         brokerage = brokerage / rupees_per(kind[-3:].upper())
-        kind = "in_cds_fut"
+        kind = kind[:-4]
     value = qty * price
     c = {"brokerage": brokerage}
     if kind.startswith("in_"):
@@ -122,14 +124,29 @@ def _days(a: str, b: str) -> float:
         return 0.0
 
 
+def _long_term(a: str, b: str) -> bool:
+    """Held for more than 12 months: sold after the same date a year on."""
+    try:
+        d = datetime.fromisoformat(a).date()
+        e = datetime.fromisoformat(b).date()
+    except (TypeError, ValueError):
+        return False
+    try:
+        return e > d.replace(year=d.year + 1)
+    except ValueError:  # 29 Feb
+        return e > d.replace(year=d.year + 1, day=28)
+
+
 def tax_estimate(kind: str, trades: list[dict]) -> dict:
     """A rough capital-gains estimate on the net profit. Only India equity is estimated."""
     if kind != "in_eq":
         note = ("F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
                 if kind in ("in_fut", "in_opt", "in_bse_opt", "in_mcx_fut", "in_mcx_opt") else "Tax depends on where you live, so it isn't estimated for this market.")
         return {"amount": None, "note": note}
-    short = sum(t["pnl"] for t in trades if _days(t.get("entry_t"), t.get("exit_t")) < 365)
-    long_ = sum(t["pnl"] for t in trades if _days(t.get("entry_t"), t.get("exit_t")) >= 365)
+    short = sum(t["pnl"] for t in trades if not _long_term(t.get("entry_t"), t.get("exit_t")))
+    long_ = sum(t["pnl"] for t in trades if _long_term(t.get("entry_t"), t.get("exit_t")))
+    if short < 0:   # a short-term loss also sets off long-term gains; a long-term loss only long-term ones
+        long_, short = long_ + short, 0.0
     amount = max(0.0, short) * IN_STCG + max(0.0, long_ - IN_LTCG_EXEMPT) * IN_LTCG
     return {"amount": round(amount, 2),
             "note": "Estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh. Losses and your other income can change it."}

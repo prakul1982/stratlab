@@ -136,8 +136,13 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   const state = decodeURIComponent(a.url.split("redirect_params=")[1]).split("state=")[1];
   const back = await request.get(`${API}/connect/kite/callback`, { params: { request_token: "t", status: "success", state }, maxRedirects: 0 });
   expect(back.status()).toBe(303);
-  expect(back.headers()["location"]).toContain("kite=ok");
-  const errors = await signIn(page, request, OWNER, "/settings#accounts");
+  // nothing is linked on the way back: the signed-in Settings page confirms it with the state and a one-time claim
+  const where = new URL(back.headers()["location"]);
+  expect(where.searchParams.get("kite")).toBe("confirm");
+  expect((await (await request.get(`${API}/connect`, { headers: auth(OWNER) })).json()).kite?.connected ?? false).toBe(false);
+  const errors = await signIn(page, request, OWNER, where.pathname + where.search + where.hash);
+  await expect(page.getByText("Zerodha is connected and your holdings are read.")).toBeVisible({ timeout: 30_000 });
+  expect(page.url(), "the state and claim leave the address once used").not.toContain("kc=");
   const main = page.locator("main");
   const z = main.locator("#zerodha");
   await expect(z.getByTestId("kite-line")).toHaveText(/^Connected · last read today \d\d:\d\d IST/, { timeout: 30_000 });

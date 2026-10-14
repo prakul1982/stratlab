@@ -53,7 +53,7 @@ def test_stale_prices_are_caught(w, monkeypatch):
     from datetime import date
     monkeypatch.setattr(platform_check, "last_session", lambda m, today: date(2099, 1, 1))
     checks, _ = run(w)
-    assert checks["Prices: IN"]["state"] == "fail" and "2099-01-01 was a trading day" in checks["Prices: IN"]["detail"]
+    assert checks["Prices: IN"]["state"] == "fail" and "1 Jan was a trading day" in checks["Prices: IN"]["detail"]
 
 
 def test_only_the_admin_can_run_it(w):

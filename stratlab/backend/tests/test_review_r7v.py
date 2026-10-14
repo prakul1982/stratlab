@@ -492,3 +492,51 @@ def test_the_sites_library_rules_match_the_seeds():
     block = src[src.index("export const LIBRARY_RULES"):src.index("};", src.index("export const LIBRARY_RULES"))]
     listed = dict(re.findall(r'"([a-z0-9-]+)": "((?:[^"\\]|\\.)*)"', block))
     assert listed == {slug: s["text"] for slug, s in library_seed.STRATEGIES.items()}
+
+
+# ---------- dividends restated for later splits and bonuses; no re-pricing across one ----------
+def test_page_yield_restates_a_dividend_for_a_later_split(monkeypatch):
+    rows = [{"kind": "dividend", "sub": "interim", "amount": 10, "ex_date": "2026-05-01"},
+            {"kind": "split", "factor": 10.0, "ex_date": "2026-08-01"}]
+    monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: rows)
+    monkeypatch.setattr(corp_actions, "hist_load", lambda r, s: {"at": "2026-10-08T12:00", "rows": rows})
+    co = {"name": "X", "sym": "X", "bse": None}
+    assert main.page_dividend_yield("IN", "X", 100.0, "2026-10-08", co) == 1.0          # ₹10 declared before a 1:10 split is ₹1 now
+    rows.append({"kind": "bonus", "factor": 2.0, "ex_date": "2026-09-01"})
+    assert main.page_dividend_yield("IN", "X", 100.0, "2026-10-08", co) == 0.5
+    rows[-1]["ex_date"] = "2026-04-01"                                                  # a bonus before the dividend leaves it
+    assert main.page_dividend_yield("IN", "X", 100.0, "2026-10-08", co) == 1.0
+
+
+def test_both_dividend_windows_take_the_year_up_to_and_including_today():
+    from app.intel.company import with_dividend_yield
+    c = {"quote": {"price": 100.0}, "summary": {}, "metrics": [{"title": "V", "items": [{"label": "Div yield", "value": 9, "unit": "%"}]}]}
+    divs = [{"kind": "dividend", "amount": 1, "ex_date": "2026-10-08"}, {"kind": "dividend", "amount": 2, "ex_date": "2025-10-08"}]
+    assert with_dividend_yield(c, divs, "2026-10-08")["metrics"][0]["items"][0]["value"] == 1.0      # today in, 365 days ago out
+    assert stock_pages.dividend_yield([{"date": d["ex_date"], "amount": d["amount"]} for d in divs], 100.0, "2026-10-08") == 1.0
+
+
+def test_company_page_yield_restates_for_a_later_split():
+    from app.intel.company import with_dividend_yield
+    c = {"quote": {"price": 100.0}, "summary": {}, "metrics": [{"title": "V", "items": [{"label": "Div yield", "value": 9, "unit": "%"}]}]}
+    divs = [{"kind": "dividend", "amount": 10, "ex_date": "2026-05-01"}, {"kind": "split", "factor": 10.0, "ex_date": "2026-08-01"}]
+    assert with_dividend_yield(c, divs, "2026-10-08")["metrics"][0]["items"][0]["value"] == 1.0
+    assert with_dividend_yield({**c, "region": "US"}, divs, "2026-10-08")["metrics"][0]["items"][0]["value"] == 10.0     # US history is adjusted already
+
+
+def test_ratios_are_not_scaled_across_a_split_or_a_day_too_big(monkeypatch):
+    f = {"region": "IN", "symbol": "X", "price": 1000.0, "price_at": "2026-10-07", "price_basis": "close", "market_cap": 100000.0, "pe": 25.0, "div_yield": 1.0}
+    bar = lambda c: [{"t": "2026-10-08T00:00:00+05:30", "o": c, "h": c, "l": c, "c": c, "official": True}]      # noqa: E731
+    split = [{"kind": "split", "factor": 5.0, "ex_date": "2026-10-08"}]
+    monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: split)
+    g = stock_pages.with_new_close(f, bar(200.0))
+    assert g["price"] == 200.0 and (g["market_cap"], g["pe"], g["div_yield"]) == (100000.0, 25.0, 1.0)
+    monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: [])
+    assert stock_pages.with_new_close(f, bar(200.0))["market_cap"] == 100000.0                # a 5x fall in a day: too big to be the price
+    assert stock_pages.with_new_close(f, bar(1100.0))["market_cap"] == 110000.0               # an ordinary move still scales
+    h = stock_pages.with_official_close(f, 200.0)
+    assert h["price"] == 200.0 and h["pe"] == 25.0
+
+
+def test_sec_reads_ordinary_dividends_paid():
+    assert "PaymentsOfOrdinaryDividends" in sec.DIVIDENDS

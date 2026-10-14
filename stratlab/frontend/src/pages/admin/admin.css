@@ -15,6 +15,7 @@
   .adm-link { flex: none; white-space: nowrap; min-height: var(--ctl-sm); background: var(--chip); }
   .adm-link.active { background: var(--ink); }
 }
+@media (pointer: coarse) { .adm-link { min-height: var(--ctl); } }
 
 /* Needs your attention: one row per item */
 .adm-todo { display: flex; flex-direction: column; border-top: 1px solid var(--line); }

@@ -118,6 +118,12 @@ def test_merge_adds_quantities_and_weights_the_average():
     assert len(got) == 1 and got[0]["qty"] == 120 and round(got[0]["avg"], 2) == 407.5
 
 
+def test_merge_leaves_the_average_empty_when_one_line_has_no_cost():
+    got = holdings.merge([{"symbol": "ITC", "exchange": "NSE", "qty": 100, "avg": 410.0},
+                          {"symbol": "ITC", "exchange": "NSE", "qty": 20, "avg": None}])
+    assert got[0]["qty"] == 120 and got[0]["avg"] is None
+
+
 # ---------- importing through the app ----------
 def test_zerodha_console_import_nse_series_and_bse_only(w):
     r = upload(w["client"], "zerodha_console_holdings.xlsx")

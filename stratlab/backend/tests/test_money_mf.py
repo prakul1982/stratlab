@@ -228,6 +228,15 @@ def test_cas_with_an_opening_balance_and_dividends_switches_and_reversal():
     assert got["txns"][0]["d"] == "2020-04-01" and got["txns"][0]["a"] is None
 
 
+def test_csv_types_withdrawals_and_switch_outs_are_not_purchases():
+    row = "17-Mar-2025,Nippon India Index Fund,INF000X01AB1,,30,750,%s,25\n"
+    raw = ("Date,Scheme Name,ISIN,AMFI Code,Units,Amount (INR),Transaction Type,NAV\n"
+           + "".join(row % t for t in ("Systematic Withdrawal Plan", "Switch Out - Nippon India Index Fund", "Switch-In", "STP Out",
+                                       "Systematic Investment Plan", "SWP"))).encode()
+    got = M.parse_csv(raw)
+    assert [t["t"] for t in got["txns"]] == ["redeem", "switch_out", "switch_in", "switch_out", "sip", "redeem"]
+
+
 def test_csv_import_with_its_own_headers_and_bad_lines():
     raw = ("Transaction Date,Scheme Name,ISIN,AMFI Code,Units,Amount (INR),Transaction Type,NAV\n"
            "2024-01-15,Example Flexi Cap Fund - Direct Plan - Growth,INF000X01AB1,,100,\"2,000.00\",Purchase,20\n"

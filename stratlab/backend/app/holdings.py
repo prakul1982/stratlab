@@ -187,7 +187,7 @@ def match_us(rows: list[dict], find) -> tuple[list[dict], list[dict]]:
 
 def merge(rows: list[dict]) -> list[dict]:
     """One holding per company: lines for the same stock (on NSE and on BSE, or split by the broker) add up, and the
-    average price is weighted by quantity."""
+    average price is weighted by quantity (none if any line has none)."""
     out: dict[str, dict] = {}
     for r in rows:
         k = f"{r['exchange']}:{r['symbol']}"
@@ -199,7 +199,7 @@ def merge(rows: list[dict]) -> list[dict]:
         if cur.get("avg") and r.get("avg"):
             cur["avg"] = (cur["avg"] * cur["qty"] + r["avg"] * r["qty"]) / q
         else:
-            cur["avg"] = cur.get("avg") or r.get("avg")
+            cur["avg"] = None   # one line has no cost, so the combined cost is unknown
         cur["qty"] = q
     return list(out.values())
 

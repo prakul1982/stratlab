@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { parseDay, showDay } from "../../lib/dateInput";
+import { parseDay, showDay, whyNotDay } from "../../lib/dateInput";
 import { Field } from "./Form";
 
 /** The one date box: it shows and reads the day first ("14 Aug 2025"; 14/08/2025 is 14 August), whatever language the
@@ -21,7 +21,7 @@ export function DateInput({ id, value, onChange, min, max, ariaLabel, onProblem,
   const read = (t: string): { iso: string; problem: string | null } => {
     if (!t.trim()) return { iso: "", problem: null };
     const iso = parseDay(t);
-    if (!iso) return { iso: "", problem: "Write the date day first, like 14 Aug 2025 or 14/08/2025." };
+    if (!iso) return { iso: "", problem: whyNotDay(t) };
     if (min && iso < min) return { iso: "", problem: `Pick a day from ${showDay(min)}.` };
     if (max && iso > max) return { iso: "", problem: `Pick a day up to ${showDay(max)}.` };
     return { iso, problem: null };

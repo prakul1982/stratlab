@@ -93,7 +93,7 @@ def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatc
     push.add("u1", SUB(1))
     monkeypatch.setattr(push, "send", lambda *a, **k: 1)
     ok, failed = alerts.test(prof)
-    assert ok == ["push"] and failed == {"telegram": "Telegram refused the message (400)."}          # one failure doesn't block the rest
+    assert ok == ["push"] and failed == {"telegram": "Telegram couldn't deliver to that chat"}          # one failure doesn't block the rest
 
 
 def test_only_browser_push_services_are_accepted():

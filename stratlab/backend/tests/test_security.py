@@ -216,3 +216,104 @@ def test_a_ticker_starts_with_a_letter_or_digit(sym):
         R.symbol_of(sym)
     for ok in ("M&M", "BAJAJ-AUTO", "BRK.B", "^GSPC", "3MINDIA"):
         assert R.symbol_of(ok) == ok
+
+
+# ---------- the AI allowance is held while the call runs ----------
+def _slow_ai(monkeypatch, delay=0.15, fail=None):
+    import time
+    out = {"name": "x", "tf": "1d", "entry": [], "exit": [], "risk": {}, "notes": []}
+
+    def write(text, pro):
+        time.sleep(delay)
+        if fail:
+            raise fail
+        return dict(out)
+    monkeypatch.setattr(main, "write_strategy", write)
+    monkeypatch.setattr(main.ai_writer, "check_against_text", lambda o, t: o)
+
+
+def _burst(client, token, n=25):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        return list(pool.map(lambda _: client.post("/ai/strategy", headers=W.headers(token), json={"text": "buy when rsi is low"}).status_code, range(n)))
+
+
+def test_parallel_ai_builds_cannot_pass_the_monthly_limit(monkeypatch):
+    from app import db
+    w = W.build(monkeypatch)
+    try:
+        _slow_ai(monkeypatch)
+        codes = _burst(w["client"], "free-token")
+        assert codes.count(200) == 10 and codes.count(429) == 15                       # Free: 10 a month
+        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 10
+    finally:
+        w["close"]()
+
+
+def test_parallel_ai_builds_cannot_pass_the_daily_cap(monkeypatch):
+    from app import db
+    w = W.build(monkeypatch)
+    try:
+        _slow_ai(monkeypatch)
+        monkeypatch.setattr(main, "AI_BUILDS_PER_DAY", 7)
+        codes = _burst(w["client"], "pro-token")
+        assert codes.count(200) == 7 and codes.count(429) == 18
+        assert db.count_usage("u-pro", "ai", "2000-01-01T00:00:00+00:00") == 7
+    finally:
+        w["close"]()
+
+
+def test_a_failed_ai_build_does_not_use_up_the_allowance(monkeypatch):
+    from app import db
+    from app.ai_providers import AIBusy, AIError
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        _slow_ai(monkeypatch, delay=0, fail=AIError("down"))
+        assert [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code for _ in range(12)] == [422] * 12
+        _slow_ai(monkeypatch, delay=0, fail=AIBusy("busy"))
+        assert c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code == 503
+        _slow_ai(monkeypatch, delay=0, fail=ValueError("boom"))
+        try:
+            c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"})
+        except ValueError:
+            pass
+        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 0
+        _slow_ai(monkeypatch, delay=0)
+        assert [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code for _ in range(10)] == [200] * 10
+        assert c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy low"}).status_code == 429
+    finally:
+        w["close"]()
+
+
+def test_parallel_research_reads_cannot_pass_the_daily_cap(monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from app import db
+    from app.intel import routes as R
+    w = W.build(monkeypatch)
+    try:
+        monkeypatch.setattr(R, "ai_cap", lambda profile: 3)
+        profile = {"id": "u-free"}
+
+        def read(i):
+            try:
+                return R.ai_call(profile, "t", (i,), 60, False, lambda: (time.sleep(0.1), {"i": i})[1])
+            except Exception as e:
+                return getattr(e, "status_code", e)
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            got = list(pool.map(read, range(10)))
+        assert sum(isinstance(g, dict) for g in got) == 3 and got.count(429) == 7
+        assert db.count_usage("u-free", "research_ai", "2000-01-01T00:00:00+00:00") == 3
+        # a read that fails is given back
+        from app.ai_providers import AIError
+
+        def bad():
+            raise AIError("down")
+        before = db.count_usage("u-free", "research_ai", "2000-01-01T00:00:00+00:00")
+        monkeypatch.setattr(R, "ai_cap", lambda profile: 5)
+        for i in range(6):
+            assert getattr(__import__("pytest").raises(Exception, R.ai_call, profile, "t", ("f", i), 60, False, bad).value, "status_code") == 422
+        assert db.count_usage("u-free", "research_ai", "2000-01-01T00:00:00+00:00") == before
+    finally:
+        w["close"]()

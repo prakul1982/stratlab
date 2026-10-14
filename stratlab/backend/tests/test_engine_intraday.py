@@ -96,8 +96,9 @@ def test_entry_window_trades_per_day_and_cooldown():
           session={"start": "10:00", "end": "13:00", "maxTradesDay": 3, "cooldown": 2})
     eng, _ = run(s, day("2026-01-05", prices))
     entries = [e["t"][11:16] for e in eng.events if e["why"] == "Entry rule"]
-    # the 09:45 candle closes at 10:00; exit on the next candle, skip two, enter again (3 a day at most)
-    assert entries == ["09:45", "10:45", "11:45"]
+    # the 09:45 candle closes at 10:00: fill at the 10:00 candle's open, exit at its close, skip two,
+    # signal again at 10:45 and fill at 11:00 (3 a day at most)
+    assert entries == ["10:00", "11:00", "12:00"]
 
 
 def test_daily_loss_cap_stops_trading_for_the_day():

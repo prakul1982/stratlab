@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from app import live
 from app.data import Registry
@@ -47,3 +48,244 @@ def test_india_sessions_wait_for_kite_login(monkeypatch):
     monkeypatch.setattr(mgr, "_attach", lambda row: attached.append(row["id"]))
     mgr.resume()
     assert attached == ["b"]   # India waits: Kite isn't logged in
+
+
+# ---------- restarts: the state is saved with each order, and candles closed while down are caught up on ----------
+STOP1 = {"name": "Always in", "tf": "5m", "side": "long", "entryJoin": "all",
+         "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}], "exit": [],
+         "risk": {"capital": 10000, "riskPct": 1, "maxAlloc": 100, "sl": 1, "sizing": "capital", "perTrade": 5000,
+                  "leverage": 1, "brokerage": 0, "slippage": 0}}
+
+
+def bar5(i, c=100.0, lo=None):
+    t = datetime(2026, 10, 12, 9, 30, tzinfo=timezone.utc).timestamp() + i * 300
+    return {"t": datetime.fromtimestamp(t, timezone.utc).isoformat(), "o": c, "h": c, "l": lo or c, "c": c, "v": 1}
+
+
+class Now:
+    """Runs a background thread at once, so its writes can be checked."""
+    def __init__(self, target, daemon=None):
+        self.target = target
+
+    def start(self):
+        self.target()
+
+
+def run_threads_now(monkeypatch):
+    import threading
+    monkeypatch.setattr(live, "threading", SimpleNamespace(Thread=Now, Lock=threading.Lock))
+
+
+def offline_world(monkeypatch, mgr, history):
+    calls = []
+    prov = mgr.markets.provider("CRYPTO")
+    monkeypatch.setattr(prov, "history", lambda inst, tf, days, ttl=None: list(history))
+    run_threads_now(monkeypatch)
+    monkeypatch.setattr(live.db, "get_profile", lambda uid: {"id": uid, "alerts_enabled": True})
+    monkeypatch.setattr(live, "alerts_on", lambda p: True)
+    monkeypatch.setattr(live, "notify", lambda p, subj, body, **k: calls.append(("alert", subj, body)))
+    monkeypatch.setattr(live.db, "add_order", lambda o: calls.append(("order", o["side"], o["reason"])))
+    monkeypatch.setattr(live.db, "update_session", lambda sid, **k: calls.append(("save", k.get("state"))))
+    return calls
+
+
+def test_an_order_saves_the_session_before_it_is_logged_or_alerted(monkeypatch):
+    mgr, reg = make_manager()
+    calls = offline_world(monkeypatch, mgr, [bar5(i) for i in range(40)])
+    row = {"id": "s1", "user_id": "u", "name": "Always in", "strategy": STOP1, "instrument": reg.resolve("CRYPTO:BTC-USD")[1],
+           "started_at": "2026-10-12T09:00:00+00:00"}
+    s = mgr._attach(row)
+    s._on_candle(bar5(40))
+    assert [c[0] for c in calls] == ["save", "alert"]          # saved at once, not up to 30 seconds later (a coin's
+    # fractional quantity isn't in the whole-number orders table)
+    assert calls[0][1]["qty"] > 0 and calls[0][1]["last_bar_t"] == bar5(40)["t"]
+
+
+def test_a_restart_runs_the_candles_that_closed_while_the_server_was_down(monkeypatch):
+    mgr, reg = make_manager()
+    hist = [bar5(i) for i in range(40)]
+    offline_world(monkeypatch, mgr, hist)
+    row = {"id": "s1", "user_id": "u", "name": "Always in", "strategy": STOP1, "instrument": reg.resolve("CRYPTO:BTC-USD")[1],
+           "started_at": "2026-10-12T09:00:00+00:00"}
+    s = live.LiveSession(mgr, row)
+    assert not s.engine.events                        # a new session runs no history
+    s._on_candle(bar5(40))
+    assert s.engine.qty > 0 and s.engine.sl == 99.0
+    saved = s.state()
+    # down for three candles: the second one's low crosses the stop; the history now reaches past the saved candle
+    calls = offline_world(monkeypatch, mgr, hist + [bar5(40), bar5(41), bar5(42, lo=98.0), bar5(43)])
+    mgr.sessions["s1"] = s2 = live.LiveSession(mgr, {**row, "state": saved})
+    e = s2.engine
+    stop = next(t for t in e.trades if t["why"] == "Stop loss")
+    assert stop["exit_t"] == bar5(42)["t"] and stop["exit"] == 99.0
+    # the 10:00 candle saved before the restart isn't run again: one entry before it, one after the stop
+    assert [ev["t"] for ev in e.events if ev["side"] == "buy"] == [bar5(40)["t"], bar5(43)["t"]]
+    assert s2.bars[-1]["t"] == bar5(43)["t"] and s2.state()["last_bar_t"] == bar5(43)["t"]
+    alerts = [c for c in calls if c[0] == "alert"]               # one alert for the caught-up orders, not one each
+    assert len(alerts) == 1 and "2 paper trades while offline" in alerts[0][1]
+    assert "SELL" in alerts[0][2] and "Stop loss" in alerts[0][2] and "Entry rule" in alerts[0][2]
+    # restarting again from the caught-up state runs nothing more
+    calls.clear()
+    s3 = live.LiveSession(mgr, {**row, "state": s2.state()})
+    assert len(s3.engine.events) == len(e.events) and not [c for c in calls if c[0] == "alert"]
+
+
+def test_a_poll_without_a_price_leaves_the_last_one_ageing(monkeypatch):
+    mgr, reg = make_manager()
+    offline_world(monkeypatch, mgr, [bar5(i) for i in range(40)])
+    row = {"id": "s1", "user_id": "u", "name": "Always in", "strategy": STOP1, "instrument": reg.resolve("CRYPTO:BTC-USD")[1],
+           "started_at": "2026-10-12T09:00:00+00:00"}
+    s = live.LiveSession(mgr, row)
+    monkeypatch.setattr(s.prov, "closed_candles", lambda inst, tf, since: [])
+    monkeypatch.setattr(s.prov, "ltp", lambda inst: None)
+    s.on_timer(datetime.now(timezone.utc))
+    assert s.poll_ok and s.last_tick_at is None                   # no price came, so none is fresh
+    monkeypatch.setattr(s.prov, "ltp", lambda inst: 101.0)
+    s.next_poll = 0
+    s.on_timer(datetime.now(timezone.utc))
+    assert s.last_price == 101.0 and s.last_tick_at
+
+
+def test_a_tick_is_as_fresh_as_its_own_time():
+    from app.kite_service import IST
+    now = datetime.now(IST)
+    old = now.replace(microsecond=0) - live.timedelta(days=1)
+    assert live.tick_time(old) == old.isoformat()                 # yesterday's close sent on subscribe stays yesterday's
+    assert datetime.fromisoformat(live.tick_time(now + live.timedelta(seconds=5))) <= datetime.now(IST)   # never ahead
+
+
+# ---------- corporate actions on an open position (corp_actions.PaperActions) ----------
+CORP = {**STOP1, "risk": {**STOP1["risk"], "capital": 100000, "perTrade": 10000}}
+SPLIT = {"id": "ACME|split|2026-01-06|2:1", "symbol": "ACME", "kind": "split", "label": "Split", "factor": 2.0, "ex_date": "2026-01-06"}
+BONUS = {"id": "ACME|bonus|2026-01-06|1:3", "symbol": "ACME", "kind": "bonus", "label": "Bonus 1:3", "ratio": [1, 3],
+         "factor": 4 / 3, "ex_date": "2026-01-06"}
+DIV = {"id": "ACME|dividend|2026-01-06|dividend", "symbol": "ACME", "kind": "dividend", "label": "Dividend", "amount": 5.0,
+       "ex_date": "2026-01-06"}
+
+
+def sbar(day, i, c, lo=None):
+    t = datetime(2026, 1, day, 14, 30, tzinfo=timezone.utc).timestamp() + i * 300
+    return {"t": datetime.fromtimestamp(t, timezone.utc).isoformat(), "o": c, "h": c, "l": lo or c, "c": c, "v": 10}
+
+
+def stock_world(monkeypatch, history, acts, symbol="ACME"):
+    """A US stock paper session on a fake feed, with `acts` as the stored corporate actions (no network: asserted)."""
+    from app import corp_actions
+    from app.intel.net import TTLCache
+    mgr, reg = make_manager()
+    prov = reg.provider("CRYPTO")
+    monkeypatch.setitem(reg.providers, "US", prov)
+    monkeypatch.setattr(prov, "history", lambda inst, tf, days, ttl=None: [dict(b) for b in history])
+    monkeypatch.setattr(corp_actions, "_paper", TTLCache())
+
+    def stored(region, sym, sources=None, today=None, fetch=True, **k):
+        assert sources is None and not fetch and region == "US"
+        return [a for a in acts if a["symbol"] == sym]
+    monkeypatch.setattr(corp_actions, "actions_for", stored)
+    inst = {**reg.resolve("CRYPTO:BTC-USD")[1], "id": f"US:{symbol}", "symbol": symbol, "market": "US", "type": "EQ", "step": 1}
+    row = {"id": "s1", "user_id": "u", "name": "Always in", "strategy": CORP, "instrument": inst, "started_at": "2026-01-05T09:00:00+00:00"}
+    return mgr, row
+
+
+def corp_events(e):
+    return [ev for ev in e.events if ev.get("kind") == "corp"]
+
+
+def test_a_split_rescales_the_open_long_and_its_stop_without_a_false_stop_out(monkeypatch):
+    mgr, row = stock_world(monkeypatch, [sbar(5, i, 1000.0) for i in range(40)], [SPLIT])
+    s = live.LiveSession(mgr, row)
+    s._on_candle(sbar(5, 40, 1000.0))
+    e = s.engine
+    assert (e.qty, e.entry, e.sl) == (10, 1000.0, 990.0)
+    cash = e.cash
+    # the first candle after the ex-date is in the new prices (the feed's older candles aren't: the jump says so)
+    s._on_candle(sbar(6, 0, 500.0, lo=496.0))
+    assert (e.qty, e.entry, e.sl, e.best, e.init_sl) == (20, 500.0, 495.0, 500.0, 495.0)
+    assert not e.trades and e.cash == cash                     # no stop-out at 496, no cash for a whole split
+    assert [ev["why"] for ev in corp_events(e)] == ["Split 1:2 applied: 10 shares at $1,000 are now 20 at $500"]
+    assert s.bars[0]["c"] == 500.0 and s.bars[-2]["c"] == 500.0 and s.bars[0]["v"] == 20
+    assert e.equity(500.0) == cash + 20 * 500.0
+    assert s.state()["corp_applied"] == [SPLIT["id"]]
+    assert "side" not in corp_events(e)[0]                     # a log line, not an order
+
+
+def test_a_bonus_pays_the_fractional_share_in_cash(monkeypatch):
+    mgr, row = stock_world(monkeypatch, [sbar(5, i, 1000.0) for i in range(40)], [BONUS])
+    s = live.LiveSession(mgr, row)
+    s._on_candle(sbar(5, 40, 1000.0))
+    e, cash = s.engine, s.engine.cash
+    s.last_price = 1000.0
+    s._corp_day("2026-01-06", timer=True)                     # the day's check, before its first candle
+    # 10 shares with 1 new for every 3 held: 13.33, so 13 shares and a third of one paid at the adjusted 750
+    assert e.qty == 13 and e.entry == 750.0 and e.sl == 742.5 and s.last_price == 750.0
+    assert round(e.cash - cash, 2) == 250.0
+    assert corp_events(e)[0]["why"] == ("Bonus 1:3 applied: 10 shares at $1,000 are now 13 at $750, "
+                                        "$250 paid for the fractional share")
+    s._corp_day("2026-01-06", timer=True)                     # once a day
+    assert len(corp_events(e)) == 1
+
+
+def test_a_dividend_is_paid_to_a_long_and_by_a_short(monkeypatch):
+    for side, sign, word in (("long", 1, "credited for {} shares"), ("short", -1, "paid for {} shares short")):
+        mgr, row = stock_world(monkeypatch, [sbar(5, i, 1000.0) for i in range(40)], [DIV])
+        s = live.LiveSession(mgr, {**row, "strategy": {**CORP, "side": side}})
+        s._on_candle(sbar(5, 40, 1000.0))
+        e, cash, q = s.engine, s.engine.cash, s.engine.qty
+        assert q > 0 and e.dir == sign
+        s._on_candle(sbar(6, 0, 995.0))
+        assert e.cash == cash + sign * 5.0 * q and e.qty == q and e.entry == 1000.0
+        assert corp_events(e)[0]["why"] == f"Dividend $5 a share: ${5 * q} " + word.format(q)
+
+
+def test_an_action_is_applied_once_across_restarts(monkeypatch):
+    day1 = [sbar(5, i, 1000.0) for i in range(41)]
+    mgr, row = stock_world(monkeypatch, day1[:40], [SPLIT])
+    s = live.LiveSession(mgr, row)
+    s._on_candle(day1[40])
+    s._on_candle(sbar(6, 0, 500.0))
+    saved = s.state()
+    # the broker's intraday candles aren't adjusted, Yahoo's are: either way the position stays as it is
+    for hist in (day1 + [sbar(6, 0, 500.0)], [{**b, "o": 500.0, "h": 500.0, "l": 500.0, "c": 500.0} for b in day1] + [sbar(6, 0, 500.0)]):
+        mgr, row = stock_world(monkeypatch, hist, [SPLIT])
+        s2 = live.LiveSession(mgr, {**row, "state": saved})
+        s2._on_candle(sbar(6, 1, 500.0))
+        e = s2.engine
+        assert (e.qty, e.entry, e.sl) == (20, 500.0, 495.0) and not e.trades and len(corp_events(e)) == 1
+        assert all(b["c"] == 500.0 for b in s2.bars)
+
+
+def test_a_split_while_the_server_was_down_is_applied_before_the_missed_candles(monkeypatch):
+    day1 = [sbar(5, i, 1000.0) for i in range(41)]
+    mgr, row = stock_world(monkeypatch, day1[:40], [SPLIT])
+    s = live.LiveSession(mgr, row)
+    s._on_candle(day1[40])
+    saved = s.state()
+    assert "corp_applied" in saved and not saved["corp_applied"]
+    # back the next day: the feed's history is adjusted back in time, and two candles closed while down
+    adj = [{**b, "o": 500.0, "h": 500.0, "l": 500.0, "c": 500.0} for b in day1]
+    mgr, row = stock_world(monkeypatch, adj + [sbar(6, 0, 500.0, lo=497.0), sbar(6, 1, 501.0)], [SPLIT])
+    s2 = live.LiveSession(mgr, {**row, "state": saved})
+    e = s2.engine
+    assert (e.qty, e.entry, e.sl) == (20, 500.0, 495.0) and not e.trades and s2.dirty
+    assert s2.bars[-1]["c"] == 501.0 and len(corp_events(e)) == 1
+
+
+def test_futures_options_commodities_and_crypto_are_left_alone(monkeypatch):
+    from app import corp_actions
+    assert corp_actions.paper_region({"market": "IN", "type": "EQ", "exchange": "NSE"}) == "IN"
+    assert corp_actions.paper_region({"market": "US", "type": "ETF"}) == "US"
+    for inst in ({"market": "IN", "fno": True, "exchange": "NFO", "type": "FUT"}, {"market": "IN", "exchange": "NFO", "type": "CE"},
+                 {"market": "MCX", "type": "FUT"}, {"market": "CDS", "type": "FUT"}, {"market": "CRYPTO", "type": "CRYPTO"},
+                 {"market": "IN", "type": "INDEX"}):
+        assert corp_actions.paper_region(inst) is None
+    # a coin session never looks actions up, so a row under its symbol changes nothing
+    mgr, reg = make_manager()
+    monkeypatch.setattr(mgr.markets.provider("CRYPTO"), "history", lambda inst, tf, days, ttl=None: [sbar(5, i, 1000.0) for i in range(40)])
+    monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: (_ for _ in ()).throw(AssertionError("looked up")))
+    row = {"id": "c1", "user_id": "u", "name": "Coin", "strategy": CORP, "instrument": reg.resolve("CRYPTO:BTC-USD")[1],
+           "started_at": "2026-01-05T09:00:00+00:00"}
+    s = live.LiveSession(mgr, row)
+    s._on_candle(sbar(5, 40, 1000.0))
+    q = s.engine.qty
+    s._on_candle(sbar(6, 0, 1000.0))
+    assert s.engine.qty == q and not corp_events(s.engine)

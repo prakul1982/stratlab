@@ -20,7 +20,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 
 from . import db, instrument_kinds, tax_total
-from .engine.costs import IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
+from .engine.costs import IN_EQUITY_MIS, IN_LTCG, IN_LTCG_EXEMPT, IN_STCG
 
 KEY = "taxlots:"
 FMV_KEY = "fmv2018:"              # fmv2018:<symbol> = {"v": the 31 Jan 2018 high a share, or null, "at": when looked up}
@@ -56,9 +56,10 @@ SETOFF_RULES = [
 NOTES = [
     "Rates before 4% cess and any surcharge. Your basic exemption limit and rebate can change the amount.",
     "Buys and sales are matched first in, first out, per company, across every file you uploaded.",
-    "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible.",
+    "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible from capital gains.",
     "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the purchase date.",
-    "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate.",
+    "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate. Their STT "
+    "is deducted (section 36(1)(xv)): the figure in your file, or 0.025% of the sale value where the file has none.",
     "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
     "Turnover is the total of profits and losses, trade by trade. Brokers' summaries often net them per contract "
@@ -185,7 +186,7 @@ def load(uid: str) -> dict:
 
 
 def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = None, business: list[dict] | None = None):
-    keep = ("d", "t", "side", "qty", "price", "charges", "isin", "symbol", "name", "sym", "exchange", "tid", "fmv", "src")
+    keep = ("d", "t", "side", "qty", "price", "charges", "isin", "symbol", "name", "sym", "exchange", "tid", "fmv", "src", "stt")
     slim = [{k: t[k] for k in keep if t.get(k) not in (None, "")} for t in trades[:MAX_TRADES]]
     db.set_setting(_key(uid), json.dumps({"trades": slim, "files": files[-MAX_FILES:], "fmv": fmv or {},
                                           "business": (business or [])[-MAX_BUSINESS:],
@@ -195,14 +196,14 @@ def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = Non
 def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int, int]:
     """(totals, added, replaced, same): a new file's F&O, commodity and currency totals beside the saved ones. Lines
     aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates overlap a saved
-    one replaces it (the same file again, or a full year after a quarter), and one that doesn't overlap is added (the
-    next quarter)."""
+    one replaces it (a full year after a quarter), one inside a saved range is already counted, and one that doesn't
+    overlap is added (the next quarter)."""
     out = list(old)
     added = replaced = same = 0
     for c in new:
         hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and not (c["last"] < o["first"] or c["first"] > o["last"])]
-        if any(_same(o, c) for o in hits):
-            same += 1
+        if any(_same(o, c) for o in hits) or (hits and any(o["first"] <= c["first"] and c["last"] <= o["last"] for o in hits)):
+            same += 1                  # the same file again, or one inside a saved range (a quarter after the year)
             continue
         out = [o for o in out if not any(o is h for h in hits)]
         out.append(c)
@@ -319,6 +320,18 @@ def _pairs(trades: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
     return pairs, rest
 
 
+def _intraday_stt(sells: list[dict], frac: float) -> tuple[float, bool]:
+    """(STT to deduct, whether it's an estimate) on `frac` of these sales: the file's figure, else the intraday rate on
+    the sale value. Capital gains never use it."""
+    stt, est = 0.0, False
+    for t in sells:
+        if t.get("stt") is None:
+            stt, est = stt + IN_EQUITY_MIS["stt_sell"] * t["qty"] * t["price"], True
+        else:
+            stt += t["stt"]
+    return stt * frac, est
+
+
 def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
     """One tax P&L line: intraday when bought and sold the same day, else a realised gain as the broker matched it,
     grandfathered like any other lot."""
@@ -328,7 +341,10 @@ def _pair(key: str, buy: dict, sale: dict, fmv: float | None, out: dict):
     net = gross - (sale.get("charges") or 0) * q / sale["qty"]
     d, bd = sale["d"], buy["d"]
     if d == bd:
-        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": q, "buy": cost, "sell": net, "pnl": net - cost})
+        stt, est = _intraday_stt([sale], q / sale["qty"])
+        net -= stt
+        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": q, "buy": cost, "sell": net, "pnl": net - cost,
+                                "stt": stt, "stt_est": est})
         return
     lt = long_term(bd, d)
     gf, actual, fmv_total = None, cost, None
@@ -389,8 +405,10 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
     intra = min(bq, sq)
     if intra > EPS:
         buy = intra * bval / bq + bchg * intra / bq
-        sell = intra * sval / sq - schg * intra / sq
-        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": intra, "buy": buy, "sell": sell, "pnl": sell - buy})
+        stt, est = _intraday_stt(sells, intra / sq)
+        sell = intra * sval / sq - schg * intra / sq - stt
+        out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": intra, "buy": buy, "sell": sell, "pnl": sell - buy,
+                                "stt": stt, "stt_est": est})
     if bq - intra > EPS:
         q = bq - intra
         fmvs = [t["fmv"] * t["qty"] for t in buys if t.get("fmv")]
@@ -462,8 +480,9 @@ def _by_day(rows: list[dict]) -> list[dict]:
         if cur is None:
             days[(r["key"], r["d"])] = dict(r)
         else:
-            for f in ("qty", "buy", "sell", "pnl"):
+            for f in ("qty", "buy", "sell", "pnl", "stt"):
                 cur[f] += r[f]
+            cur["stt_est"] = cur["stt_est"] or r["stt_est"]
     return list(days.values())
 
 
@@ -575,7 +594,8 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         "buckets": buckets, "steps": steps, "tax": _r(tax), "tax_with_cess": _r(tax * (1 + CESS)),
         "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)},
         "intraday": {"count": len(intra), "buy": _r(sum(i["buy"] for i in intra)), "sell": _r(sum(i["sell"] for i in intra)),
-                     "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra))},
+                     "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra)),
+                     "stt": _r(sum(i["stt"] for i in intra)), "stt_estimated": any(i["stt_est"] for i in intra)},
         "gf_missing": sum(1 for r in rows if r["gf"] == "missing"), "gf_applied": sum(1 for r in rows if r["gf"] == "applied"),
         "count": len(rows), "rows": [_row(r) for r in rows_out[:limit]],
     }

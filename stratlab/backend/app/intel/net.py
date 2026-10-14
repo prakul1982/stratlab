@@ -265,7 +265,7 @@ def num(v) -> float | None:
         return None
     if isinstance(v, (int, float)):
         return float(v) if v == v else None   # NaN check
-    s = str(v).replace(",", "").replace("₹", "").replace("%", "").strip()
+    s = str(v).replace(",", "").replace("₹", "").replace("%", "").replace("−", "-").strip()
     if s in ("", "-", "—", "--"):
         return None
     try:

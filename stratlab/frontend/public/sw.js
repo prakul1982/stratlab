@@ -14,16 +14,18 @@ self.addEventListener("install", (e) => {
 // what a page load gets when the network fails and no copy of the app is kept: a plain offline page, never nothing (a
 // navigation answered with nothing showed Safari's "Returned response is null" error page, R6O-006). It has a Reload button
 // that works without scripts (a form that asks for the same address again), and tries again by itself after 30 seconds
-// (R8B-011: an iPhone on a 503 saw "StratLab can't be reached" with no way to retry).
+// (R8B-011: an iPhone on a 503 saw "StratLab can't be reached" with no way to retry). The retry is a timer, not a
+// <meta refresh>: a delayed refresh takes control of the page from the reader (axe: meta-refresh, R13S-013).
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function offlinePage(path) {
   const to = esc(path || "/");
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    + '<meta http-equiv="refresh" content="30"><meta name="color-scheme" content="light dark">'
+    + '<meta name="color-scheme" content="light dark">'
     + '<title>StratLab: offline</title></head><body style="font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center">'
     + '<main><h1 style="font-size:22px">StratLab can\'t be reached</h1><p>Check the connection, then reload. This page also tries again by itself in 30 seconds.</p>'
     + '<form method="get" action="' + to + '"><button type="submit" data-testid="offline-reload" style="font:inherit;padding:10px 20px;border-radius:8px;'
-    + 'border:1px solid currentColor;background:none;color:inherit;cursor:pointer">Reload</button></form></main></body></html>';
+    + 'border:1px solid currentColor;background:none;color:inherit;cursor:pointer">Reload</button></form></main>'
+    + '<script>setTimeout(function(){location.reload()},30000)</script></body></html>';
 }
 function offline(path) {
   try { return new Response(offlinePage(path), { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }); }

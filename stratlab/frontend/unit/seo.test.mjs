@@ -304,10 +304,10 @@ test("the Privacy page lists every AI provider the code can use, says what the b
   const page = read("src/pages/LegalPage.tsx");
   const catalog = backend("app/ai_catalog.py");
   const names = [...catalog.matchAll(/^\s+Provider\("([a-z0-9]+)", "([^"]+)"/gm)].map((m) => m[2]);
-  assert.ok(names.length >= 12, `${names.length} providers read`);
+  assert.ok(names.length >= 11, `${names.length} providers read`);
   const privacy = page.slice(page.indexOf("function Privacy"), page.indexOf("function Refunds"));
   for (const name of names.map((n) => n.replace(/ \(.*\)$/, ""))) assert.ok(privacy.includes(name), `${name} is in the catalog but not in the policy`);
-  assert.match(privacy, new RegExp(`any of these ${({ 12: "twelve" })[names.length] ?? names.length}`));
+  assert.match(privacy, new RegExp(`any of these ${({ 11: "eleven", 12: "twelve" })[names.length] ?? names.length}`));
   assert.doesNotMatch(privacy, /such as Groq/);
   assert.match(privacy, /ph_/);
   assert.match(privacy, /Before you sign in/);

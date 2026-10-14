@@ -39,7 +39,7 @@ type Total = {
 type Year = {
   fy: number; label: string; stcg: Side; ltcg: Side; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
-  intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
+  intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number; stt?: number; stt_estimated?: boolean }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
   mutual_funds?: MfYear | null;
   units?: Units | null;
@@ -351,7 +351,7 @@ export function TaxReportPage() {
 
           <Card>
             <CardHead title="Intraday trades, kept apart" info="Shares bought and sold on the same day are speculative business income, taxed at your slab rate, not capital gains. They aren't in the capital gains above; they are in the total tax estimate." />
-            <p className="k-small">{y.intraday.count ? <>{y.intraday.count} same-day round trip{y.intraday.count === 1 ? "" : "s"}: purchases {inr(y.intraday.buy)}, sales {inr(y.intraday.sell)}, result <b className={tone(y.intraday.pnl)}>{inr(y.intraday.pnl)}</b>.</> : `No intraday trades in ${y.label}.`}</p>
+            <p className="k-small">{y.intraday.count ? <>{y.intraday.count} same-day round trip{y.intraday.count === 1 ? "" : "s"}: purchases {inr(y.intraday.buy)}, sales {inr(y.intraday.sell)}, result <b className={tone(y.intraday.pnl)}>{inr(y.intraday.pnl)}</b>, after STT of {inr(y.intraday.stt ?? 0)}{y.intraday.stt_estimated ? " (estimated at 0.025% of sales where your file has none)" : ""}.</> : `No intraday trades in ${y.label}.`}</p>
           </Card>
 
           <BusinessCard y={y} />

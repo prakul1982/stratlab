@@ -3,12 +3,13 @@
 Every instrument has its own engine (its own position, stops and session limits), and they step
 through time together. A new trade only opens when a position slot is free (max positions at
 once), and the daily loss cap applies to the whole portfolio: when the day's loss across every
-position reaches it, everything is closed and nothing new opens until the next day."""
+position reaches it, everything is closed and nothing new opens until the next day. The capital is one account:
+each new trade is sized from the whole portfolio's value and can only use the cash the open positions leave free."""
 import copy
 from datetime import datetime
 
 from . import costs as C
-from .core import PER_YEAR, Ctx, Engine, clean, open_position, stats
+from .core import PER_YEAR, Ctx, Engine, clean, open_position, span_years, stats, write_off
 
 
 def _key(t: str) -> datetime:
@@ -37,13 +38,22 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         books.append({"inst": d["inst"], "bars": bars, "ctx": Ctx(bars, intraday=strategy.tf != "1d"), "eng": eng,
                       "idx": idx, "last": None, "first": None})
     timeline = sorted({k for b in books for k in b["idx"]})
-    state = {"halted": False}
+    state = {"halted": False, "emptied_on": None}
 
     def free_slot() -> bool:
-        return not state["halted"] and sum(1 for b in books if b["eng"].qty > 0) < max_open
+        return not state["halted"] and not state["emptied_on"] and sum(1 for b in books if b["eng"].qty > 0) < max_open
+
+    def funds() -> tuple[float, float]:
+        """The pot's value (open positions at their last close) and its cash not tied up in an open position.
+        Each engine keeps its own books from `capital`; only what it has made or lost counts toward the pot."""
+        value = cap_total + sum(_gain(b) for b in books)
+        cash = cap_total + sum(_cash(b["eng"]) for b in books)
+        tied = sum(b["eng"].qty * b["eng"].entry for b in books) / strategy.risk.leverage
+        return value, cash - tied
 
     for b in books:
         b["eng"].gate = free_slot
+        b["eng"].funds = funds
 
     equity, hold, times = [], [], []
     episodes: list[list] = []        # stretches with any position open: [index before, last index] in [capital, *equity]
@@ -59,7 +69,8 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             i = b["idx"].get(k)
             if i is None:
                 continue
-            b["eng"].step(b["bars"], b["ctx"], i)
+            if not state["emptied_on"]:
+                b["eng"].step(b["bars"], b["ctx"], i)
             b["last"] = i
             if b["first"] is None:
                 b["first"] = i
@@ -72,8 +83,10 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
                         bar = b["bars"][b["last"]]
                         b["eng"]._close(bar, bar["c"], "Daily loss cap")
                 state["halted"] = True
+        if not state["emptied_on"] and cap_total + sum(_gain(b) for b in books) <= 0:
+            _empty(books, state, k, cap_total)
         most_open = max(most_open, sum(1 for b in books if b["eng"].qty > 0))
-        equity.append(cap_total + sum(_gain(b) for b in books))
+        equity.append(max(cap_total + sum(_gain(b) for b in books), 0.0))
         j = len(equity)
         now_open = any(b["eng"].qty > 0 for b in books)
         traded = now_open or sum(len(b["eng"].trades) for b in books) > closed_before
@@ -95,7 +108,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             open_trades.append({"symbol": b["inst"].get("symbol"), **open_position(e, px)})
     if not equity:
         equity, hold, times = [cap_total], [cap_total], []
-    st = stats(equity, trades, cap_total, PER_YEAR[strategy.tf])
+    st = stats(equity, trades, cap_total, PER_YEAR[strategy.tf], span_years(times[0], times[-1]) if times else None)
     items: dict[str, float] = {}
     for b in books:
         for name, v in b["eng"].cost_items.items():
@@ -118,7 +131,8 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
     members.sort(key=lambda m: -m["pnl"])
     return {
         "times": times, "equity": clean(equity), "buy_hold": clean(hold), "drawdown": clean(st.pop("dd")),
-        "stats": {**st, "buy_hold_ret": (hold[-1] / cap_total - 1) * 100},
+        "stats": {**st, "buy_hold_ret": (hold[-1] / cap_total - 1) * 100,
+                  "emptied_on": state["emptied_on"] or next((b["eng"].emptied_on for b in books if b["eng"].emptied_on), None)},
         "trades": trades, "open_trades": open_trades, "members": members,
         "costs": {"gross_pnl": round(net + paid, 2), "total": round(paid, 2), "items": C.breakdown(items),
                   "net_pnl": round(net, 2), "tax": tax, "kept": round(net - (tax["amount"] or 0.0), 2)},
@@ -128,12 +142,34 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
     }
 
 
+def _empty(books: list[dict], state: dict, k: datetime, cap_total: float) -> None:
+    """The whole account is worth nothing (each position is sized on the full capital, so the group can hold more than
+    the account has): everything is closed at the last close, the loss is held to what the account had (-100%), and
+    nothing opens after this day (R13S-001: a group's run showed -352.6% and a chart down to -Rs10 lakh)."""
+    for b in books:
+        e = b["eng"]
+        if e.qty > 0 and b["last"] is not None:
+            bar = b["bars"][b["last"]]
+            e._close(bar, bar["c"], "Account emptied")
+    state["emptied_on"] = k.date().isoformat()
+    pairs = sorted(((t, b["eng"]) for b in books for t in b["eng"].trades), key=lambda p: str(p[0]["exit_t"]))
+    total = cap_total + sum(_gain(b) for b in books)
+    if total < 0:
+        write_off([t for t, _ in pairs], -total, [e for _, e in pairs])
+
+
 def _gain(b: dict) -> float:
     """What this instrument's engine has made or lost so far, open trade included."""
     e = b["eng"]
     if b["last"] is None:
         return 0.0
     return e.equity(b["bars"][b["last"]]["c"]) - e.r.capital
+
+
+def _cash(e: Engine) -> float:
+    """What this instrument's trades have added to or taken from the pot's cash: closed P&L less the open
+    trade's entry charges (its money still counts as the pot's, tied up in the position)."""
+    return e.cash + e.dir * e.qty * e.entry - e.r.capital
 
 
 def _open_pnl(b: dict) -> float:

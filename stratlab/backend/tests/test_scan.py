@@ -105,7 +105,7 @@ def test_daily_alert_sends_once_per_day_to_subscribers(monkeypatch, store):
     sent = []
     job = scan.Alerts(reg, notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True)
     monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: True)
-    after_close = datetime(2026, 10, 1, 20, 30, tzinfo=timezone.utc)          # 16:30 in New York
+    after_close = datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc)          # 16:55 in New York (the alert waits for 16:50)
     job.tick(after_close)
     job.tick(after_close + timedelta(minutes=10))
     assert len(sent) == 1 and "AAA" in sent[0] and "not advice" in sent[0]
@@ -131,3 +131,31 @@ def test_st_s2_strategy_actually_trades_a_trending_stock():
     out = backtest(bars_from(list(path)), Strategy(**scan.ST_S2), 200, 1, "flat")
     assert out["stats"]["n"] >= 1 or out["open_trade"]
     assert out["diagnostics"]["all_true_on"] > 100
+
+
+def test_one_failing_user_does_not_stop_the_alert_for_the_rest(monkeypatch, store):
+    import json
+    reg = fake_setup(monkeypatch)
+    up = list(np.linspace(100, 200, 300)) + list(np.linspace(200, 180, 15)) + [199.0]
+    monkeypatch.setattr(scan, "_bars", lambda registry, iid: bars_from(up))
+    for uid in ("a", "b"):
+        store[f"watchlist:{uid}"] = json.dumps({"items": [{"region": "US", "symbol": "AAA"}]})
+        scan.set_alert(uid, True)
+
+    def profile(uid):
+        if uid == "a":
+            raise RuntimeError("db down")
+        return {"id": uid}
+    monkeypatch.setattr(db, "get_profile", profile)
+    sent = []
+    job = scan.Alerts(reg, notify=lambda p, s, t, url: sent.append(p["id"]), can_alert=lambda p: True)
+    monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: True)
+    job.tick(datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc))              # 16:55 in New York
+    assert sent == ["b"]
+
+
+def test_the_us_alert_waits_for_the_closing_prints_to_settle(monkeypatch, store):
+    job = scan.Alerts(None, notify=lambda *a, **k: None, can_alert=lambda p: True)
+    monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: True)
+    assert job.due("US", datetime(2026, 10, 1, 20, 30, tzinfo=timezone.utc)) is None      # 16:30 New York
+    assert job.due("US", datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc)) == "2026-10-01"

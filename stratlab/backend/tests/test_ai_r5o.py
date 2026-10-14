@@ -105,20 +105,20 @@ def test_the_cold_start_list_has_no_retired_gemini_model():
     assert not {"gemini-2.5-flash", "gemini-2.5-flash-lite"} & set(PROVIDERS["gemini"].defaults)
 
 
-# ---------- Vercel AI Gateway: the account needs a card on file ----------
+# ---------- a gateway that wants a card on file: an account setting ----------
 CARD = {"error": {"message": "AI Gateway requires a valid credit card on file to service requests. Please visit "
                   "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card to add a card and unlock your free credits.",
                   "type": "customer_verification_required"}}
 
 
-def test_vercel_without_a_card_is_an_account_setting_not_a_model_fault(monkeypatch):
-    keys(monkeypatch, "vercel")
+def test_a_missing_card_is_an_account_setting_not_a_model_fault(monkeypatch):
+    keys(monkeypatch, "nvidia")
     t = httpx.MockTransport(lambda req: httpx.Response(403, json=CARD))
     with pytest.raises(Exception):
         P.complete("s", "t", transport=t)
-    v = view("vercel")
+    v = view("nvidia")
     assert v["state"] == "fail" and "payment method on file (403: AI Gateway requires a valid credit card" in v["state_text"]
-    assert health("vercel")["answering"] is False
+    assert health("nvidia")["answering"] is False
 
 
 # ---------- a 200 that isn't a chat reply ----------

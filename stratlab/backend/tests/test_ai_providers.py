@@ -89,9 +89,9 @@ def test_research_uses_its_own_order(monkeypatch):
 
 
 def test_prototype_only_providers_come_after_every_production_one(monkeypatch):
-    keys(monkeypatch, "vercel", "nvidia", "huggingface", "anthropic")
+    keys(monkeypatch, "nvidia", "huggingface", "anthropic")
     o = P.order()
-    assert o[0] == "huggingface" and set(o[1:3]) == {"vercel", "nvidia"} and o[3] == "anthropic"
+    assert o[0] == "huggingface" and o[1] == "nvidia" and o[2] == "anthropic"
 
 
 def test_cloudflare_needs_its_account_id_too(monkeypatch):

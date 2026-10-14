@@ -8,7 +8,7 @@ import {
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
 import { eyebrowOf } from "../lib/eyebrow";
 import { flatZero } from "../lib/chartFormat";
-import { latestDue, marketTz, type Pending } from "../lib/format";
+import { latestDue, marketTz, minus, type Pending } from "../lib/format";
 import { homeRegion } from "../lib/homeMarket";
 import { LineChart, PairBars } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -23,9 +23,9 @@ import {
  * answer at once and a period the stored days can't tell apart from "All" isn't offered. */
 
 const A = "var(--bx-a)", B = "var(--bx-b)";
-const fmt1 = (v: number) => v.toLocaleString("en-IN", { maximumFractionDigits: 1 });
-const fmtPct = (v: number) => `${v.toFixed(1)}%`;
-const fmtInt = (v: number) => Math.round(v).toLocaleString("en-IN");
+const fmt1 = (v: number) => minus(v.toLocaleString("en-IN", { maximumFractionDigits: 1 }));
+const fmtPct = (v: number) => minus(`${v.toFixed(1)}%`);
+const fmtInt = (v: number) => minus(Math.round(v).toLocaleString("en-IN"));
 const PERIOD_UNITS = [
   { value: "days", label: "day", plural: "days" }, { value: "weeks", label: "week", plural: "weeks" },
   { value: "months", label: "month", plural: "months" }, { value: "years", label: "year", plural: "years" },
@@ -311,7 +311,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
         </Box>
         <Box title={data.group.index_name} info={help.index} h={h} cols={[{ header: "Close", get: (i) => f(h.index[i], (v) => v.toLocaleString("en-IN", { maximumFractionDigits: 2 })) }]} note={`Closing level · last ${last}`}>
           {hasIndex ? <LineChart lines={[{ values: h.index, color: "var(--ink-2)", label: data.group.index_name, width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
-            format={(v) => v.toLocaleString("en-IN", { maximumFractionDigits: 2 })} axisFormat={fmtInt} ariaLabel={`${data.group.index_name} closing level`} />
+            format={(v) => minus(v.toLocaleString("en-IN", { maximumFractionDigits: 2 }))} axisFormat={fmtInt} ariaLabel={`${data.group.index_name} closing level`} />
             : <p className="k-small k-muted">The index's prices weren't available for these days.</p>}
         </Box>
         <Box title="New 52-week highs and lows" info={help.highs_lows} h={h} cols={[{ header: "New highs", get: (i) => count(h.highs[i]) }, { header: "New lows", get: (i) => count(h.lows[i]) }]} none={flatZero(h.highs, h.lows)} note={`Highs drawn up, lows down · last ${last}`}>

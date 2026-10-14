@@ -372,3 +372,16 @@ def test_guard_limits_hooks_per_url_not_per_shared_address():
     two = guard.caller({"path": "/hooks/signal/" + "b" * 43, "headers": [(b"x-real-ip", b"52.89.214.238")]})
     assert one[0].startswith("h:") and one[0] != two[0]
     assert guard.caller({"path": "/trade/signals", "headers": [(b"x-real-ip", b"1.2.3.4")]})[0] == "a:1.2.3.4"
+
+
+def test_a_signal_sessions_open_position_follows_a_split_and_a_dividend_once(monkeypatch):
+    from app.signal_session import SignalSession
+    from tests.test_live_polling import DIV, SPLIT, stock_world
+    mgr, row = stock_world(monkeypatch, [], [SPLIT, DIV])
+    st = {"cash": 0.0, "pos": 10.0, "avg": 1000.0, "entry_t": "2026-01-05T15:00:00+00:00", "last_price": 1000.0}
+    s = SignalSession(mgr, {**row, "strategy": {"capital": 10000.0}, "state": st})       # a restart after both ex-dates
+    assert (s.pos, s.avg, s.last_price) == (20.0, 500.0, 500.0) and s.cash == 100.0     # $5 a share on the 20 held
+    assert [e["why"] for e in s.events if e.get("kind") == "corp"] == [
+        "Split 1:2 applied: 10 shares at $1,000 are now 20 at $500", "Dividend $5 a share: $100 credited for 20 shares"]
+    s2 = SignalSession(mgr, {**row, "strategy": {"capital": 10000.0}, "state": s.state()})
+    assert (s2.pos, s2.avg, s2.cash) == (20.0, 500.0, 100.0) and len(s2.events) == 2

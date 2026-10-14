@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from . import signals as SG
+from .corp_actions import PaperActions, paper_apply, paper_due, paper_event
 from .engine import costs as C
 from .kite_service import IST
 
@@ -100,6 +101,8 @@ class SignalSession:
         self.lock = threading.RLock()      # a fill asks for the price while holding it
         self.dirty = False
         self.feed_ok = True
+        self.corp = PaperActions(self.inst, st)
+        self._corp_day()
 
     # ---------- prices ----------
     def attach(self, hub):
@@ -143,6 +146,8 @@ class SignalSession:
         return self._fetch()
 
     def on_timer(self, now: datetime):
+        with self.lock:
+            self._corp_day(now)
         if not self.polled or time.time() < self._next_mark:
             return
         self._next_mark = time.time() + MARK_EVERY
@@ -151,6 +156,22 @@ class SignalSession:
             if px is not None:
                 with self.lock:
                     self._curve(px, force=False)
+
+    def _corp_day(self, now: datetime | None = None):
+        """Once a day: the stock's bonuses, splits and dividends on the open position (the last price is the previous
+        day's, so it's put in the new prices too)."""
+        day = self.corp.today(now)
+        acts = self.corp.new_day(day)
+        if not acts or not self.pos:
+            return
+        for a in paper_due(acts, self.entry_t, day, self.corp.applied):
+            d = 1 if self.pos > 0 else -1
+            q, f, cash, text = paper_apply(abs(self.pos), d, self.avg, a, self.corp.region)
+            self.pos, self.avg, self.cash = d * q, self.avg / f, self.cash + cash
+            self.last_price = self.last_price / f if self.last_price else self.last_price
+            self.events = (self.events + [{**paper_event(a, self.corp.region, text, cash), "sym": self.inst.get("symbol")}])[-1000:]
+            self.corp.applied.append(a["id"])
+            self.dirty = True
 
     # ---------- accounting ----------
     def _kind(self) -> str:
@@ -310,7 +331,7 @@ class SignalSession:
         return {"cash": self.cash, "pos": self.pos, "avg": self.avg, "entry_t": self.entry_t, "entry_cost": self.entry_cost,
                 "trades": self.trades[-1000:], "events": self.events[-1000:], "signals": self.signals[-KEEP_SIGNALS:],
                 "seen": self.seen[-KEEP_IDS:], "equity_curve": self.equity_curve[-500:], "cost_items": self.cost_items,
-                "last_price": self.last_price}
+                "last_price": self.last_price, **self.corp.dump()}
 
     def signal_counts(self, day: str) -> dict:
         """How many signals arrived on `day`, counted in the report's zone (the market's own; see daily_report.zone_of)."""

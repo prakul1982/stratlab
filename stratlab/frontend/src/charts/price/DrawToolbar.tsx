@@ -163,7 +163,7 @@ export function DrawRail(p: ToolState) {
       })}
       <span className="pc-rule" />
       <Btn label="Magnet" title="Magnet: snap to open, high, low and close (G)" icon="magnet" pressed={p.magnet} onClick={p.onMagnet} />
-      <Btn label={p.hideAll ? "Show all drawings" : "Hide all drawings"} title="Hide or show all drawings (O)" icon={p.hideAll ? "eyeOff" : "eye"} pressed={p.hideAll} onClick={p.onHide} />
+      <Btn label={p.hideAll ? "Show all drawings" : "Hide all drawings"} title="Hide or show all drawings (O)" icon={p.hideAll ? "eyeOff" : "eye"} onClick={p.onHide} />
       <div className="pc-wrap">
         <Btn label={`Drawings (${p.drawings.length})`} icon="list" pressed={open === "list"} onClick={toggle("list")} />
         {open === "list" && <div className={`pc-pop pc-fly pc-listpop${up ? " up" : ""}`} role="dialog" aria-label="Drawings" tabIndex={-1}><DrawList {...p} /></div>}
@@ -182,7 +182,7 @@ export function DrawSheet(p: ToolState & { onClose: () => void }) {
         <span className="pc-sheet-acts">
           <Btn label="Select" icon="select" pressed={!p.tool} onClick={() => pick(null)} />
           <Btn label="Magnet" icon="magnet" pressed={p.magnet} onClick={p.onMagnet} />
-          <Btn label={p.hideAll ? "Show all drawings" : "Hide all drawings"} icon={p.hideAll ? "eyeOff" : "eye"} pressed={p.hideAll} onClick={p.onHide} />
+          <Btn label={p.hideAll ? "Show all drawings" : "Hide all drawings"} icon={p.hideAll ? "eyeOff" : "eye"} onClick={p.onHide} />
           <button type="button" className="pc-btn" onClick={p.onClose}>Done</button>
         </span>
       </div>

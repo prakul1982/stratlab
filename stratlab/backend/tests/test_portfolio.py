@@ -1,4 +1,7 @@
 """Group (portfolio) backtests: shared slots, a portfolio-wide daily loss cap, the API."""
+import pandas as pd
+import pytest
+
 from app.engine import portfolio
 from app.models import Strategy
 from tests.test_engine_intraday import day
@@ -40,6 +43,55 @@ def test_portfolio_loss_cap_closes_everything():
     whys = {t["why"] for t in out["trades"]}
     assert whys == {"Daily loss cap"} and len(out["trades"]) == 2 and not out["open_trades"]
     assert out["stats"]["ret"] < 0
+
+
+def _notional(out):
+    return sum(t["qty"] * t["entry"] for t in out["open_trades"])
+
+
+def test_one_pot_funds_every_position():
+    # 4 flat stocks, the default risk sizing (1% risk at a 2% stop is 50,000 a trade): the four separate accounts
+    # used to open 2,00,000 of stock on a 1,00,000 account
+    flat = [day("2026-01-05", [100.0] * 8) for _ in range(4)]
+    s = S(risk={"capital": 100000, "brokerage": 0, "slippage": 0})
+    out = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], s, max_open=4)
+    assert len(out["open_trades"]) == 2 and out["most_open"] == 2
+    assert _notional(out) <= 100000
+    # with 3x leverage the pot carries all four, up to 3x its cash
+    lev = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], S(risk={"capital": 100000, "brokerage": 0, "slippage": 0,
+                                                                             "leverage": 3}), max_open=4)
+    assert len(lev["open_trades"]) == 4 and _notional(lev) <= 300000
+
+
+def test_later_entries_get_what_is_left():
+    # 70,000 a trade: the second stock gets the 30,000 the first leaves free
+    a = day("2026-01-05", [100.0] * 6)
+    b = day("2026-01-05", [50.0] * 6)
+    s = S(risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "capital", "perTrade": 70000})
+    out = portfolio.run([ds("A", a), ds("B", b)], s, max_open=2)
+    qty = {t["symbol"]: t["qty"] for t in out["open_trades"]}
+    assert qty == {"A": 700, "B": 600}
+
+
+def test_entries_are_sized_from_the_pot():
+    # A's 100 shares double; B's next trade is sized from the whole pot (1,00,000 + A's 10,000), not B's own account
+    a = day("2026-01-05", [100, 100, 100, 100, 200, 200])     # A trades 09:45 and 10:15, when it doubles
+    b = day("2026-01-05", [10] * 6)
+    s = S(risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "risk", "maxAlloc": 10, "maxBars": 1})
+    out = portfolio.run([ds("A", a), ds("B", b)], s, max_open=2)
+    qty = [t["qty"] for t in sorted(out["trades"] + out["open_trades"], key=lambda t: t["entry_t"]) if t["symbol"] == "B"]
+    assert qty[0] == 1000                    # 10% of 1,00,000 at 10
+    assert qty[-1] == 1100                   # 10% of 1,10,000 once A is up 10,000
+
+
+def test_group_cagr_uses_the_calendar():
+    # two coins rising 0.1% a day for a year, held throughout: CAGR is the year's return
+    days = [{"t": f"{d.date()}T00:00:00+00:00", "o": 100 * 1.001 ** k, "h": 100 * 1.001 ** k, "l": 100 * 1.001 ** k,
+             "c": 100 * 1.001 ** k, "v": 1.0} for k, d in enumerate(pd.date_range("2025-01-01", periods=366))]
+    s = S(tf="1d", risk={"capital": 100000, "sl": 0, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "capital", "perTrade": 50000})
+    out = portfolio.run([ds("A", days), ds("B", days)], s, max_open=2)
+    st = out["stats"]
+    assert st["ret"] > 40 and st["cagr"] == pytest.approx(st["ret"], rel=0.02)
 
 
 def test_group_notebook_api(api):  # noqa: F811

@@ -376,3 +376,35 @@ def test_the_watchlist_job_runs_the_stock_alert_check(monkeypatch):
     job = main.scan.Alerts(None, notify=None, can_alert=None, checks=[seen.append])
     assert job.checks == [seen.append]
     assert main.scan_alerts_job.checks                                     # the app's job carries the stock alert check
+
+
+# ---------- a message nobody could be reached with is kept, not lost or counted ----------
+def test_a_failed_delivery_keeps_the_text_and_does_not_use_the_quota(store):
+    sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
+    a = sa.items("u1")[0]
+    texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a.get("rev"))}, IN_OPEN)
+    assert texts and sa._read("u1")["pending"] == []
+    assert sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda *x: []) is False       # no channel reached
+    row = sa._read("u1")
+    assert row["pending"] == texts and row["sent"] == []
+    assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=30)) == []                       # not retried within the hour
+    again = sa.apply("u1", {}, IN_OPEN + timedelta(hours=1, minutes=1))
+    assert again == texts
+    assert sa.flush("u1", {"id": "u1"}, again, IN_OPEN + timedelta(hours=1, minutes=1), send=lambda *x: ["push"]) is True
+    row = sa._read("u1")
+    assert row["pending"] == [] and len(row["sent"]) == 1
+
+
+def test_an_error_while_sending_keeps_the_text(store):
+    def boom(*a):
+        raise RuntimeError("down")
+    assert sa.flush("u1", {"id": "u1"}, ["x crossed"], IN_OPEN, send=boom) is False
+    row = sa._read("u1")
+    assert row["pending"] == ["x crossed"] and row["sent"] == []
+
+
+def test_a_push_that_reached_no_device_is_not_a_delivery(monkeypatch):
+    monkeypatch.setattr(alerts, "jobs_for", lambda p, s, t, url="/paper": [("push", lambda: 0)])
+    assert sa.deliver({"id": "u1"}, "s", "x") == []
+    monkeypatch.setattr(alerts, "jobs_for", lambda p, s, t, url="/paper": [("push", lambda: 2)])
+    assert sa.deliver({"id": "u1"}, "s", "x") == ["push"]
