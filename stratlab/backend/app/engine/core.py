@@ -653,6 +653,6 @@ def cost_summary(eng: Engine, cost_kind: str, net_pnl: float) -> dict:
     """Profit before costs, each cost line, a tax estimate, and what is left."""
     paid = sum(eng.cost_items.values())
     tax = C.tax_estimate(cost_kind, eng.trades)
-    kept = net_pnl - (tax["amount"] or 0.0)
+    kept = max(net_pnl - (tax["amount"] or 0.0), -eng.r.capital)      # what is left can't be less than the whole account
     return {"gross_pnl": round(net_pnl + paid, 2), "total": round(paid, 2), "items": C.breakdown(eng.cost_items),
             "net_pnl": round(net_pnl, 2), "tax": tax, "kept": round(kept, 2)}

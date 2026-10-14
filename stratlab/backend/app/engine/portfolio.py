@@ -151,7 +151,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
                   "emptied_on": state["emptied_on"] or next((b["eng"].emptied_on for b in books if b["eng"].emptied_on), None)},
         "trades": trades, "open_trades": open_trades, "members": members,
         "costs": {"gross_pnl": round(net + paid, 2), "total": round(paid, 2), "items": C.breakdown(items),
-                  "net_pnl": round(net, 2), "tax": tax, "kept": round(net - (tax["amount"] or 0.0), 2)},
+                  "net_pnl": round(net, 2), "tax": tax, "kept": round(max(net - (tax["amount"] or 0.0), -cap_total), 2)},
         "most_open": most_open,
         # day-by-day changes in account value over each stretch with a position open, for the bad-luck drawdown check
         "_paths": [[b2 - a2 for a2, b2 in zip(path[a:b], path[a + 1:b + 1])] for path in [[cap_total, *equity]] for a, b in episodes],

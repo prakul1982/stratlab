@@ -65,7 +65,8 @@ from .responses import err, ok
 from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
-from .engine.verdict import restated as verdict_restated
+from . import rule_check
+from .engine.verdict import restate_empty, restated as verdict_restated
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -564,6 +565,10 @@ def get_instrument(inst_id: str) -> tuple:
 
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
+    never = rule_check.problems(strategy)["never"]
+    if never:      # R18-002: "Price is below 0" never holds, and the other rule of an "any of these" list traded alone
+        err(400, "rule_never_true", f"{'These rules' if len(never) > 1 else 'This rule'} can never be true, so nothing was run: "
+            + "; ".join(f"\"{t}\"" for t in dict.fromkeys(never)) + ". Change or remove it in the rules.")
     if not fno(profile) and needs_fno(inst):
         upgrade("Indian F&O is on the Pro plan.")
     if not all_indicators(profile) and needs_indicators(strategy):
@@ -1342,6 +1347,16 @@ def unique_name(profile, name: str) -> str:
     return f"{name[:76]} {n}"
 
 
+def with_rule_problems(nb: dict) -> dict:
+    """The notebook, plus `rule_problems` when its rules include one that can never be true (it can't be run) or is true on
+    every candle: saved as written, said with the notebook, never silently run (R18-002)."""
+    try:
+        found = {k: v for k, v in rule_check.problems(Strategy(**(nb.get("strategy") or {}))).items() if v}
+    except (ValidationError, TypeError):
+        return nb
+    return {**nb, "rule_problems": found} if found else nb
+
+
 @app.post("/notebooks")
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
@@ -1352,15 +1367,16 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
     if req.gaps is not None:
         nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
-    return save_notebook(profile, nb)
+    return with_rule_problems(save_notebook(profile, nb))
 
 
 @app.get("/notebooks/{nid}")
 def read_notebook(nid: str, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
-    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in nb.get("experiments") or []]
-    return ok(nb)
+    # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
+    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    return ok(with_rule_problems(nb))
 
 
 @app.put("/notebooks/{nid}")
@@ -1386,7 +1402,7 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb["gaps"] = req.gaps.model_dump()
     if req.clearGaps:
         nb.pop("gaps", None)
-    return ok(save_notebook(profile, nb))
+    return ok(with_rule_problems(save_notebook(profile, nb)))
 
 
 def group_body(g) -> dict:

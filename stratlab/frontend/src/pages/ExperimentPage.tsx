@@ -351,6 +351,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <Notice tone="warn">
           <b>Account emptied on {fmtDate(st.emptied_on)}.</b> The account's value reached zero, so every position was closed and nothing was traded after that day.
           The loss stops at −100%{e.group ? ": each position is sized on the whole capital, so a group can hold more than the account has." : "."}
+          {st.shown_ret != null && <> This run was saved showing {pct(st.shown_ret)}, from before accounts stopped at zero; the figures here hold the account to what it had.</>}
         </Notice>
       )}
       {(st.skipped_size ?? 0) > 0 && (

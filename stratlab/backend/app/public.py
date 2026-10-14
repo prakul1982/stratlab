@@ -45,6 +45,8 @@ def _indexed(equity: list, hold: list) -> dict:
 
 
 def snapshot(nb: dict, exp: dict) -> dict:
+    from .engine.verdict import restate_empty
+    exp = restate_empty(exp)                 # a run saved before accounts stopped at zero is shared with its account held to what it had
     v = exp.get("verdict") or {}
     inst = exp.get("instrument") or {}
     s = exp.get("series") or {}
@@ -121,6 +123,10 @@ def load(token: str) -> dict | None:
         snap["series"] = {**s, **_indexed(s.get("equity") or [], s.get("buy_hold") or [])}
     if isinstance(snap, dict) and isinstance(snap.get("stats"), dict):
         snap["stats"] = {k: snap["stats"].get(k) for k in STATS}   # a link shared with every stat (P&L over the return is the capital)
+        if isinstance(snap["stats"].get("ret"), (int, float)):     # a link shared before accounts stopped at zero
+            snap["stats"]["ret"] = max(snap["stats"]["ret"], -100.0)
+        if isinstance(snap["stats"].get("mdd"), (int, float)):
+            snap["stats"]["mdd"] = max(snap["stats"]["mdd"], -100.0)
     if isinstance(snap, dict) and isinstance(snap.get("group"), dict):
         snap["group"]["members"] = [{k: m.get(k) for k in MEMBER} for m in snap["group"].get("members") or [] if isinstance(m, dict)]
     return snap

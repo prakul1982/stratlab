@@ -166,8 +166,12 @@ export const STARTERS = [
 
 /* ---------- plain-English parser (no AI): SMA, EMA, RSI and price rules ---------- */
 function normInd(w: string): RefType { w = w.trim(); return w === "ema" ? "ema" : w === "rsi" ? "rsi" : "sma"; }
+/** "52-week low" / "52-week high" (also "52 wk", "52w", "one-year"): the lowest low / highest high of the previous 252 daily
+ * candles, a trading year (R18-002: "buy when price touches its 52-week low" became "Price is below 0"). */
+const WEEK52 = /\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b/;
 function parseRef(s: string): Ref | null {
   let m;
+  if ((m = s.match(WEEK52))) return { t: (m[1] ?? m[2]) === "low" ? "dc_lower" : "dc_upper", p: 252 };
   if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
   if ((m = s.match(/\b(ema|sma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
   if (/\brsi\b/.test(s)) return { t: "rsi", p: 14 };
@@ -216,7 +220,7 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   t = t.replace(new RegExp(`(?:with |and |, )?(?:an? )?${N} ?% ?(?:${STOP}|${TARGET})`, "g"), " ");
   t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
   const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
-  const opRe = /(cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
+  const opRe = /((?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?)(?= (?:its |the |a |an |new |their )*(?:52|fifty[- ]?two|one|1)[- ]?(?:weeks?|wks?|w|year)\b)|cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
   let lastCross: Cond | null = null;
@@ -259,7 +263,11 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
         if (!nm) continue;
         R = { t: "num", v: +nm[0] };
       }
-      const op: Op = /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
+      // "touches its 52-week low": the candle's low reaches the level (its high, for a high)
+      const reaches = /^(touch|hit|reach)/.test(w);
+      if (reaches && R.t !== "dc_lower" && R.t !== "dc_upper") continue;
+      if (reaches && L.t === "price") L = { t: R.t === "dc_lower" ? "low" : "high" };
+      const op: Op = reaches ? (R.t === "dc_lower" ? "lt" : "gt") : /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
       out[side].push({ l: L, op, r: R });
       if (op === "xa" || op === "xb") lastCross = { l: L, op, r: R };
     }
