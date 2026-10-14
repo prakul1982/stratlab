@@ -154,9 +154,13 @@ def run(registry, market: str, members: list[dict], budget: float | None = None)
         late = [_label(prov, iid) for iid, f in jobs.items() if not f.done()]
         for f in jobs.values():
             f.cancel()                # not started yet: leave the pool to others
+    newest = max((str(res["t"])[:10] for _, res, _ in done if res), default=None)
     for iid, res, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
+            continue
+        if scan_presets.is_stale(res["t"], newest):       # no candle for weeks: its "latest" stage and signal are old
+            problems.append(f"{_label(prov, iid)}: no recent daily prices")
             continue
         inst = names.get(iid) or {}
         rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"),
@@ -183,9 +187,14 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
             return iid, None, {}, f"{_label(prov, iid)}: {_why(e)}"
 
     rows, problems, checked, days = [], [], 0, []
-    for iid, res, inst, problem in _pool.map(one, ids):
+    done = list(_pool.map(one, ids))
+    newest = max((res["as_of"] for _, res, _, _ in done if res), default=None)
+    for iid, res, inst, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
+            continue
+        if scan_presets.is_stale(res["as_of"], newest):   # no candle for weeks: its match would read as today's
+            problems.append(f"{_label(prov, iid)}: no recent daily prices")
             continue
         checked += 1
         days.append(res["as_of"])
