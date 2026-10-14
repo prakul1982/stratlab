@@ -165,7 +165,7 @@ test("account: Free's limits match the Plans page, and deleting all your data as
   expect(JSON.stringify(copy)).not.toMatch(/"(token|password)"/);
   await main.getByRole("button", { name: "Delete all my data…" }).click();
   const ask = page.getByRole("dialog", { name: "Delete all your data?" });
-  await expect(ask).toContainText("Your sign-in account, plan and payment records stay.");
+  await expect(ask).toContainText("Your sign-in account, plan, payment records and usage counts stay.");
   const go = ask.getByRole("button", { name: "Delete all my data" });
   await expect(go).toBeDisabled();
   await ask.getByLabel("Type your email to confirm").fill("someone@else.com");
