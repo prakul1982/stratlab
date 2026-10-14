@@ -590,3 +590,9 @@ def test_stored_garbage_is_ignored(w):
     assert v.status_code == 200 and v.json()["txns"] == 1
     db.set_setting("mf:u-pro", "not json")
     assert w["client"].get("/money/mutual-funds", headers=PRO).status_code == 200
+
+
+@pytest.mark.parametrize("cat,name,kind", [("", "Bank of India Short Term Income Fund", "debt"),
+                                           ("Other Scheme - Other ETFs", "Nippon India ETF Bank BeES", "equity")])
+def test_a_fund_house_named_bank_is_not_a_bank_index(cat, name, kind):
+    assert M.kind_of(cat, name) == kind

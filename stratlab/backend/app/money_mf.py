@@ -126,7 +126,8 @@ _INTL = re.compile(r"\b(us|u\.s\.|usa|nasdaq|s&p|s ?& ?p 500|global|internationa
 _GOLD = re.compile(r"\b(gold|silver|precious)\b", re.I)
 _DEBT = re.compile(r"\b(gilt|g-?sec|sdl|bond|debt|crisil|liquid|overnight|money market|psu (?:bond|debt)|bharat bond|target maturity|treasury|t-?bill|"
                    r"income|corporate|credit|duration|floater|floating|fmp|fixed maturity|banking)\b", re.I)
-_EQ_NAME = re.compile(r"\b(bank(?!ing)|cpse|pse|equity)\b", re.I)    # equity ETF/index words that outrank a stray debt word
+# equity ETF/index words that outrank a stray debt word ("Bank of India ... Income Fund" is a fund house, not a bank index)
+_EQ_NAME = re.compile(r"\b(psu bank|nifty bank|bank ?bees|bank (?:etf|index)|cpse|pse|equity)\b", re.I)
 
 
 def kind_of(category: str, name: str, hint: str = "") -> str:
