@@ -149,8 +149,10 @@ export function JournalPage() {
 
   const remove = () => {
     setAskDelete(false);
+    if (busy) return;
+    setBusy(true);
     api("/trade/journal", { method: "DELETE" }).then(() => { setResult(null); setMarket(""); setSegment("all"); return load(); })
-      .then(() => notify("Your journal is deleted.")).catch(fail);
+      .then(() => notify("Your journal is deleted.")).catch(fail).finally(() => setBusy(false));
   };
 
   const showOnly = async (show: Show) => {
@@ -607,7 +609,9 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
   };
   const del = async () => {
     setAsking(false);
-    try { onSaved(await api<Journal>(`/trade/journal/trades/${encodeURIComponent(t.id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
+    if (busy) return;
+    setBusy(true);
+    try { onSaved(await api<Journal>(`/trade/journal/trades/${encodeURIComponent(t.id)}`, { method: "DELETE" })); } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
     <Modal title={`Journal: ${t.symbol}`} onClose={onClose} wide>

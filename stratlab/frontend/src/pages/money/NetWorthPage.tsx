@@ -5,6 +5,7 @@ import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { LoanCheck } from "./LoanCheck";
 import { asOf, axisInr, dateOnly, inr, pctPlain, signedInrCompact } from "../../lib/format";
+import { netWorthDelta } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
@@ -366,8 +367,10 @@ export function NetWorthPage() {
   }, [span]);
   const range = rangeChoices.some((c) => c.value === pick) ? pick! : "all";
   const keepDays = RANGE_DAYS.find(([v]) => v === range)?.[2];
-  const shown = hist.filter((h) => keepDays == null || (Date.parse(hist[hist.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
-  const last = hist[hist.length - 1], prev = hist[hist.length - 2];
+  // the chart leaves out partial snapshots: they read as falls
+  const whole = useMemo(() => hist.filter((h) => !h.partial?.length), [hist]);
+  const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
+  const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist) : null;
 
   const assetCols: Column<Row>[] = [
     { key: "asset", header: "Asset, and how it's worked out", rowHeader: true, wrap: true, cell: (r) => (
@@ -425,7 +428,7 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
               actions={<button type="button" className="btn sm" onClick={() => setAdding(true)}>Add an entry</button>} />
             <StatRow>
-              <Stat label="Net worth" value={inr(t.net)} delta={prev && last ? <Delta value={last.net - prev.net}>{signedInrCompact(last.net - prev.net)}</Delta> : undefined} note={prev && last ? `since ${day(prev.d)}` : undefined} />
+              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? `since ${day(move.since)}` : undefined} />
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
@@ -461,7 +464,7 @@ export function NetWorthPage() {
             </Card>
           )}
 
-          {view.history_allowed && hist.length >= 2 && (
+          {view.history_allowed && whole.length >= 2 && (
             <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
               footer={<p className="k-note">Last snapshot {day(last.d)}.</p>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
