@@ -436,18 +436,40 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
 
 
 # ---------- storage ----------
-def load(uid: str) -> dict:
-    """{"items": [...], "updated_at"}; empty when the user has none (or the row is damaged)."""
-    got = db.json_value(db.get_setting(KEY + uid), {})
+def _parse(raw: str | None) -> dict:
+    got = db.json_value(raw, {})
     items = [i for i in got.get("items") or [] if isinstance(i, dict) and i.get("kind") in KINDS and i.get("id")]
     return {"items": items, "updated_at": got.get("updated_at")}
+
+
+def load(uid: str) -> dict:
+    """{"items": [...], "updated_at"}; empty when the user has none (or the row is damaged)."""
+    return _parse(db.get_setting(KEY + uid))
+
+
+def _text(items: list[dict]) -> str:
+    return json.dumps({"items": items, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+
+
+def update(uid: str, fn) -> list[dict] | None:
+    """Change the entries atomically, so a statement read and a hand edit can't lose each other's save.
+    fn(current items) returns the new items (none left: the row goes), or None to leave them. It runs again on the
+    newer items if another save got in first, so keep side effects out of it. Returns the items saved."""
+    out = []
+
+    def go(raw):
+        got = fn(_parse(raw)["items"])
+        out[:] = [got]
+        return None if got is None else _text(got) if got else db.REMOVE
+    db.update_setting(KEY + uid, go)
+    return out[0]
 
 
 def save(uid: str, items: list[dict]):
     if not items:
         db.delete_setting(KEY + uid)
         return
-    db.set_setting(KEY + uid, json.dumps({"items": items, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}))
+    db.set_setting(KEY + uid, _text(items))
 
 
 def history(uid: str) -> list[dict]:
@@ -973,35 +995,38 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             entry = clean(req)
         except EntryError as e:
             bad(422, "bad_entry", str(e))
-        items = load(profile["id"])["items"]
-        if len(items) >= MAX_ITEMS:
-            bad(400, "too_many", f"Net worth keeps up to {MAX_ITEMS} entries.")
-        _limit_check(profile, len(items) + 1)
-        entry["id"] = secrets.token_hex(4)
-        save(profile["id"], items + [entry])
+        def add(items):
+            if len(items) >= MAX_ITEMS:
+                bad(400, "too_many", f"Net worth keeps up to {MAX_ITEMS} entries.")
+            _limit_check(profile, len(items) + 1)
+            entry["id"] = secrets.token_hex(4)
+            return items + [entry]
+        update(profile["id"], add)
         return page(profile, "change")
 
     @r.put("/items/{iid}")
     def edit_item(iid: str, req: ItemReq, profile=Depends(current_profile)):
         """Change an entry (its kind can change too)."""
         throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
-        items = load(profile["id"])["items"]
-        if not any(i["id"] == iid for i in items):
-            bad(404, "not_found", "That entry isn't in your net worth any more.")
-        try:
-            entry = clean(req)
-        except EntryError as e:
-            bad(422, "bad_entry", str(e))
-        save(profile["id"], [{**entry, "id": iid} if i["id"] == iid else i for i in items])
+        def edit(items):
+            if not any(i["id"] == iid for i in items):
+                bad(404, "not_found", "That entry isn't in your net worth any more.")
+            try:
+                entry = clean(req)
+            except EntryError as e:
+                bad(422, "bad_entry", str(e))
+            return [{**entry, "id": iid} if i["id"] == iid else i for i in items]
+        update(profile["id"], edit)
         return page(profile, "change")
 
     @r.delete("/items/{iid}")
     def delete_item(iid: str, profile=Depends(current_profile)):
         throttle(profile, "networth_edit", 200, 3600, "That's a lot of changes in an hour. Try again a little later.")
-        items = load(profile["id"])["items"]
-        if not any(i["id"] == iid for i in items):
-            bad(404, "not_found", "That entry isn't in your net worth any more.")
-        save(profile["id"], [i for i in items if i["id"] != iid])
+        def drop(items):
+            if not any(i["id"] == iid for i in items):
+                bad(404, "not_found", "That entry isn't in your net worth any more.")
+            return [i for i in items if i["id"] != iid]
+        update(profile["id"], drop)
         return page(profile, "change")
 
     @r.post("/prepay")

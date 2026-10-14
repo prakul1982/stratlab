@@ -3,7 +3,7 @@ import contextvars
 import json
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import httpx
 from supabase import create_client, Client
 from supabase.lib.client_options import SyncClientOptions
@@ -334,6 +334,72 @@ def set_setting(key: str, value: str) -> None:
         _mirror_put(key, value)
     finally:
         _forget_setting(key)
+
+
+REMOVE = object()                       # what an update_setting function returns to delete the row
+
+
+class SettingConflict(RuntimeError):
+    """A setting kept changing under update_setting for every try."""
+
+
+def _is_duplicate(e: Exception) -> bool:
+    return getattr(e, "code", None) == "23505" or "duplicate key" in str(e)
+
+
+def _swap(key: str, new, stamp: str | None) -> bool:
+    """Write `new` (REMOVE: delete) only if the row is still the one read: absent when `stamp` is None, else with that
+    updated_at. False when another writer got in first."""
+    t = now_iso()
+    if t == stamp:                      # the clock didn't move between two writes: the stamp must still change
+        t = (_instant(t) + timedelta(microseconds=1)).isoformat()
+    tbl = sb().table("app_settings")
+    if stamp is None:
+        if new is REMOVE:
+            return True
+        try:
+            tbl.insert({"key": key, "value": new, "updated_at": t}).execute()
+        except Exception as e:
+            if _is_duplicate(e):
+                return False
+            raise
+        return True
+    q = tbl.delete() if new is REMOVE else tbl.update({"value": new, "updated_at": t})
+    return bool(q.eq("key", key).eq("updated_at", stamp).execute().data)
+
+
+def update_setting(key: str, fn, tries: int = 10) -> str | None:
+    """Change a setting atomically: fn(current text or None) returns the new text, None to leave it, or REMOVE.
+    Returns what the setting holds afterwards. The main database is reached over REST, with no transaction to hold
+    a lock in, so this is a compare-and-set on the row's updated_at: if another writer changed the row since it was
+    read, fn runs again on the new value (so keep it free of side effects). Keys in the second database use a
+    transaction with the row locked instead."""
+    try:
+        ms = _market(key)
+        if ms is not None:
+            def locked(cur):            # a value not moved over yet is still read from the main database
+                return fn(cur if cur is not None else _read_setting_main(key))
+            new = ms.update(key, locked)
+            _mirror_put(key, new)
+            return new
+        for _ in range(tries):
+            r = sb().table("app_settings").select("value,updated_at").eq("key", key).limit(1).execute().data
+            old, stamp = (r[0]["value"], r[0]["updated_at"]) if r else (None, None)
+            new = fn(old)
+            if new is None:
+                return old
+            if _swap(key, new, stamp):
+                new = None if new is REMOVE else new
+                _mirror_put(key, new)
+                return new
+        raise SettingConflict(key)
+    finally:
+        _forget_setting(key)
+
+
+def _read_setting_main(key: str) -> str | None:
+    r = sb().table("app_settings").select("value").eq("key", key).limit(1).execute()
+    return r.data[0]["value"] if r.data else None
 
 
 def delete_setting(key: str) -> None:

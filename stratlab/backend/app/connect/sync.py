@@ -86,24 +86,29 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
     if us_rows:
         us_found, us_missed = holdings.match_us(us_rows, deps.us_find)
         found, missed = found + us_found, missed + us_missed
-    before = holdings.load(uid)
-    had = {_key(i) for i in before["items"] if i.get("via") == via}
-    # a line that didn't match but names a holding this source gave before (a market list down for a moment) makes the
-    # read partial: nothing is taken out. A line that never matched (a gold bond) doesn't stop sold stocks leaving.
-    names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
-    unsure = any(i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names
-                 for i in before["items"] if i.get("via") == via)
-    whole = bool(found) and not unsure            # only a whole read takes out what the source no longer names
-    merged, counts = merge_sync(before["items"], found, via, replace and whole)
-    kept = 0 if whole else len(had - {_key(f) for f in found})
     limit = plans.holdings_limit(profile["_plan"])
-    over, merged = [i["symbol"] for i in merged[limit:]], merged[:limit]
-    saved = bool(found) or counts["added"] or counts["changed"] or len(merged) != len(before["items"])
-    if saved:
+    out = {}
+
+    def merged(before):                   # runs again on the newer holdings if the user saves one meanwhile
+        had = {_key(i) for i in before["items"] if i.get("via") == via}
+        # a line that didn't match but names a holding this source gave before (a market list down for a moment) makes the
+        # read partial: nothing is taken out. A line that never matched (a gold bond) doesn't stop sold stocks leaving.
+        names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
+        unsure = any(i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names
+                     for i in before["items"] if i.get("via") == via)
+        whole = bool(found) and not unsure        # only a whole read takes out what the source no longer names
+        items, counts = merge_sync(before["items"], found, via, replace and whole)
+        out["kept"] = 0 if whole else len(had - {_key(f) for f in found})
+        out["over"], items = [i["symbol"] for i in items[limit:]], items[:limit]
+        out["counts"], out["had"] = counts, bool(had)
+        out["saved"] = bool(found) or counts["added"] or counts["changed"] or len(items) != len(before["items"])
+        if not out["saved"]:
+            return None
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        holdings.save(uid, deps.with_sectors(merged, known), source, since=since)
-    return {"saved": bool(saved), "count": len(found), "unmatched": missed[:50], "unmatched_count": len(missed),
-            "over_limit": over, "kept": kept, "empty": not rows and bool(had), **counts}
+        return deps.with_sectors(items, known), source, False, since
+    holdings.update(uid, merged)
+    return {"saved": bool(out["saved"]), "count": len(found), "unmatched": missed[:50], "unmatched_count": len(missed),
+            "over_limit": out["over"], "kept": out["kept"], "empty": not rows and out["had"], **out["counts"]}
 
 
 def note(got: dict, name: str) -> str | None:
