@@ -475,12 +475,13 @@ export function PulsePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title="How the market feels today"
-        lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })())} />
+        lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
+        asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} missing={data?.missing} /></Card>
       <Card>
         <CardHead title="The mood" info={HELP.researchPulse}
-          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
         {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
         {aiErr || (ai && !ai.tone) ? (
           <div className="k-row ai-read-off" role="status">
@@ -503,11 +504,11 @@ export function PulsePage() {
             </div>
           </Card>}
           {ai.flows.length > 0 && <Card>
-            <CardHead title="Where money is flowing" />
+            <CardHead title={ai.flows.some((f) => f.direction) ? "Where money is flowing" : "Money and markets in the headlines"} />
             <div className="inv-rows">
               {ai.flows.map((f) => (
                 <div key={f.title} className="inv-row">
-                  <span className="k-row"><b>{f.title}</b><Badge tone="plain" dot={false}>{f.direction.toLowerCase()}</Badge></span>
+                  <span className="k-row"><b>{f.title}</b>{f.direction && <Badge tone="plain" dot={false}>{f.direction.toLowerCase()}</Badge>}</span>
                   <span className="k-small k-muted">{f.detail}</span>
                 </div>
               ))}

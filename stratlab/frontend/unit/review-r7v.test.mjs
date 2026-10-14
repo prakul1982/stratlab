@@ -22,17 +22,17 @@ const h1s = (html) => [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m
 const ld = (html) => [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)].flatMap((m) => JSON.parse(m[1]));
 
 test("a library strategy's tab title leads with the result, and its description names the universe once (R7V-006)", () => {
-  const name = "Supertrend flip · 20 US large caps";
+  const name = "Supertrend flip · 20 of the largest US companies";
   const fact = "117.1 points behind buy and hold after costs; passed all 3 checks run.";
   // changed on purpose in R10V-005: the title is the shortfall, a short strategy name and StratLab in about 60 characters
-  // (it was "…after costs: Supertrend flip · 20 US large caps · StratLab", 91 characters, cut off in search results)
+  // (it was "…after costs: Supertrend flip · 20 of the largest US companies · StratLab", 91 characters, cut off in search results)
   assert.equal(libraryTitle(name, fact, "Passed all 3 checks run"), "117.1 points behind buy and hold: Supertrend flip · StratLab");
   // an older entry without the fact headline: its label leads
   assert.equal(libraryTitle(name, null, "Probably luck."), "Probably luck: Supertrend flip · StratLab");
-  const desc = libraryDescription({ name, where: "20 US large caps", group: "20 US large caps", factHeadline: fact, headline: "Likely a real edge.", reason: null });
+  const desc = libraryDescription({ name, where: "20 of the largest US companies", group: "20 of the largest US companies", factHeadline: fact, headline: "Likely a real edge.", reason: null });
   assert.ok(desc.startsWith("117.1 points behind buy and hold after costs;"), desc);
-  assert.equal(desc.match(/20 US large caps/g).length, 1, desc);
-  assert.doesNotMatch(desc, / on 20 US large caps/);
+  assert.equal(desc.match(/20 of the largest US companies/g).length, 1, desc);
+  assert.doesNotMatch(desc, / on 20 of the largest US companies/);
   assert.doesNotMatch(desc, /\.\s*\./);
   // a strategy whose name doesn't say where it ran still says so, once
   const orb = libraryDescription({ name: "Opening-range breakout", where: "25 most liquid F&O stocks", factHeadline: "4.0 points ahead of buy and hold after costs.", reason: "Few trades." });
@@ -57,7 +57,7 @@ test("an unknown library address is a real 404 with a noindex head, the known on
 test("the library and policy pages have their own h1 and words in the raw HTML, and one h1 each (R7V-008)", () => {
   const want = { "terms/index.html": "Terms of service", "privacy/index.html": "Privacy policy", "refunds/index.html": "Cancellation and refunds",
     "contact/index.html": "Contact us", "pricing/index.html": "Plans and prices", "faq/index.html": "Questions", "about/index.html": "About StratLab",
-    "library/index.html": "StratLab's own strategies", "library/seed-supertrend-us/index.html": "Supertrend flip · 20 US large caps" };
+    "library/index.html": "StratLab's own strategies", "library/seed-supertrend-us/index.html": "Supertrend flip · 20 of the largest US companies" };
   for (const [file, h] of Object.entries(want)) {
     assert.deepEqual(h1s(files[file]), [h], file);                       // the noscript note has no second h1
     assert.doesNotMatch(files[file], /<h1>StratLab: test it/, file);

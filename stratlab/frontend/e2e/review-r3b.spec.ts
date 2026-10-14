@@ -94,7 +94,7 @@ test("Library: groups say what they hold and ST S2 is spelled out (R3-014)", asy
   expect(text).not.toMatch(/\bST S2\b/);
   expect(text).toMatch(/Stage 2 \+ Supertrend/);
   expect(text, "a group's count says of how many").not.toMatch(/stocks \(\d+\)|large caps \(\d+\)/i);
-  expect(text).toMatch(/\d+ of the (NIFTY 50 stocks|20 US large caps)|NIFTY 50 stocks|20 US large caps/);
+  expect(text).toMatch(/\d+ of the (NIFTY 50 stocks|20 of the largest US companies)|NIFTY 50 stocks|20 of the largest US companies/);
   await noSideways(page);
   expect(errors).toEqual([]);
 });

@@ -111,7 +111,7 @@ test("trend scan: the Stage 2 + Supertrend scan of a small group keeps its colum
   await page.getByRole("group", { name: "Scan rule sets", exact: true }).getByRole("button", { name: "Golden cross (50/200)", exact: true }).click();
   await expect(page.getByText("Alert me after each close")).toHaveCount(0);                  // the alert belongs to ST S2 only
   await page.getByRole("button", { name: "Scan", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Golden cross \(50\/200\): 20 US large caps/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Golden cross \(50\/200\): 20 of the largest US companies/ })).toBeVisible();
   await expect(page.getByText("Stocks checked").first()).toBeVisible();
   await sane(page, errors);
 });

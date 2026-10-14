@@ -21,7 +21,7 @@ test("every StratLab library strategy gets its own HTML with its own title and a
   const files = Object.fromEntries(libraryFiles(read("index.html")));
   assert.equal(Object.keys(files).length, seo.LIBRARY_SEEDS.length);
   const page = files["library/seed-supertrend-us/index.html"];
-  assert.match(page, /<title>Supertrend flip · 20 US large caps: rules and verdict · StratLab<\/title>/);
+  assert.match(page, /<title>Supertrend flip: rules and verdict · StratLab<\/title>/);
   assert.match(page, /<link rel="canonical" href="https:\/\/stratlab\.studio\/library\/seed-supertrend-us">/);
   assert.match(page, /content="index, follow"/);
   assert.doesNotMatch(page, /<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
@@ -34,7 +34,7 @@ test("a library page says its dates as days and its universe once (R6V-004)", ()
   assert.equal(testedRange({ from: "2021-10-11T00:00:00-04:00", to: "2026-10-06T00:00:00-04:00" }), "11 Oct 2021 to 6 Oct 2026");
   assert.equal(testedRange({ from: "2021-10-11T00:00:00+05:30", to: "2026-10-06T00:00:00+05:30" }), "11 Oct 2021 to 6 Oct 2026");
   assert.equal(testedRange(null), null);
-  assert.equal(whereShown("Supertrend flip · 20 US large caps", "20 US large caps"), null);
+  assert.equal(whereShown("Supertrend flip · 20 of the largest US companies", "20 of the largest US companies"), null);
   assert.equal(whereShown("Opening-range breakout", "25 most liquid F&O stocks"), "25 most liquid F&O stocks");
   const pub = read("src/pages/PublicLibrary.tsx");
   assert.match(pub, /Tested \$\{testedRange\(e\.range\)\}/);

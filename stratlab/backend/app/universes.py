@@ -28,7 +28,7 @@ PRESETS = {
             "JSWSTEEL", "TITAN", "HCLTECH", "WIPRO", "ONGC", "COALINDIA"]},
     ],
     "US": [
-        {"id": "us_mega", "name": "20 US large caps", "symbols": [
+        {"id": "us_mega", "name": "20 of the largest US companies", "symbols": [
             "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "UNH", "XOM",
             "MA", "JNJ", "PG", "HD", "COST", "WMT"]},
     ],

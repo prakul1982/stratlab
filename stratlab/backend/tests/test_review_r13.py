@@ -254,10 +254,10 @@ def test_the_stage_2_plus_supertrend_list_holds_only_the_whole_rule(monkeypatch)
     assert [r["symbol"] for r in got["st_s2"]] == ["V", "MA"] and [r["symbol"] for r in got["stage2"]] == ["UNH"]
     f = {"kind": "market", "region": "US", "day": "2026-10-09", "weekly": False, "scan": got}
     secs = write.market_sections(f)
-    assert [s["title"] for s in secs] == ["New on Stage 2 + Supertrend (20 US large caps)", "New in Stage 2 only (20 US large caps)"]
+    assert [s["title"] for s in secs] == ["New on Stage 2 + Supertrend (20 of the largest US companies)", "New in Stage 2 only (20 of the largest US companies)"]
     assert [i["text"].split()[0] for i in secs[0]["items"]] == ["V", "MA"]
     lead = write.template(f)
-    assert "2 stocks from the 20 US large caps newly matched the Stage 2 + Supertrend rule." in lead
+    assert "2 stocks from the 20 of the largest US companies newly matched the Stage 2 + Supertrend rule." in lead
     assert "1 other stock newly entered Stage 2 without the Supertrend." in lead
 
 

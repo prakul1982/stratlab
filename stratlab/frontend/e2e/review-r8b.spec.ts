@@ -55,7 +55,7 @@ test("the paper overview gives the worst day and the deepest fall from the whole
   await expect(strip).toContainText("Worst day", { timeout: 30_000 });
   await expect(strip).toContainText("5 Oct");
   await expect(strip).toContainText("−5.4%");
-  await expect(strip).toContainText(/2,70,494 from the high point, 9 Oct/);
+  await expect(strip).toContainText(/2,70,494 from the high point to the low on 9 Oct/);
   expect(errors).toEqual([]);
 });
 

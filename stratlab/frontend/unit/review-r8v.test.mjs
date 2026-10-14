@@ -21,8 +21,8 @@ const tag = (html, re) => (html.match(re) ?? [])[1];
 
 // the public library's entry for one strategy, as GET /public/library gives it (the fields the build reads)
 const supertrend = {
-  id: "seed-supertrend-us", name: "Supertrend flip · 20 US large caps", market: "US", reason: null,
-  group: { name: "20 US large caps", members: Array.from({ length: 20 }, (_, i) => `S${i}`) },
+  id: "seed-supertrend-us", name: "Supertrend flip · 20 of the largest US companies", market: "US", reason: null,
+  group: { name: "20 of the largest US companies", members: Array.from({ length: 20 }, (_, i) => `S${i}`) },
   verdict: { verdict: "edge", label: "Passed all 3 checks run", headline: "Passed all 3 checks run.",
     fact_headline: "117.1 points behind buy and hold after costs; passed all 3 checks run.",
     fact_summary: "It returned +55.8% after costs; buying and holding over the same period returned +172.9%, 117.1 points more." },
@@ -38,17 +38,17 @@ test("a library strategy's raw HTML leads with its result: title, description, o
   assert.equal(tag(page, /<meta name="twitter:title" content="([^"]*)">/), title);
   const desc = tag(page, /<meta name="description" content="([^"]*)">/);
   assert.ok(desc.startsWith("117.1 points behind buy and hold after costs;"), desc);
-  assert.equal(desc.match(/20 US large caps/g).length, 1, desc);
+  assert.equal(desc.match(/20 of the largest US companies/g).length, 1, desc);
   assert.equal(tag(page, /<meta property="og:description" content="([^"]*)">/), desc);
   assert.deepEqual(h1s(page), ["117.1 points behind buy and hold after costs; passed all 3 checks run."]);
-  assert.match(page, /<p>Supertrend flip · 20 US large caps<\/p>/);
+  assert.match(page, /<p>Supertrend flip · 20 of the largest US companies<\/p>/);
   assert.match(page, /It returned \+55\.8% after costs/);
   assert.match(page, /Enters when the price crosses above the Supertrend \(10, 3\)/);
   assert.doesNotMatch(page, /rules and verdict/);
   // the same words the app's own code writes once the page has drawn
   const { libraryTitle, libraryDescription } = seo;
   assert.equal(libraryTitle(supertrend.name, supertrend.verdict.fact_headline, supertrend.verdict.label), title);
-  assert.equal(libraryDescription({ name: supertrend.name, where: "20 US large caps", group: "20 US large caps",
+  assert.equal(libraryDescription({ name: supertrend.name, where: "20 of the largest US companies", group: "20 of the largest US companies",
     factHeadline: supertrend.verdict.fact_headline, headline: supertrend.verdict.headline, reason: null }), desc);
   // a strategy the server didn't give (unreachable at build time): its own words, as before
   const plain = files["library/seed-golden-cross-in/index.html"];
