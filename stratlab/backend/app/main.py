@@ -894,8 +894,9 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
-    if req.alert_email and not alerts.alert_emails_on(profile["id"]):
-        alerts.set_alert_emails(profile["id"], True)       # saving an address again turns alert emails back on after an unsubscribe
+    new_addr = (req.alert_email or "").strip().lower()
+    if new_addr and new_addr != (profile.get("alert_email") or "").strip().lower() and not alerts.alert_emails_on(profile["id"]):
+        alerts.set_alert_emails(profile["id"], True)       # a new address turns alert emails back on after an unsubscribe; saving the same one doesn't
     if req.daily_report is not None:
         prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
         db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))

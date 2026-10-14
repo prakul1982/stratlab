@@ -106,7 +106,10 @@ def inr_compact(v) -> str:
 
 def pct(x, dp: int = 2) -> str:
     """Signed percent with a real minus: +0.60%, −1.25%."""
-    return "–" if x is None else f"{'+' if x > 0 else MINUS if x < 0 else ''}{abs(x):.{dp}f}%"
+    if x is None:
+        return "–"
+    r = round(x, dp)                           # round first: a move that rounds to zero carries no sign
+    return f"{'+' if r > 0 else MINUS if r < 0 else ''}{abs(r):.{dp}f}%"
 
 
 def pct_plain(x, dp: int = 2) -> str:
@@ -134,6 +137,8 @@ def money(v, currency: str | None = "INR", dp: int = 0, signed: bool = False) ->
     if v is None:
         return "–"
     v = float(v)
+    if round(v, dp) == 0:
+        v = 0.0                                # rounds to nothing: no sign
     sign = (MINUS if v < 0 else "+" if v > 0 else "") if signed else (MINUS if v < 0 else "")
     cur = (currency or "INR").upper()
     if cur == "INR":

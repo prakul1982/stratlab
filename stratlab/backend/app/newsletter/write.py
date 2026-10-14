@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from .. import email_kit as kit
 from ..ai_providers import AIError, complete, extract_json
 from ..config import settings
+from ..data.expiries import trading_on_or_before
 from ..intel.net import TTLCache
 
 FOOTER = "Facts from exchange filings, company documents and market data. Not investment advice."
@@ -320,6 +321,8 @@ def close_stamp(issue: dict) -> str | None:
         d = datetime.fromisoformat(str(issue["day"])[:10])
     except ValueError:
         return None
+    if issue.get("weekly"):                    # the weekly issue is dated its Saturday; the close is the last trading day before it
+        d = datetime.combine(trading_on_or_before(d.date(), issue["region"]), d.time())
     return f"the {CLOSE_AT[issue['region']]} close of {d.day} {d:%b %Y}"
 
 

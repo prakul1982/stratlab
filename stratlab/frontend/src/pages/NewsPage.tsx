@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
-import { asOf, marketTz, safeHref } from "../lib/format";
+import { asOf, marketTz, pct, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { dayName, issueStamp, issueTab, issueToShow, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
@@ -131,6 +131,7 @@ function IssueView({ id }: { id: string }) {
                 return (
                   <li key={j}>
                     <ItemText text={it.text} url={it.url} />
+                    {it.price != null && <span className="k-note"> {it.price.toLocaleString(region === "US" ? "en-US" : "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{it.change_pct != null && <>, {pct(it.change_pct, 2)} {it.since}</>}</span>}
                     {it.symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(it.symbol)}`}>{it.symbol}</Link></>}
                     {!!it.lines?.length && <ul className="news-lines">{it.lines.map((l, k) => <li key={k}><ItemText text={l.text} url={l.url} /></li>)}</ul>}
                   </li>
