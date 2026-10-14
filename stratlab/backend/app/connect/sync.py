@@ -97,7 +97,7 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
     merged, counts = merge_sync(before["items"], found, via, replace and whole)
     kept = 0 if whole else len(had - {_key(f) for f in found})
     limit = plans.holdings_limit(profile["_plan"])
-    over, merged = [i["symbol"] for i in merged[limit:]], merged[:limit]
+    merged, over = holdings.cap(merged, before["items"], limit)
     saved = bool(found) or counts["added"] or counts["changed"] or len(merged) != len(before["items"])
     if saved:
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}

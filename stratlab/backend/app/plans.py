@@ -394,6 +394,7 @@ def access_plan(profile: dict) -> str:
     """What the user can use right now: Pro for everyone during the launch offer, else what they pay for, or Basic
     while they have free Basic time (from inviting friends) and pay for less.
 
+    The site owner (an id recorded at a Google-proved admin sign-in, admin.recorded_owner) gets Pro.
     The site owner's "View as" (auth.current_profile sets `_view_as` for a verified admin only) wins over all of it,
     the launch offer and free Basic time included, so every lock and limit shows as that plan has it. It changes this
     answer only: effective_plan, the stored plan and billing never read it."""
@@ -401,6 +402,9 @@ def access_plan(profile: dict) -> str:
     if seen:
         return seen
     if promo_active():
+        return "pro"
+    from .admin import recorded_owner
+    if recorded_owner(profile):     # the site owner, in background jobs too (auth.current_profile does it in a request)
         return "pro"
     plan = effective_plan(profile)
     if plan == "free":

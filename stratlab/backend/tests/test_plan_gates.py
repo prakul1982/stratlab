@@ -174,12 +174,27 @@ def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
     assert main.lift("free", "holdings", "holdings") == " Basic gives 100." and main.lift("basic", "screens", "screens") == " Pro gives 25."
     assert main.lift("free", "live_limit", "paper sessions") == " Basic gives 2." and main.lift("free", "stock_alerts", "x") == " Basic gives 25."
     monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
+    monkeypatch.setattr(main.holdings, "load", lambda uid: {"items": [], "source": None})   # the refusal compares with the saved list
     try:
         c = as_plan("free")
         r = c.put("/holdings", json={"items": [{"symbol": f"S{i}", "qty": 1} for i in range(31)]})
         assert r.status_code == 402 and r.json()["detail"]["message"] == "Your plan keeps up to 30 stocks in My Holdings. Basic gives 100."
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_parallel_backtests_cant_pass_the_monthly_limit_together(paid, monkeypatch):
+    """At 99 of Basic's 100, a backtest already running holds the last one: a second run at the same time is refused."""
+    monkeypatch.setattr(main.db, "count_usage", lambda uid, kind, since: 99)
+    profile = {"id": "u-race", "_plan": "basic"}
+    with main.backtest_slot(profile) as limit:
+        assert limit == 100
+        with pytest.raises(Exception) as e:
+            with main.backtest_slot(profile):
+                pass
+        assert stop_reason(e) == "You've used all 100 backtests for this month. Pro has no limit on backtests."
+    with main.backtest_slot(profile):                    # released when the run ends
+        pass
 
 
 def test_downgrade_stops_sessions_the_plan_no_longer_covers(paid):

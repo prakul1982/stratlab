@@ -1180,23 +1180,34 @@ money_mf.setup(throttle)
 
 
 # ---------- backtests and notebooks ----------
-def use_backtest(profile) -> int | None:
-    """Check the monthly backtest limit before running one; returns the limit."""
+def use_backtest(profile, held: int = 0) -> int | None:
+    """Check the monthly backtest limit before running one (`held`: runs of theirs already going); returns the limit."""
     limit = PLANS[profile["_plan"]]["backtests_per_month"]
-    if limit is not None and backtests_used(profile) >= limit:
+    if limit is not None and backtests_used(profile) + held >= limit:
         upgrade(f"You've used all {limit} backtests for this month." + lift(profile["_plan"], "backtests_per_month", "backtests"),
                 "backtest_limit")
     return limit
 
 
+@contextmanager
+def backtest_slot(profile):
+    """Holds one backtest for the length of the run, like ai_slot, so parallel runs can't all pass the monthly check
+    before any is counted. Yields the limit; record the usage inside the block."""
+    box = {}
+    def check(held):
+        box["limit"] = use_backtest(profile, held)
+    with usage_slots.hold(profile["id"], "backtest", check):
+        yield box["limit"]
+
+
 def run_test(profile, strategy: Strategy, req) -> dict:
     if not strategy.entry:
         err(400, "no_entry_rules", "Add at least one buy rule first.")
-    limit = use_backtest(profile)
-    data = research.load(markets, strategy, req)
-    check_features(profile, strategy, data["inst"])
-    out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
-    db.add_usage(profile["id"], "backtest")
+    with backtest_slot(profile) as limit:
+        data = research.load(markets, strategy, req)
+        check_features(profile, strategy, data["inst"])
+        out = compute.run(strategy, data)                   # in a worker process: other pages stay quick meanwhile
+        db.add_usage(profile["id"], "backtest")
     invite_rewards.safe_touch(profile, "backtest")
     used = backtests_used(profile)
     out["usage"] = {"backtests_used": used, "backtests_limit": limit}
@@ -1212,18 +1223,18 @@ def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) 
     if prov is None or not prov.ready():
         err(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
     check_group_size(profile, len(group.get("members") or []))
-    limit = use_backtest(profile)
-    ids, missing = universes.resolve(markets, market, group.get("members") or [])
-    datasets, problems = universes.load_all(markets, strategy, ids, req.days)
-    problems = [f"{m}: not listed any more" for m in missing] + problems
-    if len(datasets) < 2:
-        err(400, "group_empty", "Fewer than two of this group's instruments had data for this period. "
-            + (" ".join(problems[:3]) if problems else ""))
-    for d in datasets:
-        check_features(profile, strategy, d["inst"])
-    max_days = min(d["max_days"] for d in datasets)
-    result = research.run_group(datasets, strategy, group, min(req.days, max_days), max_days)
-    db.add_usage(profile["id"], "backtest")
+    with backtest_slot(profile) as limit:
+        ids, missing = universes.resolve(markets, market, group.get("members") or [])
+        datasets, problems = universes.load_all(markets, strategy, ids, req.days)
+        problems = [f"{m}: not listed any more" for m in missing] + problems
+        if len(datasets) < 2:
+            err(400, "group_empty", "Fewer than two of this group's instruments had data for this period. "
+                + (" ".join(problems[:3]) if problems else ""))
+        for d in datasets:
+            check_features(profile, strategy, d["inst"])
+        max_days = min(d["max_days"] for d in datasets)
+        result = research.run_group(datasets, strategy, group, min(req.days, max_days), max_days)
+        db.add_usage(profile["id"], "backtest")
     invite_rewards.safe_touch(profile, "backtest")
     rec = research.record_group(result, strategy, req.label, version, db.now_iso(), group, datasets, problems)
     return rec, {"backtests_used": backtests_used(profile), "backtests_limit": limit}
@@ -1435,13 +1446,13 @@ def run_basket(nid: str, version: int, profile=Depends(current_profile)):
         err(400, "group_experiment", "This check runs on one instrument. Open the notebook on a single stock to use it.")
     strategy = Strategy(**exp["strategy"])
     inst = exp.get("instrument") or {}
-    limit = use_backtest(profile)          # the whole check counts as one experiment
-    check_features(profile, strategy, inst)
-    try:
-        out = basket.run(markets, strategy, inst.get("market", "IN"), inst.get("id"), exp.get("days") or 365)
-    except research.ResearchError as e:
-        err(e.status, e.code, e.message)
-    db.add_usage(profile["id"], "backtest")
+    with backtest_slot(profile) as limit:          # the whole check counts as one experiment
+        check_features(profile, strategy, inst)
+        try:
+            out = basket.run(markets, strategy, inst.get("market", "IN"), inst.get("id"), exp.get("days") or 365)
+        except research.ResearchError as e:
+            err(e.status, e.code, e.message)
+        db.add_usage(profile["id"], "backtest")
     exp["basket"] = out
     nb["experiments"] = [exp if e["v"] == version else e for e in exps]
     save_notebook(profile, nb)
@@ -1463,11 +1474,11 @@ def run_walkforward(nid: str, version: int, profile=Depends(current_profile)):
     if (exp.get("instrument") or {}).get("type") == "GROUP":
         err(400, "group_experiment", "This check runs on one instrument. Open the notebook on a single stock to use it.")
     strategy = Strategy(**exp["strategy"])
-    limit = use_backtest(profile)
-    check_features(profile, strategy, inst)
-    data = research.load(markets, strategy, basket._Req(inst["id"], exp.get("days") or 365))
-    out = walkforward.run(data["bars"], strategy, data["start"], data["lot"], data["kind"])
-    db.add_usage(profile["id"], "backtest")
+    with backtest_slot(profile) as limit:
+        check_features(profile, strategy, inst)
+        data = research.load(markets, strategy, basket._Req(inst["id"], exp.get("days") or 365))
+        out = walkforward.run(data["bars"], strategy, data["start"], data["lot"], data["kind"])
+        db.add_usage(profile["id"], "backtest")
     exp["walkforward"] = out
     nb["experiments"] = [exp if e["v"] == version else e for e in exps]
     save_notebook(profile, nb)
@@ -2192,10 +2203,17 @@ def deep_used(profile, kind: str) -> int:
 def use_deep(profile, kind: str, sym: str, region: str) -> None:
     """Count a company against the plan's monthly deep dives or decks. Only the first time in a month counts: opening
     the same company again (or its deck in the other format) is free. Stops with an upgrade message at the limit."""
+    if mark := check_deep(profile, kind, sym, region):
+        db.add_usage(profile["id"], kind)
+        db.add_usage(profile["id"], mark)
+
+
+def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
+    """use_deep's check alone: the usage mark to record, None when this company already counted this month."""
     key, limit_of = DEEP_KINDS[kind]
     mark, since = f"{kind}:{region}:{sym}", month_start_iso()
     if db.count_usage(profile["id"], mark, since):
-        return
+        return None
     limit = limit_of(profile["_plan"])
     if limit is not None and deep_used(profile, kind) >= limit:
         more = lift(profile["_plan"], key, "deep dives" if kind == "deepdive" else "decks")
@@ -2203,8 +2221,7 @@ def use_deep(profile, kind: str, sym: str, region: str) -> None:
             upgrade(f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month. Companies "
                     f"you've already opened this month still open.{more}", "deepdive_limit")
         upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month.{more}", "deck_limit")
-    db.add_usage(profile["id"], kind)
-    db.add_usage(profile["id"], mark)
+    return mark
 
 
 def deep_symbol(symbol: str, region: str) -> str:
@@ -2553,8 +2570,8 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         covered = {holdings.market_of(i) for i in found}
         found = found + [i for i in before["items"] if holdings.market_of(i) not in covered]
     limit = holdings_limit(profile["_plan"])
-    over, found = [i["symbol"] for i in found[limit:]], found[:limit]
-    if found:                             # nothing matched: the saved holdings stay as they were
+    found, over = holdings.cap(found, before["items"], limit)
+    if found:                            # nothing matched: the saved holdings stay as they were
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
         invite_rewards.safe_touch(profile, "holdings")
@@ -2568,10 +2585,13 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     that match no listed company are sent back and left out."""
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     limit = holdings_limit(profile["_plan"])
-    if len(req.items) > limit:
-        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
     before = holdings.load(profile["id"])
     saved = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
+    # over the limit after a downgrade: a list of stocks already held, no longer than the saved one, still saves, so
+    # stocks come off one at a time
+    new = any((i.market, i.symbol.strip().upper()) not in saved for i in req.items)
+    if len(req.items) > limit and (new or len(req.items) > len(before["items"])):
+        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
     kept, rows, us_rows = [], [], []
     for n, i in enumerate(req.items, 1):
         old = saved.get((i.market, i.symbol.strip().upper()))
@@ -2994,8 +3014,11 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
     region = deep_region(region)
     sym = deep_symbol(symbol, region)
     base = deep_base(sym, region)
-    use_deep(profile, "deepdive", sym, region)
-    use_deep(profile, "deck", sym, region)
+    marks = {k: check_deep(profile, k, sym, region) for k in ("deepdive", "deck")}   # both limits before either counts
+    for k, mark in marks.items():
+        if mark:
+            db.add_usage(profile["id"], k)
+            db.add_usage(profile["id"], mark)
     view = deep_view(sym, base)
     if format == "pdf":
         return Response(deck.build_pdf(view), media_type="application/pdf",
