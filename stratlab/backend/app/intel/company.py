@@ -169,6 +169,11 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
     if any(d.get("converted") for d in rows):
         note += "; payments missing from the US listing's history are converted from the home listing's at that day's rate"
     out = _set_metric(c, "Div yield", y, note)
+    eps = num(next((i.get("value") for g in c.get("metrics") or [] for i in g["items"] if i["label"] == "EPS TTM"), None))
+    if c.get("region", "IN") != "IN" and eps and eps > 0 and any(i["label"] == "Payout ratio" for g in c.get("metrics") or [] for i in g["items"]):
+        # the dividends of the last twelve months over the earnings of the same twelve months (NVDA: the source's 3.5%
+        # beside $0.52 of dividends and $7.91 of earnings a share, 6.6%)
+        out = _set_metric(out, "Payout ratio", round(total / eps * 100, 1), f"{cur}{total:,.2f} of dividends a share in the last 12 months over {cur}{eps:,.2f} of earnings a share")
     if isinstance(out.get("summary"), dict):
         out["summary"] = {**out["summary"], "div_yield": y}
     return out

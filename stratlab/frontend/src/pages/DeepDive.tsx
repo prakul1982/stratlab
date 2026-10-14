@@ -34,6 +34,7 @@ export interface DeepView {
   calls: number; card: Card | null; card_stale: boolean; checklist: Checklist;
   as_of?: string | null; numbers_at?: string | null; price_at?: string | null;
   industry_measures?: { key: string; label: string | null; measures: string[] };
+  snapshot?: { div_yield: number | null };
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; bank?: boolean; notes?: string[]; capex_reported?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null;
@@ -269,6 +270,7 @@ export function DeepDivePage() {
               <StatRow>
                 <Stat label={v.valuation.name} value={v.valuation.value == null ? "–" : `${v.valuation.value.toFixed(1)}×`} />
                 {v.valuation.short !== "P/E" && <Stat label="Price to earnings" value={v.valuation.pe == null ? "–" : `${v.valuation.pe.toFixed(1)}×`} />}
+                {v.snapshot?.div_yield != null && <Stat label="Dividend yield" value={`${v.snapshot.div_yield.toFixed(2)}%`} />}
               </StatRow>
               <p className="k-note">{v.valuation.why} A number to compare with similar companies, not a verdict on the price.</p>
             </Panel>

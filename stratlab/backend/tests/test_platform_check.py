@@ -120,3 +120,21 @@ def test_prices_are_judged_by_the_markets_own_date(monkeypatch):
             return Prov()
     assert pc.check_market(Reg(), "US")["state"] == "pass"
     assert pc.check_market(Reg(), "US", date(2026, 10, 15))["state"] == "fail"       # judged by India's date, as before
+
+
+def test_a_scan_has_the_time_a_cold_read_of_its_stocks_needs(monkeypatch):
+    """The evening run reads 50 stocks' candles from the rate-limited sources (R14): a scan that takes longer than any
+    other check's limit still passes, while a slow check of another area still fails at the usual one."""
+    import time
+    from app import platform_check as pc
+    monkeypatch.setattr(pc, "TIMEOUT", 0.2)
+    monkeypatch.setattr(pc, "TIMEOUTS", {"Scans": 2})
+    slow = lambda: (time.sleep(0.5), pc._result("slow", "a", "pass", "ok"))[1]
+    out = pc.run_all([("Prices: slow", "Prices", slow), ("Scan: slow", "Scans", slow)])["checks"]
+    assert [c["state"] for c in out] == ["fail", "pass"] and out[0]["name"] == "Prices: slow"
+    assert "Took longer than 0.2 seconds" in out[0]["detail"]
+
+
+def test_the_scan_limit_covers_the_broker_rate_limit_twice_over():
+    from app import platform_check as pc, scan
+    assert pc.TIMEOUTS["Scans"] >= scan.MAX * 0.36 * 2 and pc.TIMEOUTS["Scans"] > pc.TIMEOUT
