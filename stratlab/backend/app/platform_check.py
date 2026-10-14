@@ -11,6 +11,11 @@ from .data import calendar
 from .data.markets import BY_ID
 
 TIMEOUT = 45          # seconds a single check may take before it counts as failed
+# A scan reads 50 stocks' daily candles, and after the close the broker's cached candles are read again (kite_service,
+# R8B-001), so the evening run reads all 50 cold: the broker allows ~3 calls a second (50 reads = 18 s on their own) and
+# the global source's bucket is 90 a minute after a burst of 15 (35 more reads = 23 s). Sharing those limits with the
+# run's other checks and the evening jobs, that is more than 45 s on a healthy server (every automatic run since 12 Oct).
+TIMEOUTS = {"Scans": 150}
 
 
 def _day(d) -> str:
@@ -305,11 +310,11 @@ def run_all(checks: list[tuple[str, callable]]) -> dict:
         futures = [(name, area, pool.submit(_timed, fn)) for name, area, fn in checks]
         for name, area, f in futures:
             try:
-                res, secs = f.result(timeout=TIMEOUT)
+                res, secs = f.result(timeout=TIMEOUTS.get(area, TIMEOUT))
                 res["seconds"] = secs
                 out.append(res)
             except FutureTimeout:
-                out.append(_result(name, area, "fail", f"Took longer than {TIMEOUT} seconds."))
+                out.append(_result(name, area, "fail", f"Took longer than {TIMEOUTS.get(area, TIMEOUT)} seconds."))
             except Exception as e:
                 msg = getattr(e, "detail", None)
                 msg = msg.get("message") if isinstance(msg, dict) else (str(e) or e.__class__.__name__)
