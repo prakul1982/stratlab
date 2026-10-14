@@ -94,7 +94,7 @@ export function DrawdownBand({ yours, p95, worst }: { yours: number; p95: number
       <line x1={X(yours)} y1={30} x2={X(p95)} y2={30} stroke="var(--orange-soft)" strokeWidth={10} />
       <line x1={X(yours)} y1={16} x2={X(yours)} y2={44} stroke="var(--ink)" strokeWidth={2} />
       <circle cx={X(worst)} cy={30} r={5} fill="var(--orange)" stroke="var(--card)" strokeWidth={2} />
-      <text className="ch-tick strong" x={Math.max(30, X(yours))} y={60} textAnchor="middle">yours {fall(yours)}</text>
+      <text className="ch-tick strong" x={Math.min(272, Math.max(8, X(yours)))} y={60} textAnchor={X(yours) > 200 ? "end" : X(yours) < 60 ? "start" : "middle"}>yours {fall(yours)}</text>
       <text className="ch-tick strong" x={272} y={12} textAnchor="end">worst {fall(worst)}</text>
       <text className="ch-tick" x={8} y={12}>0%</text>
     </svg>

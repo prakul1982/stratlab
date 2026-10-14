@@ -717,7 +717,7 @@ td.num, .num { font-family: var(--sans); }
 kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line-2); background: var(--paper); }
 @media (max-width: 640px) { .kbd-hint { display: none; } }
 /* a touch screen with no keyboard: shortcut hints only puzzle (a landscape phone is wider than 640px) */
-@media (hover: none) and (pointer: coarse) { .kbd-hint, .search-btn kbd { display: none; } }
+@media (hover: none) and (pointer: coarse) { .kbd-hint, .search-btn kbd, .palette .esc-hint { display: none; } }
 
 .terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 8px 24px; margin: 10px 0 0; }
 .terms dt { font-weight: 600; font-size: 13.5px; }
@@ -1591,6 +1591,13 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-tap input { width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; }
 .k-table tfoot th, .k-table tfoot td { font-weight: 600; border-top: 1px solid var(--line-2); border-bottom: 0; padding: 11px 14px; font-size: 14px; text-align: left; background: var(--paper-2); }
 .k-table tfoot td.k-num { text-align: right; }
+/* the totals line's long label wraps instead of widening the Symbol column; on a phone the first column stays put while the figures scroll (R18-003) */
+.k-table tfoot th { white-space: normal; min-width: 0; }
+@media (max-width: 640px) {
+  .k-tbl-wrap:not(.stack):not(.pinhead) .k-table thead th:first-child, .k-tbl-wrap:not(.stack):not(.pinhead) .k-table tbody th:first-child,
+  .k-tbl-wrap:not(.stack):not(.pinhead) .k-table tfoot th:first-child { position: sticky; left: 0; z-index: 1; background: var(--card); max-width: 40vw; }
+  .k-tbl-wrap:not(.stack):not(.pinhead) .k-table thead th:first-child, .k-tbl-wrap:not(.stack):not(.pinhead) .k-table tfoot th:first-child { background: var(--paper-2); }
+}
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
 .k-table td.k-act, .k-table th.k-act { text-align: right; width: 1%; padding-left: var(--s1); }
