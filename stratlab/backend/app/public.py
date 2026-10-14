@@ -110,6 +110,11 @@ def image(token: str) -> bytes | None:
     return base64.b64decode(raw) if raw else None
 
 
+def has_image(token: str) -> bool:
+    """Whether a picture is kept for the link, without decoding it (a preview page only needs to know)."""
+    return bool(TOKEN.match(token or "")) and bool(db.get_setting(f"shareimg:{token}"))
+
+
 def url(token: str) -> str:
     return f"{settings.PUBLIC_SITE_URL}/v/{token}"
 
@@ -127,6 +132,7 @@ def preview_html(token: str, snap: dict, has_image: bool) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>{e(title)} · StratLab</title>
 <meta name="description" content="{e(desc)}">
+<meta name="robots" content="noindex,follow">
 <meta property="og:type" content="article"><meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{e(url(token))}"><meta property="og:image" content="{e(img)}">

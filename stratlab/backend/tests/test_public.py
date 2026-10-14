@@ -1,9 +1,10 @@
 """Public verdict links: a frozen snapshot without the owner or the rules, an image, a preview page, and turning off."""
 import base64
+from types import SimpleNamespace
 
 import pytest
 
-from app import db
+from app import db, public
 from tests.pngmaker import png_b64
 from tests.test_notebooks import EMA, api  # noqa: F401  (fixture)
 
@@ -45,6 +46,20 @@ def test_share_link_life_cycle(api, store):
     api.delete(f"/notebooks/{nb['id']}/experiments/1/share")
     assert api.get(f"/public/v/{token}").status_code == 404
     assert api.get(f"/v/{token}", follow_redirects=False).status_code in (302, 307)
+
+
+def test_verdict_preview_is_kept_out_of_search_and_checks_its_image_without_decoding(api, store, monkeypatch):
+    nb = api.post("/notebooks", json={"name": "T", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={"image": "data:image/png;base64," + PNG}).json()["token"]
+
+    def no_decode(*_a, **_k):
+        raise AssertionError("the picture was decoded just to see that it exists")
+    monkeypatch.setattr(public, "base64", SimpleNamespace(b64decode=no_decode))
+    assert public.has_image(token) is True and public.has_image("nope") is False
+    page = api.get(f"/v/{token}")
+    assert page.status_code == 200 and '<meta name="robots" content="noindex,follow">' in page.text
+    assert f"/v/{token}.png" in page.text and page.headers["cache-control"] == "public, max-age=300"
 
 
 def test_bad_images_and_tokens_are_refused(api, store):

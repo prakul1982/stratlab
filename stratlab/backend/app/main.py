@@ -3186,7 +3186,7 @@ def public_verdict_page(token: str):
     if not snap:
         # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
         return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
-    return HTMLResponse(public.preview_html(token, snap, public.image(token) is not None))
+    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=300"})
 
 
 # ---------- company fact cards: an image and a public link that previews as it ----------
@@ -3232,7 +3232,7 @@ def company_card_page(card: str):
     c = company_cards.load(card)
     if not c:
         return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
-    return HTMLResponse(company_cards.preview_html(card, c, company_cards.image(card) is not None))
+    return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": "public, max-age=300"})
 
 
 # ---------- public company pages, for search engines ----------
