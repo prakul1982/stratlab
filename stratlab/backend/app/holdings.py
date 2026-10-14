@@ -79,10 +79,11 @@ def saved_day(now: datetime | None = None) -> date:
     return d
 
 
-def save(uid: str, items: list[dict], source: str, stamped: bool = False) -> dict:
-    """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp)."""
+def save(uid: str, items: list[dict], source: str, stamped: bool = False, since: str | None = None) -> dict:
+    """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp): `since` when the
+    quantities are as of an earlier day (a statement's last day), else the day they're saved."""
     if not stamped:
-        items = stamp(items, load(uid)["items"], saved_day().isoformat())
+        items = stamp(items, load(uid)["items"], min(since, saved_day().isoformat()) if since else saved_day().isoformat())
     data = {"items": items, "source": source if source in SOURCES else "CSV",
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     db.set_setting(_key(uid), json.dumps(data))

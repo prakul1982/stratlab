@@ -209,7 +209,8 @@ def ingest(uid: str, root: ET.Element) -> dict:
     rows, left = positions(root)
     got = sync.sync_holdings(profile, rows, "ibkr", "Interactive Brokers") if rows or _had_ibkr(uid) else {"count": 0, "unmatched_count": 0}
     n = save_trades(uid, closed_trades(fills(root)))
-    state.update(uid, "ibkr", synced_at=state.now(), status="ok", detail=None, positions=got["count"], trades=n)
+    why = sync.note(got, "Interactive Brokers")      # an empty statement or an unmatched line keeps the US holdings read before
+    state.update(uid, "ibkr", synced_at=state.now(), status="partial" if why else "ok", detail=why, positions=got["count"], trades=n)
     return {"positions": got["count"], "unmatched": got["unmatched_count"], "left_out": left, "trades_added": n}
 
 

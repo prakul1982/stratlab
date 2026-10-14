@@ -26,7 +26,7 @@ type Policy = {
 };
 type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string };
 type View = {
-  as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null };
+  as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null };
   allocation: { class: string; label: string; value: number; pct: number | null }[]; assets: Row[]; liabilities: Row[];
   insurance: { policies: Policy[]; yearly_premium: number; cover: Record<string, number>; next: string | null };
   gold_price: { per_g: number; as_of: string } | null; rates: { epf: number; epf_note: string; ppf: number; ppf_note: string; sgb: number };
@@ -429,6 +429,8 @@ export function NetWorthPage() {
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
+            {/* a source that couldn't be read or valued: named, and no snapshot is taken from this total */}
+            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. No snapshot is taken until it can be counted.</Notice>}
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}

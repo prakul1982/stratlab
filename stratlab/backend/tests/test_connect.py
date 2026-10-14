@@ -275,8 +275,50 @@ def test_a_live_broker_wins_over_a_statement_and_sold_stocks_leave(w, on):
     assert items["INFY"]["qty"] == 99 and items["INFY"]["via"] == "kite" and items["INFY"]["avg"] == 1400.0
     upload(c, nsdl(shares=3))                                                     # the statement can't override the broker
     assert {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}["INFY"]["qty"] == 99
-    sync.sync_holdings(profile, [], "kite", "Zerodha Kite")                       # sold everything at the broker
-    assert "INFY" not in {i["symbol"] for i in holdings.load(PRO_ID)["items"]}
+    got = sync.sync_holdings(profile, [], "kite", "Zerodha Kite")                 # an empty reply is a failed read, not "sold everything"
+    assert got["empty"] and "failed read" in sync.note(got, "Zerodha")
+    assert {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}["INFY"]["qty"] == 99
+    sync.sync_holdings(profile, [{"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 1.0, "avg": None}], "kite", "Zerodha Kite")
+    assert "INFY" not in {i["symbol"] for i in holdings.load(PRO_ID)["items"]}  # a whole read without it: sold
+
+
+def test_a_read_with_an_unmatched_line_keeps_what_the_source_gave_before(w, on):
+    profile = sync.profile_for(PRO_ID)
+    infy = {"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 10.0, "avg": 1400.0}
+    itc = {"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": 380.0}
+    sync.sync_holdings(profile, [infy, itc], "kite", "Zerodha Kite")
+    got = sync.sync_holdings(profile, [{**infy, "qty": 12.0}, {"symbol": "QQZZNOPE", "isin": None, "name": "QQZZNOPE", "qty": 1.0, "avg": None}],
+                             "kite", "Zerodha Kite")
+    items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
+    assert items["INFY"]["qty"] == 12 and items["ITC"]["qty"] == 5 and items["ITC"]["avg"] == 380.0   # ITC wasn't in this read but stays
+    assert got["unmatched_count"] == 1 and got["kept"] == 1 and "QQZZNOPE" in sync.note(got, "Zerodha")
+
+
+def test_an_nps_balance_from_two_kinds_of_statement_is_one_entry(w, on):
+    assert statements.save_nps(PRO_ID, {"tier1": 100.0, "tier2": 0.0}, "2026-09-30", "pro") == ""                   # from the CAS
+    assert statements.save_nps(PRO_ID, {"tier1": 120.0, "tier2": 0.0}, "2026-10-05", "pro", how="nps_statement") == ""
+    nps = [i for i in money_networth.load(PRO_ID)["items"] if i["kind"] == "nps"]
+    assert len(nps) == 1 and nps[0]["tier1"] == 120
+    note = statements.save_nps(PRO_ID, {"tier1": 90.0, "tier2": 0.0}, "2026-08-31", "pro")                      # an older one
+    assert "newer" in note and [i["tier1"] for i in money_networth.load(PRO_ID)["items"] if i["kind"] == "nps"] == [120]
+
+
+def test_an_older_statement_leaves_the_nps_balance_alone(w, on, monkeypatch):
+    from casparser.types import NPSAccount, NPSScheme, NSDLCASData
+    sch = NPSScheme.model_construct(scheme="S", tier="I", units=1, nav=1, value=5000)
+    old = NSDLCASData.model_construct(accounts=[], statement_period=type("P", (), {"to": "30-Jun-2026"})(),
+                                      nps=NPSAccount.model_construct(value=5000, schemes=[sch]))
+    upload(w["client"], nsdl())                                                   # as of 30 Sep 2026
+    statements.save_nps(PRO_ID, {"tier1": 9000.0, "tier2": 0.0}, None, "pro")
+    monkeypatch.setattr(statements, "open_statement", lambda data, pws: old)
+    upload(w["client"], b"%PDF-1.4 fake")
+    assert [i["tier1"] for i in money_networth.load(PRO_ID)["items"] if i["kind"] == "nps"] == [9000]
+
+
+def test_a_statement_dates_its_holdings_by_its_own_last_day(w, on):
+    upload(w["client"], nsdl())                                                   # the period ends 30 Sep 2026
+    items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
+    assert items["INFY"]["since"] == "2026-09-30"                                 # a split after that day is still offered
 
 
 def test_a_sync_keeps_the_average_price_the_user_has(w, on):
@@ -755,6 +797,13 @@ def test_the_admin_callback_hands_user_logins_over(w, kite):
     assert r.status_code == 303 and r.headers["location"].endswith("kite=ok#accounts")
 
 
+def test_disconnecting_a_shared_zerodha_login_keeps_the_data_login(w, kite):
+    state.update("u-admin", "kite", token=vault.seal("DATA-LOGIN-TOKEN"), day=kite_user.today_ist(), shared=True)
+    w["client"].delete("/connect/kite", headers=ADMIN)
+    assert not [e for e in FakeKite.log if e[0] == "invalidate"]                  # only the stored copy is dropped
+    assert db.get_setting(state.KEY + "u-admin") is None
+
+
 def test_disconnecting_zerodha_deletes_the_token(w, kite):
     c = w["client"]
     kite_login(c)
@@ -929,6 +978,17 @@ def test_ibkr_a_crash_while_saving_is_one_failed_try_not_a_read_every_half_hour(
     state.update(PRO_ID, "ibkr", tried_at=day.isoformat())                              # the job's clock is the test's clock
     assert ibkr.run_daily(day + timedelta(minutes=30)) == {"users": 0, "ok": 0, "failed": 0}
     assert ibkr.run_daily(day + timedelta(days=1))["users"] == 1
+
+
+def test_ibkr_an_empty_statement_keeps_the_us_holdings(w, flex, monkeypatch):
+    c = w["client"]
+    connect_ibkr(c)
+    empty = FLEX_OK.split("<OpenPositions>")[0] + FLEX_OK.split("</OpenPositions>")[1]
+    monkeypatch.setattr(ibkr, "transport", flex_transport(empty))
+    assert c.post("/connect/ibkr/refresh", headers=PRO).status_code == 200
+    assert {"AAPL", "MSFT"} <= {i["symbol"] for i in holdings.load(PRO_ID)["items"]}
+    box = state.section(PRO_ID, "ibkr")
+    assert box["status"] == "partial" and "failed read" in box["detail"]
 
 
 def test_ibkr_disconnect_deletes_the_token_and_keeps_what_was_read(w, flex):

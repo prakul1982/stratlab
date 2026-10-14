@@ -2543,15 +2543,19 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
     found, missed = holdings.match_all(parsed["rows"], holdings_matcher())
     missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
     before = holdings.load(profile["id"])
+    n_read = len(found) if req.mode == "replace" else None
     if req.mode == "add":
         found = holdings.merge(before["items"] + found)
+    elif found:                           # a file replaces only the markets it covers: US holdings stay
+        covered = {holdings.market_of(i) for i in found}
+        found = found + [i for i in before["items"] if holdings.market_of(i) not in covered]
     limit = holdings_limit(profile["_plan"])
     over, found = [i["symbol"] for i in found[limit:]], found[:limit]
     if found:                             # nothing matched: the saved holdings stay as they were
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
         holdings.save(profile["id"], with_sectors(found, known), parsed["broker"])
         invite_rewards.safe_touch(profile, "holdings")
-    return ok({"broker": parsed["broker"], "imported": len(found), "saved": bool(found), "unmatched": missed[:200],
+    return ok({"broker": parsed["broker"], "imported": len(found) if n_read is None else min(n_read, len(found)), "saved": bool(found), "unmatched": missed[:200],
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
@@ -2697,13 +2701,16 @@ def _nw_crypto(coin: str):
 
 
 def _nw_stocks(profile) -> dict:
-    """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings)."""
+    """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings).
+    `us_no_rate` when there are US stocks but no dollar rate to count them in rupees."""
     h = holdings_view(profile)
     worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
     rate = h.get("usd_inr")
+    has_us = any(r.get("market") == "US" for r in h["rows"])
     return {"in": sum(worth(r) for r in h["rows"] if r.get("market") != "US"),
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
-            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate}
+            "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate,
+            "us_no_rate": has_us and not rate}
 
 
 app.include_router(money_networth.make_router(
@@ -2712,8 +2719,8 @@ app.include_router(money_networth.make_router(
 
 
 def _nw_value_of(uid: str) -> dict | None:
-    p = db.get_profile(uid)
-    return money_networth.build(money_networth.load(uid)["items"], _quiet(_nw_stocks, p) if p else None,
+    p = connect_sync.profile_for(uid)                    # with its plan, which My Holdings reads (a bare profile failed every time)
+    return money_networth.build(money_networth.load(uid)["items"], (_quiet(_nw_stocks, p) or {"failed": True}) if p else None,
                                 money_networth.mf_value(uid), money_networth.Prices(_nw_gold, _nw_crypto, usd_inr))
 
 

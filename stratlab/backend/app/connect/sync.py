@@ -4,8 +4,10 @@ uses. Each goes through the store's own matching, de-duplication and history, th
 
 For holdings a statement or a broker *states* what is held, so a sync sets the quantity (it doesn't add to it, which
 would double a share count each time the same file arrived) and keeps the average price already known when the
-source has none. Whatever came from a source and is no longer in its latest read is taken out (sold). Where two sources
-name the same stock, the live broker wins over a statement and a statement over a file or typed entry."""
+source has none. Whatever came from a source and is no longer in its latest read is taken out (sold), but only when
+that read was whole: it had rows and every row matched a listed company. An empty read, or one with a row that didn't
+match, keeps what the source gave before (an empty broker reply is a failed read, not "sold everything"). Where two
+sources name the same stock, the live broker wins over a statement and a statement over a file or typed entry."""
 from .. import holdings, plans
 
 PRIORITY = {"kite": 3, "ibkr": 3, "cas": 2}
@@ -73,9 +75,10 @@ def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = 
     return list(kept.values()), {"added": added, "changed": int(changed), "skipped": skipped}
 
 
-def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replace: bool = True) -> dict:
+def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replace: bool = True, since: str | None = None) -> dict:
     """Match a source's rows ({symbol, isin, name, qty, avg, market}) to listed companies and save them with My Holdings.
-    {"saved", "count", "unmatched": [...], "over_limit": [...], "added", "changed"}."""
+    `since` is the day the rows are as of (a statement's last day), else the day they're saved.
+    {"saved", "count", "unmatched": [...], "over_limit": [...], "added", "changed", "kept", "empty"}."""
     uid = profile["id"]
     in_rows = [r for r in rows if r.get("market") != "US"]
     us_rows = [r for r in rows if r.get("market") == "US"]
@@ -84,12 +87,27 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         us_found, us_missed = holdings.match_us(us_rows, deps.us_find)
         found, missed = found + us_found, missed + us_missed
     before = holdings.load(uid)
-    merged, counts = merge_sync(before["items"], found, via, replace)
+    had = {_key(i) for i in before["items"] if i.get("via") == via}
+    whole = bool(found) and not missed            # only a whole read takes out what the source no longer names
+    merged, counts = merge_sync(before["items"], found, via, replace and whole)
+    kept = 0 if whole else len(had - {_key(f) for f in found})
     limit = plans.holdings_limit(profile["_plan"])
     over, merged = [i["symbol"] for i in merged[limit:]], merged[:limit]
     saved = bool(found) or counts["added"] or counts["changed"] or len(merged) != len(before["items"])
     if saved:
         known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
-        holdings.save(uid, deps.with_sectors(merged, known), source)
+        holdings.save(uid, deps.with_sectors(merged, known), source, since=since)
     return {"saved": bool(saved), "count": len(found), "unmatched": missed[:50], "unmatched_count": len(missed),
-            "over_limit": over, **counts}
+            "over_limit": over, "kept": kept, "empty": not rows and bool(had), **counts}
+
+
+def note(got: dict, name: str) -> str | None:
+    """What a read left as it was, in plain words for the connection's card; None when the read was whole."""
+    if got.get("empty"):
+        return f"{name} returned no holdings. That's treated as a failed read, so the holdings read from it before are kept."
+    if got.get("unmatched_count"):
+        lines = ", ".join(m["text"] for m in got.get("unmatched", [])[:5] if m.get("text"))
+        n = got["unmatched_count"]
+        return (f"{n} {'line' if n == 1 else 'lines'} from {name} didn't match a listed company" + (f" ({lines})" if lines else "")
+                + (f", so {got['kept']} holdings read from it before are kept as they were." if got.get("kept") else "."))
+    return None
