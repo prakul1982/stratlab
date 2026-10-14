@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from .. import db
+from .. import db, run_marks
 from ..http_retry import real_transport
 from .net import BROWSER_UA, SourceError, TTLCache, RateLimit
 
@@ -1561,17 +1561,18 @@ class Alerts:
         day = local.date().isoformat()
         if local.strftime("%H:%M") < SEND_AT or self.last_day == day:
             return None
-        if db.get_setting("filingalert-day") == day:         # already sent today (before a restart)
+        st = run_marks.status("filingalert-day", day)
+        if st == "done":                                     # already sent today (before a restart)
             self.last_day = day
-            return None
-        return day
+        return None if st else day         # "running": another container is on it; a quiet one is resumed
 
     def tick(self, now: datetime):
         day = self.due(now)
         if not day:
             return
-        self.last_day = day
-        db.set_setting("filingalert-day", day)
+        run = run_marks.claim("filingalert-day", day)         # or the run a restart cut short
+        if not run:
+            return
         sent = 0
         for raw in db.settings_with_prefix(ALERT_KEY):
             try:
@@ -1594,10 +1595,13 @@ class Alerts:
                     if i["at"] > seen and i["severity"] != "info":
                         new.append((sym, i))
                     newest = max(newest, i["at"])
+            run.beat()
+            sub["seen"] = newest               # saved before the alert: a kill in between drops it, never repeats it
+            db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
             if new:
                 new.sort(key=lambda x: (x[1]["severity"] != "red", x[1]["at"]))
                 self.notify(profile, "StratLab: new filings to look at", alert_text(new), url="/research/filings")
                 sent += 1
-            sub["seen"] = newest
-            db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
+        run.done()
+        self.last_day = day
         self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)

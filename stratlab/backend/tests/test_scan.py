@@ -159,3 +159,40 @@ def test_the_us_alert_waits_for_the_closing_prints_to_settle(monkeypatch, store)
     monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: True)
     assert job.due("US", datetime(2026, 10, 1, 20, 30, tzinfo=timezone.utc)) is None      # 16:30 New York
     assert job.due("US", datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc)) == "2026-10-01"
+
+
+def test_a_daily_alert_run_killed_mid_way_resumes_with_the_subscribers_left(monkeypatch, store):
+    import json
+    from types import SimpleNamespace
+    from app import run_marks
+    reg = fake_setup(monkeypatch)
+    up = list(np.linspace(100, 200, 300)) + list(np.linspace(200, 180, 15)) + [199.0]
+    monkeypatch.setattr(scan, "_bars", lambda registry, iid: bars_from(up))
+    for u in ("u1", "u2", "u3"):
+        store[f"watchlist:{u}"] = json.dumps({"items": [{"region": "US", "symbol": "AAA"}]})
+        scan.set_alert(u, True)
+    clock = [1000.0]
+    monkeypatch.setattr(run_marks, "time", SimpleNamespace(time=lambda: clock[0]))
+    kill = [True]
+
+    def profile(uid):
+        if uid == "u2" and kill[0]:
+            kill[0] = False
+            raise KeyboardInterrupt                         # the deploy's SIGTERM
+        return {"id": uid}
+    monkeypatch.setattr(db, "get_profile", profile)
+    monkeypatch.setattr("app.data.calendar.is_trading_day", lambda m, d: True)
+    sent = []
+    mk = lambda: scan.Alerts(reg, notify=lambda p, s, t, url: sent.append(p["id"]), can_alert=lambda p: True)  # noqa: E731
+    at = datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc)
+    with pytest.raises(KeyboardInterrupt):
+        mk().tick(at)
+    n = len(sent)
+    mk().tick(at)
+    assert len(sent) == n                                   # still beating: not resumed
+    clock[0] += run_marks.STALE + 1
+    mk().tick(at)
+    assert sorted(sent) == ["u1", "u2", "u3"]               # each once; the ones before the kill weren't resent
+    clock[0] += run_marks.STALE + 1
+    mk().tick(at)
+    assert len(sent) == 3                                   # done: skipped

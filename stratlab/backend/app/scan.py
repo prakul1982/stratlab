@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from . import db, scan_presets, universes
+from . import db, run_marks, scan_presets, universes
 from .engine.indicators import stage, supertrend
 from .intel.net import TTLCache
 
@@ -252,26 +252,28 @@ class Alerts:
         day = local.date().isoformat()
         if local.strftime("%H:%M") < at or self.last.get(market) == day or not is_trading_day(market, local.date()):
             return None
-        if db.get_setting(f"scanalert-day:{market}") == day:        # another run already sent today's (after a restart)
+        st = run_marks.status(f"scanalert-day:{market}", day)
+        if st == "done":                   # another run already sent today's (after a restart)
             self.last[market] = day
-            return None
-        return day
+        return None if st else day         # "running": another container is on it; a quiet one is resumed
 
     def tick(self, now: datetime):
         for market in SEND_AT:
             day = self.due(market, now)
             if not day:
                 continue
-            self.last[market] = day
-            db.set_setting(f"scanalert-day:{market}", day)
+            marks = run_marks.claim(f"scanalert-day:{market}", day)      # or the run a restart cut short
+            if not marks:
+                continue
             sent = 0
             for raw in db.settings_with_prefix(ALERT_KEY):
                 try:
                     sub = json.loads(raw)
                 except (ValueError, TypeError):
                     continue
-                if not sub.get("on"):
+                if not sub.get("on") or marks.seen(sub["uid"]):
                     continue
+                marks.beat()
                 try:
                     profile = db.get_profile(sub["uid"])
                     members = watchlist_members(sub["uid"], market)
@@ -279,8 +281,11 @@ class Alerts:
                         continue
                     fresh = [r for r in run(self.registry, market, members)["rows"] if r["signal"] == "fresh" and r["st_days"] == 1]
                     if fresh:
+                        marks.record(sub["uid"])         # before the send: a kill in between drops one, never doubles
                         self.notify(profile, "StratLab: Stage 2 + Supertrend signals", alert_text(market, fresh), url="/research/scan")
                         sent += 1
                 except Exception as e:             # one user's trouble must not stop the others' alerts
                     print("scan alert failed:", sub.get("uid"), str(e)[:120])
+            marks.done()
+            self.last[market] = day
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
