@@ -113,3 +113,29 @@ def test_a_failed_read_is_not_kept(fake):
     fake.fail = None
     db.set_setting("stocks:page:IN:A", "1")
     assert db.get_setting("stocks:page:IN:A") == "1"
+
+
+def test_with_the_second_database_the_pages_live_there_and_the_copy_follows(fake, monkeypatch):
+    """Once MARKET_DATABASE_URL is set, the company pages are market data (market_store.MARKET_PREFIXES): moved there
+    with the rest, written there, and still served from the in-memory copy."""
+    from app import market_store
+    from app.config import settings
+    from tests.test_storage import FakeStore
+    db.set_setting("stocks:page:IN:OLD", "old")                  # written before the second database existed
+    s = FakeStore()
+    monkeypatch.setattr(settings, "MARKET_DATABASE_URL", "postgresql://second")
+    market_store.use(s)
+    try:
+        assert market_store.move(db, s)["settings"] == 1
+        assert s.get("stocks:page:IN:OLD") == "old"
+        assert not [r for r in fake.tables.get("app_settings", []) if r["key"].startswith("stocks:")]
+        db.forget_mirror()
+        db.set_setting("stocks:page:IN:NEW", "new")               # written there, and into the copy
+        assert s.get("stocks:page:IN:NEW") == "new"
+        fake.reads = 0
+        assert dict(db.all_settings_with_prefix("stocks:page:IN:")) == {"stocks:page:IN:NEW": "new", "stocks:page:IN:OLD": "old"}
+        db.set_setting("stocks:page:IN:NEW", "newer")
+        assert db.get_setting("stocks:page:IN:NEW") == "newer"
+        assert fake.reads == 1                                    # one (now empty) read of the main database, then memory
+    finally:
+        market_store.use(None)

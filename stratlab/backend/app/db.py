@@ -329,8 +329,8 @@ def set_setting(key: str, value: str) -> None:
         ms = _market(key)
         if ms is not None:
             ms.set(key, value)
-            return
-        sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
+        else:
+            sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
         _mirror_put(key, value)
     finally:
         _forget_setting(key)
