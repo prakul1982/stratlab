@@ -859,11 +859,11 @@ class Job:
             if not issue:
                 quiet += 1
                 continue
-            if run:
-                run.record(sub["uid"])        # before the send: a kill in between drops one, never doubles
             why = deliver_why(profile, issue, "my_stocks")
             if why == "sent":
                 sent += 1
+                if run:
+                    run.record(sub["uid"])    # after the send: a failed one is tried again if the run resumes
             else:
                 skipped[why] = skipped.get(why, 0) + 1
         words = {WHY.get(k, k): n for k, n in skipped.items()}

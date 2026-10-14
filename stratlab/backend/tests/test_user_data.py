@@ -56,10 +56,20 @@ def test_erase_removes_everything_of_one_user_and_nothing_of_another(w):
     assert got["failed"] == []
     gone = left(ME)
     assert gone["drawings"] == [] and gone["connect"] == {} and gone["holdings"] == [] and gone["networth"] is None
-    assert gone["notebooks"] == [] and gone["alerts"] is None and gone["prefs"] == [None, None, None]
+    assert gone["notebooks"] == [] and gone["alerts"] is None and gone["prefs"][0] is None and gone["prefs"][2] is None
+    assert lifecycle.tips_on(ME) is False                    # a "no tips" choice outlives the erase (the account stays)
     assert gone["inbox_index"] is None                       # the forwarding address stops working
     counts = {r["key"]: r["count"] for r in got["done"]}
     assert counts["drawings"] == 1 and counts["holdings"] == 1 and counts["notebooks"] == 1 and counts["connect"] == 3
+
+
+def test_erase_does_not_turn_tips_back_on(w):
+    seed(ME)
+    user_data.erase(ME)
+    assert db.json_value(db.get_setting(lifecycle.PREFS + ME), {}) == {"uid": ME, "tips": False}
+    db.set_setting(lifecycle.PREFS + OTHER, json.dumps({"uid": OTHER, "tips": True}))
+    user_data.erase(OTHER)
+    assert db.get_setting(lifecycle.PREFS + OTHER) is None
 
 
 def test_erase_leaves_other_users_alone(w):

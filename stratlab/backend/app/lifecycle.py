@@ -2,7 +2,8 @@
 after two quiet weeks, and payment receipts.
 
 - Each email goes to a user at most once, remembered in app_settings as lifecycle:<uid> ({email key: when sent})
-  before it is sent; a send that fails is forgotten again, so the next sweep tries once more.
+  before it is sent; a send that fails is forgotten again, so the next sweep tries once more. A receipt, plan change or
+  invite reward that fails is also kept in lifecyclepending:<uid> and retried by the sweep (4 tries within a day).
 - Everything but receipts and plan changes is a "tips and reminders" email: people turn those off in Account or from
   the link in each one, and get at most one a day. Receipts and plan changes are about the account and always go.
 - The welcome goes from the first visit after signing up. The rest go from an hourly sweep in India's daytime
@@ -20,6 +21,7 @@ from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_unti
 SENT = "lifecycle:"              # lifecycle:<uid>: {"welcome": "2026-10-03T10:00:00+00:00", "receipt:pay_1": ...}
 PREFS = "emailprefs:"            # emailprefs:<uid>: {"tips": false} once turned off
 SEEN = "lastseen:"               # lastseen:<uid>: the India date of their last visit
+PENDING = "lifecyclepending:"    # lifecyclepending:<uid>: {email key: {kind, ctx, tries, first}} for account emails that failed
 MARK = "lifecyclejob:last"       # the hour the sweep last ran
 CATEGORY = "tips"                # the unsubscribe link's category
 EVER = "2000-01-01T00:00:00+00:00"
@@ -27,6 +29,8 @@ EVER = "2000-01-01T00:00:00+00:00"
 WELCOME_WINDOW = timedelta(days=2)                       # only brand-new accounts are welcomed
 DAY2_WINDOW = (timedelta(days=1), timedelta(days=7))     # the nudge goes on day 2, or soon after if the sweep missed it
 INACTIVE_DAYS = 14
+RETRIES = 4                                              # account emails: tries before giving up, within a day
+RETRY_WINDOW = timedelta(hours=26)
 GAP = timedelta(hours=20)                                # at most one tips email a day
 HOURS = (8, 21)                                          # India time: the sweep runs from 8 am to 9 pm
 
@@ -119,6 +123,24 @@ def _release(uid: str, key: str):
         have.pop(key, None)
         return json.dumps(have)
     db.update_setting(SENT + uid, drop)
+
+
+def _pend(uid: str, key: str, kind: str, ctx: dict | None, now: datetime):
+    """Keep a failed account email for the sweep to retry."""
+    def add(raw):
+        have = db.json_value(raw, {})
+        old = have.get(key) or {}
+        have[key] = {"kind": kind, "ctx": old.get("ctx") or ctx or {}, "tries": int(old.get("tries") or 0) + 1,
+                     "first": old.get("first") or now.isoformat()}
+        return json.dumps(have, default=lambda o: o.isoformat())
+    db.update_setting(PENDING + uid, add)
+
+
+def _unpend(uid: str, key: str):
+    def drop(raw):
+        have = db.json_value(raw, {})
+        return json.dumps(have) if have.pop(key, None) is not None else None
+    db.update_setting(PENDING + uid, drop)
 
 
 def address(profile: dict) -> str | None:
@@ -347,8 +369,12 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
         alerts.send_email(to, subject, text, html=html, headers=headers)
     except Exception as e:
         _release(uid, key)
+        if transactional:
+            _pend(uid, key, kind, ctx, now)
         print(f"lifecycle email {kind} failed:", str(e)[:160])
         return False
+    if transactional:
+        _unpend(uid, key)
     return True
 
 
@@ -488,6 +514,29 @@ def sweep(now: datetime | None = None) -> int:
             if send(p, kind, key, ctx, now):
                 count += 1
                 break
+    return count + retry_pending(now)
+
+
+def retry_pending(now: datetime) -> int:
+    """Send again the account emails (receipts, plan changes, invite rewards) that failed, up to RETRIES times
+    within RETRY_WINDOW. Returns how many went."""
+    count, profiles = 0, None
+    for k, v in db.all_settings_with_prefix(PENDING):
+        uid = k[len(PENDING):]
+        for key, p in db.json_value(v, {}).items():
+            try:
+                give_up = p["tries"] >= RETRIES or now - _dt(p["first"]) > RETRY_WINDOW
+            except (KeyError, TypeError, ValueError):
+                give_up = True
+            if give_up or key in sent(uid):           # out of tries, or it went another way
+                _unpend(uid, key)
+                continue
+            ctx = dict(p.get("ctx") or {})
+            if isinstance(ctx.get("until"), str):
+                ctx["until"] = _dt(ctx["until"])
+            profiles = profiles if profiles is not None else {x.get("id"): x for x in db.all_profiles()}
+            if uid in profiles and send(profiles[uid], p["kind"], key, ctx, now):
+                count += 1
     return count
 
 

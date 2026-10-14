@@ -685,6 +685,16 @@ def test_reminder_goes_out_once(w, on, monkeypatch):
     assert jobs.run_reminders(datetime.now(timezone.utc)) == 0
 
 
+def test_a_reminder_with_no_usable_channel_is_not_marked(w, on, monkeypatch):
+    address_of(w["client"])
+    monkeypatch.setattr(jobs.alerts, "notify", lambda *a, **k: [])
+    later = datetime.now(timezone.utc) + timedelta(days=41)
+    assert jobs.run_reminders(later) == 0
+    assert not state.section(PRO_ID, "inbox").get("reminded_at")
+    monkeypatch.setattr(jobs.alerts, "notify", lambda *a, **k: ["push"])
+    assert jobs.run_reminders(later) == 1
+
+
 # ---------- Zerodha ----------
 class TokenException(Exception):
     pass
