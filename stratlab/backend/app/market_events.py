@@ -203,7 +203,7 @@ def read_rbi_schedule(text: str) -> list[dict]:
 def read_rbi_statement(text: str) -> dict | None:
     """{"repo": 5.25, "move": "unchanged" | "cut" | "raised" | None} from a policy statement's resolution."""
     t = plain(text)
-    m = re.search(r"policy repo rate[^.]{0,260}?\b(?:at|to)\s+(\d+(?:\.\d+)?)\s*per\s*cent", t, re.I)
+    m = re.search(r"policy repo rate(?:[^.]|\.(?=\d)){0,260}?\b(?:at|to)\s+(\d+(?:\.\d+)?)\s*per\s*cent", t, re.I)
     if not m:
         return None
     before = t[max(0, m.start() - 120):m.end()].lower()

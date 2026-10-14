@@ -190,7 +190,8 @@ def refresh(feed=None, now: datetime | None = None) -> dict:
     except Exception as e:                    # the stocks still count
         print("CAS indices unavailable:", str(e)[:120])
         indices = {}
-    save_live(now.astimezone(IST).date().isoformat(), stocks, indices, now)
+    day = (stocks["as_of"] or "")[:10] or now.astimezone(IST).date().isoformat()      # the day the exchange stamped, else today
+    save_live(day, stocks, indices, now)
     return stocks
 
 

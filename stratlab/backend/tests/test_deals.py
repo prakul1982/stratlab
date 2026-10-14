@@ -297,6 +297,21 @@ def test_evening_job_stores_days_buys_and_fires_alerts(w):
     assert deals.recent_for("RELIANCE", "junk") == [] and deals.recent_for("TCS", ago(9)) == []
 
 
+def test_a_failed_read_does_not_mark_the_evening_done(w):
+    feeds = [None]
+    def feed():
+        if feeds[0] is None:
+            raise RuntimeError("down")
+        return feeds[0]
+    job = deals.Job(feed, lambda rows, now: 1)
+    evening = datetime.combine(TODAY, datetime.min.time()).replace(hour=21, tzinfo=F.IST)
+    with pytest.raises(RuntimeError):
+        job.tick(evening)
+    assert job.last.get("deals") is None and db.get_setting("newsjob:deals") != TODAY.isoformat()
+    feeds[0] = main.filings_feed
+    assert job.tick(evening) == 1                                              # tried again, then done
+
+
 def test_backfill_fills_a_year_a_month_at_a_time(w):
     steps = 0
     while deals.backfill_step(main.filings_feed, TODAY):

@@ -35,6 +35,11 @@ export function strikesRead(read: number | null | undefined, near: number | null
   return `${read} strikes read`;
 }
 
+/** The first day (India's date, as the stored days are) of a custom range of `days` days ending now. */
+export function rangeFrom(days: number, now = Date.now()): string {
+  return new Date(now + 19800_000 - days * 86400_000).toISOString().slice(0, 10);
+}
+
 /** How many days are stored: the first and the last. */
 export type Span = { days: number; first: string | null; last: string | null };
 export type Coverage = { participants: Span & { backfill_done: boolean; backfill_target: number }; cash: Span; chains: Record<string, Span> };

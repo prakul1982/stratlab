@@ -251,9 +251,9 @@ class Job(news_job.Job):
             except Exception as e:                  # busy or down: next time
                 self.status["last_error"] = f"history: {str(e)[:160]}"
             return 0
-        self.mark("deals", day)
         rows, problems = latest(self.feed_fn(), day)
         store_days(rows, day)
+        self.mark("deals", day)                     # only once it is in: a failed read is tried again
         if not any(p.startswith(DEAL_KINDS["insider"]) for p in problems):
             note_buys(rows, day - timedelta(days=RECENT_DAYS), day, day)
         sent = self.fire(rows, now)

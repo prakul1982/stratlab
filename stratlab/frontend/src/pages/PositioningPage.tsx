@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
   chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
-  pcrNote, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
+  pcrNote, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { signTone } from "../lib/format";
@@ -332,7 +332,7 @@ function useHistory<T extends { day: string }>(kind: string, range: string, name
       .then((r) => {
         if (!live) return;
         if (custom == null) { setD(r); return; }
-        const from = new Date(Date.now() - custom * 86400_000).toISOString().slice(0, 10);
+        const from = rangeFrom(custom);
         setD({ ...r, points: r.points.filter((p) => p.day.slice(0, 10) >= from) });
       }).catch(() => live && setD("error"));
     return () => { live = false; };
