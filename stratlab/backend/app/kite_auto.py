@@ -207,6 +207,24 @@ class AutoLogin:
             except Exception as e:
                 print("admin alert failed:", e)
 
+    def login_now(self, now: datetime) -> bool:
+        """Whether a login is due here. The saved token is read again first: a container that booted before another
+        one's login today still holds yesterday's, and logging in again would cancel that one's token."""
+        if not login_due(now, self.kite.token_day):
+            return False
+        try:
+            self.kite.load_saved_token()
+        except Exception as e:
+            print("Kite auto-login: could not read the saved token:", str(e)[:160])
+            return False
+        if login_due(now, self.kite.token_day):
+            return True
+        try:                       # today's token, saved by the other container: bring data online with it
+            self.on_login()
+        except Exception as e:
+            print("Kite auto-login: could not go online with the saved token:", str(e)[:160])
+        return False
+
     def _loop(self):
         while True:
             now = datetime.now(IST)
@@ -214,7 +232,7 @@ class AutoLogin:
             if day != self._day:
                 self._day, self._attempts, self._gave_up = day, 0, False
             # only the leading container logs in: a second login cancels the first one's token
-            if not self._gave_up and self._attempts < MAX_ATTEMPTS and leader.leading() and login_due(now, self.kite.token_day):
+            if not self._gave_up and self._attempts < MAX_ATTEMPTS and leader.leading() and self.login_now(now):
                 self._attempts += 1
                 try:
                     self.run_once()
@@ -230,4 +248,7 @@ class AutoLogin:
 def restart_process(delay: float = 2.0):
     """KiteTicker can't reconnect with a new token inside one process, so exit and let the host restart us.
     A non-zero code makes Railway's ON_FAILURE policy (and most hosts) start a fresh process."""
-    threading.Timer(delay, os._exit, args=(3,)).start()
+    def leave():
+        leader.current.release()   # the next container takes over now, not when the lease runs out
+        os._exit(3)
+    threading.Timer(delay, leave).start()

@@ -706,16 +706,19 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
             mine = active[:limit(p)]                 # over the plan's limit (after a downgrade): the oldest count
         except Exception:
             continue
-        changes = {}
-        for a in mine:
-            if a.get("kind") not in EVENTS or a.get("region") != "IN" or not a.get("id"):
-                continue
-            if kind_ok and not kind_ok(p, a["kind"]):     # a paid kind after a downgrade waits
-                continue
-            text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
-            if text or st != (a.get("state") or {}):
-                changes[a["id"]] = (text, st, a.get("rev"), _seen(a))
-        texts = apply(uid, changes, now)
-        if texts and flush(uid, p, texts, now, send):
-            sent += 1
+        try:                                         # one user's malformed alert or a conflict never stops the rest
+            changes = {}
+            for a in mine:
+                if a.get("kind") not in EVENTS or a.get("region") != "IN" or not a.get("id"):
+                    continue
+                if kind_ok and not kind_ok(p, a["kind"]):     # a paid kind after a downgrade waits
+                    continue
+                text, st = evaluate_event(a, by_sym.get(a.get("symbol"), []))
+                if text or st != (a.get("state") or {}):
+                    changes[a["id"]] = (text, st, a.get("rev"), _seen(a))
+            texts = apply(uid, changes, now)
+            if texts and flush(uid, p, texts, now, send):
+                sent += 1
+        except Exception as e:
+            print("stock alerts: events for one user failed:", type(e).__name__, str(e)[:120])
     return sent

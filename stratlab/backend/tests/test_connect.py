@@ -659,6 +659,21 @@ def test_reminder_rules():
     assert jobs.reminder_due({"local": "u-x", "created_at": iso(100), "reminded_at": iso(41)}, now)
 
 
+def test_one_users_failing_reminder_doesnt_stop_the_others(monkeypatch):
+    now = datetime(2026, 10, 7, tzinfo=timezone.utc)
+    box = {"local": "x", "created_at": (now - timedelta(days=41)).isoformat()}
+    sent = []
+    monkeypatch.setattr(jobs.state, "everyone", lambda: [("u-bad", {"inbox": box}), ("u-ok", {"inbox": box})])
+
+    def update(uid, part, **kw):
+        if uid == "u-bad":
+            raise RuntimeError("the setting changed underneath")
+    monkeypatch.setattr(jobs.state, "update", update)
+    monkeypatch.setattr(jobs.sync, "profile_for", lambda uid: {"id": uid})
+    monkeypatch.setattr(jobs.alerts, "notify", lambda profile, subject, text, background=True, url="": sent.append(profile["id"]))
+    assert jobs.run_reminders(now) == 1 and sent == ["u-ok"]
+
+
 def test_reminder_goes_out_once(w, on, monkeypatch):
     c = w["client"]
     address_of(c)

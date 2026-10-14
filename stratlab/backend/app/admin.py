@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
 
-from . import db, referrals
+from . import db, leader, referrals
 from .auth import current_profile
 from .config import settings
 from .kite_service import IST
@@ -78,6 +78,13 @@ def recorded_owner(profile: dict) -> bool:
 def admin_profile(profile=Depends(current_profile)) -> dict:
     if not is_admin(profile):
         raise HTTPException(403, {"code": "not_admin", "message": "This page is only for the site owner."})
+    return profile
+
+
+def leader_admin(profile=Depends(admin_profile)) -> dict:
+    """An admin's Run now, on the container that runs the jobs: anywhere else it would run beside the leader's run."""
+    if not leader.leading():
+        raise HTTPException(409, {"code": "not_leader", "message": "Another server is running the jobs right now; try again in a minute."})
     return profile
 
 

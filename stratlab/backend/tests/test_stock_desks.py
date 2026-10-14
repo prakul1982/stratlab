@@ -235,6 +235,27 @@ def test_catch_up_reads_recent_days_and_counts_a_day_not_published(w, monkeypatc
     assert st["status"] == "ok" and st["as_of"] == "2026-10-01" and st["reason"] is None
 
 
+def test_alerts_of_a_stored_day_fire_once_even_after_a_failed_fire(w, monkeypatch):
+    now = datetime(2026, 10, 1, 20, 0, tzinfo=IST)
+    fired, fail = [], [1]
+
+    def fire(events, at):
+        if fail:
+            fail.pop()
+            raise RuntimeError("alerts store down")                 # or the process died after storing the day
+        fired.append(events)
+        return 1
+    monkeypatch.setattr(stock_desks.runner, "fire", fire)
+    monkeypatch.setattr(F.DESK, "after", lambda day, rows, prev: [{"kind": "mwpl", "symbol": "SAIL", "day": day}])
+    res = stock_desks.runner.catch_up(F.DESK, now)
+    assert res["2026-10-01"] == "ok" and "alerts" not in res and fired == []
+    job = X.Job(stock_desks.runner)
+    job.tick(now)                                                   # stored, not behind: the alerts go now
+    assert len(fired) == 1 and F.DESK.store.state()["fired"] == "2026-10-01"
+    job.tick(now)
+    assert len(fired) == 1                                          # once
+
+
 def test_an_outage_stops_the_run_and_says_why(w):
     w["faults"]["exchange"].mode = "500"
     now = datetime(2026, 10, 1, 20, 0, tzinfo=IST)
@@ -374,6 +395,23 @@ def test_mwpl_events_reach_the_alerts_of_users_on_a_plan_with_them(w, paid, monk
     n = stock_alerts.fire_events(ev, datetime(2026, 10, 1, 20, 0, tzinfo=IST), lambda p: 25,
                                  send=lambda p, s, t: sent.append((p["id"], t)) or ["push"], kind_ok=__import__("app.main").main._alert_kind_ok)
     assert n == 1 and [s[0] for s in sent] == ["u-basic"] and "SAIL: MWPL use rose to 81.0%" in sent[0][1]
+
+
+def test_one_users_failing_alert_doesnt_stop_the_others(w, paid, monkeypatch):
+    sent, seen, apply = [], [], stock_alerts.apply
+    for uid in ("u-basic", "u-pro"):
+        db.set_setting(f"stockalerts:{uid}", json.dumps({"items": [{"id": "a1", "region": "IN", "symbol": "SAIL", "kind": "mwpl",
+                                                                    "status": "active", "created_at": "2026-09-01T00:00:00+00:00", "rev": 1}]}))
+
+    def first_conflicts(uid, changes, now):
+        seen.append(uid)
+        if len(seen) == 1:
+            raise RuntimeError("the setting changed underneath")
+        return apply(uid, changes, now)
+    monkeypatch.setattr(stock_alerts, "apply", first_conflicts)
+    ev = [{"kind": "mwpl", "symbol": "SAIL", "day": "2026-10-01", "id": "2026-10-01:SAIL:mwpl:up", "text": "MWPL use rose to 81.0% on 1 Oct 2026 (from 79.0%)."}]
+    n = stock_alerts.fire_events(ev, datetime(2026, 10, 1, 20, 0, tzinfo=IST), lambda p: 25, send=lambda p, s, t: sent.append(p["id"]) or ["push"])
+    assert len(seen) == 2 and n == 1 and sent == [seen[1]]
 
 
 # ---------- the routes ----------

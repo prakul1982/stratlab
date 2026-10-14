@@ -416,6 +416,15 @@ def test_money_routes_need_sign_in(w):
         assert w["client"].get(path).status_code == 401
 
 
+def test_one_subscribers_failing_profile_doesnt_stop_the_others(w, monkeypatch):
+    sent, got = [], A.db.get_profile
+    monkeypatch.setattr(A, "send", lambda p, subject, text: sent.append(p["id"]) or True)
+    monkeypatch.setattr(A, "subscribers", lambda: ["u-basic", "u-pro", "u-free"])
+    monkeypatch.setattr(A.db, "get_profile", lambda uid: (_ for _ in ()).throw(RuntimeError("boom")) if uid == "u-basic" else got(uid))
+    eve = datetime(2026, 12, 8, 4, 0, tzinfo=ZoneInfo("UTC"))
+    assert A.Job().tick(eve) == 2 and sent == ["u-pro", "u-free"]
+
+
 def test_an_advance_tax_run_killed_mid_way_skips_the_readers_already_sent(w, monkeypatch):
     from app import run_marks
     clock = [1000.0]

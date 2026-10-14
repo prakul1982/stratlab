@@ -16,7 +16,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import alerts, db, leader
+from . import alerts, db, leader, run_marks
 from .intel.net import SourceError
 
 REGIONS = ("IN", "US")
@@ -422,7 +422,8 @@ CHECK_FROM = {"IN": "10:00", "US": "07:00"}          # hourly from then until mi
 
 class Job:
     """Refreshes each region's calendar twice a day (India) or once (US), sends the morning results-day messages and,
-    every hour after that, looks for the filings. Every run is marked in the database first, so it happens once."""
+    every hour after that, looks for the filings. Every run is marked in the database (the sending ones per recipient),
+    so it happens once and a run a crash cut short resumes."""
 
     def __init__(self, sources, send=send, can_alert=can_alert):
         self.sources, self.send, self.can_alert = sources, send, can_alert
@@ -455,6 +456,19 @@ class Job:
         db.set_setting(f"resultsjob:{name}", mark)
         return local.date()
 
+    def claim(self, name: str, now: datetime, region: str, at: str, stamp: str = "%Y-%m-%d"):
+        """Like due(), for a run that sends: (local day, run marker), or (None, None) when it isn't due, is done or is
+        being worked on. The marker records each recipient, so a run a crash cut short resumes without doubling."""
+        local = now.astimezone(ZoneInfo(TZ[region]))
+        mark = local.strftime(stamp)
+        if local.strftime("%H:%M") < at or self.last.get(name) == mark:
+            return None, None
+        st = run_marks.status(f"resultsjob:{name}", mark)
+        if st == "done":                                    # already ran (before a restart)
+            self.last[name] = mark
+        run = run_marks.claim(f"resultsjob:{name}", mark) if st is None else None
+        return (local.date(), run) if run else (None, None)
+
     def tick(self, now: datetime) -> int:
         sent, ran, who = 0, False, None
         for region in REGIONS:
@@ -464,14 +478,16 @@ class Job:
                     who = who if who is not None else trackers()
                     self.refresh(region, who, day)
                     ran = True
-            day = self.due(f"morning-{region}", now, region, MORNING_AT[region])
+            day, run = self.claim(f"morning-{region}", now, region, MORNING_AT[region])
             if day:
                 who = who if who is not None else trackers()
-                sent, ran = sent + self.morning(region, day, who), True
-            day = self.due(f"check-{region}", now, region, CHECK_FROM[region], stamp="%Y-%m-%dT%H")
+                sent, ran = sent + self.morning(region, day, who, run), True
+                run.done()
+            day, run = self.claim(f"check-{region}", now, region, CHECK_FROM[region], stamp="%Y-%m-%dT%H")
             if day:
                 who = who if who is not None else trackers()
-                sent, ran = sent + self.follow_up(region, day, who), True
+                sent, ran = sent + self.follow_up(region, day, who, run), True
+                run.done()
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
             from . import job_status
@@ -484,7 +500,7 @@ class Job:
         self.status["problems"] = out["problems"][:10]
         return out
 
-    def morning(self, region: str, day: date, who: dict) -> int:
+    def morning(self, region: str, day: date, who: dict, run) -> int:
         """One message per person listing their stocks with results today."""
         if not load(region)["at"]:
             self.refresh(region, who, day)
@@ -494,30 +510,38 @@ class Job:
                 per_user.setdefault(uid, []).append(r)
         sent = 0
         for uid, rows in per_user.items():
-            profile = db.get_profile(uid)
-            if not self.can_alert(profile):
+            if run.seen(uid):
                 continue
+            run.beat()
             try:
+                profile = db.get_profile(uid)
+                if not self.can_alert(profile):
+                    continue
+                run.record(uid)                # before the send: a kill in between drops one, never doubles
                 self.send(profile, "StratLab: results today", morning_text(rows), f"/research/results?region={region}")
                 sent += 1
-            except Exception as e:
-                print("results message failed:", str(e)[:160])
+            except Exception as e:             # one person's failure doesn't stop the rest
+                print("results message failed:", uid, str(e)[:160])
         return sent
 
-    def follow_up(self, region: str, day: date, who: dict) -> int:
+    def follow_up(self, region: str, day: date, who: dict, run) -> int:
         """Look for the filings of results days just gone, and tell the people tracking each company."""
         symbols = {s for (r, s) in who if r == region}
         sent = 0
         for r in check_out(region, self.sources(), symbols, day):
             for uid in who.get((region, r["symbol"]), []):
-                profile = db.get_profile(uid)
-                if not self.can_alert(profile):
+                if run.seen(f"{uid}:{r['symbol']}"):
                     continue
+                run.beat()
                 try:
+                    profile = db.get_profile(uid)
+                    if not self.can_alert(profile):
+                        continue
+                    run.record(f"{uid}:{r['symbol']}")       # before the send: a kill in between drops one, never doubles
                     self.send(profile, f"StratLab: {r['symbol']} results are out", out_text(r), f"/research/{region}/{r['symbol']}")
                     sent += 1
-                except Exception as e:
-                    print("results message failed:", str(e)[:160])
+                except Exception as e:         # one person's failure doesn't stop the rest
+                    print("results message failed:", uid, str(e)[:160])
         return sent
 
 

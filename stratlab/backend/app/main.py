@@ -76,7 +76,7 @@ from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
-from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
+from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
@@ -290,6 +290,11 @@ def lead():
     """This container holds the lease: start everything that must run in one place only, once."""
     global _jobs_started
     db.forget_mirror()           # the settings the old container wrote since this one booted
+    try:                         # ...among them today's Kite token, when it logged in after this one booted
+        if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
+            kite.load_saved_token()
+    except Exception as e:
+        print("leader: could not read the saved Kite token:", e)
     if _jobs_started:            # leading again after a lapse: the jobs are running; the live loop re-attaches the sessions
         return
     _jobs_started = True
@@ -3940,7 +3945,7 @@ def breadth_alert_delete(aid: str, profile=Depends(current_profile)):
 
 
 @app.post("/admin/breadth/run")
-def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.admin_profile)):
+def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.leader_admin)):
     """Work out a market's breadth now, in the background (the whole two years with `full`)."""
     if region not in breadth.REGIONS:
         err(400, "bad_region", "India (IN) or the US.")
@@ -3961,7 +3966,7 @@ def admin_breadth_run(region: str = "IN", full: bool = False, _=Depends(admin.ad
 
 
 @app.post("/admin/redflags/run")
-def admin_redflags_run(region: str = "IN", _=Depends(admin.admin_profile)):
+def admin_redflags_run(region: str = "IN", _=Depends(admin.leader_admin)):
     """Read a region's red-flag filings now, in the background (India: the exchange's announcements; US: 8-K items and 13D/13G)."""
     if region not in redflags.REGIONS:
         err(400, "bad_region", "India (IN) or the US.")
@@ -4243,7 +4248,7 @@ def trade_positioning_history(kind: str = "participants", name: str = "NIFTY", r
 
 
 @app.post("/admin/positioning/run")
-def admin_positioning_run(backfill: bool = False, _=Depends(admin.admin_profile)):
+def admin_positioning_run(backfill: bool = False, _=Depends(admin.leader_admin)):
     """Read the newest trading day's files now (or walk the archives back a step), in the background."""
     if positioning_runner.running:
         err(409, "busy", "A positioning run is already going.")
@@ -5136,7 +5141,7 @@ def admin_rules(_=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/rules/watch/run")
-def admin_rules_watch_run(_=Depends(admin.admin_profile)):
+def admin_rules_watch_run(_=Depends(admin.leader_admin)):
     """Read the official sources now (changes are emailed as on the daily run)."""
     rules_watch_job.run_now()
     return admin_rules()
@@ -5363,7 +5368,7 @@ def admin_end_promo(who=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/connect/run")
-def admin_connect_run(part: str = "all", _=Depends(admin.admin_profile)):
+def admin_connect_run(part: str = "all", _=Depends(admin.leader_admin)):
     """Run the connect-once work now: the daily IBKR read for users who are due, and/or the quiet-inbox reminders."""
     if part not in ("all", "ibkr", "reminders"):
         err(400, "bad_part", "Pick ibkr, reminders or all.")
@@ -5695,7 +5700,7 @@ def admin_kite_login_url(_=Depends(admin.admin_profile)):
 
 
 @app.post("/admin/kite/auto-login-now")
-def admin_kite_auto_login(_=Depends(admin.admin_profile)):
+def admin_kite_auto_login(_=Depends(admin.leader_admin)):
     try:
         auto_login.run_once()
     except AutoLoginError as e:
