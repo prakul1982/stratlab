@@ -1,4 +1,4 @@
-import { absolute, GATE_DESCRIPTION, NOT_FOUND_DESCRIPTION, pageMeta, VERDICT_DESCRIPTION } from "../content/seo";
+import { absolute, GATE_DESCRIPTION, NOT_FOUND_DESCRIPTION, PAGE_ALIASES, pageMeta, VERDICT_DESCRIPTION } from "../content/seo";
 
 /* The tags a search engine or a link preview reads, kept right while someone moves between pages (the static page
  * already carries the right ones for its own address: scripts/seoPages.mjs). Every page gets a description of its own, a
@@ -14,8 +14,11 @@ const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/"
 /** What to tell search engines about an address. `kind` says what the page is when the table doesn't know it. */
 export function seoFor(path: string, kind: SeoKind = "public", over: Partial<Seo> = {}): Seo {
   const p = tidy(path);
+  const alias = PAGE_ALIASES[p] ? pageMeta(PAGE_ALIASES[p]) : undefined;      // /plans for a visitor: /pricing's words, kept out of search results
   const known = kind === "public" ? pageMeta(p) : undefined;
-  const base: Seo = known
+  const base: Seo = alias
+    ? { description: alias.description, canonical: null, index: false }
+    : known
     ? { description: known.description, canonical: known.index ? absolute(known.canonical ?? known.path) : null, index: known.index }
     : { description: kind === "notfound" ? NOT_FOUND_DESCRIPTION : kind === "verdict" ? VERDICT_DESCRIPTION : GATE_DESCRIPTION,
       canonical: null, index: false };
