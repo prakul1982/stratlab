@@ -171,11 +171,11 @@ test("admin: with no AI keys, the panel says so and lists every free provider wi
   const panel = page.locator("section[aria-label='AI']");
   await expect(panel.getByText("No AI keys yet")).toBeVisible();
   await expect(panel.getByText("GROQ_API_KEY")).toBeVisible();
-  // the two quickest in view; the other ten one click away
+  // the two quickest in view; the other nine one click away
   await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(2);
   await expect(panel.getByRole("link", { name: "Get a key: Google Gemini" })).toBeVisible();
   await panel.getByTestId("ai-more-providers").locator("summary").click();
-  await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(12);
+  await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(11);
   await expect(panel.getByRole("button", { name: "Test every provider" })).toBeDisabled();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);

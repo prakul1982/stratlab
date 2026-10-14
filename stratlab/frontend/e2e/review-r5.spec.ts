@@ -118,8 +118,9 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("$8");
     await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$20");
     const after = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
-    // (the heading and the lines under the cards wrap differently on a narrow screen, so a phone gets more room than a laptop)
-    expect(Math.abs(after - before), "what is below the plans moved when the prices arrived").toBeLessThanOrEqual(page.viewportSize()!.width < 700 ? 120 : 60);
+    // (the heading and the lines under the cards wrap differently on a narrow screen, and a touch screen's switch is 44px
+    // tall (R13S-011), so a phone gets more room than a laptop)
+    expect(Math.abs(after - before), "what is below the plans moved when the prices arrived").toBeLessThanOrEqual(page.viewportSize()!.width < 700 ? 136 : 60);
     const basic = sec.locator('.lp-price[data-plan="basic"]');
     await expect(basic).toContainText("Charged as ₹699 / month incl. GST");
     const size = await basic.locator(".lp-price-note").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

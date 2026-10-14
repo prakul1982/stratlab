@@ -30,7 +30,12 @@ function useConnect() {
   const { fail } = useApp();
   const [c, setC] = useState<Conn | null | undefined>(undefined);
   const load = useCallback(() => { api<Conn>("/connect").then(setC).catch((e) => { setC(null); fail(e); }); }, [fail]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // back from Zerodha with a login to confirm: the confirm answers with the connections, so a load started alongside it
+    // can't land after it with a half-done view (connected, holdings not read yet)
+    const q = new URLSearchParams(window.location.search);
+    if (!(q.get("kite") === "confirm" && q.get("ks") && q.get("kc"))) load();
+  }, [load]);
   return { c, set: setC, load };
 }
 
@@ -49,8 +54,8 @@ export function ConnectCards() {
     // back from Zerodha: the login is only attached to the account that is signed in here, and only if it started there
     if (!ks || !kc) { say("failed"); return; }
     api<{ connect: Conn }>("/connect/kite/confirm", { method: "POST", body: { state: ks, claim: kc } })
-      .then((r) => { set(r.connect); say("ok"); }).catch(() => say("failed"));
-  }, [notify, set]);
+      .then((r) => { set(r.connect); say("ok"); }).catch(() => { say("failed"); load(); });
+  }, [notify, set, load]);
   if (c === undefined) return <Card label="Connecting your accounts"><Skeleton label="Loading your connections" /></Card>;
   if (c === null) return null;
   return (
