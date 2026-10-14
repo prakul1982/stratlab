@@ -740,8 +740,8 @@ def holdings(data: dict, w: dict, today: str) -> dict:
         if value:
             flows.append((today, value))
         known = not unknown and k not in w["c"]["unknown"] and k not in w["c"]["short"]
-        x = xirr(flows) if known else None
-        if known:
+        x = xirr(flows) if known and value is not None else None
+        if known and value is not None:         # a fund with no NAV has no closing value, so its flows stay out
             all_flows += flows
         realised = sum(r["sale"] - (r.get("actual_cost") or r["cost"]) for r in w["c"]["realised"] if r["key"] == k)
         rec = inf["rec"] or {}
@@ -766,7 +766,7 @@ def holdings(data: dict, w: dict, today: str) -> dict:
     rows.sort(key=lambda r: (-(r["value"] or 0), r["name"]))
     held = [r for r in rows if (r["units"] or 0) > EPS]
     value = sum(r["value"] or 0 for r in held)
-    known = [r for r in held if r["invested"] is not None]
+    known = [r for r in held if r["invested"] is not None and r["value"] is not None]
     invested = sum(r["invested"] for r in known)
     x = xirr(all_flows + []) if all_flows else None
     alloc: dict[str, dict] = {}
@@ -783,7 +783,8 @@ def holdings(data: dict, w: dict, today: str) -> dict:
     dates = sorted({r["nav_date"] for r in held if r["nav_date"]})
     return {"schemes": rows, "allocation": allocation,
             "total": {"value": _r(value), "invested": _r(invested), "gain": _r(sum((r["value"] or 0) for r in known) - invested),
-                      "xirr": x, "held": len(held), "schemes": len(rows), "unknown_cost": len(held) - len(known),
+                      "xirr": x, "held": len(held), "schemes": len(rows), "unknown_cost": sum(1 for r in held if r["invested"] is None),
+                      "no_nav": sum(1 for r in held if r["value"] is None),
                       "nav_dates": [dates[0], dates[-1]] if dates else None}}
 
 

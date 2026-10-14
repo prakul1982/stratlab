@@ -612,3 +612,17 @@ def test_stored_garbage_is_ignored(w):
                                            ("Other Scheme - Other ETFs", "Nippon India ETF Bank BeES", "equity")])
 def test_a_fund_house_named_bank_is_not_a_bank_index(cat, name, kind):
     assert M.kind_of(cat, name) == kind
+
+
+def test_a_fund_without_a_nav_is_left_out_of_the_gain_and_the_xirr():
+    def scheme(k):
+        return {"k": k, "name": k, "amfi": "", "isin": ""}
+    inf = {"A": {"nav": 120.0, "nav_date": "2026-10-01", "nav_source": "", "rec": {}, "category": "", "kind": "equity", "kind_auto": True},
+           "B": {"nav": None, "nav_date": None, "nav_source": "", "rec": {}, "category": "", "kind": "equity", "kind_auto": True}}
+    data = {"schemes": [scheme("A"), scheme("B")], "txns": [], "kinds": {}, "fmv": {}}
+    lots = {"A": [{"u": 100.0, "cost": 10000.0, "d": "2025-10-01"}], "B": [{"u": 500.0, "cost": 50000.0, "d": "2025-10-01"}]}
+    flows = {"A": [("2025-10-01", -10000.0)], "B": [("2025-10-01", -50000.0)]}
+    w = {"info": inf, "gf": {}, "c": {"lots": lots, "flows": flows, "unknown": {}, "short": {}, "realised": []}}
+    t = M.holdings(data, w, "2026-10-01")["total"]
+    assert t["gain"] == 2000 and t["invested"] == 10000 and t["no_nav"] == 1
+    assert t["xirr"] == pytest.approx(0.2, abs=0.01)
