@@ -22,8 +22,8 @@ interface Snapshot {
   tf: string; range: { from: string; to: string } | null; side: string; created_at: string;
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number;
     checks: { id: string; title: string; status: CheckStatus; detail: string }[] };
-  stats: Stats; series: { t: string[]; equity: (number | null)[]; buy_hold: (number | null)[]; split: number | null };
-  group: { name: string; max_open: number; members: { symbol: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[] } | null;
+  stats: Stats; series: { t: string[]; equity: (number | null)[]; buy_hold: (number | null)[]; split: number | null; indexed?: boolean };
+  group: { name: string; max_open: number; members: { symbol: string; trades: number; win: number | null; buy_hold: number | null }[] } | null;
 }
 type Member = NonNullable<Snapshot["group"]>["members"][number];
 
@@ -44,7 +44,6 @@ export function PublicVerdict({ token }: { token: string }) {
   const cols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
     { key: "n", header: "Trades", numeric: true, cell: (m) => m.trades },
-    { key: "pnl", header: "P&L", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
     { key: "win", header: "Win rate", numeric: true, cell: (m) => (m.win == null ? "–" : `${m.win}%`) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (m) => (m.buy_hold == null ? "–" : <span className={upDown(m.buy_hold)}>{pct(m.buy_hold)}</span>) },
   ];
@@ -75,7 +74,8 @@ export function PublicVerdict({ token }: { token: string }) {
               {snap.series.t.length > 1 && (
                 <XYChart ariaLabel="Strategy against buy and hold" height={240} split={snap.series.split} times={snap.series.t} compare
                   splitNotes={["tuned on these years", "never seen"]}
-                  format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "USD")}
+                  format={(x) => snap.series.indexed ? `${x.toFixed(1)} (from 100)` : money(x, cur)}
+                  axisFormat={(x) => snap.series.indexed ? x.toFixed(0) : moneyCompact(x, cur ?? "USD")}
                   series={[{ id: "strategy", label: "Strategy", values: snap.series.equity, color: "var(--ink)", width: 2 },
                     { id: "hold", label: "Buy and hold", values: snap.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" }]} />
               )}
