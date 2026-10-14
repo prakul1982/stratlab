@@ -83,13 +83,8 @@ def gather(profile, fy: int) -> dict:
     M = _m()
     uid = profile["id"]
     i = M.tax_inputs(profile)
-    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    mf = M.tax_mf(profile)
-    usr = money_us_routes.for_tax(profile)
-    c["realised"] += mf["rows"] + usr["rows"]
-    c["names"].update(mf["names"])
-    c["names"].update(usr["names"])
-    equity, units = tax_lots.split_units(c)
+    c, equity, units = money_routes.tax_computed(profile, i)
+    mf, usr = c["mf"], c["us"]
     dv_total = money_routes.dividends_for_tax(profile).get(fy, 0.0)
     y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy), dv_total,
                             instrument_kinds.other_year(fy, units, c["names"]))
