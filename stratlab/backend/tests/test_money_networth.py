@@ -433,3 +433,51 @@ def test_ppf_yearly_deposit_is_capped_at_1_50_000():
     assert nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=150000))["yearly"] == 150000
     with pytest.raises(nw.EntryError, match="1,50,000"):
         nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=500000))
+
+
+# ---------- snapshots ----------
+def _t(net, partial=None):
+    return {"net": net, "assets": net, "liabilities": 0, "partial": partial}
+
+
+def test_a_partial_month_snapshot_keeps_a_complete_one_and_a_complete_one_replaces_the_months_partial(w):
+    nw.record("u-t", _t(100), "month", date(2026, 10, 1))
+    assert nw.record("u-t", _t(40, ["EPF"]), "month", date(2026, 10, 1)) == nw.history("u-t") and nw.history("u-t")[0]["net"] == 100
+    assert nw.record("u-t", _t(40, ["EPF"]), "month", date(2026, 10, 2))[0]["net"] == 100      # the month has a complete one
+    nw.delete("u-t")
+    nw.record("u-t", _t(40, ["EPF"]), "month", date(2026, 10, 1))
+    rows = nw.record("u-t", _t(100), "month", date(2026, 10, 3))
+    assert [(h["d"], h["net"]) for h in rows] == [("2026-10-03", 100)]                          # one month snapshot, the complete one
+
+
+def test_the_visit_catch_up_is_only_stopped_by_a_complete_snapshot_this_month(w):
+    c = w["client"]
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000}]}))
+    nw.record("u-pro", _t(5, ["EPF"]), "month", date(2026, 10, 1))
+    c.get("/money/net-worth", headers=PRO)                                                      # complete now: replaces the partial one
+    rows = [h for h in nw.history("u-pro") if h["d"][:7] == "2026-10"]
+    assert [(h["why"], h.get("partial"), h["net"]) for h in rows] == [("month", None, 7000)]
+    c.get("/money/net-worth", headers=PRO)
+    assert [h for h in nw.history("u-pro") if h["d"][:7] == "2026-10"] == rows              # and a complete one is taken once
+
+
+def test_a_sunday_edit_does_not_overwrite_fridays_snapshot(w):
+    nw.record("u-t", _t(100), "change", date(2026, 10, 9))                                      # Friday
+    with time_machine.travel(datetime(2026, 10, 11, 5, 0, tzinfo=timezone.utc)):                # Sunday, IST
+        rows = nw.record("u-t", _t(130), "change", date(2026, 10, 9))                           # priced as of Friday's close
+    assert [(h["d"], h["net"]) for h in rows] == [("2026-10-09", 100), ("2026-10-11", 130)]
+
+
+def test_the_ppf_value_today_includes_the_yearly_deposits_since_its_balance():
+    item = {"id": "p", "kind": "ppf", "balance": 100000, "yearly": 150000, "as_of": "2025-03-31", "rate": 7.1}
+    row = nw._asset(item, date(2026, 10, 5), "", None, None, None)
+    want = nw.provident(100000, 7.1, date(2025, 3, 31), date(2026, 10, 5), yearly=150000)["value"]
+    assert row["value"] == pytest.approx(want) and row["value"] > nw.provident(100000, 7.1, date(2025, 3, 31), date(2026, 10, 5))["value"] + 150000
+    assert "yearly deposit" in row["rule"]
+    assert nw._asset({**item, "yearly": 0}, date(2026, 10, 5), "", None, None, None)["value"] < row["value"]
+
+
+def test_a_user_whose_profile_cannot_be_read_gets_a_partial_total(w, monkeypatch):
+    monkeypatch.setattr(main.connect_sync, "profile_for", lambda uid: None)
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000}]}))
+    assert main._nw_value_of("u-pro")["totals"]["partial"] == ["My Holdings couldn't be read"]

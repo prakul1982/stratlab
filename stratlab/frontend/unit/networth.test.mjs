@@ -22,7 +22,18 @@ test("no change is shown when the live total is partial or no snapshot is comple
 });
 
 test("the expected-rate note says so without a spread", () => {
-  assert.equal(expectedNote("5.50%", 2.5), "repo 5.50% + 2.50");
+  assert.equal(expectedNote("5.50%", 2.5, "2026-07-01"), "repo 5.50% + 2.50");
   assert.equal(expectedNote("5.50%", null), "Not enough repo history to work this out");
   assert.equal(expectedNote("5.50%", undefined), "Not enough repo history to work this out");
+});
+
+test("before the first reset the note names the sanctioned rate, never a missing repo", () => {
+  assert.equal(expectedNote("5.50%", 2.5, null), "the sanctioned rate (no reset yet)");
+  assert.equal(expectedNote("–", 2.5, undefined), "the sanctioned rate (no reset yet)");
+  assert.equal(expectedNote("–", null, null), "Not enough repo history to work this out");
+});
+
+test("a Sunday edit snapshots today, so the change reads against Friday's snapshot", () => {
+  const h = [{ d: "2026-10-09", net: 100 }, { d: "2026-10-11", net: 130 }];
+  assert.deepEqual(netWorthDelta(130, null, h, "2026-10-11"), { change: 30, since: "2026-10-09" });
 });

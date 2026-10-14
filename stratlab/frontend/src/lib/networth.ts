@@ -7,7 +7,9 @@ export function netWorthDelta(net: number, livePartial: string[] | null | undefi
   return null;
 }
 
-/** The expected-rate note under a repo-linked loan; says so when there is no repo history to work the spread from. */
-export function expectedNote(repoAtReset: string, spread: number | null | undefined) {
-  return spread == null ? "Not enough repo history to work this out" : `repo ${repoAtReset} + ${spread.toFixed(2)}`;
+/** The expected-rate note under a repo-linked loan; says so when there is no repo history to work the spread from, and
+ * before the first reset the expected rate is the sanctioned rate. */
+export function expectedNote(repoAtReset: string, spread: number | null | undefined, lastReset?: string | null) {
+  if (spread == null) return "Not enough repo history to work this out";
+  return lastReset ? `repo ${repoAtReset} + ${spread.toFixed(2)}` : "the sanctioned rate (no reset yet)";
 }
