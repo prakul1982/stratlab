@@ -453,6 +453,26 @@ def test_my_stocks_run_records_a_reader_only_after_the_email_went(w, monkeypatch
         record = lambda self, uid: self.sent.append(uid)  # noqa: E731
     run = Run()
     monkeypatch.setattr(job, "deliver_why", lambda *a, **k: "error")
-    assert job.Job().run_stocks(date(2026, 10, 1), False, run) == 0 and run.sent == []
+    assert job.Job().run_stocks(date(2026, 10, 1), False, run) == 0 and run.sent == ["u-pro"]    # handled: its teaser went
+    run.sent.clear()
     monkeypatch.setattr(job, "deliver_why", lambda *a, **k: "sent")
     assert job.Job().run_stocks(date(2026, 10, 1), False, run) == 1 and run.sent == ["u-pro"]
+
+
+def test_my_stocks_resume_doesnt_send_the_teaser_again_to_a_reader_not_emailed(w, monkeypatch, outbox):
+    monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
+    reader("u-pro", "pro@example.com", my_stocks="daily")
+    db.set_setting("watchlist:u-pro", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
+    qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
+           "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
+    monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
+    done, asked = set(), []
+
+    class Run:
+        seen = lambda self, uid: uid in done  # noqa: E731
+        beat = lambda self: None  # noqa: E731
+        record = lambda self, uid: done.add(uid)  # noqa: E731
+    monkeypatch.setattr(job, "deliver_why", lambda *a, **k: asked.append(1) or "unconfirmed")
+    job.Job().run_stocks(date(2026, 10, 1), False, Run())
+    job.Job().run_stocks(date(2026, 10, 1), False, Run())              # the resumed run
+    assert asked == [1]
