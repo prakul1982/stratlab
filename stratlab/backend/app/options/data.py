@@ -6,16 +6,36 @@ from .engine import Contracts
 from ..kite_service import ist_date
 from ..data.expiries import keep_listed
 
-# when an exchange's options stop trading on their expiry day, India time
-EXPIRY_TIME = {"NFO": "15:30", "BFO": "15:30", "CDS": "12:30", "MCX": "23:30"}
+# when currency options stop trading on their expiry day, India time
+CDS_EXPIRY_TIME = "12:30"
+
+
+def expiry_time(exchange: str, day=None) -> str | None:
+    """When an exchange's options stop trading on their expiry day, India time ("HH:MM"). F&O follows the derivatives
+    close (data/sessions.py). MCX closes at 23:30, and at 23:55 while US daylight saving is off (first Sunday of
+    November to the second Sunday of March)."""
+    from datetime import date, timedelta
+    from ..data import sessions
+    d = date.fromisoformat(str(day)[:10]) if day else ist_date()
+    if exchange in ("NFO", "BFO"):
+        return sessions.fo_close(d).strftime("%H:%M")
+    if exchange == "CDS":
+        return CDS_EXPIRY_TIME
+    if exchange == "MCX":
+        nov = date(d.year, 11, 1)
+        nov += timedelta(days=(6 - nov.weekday()) % 7)       # first Sunday of November
+        mar = date(d.year, 3, 1)
+        mar += timedelta(days=(6 - mar.weekday()) % 7 + 7)   # second Sunday of March
+        return "23:55" if d >= nov or d < mar else "23:30"
+    return None
 
 
 def expired_today(exchange: str, now=None) -> bool:
     """Whether today's expiry on this exchange has passed (its contracts stopped trading for good)."""
     from ..kite_service import IST
     from datetime import datetime
-    at = EXPIRY_TIME.get(exchange)
     local = (now or datetime.now(IST)).astimezone(IST)
+    at = expiry_time(exchange, local.date())
     return bool(at) and local.strftime("%H:%M") >= at
 
 # the index each index option settles against; stock options use the NSE cash stock
@@ -146,7 +166,10 @@ class OptionsData:
                 if r["type"] == "FUT" or r["expiry"] < today or r["expiry"] == gone:
                     continue
                 k = (exch, r["name"])
-                u = seen.setdefault(k, {"exchange": exch, "name": r["name"], "lot": r["lot"], "expiries": set()})
+                u = seen.setdefault(k, {"exchange": exch, "name": r["name"], "lot": r["lot"], "lot_expiry": r["expiry"],
+                                        "expiries": set()})
+                if r["expiry"] < u["lot_expiry"]:        # the lot of the nearest listed expiry
+                    u["lot"], u["lot_expiry"] = r["lot"], r["expiry"]
                 u["expiries"].add(r["expiry"])
         rank = {k: i for i, k in enumerate(POPULAR)}
         out = []
@@ -303,7 +326,10 @@ class OptionsData:
         """The price NSE and BSE options settle at on their expiry day: the underlying's official close that day (the
         index close; for a stock, the auction close). Stock contracts settle at the volume-weighted average of the
         exchanges' closes; this uses the close on the exchange named here, nearly all the volume. None before the
-        close is out, and for commodity and currency options (they settle on other rules)."""
+        close is out. Commodity and currency options settle on other rules (the RBI reference rate, the futures'
+        final settlement price) that aren't available here: they get the underlying's last price, an estimate."""
+        if exchange in ("MCX", "CDS"):
+            return self.spot(exchange, name, expiry)[0]
         if exchange not in ("NFO", "BFO"):
             return None
         from ..data import sessions

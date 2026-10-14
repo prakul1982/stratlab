@@ -897,7 +897,8 @@ def recorded_chain(name: str, choice: str, today: date) -> dict | None:
     """The newest recorded chain for the expiry asked for, when the live feed is offline."""
     for back in range(0, 8):
         # a monthly-only index's recordings of a date it can't expire on (an old weekly list) are left out
-        snaps = [s for s in recorded_last(name, today - timedelta(days=back)) if expiry_fits(NAMES[name], name, str(s["expiry"])[:10])]
+        snaps = [s for s in recorded_last(name, today - timedelta(days=back)) if expiry_fits(NAMES[name], name, str(s["expiry"])[:10])
+                and str(s["expiry"])[:10] >= today.isoformat()]          # an expiry already past is not "current"
         if not snaps:
             continue
         exps = [str(s["expiry"])[:10] for s in snaps]
@@ -905,6 +906,8 @@ def recorded_chain(name: str, choice: str, today: date) -> dict | None:
             pick = snaps[0]
         elif choice == "next":
             pick = snaps[1] if len(snaps) > 1 else snaps[0]
+        elif choice == "month":            # the last expiry of the nearest month, as options/data.py picks it
+            pick = [s for s, e in zip(snaps, exps) if e[:7] == exps[0][:7]][-1]
         else:
             pick = next((s for s, e in zip(snaps, exps) if e == choice), None)
             if pick is None:

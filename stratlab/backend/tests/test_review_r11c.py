@@ -372,3 +372,14 @@ def test_a_paper_accounts_value_is_stamped_when_its_candle_closed(monkeypatch):
     b.cur = {"start": datetime(2026, 10, 9, 15, 25, tzinfo=IST), "end": datetime(2026, 10, 9, 15, 30, tzinfo=IST),
              "o": 1, "h": 1, "l": 1, "c": 1, "v": 0}
     assert b._close()["end"] == "2026-10-09T15:30:00+05:30"
+
+
+def test_the_underlying_list_shows_the_lot_of_its_nearest_expiry(monkeypatch):
+    od = opt_data.OptionsData(kite=None)
+    today = opt_data.ist_date()
+    near, far = (today + timedelta(days=2)).isoformat(), (today + timedelta(days=9)).isoformat()
+    od._day = today.isoformat()
+    od._rows = {"NFO": [{"symbol": f"NIFTY{e}CE", "name": "NIFTY", "type": "CE", "strike": 25000.0, "expiry": e, "lot": lot,
+                         "exchange": "NFO"} for e, lot in ((far, 65), (near, 75))], "BFO": [], "MCX": [], "CDS": []}
+    monkeypatch.setattr(opt_data, "keep_listed", lambda ex, name, xs: xs)
+    assert next(u for u in od.underlyings() if u["name"] == "NIFTY")["lot"] == 75
