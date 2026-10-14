@@ -17,11 +17,11 @@ def _m():
     return main
 
 
-def _fire(events: list[dict], now) -> int:
+def _fire(events: list[dict], now) -> tuple[int, int]:
     """A desk's new day into the stock alerts (MWPL crossing 80%, a margin-funded level), within each user's limits."""
     from . import stock_alerts
     m = _m()
-    return stock_alerts.fire_events(events, now, m._alert_limit, kind_ok=m._alert_kind_ok)
+    return stock_alerts.fire_events_counted(events, now, m._alert_limit, kind_ok=m._alert_kind_ok)
 
 
 runner = X.Runner(DESKS, lambda: _m().filings_feed, fire=_fire)

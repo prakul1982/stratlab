@@ -43,6 +43,12 @@ export function monthlyUse(used: number, limit: number | null | undefined, planL
   return `${used} (unlimited)`;
 }
 
+/** "2 of 2" with "limit reached" after it once the count is at the limit: a count past it (the owner's own use, viewed as a
+ * smaller plan) reads as the limit, never "8 of 2" (R17-004). */
+export function countOf(used: number, limit: number): string {
+  return used >= limit ? `${limit} of ${limit}, limit reached` : `${used} of ${limit}`;
+}
+
 /** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap
  * the Plans card names (R9P-005); for an admin the cap isn't enforced, and the line says so. */
 export function aiBuildsUse(used: number, limit: number | null | undefined, perDay?: number | null, admin?: boolean): string {

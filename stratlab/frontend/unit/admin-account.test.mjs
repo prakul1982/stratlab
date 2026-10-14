@@ -153,3 +153,10 @@ test("signing out clears the owner's \"View as\" and Overview says AI reads apar
   assert.match(app, /"SIGNED_OUT"\) writeViewAs\(null\)/);
   assert.match(readFileSync(new URL("../src/pages/admin/OverviewSection.tsx", import.meta.url), "utf8"), /AI reads/);
 });
+
+test("a raw connection error reads as one plain line, the raw text kept for the tooltip (R18-010)", async () => {
+  const { plainError } = await import("../src/pages/admin/attention.ts");
+  const raw = "NFO:FINNIFTY next: HTTPSConnectionPool(host='api.kite.trade', port=443): Read timed out. (read timeout=7)";
+  assert.deepEqual(plainError(raw), { text: "NFO:FINNIFTY next: Kite didn't answer in time", full: raw });
+  assert.deepEqual(plainError("Nothing new"), { text: "Nothing new" });
+});

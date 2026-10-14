@@ -283,8 +283,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         <div className="palette-in">
           <Sparkle size={20} />
           <textarea ref={input} rows={Math.min(6, Math.max(1, q.split("\n").length))} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={key}
-            placeholder={`Try: ${example}`} aria-label="Search or ask anything" disabled={!!steps} />
-          <kbd className="small muted">Esc</kbd>
+            placeholder={typeof window !== "undefined" && window.matchMedia?.("(max-width: 640px)").matches ? "Search or ask anything" : `Try: ${example}`} aria-label="Search or ask anything" disabled={!!steps} />
+          <kbd className="small muted esc-hint">Esc</kbd>
         </div>
         {steps && (
           <div className="palette-work" role="status" aria-live="polite">

@@ -79,24 +79,24 @@ export const PAGES: PageMeta[] = [
  * address, so a crawler that doesn't run scripts never takes it for the home page (R6V-012). */
 export const LIBRARY_SEEDS: [string, string][] = [
   ["seed-st-s2-in", "ST S2: Stage 2 + Supertrend · NIFTY 50 stocks"],
-  ["seed-st-s2-us", "ST S2: Stage 2 + Supertrend · 20 US large caps"],
+  ["seed-st-s2-us", "ST S2: Stage 2 + Supertrend · 20 of the largest US companies"],
   ["seed-ema-20-50-in", "20/50 EMA cross · NIFTY 50 stocks"],
-  ["seed-ema-20-50-us", "20/50 EMA cross · 20 US large caps"],
+  ["seed-ema-20-50-us", "20/50 EMA cross · 20 of the largest US companies"],
   ["seed-rsi2-revert-in", "RSI(2) mean reversion · NIFTY 50 stocks"],
-  ["seed-rsi2-revert-us", "RSI(2) mean reversion · 20 US large caps"],
+  ["seed-rsi2-revert-us", "RSI(2) mean reversion · 20 of the largest US companies"],
   ["seed-breakout-52w-in", "52-week breakout with ATR stop · NIFTY 50 stocks"],
-  ["seed-breakout-52w-us", "52-week breakout with ATR stop · 20 US large caps"],
+  ["seed-breakout-52w-us", "52-week breakout with ATR stop · 20 of the largest US companies"],
   ["seed-boll-squeeze-in", "Bollinger squeeze breakout · NIFTY 50 stocks"],
-  ["seed-boll-squeeze-us", "Bollinger squeeze breakout · 20 US large caps"],
+  ["seed-boll-squeeze-us", "Bollinger squeeze breakout · 20 of the largest US companies"],
   ["seed-orb-15m-fo", "Opening-range breakout (intraday) · 25 most liquid F&O stocks"],
   ["seed-golden-cross-in", "Golden cross · NIFTY 50 stocks"],
-  ["seed-golden-cross-us", "Golden cross · 20 US large caps"],
+  ["seed-golden-cross-us", "Golden cross · 20 of the largest US companies"],
   ["seed-donchian-20-10-in", "Donchian 20/10 (turtle-style) · NIFTY 50 stocks"],
-  ["seed-donchian-20-10-us", "Donchian 20/10 (turtle-style) · 20 US large caps"],
+  ["seed-donchian-20-10-us", "Donchian 20/10 (turtle-style) · 20 of the largest US companies"],
   ["seed-macd-cross-in", "MACD signal cross · NIFTY 50 stocks"],
-  ["seed-macd-cross-us", "MACD signal cross · 20 US large caps"],
+  ["seed-macd-cross-us", "MACD signal cross · 20 of the largest US companies"],
   ["seed-supertrend-in", "Supertrend flip · NIFTY 50 stocks"],
-  ["seed-supertrend-us", "Supertrend flip · 20 US large caps"],
+  ["seed-supertrend-us", "Supertrend flip · 20 of the largest US companies"],
 ];
 
 /** Each library strategy's rules in words, by its slug (seed-<slug>-<group>), as backend/app/library_seed.py states them
@@ -117,7 +117,7 @@ export const LIBRARY_RULES: Record<string, string> = {
 /** A library entry's strategy slug: "seed-golden-cross-in" → "golden-cross". */
 export const librarySlug = (id: string) => id.replace(/^seed-/, "").replace(/-(in|us|fo)$/, "");
 
-/** Where it was tested, unless the strategy's own name already says so ("Supertrend flip · 20 US large caps"): by the
+/** Where it was tested, unless the strategy's own name already says so ("Supertrend flip · 20 of the largest US companies"): by the
  * words shown, or by the group's own name (`group`, when `where` adds a count to it). */
 export const whereShown = (name: string, where: string | null | undefined, group?: string | null) => {
   const n = name.toLowerCase();
@@ -176,8 +176,8 @@ const sentences = (required: string[], optional: string[], closers: string[], ma
 };
 
 /** A library strategy's description for search results and link previews, in at most DESCRIPTION_MAX characters: the
- * headline first, then the strategy, with where it was tested only when its name doesn't already say it (R7V-006: "… 20 US
- * large caps on 20 US large caps"), then the entry's own reason and a closing line when they fit (R10V-005). */
+ * headline first, then the strategy, with where it was tested only when its name doesn't already say it (R7V-006: "… 20 of the largest
+ * US companies on 20 of the largest US companies"), then the entry's own reason and a closing line when they fit (R10V-005). */
 export const libraryDescription = (e: { name: string; where?: string | null; group?: string | null; factHeadline?: string | null;
   headline?: string | null; reason?: string | null }) => {
   const on = whereShown(e.name, e.where, e.group);
@@ -252,7 +252,7 @@ export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | nu
 /** A landing-page address's own heading ("Plans and prices" at /pricing), the h1 the landing page shows there, so the
  * address's own HTML and the drawn page agree (R8V-008); none for the home page and addresses without their own page. */
 export const landingHeading = (path: string): string | undefined => {
-  const p = pageMeta(path);
+  const p = pageMeta(PAGE_ALIASES[tidy(path)] ?? path);
   return p && p.path !== "/" && p.heading !== TAGLINE ? p.heading : undefined;
 };
 
@@ -262,6 +262,10 @@ export const NOT_FOUND_DESCRIPTION = "There is no page at this address on StratL
 export const VERDICT_DESCRIPTION = "A strategy's verdict on past prices, shared by link: the result after costs and the four checks it was put through.";
 
 const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/");
+
+/** Addresses that open another page's words (the signed-in Plans page's address for a visitor): the build writes /plans as
+ * /pricing's page, so a visitor sees the prices' heading from the first frame and not the home page's hero (R17-002). */
+export const PAGE_ALIASES: Record<string, string> = { "/plans": "/pricing" };
 
 /** The table's entry for an address, if it has one. */
 export const pageMeta = (path: string): PageMeta | undefined => PAGES.find((p) => p.path === tidy(path));

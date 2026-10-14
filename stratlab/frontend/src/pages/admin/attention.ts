@@ -15,6 +15,15 @@ export function oneLine(text: string, max = 120): { text: string; full?: string 
   const cut = first.length > max ? `${first.slice(0, max - 1).trimEnd()}…` : first;
   return cut === flat ? { text: flat } : { text: cut, full: flat };
 }
+/** A job's raw network error as one plain line, the raw text kept in `full` for the tooltip (R18-010: "HTTPSConnectionPool(host='api.kite.trade'…) Read timed out"). */
+export function plainError(text: string | null | undefined): { text: string; full?: string } {
+  const flat = String(text ?? "").replace(/\s+/g, " ").trim();
+  const m = /HTTPSConnectionPool\(host='([^']+)'/.exec(flat);
+  if (!m) return { text: flat };
+  const who = /kite/i.test(m[1]) ? "Kite" : "The data provider";
+  const why = /timed out/i.test(flat) ? " didn't answer in time" : " couldn't be reached";
+  return { text: `${flat.slice(0, m.index)}${who}${why}`, full: flat };
+}
 /** A provider's error with each long link in it cut to its address ("https://vercel.com/d?to=…" for a 150-character one), whole sentences
  * kept: oneLine() keeps only the first sentence, which is right for Overview's one-line list but would drop "Fix the key, then press Test."
  * on System (R11P-007: a 150-character Vercel link in the AI lines). The whole text stays in `full` for a tooltip. */
@@ -165,8 +174,9 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   for (const j of jobs ?? []) {
     if (j.state !== "bad" && !holidaysDown(j)) continue;
     // the holidays read failing isn't holidays missing: said the way the Services light says it (R12-010)
-    const text = j.id === "holidays" && s.cal ? `Exchange holidays: ${s.cal.detail.replace(/^Holidays/, "holidays")}. ${j.error}` : `${j.name}: ${j.error}`;
-    out.push({ text, to: "/admin/data", label: "Data and jobs", bad: false });
+    const err = plainError(j.error);
+    const text = j.id === "holidays" && s.cal ? `Exchange holidays: ${s.cal.detail.replace(/^Holidays/, "holidays")}. ${err.text}` : `${j.name}: ${err.text}`;
+    out.push({ text, ...(err.full ? { full: `${j.name}: ${err.full}` } : {}), to: "/admin/data", label: "Data and jobs", bad: false });
   }
   // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
   // switched off on purpose isn't listed.

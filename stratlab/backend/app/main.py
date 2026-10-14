@@ -5,6 +5,7 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import math
+import unicodedata
 import logging
 from html import escape as html_escape
 import re
@@ -125,7 +126,9 @@ recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings
                     prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 # a currency option's underlying when its future has no live quote: the spot pair it settles against (R13-002)
-options_data.spot_source = lambda pair: research_hub.yahoo.meta(pair).get("price")
+options_data.spot_source = lambda pair: (lambda m: {"price": m.get("price"), "at": m.get("at")})(research_hub.yahoo.meta(pair))
+options_data.spot_close = lambda pair, day: next((b["c"] for b in research_hub.yahoo.chart(pair, "1d", 7, ttl=60, exact=True)["candles"]
+                                                  if b["t"][:10] == day), None)
 
 
 def after_login() -> str:
@@ -705,7 +708,7 @@ def me(profile=Depends(current_profile)):
         "promo": {"until": until.isoformat()} if not seen and (until := promo_until()) and promo_active() else None,
         "free_basic_until": fb.isoformat() if not seen and profile.get("_paid_plan") == "free" and (fb := free_basic_until(profile)) else None,
         "billing": ({"subscribed_plan": None if seen == "free" else seen, "status": None if seen == "free" else "active",
-                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": seen != "free"} if seen else
+                     "renews_or_ends": None, "cancel_at_period_end": False, "given_by_owner": False} if seen else
                     {"subscribed_plan": profile.get("plan"), "status": profile.get("plan_status"),
                      "renews_or_ends": profile.get("current_period_end"),
                      "cancel_at_period_end": bool(profile.get("cancel_at_period_end")),
@@ -1412,12 +1415,13 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
 
 @app.delete("/notebooks/{nid}")
 def delete_notebook(nid: str, profile=Depends(current_profile)):
-    row = db.get_strategy(profile["id"], check_id(nid))
+    nid = check_id(nid)                                   # the stored entries name the canonical id
+    row = db.get_strategy(profile["id"], nid)
     if not row:
         err(404, "not_found", "Notebook not found.")
     library.take_down(notebook_from_row(row).get("experiments") or [])   # its public links and library entries go with it
     library.remove_of_notebook(profile["id"], nid)                       # and entries whose experiment was deleted earlier
-    db.delete_strategy(profile["id"], check_id(nid))
+    db.delete_strategy(profile["id"], nid)
     return {"deleted": True}
 
 
@@ -1544,7 +1548,7 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
         if not had:
             public.unpublish(token)
         err(404, "not_found", "Experiment not found.")
-    if not had and now.get("public"):
+    if now.get("public") and now["public"] not in (had, token):    # another tab's link (or one made again meanwhile) stays
         public.unpublish(token)
         token = now["public"]
     else:
@@ -1948,7 +1952,7 @@ def results_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 
 
 @app.post("/admin/results/refresh")
-def admin_results_refresh(_=Depends(admin.admin_profile)):
+def admin_results_refresh(_=Depends(admin.leader_admin)):
     """Refresh both regions' results calendars now, and say what each feed answered."""
     who = results_calendar.trackers()
     return {region: results_job.refresh(region, who) for region in results_calendar.REGIONS} | {"job": results_job.status}
@@ -2002,7 +2006,7 @@ def corp_actions_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 
 
 @app.post("/admin/corp-actions/refresh")
-def admin_corp_actions_refresh(universe: bool = False, _=Depends(admin.admin_profile)):
+def admin_corp_actions_refresh(universe: bool = False, _=Depends(admin.leader_admin)):
     """Refresh both regions' corporate-actions calendars now, and say what each feed answered. With `universe`, also
     start the read of the whole US universe in the background (it takes several minutes)."""
     who = results_calendar.trackers()
@@ -2675,10 +2679,8 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
-        # a quantity typed over a statement's per-account one replaces it (no hidden second quantity); the next statement
-        # sets it again, as it does any statement holding without one
-        found = [{k: v for k, v in f.items() if k != "accts"} if f.get("accts") and abs(sum(f["accts"].values()) - f["qty"]) > 1e-9
-                 else f for f in found]
+        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
+        found = holdings.drop_stale_accts(found)
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
             return with_sectors(found, known), before["source"] or "Manual"
@@ -2824,7 +2826,7 @@ app.include_router(money_networth.make_router(
 
 def _nw_value_of(uid: str) -> dict | None:
     p = connect_sync.profile_for(uid)                    # with its plan, which My Holdings reads (a bare profile failed every time)
-    return money_networth.build(money_networth.load(uid)["items"], (_quiet(_nw_stocks, p) or {"failed": True}) if p else None,
+    return money_networth.build(money_networth.load(uid)["items"], (_quiet(_nw_stocks, p) or {"failed": True}) if p else {"failed": True},
                                 money_networth.mf_value(uid), money_networth.Prices(_nw_gold, _nw_crypto, usd_inr))
 
 
@@ -3077,9 +3079,8 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c, equity, units = money_routes.tax_computed(profile, i)
-    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None, units=instrument_kinds.bucket_rows(units, c["names"])),
-                            i["business"], i["income"].get(fy),
-                            money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
+    y = tax_lots.years_with_total([fy], equity, c["intraday"], instrument_kinds.bucket_rows(units, c["names"]), units, c["names"],
+                                  i["business"], i["income"], money_routes.dividends_for_tax(profile), limit=None)[fy]
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":
         below = tax_lots.below_cost(c["open"], i["quotes"], i["today"]) if fy == tax_lots.fy_of(i["today"]) else None
@@ -3158,25 +3159,26 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if "stratlab" in re.sub(r"[\W_]+", "", req.author.casefold()) and not admin.is_admin(profile):
+    if "stratlab" in re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", req.author).casefold()) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
     throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
-    e = library.entry(nb, exp, profile["id"], req.author, req.description,
-                      entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
-    if old and old.get("owner") == profile["id"]:
+    had = old["id"] if old and old.get("owner") == profile["id"] else None   # a pointer to a removed entry isn't one
+    e = library.entry(nb, exp, profile["id"], req.author, req.description, entry_id=had)
+    if had:
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
-    e = library.carry_moderation(old if old and old.get("owner") == profile["id"] else None, e)
+    e = library.carry_moderation(old if had else None, e)
     library.save(e)
     cur = get_notebook(profile, nid)          # an entry made meanwhile is kept; ours is taken down again
     now = next((x for x in cur.get("experiments") or [] if x["v"] == version), None)
     if now is None:
-        if not exp.get("library"):
+        if not had:
             library.remove(e["id"])
         err(404, "not_found", "Experiment not found.")
-    if not exp.get("library") and now.get("library") and now["library"] != e["id"]:
+    other = now.get("library")
+    if not had and other and other != e["id"] and library.load(other):
         library.remove(e["id"])
-        e = library.load(now["library"]) or e
+        e = library.load(other) or e
     else:
         now["library"] = e["id"]
         save_notebook(profile, cur)

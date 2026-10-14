@@ -28,3 +28,10 @@ def test_totals_by_currency_today_worst_day_and_drawdown():
 
 def test_empty():
     assert risk.summary([]) == {"currencies": [], "sessions": []}
+
+
+def test_deepest_fall_before_the_open_is_dated_the_last_session():
+    # 02:50 IST on the 15th: the value is still the 14th's close, so the low is the 14th, not today
+    s = snap("a", "INR", 100000, 94000, [{"t": "2026-10-13T15:00", "eq": 100000}, {"t": "2026-10-14T15:00", "eq": 94000}])
+    out = risk.summary([s], today="2026-10-15")
+    assert out["currencies"][0]["deepest_fall"]["date"] == "2026-10-14"

@@ -577,8 +577,14 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
 def apply(item: dict, a: dict) -> dict:
     """The holding after a bonus or split, remembering what it was so it can be undone."""
     q, avg = adjusted(float(item["qty"]), item.get("avg"), a)
-    return {**item, "qty": q, "avg": avg, "applied": (item.get("applied") or []) + [a["id"]],
-            "adjusted": ((item.get("adjusted") or []) + [{"id": a["id"], "label": a["short"], "qty": item["qty"], "avg": item.get("avg")}])[-10:]}
+    was = {"id": a["id"], "label": a["short"], "qty": item["qty"], "avg": item.get("avg")}
+    out = {}
+    if item.get("accts"):                 # each demat account gets its own entitlement; the quantity stays their sum
+        out["accts"] = {k: adjusted(float(v), None, a)[0] for k, v in item["accts"].items()}
+        q = round(sum(out["accts"].values()), 4)
+        was["accts"] = item["accts"]
+    return {**item, "qty": q, "avg": avg, **out, "applied": (item.get("applied") or []) + [a["id"]],
+            "adjusted": ((item.get("adjusted") or []) + [was])[-10:]}
 
 
 def dismiss(item: dict, a: dict) -> dict:
@@ -591,7 +597,11 @@ def undo(item: dict) -> dict:
     if not item.get("adjusted"):
         return item
     last = item["adjusted"][-1]
-    return {**item, "qty": last["qty"], "avg": last.get("avg"), "adjusted": item["adjusted"][:-1],
+    parts = last.get("accts")
+    if not parts and item.get("accts"):   # an adjustment saved before parts were kept: scale them back
+        f = last["qty"] / float(item["qty"]) if float(item["qty"]) else 1
+        parts = {k: round(v * f, 4) for k, v in item["accts"].items()}
+    return {**item, "qty": last["qty"], **({"accts": parts} if parts else {}), "avg": last.get("avg"), "adjusted": item["adjusted"][:-1],
             "applied": [x for x in item.get("applied") or [] if x != last.get("id")]}
 
 

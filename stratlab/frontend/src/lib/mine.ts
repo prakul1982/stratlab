@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { loadEvents, type EvKind } from "./marketEvents";
 import type { Region } from "./research";
+import { istToday } from "./format";
 
 /* The data behind "My space" (/mine): only what the app already reads for its other pages, gathered. Nothing here is
  * made up: a figure that cannot be read stays null and the card shows an empty state with the next step. */
@@ -108,7 +109,7 @@ export function useComingUp(limit = 6, enabled = true): Up[] | null {
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    const today = todayIso(), end = addDaysIso(today, 75);
+    const today = istToday(), end = addDaysIso(today, 75);
     Promise.all([
       api<MoneyView>(`/money/calendar?start=${today}&end=${end}`).catch(() => null),
       loadEvents(),
@@ -117,6 +118,7 @@ export function useComingUp(limit = 6, enabled = true): Up[] | null {
       if (!live) return;
       const out: Up[] = [];
       for (const e of money?.events ?? []) {
+        if (e.date < today) continue;
         if (e.kind === "results_out") continue;          // results already filed are not "coming up" (R6O-016)
         out.push({ key: `${e.date}|${e.symbol ?? ""}|${/result/i.test(e.title) ? "results" : e.title.toLowerCase()}`, date: e.date, title: e.title, tag: CAT_TAG[e.cat] ?? "Money",
           detail: [e.detail, e.amount != null ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });

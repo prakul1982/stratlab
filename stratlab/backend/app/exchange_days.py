@@ -505,7 +505,9 @@ class Runner:
         prev = desk.store.latest(before=key)
         events = desk.after(key, rec.get("rows") or {}, (prev[1].get("rows") if prev else None))
         n = self.fire(events, now) if events else 0
-        desk.store.set_state(fired=key)
+        n, failed = n if isinstance(n, tuple) else (n, 0)
+        if not failed:                      # a user it failed for gets it next pass (each alert remembers what it sent)
+            desk.store.set_state(fired=key)
         return n
 
     def backfill(self, desk: Desk, today: date, step: int = BACKFILL_STEP, days: int | None = None) -> dict:
@@ -584,9 +586,13 @@ class Job(news_job.Job):
                 if behind and time.time() - self._tried.get(name, 0.0) >= RETRY_MINUTES * 60:
                     self._tried[name] = time.time()
                     self.status["desks"][name] = {"catch_up": self.runner.catch_up(desk, now), "at": now.isoformat()}
-                elif exp is not None and not behind and desk.store.state().get("fired") != exp.isoformat():
-                    self.status["desks"].setdefault(name, {})["alerts"] = self.runner.alert(desk, exp, now)
-                elif not (QUIET[0] <= hhmm <= QUIET[1]) and not (desk.store.state().get("backfill") or {}).get("done"):
+                    continue
+                if exp is not None and desk.store.get(exp.isoformat()) and desk.store.state().get("fired") != exp.isoformat():
+                    try:                    # a stored day whose alerts are owed; the walk back goes on whatever comes of them
+                        self.status["desks"].setdefault(name, {})["alerts"] = self.runner.alert(desk, exp, now)
+                    except Exception as e:
+                        self.status["last_error"] = f"{name}: {str(e)[:180]}"
+                if not (QUIET[0] <= hhmm <= QUIET[1]) and not (desk.store.state().get("backfill") or {}).get("done"):
                     self.status["desks"].setdefault(name, {})["backfill"] = self.runner.backfill(desk, local.date())
             except Exception as e:
                 self.status["last_error"] = f"{name}: {str(e)[:180]}"

@@ -66,7 +66,8 @@ def session_day(at, region: str) -> str | None:
 def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:
     """One index's tile: its level and change with the session they are of. `stale`: the market is open today and this
     quote is still a previous session's, so its change is that session's and is never shown as today's (R7T-003: SENSEX
-    "−1.44% today" after 9 Oct's open was 8 Oct's move); `live`: the quote is today's while the market trades."""
+    "−1.44% today" after 9 Oct's open was 8 Oct's move); `live`: the quote is today's while the market trades;
+    `settling`: the level is of the session whose closing prints are still settling, as a stock page says it (R16B-002)."""
     day = session_day(q.get("at"), region)
     is_open = market_open(region, now)
     today = market_today(region, now)
@@ -74,9 +75,12 @@ def index_level(name: str, q: dict, region: str, now: datetime | None = None) ->
     price = q["price"]
     if hi and q.get("high") and q["high"] > hi:
         hi = q["high"]                          # today's high above the year's: the year's high is today's
+    from .. import stock_pages
+    settling = stock_pages.settling(region, now)
     return {"name": name, "price": price, "change_pct": q.get("change_pct"), "high52": hi, "low52": q.get("low52"),
             "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": q.get("at"), "day": day,
-            "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today))}
+            "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today)),
+            "settling": bool(settling and (day is None or day == settling))}
 
 
 def _fy(label: str) -> str:
@@ -723,8 +727,8 @@ class Research:
                                _item("PEG (fwd)", M.get("forwardPEG"))]),
                 ("Profitability", [_item("Gross margin", M.get("grossMarginTTM"), "%"),
                                    _item("Operating margin", M.get("operatingMarginTTM"), "%"),
-                                   _item("Net margin", M.get("netProfitMarginTTM"), "%"), _item("ROE", M.get("roeTTM"), "%"),
-                                   _item("ROA", M.get("roaTTM"), "%")]),
+                                   _item("Net margin", M.get("netProfitMarginTTM"), "%", "Last 12 months"),
+                                   _item("ROE", M.get("roeTTM"), "%", "Last 12 months"), _item("ROA", M.get("roaTTM"), "%")]),
                 ("Growth", [_item("Revenue YoY", M.get("revenueGrowthTTMYoy"), "%±"),
                             _item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±"),
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),

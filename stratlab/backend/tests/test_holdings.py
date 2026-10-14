@@ -471,3 +471,10 @@ def test_manual_edits_are_throttled_too(w):
     for _ in range(120):
         assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 1}]}).status_code == 200
     assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 1}]}).status_code == 429
+
+
+def test_merge_drops_parts_that_no_longer_add_up_to_the_quantity():
+    have = {"symbol": "INFY", "exchange": "NSE", "qty": 10.0, "avg": None, "accts": {"NSDL": 10.0}}
+    added = holdings.merge([have, {"symbol": "INFY", "exchange": "NSE", "qty": 5.0, "avg": None}])
+    assert added[0]["qty"] == 15 and "accts" not in added[0]
+    assert holdings.merge([have])[0]["accts"] == {"NSDL": 10.0}

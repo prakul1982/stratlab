@@ -411,6 +411,9 @@ class OptionsEngine:
             if rk.legStopPct and any(l["side"] == "sell" for l in p["legs"]):
                 stopped = False
                 for leg in p["legs"]:
+                    lq = quotes.get(leg["key"]) or {}
+                    if leg["open"] and leg["side"] == "sell" and "entry_mid" not in leg and lq.get("bid") and lq.get("ask") and lq["ask"] >= lq["bid"]:
+                        leg["entry_mid"] = leg["entry"] + (lq["ask"] - lq["bid"]) / 2   # saved before entry_mid: entry was the bid
                     if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg.get("entry_mid", leg["entry"]) * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
                         stopped = True

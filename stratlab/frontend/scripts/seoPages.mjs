@@ -8,7 +8,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGE_ALIASES, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -72,6 +72,11 @@ export function pageFiles(template) {
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
       faq: p.path === "/faq" })]);
+  // /plans (the signed-in Plans page's address) opens the landing page at its prices: same words as /pricing, kept out of
+  // search results with that page as the one address (R17-002: it started as the home page's hero and then jumped down)
+  const pricing = PAGES.find((p) => p.path === PAGE_ALIASES["/plans"]);
+  files.push(["plans/index.html", pageHtml(template, { title: pricing.title, description: pricing.description, canonical: null, index: false,
+    heading: pricing.heading, summary: pricing.summary })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION] })]);
   return files;

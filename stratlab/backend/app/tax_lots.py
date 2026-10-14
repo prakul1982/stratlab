@@ -62,6 +62,9 @@ NOTES = [
     "is deducted (section 36(1)(xv)): the figure in your file, or 0.025% of the sale value where the file has none.",
     "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
+    "Losses left over in an earlier year of your files are brought forward into the later years (capital and F&O "
+    "losses for 8 years, intraday for 4), as if each return was filed by its due date. Losses from years not in your "
+    "files aren't included.",
     "Turnover is the total of profits and losses, trade by trade. Brokers' summaries often net them per contract "
     "first, which gives a smaller figure; both are shown.",
     "The estimate is for an individual of the age band and residency you choose (resident and below 60 until you say "
@@ -248,23 +251,57 @@ def business_year(fy: int, chunks: list[dict]) -> dict:
             "turnover_contract": _r(sum(x["turnover_contract"] for x in segs)), "trades": sum(x["trades"] for x in segs)}
 
 
-def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: float = 0.0, units: dict | None = None) -> dict:
+def with_total(y: dict, business: list[dict], inputs: dict | None, dividends: float = 0.0, units: dict | None = None,
+               brought: list[dict] | None = None) -> dict:
     """A year from year() with its F&O totals, the total tax estimate on the user's inputs (and the other regime's
     figure on the same inputs, as a fact), and the return and audit facts. `dividends`: the year's dividend income
     the user included (from Tax tools). `units` is the year's gold, silver, international and debt ETFs and gold bonds
     (instrument_kinds.other_year), shown as their own rows; their gains are already in y's buckets (year() with
-    `units`)."""
+    `units`). `brought`: earlier years' intraday and business losses still carried (tax_total.estimate)."""
     biz = business_year(y["fy"], business)
     v = tax_total.clean(inputs) if inputs else tax_total.default_inputs()
-    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], dividends=dividends)
+    total = tax_total.estimate(y["fy"], v, y["buckets"], y["intraday"]["pnl"], biz["net"], dividends=dividends, brought=brought)
     other = tax_total.estimate(y["fy"], {**v, "regime": "old" if v["regime"] == "new" else "new"}, y["buckets"],
-                               y["intraday"]["pnl"], biz["net"], dividends=dividends)
+                               y["intraday"]["pnl"], biz["net"], dividends=dividends, brought=brought)
     turnover = (y["intraday"].get("turnover") or 0) + biz["turnover"]
     return {**y, "business": biz, "total": total, "inputs": {**v, "saved": bool(inputs)}, "units": units,
             "other_regime": {"regime": other["regime"], "total": other.get("total")} if other.get("available") else None,
             "filing": tax_total.filing_facts(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
             "audit": tax_total.audit_fact(y["fy"], turnover, bool(biz["segments"]) or y["intraday"]["count"] > 0),
             "turnover": _r(turnover)}
+
+
+CF_YEARS = {"st": 8, "lt": 8, "speculative": 4, "business": 8}       # years a loss can be carried forward
+
+
+def _carried(fy: int, y: dict, rest: list[dict]) -> list[dict]:
+    """The losses still carried after year `fy` (a with_total() result): those brought in and not used, then its own.
+    `rest`: the intraday and business losses brought in, which pass through a year with no estimate."""
+    t = y["total"]
+    bf = y["brought_forward"] + (t["brought_forward"] if t.get("available") else rest)
+    out = [{"fy": p["fy"], "kind": p["kind"], "amt": p.get("left", p["amt"])} for p in bf]
+    own = t["carry_forward"] if t.get("available") else {"speculative": max(0.0, -y["intraday"]["pnl"]), "business": max(0.0, -y["business"]["net"])}
+    out += [{"fy": fy, "kind": k, "amt": y["carry_forward"][k]} for k in ("st", "lt")]
+    out += [{"fy": fy, "kind": k, "amt": own[k]} for k in ("speculative", "business")]
+    return [p for p in out if p["amt"] > EPS]
+
+
+def years_with_total(fys, equity: list[dict], intraday: list[dict], unit_rows: list[dict], units: list[dict], names: dict,
+                     business: list[dict], inputs: dict[int, dict], dividends: dict[int, float], limit: int | None = MAX_ROWS) -> dict[int, dict]:
+    """with_total(year()) for each year in `fys`, with the losses carried forward from every earlier year in the files
+    (capital losses 8 years, intraday 4 years, business 8 years), oldest first. Assumes each return was filed in time."""
+    data = {r["fy"] for r in equity} | {r["fy"] for r in unit_rows} | {i["fy"] for i in intraday} | {b["fy"] for b in business}
+    pools: list[dict] = []
+    out = {}
+    for fy in sorted(set(fys) | {d for d in data if d < max(fys)}):
+        live = [p for p in pools if fy - p["fy"] <= CF_YEARS[p["kind"]]]
+        cap, rest = [p for p in live if p["kind"] in ("st", "lt")], [p for p in live if p["kind"] not in ("st", "lt")]
+        y = with_total(year(fy, equity, intraday, limit if fy in fys else 0, units=unit_rows, brought=cap), business, inputs.get(fy),
+                       dividends.get(fy, 0.0), instrument_kinds.other_year(fy, units, names) if fy in fys else None, brought=rest)
+        pools = _carried(fy, y, rest)
+        if fy in fys:
+            out[fy] = y
+    return out
 
 
 def delete(uid: str):
@@ -500,8 +537,10 @@ BUCKETS = [("st_new", "Short-term, sold from 23 Jul 2024", IN_STCG), ("st_old", 
            ("st_unit", "Short-term at your slab rate (ETFs and gold bonds)", 0.0),
            ("lt_unit", "Long-term, ETFs and gold bonds, 12.5% (section 112)", 0.125)]
 SLAB = {"st_slab", "st_us", "st_unit"}
+# slab-rate buckets last: whether they pay more than 20% depends on the user's slab (and 87A), not known here
 ST_ORDER = ["st_new", "st_old", "st_slab", "st_us", "st_unit"]
-LT_ORDER = ["lt_112i", "lt_usi", "lt_new", "lt_112", "lt_us", "lt_unit", "lt_old"]
+# 12.5% buckets with no exemption before lt_new and lt_old, whose first ₹1.25 lakh is exempt anyway
+LT_ORDER = ["lt_112i", "lt_usi", "lt_112", "lt_us", "lt_unit", "lt_new", "lt_old"]
 
 
 STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)", "st_old": "short-term gains taxed at 15% (sold before 23 Jul 2024)",
@@ -535,10 +574,12 @@ def money(v: float) -> str:
 
 
 def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None = MAX_ROWS,
-         units: list[dict] | None = None) -> dict:
+         units: list[dict] | None = None, brought: list[dict] | None = None) -> dict:
     """One financial year: gains and losses by kind and rate, set-off in the order that leaves the least tax (losses
     against the highest-rate gains first), the exemption, the estimated tax and what is left to carry forward.
-    `units` are the ETF and gold bond sales from instrument_kinds.bucket_rows: set off with the rest, not listed."""
+    `units` are the ETF and gold bond sales from instrument_kinds.bucket_rows: set off with the rest, not listed.
+    `brought`: earlier years' capital losses still carried ({fy, kind "st"/"lt", amt}), set off after this year's
+    own losses and before the exemption."""
     rows = [r for r in realised if r["fy"] == fy]
     gains = {b: 0.0 for b, _, _ in BUCKETS}
     st_loss = lt_loss = exempt_gain = 0.0
@@ -566,6 +607,13 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
     st_left = use(ST_ORDER, st_loss, "Short-term losses")
     lt_left = use(LT_ORDER, lt_loss, "Long-term losses")
     st_left = use(LT_ORDER, st_left, "Short-term losses")
+    bf = []
+    for p in sorted(brought or [], key=lambda p: (p["fy"], p["kind"])):       # oldest first; long-term before short-term
+        what = f"Brought forward from {fy_label(p['fy'])}: {'short' if p['kind'] == 'st' else 'long'}-term loss"
+        left = use(ST_ORDER + LT_ORDER if p["kind"] == "st" else LT_ORDER, p["amt"], what)
+        if left > EPS:
+            steps.append(f"{what} of {money(left)} not set off this year, still carried forward.")
+        bf.append({"fy": p["fy"], "label": fy_label(p["fy"]), "kind": p["kind"], "amt": _r(p["amt"]), "used": _r(p["amt"] - left), "left": _r(left)})
     cap = exemption(fy)
     ex_left, exempt = cap, {b: 0.0 for b in net}
     for b in ("lt_new", "lt_old"):
@@ -599,7 +647,7 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
         "exempt_old": _r(exempt_gain) if any(_bucket(r) is None for r in rows) else None,
         "exemption": {"limit": cap, "used": _r(used), "left": _r(ex_left)},
         "buckets": buckets, "steps": steps, "tax": _r(tax), "tax_with_cess": _r(tax * (1 + CESS)),
-        "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)},
+        "carry_forward": {"st": _r(st_left), "lt": _r(lt_left)}, "brought_forward": bf,
         "intraday": {"count": len(intra), "buy": _r(sum(i["buy"] for i in intra)), "sell": _r(sum(i["sell"] for i in intra)),
                      "pnl": _r(sum(i["pnl"] for i in intra)), "turnover": _r(sum(abs(i["pnl"]) for i in intra)),
                      "stt": _r(sum(i["stt"] for i in intra)), "stt_estimated": any(i["stt_est"] for i in intra)},
@@ -677,9 +725,8 @@ def report(trades: list[dict], actions: dict, fmv: dict, quotes: dict, items: li
         cur["qty"] = round(cur["qty"] + u["qty"], 4)
         cur["first"] = min(cur["first"], u["d"])
     unit_rows = instrument_kinds.bucket_rows(units, c["names"])
-    return {"years": [with_total(year(y, equity, c["intraday"], units=unit_rows), business, inputs.get(y), (dividends or {}).get(y, 0.0),
-                                 instrument_kinds.other_year(y, units, c["names"]))
-                      for y in fys], "current_fy": fy_of(today), "kinds": kinds(c["names"]),
+    got = years_with_total(fys, equity, c["intraday"], unit_rows, units, c["names"], business, inputs, dividends or {})
+    return {"years": [got[y] for y in fys], "current_fy": fy_of(today), "kinds": kinds(c["names"]),
             "unit_notes": instrument_kinds.NOTES if any(kinds(c["names"]).values()) else [],
             "below_cost": below_cost(c["open"], quotes, today), "names": c["names"],
             "unmatched_sales": sorted(unmatched.values(), key=lambda u: u["first"])[:100],

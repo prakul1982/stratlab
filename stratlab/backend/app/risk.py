@@ -84,7 +84,11 @@ def _series(s: dict, cap: float, eq: float, today: str) -> tuple[dict[str, float
     for d, v in kept.items():
         if d <= today:
             closes[d] = float(v) - cap
-    closes.setdefault(today, eq - cap)
+    # today's point only when the value moved since the last close: before the open it is the same figure, and a low
+    # reached on the last session is dated that session, not today (R18-005)
+    prev = [v for d, v in sorted(closes.items()) if d < today]
+    if today not in closes and not (prev and abs(prev[-1] - (eq - cap)) < 0.005):
+        closes[today] = eq - cap
     points += [(d + END, v) for d, v in closes.items()]
     return closes, sorted(points), complete
 

@@ -249,6 +249,9 @@ export function dayIn(v: DateInput, tz: string = IST): string | null {
   return d ? d.toLocaleDateString("en-CA", { timeZone: tz }) : null;
 }
 
+/** Today by India's calendar: what "coming up" is measured from, so a date already past there is not listed (R18-006). */
+export const istToday = (): string => dayIn(new Date()) ?? "";
+
 /** A date as written ("2025-03-10") is a calendar day, not an instant: `new Date("2025-03-10")` is midnight UTC, which a
  * reader west of Greenwich (every US reader) sees as the 9th. A date with a time keeps its instant. */
 export function asDate(iso: string): Date {

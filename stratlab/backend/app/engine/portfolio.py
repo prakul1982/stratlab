@@ -39,12 +39,14 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         books.append({"inst": d["inst"], "bars": bars, "ctx": Ctx(bars, intraday=strategy.tf != "1d"), "eng": eng,
                       "idx": idx, "last": None, "first": None})
     timeline = sorted({k for b in books for k in b["idx"]})
-    state = {"halted": False, "emptied_on": None, "free0": None, "value0": None, "k": None}
+    state = {"halted": False, "emptied_on": None, "free0": None, "value0": None, "k": None, "stepped": set()}
     lev = strategy.risk.leverage
 
     def free_slot(at_open: bool = False) -> bool:
         used = sum(1 for b in books if b["eng"].qty > 0)
         if at_open:
+            # a member not yet stepped whose exit fills at this same open has left its slot by then, whatever the order
+            used -= len(_leaving_at_open(books, state))
             # a fill at the candle's open: a slot freed later in this candle (a stop hit) was still taken at its open
             used += sum(1 for b in books if b["eng"].qty == 0 and _closed_after_open(b, state["k"]))
         return not state["halted"] and not state["emptied_on"] and used < max_open
@@ -53,11 +55,12 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         """The pot's value (open positions at their last close) and its cash not tied up in an open position.
         Each engine keeps its own books from `capital`; only what it has made or lost counts toward the pot."""
         value = cap_total + sum(_gain(b) for b in books) if state["value0"] is None else state["value0"]
-        free = _free(books, cap_total, lev)
+        leaving = _leaving_cash(books, state, lev)
+        free = _free(books, cap_total, lev) + leaving
         if state.get("free0") is not None:
             # entries fill at the candle's open: they can use what was free then and what exits at that open freed, never
             # what a position closed later in the same candle gives back (three Rs50,000 slots opened on Rs1,00,000)
-            free = min(free, state["free0"] + _freed_at_open(books, state["k"], lev) - _spent_at(books, state["k"], lev))
+            free = min(free, state["free0"] + leaving + _freed_at_open(books, state["k"], lev) - _spent_at(books, state["k"], lev))
         return value, free
 
     for b in books:
@@ -74,7 +77,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         if date != day:
             day, state["halted"] = date, False
             realised_at_open = sum(t["pnl"] for b in books for t in b["eng"].trades)
-        state["free0"], state["k"] = _free(books, cap_total, lev), k
+        state["free0"], state["k"], state["stepped"] = _free(books, cap_total, lev), k, set()
         # entries fill at the open: the pot is valued at the last close, not at the close of instruments already stepped
         state["value0"] = cap_total + sum(_gain(b) for b in books)
         for b in books:
@@ -83,6 +86,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
                 continue
             if not state["emptied_on"]:
                 b["eng"].step(b["bars"], b["ctx"], i)
+            state["stepped"].add(id(b))
             b["last"] = i
             if b["first"] is None:
                 b["first"] = i
@@ -206,7 +210,31 @@ def _spent_at(books: list[dict], k: datetime, lev: float) -> float:
     return out
 
 
+def _leaving_at_open(books: list[dict], state: dict) -> list[dict]:
+    """Members not yet stepped in this candle whose open position certainly closes at its open."""
+    out = []
+    for b in books:
+        i = b["idx"].get(state["k"])
+        if i is not None and id(b) not in state["stepped"] and b["eng"].open_exit(b["bars"][i]):
+            out.append(b)
+    return out
+
+
+def _leaving_cash(books: list[dict], state: dict, lev: float) -> float:
+    """What those exits will give back to the free cash at the open: their margin plus their P&L there, after exit charges."""
+    out = 0.0
+    for b in _leaving_at_open(books, state):
+        e, o = b["eng"], b["bars"][b["idx"][state["k"]]]["o"]
+        fill = o * (1 - e.r.slippage / 100 * e.dir)
+        side = "sell" if e.dir == 1 else "buy"
+        cost = C.total(C.order_costs(e.kind, side, e.qty, fill, e.r.brokerage))
+        out += e.qty * e.entry / lev + e.dir * e.qty * (fill - e.entry) - e.entry_cost - cost
+    return out
+
+
 def _at_open(b: dict, t: dict, o: float) -> bool:
+    if "at_open" in t:
+        return t["at_open"]
     d = -1 if t["side"] == "short" else 1
     return math.isclose(t["exit"], o * (1 - b["eng"].r.slippage / 100 * d), rel_tol=1e-9)
 

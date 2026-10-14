@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "./api";
-import { focusParam } from "./researchFormat";
+import { SETTLING, focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
@@ -73,12 +73,12 @@ export interface SectorAI {
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */
 export interface IndexLevel {
   name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null;
-  at?: string | null; day?: string | null; live?: boolean; stale?: boolean;
+  at?: string | null; day?: string | null; live?: boolean; stale?: boolean; settling?: boolean;
 }
 
 /** What a price read between a market's close and its settle point is called (R13-005: "Last close $336.68" at 16:12 ET,
  * the final close being $336.64): the company header, the scans and the watchlist say it the same way. */
-export const SETTLING = "Latest, closing prints still settling";
+export { SETTLING } from "./researchFormat";
 
 /** A US share class with a dash, the one way the app writes it (R13-001: /research/US/BRK.B had no chart and a market value
  * $120B too low; the public pages already send BRK.B to BRK-B). Other tickers upper-cased, as typed. */
@@ -133,15 +133,16 @@ export function priceLabel(c: Pick<Company, "market_open" | "phase">): { label: 
 
 /** The words under an index's change: "today" only for a live level of today's session; a previous session's level while
  * the market trades says it hasn't updated; out of hours, the session it is of ("on 8 Oct"). */
-export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale">, dayText: (iso: string) => string): string {
+export function indexWhen(i: Pick<IndexLevel, "day" | "live" | "stale" | "settling">, dayText: (iso: string) => string): string {
+  if (i.settling) return i.day ? `${dayText(i.day)} · closing prints still settling` : "closing prints still settling";
   if (i.stale) return i.day ? `${dayText(i.day)} close · not updated today yet` : "not updated today yet";
   if (i.live || i.live === undefined && i.day === undefined) return "today";
   return i.day ? `on ${dayText(i.day)}` : "last session";
 }
 export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
-  flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" }[];
-  themes: { theme: string; detail: string; example: string }[]; generated_at: number;
+  flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
+  themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
 }
 export interface CompareAI {
   verdict: string; differences: string[];

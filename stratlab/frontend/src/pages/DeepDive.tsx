@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
+import { countOf } from "../lib/account";
 import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { millionsOf, scaleFor } from "../lib/research";
@@ -238,8 +239,8 @@ export function DeepDivePage() {
       {!limited && error && <ErrorState title="The deep dive couldn't be opened">{error}</ErrorState>}
       {!v && !error && <Card><Skeleton label="Reading the reported numbers" lines={5} /></Card>}
       {v && u?.deepdive_limit != null && (
-        <p className="k-note">{u.deepdive_used ?? 0} of {u.deepdive_limit} companies opened this month
-          {u.deck_limit != null ? `, ${u.deck_used ?? 0} of ${u.deck_limit} decks` : ""}. Opening a company again this month doesn't count. <Link className="link" to="/plans">Plans</Link></p>
+        <p className="k-note">{countOf(u.deepdive_used ?? 0, u.deepdive_limit)} companies opened this month
+          {u.deck_limit != null ? `; ${countOf(u.deck_used ?? 0, u.deck_limit)} decks` : ""}. Opening a company again this month doesn't count. <Link className="link" to="/plans">Plans</Link></p>
       )}
       {v && n && (
         <>

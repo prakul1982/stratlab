@@ -116,7 +116,7 @@ def test_daily_alert_sends_once_per_day_to_subscribers(monkeypatch, store):
 
 def test_a_new_notebook_keeps_its_group(api):
     body = {"name": "ST S2 on a group", "strategy": scan.ST_S2,
-            "group": {"id": "us_mega", "name": "20 US large caps", "market": "us", "maxOpen": 5,
+            "group": {"id": "us_mega", "name": "20 of the largest US companies", "market": "us", "maxOpen": 5,
                       "members": [{"symbol": "AAPL"}, {"symbol": "MSFT", "id": "US:MSFT"}]}}
     nb = api.post("/notebooks", json=body).json()
     assert nb["group"]["market"] == "US" and [m["symbol"] for m in nb["group"]["members"]] == ["AAPL", "MSFT"]

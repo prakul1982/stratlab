@@ -388,14 +388,15 @@ def test_a_wide_spread_doesnt_stop_a_sold_leg_without_a_move():
     assert out and out[0]["why"] == "Leg stop"
 
 
-def test_a_leg_saved_before_the_entry_middle_stops_on_its_entry_price():
+def test_a_leg_saved_before_the_entry_middle_stops_on_a_real_move():
     s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 20})
     e, c = OptionsEngine(s), contracts()
     q = {"NFO:NIFTY25000CE": {"bid": 5.0, "ask": 6.0, "ltp": 5.5}}
     e.step(at("09:31"), 25000, c, q, True)
     del e.pos["legs"][0]["entry_mid"]
-    q = {"NFO:NIFTY25000CE": {"bid": 6.0, "ask": 7.0, "ltp": 6.5}}      # middle 6.5 is +30% on the entry 5.0
-    out = e.step(at("09:36"), 25000, c, q, True)
+    assert e.step(at("09:36"), 25000, c, q, True) == []                  # first quote after the restore sets the entry middle 5.5
+    q = {"NFO:NIFTY25000CE": {"bid": 7.0, "ask": 8.0, "ltp": 7.5}}      # middle 7.5 is +36% on 5.5
+    out = e.step(at("09:41"), 25000, c, q, True)
     assert out and out[0]["why"] == "Leg stop"
 
 
@@ -418,3 +419,76 @@ def test_mcx_and_cds_settle_at_the_expiry_days_close_when_checked_long_after_it(
     assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-24") == 6400.0       # expiry passed days ago
     assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-23") is None         # no candle: hold the leg
     assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2099-01-29") == 6500.0       # at the time: the live price
+
+
+def test_a_sold_leg_saved_before_the_entry_middle_isnt_stopped_by_its_spread_alone():
+    s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 25})
+    e, c = OptionsEngine(s), contracts()
+    q = {"NFO:NIFTY25000CE": {"bid": 1.0, "ask": 1.5, "ltp": 1.2}}
+    e.step(at("09:31"), 25000, c, q, True)
+    del e.pos["legs"][0]["entry_mid"]                                    # as saved before entry_mid existed: entry is the bid
+    assert e.step(at("09:36"), 25000, c, q, True) == [] and e.pos       # middle 1.25 is not +25% on 1.0, no move
+    assert e.pos["legs"][0]["entry_mid"] == 1.25                         # kept on the leg, so it is saved
+    q = {"NFO:NIFTY25000CE": {"bid": 1.4, "ask": 1.8, "ltp": 1.6}}      # middle 1.6 is +28% on 1.25
+    out = e.step(at("09:41"), 25000, c, q, True)
+    assert out and out[0]["why"] == "Leg stop"
+
+
+def _cds_data(px_at, close=None):
+    from app.options.data import OptionsData
+    d = OptionsData.__new__(OptionsData)
+    d.spot_key = lambda *a: "CDS:USDINR26SEPFUT"
+    d.quotes = lambda keys: {k: {"ltp": 96.1, "bid": None, "ask": None, "volume": 0, "ts": "2026-09-09T15:00:00+05:30"} for k in keys}
+    d.spot_source = lambda pair: {"price": 96.76, "at": px_at}
+    d.spot_close = (lambda pair, day: close) if close else None
+    return d
+
+
+def test_the_spot_pair_counts_as_fresh_only_by_its_own_quote_time_in_hours():
+    from app.options.data import OptionsData, cds_open
+    sat, fri_noon = datetime(2026, 9, 26, 11, 0, tzinfo=IST), datetime(2026, 9, 25, 12, 0, tzinfo=IST)
+    d = _cds_data("2026-09-25T15:30:00+05:30")                           # Friday's last Yahoo price
+    px, q, where = d.spot("CDS", "USDINR", "2026-09-24")
+    assert where == "spot" and q["ts"] == "2026-09-25T15:30:00+05:30"
+    assert not OptionsData.fresh(q, sat)                                 # a day old on Saturday
+    assert not cds_open(sat) and cds_open(fri_noon)
+    d = _cds_data("2026-09-25T11:59:00+05:30")
+    q = d.spot("CDS", "USDINR", "2026-09-24")[1]
+    assert OptionsData.fresh(q, fri_noon) and cds_open(fri_noon)         # a minute old, in hours
+    assert not (OptionsData.fresh(q, datetime(2026, 9, 25, 17, 30, tzinfo=IST)) and cds_open(datetime(2026, 9, 25, 17, 30, tzinfo=IST)))
+
+
+def test_cds_settles_on_the_days_complete_bar_not_a_forming_one(monkeypatch):
+    from app.options.data import OptionsData
+    from app import live
+    import app.options.data as optdata
+    monkeypatch.setattr(live, "official_close", lambda kite, inst, day: 96.5)
+    d = _cds_data("2026-09-24T12:00:00+05:30")
+    d.kite = SettleData.kite
+    d.spot_key = lambda *a: "CDS:USDINR26SEPFUT"
+    d.quotes = lambda keys: {k: {"ltp": 96.4, "bid": 96.39, "ask": 96.41, "volume": 5} for k in keys}   # a live future
+    real = datetime
+
+    class Clock(real):
+        now_at = None
+        @classmethod
+        def now(cls, tz=None):
+            return cls.now_at.astimezone(tz) if tz else cls.now_at
+    monkeypatch.setattr("datetime.datetime", Clock, raising=False)
+    import datetime as dtmod
+    monkeypatch.setattr(dtmod, "datetime", Clock)
+    Clock.now_at = real(2026, 9, 24, 14, 0, tzinfo=IST)                  # past the 12:30 expiry and its grace, before 17:00
+    assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") is None
+    Clock.now_at = real(2026, 9, 24, 17, 5, tzinfo=IST)
+    assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") == 96.5
+
+
+def test_cds_with_no_live_future_settles_on_the_spot_pairs_close(monkeypatch):
+    from app.options.data import OptionsData
+    from app import live
+    monkeypatch.setattr(live, "official_close", lambda kite, inst, day: 96.135)   # the future's frozen price
+    d = _cds_data("2026-10-09T12:00:00+05:30", close=96.76)
+    d.kite = SettleData.kite
+    assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") == 96.76
+    d.spot_close = None
+    assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") == 96.135

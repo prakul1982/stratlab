@@ -61,7 +61,7 @@ export function LoanCheck({ version }: { version: string }) {
             {c.benchmark === "repo" && (
               <StatRow>
                 <Stat label={<>Expected now <Info label="How the expected rate is worked out">The repo rate in force on the last reset ({c.last_reset ? dateOnly(c.last_reset) : "the start"}: {pct(c.repo_at_reset)}){c.spread != null && ` plus your spread of ${c.spread.toFixed(2)} points`}{c.spread != null && c.spread_inferred ? ", worked out as the sanctioned rate less the repo rate when the loan started" : ""}.</Info></>}
-                  value={pct(c.expected)} note={expectedNote(pct(c.repo_at_reset), c.spread)} />
+                  value={pct(c.expected)} note={expectedNote(pct(c.repo_at_reset), c.spread, c.last_reset)} />
                 <Stat label="On your statement" value={pct(c.current_rate)} note={c.current_rate == null ? "Edit the loan to enter it" : undefined} />
                 {c.gap && <Stat label="Difference" value={c.gap.matches ? "None" : `${c.gap.pts > 0 ? "+" : "−"}${Math.abs(c.gap.pts).toFixed(2)} pts`} note={!c.gap.matches ? `${inr(Math.abs(c.gap.rupees_year))} a year on ${inr(c.outstanding)}` : undefined} />}
               </StatRow>
