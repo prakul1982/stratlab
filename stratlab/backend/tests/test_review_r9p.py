@@ -357,5 +357,8 @@ def test_saving_the_same_address_after_an_unsubscribe_keeps_alert_emails_off(mon
         assert not alerts.alert_emails_on("u-pro")
         c.put("/me/alerts", headers=headers("pro-token"), json={**body, "alert_email": "new@example.com"})
         assert alerts.alert_emails_on("u-pro")                                   # a different address turns them back on
+        alerts.set_alert_emails("u-pro", False)
+        c.put("/me/alerts", headers=headers("pro-token"), json={**body, "alert_email": "new@example.com", "alert_emails": True})
+        assert alerts.alert_emails_on("u-pro")                                   # so does the "turn them back on" button
     finally:
         w["close"]()
