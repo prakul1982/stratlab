@@ -356,3 +356,34 @@ def test_the_csv_does_not_hand_a_spreadsheet_a_formula(w):
     cells = [cell.strip('"') for line in text.splitlines() for cell in line.split(",")]
     assert not any(x.startswith(("=", "@")) for x in cells), text
     assert "'=HYPERLINK" in text and "'@SUM" in text
+
+
+def test_an_asset_without_a_price_makes_the_total_partial_and_is_named(w):
+    cash = {"id": "c1", "kind": "cash", "name": "Wallet", "value": 1000, "as_of": "2026-10-05"}
+    btc = {"id": "c2", "kind": "crypto", "name": "BTC", "coin": "BTC", "qty": 1}
+    t = nw.build([cash, btc], None, None, nw.Prices(), date(2026, 10, 5))
+    assert t["totals"]["assets"] == 1000 and t["totals"]["partial"] == ["no price for BTC"]
+    assert nw.record("u-x", t["totals"], "visit") == [] and nw.history("u-x") == []
+
+
+def test_allocation_percentages_add_to_exactly_100():
+    assert round(sum(nw.pct_split([1, 1, 1])), 1) == 100 and nw.pct_split([1, 1, 1]) == [33.4, 33.3, 33.3]
+    items = [{"id": f"i{n}", "kind": k, "value": 1000, "as_of": "2026-10-05"} for n, k in enumerate(["cash", "property", "other"])]
+    t = nw.build(items, None, None, nw.Prices(), date(2026, 10, 5))
+    assert round(sum(a["pct"] for a in t["allocation"]), 1) == 100.0
+
+
+def test_unnamed_entries_keep_their_own_calendar_ids_and_premiums_show_the_insurer(w):
+    c = w["client"]
+    for ins in ("Acme", "Zed"):
+        add(c, {"kind": "policy", "insurer": ins, "policy_type": "term", "premium": 1000, "frequency": "yearly", "due": "2026-11-01"})
+    rows = nw.upcoming_dates("u-pro", 60)
+    prem = [r for r in rows if r["kind"] == "premium"]
+    assert len(prem) == 2 and len({r["id"] for r in prem}) == 2 and all(r["id"] for r in prem)
+    assert {r["title"] for r in prem} == {"Acme: premium due", "Zed: premium due"}
+
+
+def test_ppf_yearly_deposit_is_capped_at_1_50_000():
+    assert nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=150000))["yearly"] == 150000
+    with pytest.raises(nw.EntryError, match="1,50,000"):
+        nw.clean(nw.ItemReq(kind="ppf", balance=1000, yearly=500000))

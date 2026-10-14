@@ -35,7 +35,7 @@ type Year = {
 type Gains = { years: Year[]; current_fy: number; notes: string[]; gf_missing: string[]; unknown_units: Record<string, number>; flags: string[] };
 type View = {
   schemes: Scheme[]; allocation: { broad: string; value: number; pct: number | null; schemes: number; subs: { sub: string; value: number; pct: number | null }[] }[];
-  total: { value: number; invested: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; nav_dates: [string, string] | null };
+  total: { value: number; invested: number; gain: number; xirr: number | null; held: number; schemes: number; unknown_cost: number; no_nav?: number; nav_dates: [string, string] | null };
   gains: Gains | null; gains_allowed: boolean; gains_plan: string; limit: number | null; files: { name: string; kind: string; txns: number; at: string }[];
   updated_at: string | null; txns: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
@@ -229,7 +229,7 @@ export function MutualFundsPage() {
               <Stat label="Current value" value={inr(t.value)} note={`${t.held} scheme${t.held === 1 ? "" : "s"} held`} />
               <Stat label={<>Invested <Info label="What invested means">The cost of the units you still hold, matched first in, first out, including stamp duty. Units sold or switched out are not in it.</Info></>}
                 value={inr(t.invested)} note={t.unknown_cost > 0 ? `${t.unknown_cost} scheme${t.unknown_cost === 1 ? "" : "s"} without a known cost left out` : undefined} />
-              <Stat label="Unrealised gain" value={inr(t.gain)} tone={signTone(t.gain)} delta={t.invested > 0 ? <Delta value={t.gain}>{pct((t.gain / t.invested) * 100)}</Delta> : undefined} />
+              <Stat label="Unrealised gain" value={inr(t.gain)} tone={signTone(t.gain)} note={t.no_nav ? `${t.no_nav} scheme${t.no_nav === 1 ? "" : "s"} without a NAV left out` : undefined} delta={t.invested > 0 ? <Delta value={t.gain}>{pct((t.gain / t.invested) * 100)}</Delta> : undefined} />
               <Stat label={<>XIRR, all schemes <Info label="What XIRR is">The yearly rate of return that accounts for when each rupee went in and came out: every purchase, redemption and dividend paid out, with today's value as the last amount.</Info></>}
                 value={xirrText(t.xirr)} tone={signTone(t.xirr)} />
             </StatRow>

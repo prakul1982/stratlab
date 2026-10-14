@@ -60,7 +60,7 @@ const FORM: Record<Kind, { title: string; fields: F[]; note?: string }> = {
     { ...RATE, optional: true, hint: "8.25", info: "Leave it empty to use the declared rate." }],
     note: "Interest is worked out monthly on the running balance and credited on 31 March, at the declared rate unless you enter another." },
   ppf: { title: "PPF", fields: [NAME, { k: "balance", label: "Balance", type: "money" }, { k: "as_of", label: "Balance as of", type: "date", optional: true },
-    { k: "yearly", label: "Yearly deposit", type: "money", optional: true }, { k: "opened", label: "Account opened on", type: "date", optional: true },
+    { k: "yearly", label: "Yearly deposit (up to ₹1,50,000)", type: "money", optional: true }, { k: "opened", label: "Account opened on", type: "date", optional: true },
     { ...RATE, optional: true, hint: "7.1", info: "Leave it empty to use the declared rate." }],
     note: "Matures after 15 whole financial years from the end of the year it was opened in." },
   nps: { title: "NPS", fields: [NAME, { k: "tier1", label: "Tier I value", type: "money" }, { k: "tier2", label: "Tier II value", type: "money", optional: true }, AS_OF] },
