@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { money, num, pct, TF_NAME, tzOf } from "../lib/format";
+import { money, monthYear, num, pct, TF_NAME } from "../lib/format";
 import { refName, opSay } from "../lib/rules";
 import type { Cond, Experiment, Strategy } from "../lib/types";
 import { XYChart } from "../components/Charts";
@@ -68,7 +68,6 @@ export function CompareExperiments() {
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };
 
   // both equity curves as % return, on one date axis
-  const tz = tzOf(b.instrument);
   const ret = (e: Experiment) => {
     const m = new Map<string, number>();
     const start = e.strategy.risk.capital;
@@ -77,7 +76,7 @@ export function CompareExperiments() {
   };
   const ra = ret(a), rb = ret(b);
   const dates = Array.from(new Set([...ra.keys(), ...rb.keys()])).sort();
-  const lbl = dates.map((d) => new Date(d).toLocaleDateString("en-GB", { timeZone: tz, month: "short", year: "2-digit" }));
+  const lbl = dates.map((d) => monthYear(d));
   const diff = changes(a, b);
   const cur = b.instrument?.currency;
   // the last flag is true for a gain or loss, which is green or red like everywhere else
@@ -86,7 +85,7 @@ export function CompareExperiments() {
     ["Yearly return", (e) => pct(e.stats.cagr), (e) => e.stats.cagr, true, true],
     ["Worst drop", (e) => pct(-Math.abs(e.stats.mdd)), (e) => -Math.abs(e.stats.mdd), true, true],
     ["Trades", (e) => String(e.stats.n), () => null, false],
-    ["Win rate", (e) => `${e.stats.win.toFixed(0)}%`, (e) => e.stats.win, true],
+    ["Win rate", (e) => e.stats.n ? `${e.stats.win.toFixed(0)}%` : "–", (e) => e.stats.win, true],
     ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
     ["Costs paid", (e) => money(e.costs.total, cur), (e) => -e.costs.total, true],
     ["Checks passed", (e) => `${e.verdict.passed} of ${e.verdict.total}`, (e) => e.verdict.passed, true],

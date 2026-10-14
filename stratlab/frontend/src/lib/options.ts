@@ -148,8 +148,11 @@ export function payoff(p: OptPreview) {
   const at0 = [0, ...legs.map((l) => l.strike)], corners = at0.map(at);
   const slopeAbove = legs.reduce((n, l) => n + (l.opt === "CE" ? (l.side === "buy" ? 1 : -1) * l.qty : 0), 0);
   const maxP = Math.max(...corners), maxL = Math.min(...corners);
+  // every crossing, as options/charges.py finds them: on each segment between 0 and the strikes, then past the top strike
+  const bx = [0, ...[...new Set(legs.map((l) => l.strike))].sort((a, b) => a - b)], by = bx.map(at);
   const breakevens: number[] = [];
-  for (let i = 1; i < xs.length; i++) if ((ys[i - 1] < 0) !== (ys[i] < 0)) breakevens.push(xs[i - 1] + ((xs[i] - xs[i - 1]) * -ys[i - 1]) / (ys[i] - ys[i - 1]));
+  for (let i = 1; i < bx.length; i++) if ((by[i - 1] < 0) !== (by[i] < 0)) breakevens.push(bx[i - 1] + ((bx[i] - bx[i - 1]) * -by[i - 1]) / (by[i] - by[i - 1]));
+  if (slopeAbove && (by[by.length - 1] < 0) !== (slopeAbove < 0)) breakevens.push(bx[bx.length - 1] - by[by.length - 1] / slopeAbove);
   const credit = legs.reduce((s, l) => s + (l.side === "sell" ? 1 : -1) * l.fill * l.qty, 0);
   // the price where each bound is reached: a flat stretch (an iron condor beyond its wings) reaches it at every price
   // there, so take the one nearest today's price; "outside the chart" is then said only when no price on it reaches it

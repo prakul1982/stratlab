@@ -67,6 +67,6 @@ export function rupeesNote(code: string, about: { basic: string; pro: string } |
 
 export function money(row: CurrencyRow | undefined, v: number, code: string): string {
   if (!row) return `₹${v.toLocaleString("en-IN")}`;
-  const n = v.toLocaleString(code === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: v % 1 ? 2 : 0 });
+  const n = v.toLocaleString(code === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: v % 1 ? 2 : 0 });
   return `${row.symbol}${n}`;
 }

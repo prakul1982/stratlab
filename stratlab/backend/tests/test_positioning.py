@@ -656,3 +656,13 @@ def test_api_says_how_much_is_stored_and_why_a_number_is_missing(sunday):
     assert d["cash"]["reason"] and "fii" not in d["cash"]
     brief = c.get("/trade/positioning", params={"brief": 1}, headers=headers("free-token")).json()
     assert brief["cash"]["reason"] and "coverage" not in brief
+
+
+def test_the_recorded_current_chain_skips_an_expiry_already_past(monkeypatch):
+    today = date(2026, 10, 14)
+    snap = lambda e: {"expiry": e, "spot": 25000.0, "chain": [], "lot": 65, "taken_at": "2026-10-13T09:50:00+00:00"}
+    monkeypatch.setattr(P, "recorded_last", lambda name, day: [snap("2026-10-13"), snap("2026-10-20"), snap("2026-10-27"), snap("2026-11-24")])
+    monkeypatch.setattr(P, "expiry_fits", lambda ex, name, e: True)
+    assert P.recorded_chain("NIFTY", "current", today)["expiry"] == "2026-10-20"
+    assert P.recorded_chain("NIFTY", "next", today)["expiry"] == "2026-10-27"
+    assert P.recorded_chain("NIFTY", "month", today)["expiry"] == "2026-10-27"

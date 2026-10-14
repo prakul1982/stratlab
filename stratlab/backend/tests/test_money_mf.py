@@ -178,6 +178,12 @@ def test_31_jan_2018_navs_are_read_once_and_kept(w, monkeypatch):
     ("Other Scheme - FoF Overseas", "X US Equity Fund of Fund", "other"),
     ("Other Scheme - Gold ETF", "X Gold ETF", "other"),
     ("Income", "X Fixed Maturity Plan", "debt"),
+    ("Other Scheme - Other ETFs", "Nippon India ETF PSU Bank BeES", "equity"),
+    ("Other Scheme - Index Funds", "X Nifty PSU Bank Index Fund", "equity"),
+    ("Other Scheme - Other ETFs", "X CPSE ETF", "equity"),
+    ("Other Scheme - Index Funds", "X PSE Index Fund", "equity"),
+    ("Other Scheme - Index Funds", "X Bharat Bond ETF - April 2030", "debt"),
+    ("Other Scheme - Index Funds", "X Nifty SDL Plus G-Sec Index Fund", "debt"),
     ("", "Unknown Liquid Fund", "debt"),
     ("", "Unknown Flexi Cap Fund", "equity"),
 ])
@@ -372,6 +378,27 @@ def test_dividends_paid_out_and_stt_by_year():
     assert c["dividends"] == {2023: 50, 2024: 40} and c["stt"] == {2024: 0.01}
 
 
+def test_reinvested_dividend_is_income_but_not_a_cash_flow():
+    c = gains_of("equity", [tx("2024-01-01", "purchase", 100, 1000), tx("2024-03-01", "div_reinvest", 2, 50)])
+    assert c["dividends"] == {2023: 50} and c["flows"]["F|A"] == [("2024-01-01", -1000)]
+
+
+def test_merge_same_day_twins_kept_and_reupload_adds_nothing():
+    twin = {"schemes": [sch()], "txns": [tx("2024-01-01", "sip", 10, 500), tx("2024-01-01", "sip", 10, 500)]}
+    data, n = M.merge(M.empty(), twin, None)
+    assert n["added"] == 2 and n["duplicates"] == 0
+    again, n = M.merge(data, twin, None)
+    assert n["added"] == 0 and n["duplicates"] == 2 and len(again["txns"]) == 2
+
+
+def test_merge_older_file_drops_a_stored_opening_balance():
+    fy24 = {"schemes": [sch()], "txns": [tx("2023-04-01", "opening", 100), tx("2023-06-01", "purchase", 5, 100)]}
+    data, _ = M.merge(M.empty(), fy24, None)
+    full = {"schemes": [sch()], "txns": [tx("2020-01-10", "purchase", 100, 1000), tx("2023-06-01", "purchase", 5, 100)]}
+    merged, n = M.merge(data, full, None)
+    assert not any(t["t"] == "opening" for t in merged["txns"]) and n["added"] == 1 and n["duplicates"] == 1
+
+
 # ---------- XIRR ----------
 def test_xirr():
     assert M.xirr([("2023-01-01", -1000), ("2024-01-01", 1100)]) == pytest.approx(0.0998, abs=1e-3)   # 365 days
@@ -563,3 +590,9 @@ def test_stored_garbage_is_ignored(w):
     assert v.status_code == 200 and v.json()["txns"] == 1
     db.set_setting("mf:u-pro", "not json")
     assert w["client"].get("/money/mutual-funds", headers=PRO).status_code == 200
+
+
+@pytest.mark.parametrize("cat,name,kind", [("", "Bank of India Short Term Income Fund", "debt"),
+                                           ("Other Scheme - Other ETFs", "Nippon India ETF Bank BeES", "equity")])
+def test_a_fund_house_named_bank_is_not_a_bank_index(cat, name, kind):
+    assert M.kind_of(cat, name) == kind

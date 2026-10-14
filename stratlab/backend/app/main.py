@@ -4279,7 +4279,7 @@ def options_greeks(req: OptGreeksReq, profile=Depends(current_profile)):
     for l, k in zip(legs, keys):
         l["quote"] = q.get(k) if k else None
     pos = opt_greeks.position(legs, m)
-    closes = [{"side": _other(l["side"]), "qty": l["qty"], "fill": fill_price(l["quote"], _other(l["side"]), 0)} for l in legs]
+    closes = [{"side": _other(l["side"]), "qty": l["qty"], "fill": fill_price(l["quote"], _other(l["side"]), 0, tick_for(req.exchange))} for l in legs]
     kind = opt_charges.kind_for(req.exchange)
     cost = (opt_charges.orders_cost(closes, kind, req.brokerage, req.freeze or freeze_limit(req.underlying))
             if all(x["fill"] is not None for x in closes) else None)
@@ -4309,8 +4309,8 @@ def options_roll(req: OptRollReq, profile=Depends(current_profile)):
     for l, k in zip(legs, keys):
         l["quote"] = q.get(k) if k else None
     close_side = _other(old["side"])
-    close_px = fill_price(old["quote"], close_side, 0)
-    open_px = fill_price(q.get(new_key), old["side"], 0)
+    close_px = fill_price(old["quote"], close_side, 0, tick_for(req.exchange))
+    open_px = fill_price(q.get(new_key), old["side"], 0, tick_for(req.exchange))
     if close_px is None or open_px is None:
         err(409, "no_quote", "One of the two contracts has no price right now, so the roll can't be priced.")
     new = {**old, "strike": req.strike, "fill": open_px, "quote": q.get(new_key)}
