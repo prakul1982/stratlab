@@ -461,6 +461,30 @@ def test_the_visit_catch_up_is_only_stopped_by_a_complete_snapshot_this_month(w)
     assert [h for h in nw.history("u-pro") if h["d"][:7] == "2026-10"] == rows              # and a complete one is taken once
 
 
+def test_the_catch_up_on_a_weekend_first_is_taken_once_and_a_delete_stays_deleted(w, monkeypatch):
+    c = w["client"]
+    fake = types.ModuleType("app.money_mf")
+    fake.net_worth_value = lambda uid: {"value": 250000.0, "as_of": "2026-10-30"} if uid == "u-pro" else 0      # the Friday close
+    monkeypatch.setitem(sys.modules, "app.money_mf", fake)
+    import app
+    monkeypatch.setattr(app, "money_mf", fake, raising=False)
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000}]}))
+    with time_machine.travel(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc)):                  # Sunday 1 November, IST
+        assert c.get("/money/net-worth", headers=PRO).json()["as_of"] == "2026-10-30"
+        rows = nw.history("u-pro")
+        assert [(h["d"], h["why"], h["net"]) for h in rows] == [("2026-10-30", "month", 257000)]
+        db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 9000}]}))
+        c.get("/money/net-worth", headers=PRO)
+        assert nw.history("u-pro") == rows                                                      # the second visit took nothing
+        assert c.delete("/money/net-worth/history/2026-10-30", headers=PRO).json()["history_count"] == 0
+        c.get("/money/net-worth", headers=PRO)
+        assert nw.history("u-pro") == []                                                        # and a delete stays deleted
+    fake.net_worth_value = lambda uid: {"value": 250000.0, "as_of": "2026-11-02"} if uid == "u-pro" else 0
+    with time_machine.travel(datetime(2026, 11, 2, 5, 0, tzinfo=timezone.utc)):                  # Monday: November's own
+        c.get("/money/net-worth", headers=PRO)
+        assert [(h["d"], h["why"]) for h in nw.history("u-pro")] == [("2026-11-02", "month")]
+
+
 def test_a_sunday_edit_does_not_overwrite_fridays_snapshot(w):
     nw.record("u-t", _t(100), "change", date(2026, 10, 9))                                      # Friday
     with time_machine.travel(datetime(2026, 10, 11, 5, 0, tzinfo=timezone.utc)):                # Sunday, IST

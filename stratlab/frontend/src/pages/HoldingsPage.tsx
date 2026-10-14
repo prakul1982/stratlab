@@ -266,7 +266,7 @@ export function HoldingsPage() {
             </p>
             {t.no_cost && (
               <p className="k-note">
-                Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ₹${view.usd_inr.toFixed(2)} a dollar)` : ""}.
+                Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ₹${view.usd_inr.toFixed(2)} a dollar)` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.
                 Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
               </p>
             )}

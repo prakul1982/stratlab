@@ -5,8 +5,9 @@
 - Holdings: results meetings, corporate actions (ex-dates and record dates of dividends, bonuses, splits and the
   like, and the record dates announced with an AGM) for the user's holdings and watchlist, from the stored results
   and corporate-actions calendars; gold bonds' maturity months.
-- Other Money pages, when they exist: maturities, premiums and EMIs (money_networth), advance-tax amounts
-  (money_advance_tax) and SIP dates (money_mf), each through an optional hook that gives nothing when missing.
+- Other Money pages, when they exist: maturities, premiums, EMIs and loan rate resets (money_networth), through an
+  optional hook that gives nothing when missing. (Advance-tax amounts need the whole tax estimate and a SIP's date
+  is not saved anywhere, so neither is a hook; the plain instalment dates are above.)
 - The user's own events, once, every month or every year.
 
 The feed is an ICS file at a private, unguessable link (a token only its owner sees, turned off or replaced at any
@@ -53,8 +54,7 @@ FEED_RATE = (60, 3600)            # requests a token may make in that many secon
 MAX_LIST = 1500                   # events in one answer
 REMIND_DAYS = (1, 2, 3, 7, 14)
 REMIND_AT = "08:40"               # India time, each day
-HOOKS = [("money_networth", "upcoming_dates", "money"), ("money_advance_tax", "upcoming_dates", "tax"),
-         ("money_mf", "upcoming_dates", "money"), ("money_mf", "sip_dates", "money")]
+HOOKS = [("money_networth", "upcoming_dates", "money")]      # (module, function, category); each called as f(uid, days, frm=window start)
 NOTES = [
     "Tax dates are the ones the law sets for a resident individual; the tax department can extend them. Advance tax "
     "is due only when the year's tax, after TDS, is ₹10,000 or more.",
@@ -229,7 +229,7 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
     # a dividend's total uses the shares held on its ex-date, worked back through any bonus or split (the same sum as
     # Holdings and Tax tools: corp_actions.qty_before), not today's quantity
     from . import holdings as H
-    fallback = str(H.load(uid).get("updated_at") or date.today().isoformat())[:10]
+    fallback = corp_actions.saved_day(H.load(uid).get("updated_at"), datetime.now(IST).date())
     for a in rows.values():
         item, q = held.get(a["symbol"]), None
         if item and a.get("kind") == "dividend" and a.get("ex_date"):
@@ -278,7 +278,7 @@ def _action_events(a: dict, item: dict | None, frm: date, to: date, qty: float |
 
 
 # ---------- other Money pages, through optional hooks ----------
-def _hook(module: str, fn: str, *args) -> list:
+def _hook(module: str, fn: str, *args, **kw) -> list:
     """What another Money page's `fn` gives, or [] when the page isn't there or fails."""
     try:
         mod = importlib.import_module(f"app.{module}")
@@ -288,7 +288,7 @@ def _hook(module: str, fn: str, *args) -> list:
     if not callable(f):
         return []
     try:
-        got = f(*args)
+        got = f(*args, **kw)
     except Exception as e:
         print("money calendar hook failed:", module, fn, type(e).__name__)
         return []
@@ -300,7 +300,7 @@ def hook_events(uid: str, frm: date, to: date) -> list[dict]:
     days = max(1, min(800, (to - datetime.now(IST).date()).days + 1))
     out = []
     for module, fn, cat in HOOKS:
-        for x in _hook(module, fn, uid, days)[:500]:
+        for x in _hook(module, fn, uid, days, frm=frm)[:500]:
             d = _day(x.get("date")) if isinstance(x, dict) else None
             if not d or not frm <= d <= to or not isinstance(x.get("title"), str) or not x["title"].strip():
                 continue

@@ -522,9 +522,11 @@ def drop_snapshot(uid: str, day: str) -> list[dict] | None:
     left = [h for h in rows if h["d"] != day]
     if len(left) == len(rows):
         return None
-    if day[:7] == today().strftime("%Y-%m"):
-        # this month's snapshot taken out on purpose: the next visit doesn't take the monthly one again at once
-        db.set_setting(SKIP + uid, day[:7])
+    this = today().replace(day=1)
+    if day[:7] in (this.strftime("%Y-%m"), (this - timedelta(days=1)).strftime("%Y-%m")):
+        # this month's snapshot taken out on purpose (or last month's, which a visit on a weekend 1st or 2nd dates by the
+        # last close): the next visit doesn't take the monthly one again at once
+        db.set_setting(SKIP + uid, max(db.get_setting(SKIP + uid) or "", day[:7]))
     if left:
         db.set_setting(LOG + uid, json.dumps(left))
     else:
@@ -799,18 +801,20 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
 
 
 # ---------- the money calendar ----------
-def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dict]:
-    """This module's dates in the next `days` days, soonest first, for the money calendar: deposit, PPF and SGB
-    maturities, SGB interest dates, premium due dates and EMI dates. Each is {"date", "kind", "title", "detail",
-    "amount", "url", "id"}; id is the entry's; amounts are what the user entered or the arithmetic on it."""
+def upcoming_dates(uid: str, days: int = 60, at: date | None = None, frm: date | None = None) -> list[dict]:
+    """This module's dates from `frm` (today when not given) to `days` days after `at` (today), soonest first, for the
+    money calendar: deposit, PPF and SGB maturities, SGB interest dates, premium due dates and EMI dates. Each is
+    {"date", "kind", "title", "detail", "amount", "url", "id"}; id is the entry's; amounts are what the user entered or
+    the arithmetic on it. A window that starts before today lists the dates already past in it."""
     at = at or today()
+    start = frm or at
     end = at + timedelta(days=max(0, min(int(days), 3660)))
     out = []
 
     eid = ""
 
     def add(d: date | None, kind: str, title: str, detail: str, amount=None):
-        if d and at <= d <= end:
+        if d and start <= d <= end:
             out.append({"id": eid, "date": d.isoformat(), "kind": kind, "title": title, "detail": detail,
                         "amount": _r(amount) if amount is not None else None, "url": "/money/net-worth"})
     for i in load(uid)["items"]:
@@ -830,13 +834,13 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dic
                 s, mat = _date(i.get("start")), _date(i.get("maturity"))
                 add(mat, "sgb_maturity", f"{name} matures", "Sovereign gold bond maturity")
                 if s:
-                    d = next_due(s, "half-yearly", at)
+                    d = next_due(s, "half-yearly", start)
                     while d and d <= end and (not mat or d <= mat):
                         add(d, "sgb_interest", f"{name}: interest date", f"{SGB_RATE:g}% a year on the issue price, paid every six months",
                             i["units"] * i["issue_price"] * SGB_RATE / 200 if i.get("issue_price") else None)
                         d = add_months(d, 6)
             elif k == "policy" and _date(i.get("due")):
-                d = next_due(date.fromisoformat(i["due"]), i.get("frequency", "yearly"), at)
+                d = next_due(date.fromisoformat(i["due"]), i.get("frequency", "yearly"), start)
                 step = FREQUENCY.get(i.get("frequency", "yearly"), 12)
                 while d and d <= end:
                     add(d, "premium", f"{i.get('name') or i['insurer']}: premium due", f"{POLICY_TYPES.get(i.get('policy_type', 'other'))} policy, {i['insurer']}",
@@ -846,7 +850,7 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dic
                 s = date.fromisoformat(i["start"])
                 pay = emi(i["principal"], i["rate"], i["tenure_months"])
                 label = name if i.get("name") else LOAN_TYPES.get(i.get("loan_type", "other"), "Loan")
-                for j in range(emis_paid(s, i["tenure_months"], at - timedelta(days=1)) + 1, i["tenure_months"] + 1):
+                for j in range(emis_paid(s, i["tenure_months"], start - timedelta(days=1)) + 1, i["tenure_months"] + 1):
                     d = add_months(s, j)
                     if d > end:
                         break
@@ -855,7 +859,7 @@ def upcoming_dates(uid: str, days: int = 60, at: date | None = None) -> list[dic
                     anchor = _date(i.get("last_reset")) or s
                     step, n = int(i["reset_months"]), 1
                     d = add_months(anchor, step)
-                    while d < at:
+                    while d < start:
                         n += 1
                         d = add_months(anchor, step * n)
                     while d <= end and d <= add_months(s, i["tenure_months"]):
@@ -1016,8 +1020,8 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         v = build(items, f_stocks.result(), f_mf.result(), prices)
         hist = f_hist.result()
         has_any = bool(v["assets"] or v["liabilities"])
-        this_month = today().strftime("%Y-%m")
         day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
+        this_month = (day or today()).strftime("%Y-%m")      # so "this month" is the month of that day (the 1st on a weekend is the last close's)
         if why and has_any:
             hist = record(uid, v["totals"], why, day)
         elif (has_any and not any(h["d"].startswith(this_month) and not h.get("partial") for h in hist)

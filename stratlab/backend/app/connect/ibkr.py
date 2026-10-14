@@ -142,13 +142,35 @@ def fills(root: ET.Element) -> list[dict]:
     return sorted(out, key=lambda f: (f["d"], f["t"], f["id"]))
 
 
-def closed_trades(fs: list[dict]) -> list[dict]:
+def splits(root: ET.Element) -> dict[str, list[tuple[str, float]]]:
+    """{symbol: [(day, shares after per share before)]} from the statement's Corporate Actions section, when the query has
+    one: a forward or reverse split described as "SPLIT 4 FOR 1"."""
+    out: dict[str, list[tuple[str, float]]] = {}
+    for c in root.iter("CorporateAction"):
+        a = c.attrib
+        m = re.search(r"\bSPLIT\s+(\d+(?:\.\d+)?)\s+FOR\s+(\d+(?:\.\d+)?)", a.get("actionDescription") or "", re.I)
+        d = _day(a.get("dateTime") or a.get("reportDate") or "")
+        sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
+        if a.get("assetCategory") not in (None, "STK") or not m or not d or not sym or float(m.group(2)) <= 0 or float(m.group(1)) <= 0:
+            continue
+        out.setdefault(sym, []).append((d, float(m.group(1)) / float(m.group(2))))
+    return {k: sorted(set(v)) for k, v in out.items()}
+
+
+def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | None = None) -> list[dict]:
     """Round trips by first in, first out per stock, as the journal's added-by-hand trades (segment "us"). A sale with no
-    purchase before it in the data (bought before the query's period) is left out, never guessed."""
+    purchase before it in the data (bought before the query's period) is left out, never guessed. `split` (splits): the
+    shares bought before a split count as the shares after it, at the price of each after it."""
     out = []
     book: dict[str, list[list]] = {}                  # symbol -> open lots [side, qty left, fill, fee left]
+    ahead = {k: list(v) for k, v in (split or {}).items()}
     for f in fs:
         lots = book.setdefault(f["sym"], [])
+        while ahead.get(f["sym"]) and ahead[f["sym"]][0][0] <= f["d"]:
+            k = ahead[f["sym"]].pop(0)[1]
+            for lot in lots:
+                lot[1] *= k
+                lot[2] = {**lot[2], "price": lot[2]["price"] / k}
         q, fee = f["qty"], f["fee"]
         total = f["qty"]
         while q > 1e-9 and lots and lots[0][0] != f["side"]:
@@ -208,7 +230,7 @@ def ingest(uid: str, root: ET.Element) -> dict:
     profile = sync.profile_for(uid)
     rows, left = positions(root)
     got = sync.sync_holdings(profile, rows, "ibkr", "Interactive Brokers") if rows or _had_ibkr(uid) else {"count": 0, "unmatched_count": 0}
-    n = save_trades(uid, closed_trades(fills(root)))
+    n = save_trades(uid, closed_trades(fills(root), splits(root)))
     why = sync.note(got, "Interactive Brokers")      # an empty statement or an unmatched line keeps the US holdings read before
     state.update(uid, "ibkr", synced_at=state.now(), status="partial" if why else "ok", detail=why, positions=got["count"], trades=n)
     return {"positions": got["count"], "unmatched": got["unmatched_count"], "left_out": left, "trades_added": n}

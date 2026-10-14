@@ -265,7 +265,7 @@ def estimate(items: list[dict], actions: dict[str, list[dict]], today: date, fal
     """(paid, ahead): each declared dividend × the shares held at its ex-date, worked back from today's holding
     through any bonus or split, assuming no trades in between. `ahead` are those with an ex-date still to come."""
     paid, ahead = [], []
-    fallback = (fallback_since or today.isoformat())[:10]
+    fallback = corp_actions.saved_day(fallback_since, today)
     for i in items:
         acts = actions.get(i["symbol"]) or []
         since = str(i.get("since") or fallback)[:10]

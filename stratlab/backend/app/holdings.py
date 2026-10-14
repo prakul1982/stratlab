@@ -359,14 +359,15 @@ def _totals(rows: list[dict], rate, session: str | None = None) -> dict:
     pnl, days, n = None, False, 0
     for r in rows:
         fx = rate(r)
-        if fx is None or not _counted(r):
+        if fx is None:
             continue
-        n += 1
-        value += fx * (r["value"] if r["value"] is not None else r["invested"] or 0)
-        cost += fx * (r["invested"] or 0)
-        if r["pnl"] is not None:
-            pnl = (pnl or 0) + fx * r["pnl"]
-            cost_priced += fx * r["invested"]
+        if _counted(r):
+            n += 1
+            value += fx * (r["value"] if r["value"] is not None else r["invested"] or 0)
+            cost += fx * (r["invested"] or 0)
+            if r["pnl"] is not None:
+                pnl = (pnl or 0) + fx * r["pnl"]
+                cost_priced += fx * r["invested"]
         if r["day"] is not None and (session is None or r.get("session") in (None, session)):
             days = True
             day += fx * r["day"]
@@ -403,7 +404,7 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
     totals["session"] = session
     # the other session's moves, left out of the day's change: named, so the page can say so
     totals["other_session"] = sorted({r["symbol"] for r in rows if session and r.get("session") and r["session"] != session
-                                      and r["day"] is not None and rate(r) is not None and _counted(r)})
+                                      and r["day"] is not None and rate(r) is not None})
     # weights and the sector mix are shares of everything held that has a value (a position without a buy price too)
     value = sum((r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r) for r in rows if rate(r) is not None)
     for r in rows:

@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
+import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, usTodayNote } from "../lib/marketHours";
 import { MARKET_TILES, goldInr10g, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate } from "../lib/format";
@@ -115,8 +116,8 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
 
 /* ---------- net worth ---------- */
 type NwView = {
-  as_of: string; totals: { assets: number; liabilities: number; net: number }; assets: unknown[]; liabilities: unknown[];
-  history: { d: string; net: number }[] | null; history_allowed: boolean;
+  as_of: string; totals: { assets: number; liabilities: number; net: number; partial?: string[] | null }; assets: unknown[]; liabilities: unknown[];
+  history: { d: string; net: number; partial?: string[] }[] | null; history_allowed: boolean;
 };
 
 function NetWorthCard() {
@@ -131,16 +132,18 @@ function NetWorthCard() {
     );
   }
   const hist = v.history ?? [];
-  // the change against the snapshot nearest a month ago (or the first one, if there is less than a month)
-  const base = hist.length >= 2 ? (hist.find((h) => new Date(h.d).getTime() >= Date.now() - 31 * 86400_000) ?? hist[0]) : null;
-  const diff = base && base.d !== hist[hist.length - 1]?.d ? v.totals.net - base.net : null;
+  // as on the Net worth page: the change is against the latest complete snapshot from before today, none while the live
+  // total is partial; the chart leaves out partial snapshots, which read as falls
+  const whole = hist.filter((h) => !h.partial?.length);
+  const move = netWorthDelta(v.totals.net, v.totals.partial, hist);
+  const diff = move ? move.change : null;
   return (
     <Card testId="mine-networth">
       <CardHead title="Net worth" actions={<Link className="btn quiet sm" to="/money/net-worth" aria-label="Open net worth">Open</Link>} />
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
-        note={diff !== null && base ? `since ${asOf(base.d)}` : `As of ${asOf(v.as_of) ?? "today"}`} />
-      {hist.length >= 2 ? <Spark values={hist.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
+        note={move ? `since ${asOf(move.since)}` : `As of ${asOf(v.as_of) ?? "today"}`} />
+      {whole.length >= 2 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
         : <HistoryPlaceholder allowed={v.history_allowed} />}
     </Card>
   );
@@ -161,7 +164,7 @@ function HistoryPlaceholder({ allowed }: { allowed: boolean }) {
 }
 
 /* ---------- today's P&L ---------- */
-type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; day_pct: number | null; count: number }; prices_at?: string | null; updated_at: string | null;
+type Holdings = { rows: unknown[]; totals: { value: number; day: number | null; day_pct: number | null; count: number; no_cost?: { count: number; symbols: string[] } | null }; prices_at?: string | null; updated_at: string | null;
   us?: { day: number | null; in_total?: boolean } | null; usd_inr?: number | null };
 
 function PnlCard() {
@@ -186,6 +189,8 @@ function PnlCard() {
         note={day == null ? "The day's change needs prices, which are not in yet." : h.totals.day_pct != null ? <>Holdings <Signed value={day}>{pct(h.totals.day_pct, 2)}</Signed></> : undefined} />
       {/* the US part of the day named, live or at its close, as Holdings and Money say it (R7O-012) */}
       {(() => { const note = usTodayNote(markets, h.us, h.usd_inr); return note && <p className="k-note" data-testid="mine-us-today">{note}</p>; })()}
+      {/* a stock with a price but no buy price is in the day's change, not in the value and gain or loss (R3D) */}
+      {h.totals.no_cost && <p className="k-note" data-testid="mine-no-cost">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
       {h.prices_at && <div><Badge>Prices as of {asOf(h.prices_at)}</Badge></div>}
     </Card>
   );

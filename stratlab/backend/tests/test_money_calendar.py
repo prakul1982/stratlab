@@ -129,22 +129,55 @@ def test_other_money_pages_through_hooks(w, monkeypatch):
     today = M._today()
     assert M._hook("money_nothing_here", "upcoming_dates", "u") == []                          # a page that isn't there
     fake = types.ModuleType("app.money_networth")
-    fake.upcoming_dates = lambda uid, days: [
+    fake.upcoming_dates = lambda uid, days, frm=None: [
         {"date": (today + timedelta(days=3)).isoformat(), "title": "PPF matures", "amount": 512000.0, "kind": "maturity"},
         {"date": "not a date", "title": "bad"}, {"date": today.isoformat()}, "junk",
         {"date": (today + timedelta(days=4)).isoformat(), "title": "Premium", "amount": float("nan")}]
     broken = types.ModuleType("app.money_mf")
-    broken.upcoming_dates = lambda uid, days: 1 / 0                                           # a page that fails
+    broken.upcoming_dates = lambda uid, days, frm=None: 1 / 0                                           # a page that fails
     tax = types.ModuleType("app.money_advance_tax")
     jun = date(today.year + (1 if today.month > 6 else 0), 6, 15)
-    tax.upcoming_dates = lambda uid, days: [{"date": jun.isoformat(), "title": "Advance tax: ₹12,000 due", "amount": 12000, "kind": "advance_due"}]
+    tax.upcoming_dates = lambda uid, days, frm=None: [{"date": jun.isoformat(), "title": "Advance tax: ₹12,000 due", "amount": 12000, "kind": "advance_due"}]
     for name, mod in (("app.money_networth", fake), ("app.money_mf", broken), ("app.money_advance_tax", tax)):
         monkeypatch.setitem(sys.modules, name, mod)
+    assert M.HOOKS == [("money_networth", "upcoming_dates", "money")]          # only the pages that have the function are named
+    monkeypatch.setattr(M, "HOOKS", M.HOOKS + [("money_mf", "upcoming_dates", "money"), ("money_advance_tax", "upcoming_dates", "tax")])
     got = M.events("u-pro", today, today + timedelta(days=400))
     money = [(e["title"], e["amount"]) for e in got if e["cat"] == "money"]
     assert money == [("PPF matures", 512000.0), ("Premium", None)]
     on_jun = [e["title"] for e in got if e["date"] == jun.isoformat()]
     assert on_jun == ["Advance tax: ₹12,000 due"]                                             # the page's amount replaces the plain date
+
+
+def test_a_window_before_today_lists_the_emis_premiums_and_maturities_already_past_in_it(w):
+    import json
+    import time_machine
+    from app import money_networth as nw
+    db.set_setting("networth:u-pro", json.dumps({"items": [
+        {"id": "l", "kind": "loan", "name": "Home", "principal": 900000, "rate": 8.5, "tenure_months": 120, "start": "2026-04-05"},
+        {"id": "p", "kind": "policy", "insurer": "Star", "policy_type": "health", "premium": 2000, "frequency": "monthly", "due": "2026-07-20"},
+        {"id": "f", "kind": "fd", "name": "Bank FD", "principal": 100000, "rate": 7, "start": "2025-09-25", "maturity": "2026-09-25"}]}))
+    frm, to = date(2026, 7, 1), date(2026, 11, 5)
+    with time_machine.travel(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)):                  # Monday 5 October, IST
+        assert [e["date"] for e in nw.upcoming_dates("u-pro", 31) if e["date"] < "2026-10-05"] == []      # from today, as it was
+        got = nw.upcoming_dates("u-pro", 31, frm=frm)
+        past = sorted((e["kind"], e["date"]) for e in got if e["date"] < "2026-10-05")
+        assert past == [("emi", "2026-07-05"), ("emi", "2026-08-05"), ("emi", "2026-09-05"), ("fd_maturity", "2026-09-25"),
+                        ("premium", "2026-07-20"), ("premium", "2026-08-20"), ("premium", "2026-09-20")]
+        assert {(e["kind"], e["date"]) for e in nw.upcoming_dates("u-pro", 31)} <= {(e["kind"], e["date"]) for e in got}
+        shown = [(e["title"], e["date"]) for e in M.events("u-pro", frm, to, {"money"})]               # the calendar passes the window start
+        assert ("Home: EMI", "2026-07-05") in shown and ("Star: premium due", "2026-08-20") in shown and ("Bank FD matures", "2026-09-25") in shown
+        assert ("Home: EMI", "2026-11-05") in shown
+
+
+def test_the_since_day_of_a_saved_holdings_file_is_the_india_day():
+    from app import corp_actions
+    today = date(2026, 10, 14)
+    assert corp_actions.saved_day("2026-10-13T20:30:00+00:00", today) == "2026-10-14"           # 02:00 IST on the 14th
+    assert corp_actions.saved_day("2026-10-14T05:00:00+00:00", today) == "2026-10-14"
+    assert corp_actions.saved_day("2026-10-13T18:29:59+00:00", today) == "2026-10-13"
+    assert corp_actions.saved_day("2026-10-12", today) == "2026-10-12" and corp_actions.saved_day(None, today) == "2026-10-14"
+    assert corp_actions.saved_day("garbage that is long", today) == "garbage th"
 
 
 # ---------- the feed ----------
