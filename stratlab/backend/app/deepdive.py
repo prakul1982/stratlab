@@ -143,7 +143,7 @@ def numbers(p: dict) -> dict:
         capex, cut = None, False          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
         if not bank and reported and reported[i] is not None:
             capex = abs(reported[i])
-        elif not bank and i > 0 and fa[i] is not None and fa[i - 1] is not None:
+        elif not bank and not any(v is not None for v in reported) and i > 0 and fa[i] is not None and fa[i - 1] is not None:
             d_cwip = cwip[i] - cwip[i - 1] if cwip[i] is not None and cwip[i - 1] is not None else 0
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
             capex = (fa[i] - fa[i - 1]) + d_cwip + d_dep
