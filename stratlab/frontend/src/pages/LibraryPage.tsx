@@ -49,13 +49,14 @@ export function LibraryPage() {
   const [layout, setLayout] = usePersisted<"cards" | "table">("stratlab.library.view", "cards");
 
   useEffect(() => {
+    let live = true;       // a slower answer for an earlier search must not replace the one for the search now on screen
     const t = window.setTimeout(() => {
       const p = new URLSearchParams({ q, market, verdict, sort, ...(official ? { official: "true" } : {}) });
       setFailed(false);
       api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string> }>(`/library?${p}`)
-        .then((r) => { setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { setRows([]); setFailed(true); fail(e); });
+        .then((r) => { if (!live) return; setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { if (!live) return; setRows([]); setFailed(true); fail(e); });
     }, 200);
-    return () => window.clearTimeout(t);
+    return () => { live = false; window.clearTimeout(t); };
   }, [q, market, verdict, sort, official, fail, again]);
 
   const copy = async (e: LibEntry) => {
