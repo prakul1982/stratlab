@@ -276,7 +276,7 @@ type Filings = { rows: { symbol: string; summary: FilingSummary; stale?: boolean
 function RedFlags({ region }: { region: Region }) {
   const { me } = useApp();
   // until `me` has loaded the plan isn't known: the card shows its skeleton, never the Basic-plan note to a paying reader (R13S-003)
-  const known = !!me?.plan_info;
+  const known = !!me;
   const allowed = !!me?.plan_info?.features?.filings;
   const [data, setData] = useState<Filings | null>(null);
   const [failed, setFailed] = useState(false);
@@ -290,7 +290,8 @@ function RedFlags({ region }: { region: Region }) {
   const flagged = data?.rows.filter((r) => r.summary.red > 0) ?? [];
   // the feed not answering is not "you hold nothing": say which companies couldn't be read, and offer another try (R13S-002)
   const unread = unreadSymbols(data?.problems);
-  const retry = <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button>;  // red flags are read from India's exchange filings: none exist for US companies, so the card says that instead of showing India's (R9R-008)
+  const retry = <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button>;
+  // red flags are read from India's exchange filings: none exist for US companies, so the card says that instead of showing India's (R9R-008)
   if (us) {
     return (
       <Panel title="Red flags" right={<Link to="/invest/holders?region=US" className="link">US 5% holders →</Link>}>
