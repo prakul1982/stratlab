@@ -1,6 +1,7 @@
 """Owner-only admin: who's signed up, what they use, and granting plans by hand.
 
 Access is by Google account: verified emails listed in ADMIN_EMAILS. (The old ?key= admin URLs are gone.)"""
+import json
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -68,9 +69,35 @@ def _profiles(cols: str, plan: str | None = None, q: str = "") -> list[dict]:
     return _paged(build)
 
 
-def _paying(r: dict) -> bool:
+# who has a paid plan the owner gave by hand (set_plan), as one setting {uid: true}: kept out of profiles so it needs no
+# schema change; a subscription that starts later takes the user off it (billing.activate)
+GRANTED_KEY = "admin_plan_granted"
+
+
+def granted() -> set:
+    try:
+        d = db.json_value(db.get_setting(GRANTED_KEY), {})
+        return set(d) if isinstance(d, dict) else set()
+    except Exception as e:            # the counts still show; a hand-given plan may read as paying meanwhile
+        print("admin granted read failed:", str(e)[:160])
+        return set()
+
+
+def mark_granted(uid: str, on: bool) -> None:
+    d = db.json_value(db.get_setting(GRANTED_KEY), {})
+    d = d if isinstance(d, dict) else {}
+    if bool(d.get(uid)) == on:
+        return
+    if on:
+        d[uid] = True
+    else:
+        d.pop(uid, None)
+    db.set_setting(GRANTED_KEY, json.dumps(d))
+
+
+def _paying(r: dict, given: set = frozenset()) -> bool:
     """On a paid plan by a live subscription, not one the owner gave by hand (set_plan) after it ended."""
-    return bool(r.get("razorpay_subscription_id")) and r.get("plan_status") == "active" and r.get("plan_source") != "admin"
+    return bool(r.get("razorpay_subscription_id")) and r.get("plan_status") == "active" and r.get("id") not in given
 
 
 def _at(s) -> datetime | None:
@@ -83,7 +110,7 @@ def _at(s) -> datetime | None:
 def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -> list[dict]:
     """The newest `limit` users: those whose email contains `q`, and on `plan` when given (the plan they have now, so
     a paid plan that ended counts as Free)."""
-    cols = "id,email,plan,plan_status,plan_source,current_period_end,razorpay_subscription_id,created_at"
+    cols = "id,email,plan,plan_status,current_period_end,razorpay_subscription_id,created_at"
     if plan in PLANS:
         rows = sorted(_profiles(cols, plan, q), key=lambda r: r.get("created_at") or "", reverse=True)
         rows = [r for r in rows if effective_plan(r) == plan][:limit]
@@ -104,16 +131,17 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
     except Exception as e:           # the same: extra
         print("admin users: invite rewards failed:", str(e)[:160])
         months = {}
+    given = granted()
     return [{
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
-        "plan_until": r.get("current_period_end"), "paying": _paying(r),
+        "plan_until": r.get("current_period_end"), "paying": _paying(r, given),
         "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
         "free_months": months.get(r["id"], 0),
     } for r in rows]
 
 
-_COUNT_COLS = "id,plan,plan_status,plan_source,current_period_end,created_at,razorpay_subscription_id"
+_COUNT_COLS = "id,plan,plan_status,current_period_end,created_at,razorpay_subscription_id"
 
 
 def stats(month_start: str) -> dict:
@@ -123,7 +151,8 @@ def stats(month_start: str) -> dict:
     today = now.astimezone(IST).replace(hour=0, minute=0, second=0, microsecond=0)     # the India day
     plans = Counter(effective_plan(r) for r in rows)
     # on a paid plan by paying (a subscription), or given by the owner by hand: Overview tells them apart
-    paying = Counter(effective_plan(r) for r in rows if _paying(r))
+    given = granted()
+    paying = Counter(effective_plan(r) for r in rows if _paying(r, given))
     made = [t for t in (_at(r.get("created_at")) for r in rows) if t]
     new = sum(1 for t in made if t >= week_ago)
     return {"users": len(rows), "plans": {p: plans.get(p, 0) for p in PLANS}, "new_7d": new,
@@ -138,7 +167,8 @@ def week_stats(since: datetime) -> dict:
     rows = _profiles(_COUNT_COLS)
     plans = Counter(effective_plan(r) for r in rows)
     # paying (a subscription) apart from given by the owner, as Overview counts them (R6V-010)
-    paying = Counter(effective_plan(r) for r in rows if _paying(r))
+    given = granted()
+    paying = Counter(effective_plan(r) for r in rows if _paying(r, given))
     new = sum(1 for r in rows if (t := _at(r.get("created_at"))) and t >= since)
     since_iso = since.astimezone(timezone.utc).isoformat()
     usage = {"backtest": _count_since("backtest", since_iso), "ai": _count_since("ai", since_iso)}
@@ -153,12 +183,15 @@ def set_plan(user_id: str, plan: str, days: int | None) -> dict:
     if plan not in PLANS:
         raise HTTPException(400, {"code": "bad_plan", "message": "Unknown plan."})
     if plan == "free":
-        fields = {"plan": "free", "plan_status": None, "plan_source": None, "current_period_end": None, "cancel_at_period_end": False}
+        fields = {"plan": "free", "plan_status": None, "current_period_end": None, "cancel_at_period_end": False}
     else:
         until = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat() if days else None
-        fields = {"plan": plan, "plan_status": "active", "plan_source": "admin", "current_period_end": until,
-                  "cancel_at_period_end": False}      # plan_source: given by hand, so never counted as paying
+        fields = {"plan": plan, "plan_status": "active", "current_period_end": until, "cancel_at_period_end": False}
     row = db.update_profile(user_id, **fields)
     if row is None:
         raise HTTPException(404, {"code": "no_user", "message": "No user with that ID."})
+    try:
+        mark_granted(user_id, plan != "free")     # given by hand, so never counted as paying
+    except Exception as e:                    # the plan is given either way; only Overview's paying count reads this
+        print("admin granted mark failed:", str(e)[:160])
     return row

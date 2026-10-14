@@ -142,14 +142,16 @@ def test_counts_page_past_the_servers_read_cap(monkeypatch):
 def test_a_plan_given_by_hand_after_a_cancelled_subscription_is_not_paying():
     sub = {"id": "u9", "plan": "pro", "plan_status": "active", "razorpay_subscription_id": "sub_old"}
     assert admin._paying(sub)
-    assert not admin._paying({**sub, "plan_source": "admin"})
+    assert not admin._paying(sub, {"u9"})                          # given by hand (admin.granted)
     assert not admin._paying({**sub, "plan_status": "cancelled"})
 
 
 def test_set_plan_records_that_it_was_given_by_hand(monkeypatch):
-    saved = {}
+    saved, store = {}, {}
     monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.update(f) or {"id": uid, **f})
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
     admin.set_plan("u1", "pro", 30)
-    assert saved["plan_source"] == "admin"
+    assert "plan_source" not in saved and admin.granted() == {"u1"}      # no new profile column needed
     admin.set_plan("u1", "free", None)
-    assert saved["plan_source"] is None
+    assert admin.granted() == set()

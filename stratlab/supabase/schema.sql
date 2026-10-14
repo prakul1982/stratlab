@@ -16,7 +16,6 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-alter table public.profiles add column if not exists plan_source text;   -- 'admin': a plan the owner gave by hand
 create index if not exists profiles_sub_idx on public.profiles (razorpay_subscription_id);
 
 create table if not exists public.usage_events (
