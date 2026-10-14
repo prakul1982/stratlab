@@ -19,7 +19,7 @@ from ..kite_service import IST
 from ..plans import has_indicators
 from . import ai as A
 from . import grounding, key_facts
-from .company import Research, with_dividend_yield
+from .company import INDICES, Research, with_dividend_yield
 from .net import NotFound, SourceError
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -375,7 +375,8 @@ def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile))
         news = hub.headlines(r, focus[:60])
     except SourceError:
         news = []
-    return ok({"indices": indices, "headlines": news})
+    got = {i["name"] for i in indices}
+    return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got]})
 
 
 # ---------- AI reads ----------

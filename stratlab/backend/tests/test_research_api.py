@@ -206,3 +206,13 @@ def test_an_old_stored_read_with_scores_shows_none(api):
     r = api.get("/research/company/US/NVDA/ai").json()
     assert r["summary"] == "Old read." and r["facts"] == [] and not api.calls
     _no_scores(r)
+
+
+def test_pulse_names_an_index_that_could_not_load(api, monkeypatch):
+    from app.intel import routes
+    got = routes.hub.indices("IN")
+    monkeypatch.setattr(routes.hub, "indices", lambda region, now=None: got[:1])
+    p = api.get("/research/pulse?region=IN").json()
+    assert [i["name"] for i in p["indices"]] == ["NIFTY 50"] and p["missing"] == ["SENSEX", "NIFTY BANK"]
+    monkeypatch.setattr(routes.hub, "indices", lambda region, now=None: got)
+    assert api.get("/research/pulse?region=IN").json()["missing"] == []

@@ -115,7 +115,7 @@ class Live:
         if not self.ready():
             _set_status(region, error="Live prices aren't available (the data login has lapsed).", failed_at=breadth._now())
             return {"ok": False, "error": "not ready"}
-        expect = breadth.last_complete(region, now)
+        expect = breadth.last_trading(region, breadth.last_complete(region, now))
         base = breadth.load_base(region)
         if (not base or base.get("day") != expect) and self.rebuild:
             try:
@@ -123,6 +123,9 @@ class Live:
             except Exception as e:
                 print("breadth live base:", str(e)[:120])
             base = breadth.load_base(region)
+        if not base or base.get("day") != expect:       # still old after a failed rebuild: its sums aren't today's base
+            _set_status(region, error="Live prices aren't available (the day's base isn't read yet).", failed_at=breadth._now())
+            return {"ok": False, "error": "no base"}
         stocks = (base or {}).get("stocks") or {}
         groups = [g for g, v in breadth.GROUPS.items() if v["region"] == region]
         who = {g: breadth.members(g) for g in groups}
@@ -191,7 +194,7 @@ class LiveJob:
 def rebuild_base(load_bars, region: str, now: datetime, gap: float = breadth.GAP, sleep=time.sleep) -> int:
     """Read each stock's recent daily candles (paced) and store the finished days the live rounds need. Used only when the
     daily run hasn't stored them for the last finished day. Returns how many stocks were read."""
-    through = breadth.last_complete(region, now)
+    through = breadth.last_trading(region, breadth.last_complete(region, now))
     syms = sorted({s for g, v in breadth.GROUPS.items() if v["region"] == region for s in breadth.members(g)})
     stocks, streak = {}, 0
     for i, s in enumerate(syms):

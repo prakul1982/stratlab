@@ -246,9 +246,10 @@ class Alerts:
             time.sleep(60)
 
     def due(self, market: str, now: datetime) -> str | None:
-        from .data.calendar import is_trading_day
+        from .data.calendar import is_trading_day, shifted
         tz, at = SEND_AT[market]
         local = now.astimezone(ZoneInfo(tz))
+        at = shifted(market, local.date(), at)
         day = local.date().isoformat()
         if local.strftime("%H:%M") < at or self.last.get(market) == day or not is_trading_day(market, local.date()):
             return None
