@@ -515,3 +515,13 @@ def test_deep_dive_cap_applies_before_payments_go_live(api, monkeypatch):
     assert codes == [200, 200, 402]                                                  # Free: 2 companies a month
     r = c.get("/research/deep/S9")
     assert r.json()["detail"]["code"] == "deepdive_limit" and "ask us at" in r.json()["detail"]["message"]
+
+
+def test_business_read_drops_advice_wording():
+    b = deepdive.clean_business({"summary": "Makes pumps. Analysts see more upside here. Sells to farms.",
+                                 "drivers": ["Rural demand", "A good time to buy the stock"], "strengths": ["Low debt"],
+                                 "risks": ["Raw material prices"], "customers": "Buy the stock now."})
+    assert b["summary"] == "Makes pumps. Sells to farms."
+    assert b["drivers"] == ["Rural demand"] and b["customers"] == ""
+    risky = deepdive.clean_business({"summary": "x", "risks": ["Higher steel prices could pressure margins"]})
+    assert risky["risks"] == ["Higher steel prices could pressure margins"]          # a risk is a filing's own words

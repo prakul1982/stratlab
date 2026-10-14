@@ -12,6 +12,7 @@ from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
 from .docs import pdf_links, quote_found, ranked_windows, windows
 from .intel.filings import file_words as _file_words, is_call, ist_now
+from .intel.grounding import ADVICE, _SENT
 from .intel.net import num
 
 KEEP = 7 * 86400              # a document read is reused for a week
@@ -348,8 +349,9 @@ PLAN_WORDS = [r"capex", r"capital expenditure", r"capacity", r"expansion", r"gre
               r"commission", r"guidance", r"outlook", r"we expect", r"target", r"margin", r"growth of", r"crore"]
 
 
-def _clip(x, n: int, length: int = 300) -> list:
-    return [str(i)[:length] for i in (x or []) if str(i).strip()][:n] if isinstance(x, list) else []
+def _clip(x, n: int, length: int = 300, plain: bool = False) -> list:
+    """Up to n non-empty items; with `plain`, an item worded as advice or a forecast is left out."""
+    return [str(i)[:length] for i in (x or []) if str(i).strip() and not (plain and ADVICE.search(str(i)))][:n] if isinstance(x, list) else []
 
 
 def _num(v):
@@ -378,13 +380,20 @@ def clean_measures(d: dict, labels: dict, texts: dict | None = None) -> list[dic
     return out
 
 
+def _plain(text, length: int) -> str:
+    """The AI's words with any sentence worded as advice or a forecast left out (a filing's own text can't make the read say
+    "buy" or "upside"); cut at `length`."""
+    return " ".join(x for x in _SENT.split(" ".join(str(text or "").split())) if not ADVICE.search(x))[:length]
+
+
 def clean_business(d: dict) -> dict:
     segs = []
     for s in (d.get("segments") or [])[:6]:
         if isinstance(s, dict) and str(s.get("name") or "").strip():
-            segs.append({"name": str(s["name"])[:80], "share_pct": _num(s.get("share_pct")), "what": str(s.get("what") or "")[:200]})
-    return {"summary": str(d.get("summary") or "")[:700], "segments": segs, "customers": str(d.get("customers") or "")[:300],
-            "drivers": _clip(d.get("drivers"), 5), "strengths": _clip(d.get("strengths"), 5), "risks": _clip(d.get("risks"), 5)}
+            segs.append({"name": str(s["name"])[:80], "share_pct": _num(s.get("share_pct")), "what": _plain(s.get("what"), 200)})
+    return {"summary": _plain(d.get("summary"), 700), "segments": segs, "customers": _plain(d.get("customers"), 300),
+            "drivers": _clip(d.get("drivers"), 5, plain=True), "strengths": _clip(d.get("strengths"), 5, plain=True),
+            "risks": _clip(d.get("risks"), 5)}     # a risk is said as one ("could pressure margins"): kept as the filing words it
 
 
 def _with_unit(v) -> str | None:
