@@ -41,10 +41,16 @@ export function ConnectCards() {
     const q = new URLSearchParams(window.location.search);
     const k = q.get("kite");
     if (!k) return;
-    notify(k === "ok" ? "Zerodha is connected and your holdings are read." : k === "cancelled" ? "The Zerodha login was cancelled." : "The Zerodha login didn't work. Try again.");
-    q.delete("kite");
+    const [ks, kc] = [q.get("ks"), q.get("kc")];
+    for (const name of ["kite", "ks", "kc"]) q.delete(name);
     window.history.replaceState(null, "", window.location.pathname + (q.toString() ? `?${q}` : "") + window.location.hash);
-  }, [notify]);
+    const say = (r: string) => notify(r === "ok" ? "Zerodha is connected and your holdings are read." : r === "cancelled" ? "The Zerodha login was cancelled." : "The Zerodha login didn't work. Try again.");
+    if (k !== "confirm") { say(k); return; }
+    // back from Zerodha: the login is only attached to the account that is signed in here, and only if it started there
+    if (!ks || !kc) { say("failed"); return; }
+    api<{ connect: Conn }>("/connect/kite/confirm", { method: "POST", body: { state: ks, claim: kc } })
+      .then((r) => { set(r.connect); say("ok"); }).catch(() => say("failed"));
+  }, [notify, set]);
   if (c === undefined) return <Card label="Connecting your accounts"><Skeleton label="Loading your connections" /></Card>;
   if (c === null) return null;
   return (

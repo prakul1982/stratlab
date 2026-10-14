@@ -38,7 +38,7 @@ def setup(monkeypatch, live=True):
     monkeypatch.setattr(db, "add_usage", lambda *a, **k: None)
     monkeypatch.setattr(db, "add_order", lambda *a, **k: None)
     monkeypatch.setattr(db, "get_profile", lambda uid: {"id": uid, "plan": "pro"})
-    monkeypatch.setattr(main, "ai_allowance", lambda p: (0, 50))
+    monkeypatch.setattr(main, "ai_allowance", lambda p, held=0: (0, 50))
     app.dependency_overrides[main.current_profile] = lambda: {"id": "u", "_plan": "pro", "plan": "pro"}
     return data, rows
 

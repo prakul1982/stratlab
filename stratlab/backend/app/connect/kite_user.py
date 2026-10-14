@@ -8,11 +8,17 @@ re-reads while the token lives, and after 6 am the same button logs in again.
 Off until the owner says Zerodha has approved the multi-user Kite app (KITE_MULTIUSER_APPROVED=true). Until then only the
 admin's own account can connect. The redirect URL set in the Kite app is {PUBLIC_API_URL}/connect/kite/callback, or the
 existing /admin/kite/callback, which hands user logins here by their state."""
+import hashlib
+import hmac
+import json
+import secrets
+import threading
+import time
 from datetime import datetime
 from typing import Callable
 from urllib.parse import quote
 
-from .. import admin, mail_tokens
+from .. import admin, db, mail_tokens
 from ..config import settings
 from ..kite_service import IST, token_valid, today_ist
 from . import state, sync, vault
@@ -71,8 +77,31 @@ def uid_from_state(st: str) -> str | None:
     return got[0] if got else None
 
 
-def complete(request_token: str, st: str) -> dict:
-    """Finish a login: swap the request token, keep the access token, read holdings. Raises KiteConnectError."""
+PENDING = "kite-pending:"
+PENDING_TTL = 600          # seconds a finished Zerodha login waits to be confirmed by the signed-in person
+_pending_lock = threading.Lock()
+
+
+def _pending_key(st: str) -> str:
+    return PENDING + hashlib.sha256(st.encode()).hexdigest()[:40]
+
+
+def _claim_hash(claim: str) -> str:
+    return hashlib.sha256(claim.encode()).hexdigest()
+
+
+def _prune_pending() -> None:
+    for key, raw in db.all_settings_with_prefix(PENDING):
+        rec = db.json_value(raw, {})
+        if time.time() - float(rec.get("at") or 0) > 3600:
+            db.delete_setting(key)
+
+
+def stage(request_token: str, st: str) -> str:
+    """Zerodha's return, which anyone's browser can make (the state is in a link, so it can be passed to someone else):
+    swap the request token and keep the session aside under the state, not on the account. Returns the claim, a secret
+    only the browser that came back from Zerodha holds, which confirm() needs. The state works once. Raises
+    KiteConnectError."""
     got = read_state(st)
     if not got:
         raise KiteConnectError("This login link has expired. Start again from Settings.")
@@ -80,13 +109,38 @@ def complete(request_token: str, st: str) -> dict:
     profile = sync.profile_for(uid)
     if not profile or not configured() or not (settings.KITE_MULTIUSER_APPROVED or via == "admin"):
         raise KiteConnectError("Zerodha login isn't open for this account yet.")
+    key = _pending_key(st)
+    with _pending_lock:
+        if db.get_setting(key):
+            raise KiteConnectError("This login link has already been used. Start again from Settings.")
+        db.set_setting(key, json.dumps({"used": True, "at": time.time()}))          # taken, whatever happens next
+    _prune_pending()
     kite = factory(api_key())
     try:
         data = kite.generate_session(request_token, api_secret=api_secret())
         token = data["access_token"]
     except Exception as e:
         raise KiteConnectError("Zerodha didn't accept that login. Try again.") from None
-    state.update(uid, "kite", token=vault.seal(token), kite_user=str(data.get("user_id") or "")[:20], day=today_ist(),
+    claim = secrets.token_urlsafe(24)
+    db.set_setting(key, json.dumps({"uid": uid, "token": vault.seal(token), "kite_user": str(data.get("user_id") or "")[:20],
+                                    "claim": _claim_hash(claim), "at": time.time()}))
+    return claim
+
+
+def confirm(uid: str, st: str, claim: str) -> dict:
+    """Attach the session staged under the state to the signed-in user, only if the state was theirs and the claim is
+    the one given to the browser that came back from Zerodha. Raises KiteConnectError."""
+    got = read_state(st)
+    if not got or got[0] != uid:
+        raise KiteConnectError("This login link isn't yours or has expired. Start again from Settings.")
+    key = _pending_key(st)
+    with _pending_lock:
+        rec = db.json_value(db.get_setting(key), {})
+        if (rec.get("used") or rec.get("uid") != uid or time.time() - float(rec.get("at") or 0) > PENDING_TTL
+                or not hmac.compare_digest(str(rec.get("claim") or ""), _claim_hash(claim or ""))):
+            raise KiteConnectError("This login has expired or was already used. Start again from Settings.")
+        db.set_setting(key, json.dumps({"used": True, "at": time.time()}))
+    state.update(uid, "kite", token=rec["token"], kite_user=rec.get("kite_user") or "", day=today_ist(),
                  status="ok", detail=None, connected_at=state.now())
     return refresh(uid)
 

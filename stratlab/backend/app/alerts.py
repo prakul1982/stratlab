@@ -322,5 +322,6 @@ def test(profile: dict) -> tuple[list[str], dict[str, str]]:
             job()
             sent.append(channel)
         except Exception as e:
-            failed[channel] = str(e)[:200]
+            # Telegram's own words say whether a chat id exists, and any chat id can be typed in: not passed on
+            failed[channel] = "Telegram couldn't deliver to that chat" if channel == "telegram" else str(e)[:200]
     return sent, failed
