@@ -1,5 +1,6 @@
 """Public verdict links: a frozen snapshot without the owner or the rules, an image, a preview page, and turning off."""
 import base64
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -107,3 +108,20 @@ def test_deleting_a_notebook_turns_off_its_links(api, store):
     token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={}).json()["token"]
     api.delete(f"/notebooks/{nb['id']}")
     assert api.get(f"/public/v/{token}").status_code == 404
+
+
+def test_the_public_lines_are_the_growth_of_100_not_the_account():
+    # the amounts would show the capital: both lines start from 100 at the strategy's start
+    from app import public
+    snap = public.snapshot({"name": "n"}, {"series": {"t": ["a", "b"], "equity": [250000, 275000], "buy_hold": [250000, 262500]}})
+    assert snap["series"]["equity"] == [100.0, 110.0] and snap["series"]["buy_hold"] == [100.0, 105.0]
+    assert snap["series"]["indexed"] is True
+
+
+def test_a_link_shared_before_shows_no_amounts_either(monkeypatch):
+    from app import db, public
+    old = {"name": "n", "series": {"t": ["a", "b"], "equity": [200000, 220000], "buy_hold": [200000, 210000]},
+           "group": {"members": [{"symbol": "A", "pnl": 5000}]}}
+    monkeypatch.setattr(db, "get_setting", lambda k: json.dumps(old))
+    snap = public.load("a" * 22)
+    assert snap["series"]["equity"] == [100.0, 110.0] and "pnl" not in snap["group"]["members"][0]
