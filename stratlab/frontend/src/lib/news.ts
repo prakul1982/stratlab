@@ -10,7 +10,8 @@ export interface IssueRow {
 }
 
 export interface IssueLine { text: string; url?: string | null }
-export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null; lines?: IssueLine[] }
+export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null; lines?: IssueLine[];
+  /** My stocks: the price, its move since the previous session and the "since …" label the email shows */ price?: number | null; change_pct?: number | null; since?: string | null }
 
 export interface Issue {
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string;
@@ -52,9 +53,18 @@ export function issueToShow(tab: NewsTab, rows: { id: string }[] | null, picked:
 
 /** The stamp over an issue's numbers: a Market Brief's are the day's close ("the 16:00 ET close of 9 Oct 2026", R13-003),
  * My stocks' the moment it was built. */
+/** The weekly issue is dated its Saturday; its numbers are the last weekday's close before it. */
+export function closeDay(day: string, weekly?: boolean): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(day);
+  if (!m || !weekly) return day;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() - ({ 6: 1, 0: 2 }[d.getDay()] ?? 0));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function issueStamp(issue: { kind: NewsKind; region: Region | null; day: string; weekly?: boolean }, built: string | null): string | null {
   if (issue.kind === "market" && (issue.region === "US" || issue.region === "IN")) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(issue.day);
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(closeDay(issue.day, issue.weekly));
     if (m) {
       const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
       return `the ${issue.region === "US" ? "16:00 ET" : "15:30 IST"} close of ${d.getDate()} ${d.toLocaleDateString("en-GB", { month: "short" }).replace("Sept", "Sep")} ${d.getFullYear()}`;

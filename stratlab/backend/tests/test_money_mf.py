@@ -545,6 +545,22 @@ def test_capital_gains_and_total_value_hooks(w):
     assert M.for_tax("nobody") == {"rows": [], "names": {}, "years": {}}
 
 
+def test_net_worth_counts_a_fund_without_a_nav_at_cost(w, monkeypatch):
+    upload(w["client"], statement(flexi(), debt()))
+    assert M.net_worth_value("u-pro") == {"value": 42500.0, "as_of": None, "at_cost": 0, "missing": 0}
+    real = M.holdings
+
+    def no_nav(data, wk, today):
+        out = real(data, wk, today)
+        r = out["schemes"][0]
+        out["schemes"][0] = {**r, "value": None}
+        return out
+    monkeypatch.setattr(M, "holdings", no_nav)
+    first = real(M.load("u-pro"), M.worked(M.load("u-pro")), M.today_ist())["schemes"][0]
+    got = M.net_worth_value("u-pro")
+    assert got["at_cost"] == 1 and got["value"] == pytest.approx(42500 - first["value"] + first["invested"])
+
+
 def test_statement_nav_when_the_daily_file_is_down(w, monkeypatch):
     def down(url):
         raise OSError("down")

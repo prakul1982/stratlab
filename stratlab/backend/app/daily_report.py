@@ -84,7 +84,7 @@ def summarise(s, day: str) -> dict:
     else:
         trades = [t for t in s.engine.trades if _day(t["exit_t"]) == day]
         open_n = 1 if acct.get("qty") else 0
-    return {"name": s.name, "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", "IN") == "IN" else ""),
+    return {"name": s.name, "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", "IN") == "IN" else "USD"),
             "closed": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0), "pnl": sum(t["pnl"] for t in trades),
             "open": open_n, "unrealised": acct.get("unrealised") or 0.0,
             "equity": acct["equity"], "capital": acct["capital"],

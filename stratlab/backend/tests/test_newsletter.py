@@ -422,3 +422,17 @@ def test_the_market_issue_is_not_resent_while_its_send_is_still_going(w, monkeyp
         j._open.clear()
         assert j.catch_up(AFTER_IN_CLOSE, []) == want                    # a live heartbeat: the other container is on it
     assert job.ledger(issue["id"])["done"] and len(outbox) == 1
+
+
+def test_a_weekly_briefs_close_is_the_last_trading_day_not_its_saturday():
+    sat = {"kind": "market", "region": "IN", "day": "2026-10-17", "weekly": True}
+    assert write.close_stamp(sat) == "the 15:30 IST close of 16 Oct 2026"
+    assert write.close_stamp({**sat, "region": "US"}) == "the 16:00 ET close of 16 Oct 2026"
+    assert write.close_stamp({**sat, "weekly": False, "day": "2026-10-16"}) == "the 15:30 IST close of 16 Oct 2026"
+
+
+def test_a_change_that_rounds_to_zero_carries_no_sign():
+    from app import email_kit as kit
+    assert kit.pct(0.004) == "0.00%" and kit.pct(-0.004) == "0.00%" and kit.pct(-0.04, 1) == "0.0%"
+    assert kit.pct(0.6) == "+0.60%" and kit.pct(-1.25) == "−1.25%"
+    assert kit.money(-0.4, "USD", 0, True) == "$0" and kit.money(-35, "USD", 0, True) == "−$35"

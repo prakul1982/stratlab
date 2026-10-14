@@ -125,6 +125,16 @@ def test_merge_leaves_the_average_empty_when_one_line_has_no_cost():
 
 
 # ---------- importing through the app ----------
+def test_replacing_with_an_indian_file_keeps_the_us_holdings(w):
+    holdings.save("u-pro", [{"symbol": "AAPL", "exchange": "US", "name": "Apple", "market": "US", "currency": "USD", "qty": 3.0, "avg": 150.0},
+                            {"symbol": "OLDCO", "exchange": "NSE", "name": "Old Co", "qty": 1.0, "avg": 30.0}], "Manual")
+    r = upload(w["client"], "zerodha_console_holdings.xlsx")
+    assert r.status_code == 200, r.text
+    items = {i["symbol"]: i for i in holdings.load("u-pro")["items"]}
+    assert items["AAPL"]["qty"] == 3 and "OLDCO" not in items and "RELIANCE" in items   # the file's market is replaced, the US one kept
+    assert r.json()["imported"] == 6
+
+
 def test_zerodha_console_import_nse_series_and_bse_only(w):
     r = upload(w["client"], "zerodha_console_holdings.xlsx")
     assert r.status_code == 200, r.text

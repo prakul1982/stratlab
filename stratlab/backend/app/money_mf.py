@@ -884,6 +884,19 @@ def total_value(uid: str) -> float:
     return float(holdings(data, worked(data), today_ist())["total"]["value"] or 0.0)
 
 
+def net_worth_value(uid: str) -> dict:
+    """For net worth: total_value, with a fund that has no NAV counted at its cost (as a stock without a price is on My
+    Holdings). {"value", "as_of", "at_cost": funds counted at cost, "missing": funds with neither a NAV nor a cost}."""
+    data = load(uid)
+    if not data["txns"]:
+        return {"value": 0.0, "as_of": None, "at_cost": 0, "missing": 0}
+    held = [r for r in holdings(data, worked(data), today_ist())["schemes"] if (r["units"] or 0) > EPS]
+    no_nav = [r for r in held if r["value"] is None]
+    value = sum(r["value"] for r in held if r["value"] is not None) + sum(r["invested"] or 0 for r in no_nav)
+    return {"value": float(value), "as_of": None, "at_cost": sum(1 for r in no_nav if r["invested"] is not None),
+            "missing": sum(1 for r in no_nav if r["invested"] is None)}
+
+
 # ---------- API ----------
 router = APIRouter(prefix="/money/mutual-funds", tags=["money"])
 _throttle = None

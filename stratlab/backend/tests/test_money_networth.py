@@ -304,6 +304,24 @@ def test_snapshot_on_the_first_of_each_month_once(w):
     assert snap and snap[0]["why"] == "month" and snap[0]["net"] == 7000
 
 
+def test_a_partial_total_is_named_and_never_recorded(w, monkeypatch):
+    c = w["client"]
+    add(c, {"kind": "cash", "value": 7000})
+    before = nw.history("u-pro")
+
+    def broken(profile):
+        raise RuntimeError("holdings down")
+    monkeypatch.setattr(main, "holdings_view", broken)
+    v = add(c, {"kind": "cash", "value": 1000})
+    assert v["totals"]["partial"] == ["My Holdings couldn't be read"] and nw.history("u-pro") == before
+    assert main.networth_job.tick(datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)) == 0
+    assert not [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]          # the month's snapshot isn't a partial total
+    t = nw.build([], {"in": 100.0, "us": 0, "count": 2, "us_no_rate": True}, {"value": 500.0, "at_cost": 1, "missing": 0}, nw.Prices())
+    assert t["totals"]["partial"] == ["US stocks (no dollar rate right now)"]
+    assert "1 fund without a NAV at cost" in next(r for r in t["assets"] if r["kind"] == "mf")["rule"]
+    assert nw.build([], {"in": 100.0, "us": 50.0, "count": 2}, None, nw.Prices())["totals"]["partial"] is None
+
+
 def test_damaged_rows_never_break_the_page(w):
     db.set_setting("networth:u-pro", '{"items": [{"id": "x", "kind": "fd", "principal": "lots"}, {"kind": "cash"}, 5, null]}')
     db.set_setting("networthlog:u-pro", "not json")

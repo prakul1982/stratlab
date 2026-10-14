@@ -455,7 +455,10 @@ def history(uid: str) -> list[dict]:
 
 
 def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[dict]:
-    """Add a snapshot of the totals (one a day: a later one the same day replaces it)."""
+    """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total (a source that
+    couldn't be read or valued) is never stored: it would show as a fall that didn't happen."""
+    if totals.get("partial"):
+        return history(uid)
     d = (day or today()).isoformat()
     rows = [h for h in history(uid) if h["d"] != d]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
@@ -681,7 +684,15 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
                 assets.append(_asset(i, at, now_iso, g, crypto, fx))
         except (KeyError, TypeError, ValueError, OverflowError):
             continue                                        # a damaged entry is left out, never breaks the page
-    linked = []
+    linked, partial = [], []                                # partial: what couldn't be read or valued, so isn't in the total
+    if stocks and stocks.get("failed"):
+        partial.append("My Holdings couldn't be read")
+    if stocks and stocks.get("count") and stocks.get("us_no_rate"):
+        partial.append("US stocks (no dollar rate right now)")
+    if mf and mf.get("failed"):
+        partial.append("mutual funds couldn't be read")
+    if mf and mf.get("missing"):
+        partial.append(f"{mf['missing']} mutual {'fund' if mf['missing'] == 1 else 'funds'} without a NAV or a cost")
     if stocks and stocks.get("count"):
         if stocks.get("in"):
             linked.append({"id": "stocks_in", "kind": "stocks_in", "label": "Indian stocks", "name": "My Holdings: Indian stocks", "class": "stocks_in",
@@ -695,7 +706,8 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
                            "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
-                       "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV",
+                       "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV"
+                       + (f"; {mf['at_cost']} {'fund' if mf['at_cost'] == 1 else 'funds'} without a NAV at cost" if mf.get("at_cost") else ""),
                        "facts": {}, "linked": mf.get("link")})
     rows = linked + assets
     total_assets = sum(r["value"] or 0 for r in rows)
@@ -709,7 +721,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     upcoming_due = sorted((p for p in policies if p["due_in"] is not None), key=lambda p: p["due_in"])
     return {"as_of": data_day(rows, at).isoformat(), "computed_at": now_iso,
             "totals": {"assets": _r(total_assets), "liabilities": _r(total_loans), "net": _r(total_assets - total_loans),
-                       "oldest_as_of": min(dated) if dated else None},
+                       "oldest_as_of": min(dated) if dated else None, "partial": partial or None},
             "allocation": allocation, "assets": rows, "liabilities": loans,
             "insurance": {"policies": policies, "yearly_premium": _r(sum(p["yearly_premium"] or 0 for p in policies)),
                           "cover": {t: _r(sum(p["sum_assured"] or 0 for p in policies if p["entry"].get("policy_type") == t))
@@ -800,11 +812,11 @@ def mf_value(uid: str) -> dict:
         got = fn(uid) if fn else 0
     except Exception as e:
         print("net worth: mutual funds unavailable:", type(e).__name__)
-        got = 0
+        return {"value": 0, "as_of": None, "link": "/money/mutual-funds", "failed": True}
     if isinstance(got, dict):
         v = got.get("value")
         return {"value": float(v) if isinstance(v, (int, float)) and math.isfinite(v) else 0, "as_of": got.get("as_of"),
-                "link": got.get("link") or "/money/mutual-funds"}
+                "link": got.get("link") or "/money/mutual-funds", "at_cost": got.get("at_cost") or 0, "missing": got.get("missing") or 0}
     return {"value": float(got) if isinstance(got, (int, float)) and math.isfinite(got) else 0, "as_of": None, "link": "/money/mutual-funds"}
 
 
@@ -878,7 +890,7 @@ class Job:
             uid = key[len(KEY):]
             try:
                 v = self.value_of(uid)
-                if v:
+                if v and not v["totals"].get("partial"):  # a partial total isn't a snapshot (see record)
                     record(uid, v["totals"], "month", local.date())
                     n += 1
             except Exception as e:                          # one user's data never stops the others'
@@ -915,7 +927,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             return stocks_of(profile)
         except Exception as e:
             print("net worth: holdings unavailable:", type(e).__name__)
-            return None
+            return {"failed": True}
 
     def page(profile, why: str | None = None) -> dict:
         uid = profile["id"]

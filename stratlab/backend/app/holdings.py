@@ -79,10 +79,11 @@ def saved_day(now: datetime | None = None) -> date:
     return d
 
 
-def save(uid: str, items: list[dict], source: str, stamped: bool = False) -> dict:
-    """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp)."""
+def save(uid: str, items: list[dict], source: str, stamped: bool = False, since: str | None = None) -> dict:
+    """Save the holdings. Unless they're `stamped` already, each one's `since` is set (see stamp): `since` when the
+    quantities are as of an earlier day (a statement's last day), else the day they're saved."""
     if not stamped:
-        items = stamp(items, load(uid)["items"], saved_day().isoformat())
+        items = stamp(items, load(uid)["items"], min(since, saved_day().isoformat()) if since else saved_day().isoformat())
     data = {"items": items, "source": source if source in SOURCES else "CSV",
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     db.set_setting(_key(uid), json.dumps(data))
@@ -177,7 +178,8 @@ def match_us(rows: list[dict], find) -> tuple[list[dict], list[dict]]:
         sym = (r.get("symbol") or "").strip().upper().replace(".", "-")
         hit = find(sym) if US_TICKER.fullmatch(sym) else None
         if not hit:
-            missed.append({"line": r.get("line"), "text": r.get("text") or sym, "reason": "No US-listed company has that ticker."})
+            missed.append({"line": r.get("line"), "text": r.get("text") or sym, "symbol": sym, "isin": r.get("isin"),
+                           "reason": "No US-listed company has that ticker."})
             continue
         found.append({"symbol": hit["symbol"], "exchange": "US", "name": hit.get("name") or hit["symbol"], "market": "US",
                       "currency": "USD", "isin": None, "qty": round(float(r["qty"]), 4),
@@ -210,7 +212,8 @@ def match_all(rows: list[dict], matcher: Matcher) -> tuple[list[dict], list[dict
     for r in rows:
         hit, why = matcher.match(r)
         if not hit:
-            missed.append({"line": r.get("line"), "text": r.get("text") or r.get("symbol") or r.get("name") or "", "reason": why})
+            missed.append({"line": r.get("line"), "text": r.get("text") or r.get("symbol") or r.get("name") or "",
+                           "symbol": r.get("symbol"), "isin": r.get("isin"), "reason": why})
             continue
         kind = instrument_kinds.classify(hit["symbol"], r.get("isin"), r.get("name") or hit.get("name"))
         found.append({**hit, "isin": r.get("isin") or None, "qty": round(float(r["qty"]), 4),
