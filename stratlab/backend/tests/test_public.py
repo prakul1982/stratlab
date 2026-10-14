@@ -81,6 +81,14 @@ def test_snapshot_keeps_only_the_stats_the_page_shows(api, store):
     assert set(api.get(f"/public/v/{token}").json()["stats"]) == {"ret", "buy_hold_ret", "mdd", "n"}      # no pnl (it shows the capital)
 
 
+def test_a_group_snapshot_has_no_member_amounts():
+    from app import public
+    exp = {"group": {"name": "G", "max_open": 3, "members": [{"symbol": "A", "trades": 4, "pnl": 12345.0, "win": 50, "buy_hold": 7.5}]},
+           "stats": {"ret": 5.0, "pnl": 999.0}}
+    snap = public.snapshot({"name": "x"}, exp)
+    assert snap["group"]["members"] == [{"symbol": "A", "trades": 4, "win": 50, "buy_hold": 7.5}] and "pnl" not in snap["stats"]
+
+
 def test_the_51st_experiment_turns_off_the_link_of_the_one_it_drops(api, store):
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})

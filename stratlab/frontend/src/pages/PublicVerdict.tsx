@@ -23,7 +23,7 @@ interface Snapshot {
   verdict: { verdict: VerdictKind; headline: string; summary: string; passed: number; total: number;
     checks: { id: string; title: string; status: CheckStatus; detail: string }[] };
   stats: Stats; series: { t: string[]; equity: (number | null)[]; buy_hold: (number | null)[]; split: number | null };
-  group: { name: string; max_open: number; members: { symbol: string; trades: number; pnl: number; win: number | null; buy_hold: number | null }[] } | null;
+  group: { name: string; max_open: number; members: { symbol: string; trades: number; win: number | null; buy_hold: number | null }[] } | null;
 }
 type Member = NonNullable<Snapshot["group"]>["members"][number];
 
@@ -44,7 +44,6 @@ export function PublicVerdict({ token }: { token: string }) {
   const cols: Column<Member>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
     { key: "n", header: "Trades", numeric: true, cell: (m) => m.trades },
-    { key: "pnl", header: "P&L", numeric: true, cell: (m) => <span className={upDown(m.pnl)}>{money(m.pnl, cur)}</span> },
     { key: "win", header: "Win rate", numeric: true, cell: (m) => (m.win == null ? "–" : `${m.win}%`) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (m) => (m.buy_hold == null ? "–" : <span className={upDown(m.buy_hold)}>{pct(m.buy_hold)}</span>) },
   ];

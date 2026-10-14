@@ -34,13 +34,13 @@ def test_the_pages_sitemap_lists_every_public_page_with_the_day_it_changed(w):
 
 
 def test_stratlabs_own_strategies_are_listed_and_a_users_are_not(w):
-    mine = {"id": "seed-ema-nifty50", "official": True, "owner": library.OFFICIAL_OWNER, "published_at": "2026-10-02T04:00:00+00:00"}
+    mine = {"id": "seed-ema-20-50-in", "official": True, "owner": library.OFFICIAL_OWNER, "published_at": "2026-10-02T04:00:00+00:00"}
     theirs = {"id": "user-made-1", "official": False, "owner": "user-9", "published_at": "2026-10-03T04:00:00+00:00"}
     hidden = {"id": "seed-hidden-nifty50", "official": True, "owner": library.OFFICIAL_OWNER, "hidden": True, "published_at": "2026-10-04T04:00:00+00:00"}
     for e in (mine, theirs, hidden):
         library.save(e)
     got = rows(w["client"].get("/sitemaps/pages.xml").content)
-    assert got["https://stratlab.studio/library/seed-ema-nifty50"] == "2026-10-02"
+    assert got["https://stratlab.studio/library/seed-ema-20-50-in"] == "2026-10-02"
     assert not any("user-made-1" in u or "seed-hidden" in u for u in got)
 
 
