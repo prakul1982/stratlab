@@ -203,7 +203,7 @@ export function MarketAuditPanel({ region = "IN" }: { region?: Region }) {
           {m.new_listings.length > 0 && (
             <p className="k-small">New listings: {m.new_listings.slice(0, 12).map((n, i) => (
               <span key={n.symbol}>{i ? ", " : ""}<Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(n.symbol))}/deep`}>{n.symbol}</Link>
-                <span className="k-muted">{n.listed ? ` (${n.listed})` : ""}{n.checked ? "" : " · queued"}</span></span>))}</p>
+                <span className="k-muted">{n.listed ? ` (${dayMonth(n.listed)})` : ""}{n.checked ? "" : " · queued"}</span></span>))}</p>
           )}
           {sum && sum.companies > 0 && (
             <>
@@ -253,7 +253,7 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
   ];
   return (
     <>
-      {areas.length > 0 && <DataTable label="Findings by area" rows={areas} rowKey={([a]) => a} columns={cols} />}
+      {areas.length > 0 && <DataTable label={onRecheck ? "Whole-market findings by area" : "Data audit findings by area"} rows={areas} rowKey={([a]) => a} columns={cols} />}
       <div className="k-toolbar">
         <ChipBar label="Show" value={show} onChange={(v) => setShow(v as Level | "all")}
           options={(["mismatch", "error", "gap", "fact", "pending", "all"] as const).map((k) => ({ value: k, label: SHOWS[k] }))} />

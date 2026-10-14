@@ -449,7 +449,7 @@ export function ExperimentPage() {
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
-  if (!e) return <div className="k-page"><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
+  if (!e) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
   return <ExperimentView nb={nb} e={e} />;
 }
 
