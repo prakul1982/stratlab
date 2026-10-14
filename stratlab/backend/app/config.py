@@ -83,8 +83,6 @@ class Settings:
     ZAI_MODEL = _env("ZAI_MODEL", "auto")
     HF_TOKEN = _env("HF_TOKEN")                                     # Hugging Face: small free monthly credit
     HUGGINGFACE_MODEL = _env("HUGGINGFACE_MODEL", "auto")
-    AI_GATEWAY_API_KEY = _env("AI_GATEWAY_API_KEY")                 # Vercel AI Gateway: $5 free every 30 days
-    AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "auto")
     NVIDIA_API_KEY = _env("NVIDIA_API_KEY")                         # NVIDIA API catalog: free for development (asked late)
     NVIDIA_MODEL = _env("NVIDIA_MODEL", "auto")
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")

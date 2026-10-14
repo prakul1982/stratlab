@@ -98,15 +98,6 @@ PROVIDERS: dict[str, Provider] = {p.name: p for p in [
              "Free: $0.10 of credit a month (about a hundred short answers); $2 a month with a PRO account.", "ok",
              ("meta-llama/Llama-3.3-70B-Instruct", "openai/gpt-oss-120b", "Qwen/Qwen3-235B-A22B-Instruct-2507", "deepseek-ai/DeepSeek-V3.1"),
              ctx=32000, probe_max=2, probe_every_h=72, prior=(10, 10, 10)),   # the credit is tiny: measure rarely
-    Provider("vercel", "Vercel AI Gateway", "openai", "https://ai-gateway.vercel.sh/v1", "AI_GATEWAY_API_KEY",
-             "https://vercel.com/dashboard/ai-gateway",
-             "Free: $5 of credit every 30 days, on a set of free-tier models. Buying credit ends the free monthly $5.", "prototype",
-             ("openai/gpt-oss-120b", "google/gemini-2.5-flash", "meta/llama-4-maverick"),
-             # only the cheap open and Flash models: the $5 should last the month
-             allow=r"gpt-oss|gemini-[\d.]+-flash|llama-4|gemma|glm-[\d.]+-flash|qwen[\d.-]*-?flash|nemotron|deepseek-v3",
-             ctx=128000, probe_max=4, prior=(19, 19, 19),
-             note="Fine on a Vercel Pro team; Vercel's Hobby plan is for personal, non-commercial use, so it's asked after "
-                  "the production-ready providers."),
     Provider("nvidia", "NVIDIA API catalog", "openai", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY", "https://build.nvidia.com/settings/api-keys",
              "Free for development: about 40 requests a minute.", "prototype",
              ("meta/llama-3.3-70b-instruct", "openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
