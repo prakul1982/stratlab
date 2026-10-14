@@ -473,6 +473,26 @@ def test_alert_fires_once_on_a_cross_and_keeps_watching(mem, monkeypatch):
     assert len(sent) == 1
 
 
+def test_a_crossing_while_the_user_is_over_the_message_limit_waits_for_the_next_message(mem, monkeypatch):
+    from app import stock_alerts
+    monkeypatch.setattr(db, "all_settings_with_prefix", lambda p: [(k, v) for k, v in mem.items() if k.startswith(p)])
+    share_day("nifty500", "2026-09-29", 5)
+    breadth.add_alert("u1", "nifty500", 60)
+    now = datetime(2026, 9, 30, 13, 30, tzinfo=timezone.utc)
+    used = [(now - timedelta(minutes=10 + i)).isoformat() for i in range(stock_alerts.PER_HOUR)]
+    mem["stockalerts:u1"] = json.dumps({"items": [], "sent": used, "pending": []})        # five messages this hour already
+    sent = []
+    send = lambda profile, subject, text: sent.append((subject, text)) or ["phone"]     # noqa: E731
+    prof = lambda uid: {"id": uid}                              # noqa: E731
+    share_day("nifty500", "2026-09-30", 7)
+    assert breadth.check_alerts(["nifty500"], now, prof, lambda p: True, send) == 0 and sent == []
+    assert breadth.alerts_of("u1")[0]["side"] == "above"        # the side moved on, so the crossing is not seen again…
+    assert [t for t, _ in stock_alerts._read("u1")["pending"]] == [breadth.alert_text(breadth.alerts_of("u1")[0], "2026-09-30", 70.0)]   # …but its text waits
+    later = now + timedelta(hours=1, minutes=1)
+    texts = stock_alerts.apply("u1", {}, later)                  # the stock-alert check, an hour on
+    assert len(texts) == 1 and "crossing above 60%" in texts[0]
+
+
 def test_alert_rules(mem):
     with pytest.raises(breadth.AlertError):
         breadth.add_alert("u1", "nope", 50)

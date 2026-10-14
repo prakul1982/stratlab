@@ -154,14 +154,15 @@ ALERT_OFF = "alert-email-off:"          # app_settings key prefix: set while the
 
 
 def alert_emails_on(uid: str | None) -> bool:
-    """False once the person pressed Unsubscribe on an alert email; saving an email address in Settings turns it back on."""
+    """False once the person pressed Unsubscribe on an alert email; saving an email address in Settings turns it back on.
+    When the setting can't be read, False: an email isn't sent to someone who may have unsubscribed."""
     if not uid:
         return True
     from . import db
     try:
         return not db.get_setting(ALERT_OFF + uid)
     except Exception:
-        return True
+        return False
 
 
 def set_alert_emails(uid: str, on: bool) -> None:

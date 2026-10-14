@@ -815,6 +815,7 @@ def check_alerts(groups: list[str], now: datetime, profile_fn, allowed_fn, send=
             if not profile or not allowed_fn(profile):
                 continue
             if not stock_alerts.may_send(stock_alerts._read(uid)["sent"], now):
+                stock_alerts.hold(uid, texts, now)          # over the limits: goes out with the next message (the side has moved on)
                 continue
             if stock_alerts.flush(uid, profile, texts, now, **({"send": send} if send else {})):
                 sent += 1

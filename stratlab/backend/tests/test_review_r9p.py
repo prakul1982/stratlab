@@ -63,6 +63,7 @@ def test_a_purely_transactional_email_sends_no_unsubscribe_header(brevo):
 
 def test_the_weekly_summary_and_the_test_alert_go_out_with_the_header(brevo, monkeypatch):
     monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
+    monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: True)            # (no database here: an unreadable setting now reads as off)
     profile = {"id": "u-owner", "alert_email": "owner@example.com"}
     sent, failed = alerts.test(profile)                                            # "Settings → Notifications → Send a test"
     assert sent == ["email"] and not failed

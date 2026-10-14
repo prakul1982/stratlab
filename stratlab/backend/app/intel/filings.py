@@ -1588,17 +1588,27 @@ class Alerts:
                 if not symbols or not self.can_alert(profile):
                     continue
                 seen, newest, new = sub.get("seen") or "", sub.get("seen") or "", []
+                by = {k: v for k, v in (sub.get("seen_by") or {}).items() if k in symbols and isinstance(v, str)}
+                failed = False
                 for sym in symbols:
                     try:
                         items = self.feed.announcements(sym)
                     except SourceError:
+                        failed = True
                         continue
+                    floor = by.get(sym, seen)       # a stock the exchange didn't answer for stays at where it was
                     for i in items:
-                        if i["at"] > seen and i["severity"] != "info":
+                        if i["at"] > floor and i["severity"] != "info":
                             new.append((sym, i))
                         newest = max(newest, i["at"])
+                        by[sym] = max(by.get(sym, seen), i["at"])
                 run.beat()
-                sub["seen"] = newest               # saved before the alert: a kill in between drops it, never repeats it
+                if failed:                          # moving "seen" on would drop the failed stock's flags: keep it per stock until all answer
+                    sub["seen_by"] = by
+                else:
+                    sub["seen"] = newest
+                    sub.pop("seen_by", None)
+                # saved before the alert: a kill in between drops it, never repeats it
                 db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
                 if new:
                     new.sort(key=lambda x: (x[1]["severity"] != "red", x[1]["at"]))

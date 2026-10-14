@@ -332,6 +332,17 @@ def test_reminders_go_once_to_plans_that_have_them(w, paid):
     assert len(M.prefs("u-basic")["sent"]) == 1
 
 
+def test_a_reminder_that_reached_no_channel_is_unsent_so_the_next_run_tries_again(w, paid):
+    M.refresh(FakeWeb(), TODAY)
+    M.save_prefs("u-basic", {**M.prefs("u-basic"), "remind": True, "kinds": ["rbi"], "days": 2})
+    reached = []
+    send = lambda p, subject, text: reached                    # noqa: E731
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 0 and M.prefs("u-basic")["sent"] == []     # no channel: nothing sent
+    reached.append("push")
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 1 and len(M.prefs("u-basic")["sent"]) == 1
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 0                                           # and then once
+
+
 def test_events_go_into_the_money_calendar_only_when_asked(w):
     c = w["client"]
     M.refresh(FakeWeb(), TODAY)

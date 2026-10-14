@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, supabase } from "../lib/api";
+import { leavePush } from "../lib/pwa";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
@@ -57,7 +58,7 @@ export function AccountPage() {
   };
   const everywhere = async () => {
     setBusy(true);
-    try { await supabase.auth.signOut({ scope: "global" }); } catch (e) { fail(e); setBusy(false); }
+    try { await leavePush(); await supabase.auth.signOut({ scope: "global" }); } catch (e) { fail(e); setBusy(false); }
   };
 
   const usage: [string, string][] = [
@@ -113,7 +114,7 @@ export function AccountPage() {
           StratLab keeps you signed in on each device until you sign out.
         </p>
         <div className="k-row">
-          <button type="button" className="btn outline" onClick={() => void supabase.auth.signOut()}>Sign out</button>
+          <button type="button" className="btn outline" onClick={() => void leavePush().then(() => supabase.auth.signOut())}>Sign out</button>
           <button type="button" className="btn quiet" onClick={() => setAsk("everywhere")}>Sign out everywhere</button>
         </div>
       </Card>

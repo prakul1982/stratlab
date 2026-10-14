@@ -171,6 +171,46 @@ def test_a_failed_send_is_tried_again(w, monkeypatch):
     assert len(got) == 1
 
 
+def test_a_failing_tip_is_given_up_after_three_attempts(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    tries = []
+
+    def down(*a, **k):
+        tries.append(1)
+        raise RuntimeError("Brevo refused the email (500).")
+    monkeypatch.setattr(alerts, "send_email", down)
+    p = user()
+    for h in range(6):
+        assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=h))
+    assert len(tries) == lifecycle.TIP_TRIES == 3
+    assert "welcome" not in lifecycle.sent(p["id"])                                    # never sent, and no longer tried
+    assert lifecycle.due(p, NOW + timedelta(hours=6), lifecycle.sent(p["id"]), None, None) == []
+    assert lifecycle.sweep(NOW + timedelta(hours=7)) == 0 and len(tries) == 3
+    monkeypatch.setattr(alerts, "send_email", lambda *a, **k: tries.append("late"))
+    assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=8)) and "late" not in tries
+
+
+def test_a_tip_that_fails_once_still_goes_on_the_next_try_and_counts_no_more(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    calls = []
+    def flaky(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("timed out")
+    monkeypatch.setattr(alerts, "send_email", flaky)
+    p = user()
+    assert not lifecycle.send(p, "welcome", now=NOW) and lifecycle.send(p, "welcome", now=NOW + timedelta(hours=1))
+    assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=2)) and len(calls) == 2
+
+
+def test_the_whats_new_note_has_a_window_after_14_quiet_days(w):
+    p = user(created=NOW - timedelta(days=200))
+    today = NOW.astimezone(IST).date()
+    quiet = lambda n: kinds(lifecycle.due(p, NOW, {}, (today - timedelta(days=n)).isoformat(), None))
+    assert quiet(14) == ["inactive"] and quiet(lifecycle.INACTIVE_UNTIL - 1) == ["inactive"]
+    assert quiet(lifecycle.INACTIVE_UNTIL) == [] and quiet(200) == []                  # long gone: not sent as news now
+
+
 def test_a_failed_receipt_or_plan_note_is_retried_by_the_sweep(w, monkeypatch):
     monkeypatch.setattr(alerts, "email_ready", lambda: True)
     got = []

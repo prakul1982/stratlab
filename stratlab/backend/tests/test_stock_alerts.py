@@ -315,6 +315,7 @@ def test_email_goes_only_to_a_confirmed_address(monkeypatch):
     monkeypatch.setattr(alerts, "send_email", lambda to, subject, text, html=None, headers=None: mail.append((to, text)))
     monkeypatch.setattr(alerts, "jobs_for", lambda p, s, t, url="/paper": [("push", lambda: phone.append(t)), ("email", lambda: mail.append("raw"))])
     p = {"id": "u1", "email": "me@example.com"}
+    monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: True)         # (an unreadable setting now counts as off: tests below)
     monkeypatch.setattr(alerts, "email_confirmed", lambda prof: False)
     assert sa.deliver(p, "s", "RELIANCE crossed above ₹3,000 (now ₹3,012)") == ["push"] and mail == []
     monkeypatch.setattr(alerts, "email_confirmed", lambda prof: True)
@@ -390,10 +391,10 @@ def test_a_failed_delivery_keeps_the_text_and_does_not_use_the_quota(store):
     sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
     a = sa.items("u1")[0]
     texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a.get("rev"))}, IN_OPEN)
-    assert texts and sa._read("u1")["pending"] == []
+    assert texts and [t for t, _ in sa._read("u1")["pending"]] == texts      # they leave the list only once sent
     assert sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda *x: []) is False       # no channel reached
     row = sa._read("u1")
-    assert row["pending"] == texts and row["sent"] == []
+    assert [t for t, _ in row["pending"]] == texts and row["sent"] == []
     assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=30)) == []                       # not retried within the hour
     again = sa.apply("u1", {}, IN_OPEN + timedelta(hours=1, minutes=1))
     assert again == texts
@@ -407,7 +408,7 @@ def test_an_error_while_sending_keeps_the_text(store):
         raise RuntimeError("down")
     assert sa.flush("u1", {"id": "u1"}, ["x crossed"], IN_OPEN, send=boom) is False
     row = sa._read("u1")
-    assert row["pending"] == ["x crossed"] and row["sent"] == []
+    assert [t for t, _ in row["pending"]] == ["x crossed"] and row["sent"] == []
 
 
 def test_a_push_that_reached_no_device_is_not_a_delivery(monkeypatch):
@@ -415,3 +416,86 @@ def test_a_push_that_reached_no_device_is_not_a_delivery(monkeypatch):
     assert sa.deliver({"id": "u1"}, "s", "x") == []
     monkeypatch.setattr(alerts, "jobs_for", lambda p, s, t, url="/paper": [("push", lambda: 2)])
     assert sa.deliver({"id": "u1"}, "s", "x") == ["push"]
+
+
+# ---------- what waits, what is read each minute, and what an unsubscribed user sees ----------
+def test_alert_emails_off_is_read_as_off_when_the_setting_cant_be_read(monkeypatch):
+    def down(key):
+        raise RuntimeError("database down")
+    monkeypatch.setattr(db, "get_setting", down)
+    assert alerts.alert_emails_on("u1") is False and alerts.alert_emails_on(None) is True
+
+
+def test_channels_do_not_list_email_after_unsubscribing(monkeypatch):
+    monkeypatch.setattr(alerts, "jobs_for", lambda p, s, t, url="/paper": [("push", lambda: 1), ("email", lambda: 1)])
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    monkeypatch.setattr(alerts, "email_confirmed", lambda prof: True)
+    p = {"id": "u1", "email": "me@example.com"}
+    monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: True)
+    assert sa.channels(p) == ["push", "email"]
+    monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: False)
+    assert sa.channels(p) == ["push"]
+
+
+def test_texts_stay_waiting_until_a_send_succeeds_so_a_crash_loses_none(store):
+    sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
+    a = sa.items("u1")[0]
+    texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a["rev"], sa._seen(a))}, IN_OPEN)
+    assert len(texts) == 1                                                  # …and the process dies here, before flush
+    assert [t for t, _ in sa._read("u1")["pending"]] == texts
+    assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=1)) == []         # a send is in flight: not handed out twice
+    later = sa.apply("u1", {}, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1))
+    assert later == texts                                                   # the restart finds them
+    assert sa.flush("u1", {"id": "u1"}, later, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1), send=lambda *x: ["push"])
+    row = sa._read("u1")
+    assert row["pending"] == [] and "claim" not in row and len(row["sent"]) == 1
+
+
+def test_waiting_texts_carry_their_time_and_old_ones_are_dropped(store):
+    old = (IN_OPEN - timedelta(hours=25)).isoformat()
+    fresh = (IN_OPEN - timedelta(hours=2)).isoformat()
+    store["stockalerts:u1"] = json.dumps({"items": [], "sent": [], "pending": [["stale", old], ["recent", fresh], "plain string"]})
+    texts = sa.apply("u1", {}, IN_OPEN)
+    assert texts == ["recent", "plain string"]                              # a stored plain string is kept, dated from now
+    row = sa._read("u1")
+    assert row["pending"] == [["recent", fresh], ["plain string", IN_OPEN.isoformat()]]
+
+
+def test_the_tick_reads_profiles_and_rows_only_for_users_with_something_to_do(store):
+    m, sent, read = Market(), [], []
+    m.prices["TCS"] = 100
+    sa.create("quiet", {"region": "US", "symbol": "AAPL", "kind": "price", "op": "above", "value": 1}, 5)     # US is shut at IN_OPEN
+    sa.create("event", {"region": "IN", "symbol": "TCS", "kind": "insider"}, 5)                                # checked in the evening
+    sa.create("busy", {"region": "IN", "symbol": "TCS", "kind": "price", "op": "above", "value": 150}, 5, {"price": 100})
+    store["stockalerts:waiting"] = json.dumps({"items": [], "sent": [], "pending": [["RELIANCE crossed", IN_OPEN.isoformat()]]})
+    job = sa.Checker(m.quotes, lambda r, s: [], lambda p: 5, send=lambda p, subject, text: sent.append(p["id"]) or ["push"],
+                     profile=lambda uid: read.append(uid) or {"id": uid})
+    applied = []
+    real = sa.apply
+    sa.apply = lambda uid, changes, now: applied.append(uid) or real(uid, changes, now)
+    try:
+        job.tick(IN_OPEN)
+    finally:
+        sa.apply = real
+    assert sorted(read) == ["busy", "waiting"]                              # not the user whose alerts are for a closed market or a later job
+    assert applied == ["waiting"]                                           # "busy" fired nothing and changed no state
+    assert sent == ["waiting"]
+
+
+def test_a_user_whose_profile_cant_be_read_keeps_the_waiting_texts(store):
+    store["stockalerts:u1"] = json.dumps({"items": [], "sent": [], "pending": [["RELIANCE crossed", IN_OPEN.isoformat()]]})
+    sent = []
+    def down(uid):
+        raise RuntimeError("profiles down")
+    job = sa.Checker(Market().quotes, lambda r, s: [], lambda p: 5, send=lambda *a: sent.append(a) or ["push"], profile=down)
+    job.tick(IN_OPEN)
+    assert sent == [] and [t for t, _ in sa._read("u1")["pending"]] == ["RELIANCE crossed"] and "claim" not in sa._read("u1")
+
+
+def test_a_disclosure_filed_before_the_alert_was_set_is_judged_on_the_india_date():
+    # set at 00:30 on 2 Oct in India (19:00 on 1 Oct UTC): a filing dated 1 Oct came before it
+    a = {**alert(kind="bizupdate"), "created_at": "2026-10-01T19:00:00+00:00"}
+    rows = [{"id": "old", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-01", "text": "a"},
+            {"id": "new", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-02", "text": "b"}]
+    text, st = sa.evaluate_event(a, rows)
+    assert st["seen"] == ["new"] and text

@@ -168,6 +168,25 @@ def test_daily_alert_sends_only_new_flags_once(monkeypatch, store):
     assert len(sent) == 1                           # nothing new since
 
 
+def test_a_stock_the_exchange_did_not_answer_for_keeps_its_flags_for_the_next_run(monkeypatch, store):
+    store["watchlist:u1"] = json.dumps({"items": [{"region": "IN", "symbol": "ABC"}, {"region": "IN", "symbol": "XYZ"}]})
+    store[F.ALERT_KEY + "u1"] = json.dumps({"uid": "u1", "on": True, "seen": "2026-09-20T10:00"})
+    rows = {"ABC": [row("Creation of pledge by promoter", when="2026-09-21 10:00:00", seq="a")]}      # XYZ: the exchange fails
+    sent = []
+    job = F.Alerts(FakeFeed(rows), notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True)
+    evening = datetime(2026, 9, 22, 20, 45, tzinfo=F.IST)
+    job.tick(evening)
+    assert len(sent) == 1 and "ABC" in sent[0]
+    saved = json.loads(store[F.ALERT_KEY + "u1"])
+    assert saved["seen"] == "2026-09-20T10:00"                       # not moved on to ABC's newest time
+    rows["XYZ"] = [{**row("Qualified Institutions Placement", when="2026-09-21 09:00:00", seq="x"), "symbol": "XYZ"}]    # filed before ABC's, shown now
+    store.pop("filingalert-day")
+    job.last_day = None
+    job.tick(evening)
+    assert len(sent) == 2 and "XYZ" in sent[1] and "ABC" not in sent[1]      # XYZ's flag is sent, ABC's is not repeated
+    assert json.loads(store[F.ALERT_KEY + "u1"])["seen"] == "2026-09-21T10:00" and "seen_by" not in json.loads(store[F.ALERT_KEY + "u1"])
+
+
 def test_a_filing_alert_is_not_repeated_when_a_kill_comes_after_the_send(monkeypatch, store):
     from datetime import timedelta
     rows = {"ABC": [row("Qualified Institutions Placement", when=recent(40), seq="old")]}
