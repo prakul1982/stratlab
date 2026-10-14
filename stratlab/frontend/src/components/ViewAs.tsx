@@ -24,6 +24,7 @@ export function ViewAsCard() {
       <CardHead title="View as a plan"
         info="See the whole app as a Free, Basic or Pro user does: their locks, upgrade prompts and monthly limits, with the launch offer left out. Only you see it. Your real plan, billing and Admin are unchanged, and it stays on until you turn it off." />
       <Seg label="View as" value={planToChoice(viewAs)} options={VIEW_AS_CHOICES} onChange={(v) => { void setViewAs(choiceToPlan(v)); }} />
+      <p className="k-note">Shows the plan's limits as they'll be after the launch offer ends.</p>
     </Card>
   );
 }

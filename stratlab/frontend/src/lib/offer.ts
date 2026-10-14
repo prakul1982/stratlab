@@ -3,7 +3,7 @@
  * the plan buttons all word it here, so they can't say different things (early access on one page, "Start with Pro" on
  * another). Pure functions, no network: unit/offer.test.mjs checks them. */
 import type { Offer } from "./types";
-import { fmtDate } from "./format";
+import { IST } from "./format";
 
 export type PlanId = "free" | "basic" | "pro";
 export type OfferMode = Offer["mode"] | "unknown";
@@ -11,6 +11,14 @@ export type OfferMode = Offer["mode"] | "unknown";
 /** The mode, or "unknown" while (or if) the offer couldn't be read: then nothing is promised either way. */
 export function offerMode(o: Offer | null | undefined): OfferMode {
   return o && (o.mode === "early" || o.mode === "promo" || o.mode === "paid") ? o.mode : "unknown";
+}
+
+/** The stored end instant in India time, as the emails say it: "Thu 22 Oct at 5:20 pm IST". */
+export function endsAt(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-GB", { timeZone: IST, weekday: "short", day: "numeric", month: "short" }).replace(",", "").replace(/\bSept\b/, "Sep");
+  const time = d.toLocaleTimeString("en-GB", { timeZone: IST, hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s?([ap]m)/i, (_, m) => ` ${m.toLowerCase()}`);
+  return `${day} at ${time} IST`;
 }
 
 /** The launch offer's end, while it runs. */
@@ -64,10 +72,12 @@ export function listing(items: string[]): string {
 export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, unknown>, where: "landing" | "app", email = EARLY_ACCESS_EMAIL): { title: string; lede: string } {
   const mode = offerMode(o);
   if (mode === "promo") {
-    const day = fmtDate(o!.promo_until!, { year: false });
+    const day = endsAt(o!.promo_until!);
     return {
       title: where === "landing" ? `Every Pro feature, free until ${day}.` : "Plans",
-      lede: `Launch offer: every Pro feature is free for everyone until ${day}. After that, each plan gets what its card lists.`
+      // the Plans page shows the countdown box with the end, so its line doesn't state the offer a second time
+      lede: (where === "landing" ? `Launch offer: every Pro feature is free for everyone until ${day}. After that, each plan gets what its card lists.`
+        : "When the launch offer ends, each plan gets what its card lists.")
         + (o!.payments ? "" : ` Paid plans aren't on sale yet; ask us at ${email} for early access.`),
     };
   }

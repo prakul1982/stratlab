@@ -18,9 +18,9 @@
     return true;
   }
 
-  function show() {
+  function show(force) {
     var root = document.getElementById("root");
-    if (!root || !root.querySelector("[data-boot], .boot")) return;       // once the app has drawn, its own error screen does this
+    if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;       // once the app has drawn, its own error screen does this
     root.textContent = "";
     var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
     var box = document.createElement("div");
@@ -74,6 +74,15 @@
     var url = String(t.src || t.href || "");
     if (/\/assets\//.test(url) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) recover();
   }, true);
+
+  // the built stylesheet downloaded but did not apply (src/styles.css sets --css-ok on :root): the app would show as plain,
+  // unstyled text, so say so with the reload button instead. Only where the page links a built stylesheet.
+  window.addEventListener("load", function () {
+    try {
+      if (!document.querySelector('link[rel="stylesheet"][href*="/assets/"]')) return;
+      if (getComputedStyle(document.documentElement).getPropertyValue("--css-ok").trim() !== "1") show(true);
+    } catch (e) { /* nothing to check */ }
+  });
 
   // the page is still the plain start-up text after a long wait
   setTimeout(function () {

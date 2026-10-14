@@ -137,6 +137,12 @@ def _last_day(end: datetime) -> date:
     return (end - timedelta(seconds=1)).astimezone(IST).date()
 
 
+def _end_text(end: datetime) -> str:
+    """An instant in India time, as the pages say it: Thu 22 Oct at 5:20 pm IST."""
+    t = end.astimezone(IST)
+    return f"{t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
+
+
 def _url(path: str) -> str:
     return kit.site(path)
 
@@ -191,11 +197,10 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             "After that, the Basic or Pro plan keeps paper trading going. Your notebooks and backtests stay either way."],
             ("See plans", "/plans"), label="Your trial")
     if kind in ("promo_before", "promo_end"):
-        last = ctx.get("last_day") or date.today()
         when = "tomorrow" if kind == "promo_before" else "today"
+        end = ctx.get("end") or datetime.now(timezone.utc)
         return _compose(f"The launch offer ends {when}", [
-            f"Every Pro feature has been free for everyone during the launch offer. It ends at the end of {_day(last)} "
-            "(India time).",
+            f"Every Pro feature has been free for everyone during the launch offer. It ends on {_end_text(end)}.",
             "After that, the Free plan's limits apply again unless you choose a plan. Your notebooks, backtests and "
             "watchlist stay either way."], ("See plans", "/plans"), label="Launch offer")
     if kind == "inactive":
@@ -295,9 +300,9 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     now = _now(now)
     tomorrow = now.astimezone(IST).date() + timedelta(days=1)
     if kind in ("trial_before", "promo_before"):
-        return {"last_day": tomorrow}
+        return {"last_day": tomorrow, "end": now + timedelta(days=1)}
     if kind in ("trial_end", "promo_end"):
-        return {"last_day": now.astimezone(IST).date()}
+        return {"last_day": now.astimezone(IST).date(), "end": now + timedelta(hours=3)}
     if kind == "receipt":
         return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":
@@ -444,7 +449,7 @@ def due(profile: dict, now: datetime, record: dict, seen_day: str | None, promo_
         last = _last_day(promo_end)
         for kind, day in (("promo_end", last), ("promo_before", last - timedelta(days=1))):
             if today == day:                       # one per offer: a later offer can remind again
-                out[kind] = (kind, f"{kind}:{last.isoformat()}", {"last_day": last})
+                out[kind] = (kind, f"{kind}:{last.isoformat()}", {"last_day": last, "end": promo_end})
     try:
         age = now - _dt(profile["created_at"])
     except (KeyError, TypeError, ValueError):
