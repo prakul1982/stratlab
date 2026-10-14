@@ -71,15 +71,44 @@ def analyse(bars: list[dict]) -> dict | None:
 RANK = {"fresh": 0, "st_s2": 1, "stage2": 2, None: 3}
 
 
+SETTLED_MARKETS = ("US",)  # India's daily candles take the official close in the broker's own cache (kite_service, R8B-001)
+
+
+def settled_at(market: str, now: datetime | None = None) -> float | None:
+    """When the market's latest close settled (its close plus the public pages' settle step), as a timestamp; None for a
+    market whose candles aren't held to it here. Candles read before it may carry closing prints still settling."""
+    if market not in SETTLED_MARKETS:
+        return None
+    try:
+        from .stock_pages import last_close, settle
+        _, at = last_close(market, now)
+        return at.timestamp() + settle(market)
+    except Exception:                     # no calendar: the cache's own lifetime decides
+        return None
+
+
 def _bars(registry, iid: str) -> list[dict]:
+    """A stock's daily candles, kept for 15 minutes; a copy read before its market's close settled is read again once it
+    has (R13-005: the US large-cap scan kept NVDA at the provisional $229.48 for half an hour after the 16:00 close, against
+    the final $229.28), so the scans, the brief built from them and the company pages say the same close."""
+    market = iid.split(":", 1)[0] if ":" in iid else "IN"
+    settled = settled_at(market)
     hit = _cache.get(iid)
     if hit is not None:
-        return hit
+        at, bars = hit if isinstance(hit, tuple) else (time.time(), hit)
+        if settled is None or at >= settled or time.time() < settled:
+            return bars
     prov, inst = registry.resolve(iid)
     if not prov or not inst:
         raise LookupError("not found")
-    bars = prov.history(inst, "1d", DAYS)
-    _cache.set(iid, bars, 900)
+    if settled is not None and time.time() >= settled:
+        try:                              # the source's own copy too must be from after the settle point
+            bars = prov.history(inst, "1d", DAYS, ttl=max(60.0, time.time() - settled))
+        except TypeError:                 # a source without its own cache control
+            bars = prov.history(inst, "1d", DAYS)
+    else:
+        bars = prov.history(inst, "1d", DAYS)
+    _cache.set(iid, (time.time(), bars), 900)
     return bars
 
 

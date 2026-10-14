@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { asOf, marketTz, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { dayName, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
+import { dayName, issueStamp, issueTab, issueToShow, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
 
 type Tab = "IN" | "US" | "mine";
@@ -21,7 +21,9 @@ export function NewsPage() {
   const tab: Tab = isTab(fromUrl) ? fromUrl : isTab(saved) ? saved : "IN";
   const picked = params.get("issue");
 
-  const [rows, setRows] = useState<IssueRow[] | null>(null);
+  // the list with the tab it is of: a list still on screen from the tab before is never taken for this tab's (R13-004)
+  const [list, setList] = useState<{ tab: Tab; rows: IssueRow[] } | null>(null);
+  const rows = list && list.tab === tab ? list.rows : null;
   const [listError, setListError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
 
@@ -35,15 +37,21 @@ export function NewsPage() {
 
   useEffect(() => {
     let live = true;
-    setRows(null); setListError(null);
+    setList(null); setListError(null);
     api<{ issues?: IssueRow[] }>(listPath(tab))
-      .then((r) => { if (live) setRows(Array.isArray(r?.issues) ? r.issues : []); })
-      .catch((e: ApiError) => { if (!live) return; if (e.status === 404) setRows([]); else setListError(e.message || "Something went wrong."); });
+      .then((r) => { if (live) setList({ tab, rows: Array.isArray(r?.issues) ? r.issues : [] }); })
+      .catch((e: ApiError) => { if (!live) return; if (e.status === 404) setList({ tab, rows: [] }); else setListError(e.message || "Something went wrong."); });
     return () => { live = false; };
   }, [tab, tries]);
 
-  // on a wide screen there's room for both, so open the latest issue straight away
-  useEffect(() => { if (rows?.length && !picked && wide()) pick(rows[0].id, true); }, [rows, picked, pick]);
+  // the reading pane shows this tab's issue: the one picked when it is this tab's, else (on a wide screen, where there's room
+  // for both) the tab's latest, else none; never another tab's issue under this tab's heading (R13-004)
+  useEffect(() => {
+    if (!rows) return;
+    const show = issueToShow(tab, rows, picked, wide());
+    if (show !== picked) pick(show, true);
+  }, [rows, tab, picked, pick]);
+  const shown = picked && issueTab(picked) === tab ? picked : null;
 
   return (
     <div className="k-page">
@@ -59,10 +67,10 @@ export function NewsPage() {
         : !rows.length ? (
           <Card><EmptyState title="No briefs yet" action={{ label: "Brief emails", to: "/settings#newsletters" }}>The first one arrives after the next market close. The headlines on each company's page are separate: they come in through the day.</EmptyState></Card>
         ) : (
-          <div className={`news-grid${picked ? " reading" : ""}`}>
+          <div className={`news-grid${shown ? " reading" : ""}`}>
             <nav className="news-list inv-issues" aria-label="Issues">
               {rows.map((r) => (
-                <button key={r.id} className="news-pick" aria-current={picked === r.id} onClick={() => pick(r.id)}>
+                <button key={r.id} className="news-pick" aria-current={shown === r.id ? "true" : undefined} onClick={() => pick(r.id)}>
                   <span className="k-row">
                     <span className="k-eyebrow">{dayName(r.day)}</span>
                     {r.weekly && <Badge tone="ok" dot={false}>Weekly</Badge>}
@@ -73,9 +81,9 @@ export function NewsPage() {
               ))}
             </nav>
             <div className="k-stack">
-              {picked ? <>
+              {shown ? <>
                 <button className="btn quiet sm news-back k-btn-end" onClick={() => pick(null)}>← All issues</button>
-                <IssueView id={picked} />
+                <IssueView id={shown} />
               </> : <p className="k-muted news-hint">Pick an issue to read it.</p>}
             </div>
           </div>
@@ -109,7 +117,8 @@ function IssueView({ id }: { id: string }) {
             {issue.weekly && <Badge tone="ok" dot={false}>Weekly</Badge>}
           </span>
           <h2 className="k-card-title">{issue.subject}</h2>
-          {asOf(issue.at) && <span className="k-note">Prices and numbers as of {asOf(issue.at, { tz: marketTz(issue.region) })}</span>}
+          {(() => { const when = issueStamp(issue, asOf(issue.at) ? asOf(issue.at, { tz: marketTz(issue.region) }) : null);
+            return when && <span className="k-note" data-testid="news-stamp">Prices and numbers as of {when}</span>; })()}
           {issue.summary && <p className="k-lede">{issue.summary}</p>}
           {issue.ai_summary && <p data-testid="news-ai-summary">{issue.ai_summary}</p>}
         </div>

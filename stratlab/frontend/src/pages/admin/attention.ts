@@ -117,12 +117,19 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     // the holidays on file and the exchange's live list are two facts: with the daily read failing the light says both, so
     // it never reads "OK" beside "The exchange feed isn't answering" in Needs your attention (R12-010)
     const left = sv.calendar.days_left;
-    const down = (jobs ?? []).some((j) => j.id === "holidays" && j.state === "bad");
+    const down = (jobs ?? []).some(holidaysDown);
     const state: HealthState = left < 30 ? "bad" : left < 60 || down ? "warn" : "ok";
     out.push({ key: "cal", label: "Exchange holidays", to: "/admin/data", state,
       detail: down ? `Holidays on file for ${left} more days · live feed down` : `Known for ${left} more days` });
   }
   return out;
+}
+
+/** The exchange holidays read failing: a Problem from an older server, or the Check it is while the holidays on file still
+ * cover the weeks ahead (R13-012: "Problem, couldn't reach the exchange" with 83 days on file). Said once, in the
+ * Services light's words, never also among the feeds on Check. */
+export function holidaysDown(j: { id: string; state: string; error?: string | null }): boolean {
+  return j.id === "holidays" && (j.state === "bad" || (j.state === "warn" && !!j.error));
 }
 
 /** One service by its key, for the page that shows it as a row. */
@@ -156,14 +163,14 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   const pending = (reported?.entries ?? []).filter((r) => r.hidden_by !== "admin").length;
   if (pending) out.push({ text: `${pending} library entr${pending > 1 ? "ies were" : "y was"} reported by users.`, to: "/admin/quality", label: "Quality", bad: false });
   for (const j of jobs ?? []) {
-    if (j.state !== "bad") continue;
+    if (j.state !== "bad" && !holidaysDown(j)) continue;
     // the holidays read failing isn't holidays missing: said the way the Services light says it (R12-010)
     const text = j.id === "holidays" && s.cal ? `Exchange holidays: ${s.cal.detail.replace(/^Holidays/, "holidays")}. ${j.error}` : `${j.name}: ${j.error}`;
     out.push({ text, to: "/admin/data", label: "Data and jobs", bad: false });
   }
   // feeds on "Check": never run, or only partly read (R5O-016: seven sat on "Not run yet" without a word here). A job
   // switched off on purpose isn't listed.
-  const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off");
+  const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off" && !holidaysDown(j));
   if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
   if (s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });

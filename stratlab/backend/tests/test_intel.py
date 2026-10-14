@@ -126,7 +126,12 @@ def test_us_company_profile(research):
     assert c["market_cap"] == pytest.approx(4312000.5e6)
     groups = {g["title"]: {i["label"]: i for i in g["items"]} for g in c["metrics"]}
     assert groups["Valuation"]["P/E"]["value"] == 52.3 and groups["Growth"]["Revenue YoY"]["unit"] == "%±"
-    assert c["range52"] == {"low": 86.6, "high": 195.6}
+    # R13-008 changed this on purpose: the 52-week range is the year's daily candles' over exactly 365 days (the public
+    # page's rule), not the fundamentals source's 52WeekLow/52WeekHigh (86.6 to 195.6 here), whose window ran 367 days
+    from app import stock_pages
+    bars = stock_pages.closed_bars(research.yahoo.chart("NVDA", "1d", 400)["candles"], "US")
+    lo, hi = stock_pages.year_low_high(bars)
+    assert c["range52"] == {"low": lo, "high": hi} and lo is not None
     assert [p["y"] for p in c["trend"]["revenue"]] == ["FY22", "FY23", "FY24", "FY25"]
     assert c["earnings"][0]["period"] == "2024-10-31" and c["earnings"][-1]["surprise_pct"] == 3.9
     # the largest US companies in its sector first, then the source's narrow-industry peers (R5O-020)

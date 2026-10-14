@@ -126,7 +126,8 @@ def clean(req: dict) -> dict:
     region = str(req.get("region") or "").upper()
     if region not in REGIONS:
         raise AlertError("Alerts cover India (IN) and US stocks.")
-    sym = str(req.get("symbol") or "").strip().upper()
+    from .us_ticker import canon
+    sym = canon(region, req.get("symbol"))         # a US share class with a dash: BRK.B is BRK-B's alert (R13-001)
     if not sym or len(sym) > 20 or not all(ch.isalnum() or ch in "&-._" for ch in sym):
         raise AlertError("That doesn't look like a ticker.")
     kind = req.get("kind")

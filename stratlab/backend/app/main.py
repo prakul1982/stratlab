@@ -78,7 +78,7 @@ from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_confi
 from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
-from .options.data import OptionsData, freeze as freeze_limit
+from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
 from .options.engine import fill_price, from_last, tick_for
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
@@ -122,6 +122,8 @@ manager = LiveManager(kite, hub, markets, options_data)
 recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings.OPTION_SNAPSHOTS), settings.OPTION_SNAPSHOT_MINUTES,
                     prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
+# a currency option's underlying when its future has no live quote: the spot pair it settles against (R13-002)
+options_data.spot_source = lambda pair: research_hub.yahoo.meta(pair).get("price")
 
 
 def after_login() -> str:
@@ -1541,7 +1543,8 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     prov = markets.provider(req.region)
     if prov is None or not prov.ready():
         raise KiteNotReady("Market data for this market is offline right now.")
-    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members))
+    # an answer from before the close settled isn't kept past it (R13-005)
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region))
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
@@ -1554,6 +1557,11 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     out = dict(out)
     out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
     out["problems"] = [public_text(x) for x in out["problems"]]          # data-source errors can name the source
+    # the session the prices are of, and whether its closing prints are still settling: the page says "Last close, 9 Oct"
+    # or "Latest, closing prints still settling" over the prices, as the company page does (R13-005, R13-007)
+    days = sorted(str(r.get("t") or r.get("as_of") or "")[:10] for r in out["rows"] if r.get("t") or r.get("as_of"))
+    out["price_day"] = days[-1] if days else None
+    out["settling"] = bool(out["price_day"]) and stock_pages.settling(req.region) == out["price_day"]
     return ok({"name": name, "market": req.region, **out})
 
 
@@ -2142,7 +2150,8 @@ def use_deep(profile, kind: str, sym: str, region: str) -> None:
 
 def deep_symbol(symbol: str, region: str) -> str:
     if region != "IN":
-        return re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12]
+        from .us_ticker import canon_us        # one stored read for BRK.B and BRK-B (R13-001)
+        return canon_us(re.sub(r"[^A-Z0-9.\-]", "", symbol.upper())[:12])
     s = research_routes.symbol_of(symbol)
     # a BSE code and the company's BSE symbol are the same page (and share its stored reads)
     return bse_symbol(s) if s.isdigit() and len(s) == 6 else s
@@ -3381,10 +3390,14 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
     prov, inst = markets.resolve(ids[0])
     if not prov or not inst:
         return []
-    _, at = stock_pages.last_close(region)
+    day, at = stock_pages.last_close(region)
     age = time.time() - (at.timestamp() + stock_pages.settle(region))     # how old a copy may be and still be after it
     try:
         bars = prov.history(inst, "1d", scan.DAYS, ttl=max(60.0, age))
+        if bars and str(bars[-1].get("t") or "")[:10] < day.isoformat() and age > 60:
+            # a copy read after the settle point but before the source had this close: read again, or every retry of
+            # the page would find the same copy without it (R13-006: GLBE, IHG and four more on 8 Oct at 21:28 UTC)
+            bars = prov.history(inst, "1d", scan.DAYS, ttl=60.0)
     except TypeError:                     # a source without its own cache control: the scan's copy
         bars = scan._bars(markets, ids[0])
     if region == "IN" and bars:
@@ -3532,11 +3545,15 @@ def stock_page(region: str, symbol: str, ref: str | None = None):
         # crawlers, and never cached
         return HTMLResponse(stock_pages.busy_page(r, sym, co.get("name")), status_code=503,
                             headers={"Retry-After": "600", "Cache-Control": "no-store"})
-    if (stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}).get("not_company"):
+    stored = stock_page_store.mem.get(f"stocks:page:{r}:{sym}") or {}
+    if stored.get("not_company"):
         return HTMLResponse(page, status_code=404)             # a fund or a note: no company page (R6V-001)
     if r == "IN":                           # the surveillance lists change daily, so they're added as the page is sent
         page = stock_pages.with_surveillance(page, surveillance.flags_for(sym))
-    return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=SEO_HEADERS)
+    # kept by the site's cache no longer than the next close's settle point, and a minute while it waits for its new close,
+    # so no compressed copy outlives the refresh (R13-006)
+    headers = {"Cache-Control": stock_pages.cache_control(r, stored.get("facts") if isinstance(stored, dict) else None)}
+    return HTMLResponse(stock_pages.with_ref(page, ref) if ref else page, headers=headers)
 
 
 @app.get("/public/company/{region}/{symbol}")
@@ -3588,9 +3605,14 @@ stock_page_store.on_built = screens.note_page       # a page built is in the scr
 
 # after each close, how many stored pages' prices are re-read per run, and the pause between reads (seconds): India's
 # broker allows a few reads a second, the US prices fewer a minute, and people's own pages and backtests come first
-PRICE_REFRESH = {"IN": (300, 1.0), "US": (150, 2.0)}
+# R13-006: a quarter of the sampled US pages were still on the day before 88 minutes after the close: 150 pages a pass,
+# and a page whose new candle wasn't out yet waited a quarter of an hour for its next try, each try finding the copy of
+# its candles read at the first one. Now 300 a pass, a page not yet at the close is tried again within a few minutes on
+# a fresh read of its candles (stock_page_bars)
+PRICE_REFRESH = {"IN": (300, 1.0), "US": (300, 1.0)}
 PRICE_REFRESH_EVERY = 15 * 60
 PRICE_REFRESH_BACKLOG = 60                 # seconds between passes while a pass leaves pages behind
+PRICE_REFRESH_RETRY = 180                  # ...and while pages wait for a close their source hadn't yet
 price_refresh_status: dict = {"last_run": None, "IN": None, "US": None}
 
 
@@ -3612,8 +3634,18 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
 
 
 def refresh_backlog(status: dict) -> bool:
-    """Whether a pass left pages it had no room for (pages whose new close wasn't out yet wait for the usual pass)."""
+    """Whether a pass left pages it had no room for."""
     return any(isinstance(s, dict) and s.get("left") for s in (status.get(r) for r in PRICE_REFRESH))
+
+
+def refresh_wait(status: dict) -> int:
+    """Seconds to the next pass: a minute while pages wait for room, three while pages wait for a close their source
+    hadn't yet (R13-006: they waited a quarter of an hour), else the usual quarter of an hour."""
+    if refresh_backlog(status):
+        return PRICE_REFRESH_BACKLOG
+    if any(isinstance(s, dict) and s.get("retry") for s in (status.get(r) for r in PRICE_REFRESH)):
+        return PRICE_REFRESH_RETRY
+    return PRICE_REFRESH_EVERY
 
 
 def stock_price_refresh_job():
@@ -3627,7 +3659,7 @@ def stock_price_refresh_job():
             status = stock_price_refresh_once()
         except Exception as e:
             print("stock price refresh failed:", str(e)[:160])
-        time.sleep(PRICE_REFRESH_BACKLOG if refresh_backlog(status) else PRICE_REFRESH_EVERY)
+        time.sleep(refresh_wait(status))
 screen_job = screens.Job(lambda uid: db.get_profile(uid), lambda p: screens_limit(access_plan(p)))
 
 
@@ -4120,8 +4152,7 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
     c = options_data.contracts(s.exchange, s.underlying, s.expiry)
     if not c:
         err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")
-    sk = options_data.spot_key(s.exchange, s.underlying, c.expiry)
-    spot = (options_data.quotes([sk]).get(sk) or {}).get("ltp") if sk else None
+    spot, spot_q, spot_from = options_data.spot(s.exchange, s.underlying, c.expiry)
     if not spot:
         err(503, "no_spot", f"Couldn't get the {s.underlying} price just now.")
     atm = c.atm(spot)
@@ -4140,7 +4171,10 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
     q = options_data.quotes([l["key"] for l in legs if l["key"]])
     for l in legs:
         l["quote"] = q.get(l["key"]) if l["key"] else None
-        l["fill"] = fill_price(l["quote"], l["side"], s.costs.slippageTicks, tick_for(s.exchange))
+        # a currency option with no bid, no ask and nothing traded has no live quote: it isn't priced from a last trade
+        # that can be weeks old (R13-002: USDINR's ATM straddle "priced" at ₹1.10 and ₹1.09, OI 0, volume 0)
+        l["no_live"] = bool(l["key"]) and s.exchange == "CDS" and no_live_quote(l["quote"])
+        l["fill"] = None if l["no_live"] else fill_price(l["quote"], l["side"], s.costs.slippageTicks, tick_for(s.exchange))
         # no bid or ask on the side it fills on: priced from the last trade, which may be hours old (R11C-007)
         l["from_last"] = l["fill"] is not None and from_last(l["quote"], l["side"])
         l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
@@ -4158,12 +4192,16 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
               for l in legs if l["strike"] is not None and l["fill"] is not None]
     charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
                if units and priced and len(priced) == len(legs) else None)
+    no_live = sum(1 for l in legs if l.get("no_live"))
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
             "tick": tick_for(s.exchange), "from_last": sum(1 for l in legs if l.get("from_last")),
+            # the underlying's source: its own quote, or for a currency option with no live future the spot rate it settles at
+            "spot_from": spot_from, "no_live": no_live,
+            "no_live_text": NO_LIVE.format(name=s.underlying) if no_live else None,
             "impossible": impossible(priced) if priced and len(priced) == len(legs) else None,
             "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
-            "spot_ts": (options_data.quotes([sk]).get(sk) or {}).get("ts"),
+            "spot_ts": (spot_q or {}).get("ts"),
             **_preview_greeks(c, spot, legs, units)}
 
 
@@ -4196,8 +4234,7 @@ def _held(req: OptGreeksReq, expiry: str | None = None):
     c = options_data.contracts(req.exchange, req.underlying, expiry or req.expiry)
     if not c:
         err(404, "no_contracts", f"No {req.underlying} options are listed on {req.exchange} for that expiry.")
-    sk = options_data.spot_key(req.exchange, req.underlying, c.expiry)
-    spot = (options_data.quotes([sk]).get(sk) or {}).get("ltp") if sk else None
+    spot = options_data.spot(req.exchange, req.underlying, c.expiry)[0]
     if not spot:
         err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
     m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
@@ -5400,6 +5437,21 @@ def news_view(issue: dict) -> dict:
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out
+
+
+@app.get("/news-link/{iid}/{n}", include_in_schema=False)
+def news_link(iid: str, n: int):
+    """A Market Brief's nth headline: forwards to the story. The plain-text part of the email prints this short address
+    where the story's own is a news aggregator's long redirect (R13-003). Only a market brief's own stored headline links
+    are ever forwarded to, so it is no open redirect; a reader needs no sign-in to follow a link from their email."""
+    parts = news.parse_id(iid)
+    issue = news.load(iid) if parts and parts[0] == "market" else None
+    urls = news.write.headline_urls(issue) if issue else []
+    url = news.write.kit.safe_url(urls[n]) if 0 <= n < len(urls) else None
+    if not url:
+        return HTMLResponse(mail_pages.notice("That link isn't available", "The story may have been taken down. The brief is on the "
+                                            "Briefs page in the app."), status_code=404)
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/news")

@@ -174,6 +174,10 @@ class OptionsEngine:
 
     def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out, picked: str | None = None) -> bool:
         key = contracts.key(opt, strike)
+        if key and self.s.exchange == "CDS":
+            from .data import no_live_quote
+            if no_live_quote(quotes.get(key)):     # no bid, no ask, nothing traded: no live price to enter at (R13-002)
+                return False
         px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks, tick_for(self.s.exchange)) if key else None
         if px is None:
             return False

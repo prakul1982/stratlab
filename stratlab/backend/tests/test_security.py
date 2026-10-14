@@ -13,7 +13,9 @@ PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/
           "/stocks", "/stocks/", "/stocks/{region}", "/stocks/{region}/", "/stocks/{region}/{symbol}/",   # their search, and one address each
           "/public/company/{region}/{symbol}",      # a company's name and public page, for "Sign in to see …"
           "/public/library", "/public/library/{eid}",   # StratLab's own library strategies, read only, for visitors
-          "/public/business"}                       # the seller's name, address and email, for the policy pages
+          "/public/business",                       # the seller's name, address and email, for the policy pages
+          # a Market Brief's headline from the plain-text email: forwards only to a link stored in that brief (R13-003)
+          "/news-link/{iid}/{n}"}
 
 
 def _deps(d) -> set:

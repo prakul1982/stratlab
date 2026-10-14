@@ -35,6 +35,9 @@ def plain_error(text: str | None) -> str | None:
     return _ERROR_CLASS.sub("", text).strip() if text else text
 
 
+HOLIDAYS_ENOUGH = 30          # days of holidays on file that keep a failed read of the exchange's list a Check (R13-012)
+
+
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
          run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None) -> dict:
     """One job. `parts`: how many sources the last run tried, for a job that reads several (each failed one is a line
@@ -165,7 +168,7 @@ def rows() -> list[dict]:
             log.append(line)
         at, extra = _ran(st, "last_run", data=lambda: max((i.get("at") or "" for r in news.SEND_AT for i in news.recent("market", r, 1)), default="") or None)
         error = st.get("last_error") or (f"{plural(failed, 'reader')} couldn't be sent an issue; it is tried again during the day" if failed else None)
-        return _row("newsletters", "Newsletters", "India 4:15 PM IST and US 4:30 PM New York time on trading days; the weekly digest on Saturday 8 AM IST",
+        return _row("newsletters", "Newsletters", f"{news.SEND_WORDS} on trading days; the weekly digest on Saturday 8 AM IST",
                     at, error, (_problems(st) if st.get("last_error") else []) + log + extra,
                     note="Readers whose address isn't confirmed yet, or whose email failed, are tried again through the day they were due.")
     add("Newsletters", newsletters)
@@ -202,9 +205,17 @@ def rows() -> list[dict]:
     add("Fund costs (TER)", ter)
 
     def holidays():
-        a = m.calendar_status().get("auto") or {}
-        return _row("holidays", "Exchange holidays", "Every day", a.get("at"), a.get("error"),
-                    [f"{a['count']} holidays in the last read" if a.get("at") else ""], [{"label": "Read now", "path": "/admin/holidays/refresh"}])
+        cal = m.calendar_status()
+        a = cal.get("auto") or {}
+        row = _row("holidays", "Exchange holidays", "Every day", a.get("at"), a.get("error"),
+                   [f"{a['count']} holidays in the last read" if a.get("at") else ""], [{"label": "Read now", "path": "/admin/holidays/refresh"}])
+        left = cal.get("days_left")
+        if row["state"] == "bad" and isinstance(left, int) and left >= HOLIDAYS_ENOUGH:
+            # holidays are published months ahead: the live list being unreachable (the exchange turns this server away)
+            # is a Check while the days on file still cover the weeks ahead, not a Problem (R13-012), in the words the
+            # Services light uses (R12-010)
+            row = {**row, "state": "warn", "note": f"Holidays on file for {left} more days · live feed down"}
+        return row
     add("Exchange holidays", holidays)
 
     def results():

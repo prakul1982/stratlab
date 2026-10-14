@@ -210,7 +210,8 @@ export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: str
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
-  model?: GreekModel | null }       // the inputs every strike's IV and Greeks share (model estimates)
+  model?: GreekModel | null;       // the inputs every strike's IV and Greeks share (model estimates)
+  spot_from?: "quote" | "spot" | "none" }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
 /** A position's model view (options/greeks.py position): each leg's IV and Greeks per option, the what-if inputs of the
  * legs that have an IV, and the net Greeks (× quantity, sold legs negative). */
 export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: ModelLeg[]; complete: boolean; net: (NetGreeks & { pnl: number }) | null }
@@ -219,10 +220,14 @@ export interface OptPreview {
   margin_one: number | null; margin: number | null; strikes: number[]; expiries?: string[];
   legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null;
     rule?: string; pick?: string | null;     // the leg's rule in words, and why a strike rule picked its strike (or why none)
-    from_last?: boolean }[];                 // priced from the last trade: no bid or ask on the side it fills on (R11C-007)
+    from_last?: boolean;                     // priced from the last trade: no bid or ask on the side it fills on (R11C-007)
+    no_live?: boolean }[];                   // no live quote at all: no bid, no ask, nothing traded (R13-002)
   tick?: number;                       // the contract's price step (0.0025 for USDINR)
   from_last?: number;                  // how many legs were priced from the last trade
   impossible?: string | null;          // why these fills can't be real (a profit at every price)
+  no_live?: number;                    // legs with no live quote at all (no bid, no ask, nothing traded): not priced (R13-002)
+  no_live_text?: string | null;        // what the page says then
+  spot_from?: "quote" | "spot" | "none";   // the underlying's own quote, or the spot rate a currency option settles at
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
   model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
 }
