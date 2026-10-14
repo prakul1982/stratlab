@@ -274,7 +274,7 @@ def summary(p: dict) -> dict:
     return {
         "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
-        "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book else None,
+        "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book and book > 0 else None,
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
         "net_margin": net_margin, "opm": cell(opm_all, latest),
@@ -284,7 +284,9 @@ def summary(p: dict) -> dict:
         "debt_cr": borrow_now,
         # the balance sheet column the debt is from (a half-year column can be newer than the last annual one)
         "debt_as_of": (str(bal["cols"][-1]).strip() or None) if borrow_now is not None and (bal or {}).get("cols") else None,
-        "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth else None,
+        # no ratio on a negative net worth (-2.0 would read as the least leveraged)
+        "debt_equity": (borrow_now / net_worth) if borrow_now is not None and net_worth and net_worth > 0 else None,
+        "net_worth_negative": net_worth is not None and net_worth <= 0 or (book is not None and book <= 0),
         "sales_cr": sales[-1] if sales else None, "profit_cr": profit[-1] if profit else None,
     }
 

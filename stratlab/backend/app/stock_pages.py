@@ -1772,7 +1772,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
-            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of ₹{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
+            ("Dividend yield", (_fmt(dy, 2, "%") + (f" (incl. a special dividend of {'$' if f.get('currency') == 'USD' else '₹'}{_num(f['div_special']):,.2f})".replace(".00)", ")") if _num(f.get("div_special")) else "")) if dy is not None else "n/a")]
     return [(k, v) for k, v in out if v != "–"]
 
 

@@ -1425,7 +1425,7 @@ def ratios(p: dict, price: float | None, high: float | None = None, low: float |
     fy_profit = _latest(p.get("pl"), "Net Profit", skip_ttm=True, last_only=True)
     ebitda = _latest(p.get("pl"), "Operating Profit", skip_ttm=True, last_only=True)
     dep = _latest(p.get("pl"), "Depreciation", skip_ttm=True, last_only=True)
-    divs = usd(_latest(p.get("cashflow"), "Dividends paid"))
+    divs = usd(_latest(p.get("cashflow"), "Dividends paid", last_only=True))
     book = usd(equity)
     pe, _ = pe_and_basis(p, price, mcap)
     out = {"Current Price": price, "Market Cap": round(mcap, 1) if mcap else None,
