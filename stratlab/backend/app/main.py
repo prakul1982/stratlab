@@ -5,7 +5,6 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import math
-import re
 import logging
 from html import escape as html_escape
 import re
