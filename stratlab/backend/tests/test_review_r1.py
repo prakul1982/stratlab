@@ -105,3 +105,12 @@ def test_company_growth_matches_the_ai_read_facts(w):
     rows = {r["id"]: {i["label"]: i["text"] for i in r["items"]} for r in routes.company_key_facts("IN", c)}
     assert rows["growth"]["Sales, 3 years"] == f"{val[('Sales growth', '3Y CAGR')]:.1f}% a year"
     assert rows["growth"]["Net profit, 5 years"] == f"{val[('Profit growth', '5Y CAGR')]:.1f}% a year"
+
+
+def test_ratios_stay_across_a_split_or_a_move_too_big_for_a_day(monkeypatch):
+    from app import corp_actions
+    s = {"price": 1000.0, "pe": 25.0, "book_value": 1000.0, "market_cap_cr": 100000.0, "div_yield": 1.0}
+    assert at_live_price(s, 200.0) is s                                  # 5:1 split: not a fifth of the company's value
+    monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: [{"kind": "bonus", "factor": 1.1, "ex_date": "2026-10-10"}])
+    assert at_live_price(s, 910.0, "X", "2026-10-09T05:00+00:00") is s   # a 1:10 bonus after the page was read
+    assert at_live_price(s, 910.0, "X", "2026-10-11T05:00+00:00")["pe"] == pytest.approx(22.75)

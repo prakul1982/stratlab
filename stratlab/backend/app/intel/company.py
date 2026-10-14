@@ -116,12 +116,14 @@ def _groups(*groups) -> list[dict]:
     return out
 
 
-def at_live_price(s: dict, live: float | None) -> dict:
+def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=None) -> dict:
     """The fundamentals summary re-priced at the live price, so the market value, P/E, P/B and dividend yield on a
     company's page agree with the price at the top of it. The fundamentals source prices its ratios once a day; the
-    reported numbers behind them (earnings, book value, dividend) don't move with the price, so each ratio scales with it."""
+    reported numbers behind them (earnings, book value, dividend) don't move with the price, so each ratio scales with it.
+    Left as read across a split or bonus (`symbol`, with an ex-date after `since`) or a move too large for a day's."""
+    from ..stock_pages import can_reprice
     old = s.get("price")
-    if not live or live <= 0 or not old or old <= 0:
+    if not live or live <= 0 or not old or old <= 0 or not can_reprice(old, live, "IN", symbol, since):
         return s
     k = live / old
     out = dict(s, price=live)
@@ -143,18 +145,22 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
     special left out without a word). Without those dividends the source's figure stays, labelled as its own."""
     price = num(((c.get("quote") or {}).get("price")))
     from datetime import date, timedelta
+    from ..stock_pages import restated_by, restating_actions
     try:
         year_ago = (date.fromisoformat(today) - timedelta(days=365)).isoformat()
     except ValueError:
         return c
-    rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago <= str(d.get("ex_date")) < today]
+    rows = [d for d in divs or [] if d.get("kind") == "dividend" and num(d.get("amount")) and year_ago < str(d.get("ex_date")) <= today]
     if not rows or not price:
         what = "From the last reported year's dividends" if c.get("region", "IN") == "IN" else "From the company's stated yearly dividend"
         note = what if any(i["label"] == "Div yield" for g in c.get("metrics") or [] for i in g["items"]) else None
         return _set_metric(c, "Div yield", None, note) if note else c
     cur = "₹" if c.get("region", "IN") == "IN" else "$"
-    total = sum(num(d["amount"]) for d in rows)
-    special = sum(num(d["amount"]) for d in rows if d.get("sub") == "special")
+    # India's amounts are as declared: per share after a later split or bonus (the US history is adjusted already)
+    later = restating_actions(divs) if c.get("region", "IN") == "IN" else []
+    amt = lambda d: num(d["amount"]) / restated_by(later, str(d["ex_date"]))
+    total = sum(amt(d) for d in rows)
+    special = sum(amt(d) for d in rows if d.get("sub") == "special")
     y = round(total / price * 100, 2)
     amount = f"{total:,.2f}" if cur == "₹" else f"{total:,.3f}".rstrip("0").rstrip(".") if total < 10 else f"{total:,.2f}"
     note = f"{cur}{amount} a share in the last 12 months".replace(".00 ", " ")
@@ -820,7 +826,7 @@ class Research:
                 lo52, hi52 = lo, hi
         if quote is None and s.get("price"):
             quote = {"price": s["price"]}
-        s = at_live_price(s, num((quote or {}).get("price")))
+        s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
         # one value per figure on the page: growth compounded over the reported years (as the AI read's facts and the

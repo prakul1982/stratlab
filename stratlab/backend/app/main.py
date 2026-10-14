@@ -2114,7 +2114,14 @@ def deep_view(sym: str, base: dict) -> dict:
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
-        snap = at_live_price(snap, (base.get("trend") or {}).get("price"))
+        snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
+        # last reported year's, so the deck's tile agrees with them
+        try:
+            dy = page_dividend_yield("IN", sym, snap.get("price"), datetime.now(IST).date().isoformat(), {"sym": sym, "bse": None})
+        except Exception:
+            dy = None
+        snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -3285,7 +3292,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
             close = (prices or {}).get("price")
         # the fundamentals source prices its ratios once a day: re-priced at the last close shown on the same page (as the
         # company page does), so the screens' market value and P/E agree with the price beside them
-        snap = at_live_price(snap, close)
+        snap = at_live_price(snap, close, sym, p.get("fetched_at"))
         # the dividend yield as the company page in the app works it out: every dividend with an ex-date in the year to
         # the close, specials included, over the close (R7O-004, R7V-002: TCS 3.08% here against 5.35% in the app);
         # n/a when the dividends couldn't be read, never the last reported year's (another definition)
@@ -3336,7 +3343,7 @@ def india_page_dividends(sym: str, co: dict, fetch: bool = True, listed: bool | 
         known = bool(corp_actions.hist_load("IN", sym)["at"])
     except Exception:
         rows, known = [], False
-    divs = stock_pages.dividend_list(rows)
+    divs = stock_pages.dividend_list(rows, restate=True)
     if divs or known:
         return divs
     if not (fetch if listed is None else listed):

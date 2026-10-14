@@ -453,3 +453,14 @@ def test_stored_findings_are_read_with_todays_rules():
     assert now[1] is None and now[2] == old[2] and now[3] is None and now[4]["level"] == "fact"
     us = audit.restate(audit._issue("mismatch", "Numbers", "Trailing revenue 900 cr vs last four quarters 700 cr"), us=True)
     assert us["detail"] == "Trailing revenue $900 m vs last four quarters $700 m"
+
+
+def test_deep_view_yield_is_the_pages_ex_dated_one(monkeypatch):
+    p = company()
+    p["ratios"] = {"Market Cap": "520", "Stock P/E": "20", "Current Price": "100", "Dividend Yield": "3.08 %"}
+    monkeypatch.setattr(deepdive, "stored", lambda s: None)
+    monkeypatch.setattr(report_card, "stored", lambda s: None)
+    seen = {}
+    monkeypatch.setattr(main, "page_dividend_yield", lambda region, sym, price, as_of, co=None, fetch=True: seen.update(price=price) or 5.35)
+    view = main.deep_view("ACME", base_for(p, {"price": 100.0})("ACME"))
+    assert view["snapshot"]["div_yield"] == 5.35 and seen["price"] == 100.0       # not the source's last reported year's 3.08

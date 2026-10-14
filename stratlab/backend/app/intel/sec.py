@@ -104,7 +104,7 @@ CAPEX = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProduct
          "PaymentsToAcquireOtherProductiveAssets", "PaymentsToDevelopSoftware", "PaymentsForSoftware",
          "PurchaseOfPropertyPlantAndEquipmentIntangibleAssetsOtherThanGoodwillInvestmentPropertyAndOtherNoncurrentAssets",
          "PurchaseOfInvestmentProperty")
-DIVIDENDS = ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock", "DividendsPaidClassifiedAsFinancingActivities",
+DIVIDENDS = ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock", "PaymentsOfOrdinaryDividends", "DividendsPaidClassifiedAsFinancingActivities",
              "DividendsPaid")
 # debt: long-term debt including the part due within a year, or its two halves, plus short-term borrowings
 DEBT_TOTAL = ("LongTermDebt", "DebtLongtermAndShorttermCombinedAmount", "Borrowings")
