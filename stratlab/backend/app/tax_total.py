@@ -223,13 +223,14 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
 
 
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             dividends: float = 0.0, slab_gains: float = 0.0) -> dict:
+             dividends: float = 0.0, slab_gains: float = 0.0, brought: list[dict] | None = None) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
     speculative profit or loss; `business` the F&O, commodity and currency profit or loss after charges;
     `dividends` the year's dividend income (income from other sources, at slab rates, surcharge capped at 15%), when the user includes it; `slab_gains` other short-term
-    gains taxed at slab rates, already set off (the report sends ETF and gold bond gains as the st_unit bucket instead). Returns the steps in plain words, a breakdown table and
+    gains taxed at slab rates, already set off (the report sends ETF and gold bond gains as the st_unit bucket instead); `brought` earlier years'
+    intraday and business losses still carried ({fy, kind "speculative"/"business", amt}). Returns the steps in plain words, a breakdown table and
     the total."""
     v = clean(inputs)
     r = rules(fy, v["regime"], v["age"], v["resident"])
@@ -342,6 +343,28 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
             steps.append(f"{money(loss)} of business loss is left to carry forward.")
         biz = 0.0
 
+    # losses brought forward, after this year's own: intraday only against intraday profit, business against either
+    bf, spec_bf, biz_bf = [], 0.0, 0.0
+    for p in sorted(brought or [], key=lambda p: (p["fy"], p["kind"] != "speculative")):
+        left = p["amt"]
+        if p["kind"] == "business":
+            take = min(biz, left)
+            biz -= take
+            left -= take
+        take = min(spec, left)
+        spec -= take
+        left -= take
+        used = p["amt"] - left
+        what = "intraday (speculative) loss" if p["kind"] == "speculative" else "F&O, commodity and currency (business) loss"
+        steps.append(f"Brought forward from FY {p['fy']}-{str(p['fy'] + 1)[2:]}: {what} of {money(p['amt'])}, {money(used)} of it "
+                     f"set off against this year's {'intraday profit' if p['kind'] == 'speculative' else 'business income'}"
+                     + (f", {money(left)} still carried forward." if left > 0.005 else "."))
+        if p["kind"] == "speculative":
+            spec_bf += used
+        else:
+            biz_bf += used
+        bf.append({**p, "used": round(used, 2), "left": round(left, 2)})
+
     normal_gross = salary - std + rest + spec + biz
     ded = min(v["deductions"], normal_gross) if r["deductions"] else 0.0
     if r["deductions"] and v["deductions"]:
@@ -431,6 +454,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         line("Non-equity short-term gains at slab rates (ETFs, gold bonds)", slab_gains)
     line("Intraday (speculative) profit or loss", intraday)
     line("F&O, commodity and currency profit or loss, after charges", business)
+    if spec_bf:
+        line("Less intraday loss brought forward", -spec_bf)
+    if biz_bf:
+        line("Less business loss brought forward", -biz_bf)
     if slab_mf:
         line("Mutual fund gains taxed at slab rates", slab_mf)
     if slab_us:
@@ -464,7 +491,7 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                        "dividends": round(div, 2),
                        # the F&O and intraday lines the Money home shows beside the total (R6O-014)
                        "business": round(business, 2), "intraday": round(intraday, 2)},
-            "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)},
+            "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)}, "brought_forward": bf,
             "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
 
 

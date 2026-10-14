@@ -32,7 +32,11 @@ def summary_lines(y: dict) -> list[tuple[str, str]]:
            ("Long-term exemption used", f"{money(y['exemption']['used'])} of {money(y['exemption']['limit'])}")]
     for b in y["buckets"]:
         out.append((f"{b['label']} at {_pct(None if b.get('slab') else b['rate'])}: taxable", f"{money(b['taxable'])} (tax {money(b['tax'])})"))
-    out += [("Estimated tax (before cess and surcharge)", money(y["tax"])), ("With 4% cess", money(y["tax_with_cess"])),
+    for p in y.get("brought_forward") or []:
+        out.append((f"Brought forward from {p['label']}: {'short' if p['kind'] == 'st' else 'long'}-term loss",
+                    f"{money(p['amt'])} ({money(p['used'])} set off, {money(p['left'])} still carried)"))
+    out += [("Tax on share gains, before basic exemption, rebate, surcharge and cess", money(y["tax"])),
+            ("The same with 4% cess", money(y["tax_with_cess"])),
             ("Short-term loss to carry forward", money(y["carry_forward"]["st"])), ("Long-term loss to carry forward", money(y["carry_forward"]["lt"])),
             ("Intraday (speculative) profit or loss, not in the above", money(y["intraday"]["pnl"]))]
     for seg in (y.get("business") or {}).get("segments") or []:
@@ -64,6 +68,10 @@ def total_lines(y: dict) -> list[tuple[str, str]]:
     p = t["parts"]
     out += [("Share of the total: capital gains", money(p["capital_gains"])), ("Share of the total: intraday", money(p["intraday"])),
             ("Share of the total: F&O, commodity and currency", money(p["fno"])), ("Share of the total: other income", money(p["other"]))]
+    for p in t.get("brought_forward") or []:
+        what = "Speculative loss" if p["kind"] == "speculative" else "Business loss"
+        out.append((f"{what} brought forward from FY {p['fy']}-{str(p['fy'] + 1)[2:]}",
+                    f"{money(p['amt'])} ({money(p['used'])} set off, {money(p['left'])} still carried)"))
     cf = t["carry_forward"]
     if cf["speculative"]:
         out.append(("Speculative loss to carry forward", money(cf["speculative"])))
