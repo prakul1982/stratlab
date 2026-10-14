@@ -66,7 +66,8 @@ def _slope_above(legs: list[dict]) -> float:
 
 def breakevens(legs: list[dict], shift: float = 0.0) -> list[float]:
     """Prices at expiry where the payoff less `shift` crosses zero, exactly: the payoff is a straight line between
-    strikes, so each crossing is found on its own segment. Prices run from zero up."""
+    strikes, so each crossing is found on its own segment. Prices run from zero up. They keep four decimals: a currency
+    option moves in 0.0025 (R11C-007), which two would lose."""
     xs = [0.0] + sorted({float(lg["strike"]) for lg in legs})
     ys = [_payoff_at(legs, x) - shift for x in xs]
     out = []
@@ -76,7 +77,7 @@ def breakevens(legs: list[dict], shift: float = 0.0) -> list[float]:
     k = _slope_above(legs)
     if k and (ys[-1] < 0) != (k < 0):          # one more crossing past the top strike
         out.append(xs[-1] - ys[-1] / k)
-    return [round(b, 2) for b in out]
+    return [round(b, 4) for b in out]
 
 
 def _corners(legs: list[dict]) -> list[float]:

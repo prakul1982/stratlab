@@ -19,6 +19,25 @@ export function levelText(x: number, tick?: number | null): string {
   return Math.round(x).toLocaleString("en-IN");
 }
 
+/** The expiry a pick names among an underlying's listed ones (the server's pick_expiry): Nearest, Next (the one after, else
+ * the only one), Monthly (the last of the nearest month) or a date. undefined when it names none. */
+export function pickedExpiry(expiries: string[] | undefined, choice: string): string | undefined {
+  const ex = expiries ?? [];
+  if (!ex.length) return undefined;
+  if (choice === "current") return ex[0];
+  if (choice === "next") return ex[1] ?? ex[0];
+  if (choice === "month") return ex.filter((e) => e.slice(0, 7) === ex[0].slice(0, 7)).pop();
+  return ex.includes(choice) ? choice : undefined;
+}
+
+/** Shares in one lot of the expiry picked: that expiry's own (a later series can have another lot), else the underlying's
+ * (the nearest expiry's) when the nearest is the one picked. undefined when it can't be told. */
+export function lotOf(u: { lot: number; expiries?: string[]; lots?: Record<string, number> } | undefined, choice: string): number | undefined {
+  const e = u && pickedExpiry(u.expiries, choice);
+  if (!u || !e) return undefined;
+  return u.lots?.[e] ?? (e === u.expiries?.[0] ? u.lot : undefined);
+}
+
 /** The underlying's price in the line under the form, at the contract's precision, saying when it is the spot rate
  * (R13-002: "USDINR ₹96.14" from a future frozen at 96.135 for a month, with the dollar at 96.76). */
 export function spotText(name: string, spot: number, tick?: number | null, from?: string | null): string {

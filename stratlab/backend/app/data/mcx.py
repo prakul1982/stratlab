@@ -34,7 +34,7 @@ CONTRACTS = {
 DEFAULTS = ["GOLDM", "SILVERM", "CRUDEOIL", "NATURALGAS", "COPPER", "GOLD"]
 ALIASES = {"GOLD MINI": "GOLDM", "SILVER MINI": "SILVERM", "CRUDE": "CRUDEOIL", "CRUDE OIL": "CRUDEOIL", "OIL": "CRUDEOIL",
            "NATURAL GAS": "NATURALGAS", "NATGAS": "NATURALGAS", "GAS": "NATURALGAS", "ALUMINUM": "ALUMINIUM"}
-PER_DAY = {"1h": 15, "15m": 58, "5m": 174}           # 09:00 to 23:30
+MINUTES = {"1h": 60, "15m": 15, "5m": 5}              # candles a day: the session's length (open to the day's close) over this
 
 
 def front(contracts: list[dict], today: date) -> dict | None:
@@ -49,7 +49,7 @@ def front(contracts: list[dict], today: date) -> dict | None:
 class MCXProvider:
     """Front-month futures on one Kite exchange. Currency futures (cds.py) are the same with other contracts."""
     market = exchange = "MCX"
-    contracts, default_names, aliases, per_day = CONTRACTS, DEFAULTS, ALIASES, PER_DAY
+    contracts, default_names, aliases = CONTRACTS, DEFAULTS, ALIASES
     noun = "MCX"
     max_days = {"1d": 3650, "1h": 180, "15m": 120, "5m": 60}
 
@@ -107,19 +107,32 @@ class MCXProvider:
     def ltp(self, inst: dict) -> float | None:
         return self.kite.ltp_key(f"{self.exchange}:{inst['contract']}")
 
+    def day_close(self, day=None) -> str | None:
+        """When this segment's day ends, India time "HH:MM": from /markets' hours, so MCX's 23:55 winter close is followed
+        (options/data.py expiry_time) and the same figure serves the daily candle's close, the candle counts and the labels."""
+        from . import _hours
+        from .markets import BY_ID
+        return ((_hours(BY_ID[self.market], day or ist_date()) or {}).get("close"))
+
+    def per_day(self, tf: str) -> int:
+        """Candles in a trading day on this timeframe, from the segment's open to its close that day."""
+        from .markets import BY_ID
+        h = BY_ID[self.market]["hours"]
+        mins = lambda hhmm: int(hhmm[:2]) * 60 + int(hhmm[3:])
+        return math.ceil((mins(self.day_close()) - mins(h["open"])) / MINUTES[tf])
+
     def warmup_days(self, tf: str, candles: int = 210) -> int:
         if tf == "1d":
             return math.ceil(candles * 7 / 5) + 10
-        return math.ceil(candles / self.per_day[tf] * 7 / 5) + 3
+        return math.ceil(candles / self.per_day(tf) * 7 / 5) + 3
 
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         if tf != "1d":       # no continuous intraday series: only the current contract's own life
             days = min(days, self.max_days[tf])
-        else:                # the day's candle is read again after this segment's own close (17:00 currency, 23:30 commodity)
-            from .markets import BY_ID
+        else:                # the day's candle is read again after this segment's own close (17:00 currency, 23:30 commodity and 23:55 while US daylight saving is off)
             mark = getattr(self.kite, "set_session_close", None)
             if mark:
-                mark(int(inst["token"]), ((BY_ID.get(self.market) or {}).get("hours") or {}).get("close"))
+                mark(int(inst["token"]), self.day_close())
         try:
             bars = self.kite.history(int(inst["token"]), tf, days, continuous=(tf == "1d"))
             if tf == "1d" and (not bars or frozen_series(bars)):

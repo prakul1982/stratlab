@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
 import { chainStamp } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, optMoney, payoff, PICKS, POPULAR_FALLBACK, sessionFor, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
+import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -432,7 +432,7 @@ export function OptionsPage() {
   const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legRule(l, s.offsetUnit)} ${l.opt}`).join(" · ");
   const vf = s.vix;
   const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
-  const exp = und?.expiries?.[s.expiry === "next" ? 1 : 0];
+  const exp = pickedExpiry(und?.expiries, s.expiry), lot = lotOf(und, s.expiry);
   const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
   const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry} ${ZONE}` : `Enters at ${t.entry} ${ZONE}, no later than ${t.lastEntry} ${ZONE}`}, and exits by ${t.squareoff} ${ZONE}${stopWord}${tgtWord}.`;
@@ -478,7 +478,7 @@ export function OptionsPage() {
               <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
                 options={[{ value: "current", label: "Nearest" }, { value: "next", label: "Next" }, { value: "month", label: "Monthly" }]} onChange={(v) => patch({ expiry: v })} />
               {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
-              {und && <span className="k-note" data-testid="opt-expiry-note">{preview ? `${expiryName(preview.expiry)} · ` : exp && s.expiry !== "month" ? `${expiryName(exp)} · ` : ""}lot {und.lot}</span>}
+              {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot}` : ""].filter(Boolean).join(" · ")}</span>}
             </div>
           </FieldGroup>
           <FieldGroup label="Strategy" wide>
@@ -547,7 +547,7 @@ export function OptionsPage() {
               </div>
             </div>
           </div>
-          <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{und ? ` A lot is ${und.lot} ${s.underlying}.` : ""}</p>
+          <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{lot != null ? ` A lot is ${lot} ${s.underlying}.` : ""}</p>
           <div className="k-sentence" data-testid="vix-filter">
             <CheckField label={<>Enter only while India VIX is between{!vixOk && " (Basic)"}</>} checked={!!vf} disabled={!vixOk && !vf} onChange={(on) => patch({ vix: on ? { min: 11, max: 18 } : null })} />
             {vf && <> <InNum label="Lowest (0 = none)" value={vf.min} max={100} step={0.5} onChange={(v) => patch({ vix: { ...vf, min: v } })} /> and

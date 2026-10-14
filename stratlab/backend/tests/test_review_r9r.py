@@ -274,12 +274,17 @@ def test_currency_and_commodity_providers_tell_the_broker_when_their_segment_clo
 
         def history(self, token, tf, days, continuous=None, ttl=None):
             return [{"t": "2026-10-09T00:00:00+05:30", "o": 1, "h": 1, "l": 1, "c": 1, "v": 0}]
-    for cls, close in ((CDSProvider, "17:00"), (MCXProvider, "23:30")):
-        k = Kite()
-        cls(k).history({"token": 55}, "1d", 30)
-        assert k.marks == [(55, close)]
-        cls(k).history({"token": 56}, "1h", 30)
-        assert k.marks == [(55, close)]                                                         # intraday candles: nothing to mark
+    import time_machine
+    # pinned: MCX closes at 23:30, and at 23:55 while US daylight saving is off (options/data.py expiry_time)
+    for day, cls, close in ((datetime(2026, 10, 14, 6, 0, tzinfo=timezone.utc), CDSProvider, "17:00"),
+                            (datetime(2026, 10, 14, 6, 0, tzinfo=timezone.utc), MCXProvider, "23:30"),
+                            (datetime(2026, 11, 11, 6, 0, tzinfo=timezone.utc), MCXProvider, "23:55")):
+        with time_machine.travel(day, tick=False):
+            k = Kite()
+            cls(k).history({"token": 55}, "1d", 30)
+            assert k.marks == [(55, close)]
+            cls(k).history({"token": 56}, "1h", 30)
+            assert k.marks == [(55, close)]                                                     # intraday candles: nothing to mark
 
 
 # ---------- R9R-006: the Positioning log is a sentence, and amber until the files arrive ----------

@@ -775,7 +775,7 @@ def _fresh_recording(name: str, choice: str, max_age: float | None = RECORDED_FR
         today = ist_now().date()
         if not recorded_last(name, today):          # nothing recorded today: don't walk back through older days
             return None
-        got = recorded_chain(name, choice, today)
+        got = recorded_chain(name, choice, today, ist_now())
         at = datetime.fromisoformat(str((got or {}).get("taken_at")).replace("Z", "+00:00"))
     except (TypeError, ValueError, KeyError):
         return None
@@ -893,12 +893,15 @@ def live_chain(options_data, exchange: str, name: str, choice: str) -> dict | No
     return live_chains(options_data, (name,), choice).get(name)
 
 
-def recorded_chain(name: str, choice: str, today: date) -> dict | None:
-    """The newest recorded chain for the expiry asked for, when the live feed is offline."""
+def recorded_chain(name: str, choice: str, today: date, now: datetime | None = None) -> dict | None:
+    """The newest recorded chain for the expiry asked for, when the live feed is offline. With `now`, today's own expiry
+    counts as past once its options stopped trading (the derivatives close, 15:40 since 3 Aug 2026): the next one is "current"."""
+    from .options.data import expired_today
+    over = now is not None and expired_today(NAMES[name], now)
     for back in range(0, 8):
         # a monthly-only index's recordings of a date it can't expire on (an old weekly list) are left out
         snaps = [s for s in recorded_last(name, today - timedelta(days=back)) if expiry_fits(NAMES[name], name, str(s["expiry"])[:10])
-                and str(s["expiry"])[:10] >= today.isoformat()]          # an expiry already past is not "current"
+                and (str(s["expiry"])[:10] > today.isoformat() or (str(s["expiry"])[:10] == today.isoformat() and not over))]   # an expiry already past is not "current"
         if not snaps:
             continue
         exps = [str(s["expiry"])[:10] for s in snaps]
@@ -947,7 +950,7 @@ def chain_now(options_data, name: str, choice: str, now: datetime) -> tuple[dict
     and one computation for every place that shows it (the chain panel, the PCR table and the VIX card's ATM IV): a
     recording's or a close's own time, never the moment of asking (R7T-005: ATM IV 14.40% on the VIX card, 13.3% in the
     chain panel and 13.51 recorded for the same 8 Oct close)."""
-    got = live_chain(options_data, NAMES[name], name, choice) or recorded_chain(name, choice, now.date())
+    got = live_chain(options_data, NAMES[name], name, choice) or recorded_chain(name, choice, now.date(), now)
     if not got:
         return None, None, None
     at = datetime.fromisoformat(got["taken_at"]) if got["source"] == "recorded" or got.get("at_close") else now
@@ -992,7 +995,10 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
                   **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
     out["iv"] = None
-    if full:
+    # the recorded history is the front expiry's (the nearest after the day itself): another expiry's IV, or the expiring
+    # chain's on its last day, is not comparable with it, so no percentile is given for them
+    later = sorted(e for e in (out["expiries"] or [expiry]) if e > taken_day.isoformat())
+    if full and later and later[0] == expiry:
         past = [p["atm_iv"] for p in chain_series(name) if p["day"] < taken_day.isoformat()]
         out["iv"] = iv_stats(stats["atm_iv"], past)
     return out
@@ -1013,7 +1019,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
         chains = live_chains(options_data, tuple(names), "current", quick=True)
     else:
         for name in names:
-            rec = recorded_chain(name, "current", now.date())
+            rec = recorded_chain(name, "current", now.date(), now)
             if rec and str(rec["expiry"])[:10] >= now.astimezone(IST).date().isoformat():     # not an expiry that has passed
                 chains[name] = {**rec, "at_close": True}
         left = tuple(n for n in names if not chains.get(n))
@@ -1021,7 +1027,7 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
             chains.update(live_chains(options_data, left, "current"))
     for name in names:
         ex = NAMES[name]
-        got = chains.get(name) or recorded_chain(name, "current", now.date())
+        got = chains.get(name) or recorded_chain(name, "current", now.date(), now)
         if not got:
             out.append({"name": name, "exchange": ex, "source": None})
             continue

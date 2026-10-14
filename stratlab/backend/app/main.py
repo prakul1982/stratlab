@@ -4425,7 +4425,7 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
             "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (spot_q or {}).get("ts"),
-            **_preview_greeks(c, spot, legs, units)}
+            **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"))}
 
 
 def impossible(priced: list[dict]) -> str | None:
@@ -4438,10 +4438,10 @@ def impossible(priced: list[dict]) -> str | None:
             "pay out. Real bids and asks don't allow that, so at least one price here is out of date.")
 
 
-def _preview_greeks(c, spot: float, legs: list[dict], units: int) -> dict:
+def _preview_greeks(c, spot: float, legs: list[dict], units: int, spot_ts=None) -> dict:
     """The model's view of a priced structure, for every plan: the shared inputs, each leg's IV and Greeks, and the
     net Greeks of the whole position (empty when the expiry has passed)."""
-    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), spot_ts)
     if not m:
         return {"model": None, "greeks": None}
     have = [l for l in legs if l["strike"] is not None]
@@ -4457,10 +4457,10 @@ def _held(req: OptGreeksReq, expiry: str | None = None):
     c = options_data.contracts(req.exchange, req.underlying, expiry or req.expiry)
     if not c:
         err(404, "no_contracts", f"No {req.underlying} options are listed on {req.exchange} for that expiry.")
-    spot = options_data.spot(req.exchange, req.underlying, c.expiry)[0]
+    spot, spot_q, _ = options_data.spot(req.exchange, req.underlying, c.expiry)
     if not spot:
         err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
-    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), (spot_q or {}).get("ts"))
     if not m:
         err(409, "expired", "That expiry has passed, so there's nothing left to model.")
     return c, spot, m

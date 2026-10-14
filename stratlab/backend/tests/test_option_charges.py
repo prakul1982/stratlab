@@ -31,7 +31,7 @@ def test_short_straddle_breakevens_and_shares():
     assert s["pct_of_max_profit"] == 0.774 and s["pct_of_premium"] == 0.774   # 135.843061 / 17,550
     assert s["breakevens"] == [22130, 22670]                                 # 22,400 ± 270
     # the payoff drops ₹135.84 everywhere: 135.843061 / 65 = 2.09 points nearer the strike on each side
-    assert s["breakevens_after"] == [22132.09, 22667.91]
+    assert s["breakevens_after"] == approx([22132.09, 22667.91], abs=0.01)            # kept to four decimals: 22132.0899 and 22667.9101
     assert [i["label"] for i in s["items"]] == ["Brokerage", "STT", "Exchange charges", "SEBI fee", "Stamp duty", "GST"]
 
 
@@ -115,3 +115,13 @@ def test_iron_fly_is_bounded_both_ways():
     assert hi == 160 * 65 and lo == -40 * 65
     assert hi_after == approx(10400 - cost, abs=0.01) and lo_after == approx(-2600 - cost, abs=0.01)
     assert charges.breakevens(legs) == [22240, 22560]
+
+
+def test_a_currency_option_breakevens_keep_their_quarter_paise():
+    """USDINR premiums move in 0.0025 (R11C-007): a breakeven rounded to two decimals lost the last digits of 95.1625."""
+    legs = [{"side": "buy", "opt": "CE", "strike": 95.5, "fill": 0.3375, "qty": 1000}]
+    assert charges.breakevens(legs) == [95.8375]
+    legs = [{"side": "sell", "opt": "CE", "strike": 95.5, "fill": 0.3375, "qty": 1000},
+            {"side": "sell", "opt": "PE", "strike": 95.5, "fill": 0.2125, "qty": 1000}]
+    assert charges.breakevens(legs) == [94.95, 96.05]
+    assert charges.breakevens(legs, 2.5) == [94.9525, 96.0475]            # charges of ₹2.50 on 1,000 units: a quarter paise a unit
