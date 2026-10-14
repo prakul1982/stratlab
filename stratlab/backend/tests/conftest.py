@@ -41,6 +41,17 @@ def no_official_close_reads():
 
 
 @pytest.fixture(autouse=True)
+def still_market_clock():
+    """The fake market's clock stands still for the length of a test (tests/fake_prices.py): in the session, a price read
+    by the test and the same price read by a page a moment later never fall on two sides of a minute."""
+    from datetime import datetime, timezone
+    from tests import fake_prices
+    fake_prices.FROZEN = datetime.now(timezone.utc)
+    yield
+    fake_prices.FROZEN = None
+
+
+@pytest.fixture(autouse=True)
 def fresh_settings_mirror():
     """The in-memory copy of the stored company pages (app/db.py) doesn't carry over from one test to the next."""
     from app import db

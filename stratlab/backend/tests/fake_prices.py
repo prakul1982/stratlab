@@ -12,7 +12,7 @@ in hours too (the exchange's ETF list is read at the close), so the ETF page, th
 import functools
 import math
 import zlib
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -117,12 +117,21 @@ def on_trading_day(d: date, market: str = "IN", back: bool = False) -> date:
     return d
 
 
+# The fake market's "now" while a test runs: tests/conftest.py sets it as each test starts, so a test that reads a price,
+# then a page, then the price again in India's session sees one price throughout, whatever minute it ticks over.
+FROZEN: datetime | None = None
+
+
+def clock_now() -> datetime:
+    return FROZEN or datetime.now(timezone.utc)
+
+
 def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
     """The time of the market's last trade: now while it is open (09:15 to 15:30 IST on a trading day; 09:30 to 16:00
     New York time for the US), else the close of the latest session. Out of hours quotes stand still at that close and
     say when it was, as the real ones do, so a page never claims a price from a moment nobody traded."""
     (oh, om), (ch, cm), tz = SESSION[market]
-    now = (now or datetime.now(tz)).astimezone(tz)
+    now = (now or clock_now()).astimezone(tz)
     close = now.replace(hour=ch, minute=cm, second=0, microsecond=0)
     if trading_day(market, now.date()) and now >= now.replace(hour=oh, minute=om, second=0, microsecond=0):
         # to the minute, as the broker's minute candles are: a test reading the price, then a page, a second apart in
@@ -137,7 +146,7 @@ def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
 def last_close(market: str = "IN", now: datetime | None = None) -> datetime:
     """The close of the latest session that has ended: today's after the close, else the trading day before's."""
     (_, _), (ch, cm), tz = SESSION[market]
-    now = (now or datetime.now(tz)).astimezone(tz)
+    now = (now or clock_now()).astimezone(tz)
     day = now.replace(hour=ch, minute=cm, second=0, microsecond=0)
     if now < day:
         day -= timedelta(days=1)
