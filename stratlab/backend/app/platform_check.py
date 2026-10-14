@@ -13,6 +13,21 @@ from .data.markets import BY_ID
 TIMEOUT = 45          # seconds a single check may take before it counts as failed
 
 
+def _day(d) -> str:
+    """A date as the site writes it, "12 Oct"; text that is not a date is left as it is (R13S-010)."""
+    try:
+        d = d if isinstance(d, date) else date.fromisoformat(str(d)[:10])
+    except ValueError:
+        return str(d)
+    return f"{d.day} {d:%b}"
+
+
+def _level(x) -> str:
+    """An index level in Indian grouping with two decimals: 22,520.45."""
+    from .email_kit import num
+    return num(x)
+
+
 def _result(name: str, area: str, state: str, detail: str, seconds: float | None = None) -> dict:
     return {"name": name, "area": area, "state": state, "detail": detail, "seconds": seconds}
 
@@ -79,16 +94,16 @@ def check_market(registry, market: str, today: date | None = None, now: datetime
         return _result(f"Prices: {market}", "Prices", "fail", f"{len(bad)} candles of {inst['symbol']} have high/low outside open/close.")
     if last < expected:
         return _result(f"Prices: {market}", "Prices", "fail",
-                       f"{inst['symbol']}: last daily candle {last}, but {expected} was a trading day." + _why_stale(prov, inst))
+                       f"{inst['symbol']}: last daily candle {_day(last)}, but {_day(expected)} was a trading day." + _why_stale(prov, inst))
     done = expected if explicit else last_completed_session(market, now)
     if last < done:
         meta = BY_ID.get(market) or {}
         close = (meta.get("hours") or {}).get("close")
         at = f" at {close} {ZONES.get(meta.get('tz'), meta.get('tz') or 'UTC')}" if close else ""
         return _result(f"Prices: {market}", "Prices", "warn",
-                       f"{inst['symbol']}: the latest daily candle is {last}, but the {done} session closed{at} and its candle should be "
+                       f"{inst['symbol']}: the latest daily candle is {_day(last)}, but the {_day(done)} session closed{at} and its candle should be "
                        f"here by now (last close {bars[-1]['c']:,.2f}).{_why_stale(prov, inst)}")
-    return _result(f"Prices: {market}", "Prices", "pass", f"{inst['symbol']}: {len(bars)} daily candles, latest {last}, close {bars[-1]['c']:,.2f}.")
+    return _result(f"Prices: {market}", "Prices", "pass", f"{inst['symbol']}: {len(bars)} daily candles, latest {_day(last)}, close {bars[-1]['c']:,.2f}.")
 
 
 def _why_stale(prov, inst) -> str:
@@ -163,22 +178,21 @@ def check_options(options, today: date) -> dict:
     if not rows or not expiry:
         return _result("Option chain: NIFTY", "Options", "fail", "No strikes came back.")
     if expiry < today.isoformat():
-        return _result("Option chain: NIFTY", "Options", "fail", f"Offered expiry {expiry}, which has passed.")
+        return _result("Option chain: NIFTY", "Options", "fail", f"Offered expiry {_day(expiry)}, which has passed.")
     if not calendar.is_trading_day("IN", date.fromisoformat(expiry)):
-        return _result("Option chain: NIFTY", "Options", "fail", f"Expiry {expiry} falls on a closed day.")
+        return _result("Option chain: NIFTY", "Options", "fail", f"Expiry {_day(expiry)} falls on a closed day.")
     quoted = sum(1 for r in rows for side in ("ce", "pe") if (r.get(side) or {}).get("ltp"))
     two_sided = sum(1 for r in rows for side in ("ce", "pe") if (r.get(side) or {}).get("bid") and (r.get(side) or {}).get("ask"))
     state = "pass" if quoted >= len(rows) else "warn"
     return _result("Option chain: NIFTY", "Options", state,
-                   f"Expiry {expiry}, spot {c.get('spot')}, {len(rows)} strikes; {quoted} prices, {two_sided} with bid and ask.")
+                   f"Expiry {_day(expiry)}, spot {_level(c.get('spot'))}, {len(rows)} strikes; {quoted} prices, {two_sided} with bid and ask.")
 
 
 def check_filings(feed) -> dict:
     items = feed.announcements("RELIANCE")
     if not items:
         return _result("Exchange filings", "Filings", "warn", "Reliance has no filings in the window, which is unusual.")
-    newest = items[0]["at"][:10]
-    return _result("Exchange filings", "Filings", "pass", f"{len(items)} Reliance filings; newest {newest}.")
+    return _result("Exchange filings", "Filings", "pass", f"{len(items)} Reliance filings; newest {_day(items[0]['at'])}.")
 
 
 def check_insider_trades(feed) -> dict:
@@ -187,7 +201,7 @@ def check_insider_trades(feed) -> dict:
     items = feed.insider_trades("RELIANCE")
     if not items:
         return _result("Insider trades", "Filings", "warn", "Reliance has no insider-trading disclosures in the last year, which is unusual.")
-    return _result("Insider trades", "Filings", "pass", f"{len(items)} Reliance insider-trading disclosures; newest {items[0]['date']}.")
+    return _result("Insider trades", "Filings", "pass", f"{len(items)} Reliance insider-trading disclosures; newest {_day(items[0]['date'])}.")
 
 
 def check_surveillance(feed) -> dict:
@@ -229,7 +243,7 @@ def check_bse_filings(bse) -> dict:
         return _result("BSE filings", "Filings", "warn", "Reliance has no BSE filings in the window, which is unusual.")
     pdfs = sum(1 for i in items if i.get("url"))
     return _result("BSE filings", "Filings", "pass" if pdfs else "warn",
-                   f"{len(items)} Reliance filings on BSE, {pdfs} with a document; newest {items[0]['at'][:10]}.")
+                   f"{len(items)} Reliance filings on BSE, {pdfs} with a document; newest {_day(items[0]['at'])}.")
 
 
 def check_company(hub, region: str, symbol: str) -> dict:

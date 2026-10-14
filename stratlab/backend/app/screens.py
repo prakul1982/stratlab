@@ -63,6 +63,9 @@ CAP_BANDS = {
            "small": ("Small ($300 million to 2 billion)", 300, 2000), "micro": ("Micro (under $300 million)", None, 300)},
 }
 STAGES = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
+# the US column is the SEC's industry division, which reads like a sector but is not one (R13S-015)
+SECTOR_HELP_US = ("The division of the SEC's Standard Industrial Classification the company files under, such as Manufacturing "
+                  "or Services. It is a broad grouping of industries, not a market sector.")
 HELP = {
     "market": "India (NSE and BSE) or the US.",
     "sector": "The company's sector, from its industry classification.",
@@ -531,7 +534,7 @@ def meta(region: str) -> dict:
             "cap": [{"id": k, "label": v[0]} for k, v in CAP_BANDS[region].items()],
             "stages": [{"id": k, "label": v} for k, v in STAGES.items()],
             "ranges": [{"id": k, "label": v[0], "unit": v[1], "help": v[2]} for k, v in RANGES.items()],
-            "help": HELP, "red_flags": True, "columns": list(COLUMNS),
+            "help": {**HELP, "sector": SECTOR_HELP_US} if region == "US" else HELP, "red_flags": True, "columns": list(COLUMNS),
             "insider": {"days": list(deals.SCREEN_DAYS), "default": INSIDER_DAYS, "from": deals.buys().get("from")} if region == "IN" else None,
             "surveillance": {"lists": [{"id": k, "label": v} for k, v in surveillance.FAMILY_NAME.items()]} if region == "IN" else None,
             "indexed": len(index["rows"]), "as_of": as_of(index), "index_at": index.get("at")}
@@ -541,7 +544,7 @@ def describe(region: str, f: dict) -> list[str]:
     """The conditions in words: "Sector: Energy", "P/E between 5 and 20"."""
     out = []
     if f["sector"]:
-        out.append("Sector: " + ", ".join(f["sector"]))
+        out.append(("Industry (SEC division): " if region == "US" else "Sector: ") + ", ".join(f["sector"]))
     if f["cap"]:
         out.append("Size: " + ", ".join(CAP_BANDS[region][c][0].split(" (")[0] for c in f["cap"]))
     for k, b in f["ranges"].items():

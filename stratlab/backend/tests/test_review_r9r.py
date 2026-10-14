@@ -225,7 +225,7 @@ def test_the_last_completed_session_waits_for_the_close_and_the_feed():
 def test_a_currency_candle_a_session_behind_after_the_close_is_a_warning_not_a_pass():
     after = datetime(2026, 10, 9, 18, 15, tzinfo=IST)
     got = pc.check_market(_Reg("2026-10-08"), "CDS", now=after)
-    assert got["state"] == "warn" and "2026-10-08" in got["detail"] and "2026-10-09 session closed at 17:00 IST" in got["detail"]
+    assert got["state"] == "warn" and "candle is 8 Oct" in got["detail"] and "the 9 Oct session closed at 17:00 IST" in got["detail"]
     assert pc.check_market(_Reg("2026-10-09"), "CDS", now=after)["state"] == "pass"
     # before the close the day before's candle is the newest there should be
     assert pc.check_market(_Reg("2026-10-08"), "CDS", now=datetime(2026, 10, 9, 14, 0, tzinfo=IST))["state"] == "pass"

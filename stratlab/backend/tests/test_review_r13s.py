@@ -76,3 +76,135 @@ def test_short_squeeze_closes_the_account_at_zero():
     assert any(t["why"] == "Account emptied" for t in out["trades"])
     assert math.isclose(out["equity"][-1], 0.0, abs_tol=0.01)
     assert not out["open_trade"]
+
+
+# ---- R13S-002: the watchlist filings answer within a bound, and say which company they couldn't read ----
+
+class _SlowFeed:
+    """OK answers at once, SLOW waits until it is released, BAD (and every name once `fail` is set) fails."""
+
+    def __init__(self):
+        import threading
+        from app.intel import filings as F
+        self.release, self.cache, self.fail = threading.Event(), F.TTLCache(), False
+
+    def announcements(self, sym, days=0):
+        from app.intel.net import SourceError
+        if sym == "SLOW":
+            self.release.wait(10)
+            return []
+        if sym == "BAD" or self.fail:
+            raise SourceError("the exchange", "The exchange feed isn't answering right now.", busy=True)
+        return []
+
+
+def test_filings_overview_does_not_wait_for_one_slow_company():
+    from app.intel import filings as F
+    feed = _SlowFeed()
+    try:
+        out = F.overview(feed, ["OK", "SLOW", "BAD"], wait=0.3)
+    finally:
+        feed.release.set()
+    assert [r["symbol"] for r in out["rows"]] == ["OK"]
+    assert sorted(p.split(":")[0] for p in out["problems"]) == ["BAD", "SLOW"]
+
+
+def test_filings_overview_keeps_the_last_good_row_marked_stale():
+    from app.intel import filings as F
+    feed = _SlowFeed()
+    first = F.overview(feed, ["OK"], wait=2)
+    assert first["problems"] == [] and "stale" not in first["rows"][0]
+    feed.fail = True
+    again = F.overview(feed, ["OK"], wait=2)
+    assert [r["symbol"] for r in again["rows"]] == ["OK"] and again["rows"][0]["stale"] is True
+    assert again["problems"][0].startswith("OK:")
+    assert F.overview(_SlowFeed(), ["BAD"], wait=2)["rows"] == []                # another feed has no last row to show
+
+
+# ---- R13S-004: a block keeps who made it and when; a re-rank can be put back ----
+
+def test_a_block_records_who_made_it_and_when():
+    from app import ai_providers as P
+    from app import ai_rank as R
+    R.block("groq", "m-1", True, "owner@example.com")
+    info = R.block_info("groq", "m-1")
+    assert info["by"] == "owner@example.com" and info["at"] > 0
+    assert P._provider_view("groq", 0.0)["blocked_info"]["m-1"]["by"] == "owner@example.com"
+    R._status.clear()                                                            # a restart: the record comes back with the block
+    assert R.block_info("groq", "m-1")["by"] == "owner@example.com"
+    R.block("groq", "m-1", False, "owner@example.com")
+    assert R.block_info("groq", "m-1") is None and "groq/m-1" not in R.blocks()
+
+
+def test_a_block_made_before_it_was_recorded_has_no_who_or_when():
+    import json
+    from app import ai_providers as P
+    from app import ai_rank as R
+    R.STORE.data["ai:prefs"] = json.dumps({"pins": {}, "blocks": ["groq/old-model"]})
+    R._status.clear()
+    assert list(R.blocks()) == ["groq/old-model"] and R.block_info("groq", "old-model") is None
+    assert P._provider_view("groq", 0.0)["blocked_info"] == {"old-model": {}}
+
+
+def test_the_admin_block_and_rerank_routes_keep_the_admin_and_the_old_order(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import ai_rank as R
+    from app import main
+    from app.config import settings
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "owner@x.com")
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "k")
+    main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u1", "email": "owner@x.com", "_plan": "pro", "_email_verified": True}
+    c = TestClient(main.app)
+    try:
+        r = c.post("/admin/ai/block", json={"provider": "groq", "model": "m-1"}).json()
+        g = next(p for p in r["providers"] if p["name"] == "groq")
+        assert g["blocked_info"]["m-1"]["by"] == "owner@x.com"
+        R.status("groq").order = ["m-a", "m-b"]
+        R.status("groq").ranked_at = 111.0
+        monkeypatch.setattr(R, "start_rerank", lambda names, transport=None: names)
+        out = c.post("/admin/ai/rerank", json={"provider": "groq"}).json()
+        assert out["undo"]["groq"]["order"] == ["m-a", "m-b"] and out["undo"]["groq"]["ranked_at"] == 111.0
+        R.status("groq").order = ["m-z"]                                             # what the re-rank then measured
+        back = c.post("/admin/ai/rank-restore", json={"ranks": out["undo"]}).json()
+        assert back["restored"] == ["groq"] and R.status("groq").order == ["m-a", "m-b"] and R.status("groq").ranked_at == 111.0
+        assert c.post("/admin/ai/rank-restore", json={"ranks": {"nope": {"order": ["x"]}}}).json()["restored"] == []
+        main.app.dependency_overrides[main.current_profile] = lambda: {"id": "u2", "email": "other@x.com", "_plan": "pro", "_email_verified": True}
+        assert c.post("/admin/ai/rank-restore", json={"ranks": {}}).status_code == 403
+    finally:
+        main.app.dependency_overrides.clear()
+
+
+def test_a_rerank_that_finishes_after_an_undo_leaves_the_restored_order():
+    from app import ai_rank as R
+    st = R.status("groq")
+    st.order, st.probing = ["m-new"], True
+    R.restore_rank({"groq": {"order": ["m-old"], "ranked_at": 5.0, "rank_error": None}})
+    assert st.order == ["m-old"] and st.keep_order is True
+    st.probing = False
+    R.restore_rank({"groq": {"order": ["m-old"], "ranked_at": 5.0, "rank_error": None}})
+    assert st.keep_order is False
+
+
+# ---- R13S-010: the platform check writes its dates the site's way, and index levels with Indian grouping ----
+
+def test_the_platform_check_writes_days_and_levels_for_people():
+    from datetime import date
+    from app import platform_check as pc
+    assert pc._day(date(2026, 10, 7)) == "7 Oct"
+    assert pc._day("2026-10-13") == "13 Oct"
+    assert pc._day("2026-10-12T18:10:05+05:30") == "12 Oct"
+    assert pc._day("soon") == "soon"
+    assert pc._level(22520.45) == "22,520.45"
+    assert pc._level(1234567.5) == "12,34,567.50"
+    assert pc._level(None) == "–"
+
+
+# ---- R13S-015: the US screen's "sector" is the SEC's industry division, and says so ----
+
+def test_the_us_screen_calls_its_sector_what_it_is():
+    from app import screens
+    f = {"sector": ["Manufacturing"], "cap": [], "stage": [], "ranges": {}, "red_flags": None, "insider_buy": None, "surv_lists": None}
+    assert screens.describe("US", f)[0] == "Industry (SEC division): Manufacturing"
+    assert screens.describe("IN", f)[0] == "Sector: Manufacturing"
+    assert "not a market sector" in screens.meta("US")["help"]["sector"]
+    assert screens.meta("IN")["help"]["sector"] == screens.HELP["sector"] and "SEC" not in screens.HELP["sector"]
