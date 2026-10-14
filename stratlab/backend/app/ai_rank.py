@@ -19,6 +19,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+from . import leader
 from .ai_catalog import PROVIDERS, TASKS, configured, model_setting, size_b, strength, thinks, unusable
 from .ai_clients import CallError, client
 from .ai_reply import BadReply, check, extract_json, remaining
@@ -717,7 +718,8 @@ class RerankJob:
         time.sleep(self.first_wait)
         while True:
             try:
-                rerank_many([n for n in PROVIDERS if stale(n)])
+                if leader.leading():      # another container leads: it runs this pass
+                    rerank_many([n for n in PROVIDERS if stale(n)])
             except Exception:  # noqa: BLE001  (a bug here must not end the loop)
                 pass
             time.sleep(self.every)

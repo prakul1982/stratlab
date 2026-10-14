@@ -326,6 +326,24 @@ def test_an_edit_made_while_a_run_is_in_progress_is_kept(api, monkeypatch):
     assert [e["v"] for e in got["experiments"]] == [1] and got["summary"]["experiments"] == 1
 
 
+
+def test_two_overlapping_runs_get_distinct_versions(api, monkeypatch):
+    nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    real, inner = main.run_test, []
+
+    def slow(profile, strategy, req):
+        out = real(profile, strategy, req)
+        if not inner:                     # a second tab's run starts and finishes while this one runs
+            inner.append(None)
+            inner[0] = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400, "label": "second tab"}).json()
+        return out
+
+    monkeypatch.setattr(main, "run_test", slow)
+    first = api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365, "label": "first tab"}).json()
+    assert inner[0]["experiment"]["v"] == 1 and first["experiment"]["v"] == 2      # both counted v1 when they started
+    got = api.get(f"/notebooks/{nb['id']}").json()
+    assert [(e["v"], e["label"]) for e in got["experiments"]] == [(1, "second tab"), (2, "first tab")]
+
 def test_basket_and_walkforward_results_keep_an_edit_made_meanwhile(api, monkeypatch):
     nb = api.post("/notebooks", json={"name": "x", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 365})

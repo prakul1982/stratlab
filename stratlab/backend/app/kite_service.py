@@ -509,10 +509,14 @@ class KiteService:
         hit = self._cache.get(key)
         own = self.session_close.get(int(token))
         out_at = self._close_out(now) if not own else self._close_out_at(now, own)
-        # a daily bar stored today before the close landed holds a partial day: reused for a minute at most
-        if tf == "1d" and hit and hit[0] < out_at and datetime.fromtimestamp(hit[0], IST).date() == now.date():
+        open_at = self._open_at(token, now) if tf == "1d" else None
+        # today's daily bar stored before the close landed holds a partial day: reused for a minute at most, only once
+        # the market has opened on a trading day (weekends, holidays and before the open have no forming bar)
+        if open_at and open_at <= time.time() and hit and hit[0] < out_at and hit[1] \
+                and str(hit[1][-1]["t"])[:10] == now.date().isoformat():
             ttl = min(ttl, 60)
-        if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()):
+        if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()) \
+                and not (open_at and hit[0] < open_at <= time.time()):      # read before today's open: no today bar
             return self._official_days(token, tf, self._with_tail(token, tf, hit[1], continuous=continuous))
         start = now - timedelta(days=days)
         out, frm = [], start
@@ -568,6 +572,19 @@ class KiteService:
         from .data import sessions as S
         local = now.astimezone(IST)
         return (S.at(local.date(), S.close_known("cas", local.date())) + timedelta(minutes=2)).timestamp()
+
+    def _open_at(self, token, now: datetime) -> float | None:
+        """When the token's market opens today, as a timestamp; None on a day it doesn't trade."""
+        from .data import sessions as S
+        from .data.calendar import is_trading_day
+        local = now.astimezone(IST)
+        exch = (self._by_token.get(int(token)) or {}).get("exchange")
+        market = exch if exch in ("MCX", "CDS") else "IN"
+        if not is_trading_day(market, local.date()):
+            return None
+        if market != "IN":                           # commodities and currencies open at 09:00
+            return local.replace(hour=9, minute=0, second=0, microsecond=0).timestamp()
+        return S.at(local.date(), S.continuous("cash", local.date())[0]).timestamp()
 
     @staticmethod
     def _close_out_at(now: datetime, hhmm: str) -> float:

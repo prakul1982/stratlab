@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from . import alerts, db
+from . import alerts, db, leader
 from . import email_kit as kit
 from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
 
@@ -496,7 +496,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("lifecycle emails:", e)

@@ -16,7 +16,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import alerts, db
+from . import alerts, db, leader
 from .intel.net import SourceError
 
 REGIONS = ("IN", "US")
@@ -435,7 +435,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("results calendar:", e)

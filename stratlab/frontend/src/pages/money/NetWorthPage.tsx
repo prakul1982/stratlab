@@ -24,7 +24,7 @@ type Policy = {
   id: string; label: string; name: string; insurer: string; sum_assured: number | null; premium: number; frequency: string; yearly_premium: number | null;
   next_due: string | null; due_in: number | null; nominee: string | null; entry: Entry;
 };
-type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string };
+type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[] };
 type View = {
   as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null };
   allocation: { class: string; label: string; value: number; pct: number | null }[]; assets: Row[]; liabilities: Row[];
@@ -430,7 +430,7 @@ export function NetWorthPage() {
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
             {/* a source that couldn't be read or valued: named, and no snapshot is taken from this total */}
-            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. No snapshot is taken until it can be counted.</Notice>}
+            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. Only the monthly snapshot is kept meanwhile, marked partial.</Notice>}
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
@@ -478,7 +478,7 @@ export function NetWorthPage() {
               <ul className="k-stack k-tight">
                 {[...hist].reverse().map((h) => (
                   <li key={h.d} className="k-row">
-                    <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}</span>
+                    <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}{h.partial?.length ? ` · partial (not counted: ${h.partial.join("; ")})` : ""}</span>
                     <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`}>
                       <Trash size={14} /> Remove
                     </button>

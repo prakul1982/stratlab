@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from . import db
+from . import db, leader
 
 DAILY_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
 # the NAV history report for one day, every scheme
@@ -247,7 +247,8 @@ def keep_fresh(every: float = 900.0) -> None:
     older than MAX_AGE, so no visitor is the one to trigger it."""
     while True:
         try:
-            daily()
+            if leader.leading():      # another container leads: it runs this pass
+                daily()
         except Exception as e:
             print("NAV keep-fresh failed:", type(e).__name__)
         time.sleep(every)

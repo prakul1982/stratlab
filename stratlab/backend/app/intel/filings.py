@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from .. import db, run_marks
+from .. import db, leader, run_marks
 from ..http_retry import real_transport
 from .net import BROWSER_UA, SourceError, TTLCache, RateLimit
 
@@ -1550,7 +1550,8 @@ class Alerts:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(IST))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(IST))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("filing alerts:", e)

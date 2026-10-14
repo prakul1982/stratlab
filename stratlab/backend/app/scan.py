@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from . import db, run_marks, scan_presets, universes
+from . import db, leader, run_marks, scan_presets, universes
 from .engine.indicators import stage, supertrend
 from .intel.net import TTLCache
 
@@ -232,6 +232,9 @@ class Alerts:
 
     def _loop(self):
         while True:
+            if not leader.leading():      # another container leads: it runs this pass
+                time.sleep(60)
+                continue
             now = datetime.now(ZoneInfo("UTC"))
             for check in self.checks:
                 try:

@@ -21,7 +21,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from . import db, results
+from . import db, leader, results
 from .intel.net import SourceError, TTLCache
 from .results import REGIONS, TZ, dates_in, local_today, parse_day
 
@@ -664,7 +664,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("corporate actions:", e)

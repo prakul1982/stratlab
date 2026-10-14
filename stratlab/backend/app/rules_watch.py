@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import alerts, db
+from . import alerts, db, leader
 from .http_retry import real_transport
 
 KEY = "ruleswatch:state"
@@ -323,7 +323,8 @@ class Job:
     def _loop(self):
         while True:
             try:
-                self.tick(datetime.now(timezone.utc))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(timezone.utc))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("rules watch:", e)

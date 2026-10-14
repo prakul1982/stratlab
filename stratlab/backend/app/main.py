@@ -641,7 +641,8 @@ def rates_job():
     time.sleep(120)
     while True:
         try:
-            pricing.refresh_rates(fx_rate)
+            if leader.leading():      # another container leads: it runs this pass
+                pricing.refresh_rates(fx_rate)
         except Exception as e:
             print("exchange rate refresh failed:", e)
         time.sleep(24 * 3600)
@@ -1428,7 +1429,9 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
         rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
     # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over
     cur = get_notebook(profile, nid)
-    full = list(cur.get("experiments") or []) + [rec]
+    prev = list(cur.get("experiments") or [])
+    rec["v"] = max((e["v"] for e in prev), default=0) + 1      # a run that finished meanwhile took the number counted at the start
+    full = prev + [rec]
     public.unpublish_all(full[:-50])          # a dropped experiment's link could not be turned off any more
     experiments = research.slim(full[-50:])
     cur["experiments"], cur["summary"] = experiments, research.summary(experiments)
@@ -3586,7 +3589,8 @@ def stock_list_job():
     """Once a day: the lists of listed companies (India, NSE and BSE-only; the US), for the sitemaps and pages."""
     time.sleep(240)                         # after startup traffic
     while True:
-        for region, fn in (("IN", india_listing), ("US", _sec_companies)):
+        lists = (("IN", india_listing), ("US", _sec_companies)) if leader.leading() else ()   # another container leads: it reads them
+        for region, fn in lists:
             try:
                 stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
             except Exception as e:
@@ -3754,7 +3758,8 @@ def stock_price_refresh_job():
     while True:
         status: dict = {}
         try:
-            status = stock_price_refresh_once()
+            if leader.leading():      # another container leads: it runs this pass
+                status = stock_price_refresh_once()
         except Exception as e:
             print("stock price refresh failed:", str(e)[:160])
         time.sleep(refresh_wait(status))
@@ -4655,8 +4660,9 @@ def holiday_job():
     time.sleep(90)                          # after startup traffic
     while True:
         try:
-            trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
-            trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
+            if leader.leading():      # another container leads: it runs this pass
+                trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
+                trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
         except Exception as e:
             print("holiday refresh failed:", e)
         time.sleep(24 * 3600)
@@ -5296,7 +5302,8 @@ def weekly_job():
     """Every Monday at 9:00 IST: the owner's summary of the week. Wakes at least hourly, so a restart catches up."""
     while True:
         try:
-            send_weekly_summary(datetime.now(IST))
+            if leader.leading():      # another container leads: it runs this pass
+                send_weekly_summary(datetime.now(IST))
         except Exception as e:
             print("weekly summary failed:", e)
         now = datetime.now(IST)
@@ -5387,6 +5394,8 @@ def library_seed_once(sleep=time.sleep):
     sleep(SEED_FIRST_WAIT)
     for _ in range(SEED_TRIES):
         try:
+            if not leader.leading():      # another container leads: its own start seeds
+                return
             if library_seed.seeded():
                 return
             if kite.ready() and _seeding.acquire(blocking=False):

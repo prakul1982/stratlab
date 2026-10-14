@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
+from .. import leader
 from ..data import sessions
 from ..data.calendar import is_trading_day
 
@@ -126,7 +127,8 @@ class Recorder:
         def loop():
             while True:
                 t = time.time()
-                if t >= self._next or self.close_due(datetime.now(timezone.utc)):
+                # another container leads: it records
+                if leader.leading() and (t >= self._next or self.close_due(datetime.now(timezone.utc))):
                     self._next = t + self.every
                     try:
                         self.run_once()
