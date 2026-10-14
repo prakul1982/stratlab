@@ -38,10 +38,13 @@ export function useNotebook(id: string | undefined) {
   const timer = useRef<number>(undefined);
   const pending = useRef<Record<string, unknown>>({});
 
+  const seq = useRef(0);       // a slower answer for the notebook just left must not land on this one
   const load = useCallback(async () => {
     if (!id) return;
+    const n = ++seq.current;
     setProblem(null);
-    try { setNb(await api<Notebook>(`/notebooks/${id}`)); } catch (e) {
+    try { const x = await api<Notebook>(`/notebooks/${id}`); if (n === seq.current) setNb(x); } catch (e) {
+      if (n !== seq.current) return;
       const status = (e as ApiError).status;
       if (status === 404 || status === 400 || status === 422) setProblem("missing");      // a page says so; no toast
       else { setProblem("error"); fail(e); }

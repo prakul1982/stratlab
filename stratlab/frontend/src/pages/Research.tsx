@@ -79,7 +79,12 @@ function OpenCompany({ region, label = "Company", autoFocus }: { region: Region;
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
   const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[] } | null>(null);
-  useEffect(() => { setPulse(null); researchApi.pulse(region).then(setPulse).catch(() => setPulse({ indices: [], headlines: [] })); }, [region]);
+  useEffect(() => {
+    let live = true;
+    setPulse(null);
+    researchApi.pulse(region).then((p) => live && setPulse(p)).catch(() => live && setPulse({ indices: [], headlines: [] }));
+    return () => { live = false; };
+  }, [region]);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title="Look up a company"

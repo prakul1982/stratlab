@@ -13,7 +13,7 @@ import { IdeaComposer, type Built } from "../components/IdeaComposer";
 import { ImportStrategy } from "../components/ImportStrategy";
 import { Pin, Search, Upload } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
-import { Badge, Card, CardHead, ChipBar, EmptyState, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
+import { Badge, Card, CardHead, ChipBar, EmptyState, ErrorState, Notice, PageHeader, Seg, Skeleton } from "../components/kit";
 import "./trade/trade.css";
 
 export type Where = { market: string; instrument: Instrument | null };
@@ -198,7 +198,7 @@ type Sort = "recent" | "name" | "verdict";
 
 /** `hide`: tools the page around it already links to, so each shows once (see Explore). */
 export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
-  const { notebooks, refreshNotebooks, fail } = useApp();
+  const { notebooks, notebooksFailed, refreshNotebooks, fail } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort>(() => { try { return (localStorage.getItem("stratlab.nbSort") as Sort) || "recent"; } catch { return "recent"; } });
@@ -213,6 +213,10 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
   if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" /></Card></div>;
+  if (notebooksFailed && notebooks.length === 0) return (
+    <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" />
+      <ErrorState title="Your notebooks couldn't be read" action={{ label: "Try again", onClick: () => { void refreshNotebooks(); } }}>Nothing was changed. Check your connection and try again.</ErrorState></div>
+  );
   // /notebooks is always the list (the menu's "Notebooks"); with none yet it says so and offers the first, on /new
   if (notebooks.length === 0) return (
     <div className="k-page">
