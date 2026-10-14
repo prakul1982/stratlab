@@ -29,7 +29,7 @@ def test_the_receipt_is_headed_invoice_while_the_seller_has_no_gstin(monkeypatch
     from app import invoices
     monkeypatch.setattr(invoices, "seller", lambda: {**{f: "" for f in invoices.FIELDS}, "prefix": "SL"})
     text = P.describe("lifecycle_receipt", True)["text"]
-    assert "Not registered under GST" in text
+    assert "Not registered under GST" not in text and "not set yet" not in text
     assert "tax invoice" not in text.lower() and "INVOICE SL/2026-27/0001" in text
     inv = lifecycle.sample_invoice(datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc))
     assert "Tax invoice" not in invoices.html(inv) and "<h1>Invoice</h1>" in invoices.html(inv)

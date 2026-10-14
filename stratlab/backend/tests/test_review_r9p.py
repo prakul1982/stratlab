@@ -151,7 +151,7 @@ def test_the_receipt_preview_is_the_plain_invoice_while_the_seller_has_no_gstin(
     assert (real["taxes"], real["supply"], real["note"]) == (inv["taxes"], inv["supply"], inv["note"])
     assert real["item"]["taxable"] == inv["item"]["taxable"] == 1999.0
     text = P.describe("lifecycle_receipt", True)["text"]
-    assert "Not registered under GST" in text and "no GST charged" in text
+    assert "Not registered under GST" not in text and "not set yet" not in text and "no GST charged" in text
     assert "CGST" not in text and "SGST" not in text and "GSTIN 27" not in text and "27ABCDE1234F1Z5" not in text
     assert "₹1,999.00" in text
 
@@ -178,10 +178,10 @@ def test_the_weekly_error_line_uses_admins_wording_and_numbers(monkeypatch):
     facts = {"stats": {"users": 9, "new": 4, "paid": {}, "paying": {}, "given": {"pro": 6}, "experiments": 14, "ai": 16},
              "checks": [], "audits": {}, "errors": 21, "errors_since_restart": 0, "errors_before_restart": 23, "admin_url": None}
     _, text = weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)
-    assert "- 21 errors this week (0 since the last restart, 23 kept from before it)" in text
+    assert "- 21 server errors this week; 23 more from before the last restart are kept" in text
     assert "listed on Admin" not in text
     facts.update(errors_since_restart=2, errors_before_restart=0, errors=2)
-    assert "- 2 errors this week (2 since the last restart)" in weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)[1]
+    assert "- 2 server errors this week" in weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)[1]
 
 
 # ---------- R9P-005: Account says the viewed plan's AI caps ----------
@@ -328,7 +328,7 @@ def test_the_plain_text_part_names_the_headline_and_its_publisher_not_a_wall_of_
     assert "Sensex ends 879 points higher as IT stocks rally (Economic Times)" in text
     assert "news.google.com" not in text and "CBMi" not in text and max(len(ln) for ln in text.splitlines()) < 200
     assert "(https://example.com/rupee)" in text                                       # a short address still prints
-    assert issue["html"].count(LONG.replace("&", "&amp;")) >= 1 or "news.google.com/rss/articles/CBMi" in issue["html"]    # the link stays in the HTML
+    assert "news.google.com" not in issue["html"] and "/news-link/" in issue["html"]    # R19-006: the HTML links the same short address as the text
     assert write.banned("") is False
 
 

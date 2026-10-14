@@ -146,9 +146,15 @@ def tidy_title(t: str) -> str:
     t = " ".join(str(t or "").split())
     if len(t) >= 70 and not re.search(r"[.!?\"'’)\]…]$", t):
         last = t.rsplit(" ", 1)[-1]
-        if re.fullmatch(r"[a-z]{1,3}", last) and last not in _SHORT_OK:
+        if (re.fullmatch(r"[a-z]{1,3}", last) and last not in _SHORT_OK) or re.fullmatch(r"[B-HJ-Z]", last):   # "... 7 triggers behind R"
             return t.rsplit(" ", 1)[0].rstrip(" ,;:-–") + "…"
     return t
+
+
+def drop_publisher(title: str, source: str | None) -> str:
+    """A title without its trailing " - Publisher" when the publisher is shown beside it ("... - Reuters (Reuters)")."""
+    t, s = " ".join(str(title or "").split()), " ".join(str(source or "").split())
+    return t[:-(len(s) + 3)].rstrip() if s and t.lower().endswith(" - " + s.lower()) and len(t) > len(s) + 3 else t
 
 
 def title_key(t: str) -> str:
@@ -186,7 +192,8 @@ def other_region(region: str, title: str) -> bool:
 # not a market story whatever market word it carries (R7O-005: "'I'm getting fed up': voters line up before dawn as
 # early voting begins in Ohio")
 OFF_TOPIC = re.compile(r"\b(voters?|early voting|ballots?|polling (station|booth)s?|campaign trail|spy chief|arrested|murder|"
-                       r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football)\b", re.I)
+                       r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football|"
+                       r"cramer|things to watch|what to watch|endowments?)\b", re.I)
 _MON = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
 _TITLE_DATE = re.compile(r"\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?"
                          r"|(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?)(?![\d,])", re.I)
@@ -286,7 +293,8 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
     out, keys = [], set(seen or ())
     dated = frm > "0000-00-00" or to < "9999-99-99"
     for h in rows or []:
-        title = tidy_title(h.get("headline"))
+        source = publisher(h.get("source"))
+        title = tidy_title(drop_publisher(h.get("headline"), source))
         if not headline_ok(region, title, frm if dated else None, to if dated else None, indices):
             continue
         day = _local_day(h.get("at"), region)
@@ -296,7 +304,7 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
         if k in keys:
             continue
         keys.add(k)
-        out.append({"headline": title, "url": h.get("url"), "at": h.get("at"), "source": publisher(h.get("source"))})
+        out.append({"headline": title, "url": h.get("url"), "at": h.get("at"), "source": source})
     return out[:n]
 
 
@@ -444,7 +452,7 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     change = _pct(now["price"], before_bars[-1]["c"] if before_bars else None)
     flags = [{"label": i["label"], "severity": i["severity"], "subject": i["subject"], "at": i["at"], "url": i.get("url")}
              for i in data["filings"] or [] if i["severity"] in ("red", "amber") and i["at"] > since][:4]
-    news = [{"headline": n["headline"], "url": n.get("url"), "at": n.get("at"), "source": publisher(n.get("source"))} for n in data["news"] or []
+    news = [{"headline": drop_publisher(n["headline"], publisher(n.get("source"))), "url": n.get("url"), "at": n.get("at"), "source": publisher(n.get("source"))} for n in data["news"] or []
             if n.get("headline") and _plain_title(n["headline"]) and (not n.get("at") or str(n["at"])[:10] >= since[:10])][:2]
     trades = [{"text": deals.describe(d), "url": d.get("url"), "filed": d["filed"]}
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]

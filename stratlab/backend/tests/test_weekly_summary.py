@@ -50,7 +50,7 @@ def test_the_summary_has_the_weeks_numbers(monkeypatch):
     try:
         _week(w, monkeypatch, MONDAY)
         subject, text = main.weekly_summary(MONDAY)
-        assert "2 new users" in subject and "3 things to look at" in subject
+        assert "2 new users" in subject and "1 run with failures, 1 listing with problems, 1 server error" in subject
         assert "- 2 new this week, 3 in all" in text
         # b is on Pro with no subscription: given by the owner, not paying (R6V-010: the email said "Paid: Pro 6")
         assert "- Paying: none" in text and "- Given by the owner, not paying: Pro 1" in text and "Paid:" not in text
@@ -59,7 +59,7 @@ def test_the_summary_has_the_weeks_numbers(monkeypatch):
         assert "- India: 2 checked this week, 1 with problems: NEWCO (2 mismatches, 1 error)" in text
         assert "OLDCO" not in text
         assert "- US: audit is off" in text
-        assert "- 1 error this week" in text
+        assert "- 1 server error this week" in text
         assert text.endswith("Admin page: https://stratlab.example/admin")
     finally:
         w["close"]()
