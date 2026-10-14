@@ -61,6 +61,27 @@ def fresh_settings_mirror():
     db.forget_mirror()
 
 
+def _forget_company_lists():
+    sp, sc = sys.modules.get("app.stock_pages"), sys.modules.get("app.screens")
+    if sp is not None:
+        sp._companies.clear()
+    if sc is not None:
+        with sc._mem_lock:
+            sc._mem.clear()
+            sc._built.clear()
+
+
+@pytest.fixture(autouse=True)
+def fresh_company_lists():
+    """The public pages (app/stock_pages.py) and the stock screens (app/screens.py) keep the company lists they read in
+    memory for the process. A test that built them from its own small world left that list for whichever test came next
+    on the same worker (the demo world's screens saw 5 companies instead of its 20 when they ran after the stock-page
+    tests), so the lists don't carry over from one test to the next."""
+    _forget_company_lists()
+    yield
+    _forget_company_lists()
+
+
 @pytest.fixture(autouse=True)
 def fresh_ai():
     """What the AI layer learnt about models, and the answers it cached, don't carry over from one test to the next;

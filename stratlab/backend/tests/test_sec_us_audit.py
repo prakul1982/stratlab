@@ -1,8 +1,11 @@
 """Fixes from the US whole-market audit sheet (October 2026), on constructed SEC company-facts and submissions payloads:
 why a company has no results to show, results in another currency, revenue, profit, capex and debt read from what the
 annual report does and doesn't tag, REITs and business development companies, and fair price comparisons."""
+from datetime import datetime, timezone
+
 import httpx
 import pytest
+import time_machine
 
 from app import audit, checklist, deepdive, industry
 from app.intel import sec
@@ -89,6 +92,7 @@ def test_tickers_with_dots_slashes_and_preferred_series_find_the_filer():
     assert s.cik("BAC.PRL") == s.cik("BAC-PL") == 9
 
 
+@time_machine.travel(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc))      # its filings are from 2025: inside the two years read
 def test_a_heavy_filer_reads_the_next_page_of_its_filing_list():
     recent = _subs(["424B2"] * 3)["filings"]["recent"]
     subs = {"cik": "1", "name": "Big Bank", "sic": "6021", "filings": {"recent": recent, "files": [{"name": "CIK0000000001-submissions-001.json"}]}}

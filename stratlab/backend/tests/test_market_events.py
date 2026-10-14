@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
+import time_machine
 
 from app import db, main  # noqa: F401  (main first: it loads the modules in the order they need)
 from app import market_events as M, market_events_routes as R
@@ -30,11 +31,13 @@ def sample(name: str) -> str:
 
 @pytest.fixture
 def w(monkeypatch):
-    world = W.build(monkeypatch)
-    R.forget()
-    yield world
-    world["close"]()
-    R.forget()
+    """Every test here is on TODAY: the refresh the admin starts reads the calendar as of the app's clock, whatever day it is."""
+    with time_machine.travel(datetime(TODAY.year, TODAY.month, TODAY.day, 5, 0, tzinfo=ZoneInfo("UTC"))):
+        world = W.build(monkeypatch)
+        R.forget()
+        yield world
+        world["close"]()
+        R.forget()
 
 
 @pytest.fixture
