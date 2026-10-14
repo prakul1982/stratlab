@@ -141,6 +141,7 @@ def test_the_receipt_preview_is_the_plain_invoice_while_the_seller_has_no_gstin(
     store: dict = {}
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "update_setting", lambda k, fn, tries=10: store.__setitem__(k, fn(store.get(k)) or store.get(k)) or store.get(k))
     monkeypatch.setattr(invoices, "seller", lambda: {**{f: "" for f in invoices.FIELDS}, "prefix": "SL"})        # nothing filled in
     inv = lifecycle.sample_invoice(datetime.now(timezone.utc))
     assert inv["taxes"] == [] and inv["supply"] == "Unregistered" and inv["seller"]["gstin"] == ""

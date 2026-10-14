@@ -4489,6 +4489,9 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
+    # each call creates a Razorpay subscription
+    throttle(profile, "subscribe", 5, 60, "That's a lot of checkouts in a minute. Try again in a minute.")
+    throttle(profile, "subscribe_day", 20, 86400, "You've started a lot of checkouts today. Try again tomorrow.")
     try:
         return billing.create_subscription(profile, req.plan, req.period, req.currency)
     except ValueError as e:

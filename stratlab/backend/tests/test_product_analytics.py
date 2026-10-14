@@ -21,6 +21,7 @@ def sent(monkeypatch):
     for mod in (invoices.db, product_analytics.db):
         monkeypatch.setattr(mod, "get_setting", lambda k: saved.get(k))
         monkeypatch.setattr(mod, "set_setting", lambda k, v: saved.__setitem__(k, v))
+        monkeypatch.setattr(mod, "update_setting", lambda k, fn, tries=10: saved.__setitem__(k, fn(saved.get(k)) or saved.get(k)) or saved.get(k))
     monkeypatch.setattr(product_analytics, "BACKGROUND", False)
     monkeypatch.setattr(product_analytics.httpx, "post", lambda url, json=None, timeout=None:
                         posts.append({"url": url, "body": json}) or SimpleNamespace(status_code=200, text=""))

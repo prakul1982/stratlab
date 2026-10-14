@@ -147,6 +147,7 @@ def test_receipt_from_a_real_invoice_shows_igst_and_the_buyers_gstin(monkeypatch
     store = {}
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "update_setting", lambda k, fn, tries=10: store.__setitem__(k, fn(store.get(k)) or store.get(k)) or store.get(k))
     invoices.save_seller({"legal_name": "StratLab Labs LLP", "address": "Pune", "state": "27", "gstin": "27ABCDE1234F1Z5"})
     invoices.save_billing("u-1", {"name": "Acme Pvt Ltd", "state": "29", "gstin": "29ABCDE1234F1Z5", "country": "IN"})
     inv = invoices.make({"id": "pay_1", "amount": 49900, "currency": "INR", "created_at": 1791331200}, {"id": "u-1", "email": "a@example.com"},

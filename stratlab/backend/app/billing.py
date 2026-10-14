@@ -165,10 +165,12 @@ def activate(profile: dict, sub: dict):
 
 def _stale(profile: dict, sub: dict) -> bool:
     """A late or retried event for a subscription that must not change the plan: it has ended, or the user has since
-    moved to another active one (and this one isn't the checkout in progress)."""
+    moved to another active one (and this one isn't the checkout in progress), or a refund ended it."""
     if sub.get("status") in ("cancelled", "completed", "halted", "expired"):
         return True
     cur = profile.get("razorpay_subscription_id")
+    if profile.get("plan_status") == "refunded" and cur == sub["id"]:
+        return True
     return bool(profile.get("plan_status") == "active" and cur and cur != sub["id"]
                 and sub["id"] != profile.get("pending_subscription_id"))
 
@@ -214,7 +216,7 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
     sub = client().subscription.fetch(sub_id)
     if (sub.get("notes") or {}).get("user_id") != profile["id"]:
         raise SignatureVerificationError("Subscription belongs to another user.")
-    if _stale(profile, sub) or (profile.get("plan_status") == "refunded" and profile.get("razorpay_subscription_id") == sub_id):
+    if _stale(profile, sub):
         raise SignatureVerificationError("This subscription has ended or was refunded.")     # a replayed checkout gets nothing
     activate(profile, sub)
     try:
@@ -274,8 +276,11 @@ def _payment_owner(event: dict, payment_id: str) -> tuple[str | None, dict | Non
 
 
 def _paid_in_full(event: dict, payment_id: str) -> bool:
+    pay = _entity(event, "payment")
+    if pay.get("status") == "refunded" or (pay.get("amount") and pay.get("amount_refunded") == pay.get("amount")):
+        return True                            # the payment's own state: all of it is back
     amount = _entity(event, "refund").get("amount")
-    paid = _entity(event, "payment").get("amount")
+    paid = pay.get("amount")
     if paid is None:
         try:
             paid = client().payment.fetch(payment_id).get("amount")
@@ -302,8 +307,10 @@ def _act(event: dict):
     name = event.get("event", "")
     if name in REVERSALS:                      # these carry no subscription: invite rewards, and a full refund or lost dispute
         pid = _reversed_payment(event)
-        invite_rewards.safe_refunded(pid)
-        if pid and (name == "payment.dispute.lost" or (name == "refund.processed" and _paid_in_full(event, pid))):
+        full = bool(pid) and name == "refund.processed" and _paid_in_full(event, pid)
+        if name.startswith("payment.dispute.") or full:      # a partial (goodwill) refund keeps the invite reward
+            invite_rewards.safe_refunded(pid)
+        if pid and (name == "payment.dispute.lost" or full):
             _end_plan(event, pid)
         return
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")

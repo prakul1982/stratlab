@@ -151,7 +151,29 @@ def test_set_plan_records_that_it_was_given_by_hand(monkeypatch):
     monkeypatch.setattr(db, "update_profile", lambda uid, **f: saved.update(f) or {"id": uid, **f})
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "update_setting", lambda k, fn, tries=10: store.__setitem__(k, fn(store.get(k)) or store.get(k)) or store.get(k))
     admin.set_plan("u1", "pro", 30)
     assert "plan_source" not in saved and admin.granted() == {"u1"}      # no new profile column needed
     admin.set_plan("u1", "free", None)
     assert admin.granted() == set()
+
+
+def test_owner_ids_and_hand_given_marks_survive_a_write_in_between(monkeypatch):
+    """Two servers writing the shared maps at once: a compare-and-set, so neither change is lost."""
+    from tests.fake_db import FakeSupabase
+    from tests.test_atomic_settings import between
+    monkeypatch.setattr(db, "_client", FakeSupabase())
+    monkeypatch.setattr(settings, "ADMIN_EMAILS", "a@x.com,b@x.com")
+    admin.forget_owners()
+    between(monkeypatch, lambda: admin.mark_granted("u2", True))
+    admin.mark_granted("u1", True)
+    assert admin.granted() == {"u1", "u2"}
+    between(monkeypatch, lambda: admin.mark_granted("u2", False))
+    admin.mark_granted("u1", False)
+    assert admin.granted() == set()
+    db.set_setting(admin.OWNERS_KEY, "{}")
+    admin.forget_owners()
+    between(monkeypatch, lambda: db.set_setting(admin.OWNERS_KEY, '{"ob": "b@x.com"}'))
+    admin.remember_owner({"id": "oa", "email": "A@x.com", "_email_verified": True})
+    assert db.json_value(db.get_setting(admin.OWNERS_KEY), {}) == {"oa": "a@x.com", "ob": "b@x.com"}
+    admin.forget_owners()
