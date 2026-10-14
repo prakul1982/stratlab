@@ -1269,7 +1269,7 @@ def get_notebook(profile, nid: str) -> dict:
 
 
 def save_notebook(profile, nb: dict) -> dict:
-    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps")}
+    body = {k: nb.get(k) for k in ("kind", "question", "notes", "strategy", "instrument", "experiments", "summary", "pinned", "group", "gaps", "next_v")}
     body["kind"] = "notebook"
     body["tf"] = (nb.get("strategy") or {}).get("tf")
     inst = nb.get("instrument") or {}
@@ -1391,6 +1391,9 @@ def duplicate_notebook(nid: str, profile=Depends(current_profile)):
     copy = {"name": f"{nb.get('name') or 'Notebook'} (copy)"[:80], "question": nb.get("question") or "",
             "notes": nb.get("notes") or "", "strategy": nb.get("strategy"), "instrument": nb.get("instrument"),
             "experiments": [], "summary": research.summary([])}
+    for k in ("group", "gaps"):
+        if nb.get(k):
+            copy[k] = nb[k]
     return ok(save_notebook(profile, copy))
 
 
@@ -1400,6 +1403,7 @@ def delete_notebook(nid: str, profile=Depends(current_profile)):
     if not row:
         err(404, "not_found", "Notebook not found.")
     library.take_down(notebook_from_row(row).get("experiments") or [])   # its public links and library entries go with it
+    library.remove_of_notebook(profile["id"], nid)                       # and entries whose experiment was deleted earlier
     db.delete_strategy(profile["id"], check_id(nid))
     return {"deleted": True}
 
@@ -1439,9 +1443,11 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over
     cur = get_notebook(profile, nid)
     prev = list(cur.get("experiments") or [])
-    rec["v"] = max((e["v"] for e in prev), default=0) + 1      # a run that finished meanwhile took the number counted at the start
+    # a run that finished meanwhile took the number counted at the start; a deleted version's number is never handed out again
+    rec["v"] = max(cur.get("next_v") or 1, max((e["v"] for e in prev), default=0) + 1)
+    cur["next_v"] = rec["v"] + 1
     full = prev + [rec]
-    public.unpublish_all(full[:-50])          # a dropped experiment's link could not be turned off any more
+    library.take_down(full[:-50])             # a dropped experiment's link and library entry could not be turned off any more
     experiments = research.slim(full[-50:])
     cur["experiments"], cur["summary"] = experiments, research.summary(experiments)
     if defaulted:
@@ -1517,10 +1523,20 @@ def share_experiment(nid: str, version: int, req: ShareReq, profile=Depends(curr
     exp = next((e for e in exps if e["v"] == version), None)
     if exp is None:
         err(404, "not_found", "Experiment not found.")
+    had = exp.get("public")
     token = public.publish(nb, exp, req.image)
-    exp["public"] = token
-    nb["experiments"] = [exp if e["v"] == version else e for e in exps]
-    save_notebook(profile, nb)
+    cur = get_notebook(profile, nid)          # a share made meanwhile keeps its token; ours is switched off again
+    now = next((e for e in cur.get("experiments") or [] if e["v"] == version), None)
+    if now is None:
+        if not had:
+            public.unpublish(token)
+        err(404, "not_found", "Experiment not found.")
+    if not had and now.get("public"):
+        public.unpublish(token)
+        token = now["public"]
+    else:
+        now["public"] = token
+        save_notebook(profile, cur)
     return {"token": token, "url": public.url(token)}
 
 
@@ -3117,8 +3133,9 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if req.author.strip().casefold() == "stratlab" and not admin.is_admin(profile):
+    if "stratlab" in re.sub(r"[\W_]+", "", req.author.casefold()) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
+    throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
     e = library.entry(nb, exp, profile["id"], req.author, req.description,
                       entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
@@ -3126,9 +3143,18 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
     e = library.carry_moderation(old if old and old.get("owner") == profile["id"] else None, e)
     library.save(e)
-    exp["library"] = e["id"]
-    nb["experiments"] = [exp if x["v"] == version else x for x in exps]
-    save_notebook(profile, nb)
+    cur = get_notebook(profile, nid)          # an entry made meanwhile is kept; ours is taken down again
+    now = next((x for x in cur.get("experiments") or [] if x["v"] == version), None)
+    if now is None:
+        if not exp.get("library"):
+            library.remove(e["id"])
+        err(404, "not_found", "Experiment not found.")
+    if not exp.get("library") and now.get("library") and now["library"] != e["id"]:
+        library.remove(e["id"])
+        e = library.load(now["library"]) or e
+    else:
+        now["library"] = e["id"]
+        save_notebook(profile, cur)
     return library.public(e, profile["id"])
 
 
@@ -4017,9 +4043,9 @@ def delete_experiment(nid: str, version: int, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     if not any(e["v"] == version for e in nb.get("experiments") or []):
         err(404, "not_found", "Experiment not found.")
-    for e in nb.get("experiments") or []:
-        if e["v"] == version and e.get("public"):
-            public.unpublish(e["public"])
+    exps = nb.get("experiments") or []
+    nb["next_v"] = max(nb.get("next_v") or 1, max(e["v"] for e in exps) + 1)     # the deleted number is not handed out again
+    library.take_down([e for e in exps if e["v"] == version])             # its public link and library entry go with it
     nb["experiments"] = [e for e in nb.get("experiments") or [] if e["v"] != version]
     nb["summary"] = research.summary(nb["experiments"])
     save_notebook(profile, nb)
@@ -5472,6 +5498,8 @@ def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_pro
         library.remember(library.moderate(e, "hide"))      # published again, it stays hidden
         library.remove(eid)
     else:
+        if req.action != "hide":
+            library.clear_hide(e)
         library.save(library.moderate(e, req.action))
     return {"ok": True}
 
