@@ -192,6 +192,24 @@ def trading_bars(market: str | None, bars: list[dict], tf: str) -> list[dict]:
     return out if len(out) != len(bars) else bars
 
 
+# markets whose calendar is their own exchange's, so its closing times are theirs (MCX and global futures only borrow
+# the holidays)
+OWN_HOURS = ("US", "UK", "EU", "JP")
+
+
+@lru_cache(maxsize=512)
+def day_close(market: str, day: date) -> str | None:
+    """The day's closing time ("HH:MM", the exchange's local time) from the calendar, which knows early closes (13:00
+    on the day after Thanksgiving), or None when the calendar doesn't cover the day."""
+    cal = _calendar(CODES[market]) if market in OWN_HOURS else None
+    try:
+        if cal is None or not (cal.first_session.date() <= day <= cal.last_session.date()) or not cal.is_session(day.isoformat()):
+            return None
+        return cal.closes.loc[day.isoformat()].tz_convert(cal.tz).strftime("%H:%M")
+    except Exception:
+        return None
+
+
 def is_holiday(market: str, day: date) -> bool:
     """A weekday the exchange is closed."""
     return day.weekday() < 5 and not is_trading_day(market, day)
