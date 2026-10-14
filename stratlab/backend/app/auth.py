@@ -10,6 +10,7 @@ from .plans import access_plan, effective_plan, view_as_of
 _cache: dict[str, tuple[float, str, str, bool, str | None]] = {}     # token -> (until, id, email, verified, sign-in method)
 _rejected: dict[str, float] = {}          # tokens the sign-in service just refused, until when
 _lock = threading.Lock()
+TOKEN_TTL = 15                            # seconds a checked token is trusted: "Sign out everywhere" takes effect this soon
 
 
 def _unreachable(e: Exception) -> bool:
@@ -35,7 +36,7 @@ def _unavailable() -> HTTPException:
 
 
 def _verify(token: str, now: float) -> tuple[str, str | None, bool, str | None]:
-    """Ask the sign-in service about a token: (user id, email, proven by Google, how they signed in), kept for a minute.
+    """Ask the sign-in service about a token: (user id, email, proven by Google, how they signed in), kept for TOKEN_TTL.
     A token it refuses is remembered as refused for a minute."""
     try:
         user = db.sb().auth.get_user(token).user
@@ -59,7 +60,7 @@ def _verify(token: str, now: float) -> tuple[str, str | None, bool, str | None]:
     with _lock:
         if len(_cache) > 5000:
             _cache.clear()
-        _cache[token] = (now + 60, uid, email, verified, method)
+        _cache[token] = (now + TOKEN_TTL, uid, email, verified, method)
     return uid, email, verified, method
 
 

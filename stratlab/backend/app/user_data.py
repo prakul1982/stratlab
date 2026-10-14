@@ -3,7 +3,8 @@
 Used by Admin -> Users, "Delete this user's data". It removes what the app keeps for the person (drawings, Connect
 records with their sealed tokens, inbox address and statement password, holdings, net worth, notebooks, alerts,
 preferences and the like). It does not delete the sign-in account or the billing record: those stay with the auth
-provider and the payment records the law asks us to keep.
+provider and the payment records the law asks us to keep. Usage counts (usage_events, the plan's monthly quotas) and
+the invite reward records another user's reward caps count (reward:<uid>, rewardgrant:) stay too.
 
 Every step runs on its own, so one store that fails does not leave the rest behind; the answer says which step failed
 and the admin can run it again (every step is safe to repeat)."""
@@ -36,9 +37,17 @@ def _drawings(uid: str) -> int:
     return n
 
 
+def _rows(table: str, uid: str, cols: str = "*") -> list[dict]:
+    """Every row of the user's in a table, a page at a time (the server caps one read)."""
+    return db.paged(lambda: db.sb().table(table).select(cols).eq("user_id", uid))
+
+
 def _connect(uid: str) -> int:
     """Sealed broker tokens, the statement-inbox address and the statement password: the whole connect/ record."""
     from .connect import kite_user, state
+    for key, raw in db.all_settings_with_prefix(kite_user.PENDING):    # a Zerodha login waiting to be confirmed
+        if db.json_value(raw, {}).get("uid") == uid:
+            db.delete_setting(key)
     had = len(state.load(uid))
     try:
         if state.section(uid, "kite").get("token"):
@@ -51,7 +60,7 @@ def _connect(uid: str) -> int:
 
 def _notebooks(uid: str) -> int:
     from . import library
-    rows = db.sb().table("strategies").select("id,body").eq("user_id", uid).execute().data
+    rows = _rows("strategies", uid, "id,body")
     for r in rows:                            # their share links and library entries are public: they go first
         library.take_down((r.get("body") or {}).get("experiments") or [])
     for e in library.all_entries():           # also entries whose experiment is already gone
@@ -83,20 +92,100 @@ def _tax(uid: str) -> None:
     tax_total.delete_inputs(uid)
 
 
+ALERT_KEYS = ("stock_alerts.KEY", "scan.ALERT_KEY", "results.ALERT_KEY", "corp_actions.ALERT_KEY", "intel.filings.ALERT_KEY",
+              "breadth.ALERT_KEY", "fo_changes.ALERT_KEY", "shareholders.FOLLOW_KEY", "screens.KEY", "market_events.USER_KEY")
+PREF_KEYS = ("daily_report.PREFS", "lifecycle.PREFS", "lifecycle.SEEN", "alerts.CONFIRMED", "alerts.ALERT_OFF", "push.PREFIX",
+             "first_steps.KEY", "plan_interest.KEY", "newsletter_prefs.PREFIX")
+WATCHLIST = "watchlist:"
+
+
+def _keys(names) -> list[str]:
+    """Prefixes named "module.CONSTANT", read from the modules that own them."""
+    import importlib
+    out = []
+    for n in names:
+        mod, _, const = n.rpartition(".")
+        out.append(getattr(importlib.import_module(f".{mod}", __package__), const))
+    return out
+
+
 def _alerts(uid: str) -> int:
-    from . import breadth, corp_actions, fo_changes, results, scan, shareholders, stock_alerts
-    from .intel import filings
-    return _setting_keys(stock_alerts.KEY, scan.ALERT_KEY, results.ALERT_KEY, corp_actions.ALERT_KEY, filings.ALERT_KEY,
-                         breadth.ALERT_KEY, fo_changes.ALERT_KEY, shareholders.FOLLOW_KEY)(uid)
+    return _setting_keys(*_keys(ALERT_KEYS))(uid)
 
 
 def _prefs(uid: str) -> int:
-    from . import alerts, daily_report, first_steps, lifecycle, plan_interest, push
+    from . import lifecycle
     tips_off = not lifecycle.tips_on(uid)
-    n = _setting_keys(daily_report.PREFS, lifecycle.PREFS, alerts.CONFIRMED, push.PREFIX, first_steps.KEY, plan_interest.KEY)(uid)
+    n = _setting_keys(*_keys(PREF_KEYS))(uid)
     if tips_off:
         lifecycle.set_tips(uid, False)          # the account stays, so a "no tips" choice does too
     return n
+
+
+def _watchlist(uid: str) -> int:
+    return _setting_keys(WATCHLIST)(uid)
+
+
+def _assistant(uid: str) -> int:
+    """MCP keys: the index rows go first, so a key stops working before anything else is removed."""
+    from . import mcp_keys
+    ks = mcp_keys._row(uid)["keys"]
+    for k in ks:
+        if k.get("hash"):
+            db.delete_setting(mcp_keys.KEY_INDEX + str(k["hash"]))
+    for key, raw in db.all_settings_with_prefix(mcp_keys.KEY_INDEX):  # also one whose key is no longer listed
+        if db.json_value(raw, {}).get("uid") == uid:
+            db.delete_setting(key)
+    db.delete_setting(mcp_keys.KEY_USER + uid)
+    db.delete_setting(mcp_keys.KEY_LOG + uid)
+    return len(ks)
+
+
+def _referrals(uid: str) -> int:
+    """The user's invite code (the link stops working), who invited them, whom they invited and their active days. The
+    reward records (reward:<uid>, rewardgrant:, rewardpay:) and the inviter's ref:joined entry stay: the inviter's
+    reward caps and history count them."""
+    from . import invite_rewards
+    code = db.get_setting(f"ref:user:{uid}")
+    if code and db.get_setting(f"ref:code:{code}") == uid:
+        db.delete_setting(f"ref:code:{code}")
+    return _setting_keys("ref:user:", "ref:by:", "ref:joined:", invite_rewards.DAYS)(uid)
+
+
+def _free_basic(uid: str) -> int:
+    from . import plans
+    return _setting_keys(plans.FREE_KEY)(uid)
+
+
+def _cards(uid: str) -> int:
+    """Shared company cards: public links, taken down."""
+    from . import company_cards
+    rows = db.json_value(db.get_setting(f"cards:user:{uid}"), [])
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        if company_cards.TOKEN.match(str(r.get("t") or "")):
+            db.delete_setting(f"card:{r['t']}")
+            db.delete_setting(f"cardimg:{r['t']}")
+        if str(r.get("k") or "").startswith(f"cardtok:{uid}:"):
+            db.delete_setting(r["k"])
+    db.delete_setting(f"cards:user:{uid}")
+    return len(rows)
+
+
+def _live(uid: str) -> int:
+    """Paper and live sessions with their orders: the running ones are stopped here first."""
+    import sys
+    main = sys.modules.get(f"{__package__}.main")
+    if main is not None:
+        for s in main.manager.user_running(uid):
+            main.manager.stop(s.id, "The account's data was deleted.")
+    db.sb().table("live_orders").delete().eq("user_id", uid).execute()
+    return len(db.sb().table("live_sessions").delete().eq("user_id", uid).execute().data or [])
+
+
+def _profile_alerts(uid: str) -> None:
+    db.update_profile(uid, telegram_chat_id=None, alert_email=None, alerts_enabled=False)
 
 
 def _journal(uid: str) -> None:
@@ -126,7 +215,15 @@ STEPS: list[Step] = [
     ("journal", "Trade journal", _journal),
     ("replay", "Chart replay sessions", _replay),
     ("signals", "Signal webhook", _signals),
+    ("watchlist", "Watchlist", _watchlist),
+    ("assistant", "AI assistant keys and their log", _assistant),
+    ("referrals", "Invite link and invites", _referrals),
+    ("free_basic", "Free Basic time", _free_basic),
+    ("cards", "Shared company cards", _cards),
+    ("live", "Paper and live sessions and their orders", _live),
+    ("profile_alerts", "Alert channels (Telegram chat, alert email)", _profile_alerts),
 ]
+KEPT = "Kept: the sign-in account, plan and payment records (invoices, as the law asks), usage counts for the plan's limits."
 
 
 # ---------- the user's own copy: "Download all my data" ----------
@@ -175,15 +272,34 @@ def _x_drawings(uid: str) -> dict:
 
 
 def _x_alerts(uid: str) -> dict:
-    from . import breadth, corp_actions, fo_changes, results, scan, shareholders, stock_alerts
-    from .intel import filings
-    return _settings_of(stock_alerts.KEY, scan.ALERT_KEY, results.ALERT_KEY, corp_actions.ALERT_KEY, filings.ALERT_KEY,
-                        breadth.ALERT_KEY, fo_changes.ALERT_KEY, shareholders.FOLLOW_KEY)(uid)
+    return _settings_of(*_keys(ALERT_KEYS))(uid)
 
 
 def _x_prefs(uid: str) -> dict:
-    from . import daily_report, first_steps, lifecycle, plan_interest
-    return _settings_of(daily_report.PREFS, lifecycle.PREFS, first_steps.KEY, plan_interest.KEY)(uid)
+    return _settings_of(*_keys(n for n in PREF_KEYS if n != "push.PREFIX"))(uid)       # push keys are secrets
+
+
+def _x_sessions(uid: str) -> dict:
+    return {"sessions": _rows("live_sessions", uid), "orders": _rows("live_orders", uid)}
+
+
+def _x_assistant(uid: str) -> dict:
+    from . import mcp_keys
+    return {"assistant_keys": mcp_keys.keys(uid), "calls": mcp_keys.entries(uid)}     # names only, never a key's hash
+
+
+def _x_referrals(uid: str) -> dict:
+    from . import invite_rewards, referrals
+    return {"code": db.get_setting(f"ref:user:{uid}"), "invited_by": referrals.referred_by(uid),
+            "invited": referrals.joined(uid), "reward": invite_rewards.row(uid),
+            **_settings_of(invite_rewards.DAYS)(uid)}
+
+
+def _x_usage(uid: str) -> dict:
+    out: dict = {}
+    for r in _rows("usage_events", uid, "id,kind"):
+        out[r.get("kind")] = out.get(r.get("kind"), 0) + 1
+    return out
 
 
 def _x_connect(uid: str) -> dict:
@@ -203,7 +319,7 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("holdings", "Holdings", _x_mod("holdings", "load")),
     ("net_worth", "Net worth", _x_mod("money_networth", "load")),
     ("net_worth_history", "Net worth history", _x_mod("money_networth", "history")),
-    ("notebooks", "Notebooks and experiments", lambda uid: db.sb().table("strategies").select("*").eq("user_id", uid).execute().data),
+    ("notebooks", "Notebooks and experiments", lambda uid: _rows("strategies", uid)),
     ("trade_journal", "Trade journal", _x_mod("journal", "load")),
     ("tax_lots", "Tradebooks and tax lots", _x_mod("tax_lots", "load")),
     ("mutual_funds", "Mutual funds", _x_mod("money_mf", "load")),
@@ -214,6 +330,12 @@ EXPORT: list[tuple[str, str, Callable[[str], object]]] = [
     ("alerts", "Alerts and follows", _x_alerts),
     ("preferences", "Preferences", _x_prefs),
     ("connected_accounts", "Connected accounts (no tokens or passwords)", _x_connect),
+    ("watchlist", "Watchlist", _settings_of(WATCHLIST)),
+    ("sessions", "Paper and live sessions and their orders", _x_sessions),
+    ("ai_assistant", "AI assistant key names and their log (no keys)", _x_assistant),
+    ("referrals", "Invite link and invites", _x_referrals),
+    ("free_basic", "Free Basic time", lambda uid: _settings_of(*_keys(("plans.FREE_KEY",)))(uid)),
+    ("usage", "Usage counts", _x_usage),
 ]
 
 
@@ -244,4 +366,4 @@ def erase(uid: str) -> dict:
         except Exception as e:
             log.warning("user data: %s for %s failed: %s", key, uid, str(e)[:160])
             failed.append({"key": key, "label": label, "error": type(e).__name__})
-    return {"done": done, "failed": failed}
+    return {"done": done, "failed": failed, "kept": KEPT}
