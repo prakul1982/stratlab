@@ -374,3 +374,51 @@ def test_the_weekly_brief_is_tried_again_for_a_region_whose_sources_were_down(w,
     assert [to for to, *_ in outbox] == ["basic@example.com"]
     j.tick(SATURDAY + timedelta(minutes=20))
     assert len(outbox) == 1
+
+
+# ---------- a deploy killing a run ----------
+def test_a_my_stocks_run_killed_mid_way_resumes_with_the_readers_left(w, monkeypatch):
+    import time
+    from types import SimpleNamespace
+    from app import run_marks
+    clock = [time.time()]
+    monkeypatch.setattr(run_marks, "time", SimpleNamespace(time=lambda: clock[0]))
+    monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
+    qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
+           "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
+    monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
+    for u in ("u1", "u2", "u3"):
+        reader(u, f"{u}@example.com", my_stocks="daily")
+        db.set_setting(f"watchlist:{u}", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
+    got, kill = [], [True]
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+
+    def send_email(to, subject, text, html=None, headers=None):
+        if len(got) == 1 and kill[0]:
+            kill[0] = False
+            raise KeyboardInterrupt                      # the deploy's SIGTERM, in the second reader's send
+        got.append(to)
+    monkeypatch.setattr(alerts, "send_email", send_email)
+    with pytest.raises(KeyboardInterrupt):
+        job.Job().tick(AFTER_IN_CLOSE)
+    assert len(got) == 1
+    assert job.Job().tick(AFTER_IN_CLOSE) == 0 and len(got) == 1          # the dead run still looks alive: left alone
+    clock[0] += run_marks.STALE + 1
+    assert job.Job().tick(AFTER_IN_CLOSE) == 1                            # the reader the run never reached
+    assert len(got) == 2 and len(set(got)) == 2                           # none twice (the one cut off is dropped)
+    clock[0] += run_marks.STALE + 1
+    assert job.Job().tick(AFTER_IN_CLOSE) == 0 and len(got) == 2          # done: skipped
+
+
+def test_the_market_issue_is_not_resent_while_its_send_is_still_going(w, monkeypatch, outbox):
+    import time
+    reader("u-pro", "pro@example.com", market_in="daily")
+    issue = job.save(job.make_issue(market(), "IN"))
+    led = {"sent": [], "skipped": {}, "done": False}
+    j = job.Job()
+    j.last["market-IN"] = "2026-10-01"                                    # the marker the first container wrote
+    for beat, want in ((time.time() - 30, 0), (time.time() - 2 * job.run_marks.STALE, 1)):
+        db.set_setting(job.SENT + issue["id"], json.dumps({**led, "beat": beat}))
+        j._open.clear()
+        assert j.catch_up(AFTER_IN_CLOSE, []) == want                    # a live heartbeat: the other container is on it
+    assert job.ledger(issue["id"])["done"] and len(outbox) == 1

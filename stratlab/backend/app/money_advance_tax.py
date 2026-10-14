@@ -23,7 +23,7 @@ import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import alerts, db
+from . import alerts, db, run_marks
 from .config import settings
 from .tax_lots import fy_label, money
 
@@ -321,15 +321,19 @@ class Job:
             return 0
         sent = 0
         for d, n in reminders_due(local.date()):
-            mark = f"{RUN_KEY}{d['date']}:{n}"
-            if db.get_setting(mark):
+            run = run_marks.claim(f"{RUN_KEY}{d['date']}:{n}", local.date().isoformat(), once=True)      # or the run a restart cut short
+            if not run:
                 continue
-            db.set_setting(mark, now.isoformat(timespec="minutes"))
             subject, text = reminder_text(d, n)
             for uid in subscribers():
+                if run.seen(uid):
+                    continue
+                run.beat()
                 profile = db.get_profile(uid)
                 if profile:
                     globals()["_current"] = (d, n)
+                    run.record(uid)                # before the send: a kill in between drops one, never doubles
                     sent += send(profile, subject, text)
+            run.done()
         self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
         return sent

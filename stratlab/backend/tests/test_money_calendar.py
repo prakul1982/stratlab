@@ -247,3 +247,32 @@ def test_delete_everything(w):
     assert c.delete("/money/calendar", headers=PRO).json() == {"deleted": True}
     assert db.get_setting("moneycal:u-pro") is None and c.get(path).status_code == 404
     assert not [k for k, _ in db.all_settings_with_prefix(M.FEED_KEY)]
+
+
+def test_a_reminder_run_killed_mid_way_resumes_with_the_readers_left(w, paid, monkeypatch):
+    from types import SimpleNamespace
+    from app import run_marks
+    clock = [1000.0]
+    monkeypatch.setattr(run_marks, "time", SimpleNamespace(time=lambda: clock[0]))
+    for uid in ("u-basic", "u-pro"):
+        data = M.load(uid)
+        data["reminders"] = M.clean_reminders({"on": True, "days": 3, "channel": "email", "cats": ["tax"]})
+        M.save(uid, data)
+    sent, kill, real = [], [True], db.get_profile
+
+    def profile(uid, *a, **k):
+        if sent and kill[0]:
+            kill[0] = False
+            raise KeyboardInterrupt                                               # the deploy's SIGTERM, before the 2nd reader
+        return real(uid, *a, **k)
+    monkeypatch.setattr(db, "get_profile", profile)
+    send = lambda p, channel, subject, text: sent.append(p["id"]) or [channel]    # noqa: E731
+    at = datetime(2026, 6, 12, 3, 20, tzinfo=timezone.utc)
+    with pytest.raises(KeyboardInterrupt):
+        M.Job(send).tick(at)
+    assert M.Job(send).tick(at) == 0 and len(sent) == 1                           # still beating: not resumed
+    clock[0] += run_marks.STALE + 1
+    assert M.Job(send).tick(at) == 1                                              # the reader the run never reached
+    assert sorted(sent) == ["u-basic", "u-pro"]
+    clock[0] += run_marks.STALE + 1
+    assert M.Job(send).tick(at) == 0 and len(sent) == 2

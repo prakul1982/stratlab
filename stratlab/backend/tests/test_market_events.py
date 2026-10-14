@@ -12,7 +12,7 @@ import httpx
 import pytest
 import time_machine
 
-from app import db, main  # noqa: F401  (main first: it loads the modules in the order they need)
+from app import db, main, run_marks  # noqa: F401  (main first: it loads the modules in the order they need)
 from app import market_events as M, market_events_routes as R
 from app.config import settings
 from app.intel.net import SourceError
@@ -346,9 +346,9 @@ def test_the_job_reads_twice_a_day_and_reminds_in_the_morning(w):
     job = M.Job(lambda: web, lambda day: reminded.append(day) or 0)
     morning = datetime(2026, 10, 5, 7, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
     job.tick(morning)
-    assert db.get_setting("newsjob:mktevents-am") == "2026-10-05" and M.load_state().get("rbi") and reminded == [date(2026, 10, 5)]
+    assert run_marks.status("newsjob:mktevents-am", "2026-10-05") == "done" and M.load_state().get("rbi") and reminded == [date(2026, 10, 5)]
     job.tick(morning.replace(hour=19))
-    assert db.get_setting("newsjob:mktevents-pm") == "2026-10-05" and reminded == [date(2026, 10, 5)]   # evening: no reminders
+    assert run_marks.status("newsjob:mktevents-pm", "2026-10-05") == "done" and reminded == [date(2026, 10, 5)]   # evening: no reminders
     n = len(web.calls)
     job.tick(morning.replace(hour=20))
     assert len(web.calls) == n                                      # once per run

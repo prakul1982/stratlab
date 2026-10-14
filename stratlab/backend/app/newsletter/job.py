@@ -12,7 +12,7 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from .. import alerts, db, email_kit as kit, leader, newsletter_prefs
+from .. import alerts, db, email_kit as kit, leader, newsletter_prefs, run_marks
 from ..plans import allows, plan_of
 from . import content, write
 
@@ -499,7 +499,8 @@ def ledger(iid: str) -> dict:
     end of its readers ("done")."""
     d = db.json_value(db.get_setting(SENT + iid), {}) or {}
     return {"sent": [u for u in d.get("sent") or [] if isinstance(u, str)],
-            "skipped": {k: v for k, v in (d.get("skipped") or {}).items() if isinstance(k, str)}, "done": bool(d.get("done"))}
+            "skipped": {k: v for k, v in (d.get("skipped") or {}).items() if isinstance(k, str)}, "done": bool(d.get("done")),
+            "beat": float(d.get("beat") or 0)}
 
 
 def has_ledger(iid: str) -> bool:
@@ -509,11 +510,17 @@ def has_ledger(iid: str) -> bool:
 
 
 def save_ledger(iid: str, led: dict) -> None:
+    led["beat"] = time.time()             # a send still going keeps this fresh (see quiet)
     db.set_setting(SENT + iid, json.dumps(led))
 
 
 def retryable(led: dict) -> bool:
     return not led.get("done") or any(r in RETRY for r in led.get("skipped", {}).values())
+
+
+def quiet(led: dict) -> bool:
+    """A run that didn't finish and has made no progress for a while: it was cut short, not still sending."""
+    return not led.get("done") and time.time() - led.get("beat", 0) >= run_marks.STALE
 
 
 def skipped_words(skipped: dict) -> dict:
@@ -660,9 +667,11 @@ class Job:
             return None
         if name in AFTER_CLOSE and region and not content.closed(region, day, now):
             return None                    # never with the day's pre-auction prices: the official closes first (R8B-001)
-        if db.get_setting(f"newsjob:{name}") == day.isoformat():          # already ran today (before a restart)
+        st = run_marks.status(f"newsjob:{name}", day.isoformat())
+        if st == "done":                   # already ran today (before a restart)
             self.last[name] = day.isoformat()
-            return None
+        if st:
+            return None                    # "running": another container is on it; a quiet one is resumed
         return day
 
     # the key Admin keeps this job's status under across restarts (job_status); None: not kept
@@ -671,9 +680,21 @@ class Job:
     def mark(self, name: str, day: date):
         self.last[name] = day.isoformat()
         db.set_setting(f"newsjob:{name}", day.isoformat())
+        self.keep()
+
+    def keep(self):
         if self.status_key:
             from .. import job_status
             job_status.keep(self.status_key, self)           # Admin shows its last run after a restart too
+
+    def begin(self, name: str, day: date):
+        """Claim a per-reader run (or the unfinished one to resume): its readers are recorded as they are sent to."""
+        return run_marks.claim(f"newsjob:{name}", day.isoformat())
+
+    def finish(self, name: str, day: date, run) -> None:
+        run.done()
+        self.last[name] = day.isoformat()
+        self.keep()
 
     def tick(self, now: datetime) -> int:
         sent, ran, problems = 0, False, []
@@ -684,11 +705,12 @@ class Job:
                 self.mark(f"market-{region}", day)
                 sent, ran = sent + self._send(region, issue, False, problems), True
         day = self.due("stocks", now, *SEND_AT["IN"], region="IN")
-        if day:
-            self.mark("stocks", day)
+        run = self.begin("stocks", day) if day else None
+        if run:
             try:
-                sent, ran = sent + self.run_stocks(day, False), True
-            except Exception as e:
+                sent, ran = sent + self.run_stocks(day, False, run), True
+                self.finish("stocks", day, run)
+            except Exception as e:                # left running: resumed once it has been quiet for a while
                 problems.append(f"My stocks: {str(e)[:160]}")
                 ran = True
         tz, weekday, at = WEEKLY_AT
@@ -699,10 +721,11 @@ class Job:
                 self.mark(f"weekly-{region}", day)
                 sent += self._send(region, issue, True, problems)
         day = self.due("weekly", now, tz, at, weekday=weekday)
-        if day:
-            self.mark("weekly", day)
+        run = self.begin("weekly", day) if day else None
+        if run:
             try:
-                sent, ran = sent + self.run_stocks(day, True), True
+                sent, ran = sent + self.run_stocks(day, True, run), True
+                self.finish("weekly", day, run)
             except Exception as e:
                 problems.append(f"My stocks weekly: {str(e)[:160]}")
                 ran = True
@@ -735,7 +758,10 @@ class Job:
                 if self._open.get(iid) is False:
                     continue
                 issue = load(iid)
-                if not issue or not has_ledger(iid) or not retryable(ledger(iid)):
+                led = ledger(iid) if issue and has_ledger(iid) else None
+                if led and not led["done"] and not quiet(led):
+                    continue                  # still being sent (the old container, mid-deploy): not twice
+                if not led or not retryable(led):
                     self._open[iid] = False
                     continue
                 self._open[iid] = True
@@ -756,7 +782,7 @@ class Job:
         if retry and not has_ledger(issue["id"]):
             return 0
         led = ledger(issue["id"])
-        if not retry:
+        if not retry or not led["done"]:
             save_ledger(issue["id"], led)         # from the first reader on, a run cut short can be picked up again
         readers = other = 0
         subs = subscribers()
@@ -782,13 +808,14 @@ class Job:
                 other += 1
                 led["skipped"].pop(uid, None)
                 continue
+            led["sent"].append(uid)               # written before the send: a kill in between drops one, never doubles
+            save_ledger(issue["id"], led)
             why = deliver_why(profile, issue, what, teaser_too=not retry)
             if why == "sent":
-                led["sent"].append(uid)
                 led["skipped"].pop(uid, None)
                 sent += 1
-                save_ledger(issue["id"], led)
             else:
+                led["sent"].remove(uid)
                 led["skipped"][uid] = why
         led["done"] = True
         save_ledger(issue["id"], led)
@@ -798,13 +825,17 @@ class Job:
             "readers": readers, "sent": len(led["sent"]), "other_edition": other, "skipped": skipped_words(led["skipped"])})
         return sent
 
-    def run_stocks(self, day: date, weekly: bool) -> int:
+    def run_stocks(self, day: date, weekly: bool, run=None) -> int:
         sent, readers, quiet, other, skipped = 0, 0, 0, 0, {}
         for sub in subscribers():
             how = sub.get("my_stocks")
             if how not in ("daily", "weekly"):
                 continue
             readers += 1
+            if run:
+                if run.seen(sub["uid"]):      # sent before a restart cut the run short
+                    continue
+                run.beat()
             if not weekly and how != "daily":
                 other += 1
                 continue
@@ -828,6 +859,8 @@ class Job:
             if not issue:
                 quiet += 1
                 continue
+            if run:
+                run.record(sub["uid"])        # before the send: a kill in between drops one, never doubles
             why = deliver_why(profile, issue, "my_stocks")
             if why == "sent":
                 sent += 1

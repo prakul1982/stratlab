@@ -1089,14 +1089,17 @@ def send_reminders(today: date, allowed, send, profile=None) -> int:
         if not hits:
             continue
         subject = f"StratLab: {hits[0]['title']}" + (f" and {len(hits) - 1} more" if len(hits) > 1 else "") + f", {_short(target)}"
+        pr = prefs(uid)
+        before = pr["sent"]
+        pr["sent"] = (before + [e["id"] for e in hits])[-MAX_SENT:]
+        save_prefs(uid, pr)                # before the send: a kill in between drops it, never repeats it
         try:
             reached = send(p, subject[:150], reminder_text(hits, pr["days"], target))
         except Exception as e:
             print("market events reminder failed:", str(e)[:120])
+            pr["sent"] = before
+            save_prefs(uid, pr)
             continue
-        pr = prefs(uid)
-        pr["sent"] = (pr["sent"] + [e["id"] for e in hits])[-MAX_SENT:]
-        save_prefs(uid, pr)
         sent += 1 if reached else 0
     return sent
 
@@ -1121,9 +1124,11 @@ class Job(news_job.Job):
     def tick(self, now: datetime) -> int:
         for name, tz, at in self.RUNS:
             day = self.due(name, now, tz, at)
-            if day:
-                self.mark(name, day)
-                return self.run(now, day, remind=name.endswith("-am"))
+            run = self.begin(name, day) if day else None
+            if run:                       # an unfinished run is resumed: a reminded reader isn't reminded again (prefs "sent")
+                sent = self.run(now, day, remind=name.endswith("-am"))
+                self.finish(name, day, run)
+                return sent
         if not load_state().get("last_run") and time.time() - self._first_try > 1800:
             self._first_try = time.time()
             self.run(now, ist_now().date(), remind=False)
