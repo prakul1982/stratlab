@@ -193,7 +193,8 @@ class GroupLiveSession:
             return None, None, None
 
     # ---------- the shared book ----------
-    def free_slot(self) -> bool:
+    def free_slot(self, at_open: bool = False) -> bool:
+        # at_open: the backtest's candle-open fill rule; live entries fill at the price of the moment, so it changes nothing
         return not self.halted and not self.emptied_on and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
 
     def funds(self) -> tuple[float, float]:

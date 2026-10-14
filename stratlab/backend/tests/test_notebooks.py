@@ -283,6 +283,20 @@ def test_walkforward(api):
     assert api.get(f"/notebooks/{nb['id']}").json()["experiments"][0]["walkforward"]["headline"] == w["headline"]
 
 
+def test_walkforward_has_no_efficiency_on_short_tuning_stretches():
+    # 400 daily candles: each tuning stretch is about 4 months, whose compounded yearly return isn't compared
+    import math
+    from app.engine import walkforward
+    from app.models import Strategy
+    from tests.test_engine import bars_from
+    s = Strategy(**{k: EMA[k] for k in ("entry", "exit", "risk")})
+    closes = [100 * 1.003 ** i * (1 + 0.1 * math.sin(i / 8)) for i in range(1500)]
+    out = walkforward.run(bars_from(closes[:400]), s, 50)
+    assert out["wf_ret"] > 0 and out["efficiency"] is None and "under half a year" in out["detail"]
+    long = walkforward.run(bars_from(closes), s, 50)
+    assert long["efficiency"] is not None and "half a year" not in long["detail"]
+
+
 def test_walkforward_skips_rules_with_nothing_to_tune():
     from app.engine import walkforward
     from app.models import Strategy

@@ -141,7 +141,9 @@ def tax_estimate(kind: str, trades: list[dict]) -> dict:
     """A rough capital-gains estimate on the net profit. Only India equity is estimated."""
     if kind != "in_eq":
         note = ("F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
-                if kind in ("in_fut", "in_opt", "in_bse_opt", "in_mcx_fut", "in_mcx_opt") else "Tax depends on where you live, so it isn't estimated for this market.")
+                if kind in ("in_fut", "in_opt", "in_bse_opt", "in_mcx_fut", "in_mcx_opt")
+                else "Intraday equity profit is taxed as speculative business income at your slab rate, so it isn't estimated here."
+                if kind == "in_eq_mis" else "Tax depends on where you live, so it isn't estimated for this market.")
         return {"amount": None, "note": note}
     short = sum(t["pnl"] for t in trades if not _long_term(t.get("entry_t"), t.get("exit_t")))
     long_ = sum(t["pnl"] for t in trades if _long_term(t.get("entry_t"), t.get("exit_t")))

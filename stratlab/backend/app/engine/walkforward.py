@@ -12,12 +12,13 @@ data it hasn't seen?" A strategy whose best settings only ever work in hindsight
 from datetime import datetime
 
 from .core import Ctx, simulate
-from .indicators import ref_name
-from .verdict import _nudged, _param_keys, _ret, _with
+from .indicators import MARKET, ref_name
+from .verdict import _param_keys, _ret, _values, _with
 from ..models import Ref
 
 BLOCKS = 8          # the tradeable period is cut into this many equal blocks
 TRAIN_BLOCKS = 3    # each step tunes on 3 blocks and tests on the next one: 5 unseen steps in all
+MIN_TRAIN_YEARS = 0.5   # a shorter tuning stretch's yearly return is compounding noise: no efficiency figure
 MIN_BLOCK = 20      # candles per block; fewer and a step can't show anything
 
 
@@ -57,14 +58,16 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
 
     ctx = Ctx(bars, intraday=strategy.tf != "1d")
     cap = strategy.risk.capital
-    grid = [{keys[0]: a} for a in _nudged(keys[0][1])]
+    # the same nudged values as the nearby-settings check (an India VIX level or change % keeps its own steps)
+    grid = [{keys[0]: a} for a in _values(keys[0])]
     if len(keys) > 1:
-        grid = [{**g, keys[1]: b} for g in grid for b in _nudged(keys[1][1])]
-    label = {k: ref_name(Ref(t=k[0], p=k[1])).rsplit(" ", 1)[0] for k in keys}
+        grid = [{**g, keys[1]: b} for g in grid for b in _values(keys[1])]
+    label = {k: ref_name(Ref(t=k[0])) + " cut-off" if k[0] in MARKET else ref_name(Ref(t=k[0], p=k[1])).rsplit(" ", 1)[0]
+             for k in keys}
 
     windows, wf_curve, fixed_curve, times = [], [], [], []
     wf_growth = fixed_growth = 1.0
-    is_yearly = []
+    is_yearly, train_years = [], []
     for w in range(blocks - TRAIN_BLOCKS):
         tr_a = start + w * size
         te_a = tr_a + TRAIN_BLOCKS * size
@@ -90,7 +93,8 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
             times.append(bars[te_a + k]["t"])
         wf_growth *= 1 + test_ret / 100
         fixed_growth *= 1 + fixed_ret / 100
-        is_yearly.append(_yearly(train_ret, _years(bars, tr_a, te_a)))
+        train_years.append(_years(bars, tr_a, te_a))
+        is_yearly.append(_yearly(train_ret, train_years[-1]))
         windows.append({
             "train_from": _date(bars, tr_a), "train_to": _date(bars, te_a),
             "test_from": _date(bars, te_a), "test_to": _date(bars, te_b),
@@ -105,7 +109,8 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
     oos_years = _years(bars, oos_a, len(bars) - 1)
     oos_yearly = _yearly(wf_ret, oos_years)
     avg_is = sum(is_yearly) / len(is_yearly)
-    efficiency = round(oos_yearly / avg_is, 2) if avg_is > 0 else None
+    short_train = min(train_years) < MIN_TRAIN_YEARS
+    efficiency = round(oos_yearly / avg_is, 2) if avg_is > 0 and not short_train else None
     profitable = sum(1 for w in windows if w["test_ret"] > 0)
     settings_used = len({tuple(c["value"] for c in w["chosen"]) for w in windows})
     n = len(windows)
@@ -129,6 +134,8 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
                   + (f". It kept about {max(efficiency, 0) * 100:.0f}% of the yearly return it showed on the years it was tuned on"
                      if efficiency is not None else "") + ".")
 
+    if short_train and wf_ret > 0:
+        detail += " Each tuning stretch is under half a year, so yearly returns aren't compared."
     if status == "pass" and trades < 10:
         status = "warn"
         detail += f" Only {trades} trades happened in the unseen periods."

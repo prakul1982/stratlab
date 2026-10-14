@@ -53,7 +53,7 @@ export interface Verdict {
   suggestions: { action: string; text: string }[];
 }
 export interface Stats {
-  ret: number; pnl: number; cagr: number; mdd: number; sharpe: number; n: number; win: number;
+  ret: number; pnl: number; cagr: number | null; mdd: number; sharpe: number; n: number; win: number;
   pf: number | null; avg: number; buy_hold_ret: number;
   skipped_size?: number;     // entry signals skipped because one share or lot cost more than the budget
   emptied_on?: string | null; // the day the account reached zero (R13S-001): nothing traded after it, the loss stops at -100%
