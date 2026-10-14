@@ -470,3 +470,27 @@ def test_the_brief_and_my_stocks_leave_them_out(monkeypatch, mem):
     assert job.repair_facts_line("IN", days=3650) == 1
     items = job.load("market.IN.2026-10-09")["sections"][0]["items"]
     assert [i["text"] for i in items] == ["Sensex jumps 879 points as IT stocks rally; Nifty ends at 22,520"]
+
+
+def _page(rev, prof=None):
+    from datetime import date
+    from app.intel.grounding import PageFacts
+    tr = {"unit": "₹ crore", "revenue": [{"y": f"FY{y}", "v": v} for y, v in rev]}
+    if prof:
+        tr["profit"] = [{"y": f"FY{y}", "v": v} for y, v in prof]
+    return PageFacts({"annual_trend": tr}, "IN", date(2026, 10, 8))
+
+
+def test_a_percentage_claim_must_have_the_direction_of_the_numbers():
+    page = _page([(24, 1000), (25, 1185)])
+    assert page.check("Revenue rose 18.5% in FY25.") and page.check("Revenue grew 18.5% in FY25.")
+    assert not page.check("Revenue declined 18.5% in FY25.") and not page.check("Revenue fell 18.5% in FY25.")
+    assert not page.check("FY25 revenue was down 18.5%.")
+    down = _page([(24, 1185), (25, 1000)])
+    assert down.check("Revenue fell 15.6% in FY25.") and not down.check("Revenue rose 15.6% in FY25.")
+
+
+def test_a_money_claim_is_held_to_the_series_it_names():
+    page = _page([(25, 1185)], [(25, 120)])
+    assert page.check("Net profit was ₹120 crore in FY25.") and page.check("Revenue was ₹1,185 crore in FY25.")
+    assert not page.check("Net profit was ₹1,185 crore in FY25.")

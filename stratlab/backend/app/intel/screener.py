@@ -242,7 +242,7 @@ def summary(p: dict) -> dict:
     pl, bal = p.get("pl"), p.get("balance")
     sales = [v for v in _row(pl, "Sales", "Revenue") if v is not None]
     profit = [v for v in _row(pl, "Net Profit") if v is not None]
-    opm = [v for v in _row(pl, "OPM", "Financing Margin") if v is not None]
+    opm_all = _row(pl, "OPM", "Financing Margin")
     reserves = [v for v in _row(bal, "Reserves") if v is not None]
     equity = [v for v in _row(bal, "Equity Capital") if v is not None]
     price = num(r.get("Current Price"))
@@ -277,7 +277,7 @@ def summary(p: dict) -> dict:
         "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book else None,
         "div_yield": num(r.get("Dividend Yield")), "roce": num(r.get("ROCE")), "roe": num(r.get("ROE")),
         "face_value": num(r.get("Face Value")),
-        "net_margin": net_margin, "opm": opm[-1] if opm else None,
+        "net_margin": net_margin, "opm": cell(opm_all, latest),
         "sales_yoy": ((s_now / s_prev - 1) * 100) if s_now is not None and s_prev is not None and s_prev > 0 else None,
         # a change from a loss isn't a growth rate: none then
         "profit_yoy": ((p_now / p_prev - 1) * 100) if p_now is not None and p_prev is not None and p_prev > 0 else None,

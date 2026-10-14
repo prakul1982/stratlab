@@ -907,7 +907,8 @@ class PageFacts:
             y = self._bound_year(s, a, b)
             if y is None:
                 continue
-            want = [x * self.unit for x in (self.value("revenue", y), self.value("profit", y)) if x is not None]
+            subj = self.subject(s, a)           # a profit figure is held to the profit, not to the revenue that happens to match
+            want = [x * self.unit for x in (self.value(k, y) for k in (("revenue", "profit") if subj not in ("revenue", "profit") else (subj,))) if x is not None]
             ok = False
             for w in want:
                 if q == "over":
@@ -931,7 +932,9 @@ class PageFacts:
             want = self.expected(s, m.start(), clause, near)
             if want is None:
                 continue                                  # a kind of figure the page has nothing to check against
-            if not any(_close(stated, abs(w), dp) for w in want):
+            way = _way(clause) if not _LEVEL.search(clause) and not _LEVEL_TO.search(s[max(0, m.start() - 8):m.start()]) else 0
+            # a stated rise needs a rise on the page, a fall a fall (a 18.5% rise told as a decline)
+            if not any(_close(stated, abs(w), dp) and (way * w >= 0 or abs(w) < 0.05) for w in want):
                 return False
         return True
 
@@ -1122,6 +1125,18 @@ _UP_WORDS = (r"rose|risen|rises|rising|increased|increases|increasing|grew|grown
 _DOWN_WORDS = (r"fell|fallen|falls|falling|declined|declines|declining|dropped|drops|dropping|decreased|decreases|decreasing|"
                r"shrank|shrunk|shrinks|slipped|slips|contracted|contracts|lower|down|dipped|dips|slid|slumped|eased")
 _MOVE_WORD = re.compile(rf"\b({_UP_WORDS}|{_DOWN_WORDS})\b", re.I)
+_UP_NOUNS, _DOWN_NOUNS = r"rise|increase|jump|surge", r"decline|drop|fall|decrease|dip"
+_LEVEL = re.compile(r"margin|yield|\broe\b|\broce\b|payout")            # a level, not a change: "fell to 10%" says nothing of sign
+_LEVEL_TO = re.compile(r"\b(to|at|of|near|around)\s*$")
+
+
+def _way(clause: str) -> int:
+    """1 when the clause says a figure rose, -1 when it fell, 0 when it says neither or both."""
+    up = re.search(rf"\b({_UP_WORDS}|{_UP_NOUNS})\b", clause)
+    down = re.search(rf"\b({_DOWN_WORDS}|{_DOWN_NOUNS})\b", clause)
+    return 0 if bool(up) == bool(down) else 1 if up else -1
+
+
 _UP_RE = re.compile(rf"^(?:{_UP_WORDS})$", re.I)
 _FROM_TO = re.compile(rf"\b(?P<w>{_UP_WORDS}|{_DOWN_WORDS})\b[^.;]{{0,60}}?\bfrom\b(?P<a>[^;]{{1,50}}?)\bto\b(?P<b>[^;]{{1,60}})", re.I)
 _LABELS = re.compile(r"\b(?:FY|CY|Q[1-4]\s*FY|H[12]\s*FY)\s*'?\d{2,4}\b|\bQ[1-4]\b|\b(?:19|20)\d\d\b|\bfiscal(?:\s+year)?\b", re.I)

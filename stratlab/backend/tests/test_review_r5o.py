@@ -1062,3 +1062,11 @@ def test_write_strategy_drops_internal_notes(monkeypatch):
     assert out["notes"] == ["Short selling on delivery isn't possible, so only longs are tested."]
     assert "tgt" not in out.get("risk", {})
     assert "Never invent exits, stops or targets" in ai_writer.SYSTEM
+
+
+def test_dividend_yield_restates_for_a_later_bonus():
+    from app.intel.company import with_dividend_yield
+    c = {"quote": {"price": 100.0}, "summary": {}, "metrics": [{"title": "V", "items": [{"label": "Div yield", "value": 9, "unit": "%"}]}]}
+    divs = [{"kind": "dividend", "amount": 10, "ex_date": "2026-05-01"}, {"kind": "bonus", "factor": 2.0, "ex_date": "2026-08-01"}]
+    item = with_dividend_yield(c, divs, "2026-10-08")["metrics"][0]["items"][0]
+    assert item["value"] == 5.0 and item["note"] == "₹5 a share in the last 12 months"

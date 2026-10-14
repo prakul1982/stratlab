@@ -424,16 +424,34 @@ EXTRA_DIVIDEND = 0.0198        # a dividend above this share of the cum-dividend
 TRADED_MATCH = 0.006           # another source's as-traded candle within this of the undone close is the same session's print
 
 
-def dividend_list(rows) -> list[dict]:
+def dividend_list(rows, restate: bool = False) -> list[dict]:
     """[{"date", "amount"}] from a dividends list in either shape: the price history's ({"date", "amount"}) or the
-    corporate actions card's ({"ex_date", "kind": "dividend", "amount"})."""
+    corporate actions card's ({"ex_date", "kind": "dividend", "amount"}). `restate`: each amount as declared, divided by
+    the factor of every split or bonus in the list with a later ex-date, to the price after them (the exchange's amounts
+    are per share at the time; the price history's are already adjusted)."""
     out = []
+    later = restating_actions(rows) if restate else []
     for d in rows or []:
         if not isinstance(d, dict) or (d.get("kind") not in (None, "dividend")):
             continue
         day, amt = str(d.get("date") or d.get("ex_date") or "")[:10], _num(d.get("amount"))
         if day and amt and amt > 0:
-            out.append({"date": day, "amount": amt})
+            out.append({"date": day, "amount": amt / restated_by(later, day)})
+    return out
+
+
+def restating_actions(rows) -> list[tuple[str, float]]:
+    """(ex-date, factor) of each split or bonus in a corporate actions list."""
+    from .corp_actions import adjusts
+    return [(str(a.get("ex_date") or "")[:10], a["factor"]) for a in rows or [] if isinstance(a, dict) and adjusts(a)]
+
+
+def restated_by(actions: list[tuple[str, float]], day: str) -> float:
+    """The product of the factors of the splits and bonuses with an ex-date after `day`."""
+    out = 1.0
+    for ex, f in actions:
+        if ex > day:
+            out *= f
     return out
 
 
@@ -531,6 +549,30 @@ def price_facts(bars: list[dict], region: str | None = None, now: datetime | Non
             "high52": high, "low52": low, "price_official": bool(bars[-1].get("official"))}
 
 
+MOVE_BOUNDS = (0.6, 1.7)      # a day's move beyond this is a split or bonus, not the price: ratios are not scaled by it
+
+
+def split_since(region: str, symbol: str | None, since) -> bool:
+    """Whether a split or bonus of the company has an ex-date after `since` (a day, or a time, as ISO text), from the
+    stored corporate actions (no read of any source). False without a symbol or a stored history."""
+    since = str(since or "")[:10]
+    if not symbol or not since:
+        return False
+    try:
+        from .corp_actions import actions_for
+        return any(ex > since for ex, _ in restating_actions(actions_for(region, symbol, None, fetch=False)))
+    except Exception:
+        return False
+
+
+def can_reprice(old, new, region: str = "IN", symbol: str | None = None, since=None) -> bool:
+    """Whether ratios worked out at the price `old` can be scaled to `new`: not across a move outside MOVE_BOUNDS, and not
+    across a split or bonus with an ex-date after `since` (it changes the price, not the company's value)."""
+    if not (MOVE_BOUNDS[0] <= new / old <= MOVE_BOUNDS[1]):
+        return False
+    return not (since and abs(new / old - 1) > 0.03 and split_since(region, symbol, since))
+
+
 def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     """A page's facts at a newer close (already only closed sessions): the price, its date and the year's range from
     the candles, the trend when `analyse` is given, and the market value and P/E scaled by the price's move (shares and
@@ -543,7 +585,7 @@ def with_new_close(f: dict, bars: list[dict], analyse=None) -> dict:
     if not new_p or new_p <= 0 or not (newer or same_day_close):
         return f
     out = {**f, **{k: new[k] for k in ("price", "price_at", "price_basis", "high52", "low52", "price_official") if new.get(k) is not None}}
-    if old_p and old_p > 0:
+    if old_p and old_p > 0 and can_reprice(old_p, new_p, f.get("region") or "IN", f.get("symbol"), f.get("price_at")):
         k = new_p / old_p
         for key in ("market_cap", "pe"):
             if _num(f.get(key)) is not None:
@@ -570,11 +612,12 @@ def with_official_close(f: dict, close) -> dict:
         return out
     k = new / old
     out["price"] = new
-    for key in ("market_cap", "pe"):
-        if _num(f.get(key)) is not None:
-            out[key] = round(_num(f[key]) * k, 2)
-    if _num(f.get("div_yield")) is not None:
-        out["div_yield"] = round(_num(f["div_yield"]) / k, 2)
+    if can_reprice(old, new):
+        for key in ("market_cap", "pe"):
+            if _num(f.get(key)) is not None:
+                out[key] = round(_num(f[key]) * k, 2)
+        if _num(f.get("div_yield")) is not None:
+            out["div_yield"] = round(_num(f["div_yield"]) / k, 2)
     if _num(f.get("high52")) is not None and new > _num(f["high52"]):
         out["high52"] = new
     if _num(f.get("low52")) is not None and new < _num(f["low52"]):

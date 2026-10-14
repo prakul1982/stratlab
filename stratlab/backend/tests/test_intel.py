@@ -233,3 +233,10 @@ def test_an_empty_ai_read_is_an_error_not_a_blank_card(monkeypatch):
         A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)
     monkeypatch.setattr(A, "_ask", lambda *a, **k: {"summary": "Makes chips.", "bull": ["Demand"], "bear": []})
     assert A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)["bull"] == ["Demand"]
+
+
+def test_ebitda_margin_is_the_last_full_year_beside_the_net_margin():
+    p = {"pl": {"cols": ["Mar 2024", "Mar 2025", "TTM"], "rows": {"Sales": [900.0, 1000.0, 1000.0], "OPM": [22.0, 24.0, 18.0],
+                                                                     "Net Profit": [80.0, 100.0, 90.0]}}}
+    s = scr.summary(p)
+    assert s["opm"] == 24.0 and s["net_margin"] == pytest.approx(10.0)

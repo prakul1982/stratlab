@@ -179,3 +179,8 @@ def test_positions_at_the_indicative_settlement(monkeypatch):
     assert p["settle_on"] == 25075.0 and [l["value"] for l in p["legs"]] == [75.0, 0.0]
     assert p["open_pnl"] == (100 - 75) * 75 + 90 * 75
     assert CA.positions_at_settlement({"id": "u"}, idx, {}, date(2026, 10, 7)) == []      # not expiring that day
+
+
+def test_unicode_minus_is_a_minus_in_num():
+    from app.intel.net import num
+    assert num("−12") == -12.0 and num("−12.5%") == -12.5 and num("12") == 12.0
