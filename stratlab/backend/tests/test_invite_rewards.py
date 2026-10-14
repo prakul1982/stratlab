@@ -479,3 +479,35 @@ def test_damaged_records_dont_break_anything(w):
     assert c.get("/me/referrals", headers=headers("pro-token")).status_code == 200
     assert c.get("/admin/invite-rewards", headers=headers("admin-token")).status_code == 200
     assert R.sweep(NOW) == {"expired": 1}
+
+
+def test_a_failed_save_then_retry_credits_free_time_once(w, monkeypatch):
+    user("u-ref")
+    invite("u-ref", "u-a")
+    real, fails = R._save, [1]
+
+    def flaky(uid, r):
+        if r.get("status") == "given" and fails:
+            fails.pop()
+            raise RuntimeError("database down")
+        real(uid, r)
+    monkeypatch.setattr(R, "_save", flaky)
+    with pytest.raises(RuntimeError):
+        active("u-a")
+    assert R.row("u-a")["status"] == "waiting"
+    R.check("u-a", NOW + 3 * DAY)                                   # the retry saves, and credits nothing again
+    assert R.row("u-a")["status"] == "given"
+    for uid in ("u-a", "u-ref"):
+        until = plans.free_basic(uid)["until"]
+        assert until and until - NOW < timedelta(days=36)
+
+
+def test_an_invite_whose_reward_failed_to_start_is_rewarded_on_the_next_try(w, monkeypatch):
+    user("u-ref")
+    newcomer = user("u-a", None, NOW - timedelta(minutes=10))
+    code = referrals.code_for("u-ref")
+    real = R.joined
+    monkeypatch.setattr(R, "joined", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    assert referrals.record(newcomer, code, NOW) == "recorded" and R.row("u-a") is None
+    monkeypatch.setattr(R, "joined", real)
+    assert referrals.record(newcomer, code, NOW) == "already" and R.row("u-a")["status"] == "waiting"

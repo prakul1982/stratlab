@@ -151,6 +151,11 @@ def activate(profile: dict, sub: dict):
     db.update_profile(profile["id"], plan=plan, plan_status="active", razorpay_subscription_id=sub["id"],
                       current_period_end=_ts(sub.get("current_end")), pending_subscription_id=None,
                       cancel_at_period_end=False)
+    try:                                   # a subscription now: no longer a plan given by hand
+        from . import admin
+        admin.mark_granted(profile["id"], False)
+    except Exception as e:
+        print("could not clear the hand-given mark:", str(e)[:160])
     if old and old != sub["id"] and profile.get("plan_status") == "active":
         try:  # switching plans: stop billing the old subscription now
             client().subscription.cancel(old, {"cancel_at_cycle_end": 0})

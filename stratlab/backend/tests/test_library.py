@@ -149,3 +149,37 @@ def test_deleting_a_notebook_takes_its_library_entries_out(api, store):
     assert library.load(e["id"])
     api.delete(f"/notebooks/{nb['id']}")
     assert library.load(e["id"]) is None
+
+
+def test_deleting_and_republishing_does_not_clear_a_hide(api, store):
+    nb = api.post("/notebooks", json={"name": "Spammy", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    e = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "x"}).json()
+    for uid in ("r1", "r2", "r3"):
+        as_user(uid)
+        api.post(f"/library/{e['id']}/report", json={"reason": "spam"})
+    as_user("user-1")
+    assert api.delete(f"/library/{e['id']}").json() == {"deleted": True}
+    again = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "fresh"}).json()
+    assert again["id"] != e["id"] and again["hidden"]
+    as_user("r9")
+    assert api.get("/library").json()["total"] == 0
+
+
+def test_a_copy_does_not_write_over_a_hide_made_meanwhile(api, store):
+    nb = api.post("/notebooks", json={"name": "Trend", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
+    api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
+    e = api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "x"}).json()
+    as_user("copier")
+    real = main.visible_entry
+
+    def stale_then_hidden(eid, profile):
+        got = real(eid, profile)
+        library.save(library.moderate(library.load(eid), "hide"))          # the admin hides it while the copy runs
+        return got
+    main.visible_entry = stale_then_hidden
+    try:
+        assert api.post(f"/library/{e['id']}/copy").status_code == 200
+    finally:
+        main.visible_entry = real
+    assert library.load(e["id"])["hidden"] and library.load(e["id"])["copies"] == 1

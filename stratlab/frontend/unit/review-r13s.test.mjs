@@ -49,7 +49,8 @@ test("R13S-004: Block and Re-rank ask first, say who blocked and when, and offer
   assert.equal(blockedLine(null, null), "Blocked (who and when weren't recorded)");
   const panel = read("src/pages/admin/AIPanel.tsx");
   assert.match(panel, /setAsk\(\{ kind: "rerank"/);
-  assert.match(panel, /setAsk\(\{ kind: "block", p: pp, model \}\)/);
+  assert.match(panel, /setAsk\(\{ kind: "block", p: pp, model, blocked \}\)/);          // Block and Unblock both ask first
+  assert.match(panel, /setAsk\(\{ kind: "pin", p: pp, model \}\)/);                   // so does Pin
   assert.match(panel, /label: "Undo", run: \(\) => void restoreRank\(r\.undo!\)/);
   assert.match(panel, /label: "Undo", run: \(\) => void setBlocked\(p, model, !blocked\)/);
   assert.doesNotMatch(panel, /unblock-all|Unblock all/i);

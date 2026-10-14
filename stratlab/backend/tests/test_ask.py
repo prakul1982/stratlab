@@ -26,3 +26,8 @@ def test_ai_answers_are_checked_and_bad_ones_fall_back():
     assert ask.clean({"action": "research", "symbol": "null"}, "banks")["action"] == "ideas"
     assert ask.clean({"action": "answer", "answer": "RSI measures..." * 200}, "q")["answer"].__len__() == 1200
     assert ask.looks_like_code("//@version=5\nstrategy('x')") and not ask.looks_like_code("buy when rsi < 30")
+
+
+def test_ask_key_covers_exactly_the_text_the_ai_is_sent():
+    assert ask.key("z" * 350 + "a") != ask.key("z" * 350 + "b")            # both inside the 400 sent
+    assert ask.key("z" * 400 + "a") == ask.key("z" * 400 + "b")

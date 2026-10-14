@@ -1138,6 +1138,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
                 "The AI translator couldn't run just now, so this couldn't be imported. Try again in a minute. "
                 "(TradingView Pine Script can be read without the AI.)")
         out, used_ai, usage = importer.pine(req.text), False, None
+    except HTTPException as e:
+        if fmt != "pine" or e.status_code != 429:       # at the AI-build limit Pine Script is still read, without the AI
+            raise
+        out, used_ai, usage = importer.pine(req.text), False, None
     if not out["entry"]:
         err(422, "nothing_imported", "No entry rules could be found in that. "
             "Check it's a strategy (with buy or short conditions), or describe the idea in words instead.")
@@ -3108,7 +3112,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
                       entry_id=old["id"] if old and old.get("owner") == profile["id"] else None)
     if old and old.get("owner") == profile["id"]:
         e["copies"], e["published_at"] = old.get("copies", 0), old.get("published_at", e["published_at"])
-        e = library.carry_moderation(old, e)
+    e = library.carry_moderation(old if old and old.get("owner") == profile["id"] else None, e)
     library.save(e)
     exp["library"] = e["id"]
     nb["experiments"] = [exp if x["v"] == version else x for x in exps]
@@ -3163,8 +3167,7 @@ def copy_from_library(eid: str, profile=Depends(current_profile)):
         nb["group"] = e["group"]
     out = save_notebook(profile, nb)
     if e.get("owner") != profile["id"]:
-        e["copies"] = (e.get("copies") or 0) + 1
-        library.save(e)
+        library.add_copy(eid)
     return out
 
 
@@ -5446,6 +5449,7 @@ def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_pro
     if not e:
         err(404, "not_found", "That strategy isn't in the library any more.")
     if req.action == "delete":
+        library.remember(library.moderate(e, "hide"))      # published again, it stays hidden
         library.remove(eid)
     else:
         library.save(library.moderate(e, req.action))

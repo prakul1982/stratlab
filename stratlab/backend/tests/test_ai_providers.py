@@ -776,3 +776,22 @@ def test_admin_ai_endpoints(monkeypatch, admin_client):
     who["profile"] = {"id": "u2", "email": "someone@x.com", "_plan": "pro", "_email_verified": True}
     assert client.get("/admin/ai").status_code == 403
     assert client.post("/admin/ai/pin", json={"provider": "groq", "model": "x"}).status_code == 403
+
+
+def test_a_blocked_model_is_not_used_even_when_railway_pins_it(monkeypatch):
+    keys(monkeypatch, "groq")
+    monkeypatch.setattr(settings, "GROQ_MODEL", "llama-3.1-8b-instant")
+    P.block("groq", "llama-3.1-8b-instant")
+    assert "llama-3.1-8b-instant" not in R.in_use("groq") and R.in_use("groq")
+
+
+def test_a_refresh_asks_the_provider_again_instead_of_the_answer_cache(monkeypatch):
+    keys(monkeypatch, "groq")
+    seen = []
+    t = fake(seen=seen)
+    P.complete("s-refresh", "t", transport=t)
+    P.complete("s-refresh", "t", transport=t)
+    assert len(bodies(seen)) == 1                                          # the second came from the cache
+    with P.ask_again():
+        P.complete("s-refresh", "t", transport=t)
+    assert len(bodies(seen)) == 2

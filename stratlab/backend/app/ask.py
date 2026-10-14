@@ -3,6 +3,7 @@
 The AI reads the line and picks an action; the app then does it end to end (build the rules, create the
 notebook, run the test, start paper trading, open research, answer a question). When the AI can't be
 reached, simple word rules pick the action instead, so the box always does something sensible."""
+import hashlib
 import re
 
 from .ideas import MARKETS, guess_market
@@ -90,7 +91,8 @@ def build(ask_json, q: str) -> dict:
 
 
 def key(q: str) -> tuple:
-    return (re.sub(r"\s+", " ", q.strip().lower())[:300],)
+    """Keyed on the text the AI is sent (the first 400 characters), so a longer query never gets another's answer."""
+    return (hashlib.sha1(re.sub(r"\s+", " ", q.strip()[:400].lower()).encode()).hexdigest(),)
 
 
 def looks_like_code(q: str) -> bool:

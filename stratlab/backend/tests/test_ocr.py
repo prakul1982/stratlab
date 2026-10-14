@@ -36,3 +36,13 @@ def test_mistral_then_gemini(monkeypatch):
         ocr.read_pdf(b"%PDF-1.4 scan", http)
     monkeypatch.setattr(settings, "MISTRAL_API_KEY", "")
     assert not ocr.available() and ocr.read_pdf(b"%PDF", http) == ""
+
+
+def test_deep_dive_text_for_a_failed_scan_names_no_provider(monkeypatch):
+    from app import docs
+    from app.branding import public_text
+    d = docs.Docs(ocr=lambda data: (_ for _ in ()).throw(ocr.OCRError("Mistral OCR: 429; Gemini: 429")))
+    with pytest.raises(Exception) as e:
+        d._ocr(b"%PDF")
+    assert "Mistral" not in str(e.value) and "Gemini" not in str(e.value) and "busy" in str(e.value)
+    assert "Mistral" not in public_text("(Mistral OCR: 429; Gemini: 429)") and "Gemini" not in public_text("Gemini: 429")

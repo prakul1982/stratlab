@@ -324,7 +324,7 @@ def in_use(name: str) -> list[str]:
     """The provider's models to try, best first: the pinned one alone, else the measured top few, else (before any
     measurement) the curated defaults. Blocked models never."""
     p = pinned(name)
-    if p and not pin_gone(name, p):
+    if p and not blocked(name, p) and not pin_gone(name, p):      # a blocked pin (Railway's too) holds nothing
         return [p]
     st = status(name)
     order = [m for m in st.order if not blocked(name, m) and m != p and not _UUID.match(m)]
@@ -637,7 +637,7 @@ def rerank(name: str, transport=None) -> Status:
         p = pinned(name)
         st.aliases.update(getattr(cl, "aliases", None) or {})     # R7M-008: a stored UUID is shown by its model's name
         cands, skipped, ctx = candidates(name, listed)
-        if p and p not in cands:
+        if p and not blocked(name, p) and p not in cands:
             cands = [p] + cands[:PROVIDERS[name].probe_max - 1]
         st.discovered, st.skipped = (len(listed) if listed is not None else None), skipped
         for m in cands:
