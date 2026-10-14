@@ -410,3 +410,9 @@ def test_a_row_filed_before_the_told_flag_is_not_told_again(w):
                 can_alert=lambda p: True)
     job.tick(datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc))
     assert sent == []
+
+
+def test_a_reported_loss_per_share_reads_minus_dollar_not_dollar_minus():
+    got = R.reported({"epsActual": -0.35, "revenueActual": 2_500_000})
+    assert got[0] == {"label": "EPS", "value": "-$0.35"}
+    assert R.reported({"epsActual": -0.001})[0]["value"] == "$0.00"
