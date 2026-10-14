@@ -10,6 +10,11 @@ test("the change is the live total less the latest complete snapshot", () => {
   assert.deepEqual(netWorthDelta(130, [], hist.slice(0, 1)), { change: 30, since: "2026-08-01" });
 });
 
+test("today's own snapshot (an entry changed today) is passed over", () => {
+  const withToday = [...hist, { d: "2026-10-15", net: 130 }];
+  assert.deepEqual(netWorthDelta(130, null, withToday, "2026-10-15"), { change: 10, since: "2026-09-01" });
+});
+
 test("no change is shown when the live total is partial or no snapshot is complete", () => {
   assert.equal(netWorthDelta(130, ["EPF"], hist), null);
   assert.equal(netWorthDelta(130, null, [hist[2]]), null);
