@@ -308,3 +308,16 @@ def test_admin_refresh(w):
     assert r.status_code == 200, r.text
     assert r.json()["IN"]["rows"] >= 2 and r.json()["US"]["rows"] >= 3
     assert c.post("/admin/results/refresh", headers=headers("pro-token")).status_code == 403
+
+
+def test_us_release_lookback_counts_from_the_us_date(monkeypatch):
+    import app.intel.sec as S
+    seen = []
+    monkeypatch.setattr(S, "documents", lambda subs, days: seen.append(days) or [])
+    monkeypatch.setattr(R, "local_today", lambda region: date(2026, 10, 20) if region == "US" else None)
+
+    class Sec:
+        def cik(self, s): return 1
+        def submissions(self, c, fresh=False): return {}
+    R.us_out(None, Sec(), {"symbol": "AAPL", "date": "2026-09-30"})
+    assert seen == [21]

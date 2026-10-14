@@ -204,24 +204,23 @@ class Runner:
         start = max(start, today - timedelta(days=KEEP_DAYS))
         day, through, new, got, fails, last_error = start, st.get("through"), 0, 0, 0, None
         while day <= today:
-            if day.weekday() < 5 or day == today:       # exchanges file on weekdays; today is read whatever it is
-                try:
-                    items = feed.market_flags(day)
-                except SourceError as e:
-                    fails, last_error = fails + 1, str(e)[:160]
-                    if fails >= GIVE_UP or getattr(e, "busy", False):
-                        break
-                    day += timedelta(days=1)
-                    continue
-                fails = 0
-                if rebuild:
-                    flags.replace_day("IN", day.isoformat(), items)
-                else:
-                    new += flags.add("IN", items, replace=True)       # a row read again keeps today's label and summary
-                got += 1
-                through = day.isoformat()
-                if self.pause:
-                    self.sleep(self.pause)
+            try:                                        # weekends too: board outcomes are filed on them
+                items = feed.market_flags(day)
+            except SourceError as e:
+                fails, last_error = fails + 1, str(e)[:160]
+                if fails >= GIVE_UP or getattr(e, "busy", False):
+                    break
+                day += timedelta(days=1)
+                continue
+            fails = 0
+            if rebuild:
+                flags.replace_day("IN", day.isoformat(), items)
+            else:
+                new += flags.add("IN", items, replace=True)       # a row read again keeps today's label and summary
+            got += 1
+            through = day.isoformat()
+            if self.pause:
+                self.sleep(self.pause)
             day += timedelta(days=1)
         if not got:
             _set_state("IN", last_error=last_error or "no day could be read", failed_at=_now())
