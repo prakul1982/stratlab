@@ -206,7 +206,29 @@ def _pe(p: dict, price: float | None) -> float | None:
     latest = ttm if ttm is not None else (years[-1] if years else None)
     if latest is None:
         return num(r.get("Stock P/E"))
-    return round(price / latest, 1) if latest > 0 else None
+    if latest <= 0:
+        return None
+    pe = round(price / latest, 1)
+    if pe < MIN_PE:          # earnings per share above the price: an EPS row in other units than the price, not a P/E
+        own = num(r.get("Stock P/E"))
+        return own if own is not None and own >= MIN_PE else None
+    return pe
+
+
+MIN_PE = 1.0                   # a P/E under one means the EPS row and the price aren't in the same units (Coromandel Agro: 0.1)
+
+
+def drop_impossible_margins(p: dict) -> dict:
+    """An operating (or financing) margin above 100% is not a margin: costs written back (negative expenses) or a
+    revenue row that isn't comparable (JIOFIN, Mar 2023). One on nil or negative revenue isn't one either. Left out of
+    the annual and quarterly tables, so no page shows it. Changes `p` and returns it."""
+    for name in ("quarters", "pl"):
+        rows = (p.get(name) or {}).get("rows") or {}
+        sales = _find(rows, "sales", "revenue")
+        for key in [k for k in rows if str(k).lower().startswith(("opm", "financing margin"))]:
+            rows[key] = [None if isinstance(m, (int, float)) and (m > 100 or (sales and i < len(rows[sales]) and isinstance(rows[sales][i], (int, float)) and rows[sales][i] <= 0)) else m
+                         for i, m in enumerate(rows[key])]
+    return p
 
 
 SHARES_DRIFT = 0.015           # the source's market value and its share capital disagree by more than this: use the capital
@@ -334,7 +356,7 @@ class Screener(Source):
             self.cache.set(("parsed", path), (html, p), 6 * 3600)
         if not p["ratios"]:
             return None
-        return {**fix_lender_margins(copy.deepcopy(p)), "url": f"https://www.screener.in{path}"}
+        return {**drop_impossible_margins(fix_lender_margins(copy.deepcopy(p))), "url": f"https://www.screener.in{path}"}
 
     def _schedule(self, p: dict, parent: str, section: str, line: str) -> dict | None:
         """One line of the site's breakdown of a statement line ({column: value}), as its page shows when the line is
