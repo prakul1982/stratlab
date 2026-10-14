@@ -195,14 +195,14 @@ def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = Non
 def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int, int]:
     """(totals, added, replaced, same): a new file's F&O, commodity and currency totals beside the saved ones. Lines
     aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates overlap a saved
-    one replaces it (the same file again, or a full year after a quarter), and one that doesn't overlap is added (the
-    next quarter)."""
+    one replaces it (a full year after a quarter), one inside a saved range is already counted, and one that doesn't
+    overlap is added (the next quarter)."""
     out = list(old)
     added = replaced = same = 0
     for c in new:
         hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and not (c["last"] < o["first"] or c["first"] > o["last"])]
-        if any(_same(o, c) for o in hits):
-            same += 1
+        if any(_same(o, c) for o in hits) or (hits and any(o["first"] <= c["first"] and c["last"] <= o["last"] for o in hits)):
+            same += 1                  # the same file again, or one inside a saved range (a quarter after the year)
             continue
         out = [o for o in out if not any(o is h for h in hits)]
         out.append(c)

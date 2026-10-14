@@ -8,7 +8,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from . import corp_actions, holdings, holdings_file, tax_lots
+from . import corp_actions, holdings, holdings_file, instrument_kinds, tax_lots
 from . import money_advance_tax as adv
 from . import money_dividends as divs
 from . import money_ltcg as ltcg
@@ -167,6 +167,23 @@ def dividends_delete(profile=Depends(current_profile)):
 
 
 # ---------- advance tax ----------
+def tax_computed(profile, i: dict) -> tuple[dict, list[dict], list[dict]]:
+    """The tax report's sales: compute() plus the mutual fund and US sales, split into (the whole `c`, the sales taxed
+    like shares, the other units' sales). `c["equity_open"]` is the open lots taxed like shares; `c["mf"]` and `c["us"]` are the added sales."""
+    from . import money_us_routes
+    M = _m()
+    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
+    mf = M.tax_mf(profile)
+    usr = money_us_routes.for_tax(profile)
+    c["realised"] += mf["rows"] + usr["rows"]
+    c["names"].update(mf["names"])
+    c["names"].update(usr["names"])
+    c["mf"], c["us"] = mf, usr
+    equity, units = tax_lots.split_units(c)
+    c["equity_open"] = [l for l in c["open"] if instrument_kinds.tax_class(instrument_kinds.code_of(c["names"].get(l["key"]) or {})) == "equity"]
+    return c, equity, units
+
+
 def advance_view(profile, fy: int | None = None) -> dict:
     """The year's instalments: dates for everyone, amounts on Pro."""
     M = _m()
@@ -181,16 +198,18 @@ def advance_view(profile, fy: int | None = None) -> dict:
     if not full:
         return out
     i = M.tax_inputs(profile)
-    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
+    c, equity, units = tax_computed(profile, i)
     stored, est, ahead, rate = dividend_parts(profile["id"], fetch=False)
     dv = divs.view(stored, est, ahead, rate, t)
     div_events = divs.events(dv, stored, est, rate, fy)
     inputs = i["income"].get(fy)
 
     def tax_by(cut: str | None) -> float:
-        rows = [r for r in c["realised"] if cut is None or r["sold"] <= cut]
+        rows = [r for r in equity if cut is None or r["sold"] <= cut]
+        other = [r for r in units if cut is None or r["sold"] <= cut]
         div = sum(a for d, a in div_events if cut is None or d <= cut)
-        y = tax_lots.with_total(tax_lots.year(fy, rows, c["intraday"], limit=0), i["business"], inputs, div)
+        y = tax_lots.with_total(tax_lots.year(fy, rows, c["intraday"], limit=0), i["business"], inputs, div,
+                                instrument_kinds.other_year(fy, other, c["names"]))
         return (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
     full_tax = tax_by(None)
     upto = [tax_by(d["date"]) for d in adv.due_dates(fy)[:3]] + [full_tax]
@@ -236,9 +255,9 @@ def long_term(profile=Depends(current_profile)):
     lots turning long-term in the next 30, 60 or 90 days, and the open lots below cost."""
     M = _m()
     i = M.tax_inputs(profile)
-    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
+    c, equity, _ = tax_computed(profile, i)
     full = allows(profile["_plan"], "tax_tools")
-    out = ltcg.tracker(c, i["quotes"], i["today"], full)
+    out = ltcg.tracker({**c, "realised": equity, "open": c["equity_open"]}, i["quotes"], i["today"], full)
     below = tax_lots.below_cost(c["open"], i["quotes"], i["today"])
     return M.ok({**out, "below_cost": below if full else {**below, "rows": []}, "names": c["names"],
                  "prices": i["live"], "trades": len(i["trades"])})

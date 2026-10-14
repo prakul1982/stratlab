@@ -3,13 +3,14 @@ from holdings, and the year's total in the tax estimate), advance tax (the due d
 after a due date, 234C with its 12% and 36% tolerance, 234B, the reminders) and the long-term exemption tracker."""
 import base64
 import re
+from types import SimpleNamespace
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from app import corp_actions, holdings, money_advance_tax as A, money_dividends as D, money_ltcg as L
-from app import tax_lots as T, tax_total
+from app import money_routes, money_us_routes, tax_lots as T, tax_total
 from tests import tradebook_maker, world
 
 PRO, BASIC, FREE = world.headers("pro-token"), world.headers("basic-token"), world.headers("free-token")
@@ -276,6 +277,24 @@ def test_exemption_used_left_and_lots_turning_long_term():
     # locked: the counts and the exemption, not the lots
     locked = L.tracker(c, quotes, today, full=False)
     assert locked["long"] == [] and locked["soon"] == [] and locked["exemption"]["used"] == 10000 and locked["locked"]
+
+
+def test_tracker_counts_fund_gains_and_leaves_out_gold_etfs(monkeypatch):
+    today = "2026-10-04"
+    i = {"trades": [b("2024-01-10", 10, 100, "A"), s_("2026-05-01", 10, 5100, "A"),          # shares: ₹50,000 long-term
+                    b("2024-01-10", 10, 100, "GOLDBEES"), s_("2026-05-01", 10, 5100, "GOLDBEES"),   # gold ETF: no exemption
+                    b("2024-01-10", 10, 100, "GOLDBEES"),                                   # an open gold ETF lot
+                    b("2024-01-10", 10, 100, "MFX"), s_("2026-05-01", 10, 10100, "MFX")],     # stands in for a fund sale: ₹1,00,000
+         "acts": {}, "fmv": {}, "today": today}
+    fund = [r for r in T.compute([t for t in i["trades"] if t["sym"] == "MFX"], today=today)["realised"]]
+    i["trades"] = [t for t in i["trades"] if t["sym"] != "MFX"]
+    monkeypatch.setattr(money_routes, "_m", lambda: SimpleNamespace(tax_mf=lambda p: {"rows": fund, "names": {}}))
+    monkeypatch.setattr(money_us_routes, "for_tax", lambda p: {"rows": [], "names": {}})
+    c, equity, units = money_routes.tax_computed({"id": "u"}, i)
+    assert {r["key"] for r in equity} == {"A", "MFX"} and {r["key"] for r in units} == {"GOLDBEES"}
+    quotes = {"GOLDBEES": {"price": 200}}
+    t = L.tracker({**c, "realised": equity, "open": c["equity_open"]}, quotes, today)
+    assert t["exemption"]["used"] == 125000 and t["exemption"]["left"] == 0 and t["long"] == []
 
 
 def test_unpriced_lots_are_counted_not_guessed():

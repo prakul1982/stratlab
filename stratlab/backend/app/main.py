@@ -2909,13 +2909,7 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     """One financial year's report as a CSV (every realised line) or a PDF summary."""
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
-    c = tax_lots.compute(i["trades"], i["acts"], i["fmv"], i["today"])
-    mf = tax_mf(profile)
-    usr = money_us_routes.for_tax(profile)
-    c["realised"] += mf["rows"] + usr["rows"]
-    c["names"].update(mf["names"])
-    c["names"].update(usr["names"])
-    equity, units = tax_lots.split_units(c)
+    c, equity, units = money_routes.tax_computed(profile, i)
     y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"

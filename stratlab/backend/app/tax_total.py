@@ -284,8 +284,11 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                      "added to the income taxed at slab rates.")
     rest += slab_cg
     g_rates = {b["key"]: b["rate"] for b in buckets}
-    lt_exempt = {b["key"]: b.get("exempt") or 0.0 for b in buckets}
-    taxable = {b["key"]: max(0.0, b.get("taxable") or 0.0) for b in buckets}
+    lt_exempt: dict[str, float] = {}
+    taxable: dict[str, float] = {}
+    for b in buckets:                  # buckets that share a key (fund and ETF gains at 12.5%) add up
+        lt_exempt[b["key"]] = lt_exempt.get(b["key"], 0.0) + (b.get("exempt") or 0.0)
+        taxable[b["key"]] = taxable.get(b["key"], 0.0) + max(0.0, b.get("taxable") or 0.0)
 
     spec = intraday
     spec_cf = 0.0
