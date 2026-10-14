@@ -2762,7 +2762,7 @@ def holdings_corp_action(req: CorpActionReq, profile=Depends(current_profile)):
         if not item:
             err(404, "not_held", f"{sym} isn't in your holdings.")
         today = datetime.now(IST).date()
-        saved = (h["updated_at"] or today.isoformat())[:10]
+        saved = corp_actions.saved_day(h["updated_at"], today)
         if req.action == "undo":
             if not item.get("adjusted"):
                 err(409, "nothing_to_undo", f"{sym} has no adjustment to undo.")
