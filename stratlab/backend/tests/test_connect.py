@@ -643,12 +643,25 @@ def kite(monkeypatch, on):
     monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "https://site.example")
 
 
-def kite_login(c, headers=ADMIN, request_token="good-request-token", path="/connect/kite/callback"):
-    url = c.get("/connect/kite/login", headers=headers).json()["url"]
-    st = [p for p in url.split("%3D", 1)[1:]][0] if "%3D" in url else ""
+def kite_state(c, headers=ADMIN):
     from urllib.parse import unquote
-    st = unquote(url.split("redirect_params=")[1]).split("state=", 1)[1]
-    return c.get(path, params={"request_token": request_token, "status": "success", "state": st}, follow_redirects=False)
+    url = c.get("/connect/kite/login", headers=headers).json()["url"]
+    return unquote(url.split("redirect_params=")[1]).split("state=", 1)[1]
+
+
+def kite_login(c, headers=ADMIN, request_token="good-request-token", path="/connect/kite/callback"):
+    """Zerodha's round trip as the app's Settings page does it: back at the callback, then the signed-in page confirms.
+    Answers as the old one-step callback did (a redirect to ?kite=ok or failed)."""
+    from types import SimpleNamespace
+    from urllib.parse import parse_qs, urlparse
+    st = kite_state(c, headers)
+    r = c.get(path, params={"request_token": request_token, "status": "success", "state": st}, follow_redirects=False)
+    loc = r.headers.get("location", "")
+    if "kite=confirm" not in loc:
+        return r
+    q = parse_qs(urlparse(loc).query)
+    done = c.post("/connect/kite/confirm", headers=headers, json={"state": q["ks"][0], "claim": q["kc"][0]})
+    return SimpleNamespace(status_code=303, headers={"location": "https://site.example/settings?kite=" + ("ok" if done.status_code == 200 else "failed") + "#accounts"})
 
 
 def test_zerodha_is_closed_to_users_until_approved(w, kite):
@@ -1073,3 +1086,63 @@ def test_stored_values_never_hold_a_plain_secret(w, brevo, flex):
     raw = "".join(v for _, v in db.all_settings_with_prefix(""))
     for s in (DEMAT_PASSWORD, TOKEN):
         assert s not in raw
+
+
+# ---------- Zerodha: a login link passed to someone else can't link their account ----------
+def kite_back(c, st, request_token="good-request-token"):
+    """Zerodha sends the browser back to the callback: (claim, state) the landing page gets."""
+    from urllib.parse import parse_qs, urlparse
+    r = c.get("/connect/kite/callback", params={"request_token": request_token, "status": "success", "state": st}, follow_redirects=False)
+    q = parse_qs(urlparse(r.headers["location"]).query)
+    return r, q
+
+
+def test_the_callback_alone_links_nothing(w, kite, monkeypatch):
+    monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
+    c = w["client"]
+    st = kite_state(c, PRO)
+    r, q = kite_back(c, st)
+    assert r.headers["location"].startswith("https://site.example/settings?kite=confirm&ks=") and q["ks"] == [st]
+    assert db.get_setting(state.KEY + PRO_ID) is None                              # a signed token on a link is not a sign-in
+    assert not c.get("/connect", headers=PRO).json()["kite"]["connected"]
+
+
+def test_a_victims_login_through_the_attackers_link_is_not_attached(w, kite, monkeypatch):
+    monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
+    c = w["client"]
+    st = kite_state(c, PRO)                                                          # the attacker's link
+    _, q = kite_back(c, st)                                                          # the victim finishes it at Zerodha
+    # the victim's own sign-in, or the attacker who knows the state but never saw the claim
+    assert c.post("/connect/kite/confirm", headers=BASIC, json={"state": st, "claim": q["kc"][0]}).status_code == 400
+    assert c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": "guessed"}).status_code == 400
+    assert c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": ""}).status_code == 400
+    assert db.get_setting(state.KEY + PRO_ID) is None and db.get_setting(state.KEY + BASIC_ID) is None
+    assert c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": q["kc"][0]}).status_code == 200   # the right browser still can
+    assert state.section(PRO_ID, "kite")["kite_user"] == "AB1234"
+
+
+def test_a_zerodha_login_state_works_once(w, kite, monkeypatch):
+    monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
+    c = w["client"]
+    st = kite_state(c, PRO)
+    _, q = kite_back(c, st)
+    assert c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": q["kc"][0]}).status_code == 200
+    assert c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": q["kc"][0]}).status_code == 400   # confirmed once
+    n = len(FakeKite.log)
+    r, _ = kite_back(c, st)                                                          # the callback again with the same state
+    assert r.headers["location"].endswith("kite=failed#accounts") and not any(x[0] == "session" for x in FakeKite.log[n:])
+
+
+def test_a_staged_zerodha_login_expires(w, kite, monkeypatch):
+    monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
+    c = w["client"]
+    st = kite_state(c, PRO)
+    _, q = kite_back(c, st)
+    real = time.time()
+    monkeypatch.setattr(time, "time", lambda: real + kite_user.PENDING_TTL + 5)
+    r = c.post("/connect/kite/confirm", headers=PRO, json={"state": st, "claim": q["kc"][0]})
+    assert r.status_code == 400 and db.get_setting(state.KEY + PRO_ID) is None
+
+
+def test_confirming_a_zerodha_login_needs_signing_in(w, kite):
+    assert w["client"].post("/connect/kite/confirm", json={"state": "u1.x", "claim": "y"}).status_code == 401

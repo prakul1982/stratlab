@@ -1,5 +1,6 @@
 """/research API: company profiles, charts, quotes, market pulse, sector maps, comparisons,
 AI reads and the watchlist. Every third-party call happens here on the server."""
+import contextlib
 import json
 import threading
 import time
@@ -9,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .. import db
+from .. import db, usage_slots
 from ..branding import public_research
 from ..responses import err, safe
 from ..ai_providers import AIBusy, AIError
@@ -96,6 +97,17 @@ def ai_reads_today(profile) -> int:
 LIMIT_CODE = "research_ai_limit"
 
 
+def read_slot(profile, limit: int | None):
+    """Holds one of the person's fresh AI reads while it's written, so parallel requests can't all pass the cap before
+    any is counted. Record the usage inside the block; a read that fails leaves the cap untouched. No cap, no hold."""
+    if limit is None:
+        return contextlib.nullcontext()
+    def check(held):
+        if ai_reads_today(profile) + held >= limit:
+            err(429, LIMIT_CODE, limit_words(limit))
+    return usage_slots.hold(profile["id"], "research_ai", check)
+
+
 def limit_words(limit: int) -> str:
     return (f"You've used today's {limit} fresh AI reads on your plan. Reads already written for a company or the market "
             "still open, and the count starts again at midnight India time.")
@@ -115,27 +127,25 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
         return A.cached(kind, key, ttl, False, build)[0]
     if refresh and min_age and (hit := A.get(kind, key)) and time.time() - float(hit.get("generated_at") or 0) < min_age:
         return hit
-    limit = ai_cap(profile) if counted else None
-    if limit is not None and ai_reads_today(profile) >= limit:
-        err(429, LIMIT_CODE, limit_words(limit))
     k = repr((kind, key))
     with _building_lock:
         one = _building.setdefault(k, threading.Lock())
-    try:
-        with one:                     # two people opening the same company at once: one read, written once
-            if not refresh and A.peek(kind, key):
-                return A.cached(kind, key, ttl, False, build)[0]
-            out, fresh = A.cached(kind, key, ttl, refresh, build)
-    except AIBusy as e:
-        err(503, "ai_busy", str(e))
-    except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
-        err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
-    finally:
-        with _building_lock:
-            if len(_building) > 2000:
-                _building.clear()
-    if fresh and counted:
-        db.add_usage(profile["id"], "research_ai")
+    with read_slot(profile, ai_cap(profile) if counted else None):
+        try:
+            with one:                     # two people opening the same company at once: one read, written once
+                if not refresh and A.peek(kind, key):
+                    return A.cached(kind, key, ttl, False, build)[0]
+                out, fresh = A.cached(kind, key, ttl, refresh, build)
+        except AIBusy as e:
+            err(503, "ai_busy", str(e))
+        except AIError as e:          # there's no idea to rephrase on a research page: the reader can only try again
+            err(422, "ai_failed", str(e).replace("Try rephrasing the idea.", "Press Refresh to try again."))
+        finally:
+            with _building_lock:
+                if len(_building) > 2000:
+                    _building.clear()
+        if fresh and counted:
+            db.add_usage(profile["id"], "research_ai")
     return out
 
 
