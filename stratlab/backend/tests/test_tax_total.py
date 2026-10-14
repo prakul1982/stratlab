@@ -165,6 +165,20 @@ def test_surcharge_on_share_gains_is_capped_at_15_percent():
     assert big["surcharge"] == pytest.approx(slab * 0.25 + 2000000 * 0.15)
 
 
+def test_surcharge_on_dividends_is_capped_at_15_percent():
+    v = {"regime": "new", "other": 2.5 * CR, "salary": 0}
+    e = X.estimate(2025, v, [], 0, 0, dividends=1 * CR)                            # 3.5 crore, of which 1 crore dividends
+    slab = 300000 + (3.5 * CR - 24 * L) * 0.30
+    div_tax = 1 * CR * 0.30                                                         # the top of the slab tax
+    assert e["surcharge_rate"] == 0.25
+    assert e["surcharge"] == pytest.approx((slab - div_tax) * 0.25 + div_tax * 0.15)
+    assert e["total"] == pytest.approx((slab + e["surcharge"]) * 1.04)
+    assert any("15% on the tax on dividends" in s for s in e["steps"])
+    low = X.estimate(2025, {**v, "other": 1.5 * CR}, [], 0, 0, dividends=1 * CR)  # without the dividends, under 2 crore
+    slab = 300000 + (2.5 * CR - 24 * L) * 0.30
+    assert low["surcharge_rate"] == 0.15 and low["surcharge"] == pytest.approx(slab * 0.15)
+
+
 # ---------- regimes ----------
 def test_switching_regime():
     new = est(other=10 * L, deductions=1.5 * L)

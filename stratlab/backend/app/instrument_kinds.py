@@ -211,14 +211,29 @@ def split(realised: list[dict], names: dict) -> tuple[list[dict], list[dict]]:
     return eq, other
 
 
+BUCKET_OF = {"slab": "st_unit", "lt": "lt_unit"}   # the tax_lots buckets the slab and 12.5% heads go into
+
+
+def bucket_rows(rows: list[dict], names: dict) -> list[dict]:
+    """The sales under the slab and 12.5% heads, each tagged with its tax_lots bucket, for the year's set-off with
+    share sales (sections 70, 71 and 74). Exempt and old-rule sales are left out."""
+    out = []
+    for r in rows:
+        n = names.get(r["key"]) or {}
+        head, _ = treatment(code_of(n), n.get("symbol") or r["key"], r["bought"], r["sold"], r["fy"])
+        if head in BUCKET_OF:
+            out.append({**r, "bucket": BUCKET_OF[head]})
+    return out
+
+
 def _r(v, dp=2):
     return None if v is None else round(v, dp)
 
 
 def other_year(fy: int, rows: list[dict], names: dict) -> dict | None:
-    """One financial year's non-equity sales: each with its head, the totals, set-off (short-term losses against
-    any gains, long-term losses only against long-term gains) and what goes into the tax estimate. None when the
-    year has none."""
+    """One financial year's non-equity sales: each with its head, the totals and the set-off among these sales alone
+    (short-term losses against any gains, long-term losses only against long-term gains). The tax estimate sets them
+    off together with share sales (tax_lots.year with bucket_rows). None when the year has none."""
     mine = [r for r in rows if r["fy"] == fy]
     if not mine:
         return None
@@ -267,6 +282,6 @@ NOTES = [
     "the trust's company opted for the lower corporate tax rate (section 115BAA), and repayment of debt taxable once "
     "the total received passes the units' cost (section 56(2)(xii)). The trust's statement gives the split; "
     "distributions aren't in these files.",
-    "This estimate sets off losses within the non-equity sales and within share sales, not across the two. The law "
-    "allows short-term losses against any capital gain and long-term losses against any long-term gain.",
+    "Losses on these units and on shares are set off together: short-term losses against any capital gain, long-term "
+    "losses only against long-term gains. The year's set-off steps show where each loss went.",
 ]

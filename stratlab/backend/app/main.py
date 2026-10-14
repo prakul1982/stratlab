@@ -3028,7 +3028,8 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
     throttle(profile, "tax_export", 60, 3600, "That's a lot of downloads in an hour. Try again a little later.")
     i = tax_inputs(profile)
     c, equity, units = money_routes.tax_computed(profile, i)
-    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None), i["business"], i["income"].get(fy),
+    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None, units=instrument_kinds.bucket_rows(units, c["names"])),
+                            i["business"], i["income"].get(fy),
                             money_routes.dividends_for_tax(profile).get(fy, 0.0), instrument_kinds.other_year(fy, units, c["names"]))
     name = f"stratlab-tax-{y['label'].replace(' ', '-')}"
     if format == "pdf":

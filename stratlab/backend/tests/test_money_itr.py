@@ -105,7 +105,18 @@ def test_schedule_cg_by_section_and_by_period():
     assert any("set off" in n for n in cg["notes"]) and any("carry forward" in n for n in cg["notes"])
     f = I.t_cg_periods(g)
     by = {r[0]: r for r in f["rows"]}
-    assert by["111A at 20%"][1:7] == [500, 0, -200, 0, 0, 300] and by["112A at 12.5%"][4] == 3000
+    # after set-off and the exemption, no cell below zero: the 200 loss comes off the 500, the 112A gain is all exempt
+    assert by["111A at 20%"][1:7] == [300, 0, 0, 0, 0, 300] and by["112A at 12.5%"][1:7] == [0, 0, 0, 0, 0, 0]
+
+
+def test_table_f_carries_a_negative_period_into_the_next_and_adds_up_to_the_bucket():
+    trades = [b("2025-01-02", 10, 100), s("2025-05-02", 10, 80),          # short-term loss 200, period 1
+              b("2025-02-02", 10, 100, "B"), s("2025-07-01", 10, 150, "B"),  # short-term gain 500, period 2
+              b("2025-03-02", 10, 100, "C"), s("2026-01-05", 10, 130, "C")]  # short-term gain 300, period 4
+    f = I.t_cg_periods(g_for(trades, 2025))
+    assert f["rows"][0][0] == "111A at 20%" and f["rows"][0][1:7] == [0, 300, 0, 300, 0, 600]
+    assert I.spread([500, -800, 100, 400, 0], 200) == [200, 0, 0, 0, 0]                 # capped at the total, never negative
+    assert I.spread([0, 0, 0, 0, 0], 150) == [0, 0, 0, 0, 150]                          # the last period makes it up
 
 
 def test_dividends_by_period_with_tds_and_us_lines():
