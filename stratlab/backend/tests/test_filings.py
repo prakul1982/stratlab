@@ -166,3 +166,25 @@ def test_daily_alert_sends_only_new_flags_once(monkeypatch, store):
     job.last_day = None
     job.tick(evening)
     assert len(sent) == 1                           # nothing new since
+
+
+def test_a_filing_alert_is_not_repeated_when_a_kill_comes_after_the_send(monkeypatch, store):
+    from datetime import timedelta
+    rows = {"ABC": [row("Qualified Institutions Placement", when=recent(40), seq="old")]}
+    store["watchlist:u1"] = json.dumps({"items": [{"region": "IN", "symbol": "ABC"}]})
+    F.set_alert("u1", True)
+    rows["ABC"].append(row("Creation of pledge by promoter", when=recent(0, hour=0), seq="new"))
+    rows["ABC"][-1]["sort_date"] = (F.ist_now() + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
+    sent = []
+
+    def notify(p, s, t, url):
+        sent.append(t)
+        raise KeyboardInterrupt                             # killed right after the alert went out
+    evening = datetime.now(F.IST).replace(hour=20, minute=45)
+    with pytest.raises(KeyboardInterrupt):
+        F.Alerts(FakeFeed(rows), notify=notify, can_alert=lambda p: True).tick(evening)
+    assert json.loads(store[F.ALERT_KEY + "u1"])["seen"] > ""      # seen was saved before the send
+    from app import run_marks
+    store["filingalert-day"] = json.dumps({**json.loads(store["filingalert-day"]), "beat": 0})     # quiet long ago
+    F.Alerts(FakeFeed(rows), notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True).tick(evening)
+    assert len(sent) == 1 and run_marks.status("filingalert-day", evening.date().isoformat()) == "done"

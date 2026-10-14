@@ -414,3 +414,26 @@ def test_ltcg_api(w):
 def test_money_routes_need_sign_in(w):
     for path in ("/money/dividends", "/money/advance-tax", "/money/ltcg"):
         assert w["client"].get(path).status_code == 401
+
+
+def test_an_advance_tax_run_killed_mid_way_skips_the_readers_already_sent(w, monkeypatch):
+    from app import run_marks
+    clock = [1000.0]
+    monkeypatch.setattr(run_marks, "time", __import__("types").SimpleNamespace(time=lambda: clock[0]))
+    sent, kill = [], [True]
+
+    def send(p, subject, text):
+        if p["id"] == "u-pro" and kill[0]:
+            kill[0] = False
+            raise KeyboardInterrupt                                           # the deploy's SIGTERM
+        sent.append(p["id"])
+        return True
+    monkeypatch.setattr(A, "send", send)
+    monkeypatch.setattr(A, "subscribers", lambda: ["u-basic", "u-pro", "u-free"])
+    eve = datetime(2026, 12, 8, 4, 0, tzinfo=ZoneInfo("UTC"))
+    with pytest.raises(KeyboardInterrupt):
+        A.Job().tick(eve)
+    assert sent == ["u-basic"] and A.Job().tick(eve) == 0                      # a live heartbeat: left alone
+    clock[0] += run_marks.STALE + 1
+    A.Job().tick(eve)
+    assert sent == ["u-basic", "u-free"]                                       # not u-basic again; u-pro was cut off mid-send

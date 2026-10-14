@@ -1963,8 +1963,8 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-example { display: flex; flex-direction: column; gap: 6px; padding: var(--s4); text-decoration: none; color: inherit; }
 .lp-example:hover { border-color: var(--ink-2); }
 .lp-example .lp-space-go { margin-top: auto; }
-.lp-skel-card { height: 148px; border-radius: var(--r-card); }
-@media (max-width: 800px) { .lp-examples { grid-template-columns: minmax(0, 1fr); } .lp-skel-card { height: 110px; } }
+.lp-skel-card { height: 207px; border-radius: var(--r-card); }
+@media (max-width: 800px) { .lp-examples { grid-template-columns: minmax(0, 1fr); } .lp-skel-card { height: 190px; } }
 
 /* the phone menu and the small controls: at least 40px to tap */
 .lp-menu > summary { min-height: 40px; cursor: pointer; }

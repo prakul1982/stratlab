@@ -33,7 +33,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from . import db
+from . import db, run_marks
 from .auth import current_profile
 from .branding import public_text
 from .responses import err as _err
@@ -506,13 +506,13 @@ def _send(profile: dict, channel: str, subject: str, text: str) -> list[str]:
     return sent
 
 
-def send_reminders(today: date, send=_send) -> int:
+def send_reminders(today: date, send=_send, run=None) -> int:
     """One message per user with reminders on, listing their events `days` from today in the categories they chose.
     Only for plans with reminders."""
     sent = 0
     for k, raw in db.all_settings_with_prefix(KEY):
         uid = k[len(KEY):]
-        if not uid or ":" in uid:
+        if not uid or ":" in uid or (run and run.seen(uid)):
             continue
         r = clean_reminders(db.json_value(raw, {}).get("reminders"))
         if not r["on"] or not r["cats"]:
@@ -523,6 +523,8 @@ def send_reminders(today: date, send=_send) -> int:
                 continue
             target = today + timedelta(days=r["days"])
             evs = events(uid, target, target, set(r["cats"]))
+            if evs and run:
+                run.record(uid)                    # before the send: a kill in between drops one, never doubles
             if evs and send(profile, r["channel"], f"StratLab: {len(evs)} money date{'s' if len(evs) != 1 else ''} coming up",
                             reminder_text(evs, r["days"])):
                 sent += 1
@@ -556,11 +558,12 @@ class Job:
         day = local.date().isoformat()
         if local.strftime("%H:%M") < REMIND_AT or self.last == day:
             return 0
-        self.last = day
-        if db.get_setting(JOB_KEY) == day:
+        run = run_marks.claim(JOB_KEY, day)          # or the run a restart cut short
+        if not run:
             return 0
-        db.set_setting(JOB_KEY, day)
-        n = send_reminders(local.date(), self.send)
+        n = send_reminders(local.date(), self.send, run)
+        run.done()
+        self.last = day
         self.status.update(last_run=now.isoformat(), sent=n, last_error=None)
         return n
 
