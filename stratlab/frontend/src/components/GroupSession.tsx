@@ -20,7 +20,7 @@ export interface GroupSnapshot {
   strategy: { tf: string; risk: { capital: number } }; started_at: string; last_tick_at?: string | null; feed_connected?: boolean;
   members: { symbol: string; id: string; price: number; trades: number; pnl: number; skipped?: number; spread?: number | null;
     position: { side: "long" | "short"; qty: number; entry: number; unrealised: number; stop: number | null; target: number | null } | null }[];
-  skipped: string[]; events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number }[];
+  skipped: string[]; events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; kind?: "corp" }[];
   equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; realised: number; unrealised: number; open: number; max_open: number; halted: boolean;
     today: number; trades: number; wins: number; skipped?: { spread: number; price: number }; emptied_on?: string | null };

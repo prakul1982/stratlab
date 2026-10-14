@@ -41,7 +41,7 @@ function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
     if (f && fm && (!out.length || f.t > out[out.length - 1].t)) out.push({ t: f.t, o: fm.o, h: fm.h, l: fm.l, c: f.c });
     return out;
   }, [snap.bars, f]);
-  const markers = useMemo(() => snap.events.map((e) => ({ t: e.t, side: e.side })), [snap.events]);
+  const markers = useMemo(() => snap.events.filter((e) => e.side).map((e) => ({ t: e.t, side: e.side })), [snap.events]);
   const a = snap.account;
   const levels = useMemo<PriceLevel[]>(() => [...(a.stop ? [{ price: a.stop, label: "Stop", tone: "down" as const }] : []),
     ...(a.target ? [{ price: a.target, label: "Target", tone: "up" as const }] : [])], [a.stop, a.target]);

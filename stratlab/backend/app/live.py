@@ -8,6 +8,7 @@ from . import db
 from . import alerts
 from . import risk
 from .alerts import notify
+from .corp_actions import PaperActions
 from .engine import costs as C
 from .engine.core import Ctx, Engine, chart_series, cond_text
 from .kite_service import IST, KiteService, TickHub
@@ -283,10 +284,16 @@ class LiveSession:
         if len(bars) < 30:
             raise ValueError("Not enough price history to start this strategy.")
         state = row.get("state") or {}
+        # a stock's bonuses and splits: the candles in today's prices, before the missed ones are split off and run
+        self.corp = PaperActions(self.inst, state)
+        today = self.corp.today()
+        todo = self.corp.resume(bars, today)
         bars, missed = split_missed(bars, state.get("last_bar_t"))
         self.bars = bars[-400:]
         lot = self.inst.get("step") or (self.inst.get("lot", 1) if self.inst.get("fno") else 1)
         self.engine = Engine(self.strategy, lot, state=state or None, cost_kind=C.kind_of(self.inst))
+        n = len(self.engine.events)
+        self.engine.cash += self.corp.apply(self.engine, todo, today, todo=True)[0]
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.engine.day_close = day_close_minutes(self.market)
         self.next_poll = 0.0
@@ -298,7 +305,7 @@ class LiveSession:
         self.last_tick_at: str | None = None
         self.started_at = row["started_at"]
         self.lock = threading.Lock()
-        self.dirty = False
+        self.dirty = len(self.engine.events) > n
         self.replaying: list[dict] | None = None    # the orders of candles being caught up on, alerted as one
         if missed:
             self.mgr.replay(self, lambda: [self._on_candle(c) for c in missed])
@@ -318,6 +325,8 @@ class LiveSession:
                 self._on_candle(c)
 
     def on_timer(self, now: datetime):
+        with self.lock:
+            self._corp_day(self.corp.today(now), timer=True)
         if self.polled:
             self._poll()
             return
@@ -354,10 +363,26 @@ class LiveSession:
                 self.last_price = float(px)
                 self.last_tick_at = datetime.now(IST).isoformat()
 
+    def _corp_day(self, day: str, timer: bool = False):
+        """Once a day, before its first candle: the stock's bonuses, splits and dividends on the open position. From the
+        timer the last price is the previous day's, so it's put in the new prices too."""
+        acts = self.corp.new_day(day)
+        if acts:
+            n = len(self.engine.events)
+            self.corp.bars(self.bars, acts)
+            cash, f = self.corp.apply(self.engine, acts, day)
+            self.engine.cash += cash
+            if timer:
+                self.last_price /= f
+            self.dirty = self.dirty or len(self.engine.events) > n
+
     def _on_candle(self, c: dict):
+        self._corp_day(str(c["t"])[:10])
         self.bars.append(c)
         if len(self.bars) > 600:
             self.bars = self.bars[-500:]
+        if self.corp.waiting:
+            self.corp.on_bar(self.bars)
         ctx = Ctx(self.bars, intraday=self.tf != "1d")
         new = self.engine.step(self.bars, ctx, len(self.bars) - 1)
         # the account's value at the candle's close, stamped when the candle closed: the 14:00-14:05 candle's close is the
@@ -440,6 +465,7 @@ class LiveSession:
         d["day_equity"] = self.day_equity = risk.note_days(self.day_equity, self.equity_curve)
         d["last_price"], d["last_tick_at"] = self.last_price, self.last_tick_at
         d["last_bar_t"] = self.bars[-1]["t"]       # the last candle run: a restart catches up on the ones after it
+        d.update(self.corp.dump())
         return d
 
     def final_state(self, now: datetime | None = None) -> dict:

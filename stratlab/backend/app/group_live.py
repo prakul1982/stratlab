@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from . import risk
+from .corp_actions import PaperActions
 from .engine import costs as C
 from .engine.core import Ctx, Engine, write_off
 from .kite_service import IST, KiteService
@@ -29,11 +30,18 @@ class Member:
     def __init__(self, sess: "GroupLiveSession", inst: dict, bars: list[dict], state: dict | None, forming: dict | None = None):
         self.s, self.inst = sess, inst
         self.sym = inst.get("symbol") or inst["id"]
+        # a stock's bonuses and splits: the candles in today's prices, before the missed ones are split off and run
+        self.corp = PaperActions(inst, state)
+        today = self.corp.today()
+        todo = self.corp.resume(bars, today)
         bars, self.missed = split_missed(bars, (state or {}).get("last_bar_t"))   # closed while the server was down
         self.bars = bars[-400:]
         self.forming = forming
         lot = inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1)
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
+        n = len(self.engine.events)
+        sess.corp_cash += self.corp.apply(self.engine, todo, today, todo=True)[0]
+        sess.dirty = sess.dirty or len(self.engine.events) > n
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.engine.day_close = day_close_minutes(sess.market)
         self.engine.gate = sess.free_slot
@@ -97,6 +105,19 @@ class Member:
             self.s.dirty = True
             self.s.mgr.on_order(self.s, {**ev, "sym": self.sym})
 
+    def corp_day(self, day: str, timer: bool = False):
+        """Once a day, before its first candle: the stock's bonuses, splits and dividends on the open position; the
+        cash they pay goes to the group's pot. From the timer the last price is the previous day's: put in the new prices."""
+        acts = self.corp.new_day(day)
+        if acts:
+            n = len(self.engine.events)
+            self.corp.bars(self.bars, acts)
+            cash, f = self.corp.apply(self.engine, acts, day)
+            self.s.corp_cash += cash
+            if timer:
+                self.last_price /= f
+            self.s.dirty = self.s.dirty or len(self.engine.events) > n
+
     def open_pnl(self) -> float:
         e = self.engine
         return e.dir * e.qty * (self.last_price - e.entry) - e.entry_cost if e.qty > 0 else 0.0
@@ -125,6 +146,7 @@ class GroupLiveSession:
         cap = self.strategy.risk.capital
         self.loss_cap = cap * self.strategy.session.dailyLossPct / 100 if self.strategy.session.dailyLossPct else 0.0
         state = row.get("state") or {}
+        self.corp_cash = state.get("corp_cash", 0.0)     # dividends and cash for fractional shares, paid in or out
         self.day = state.get("day")
         self.halted = state.get("halted", False)
         self.emptied_on: str | None = state.get("emptied_on")      # the day the account reached zero: nothing opens after it
@@ -173,7 +195,7 @@ class GroupLiveSession:
         return not self.halted and not self.emptied_on and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
 
     def realised(self) -> float:
-        return sum(t["pnl"] for m in self.members for t in m.engine.trades)
+        return sum(t["pnl"] for m in self.members for t in m.engine.trades) + self.corp_cash
 
     def equity(self) -> float:
         cap = self.strategy.risk.capital
@@ -199,9 +221,12 @@ class GroupLiveSession:
         if day != self.day:
             self.day, self.halted = day, False
             self.day_start_realised = self.realised()
+        m.corp_day(day)
         m.bars.append(c)
         if len(m.bars) > 600:
             m.bars = m.bars[-500:]
+        if m.corp.waiting:
+            m.corp.on_bar(m.bars)
         m.last_price = c["c"]
         ctx = Ctx(m.bars, intraday=self.tf != "1d")
         new = m.engine.step(m.bars, ctx, len(m.bars) - 1)
@@ -242,6 +267,9 @@ class GroupLiveSession:
         self.lids = []
 
     def on_timer(self, now: datetime):
+        with self.lock:
+            for m in self.members:
+                m.corp_day(m.corp.today(now), timer=True)
         if not self.polled:
             with self.lock:
                 for m in self.members:
@@ -273,11 +301,11 @@ class GroupLiveSession:
 
     # ---------- saving and showing ----------
     def state(self) -> dict:
-        return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
+        return {"members": {m.inst["id"]: {**m.engine.dump(), **m.corp.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
                                            "last_bar_t": m.bars[-1]["t"]}      # a restart catches up from here
                             for m in self.members}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
-                "day_equity": self._days()}
+                "day_equity": self._days(), "corp_cash": self.corp_cash}
 
     def final_state(self, now: datetime | None = None) -> dict:
         """The state kept at the stop: open positions stay open, each valued at its last price, and the account's value at
@@ -333,7 +361,7 @@ def stopped_snapshot(row: dict) -> dict:
     names = row["instrument"].get("names") or {}
     events = sorted(({**ev, "sym": names.get(iid, iid.split(":", 1)[-1])} for iid, m in (st.get("members") or {}).items() for ev in m.get("events", [])[-60:]),
                     key=lambda e: str(e["t"]))[-200:]
-    realised = sum(t["pnl"] for t in trades)
+    realised = sum(t["pnl"] for t in trades) + st.get("corp_cash", 0.0)
     # positions open at the stop stay open, each valued at its last price before the stop, as in the running session
     # (R11C-002: the page showed the realised P&L alone and no position)
     rows, open_pnl, unpriced = [], 0.0, False

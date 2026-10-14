@@ -152,3 +152,37 @@ def test_a_restart_runs_missed_candles_across_the_group_in_time_order(monkeypatc
     assert {t["why"] for m in (a, b) for t in m.engine.trades} == {"Daily loss cap"}
     assert all(m.bars[-1]["t"] == bar5(41)["t"] for m in s2.members) and a.last_price == 90.0
     assert len(alerts) == 1 and "3 paper trades while offline" in alerts[0][0]
+
+
+def test_a_split_and_a_dividend_on_two_members_and_a_restart(monkeypatch):
+    from app import corp_actions
+    from tests.test_live_polling import DIV, SPLIT, corp_events, sbar, stock_world
+    beta_div = {**DIV, "id": "BETA|dividend|2026-01-06|dividend", "symbol": "BETA"}
+    mgr, srow = stock_world(monkeypatch, [sbar(5, i, 1000.0) for i in range(40)], [SPLIT, beta_div])
+    prov = mgr.markets.provider("US")
+    monkeypatch.setattr(mgr.markets, "resolve", lambda iid: (prov, {**srow["instrument"], "id": iid, "symbol": iid.split(":")[1]}))
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    grow = {**row(), "instrument": {"id": "GROUP:custom", "type": "GROUP", "market": "US", "maxOpen": 2,
+                                    "members": ["US:ACME", "US:BETA"], "names": {}},
+            "strategy": {**STRAT, "risk": {**STRAT["risk"], "sl": 1, "slippage": 0, "brokerage": 0}}}
+    s = group_live.GroupLiveSession(mgr, grow)
+    a, b = s.members
+    for m in (a, b):
+        s._on_candle(m, sbar(5, 40, 1000.0))
+    qa, qb, real = a.engine.qty, b.engine.qty, s.realised()
+    assert qa > 0 and qb > 0 and a.engine.sl == 990.0
+    s._on_candle(a, sbar(6, 0, 500.0, lo=496.0))
+    s._on_candle(b, sbar(6, 0, 995.0))
+    assert (a.engine.qty, a.engine.entry, a.engine.sl) == (2 * qa, 500.0, 495.0) and not a.engine.trades
+    assert b.engine.qty == qb and s.corp_cash == 5.0 * qb and s.realised() == real + 5.0 * qb
+    assert corp_events(a.engine)[0]["why"].startswith(f"Split 1:2 applied: {qa:,} shares at $1,000 are now {2 * qa:,} at $500")
+    assert any(e.get("kind") == "corp" for e in s.snapshot()["events"])
+    # restarted: neither is applied again, and the dividend stays in the pot
+    s2 = group_live.GroupLiveSession(mgr, {**grow, "state": s.state()})
+    a2, b2 = s2.members
+    s2._on_candle(a2, sbar(6, 1, 500.0))
+    s2._on_candle(b2, sbar(6, 1, 995.0))
+    assert a2.engine.qty == 2 * qa and a2.engine.entry == 500.0 and len(corp_events(a2.engine)) == 1
+    assert b2.engine.qty == qb and s2.corp_cash == 5.0 * qb and len(corp_events(b2.engine)) == 1
+    assert group_live.stopped_snapshot({**grow, "status": "stopped", "state": s2.state()})["account"]["realised"] == s2.realised()
+    assert corp_actions.paper_region(a2.inst) == "US"
