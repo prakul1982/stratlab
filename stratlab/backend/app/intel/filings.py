@@ -8,6 +8,7 @@ import json
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -1477,19 +1478,48 @@ def followed_symbols(uid: str) -> list[str]:
     return out[:MAX_SYMBOLS]
 
 
-def overview(feed, symbols: list[str]) -> dict:
-    """The 3-month summary for each watchlist stock, the ones with red flags first."""
-    rows, problems = [], []
-    for sym in symbols:
-        try:
-            items = feed.announcements(sym)
-        except SourceError as e:
-            problems.append(f"{sym}: {e}")
-            continue
-        s = summarise(items)
-        cutoff = (ist_now() - timedelta(days=WINDOW_DAYS)).isoformat()
-        rows.append({"symbol": sym, "summary": s,
-                     "flags": [i for i in items if i["severity"] != "info" and i["at"] >= cutoff][:5]})
+OVERVIEW_WAIT = 8.0                  # seconds the watchlist view waits for the exchange before it answers with what it has
+OVERVIEW_KEEP = 24 * 3600            # a company's last good row is shown (marked stale) for a day when the feed doesn't answer
+_overview_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="filings-overview")
+_last_rows: dict[tuple[int, str], tuple[float, dict]] = {}
+
+
+def _overview_row(feed, sym: str) -> dict:
+    items = feed.announcements(sym)
+    s = summarise(items)
+    cutoff = (ist_now() - timedelta(days=WINDOW_DAYS)).isoformat()
+    return {"symbol": sym, "summary": s, "flags": [i for i in items if i["severity"] != "info" and i["at"] >= cutoff][:5]}
+
+
+def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
+    """The 3-month summary for each watchlist stock, the ones with red flags first. Every company is read at once and
+    the answer comes within `wait` seconds (R13S-002: one slow feed made it 45 s): a company that has not answered by
+    then is left to finish in the background (its filings are cached for the next look) and is listed in `problems`,
+    with its last good row, marked `stale`, when there is one."""
+    wait = OVERVIEW_WAIT if wait is None else wait
+    jobs = {sym: _overview_pool.submit(_overview_row, feed, sym) for sym in symbols}
+    done, _ = futures_wait(jobs.values(), timeout=wait)
+    rows, problems, now = [], [], time.time()
+    for sym, job in jobs.items():
+        row, why = None, None
+        if job in done:
+            try:
+                row = job.result()
+                _last_rows[(id(feed), sym)] = (now, row)
+            except SourceError as e:
+                why = str(e)
+            except Exception:                    # one company's odd answer must not take the whole list down
+                why = "The exchange sent something unexpected for this one."
+        else:
+            job.cancel()
+            why = "Still reading this one: the exchange is slow. Try again in a moment."
+        if row is None:
+            problems.append(f"{sym}: {why}")
+            kept = _last_rows.get((id(feed), sym))
+            if kept and now - kept[0] <= OVERVIEW_KEEP:
+                row = {**kept[1], "stale": True}
+        if row is not None:
+            rows.append(row)
     rows.sort(key=lambda r: (-r["summary"]["red"], -r["summary"]["amber"], r["symbol"]))
     return {"rows": rows, "problems": problems, "days": WINDOW_DAYS}
 

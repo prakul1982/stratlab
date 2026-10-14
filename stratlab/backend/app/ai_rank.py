@@ -145,6 +145,7 @@ class Status:
     aliases: dict = field(default_factory=dict)     # an id the provider lists as a UUID (Cloudflare) -> the model's usable name
     probing: bool = False
     healed_at: float = 0.0
+    keep_order: bool = False             # the Admin page put the earlier order back while a measuring was running: keep it
 
 
 class _Statuses(dict):
@@ -152,12 +153,12 @@ class _Statuses(dict):
 
     def clear(self):
         super().clear()
-        _prefs.update(pins={}, blocks=set(), loaded=False, retry_at=0)
+        _prefs.update(pins={}, blocks=set(), block_info={}, loaded=False, retry_at=0)
         _saved.update(at=0.0, dirty=set())
 
 
 _status: dict[str, Status] = _Statuses()
-_prefs: dict = {"pins": {}, "blocks": set(), "loaded": False}
+_prefs: dict = {"pins": {}, "blocks": set(), "block_info": {}, "loaded": False}
 _saved: dict = {"at": 0.0, "dirty": set()}
 _lock = threading.RLock()
 
@@ -187,6 +188,8 @@ def _ensure_loaded():
         prefs = json.loads(data.get("ai:prefs") or "{}")
         _prefs["pins"] = {k: v for k, v in (prefs.get("pins") or {}).items() if k in PROVIDERS and isinstance(v, str)}
         _prefs["blocks"] = {b for b in prefs.get("blocks") or [] if isinstance(b, str)}
+        _prefs["block_info"] = {k: {"by": v.get("by"), "at": v.get("at")} for k, v in (prefs.get("block_info") or {}).items()
+                                if isinstance(k, str) and k in _prefs["blocks"] and isinstance(v, dict)}
     except (ValueError, AttributeError):
         pass
     for name in PROVIDERS:
@@ -219,7 +222,7 @@ def save(name: str):
 
 def save_prefs():
     with _lock:
-        value = json.dumps({"pins": _prefs["pins"], "blocks": sorted(_prefs["blocks"])})
+        value = json.dumps({"pins": _prefs["pins"], "blocks": sorted(_prefs["blocks"]), "block_info": _prefs["block_info"]})
     STORE.set("ai:prefs", value)
 
 
@@ -265,17 +268,76 @@ def pin(name: str, model: str | None):
     save_prefs()
 
 
-def block(name: str, model: str, on: bool = True):
+def _block_one(name: str, model: str, on: bool, by: str | None, now: float):
+    key = f"{name}/{model}"
+    if on:
+        _prefs["blocks"].add(key)
+        _prefs["block_info"][key] = {"by": by, "at": now}       # who blocked it and when, shown on the Admin page (R13S-004)
+        if _prefs["pins"].get(name) == model:
+            _prefs["pins"].pop(name)
+    else:
+        _prefs["blocks"].discard(key)
+        _prefs["block_info"].pop(key, None)
+
+
+def block(name: str, model: str, on: bool = True, by: str | None = None):
     _load()
     with _lock:
-        key = f"{name}/{model}"
-        if on:
-            _prefs["blocks"].add(key)
-            if _prefs["pins"].get(name) == model:
-                _prefs["pins"].pop(name)
-        else:
-            _prefs["blocks"].discard(key)
+        _block_one(name, model, on, by, time.time())
     save_prefs()
+
+
+def block_many(items: list[tuple[str, str]], on: bool, by: str | None = None):
+    """Block or unblock several models at once (one save): Admin's "Unblock all" and the undo of it."""
+    _load()
+    now = time.time()
+    with _lock:
+        for name, model in items:
+            _block_one(name, model, on, by, now)
+    save_prefs()
+
+
+def block_info(name: str, model: str) -> dict | None:
+    _load()
+    return _prefs["block_info"].get(f"{name}/{model}")
+
+
+def blocked_since(since: float | None = None) -> list[tuple[str, str]]:
+    """Every blocked model as (provider, model); with `since`, only those blocked at or after that time (an epoch)."""
+    _load()
+    out = []
+    for key in sorted(_prefs["blocks"]):
+        if since is not None and (_prefs["block_info"].get(key) or {}).get("at", 0) < since:
+            continue
+        name, model = key.split("/", 1)
+        out.append((name, model))
+    return out
+
+
+def snapshot_rank(names: list[str]) -> dict:
+    """Each provider's measured order as it is now, so a re-rank can be undone."""
+    out = {}
+    for n in names:
+        st = status(n)
+        out[n] = {"order": list(st.order), "ranked_at": st.ranked_at, "rank_error": st.rank_error}
+    return out
+
+
+def restore_rank(snap: dict) -> list[str]:
+    """Put the measured orders in `snap` back (and keep them if a measuring is still running)."""
+    done = []
+    for n, d in (snap or {}).items():
+        if n not in PROVIDERS or not isinstance(d, dict):
+            continue
+        st = status(n)
+        with _lock:
+            st.order = [m for m in d.get("order") or [] if isinstance(m, str)]
+            st.ranked_at = float(d.get("ranked_at") or 0)
+            st.rank_error = d.get("rank_error")
+            st.keep_order = st.probing
+        save(n)
+        done.append(n)
+    return done
 
 
 def pinned(name: str) -> str:
@@ -619,11 +681,14 @@ def rerank(name: str, transport=None) -> Status:
         good = [m for m in cands if stats(name, m).probe_ok > 0]
         neutral = lambda m: (score(name, m, "quick") + score(name, m, "research")) / 2   # noqa: E731
         with _lock:
-            if good:
-                st.order = sorted(good, key=neutral, reverse=True)[:IN_USE]
-            elif not st.order:
-                st.order = []                               # nothing proven: the defaults stay in use
-            st.ranked_at = time.time()
+            if st.keep_order:
+                st.keep_order = False                       # an earlier order was put back while this ran: it stays
+            else:
+                if good:
+                    st.order = sorted(good, key=neutral, reverse=True)[:IN_USE]
+                elif not st.order:
+                    st.order = []                           # nothing proven: the defaults stay in use
+                st.ranked_at = time.time()
         save(name)
         return st
     finally:

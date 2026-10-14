@@ -54,9 +54,9 @@ export function InvestorHomePage() {
       <PageHeader eyebrow={eyebrowOf("/research/watchlist")} title="Your watchlist, all in one place" asOf={rows ? at : undefined} asOfLabel="Checked" asOfTz={marketTz(region)}
         lede={`For each ${place} watchlist company: the price trend, where its sector sits in the rotation, ${us ? "" : "red-flag filings, "}the investor checklist and how well management delivered on past targets. Facts to read, not advice.`} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={pick} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
-      {!pro && <PlanNote>Watchlist at a glance is on the Basic plan.</PlanNote>}
+      {!pro && me && <PlanNote>Watchlist at a glance is on the Basic plan.</PlanNote>}
       {pro && error && <ErrorState title="The watchlist couldn't be checked" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
-      {pro && !rows && !error && <Card><Skeleton label="Checking each watchlist company" lines={4} /></Card>}
+      {(pro || !me) && !rows && !error && <Card><Skeleton label="Checking each watchlist company" lines={4} /></Card>}
       {rows && rows.length === 0 && (
         <Card>
           <EmptyState title={`Your watchlist has no ${place} stocks yet`} action={{ label: "Find a company", to: `/research?region=${region}` }}>

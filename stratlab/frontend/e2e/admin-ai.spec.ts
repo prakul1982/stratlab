@@ -126,14 +126,21 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
 
   await groq.getByRole("button", { name: "Pin openai/gpt-oss-120b" }).click();
   await expect(groq.getByText(/Pinned to openai\/gpt-oss-120b\./)).toBeVisible();
+  // Block, Re-rank and Test every provider ask first (R13S-004): nothing is sent until the dialog says yes
   await groq.getByRole("button", { name: "Block qwen/qwen3-32b" }).click();
+  await expect(page.getByRole("dialog", { name: "Block qwen/qwen3-32b?" })).toBeVisible();
+  expect(sent.filter((x) => x.path === "/admin/ai/block")).toEqual([]);
+  await page.getByRole("dialog").getByRole("button", { name: "Block it" }).click();
   await expect(groq.getByRole("button", { name: "Unblock qwen/qwen3-32b" })).toBeVisible();
   await groq.getByRole("button", { name: "Unpin" }).click();
   await expect(groq.getByText(/Pinned to/)).toHaveCount(0);
   await panel.getByRole("button", { name: "Test every provider" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Test every provider" }).click();
   await expect(groq.getByText("Test: answered with llama-3.3-70b-versatile in 0.8 s")).toBeVisible();
   await panel.getByRole("button", { name: "Re-rank models" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Re-rank", exact: true }).click();
   await groq.getByRole("button", { name: "Re-rank Groq models" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Re-rank", exact: true }).click();
   await expect.poll(() => sent).toEqual([
     { path: "/admin/ai/pin", body: { provider: "groq", model: "openai/gpt-oss-120b" } },
     { path: "/admin/ai/block", body: { provider: "groq", model: "qwen/qwen3-32b", blocked: true } },

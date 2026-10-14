@@ -21,6 +21,19 @@ class PinReq(BaseModel):
     model: str | None = Field(None, max_length=200)
 
 
+class BlockManyReq(BaseModel):
+    items: list[PinReq] = Field(..., min_length=1, max_length=200)
+    blocked: bool = True
+
+
+class UnblockAllReq(BaseModel):
+    scope: str = Field("all", pattern="^(all|today)$")
+
+
+class RestoreReq(BaseModel):
+    ranks: dict = Field(..., max_length=40)
+
+
 class BlockReq(BaseModel):
     provider: str = Field(..., max_length=40)
     model: str = Field(..., min_length=1, max_length=200)
@@ -51,7 +64,15 @@ def ai_rerank(req: RerankReq, _=Depends(admin.admin_profile)):
     names = [_provider(req.provider)] if req.provider else None
     if names and not AI.configured(names[0]):
         err(400, "no_key", f"{PROVIDERS[names[0]].label} has no key yet.")
-    return {"started": AI.rerank(names), **AI.admin_view()}
+    # what each provider's order was, so the page can offer to put it back (R13S-004)
+    before = AI.snapshot_rank(names)
+    return {"started": AI.rerank(names), "undo": before, **AI.admin_view()}
+
+
+@router.post("/rank-restore")
+def ai_rank_restore(req: RestoreReq, _=Depends(admin.admin_profile)):
+    """Put the orders from before a re-rank back (and keep them if the measuring is still running)."""
+    return {"restored": AI.restore_rank(req.ranks), **AI.admin_view()}
 
 
 @router.post("/pin")
@@ -62,7 +83,23 @@ def ai_pin(req: PinReq, _=Depends(admin.admin_profile)):
 
 
 @router.post("/block")
-def ai_block(req: BlockReq, _=Depends(admin.admin_profile)):
-    """Never use this model (or allow it again)."""
-    AI.block(_provider(req.provider), req.model.strip(), req.blocked)
+def ai_block(req: BlockReq, profile=Depends(admin.admin_profile)):
+    """Never use this model (or allow it again). A block keeps who made it and when."""
+    AI.block(_provider(req.provider), req.model.strip(), req.blocked, profile.get("email"))
     return AI.admin_view()
+
+
+@router.post("/block-many")
+def ai_block_many(req: BlockManyReq, profile=Depends(admin.admin_profile)):
+    """Block or allow several models at once: the undo of "Unblock all"."""
+    items = [(_provider(i.provider), (i.model or "").strip()) for i in req.items if (i.model or "").strip()]
+    AI.block_many(items, req.blocked, profile.get("email"))
+    return AI.admin_view()
+
+
+@router.post("/unblock-all")
+def ai_unblock_all(req: UnblockAllReq, profile=Depends(admin.admin_profile)):
+    """Allow every blocked model again, or only the ones blocked today (India's day). Says which, so it can be undone."""
+    items = AI.blocked_since(AI.today_start() if req.scope == "today" else None)
+    AI.block_many(items, False, profile.get("email"))
+    return {"unblocked": [{"provider": n, "model": m} for n, m in items], **AI.admin_view()}
