@@ -6,6 +6,7 @@ instant, and nothing depends on a job having run."""
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import time_machine
 
 from app import main  # noqa: F401, I001  (first: the app loads its modules in a fixed order)
 from app import db, lifecycle, official_close, positioning as PO, rotation, screens, stock_pages
@@ -23,6 +24,7 @@ def _ist(d: str, hm: str) -> datetime:
 
 
 # ---------- R10O-003: an unregistered seller issues an invoice, not a tax invoice ----------
+@time_machine.travel(datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc))        # the receipt's number is of the financial year it is issued in: 2026-27
 def test_the_receipt_is_headed_invoice_while_the_seller_has_no_gstin(monkeypatch):
     from app import invoices
     monkeypatch.setattr(invoices, "seller", lambda: {**{f: "" for f in invoices.FIELDS}, "prefix": "SL"})

@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+import time_machine
 
 from app import corp_actions, holdings, money_advance_tax as A, money_dividends as D, money_ltcg as L
 from app import money_routes, money_us_routes, tax_lots as T, tax_total
@@ -361,6 +362,7 @@ def test_estimated_dividends_from_holdings(w):
     assert any("Estimated" in a for a in v["assumptions"])
 
 
+@time_machine.travel(datetime(2026, 10, 5, 5, 0, tzinfo=ZoneInfo("UTC")))      # mid-year: instalments are dated by the financial year
 def test_advance_tax_api_dates_for_free_amounts_for_pro(w, paid):
     c = w["client"]
     free = c.get("/money/advance-tax", headers=FREE).json()

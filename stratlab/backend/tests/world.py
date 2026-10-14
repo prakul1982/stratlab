@@ -248,9 +248,9 @@ def market_announcements(from_date: str | None) -> list[dict]:
 
 def _nse(sw=None):
     rows = [{"symbol": "RELIANCE", "desc": "Investor Presentation", "attchmntText": "Investor presentation for Q1 FY27",
-             "sort_date": "2026-08-01 18:10:05", "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
+             "sort_date": (date.today() - timedelta(days=60)).strftime("%Y-%m-%d 18:10:05"), "seq_id": "1", "attchmntFile": "https://nsearchives.nseindia.com/p.pdf"},
             {"symbol": "RELIANCE", "desc": "Analysts/Institutional Investor Meet/Con. Call Updates",
-             "attchmntText": "Transcript of the earnings call", "sort_date": "2026-08-05 18:10:05", "seq_id": "2",
+             "attchmntText": "Transcript of the earnings call", "sort_date": (date.today() - timedelta(days=56)).strftime("%Y-%m-%d 18:10:05"), "seq_id": "2",
              "attchmntFile": "https://nsearchives.nseindia.com/t.pdf"},
             {"symbol": "RELIANCE", "desc": "Qualified Institutions Placement", "attchmntText": "QIP opened",
              "sort_date": (date.today() - timedelta(days=13)).strftime("%Y-%m-%d 18:10:05"),     # recent whenever the tests run

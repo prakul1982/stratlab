@@ -7,6 +7,7 @@ import types
 from datetime import date, datetime, timezone
 
 import pytest
+import time_machine
 
 from app import db, main
 from app import money_networth as nw
@@ -18,11 +19,17 @@ PRO, FREE = world.headers("pro-token"), world.headers("free-token")
 
 @pytest.fixture
 def w(monkeypatch):
-    built = world.build(monkeypatch)
-    main._nw_prices.clear()
-    yield built
-    main._nw_prices.clear()
-    built["close"]()
+    """The page is read on Monday 5 October 2026, 10:30 IST (the dates in these tests, such as a policy due on 1 November,
+    are written for that day), whatever day the tests actually run on; the fake market's clock stands there too."""
+    from tests import fake_prices
+    day = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(fake_prices, "FROZEN", day)
+    with time_machine.travel(day, tick=True):
+        built = world.build(monkeypatch)
+        main._nw_prices.clear()
+        yield built
+        main._nw_prices.clear()
+        built["close"]()
 
 
 def payments_live(monkeypatch):
