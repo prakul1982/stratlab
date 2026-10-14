@@ -74,3 +74,21 @@ export async function disablePush() {
   await api("/push/unsubscribe", { method: "POST", body: { subscription: sub.toJSON() } }).catch(() => undefined);
   await sub.unsubscribe();
 }
+
+let leaving = false;
+/** Before signing out: take this browser's notification subscription off the account (the server's list and the browser's own),
+ * so the next person to sign in here isn't sent this account's notifications. Waits a few seconds at most and never throws,
+ * so a failure here cannot keep anyone signed in. A call made while one is running (the server's 401 asks to sign out
+ * too) returns at once. */
+export async function leavePush(waitMs = 4000): Promise<void> {
+  if (leaving) return;
+  leaving = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    if (!pushSupported()) return;
+    await Promise.race([disablePush().catch(() => undefined), new Promise<void>((done) => { timer = setTimeout(done, waitMs); })]);
+  } catch { /* the sign-out goes on */ } finally {
+    clearTimeout(timer);
+    leaving = false;
+  }
+}

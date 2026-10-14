@@ -316,6 +316,7 @@ def test_reminder_email_falls_back_to_the_sign_in_address(monkeypatch):
     got = []
     monkeypatch.setattr(alerts, "email_ready", lambda: True)
     monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
+    monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: True)             # (no database here: an unreadable setting now reads as off)
     monkeypatch.setattr(alerts, "send_message", lambda to, *a, **k: got.append(to))
     assert M._send({"id": "u", "email": "Me@Example.com"}, "email", "s", "t") == ["email"] and got == ["me@example.com"]
     assert M._send({"id": "u", "email": "Me@Example.com", "alert_email": "other@example.com"}, "email", "s", "t") == ["email"]

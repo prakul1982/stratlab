@@ -2,8 +2,9 @@
 after two quiet weeks, and payment receipts.
 
 - Each email goes to a user at most once, remembered in app_settings as lifecycle:<uid> ({email key: when sent})
-  before it is sent; a send that fails is forgotten again, so the next sweep tries once more. A receipt, plan change or
-  invite reward that fails is also kept in lifecyclepending:<uid> and retried by the sweep (4 tries within a day).
+  before it is sent; a send that fails is forgotten again, so the next sweep tries once more (a tip, up to TIP_TRIES
+  attempts, counted in the same record as "tries:<email key>"). A receipt, plan change or invite reward that fails is
+  also kept in lifecyclepending:<uid> and retried by the sweep (4 tries within a day).
 - Everything but receipts and plan changes is a "tips and reminders" email: people turn those off in Account or from
   the link in each one, and get at most one a day. Receipts and plan changes are about the account and always go.
 - The welcome goes from the first visit after signing up. The rest go from an hourly sweep in India's daytime
@@ -29,6 +30,8 @@ EVER = "2000-01-01T00:00:00+00:00"
 WELCOME_WINDOW = timedelta(days=2)                       # only brand-new accounts are welcomed
 DAY2_WINDOW = (timedelta(days=1), timedelta(days=7))     # the nudge goes on day 2, or soon after if the sweep missed it
 INACTIVE_DAYS = 14
+INACTIVE_UNTIL = 30                                      # quiet for longer than this and the "what's new" note is no longer sent
+TIP_TRIES = 3                                            # attempts at one tips email before it is given up
 RETRIES = 4                                              # account emails: tries before giving up, within a day
 RETRY_WINDOW = timedelta(hours=26)
 GAP = timedelta(hours=20)                                # at most one tips email a day
@@ -102,14 +105,24 @@ def sent(uid: str) -> dict:
     return db.json_value(db.get_setting(SENT + uid), {})
 
 
-def _claim(uid: str, key: str, now: datetime) -> bool:
-    """Record the email as sent, unless it already was. True when this caller should send it."""
+def _capped(record: dict, key: str) -> bool:
+    """A tips email whose attempts were all used up."""
+    t = record.get("tries:" + key)
+    try:
+        return int(t["n"]) >= TIP_TRIES
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _claim(uid: str, key: str, now: datetime, capped: bool = False) -> bool:
+    """Record the email as sent, unless it already was (or, for `capped`, its attempts are used up). True when this
+    caller should send it."""
     won = []
 
     def mark(raw):
         have = db.json_value(raw, {})
         won.clear()
-        if key in have:
+        if key in have or (capped and _capped(have, key)):
             return None
         won.append(1)
         return json.dumps({**have, key: now.isoformat()})
@@ -117,10 +130,14 @@ def _claim(uid: str, key: str, now: datetime) -> bool:
     return bool(won)
 
 
-def _release(uid: str, key: str):
+def _release(uid: str, key: str, tried: datetime | None = None):
+    """Forget the claim after a failed send; with `tried`, count the attempt (see TIP_TRIES)."""
     def drop(raw):
         have = db.json_value(raw, {})
         have.pop(key, None)
+        if tried:
+            n = have.get("tries:" + key)
+            have["tries:" + key] = {"n": (int(n["n"]) if isinstance(n, dict) and str(n.get("n")).isdigit() else 0) + 1, "at": tried.isoformat()}
         return json.dumps(have)
     db.update_setting(SENT + uid, drop)
 
@@ -362,14 +379,14 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
         return False
     if not transactional and not tips_on(uid):
         return False
-    if not _claim(uid, key, now):
+    if not _claim(uid, key, now, capped=not transactional):
         return False
     try:
         subject, html, text = build(kind, profile, ctx)
         html, text, headers = kit.finish(html, text, uid, None if transactional else CATEGORY)
         alerts.send_email(to, subject, text, html=html, headers=headers)
     except Exception as e:
-        _release(uid, key)
+        _release(uid, key, None if transactional else now)
         if transactional:
             _pend(uid, key, kind, ctx, now)
         print(f"lifecycle email {kind} failed:", str(e)[:160])
@@ -491,9 +508,9 @@ def due(profile: dict, now: datetime, record: dict, seen_day: str | None, promo_
             quiet = (today - date.fromisoformat(seen_day)).days
         except (TypeError, ValueError):
             quiet = 0
-        if quiet >= INACTIVE_DAYS:
+        if INACTIVE_DAYS <= quiet < INACTIVE_UNTIL:
             out["inactive"] = ("inactive", "inactive", {})
-    return [out[k] for k in ORDER if k in out and out[k][1] not in record]
+    return [out[k] for k in ORDER if k in out and out[k][1] not in record and not _capped(record, out[k][1])]
 
 
 def sweep(now: datetime | None = None) -> int:

@@ -726,26 +726,24 @@ class Job:
         return (local.date(), run) if run else (None, None)
 
     def tick(self, now: datetime) -> int:
-        sent, ran, who = 0, False, None
+        sent, ran = 0, False
+        who = lambda: results.trackers(now=now)      # shared with the results job: read when a run needs it, and then once an hour
         for region in REGIONS:
             for at in REFRESH_AT[region]:
                 day, run = self.claim(f"refresh-{region}-{at}", now, region, at)
                 if day:
-                    who = who if who is not None else results.trackers()
-                    self.refresh(region, who, day)
+                    self.refresh(region, who(), day)
                     sent, ran = sent + self.announce(region, day, who, run), True
                     run.done()
             if region == "US" and self._universe_due(now):
-                self.start_universe(who if who is not None else results.trackers())
+                self.start_universe(who())
                 ran = True
             day = self.due(f"history-{region}", now, region, HISTORY_AT[region])
             if day:
-                who = who if who is not None else results.trackers()
-                refresh_histories(region, self.sources(), {s for (r, s) in who if r == region}, day)
+                refresh_histories(region, self.sources(), {s for (r, s) in who() if r == region}, day)
                 ran = True
             day, run = self.claim(f"eve-{region}", now, region, EVE_AT[region])
             if day:
-                who = who if who is not None else results.trackers()
                 sent, ran = sent + self.eve(region, day, who, run), True
                 run.done()
         if ran:
@@ -807,11 +805,13 @@ class Job:
                 print("corporate actions message failed:", uid, str(e)[:160])
         return sent
 
-    def announce(self, region: str, day: date, who: dict, run) -> int:
-        """One message per person for the actions newly announced on their stocks; then the actions are unmarked."""
+    def announce(self, region: str, day: date, who, run) -> int:
+        """One message per person for the actions newly announced on their stocks; then the actions are unmarked.
+        `who`: the trackers map, or a function that gives it (read only when there is something to tell)."""
         fresh = [r for r in load(region)["rows"] if r.get("fresh")]
         if not fresh:
             return 0
+        who = results._get(who)
         per_user: dict[str, list[dict]] = {}
         for r in sorted(fresh, key=lambda r: (r["ex_date"], r["symbol"])):
             if r["ex_date"] < day.isoformat():
@@ -829,15 +829,19 @@ class Job:
             save(region, rows)
         return sent
 
-    def eve(self, region: str, day: date, who: dict, run) -> int:
+    def eve(self, region: str, day: date, who, run) -> int:
         """The evening before an ex-date (Friday for a Monday one): one message per person listing their stocks. Only on a
         trading day: a weekend or holiday evening would tell them again about the same next session."""
         from .data.calendar import is_trading_day
         if not is_trading_day(region, day):
             return 0
         nxt = next_trading_day(day, region)
+        coming = between(region, day + timedelta(days=1), nxt)
+        if not coming:
+            return 0
+        who = results._get(who)
         per_user: dict[str, list[dict]] = {}
-        for r in between(region, day + timedelta(days=1), nxt):
+        for r in coming:
             for uid in who.get((region, r["symbol"]), []):
                 per_user.setdefault(uid, []).append(r)
         tomorrow = (day + timedelta(days=1)).isoformat()

@@ -116,3 +116,12 @@ def pytest_runtest_logreport(report):
     path, line, _ = report.location
     text = str(report.longrepr)[-1500:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
     print(f"\n::error file=stratlab/backend/{path},line={(line or 0) + 1},title={report.nodeid}::{text}")
+
+
+@pytest.fixture(autouse=True)
+def fresh_trackers():
+    """The hour's list of who tracks which stock (app/results.py) doesn't carry over from one test to the next."""
+    from app import results
+    results.forget_trackers()
+    yield
+    results.forget_trackers()

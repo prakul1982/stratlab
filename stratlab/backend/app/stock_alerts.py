@@ -42,6 +42,8 @@ AFTER_CLOSE = 10                     # minutes after the close to keep checking,
 PER_HOUR = 5                         # messages one user can get in an hour
 PER_DAY = 20                         # and in a day
 MAX_PENDING = 50                     # fired alerts waiting for the next message
+PENDING_FOR = timedelta(hours=24)    # a waiting text older than this is dropped: it would read as news when it isn't
+CLAIM_FOR = timedelta(minutes=10)    # texts handed to a send are not handed out again for this long (a send that crashed is retried after)
 KEEP_TRIGGERED = 50                  # triggered alerts kept on the Alerts page
 QUOTE_BATCH = 24
 
@@ -479,7 +481,7 @@ def channels(profile: dict) -> list[str]:
     """Where this user's alerts would go now."""
     from . import alerts
     out = [c for c, _ in alerts.jobs_for(profile, "", "", "/alerts") if c != "email"]
-    if alerts.newsletter_email(profile) and alerts.email_ready() and alerts.email_confirmed(profile):
+    if alerts.newsletter_email(profile) and alerts.email_ready() and alerts.email_confirmed(profile) and alerts.alert_emails_on(profile.get("id")):
         out.append("email")
     return out
 
@@ -513,6 +515,7 @@ class Checker:
         if not days:
             return
         users: dict[str, list[dict]] = {}
+        waiting: set[str] = set()                    # users with texts waiting to go out
         for key, raw in db.all_settings_with_prefix(KEY):
             uid = key[len(KEY):]
             try:
@@ -522,10 +525,14 @@ class Checker:
             mine = [a for a in (row.get("items") or []) if isinstance(a, dict) and a.get("status") == "active"]
             if mine or (isinstance(row, dict) and row.get("pending")):
                 users[uid] = sorted(mine, key=lambda a: a.get("created_at") or "")
+            if isinstance(row, dict) and row.get("pending"):
+                waiting.add(uid)
         # a plan's limit: alerts beyond it (after a downgrade) wait, the oldest are checked
         todo: dict[str, list[dict]] = {}
         profiles: dict[str, dict] = {}
         for uid, mine in users.items():
+            if uid not in waiting and not any(a.get("region") in days and a.get("kind") not in EVENTS for a in mine):
+                continue                    # nothing to check now and nothing to send: no profile read
             try:
                 profiles[uid] = self.profile(uid)
             except Exception:
@@ -565,10 +572,12 @@ class Checker:
                     fired.setdefault(uid, {})[a["id"]] = (text, st, a.get("rev"), _seen(a))
         n_fired = n_sent = 0
         for uid in users:
+            if uid not in profiles or not (uid in fired or uid in waiting):
+                continue                    # no profile (its texts stay waiting), or nothing fired and nothing waiting
             changes = fired.get(uid, {})
             texts = apply(uid, changes, now)
             n_fired += sum(1 for t, *_ in changes.values() if t)
-            if texts and uid in profiles and flush(uid, profiles[uid], texts, now, self.send):
+            if texts and flush(uid, profiles[uid], texts, now, self.send):
                 n_sent += 1
         self.status.update(last_run=now.isoformat(), checked=checked, fired=n_fired, sent=n_sent)
 
@@ -587,10 +596,35 @@ def _waiting(row: dict, now: datetime) -> bool:
         return False
 
 
+def _entry(p, now: datetime) -> list | None:
+    """A waiting text as [text, when it fired]: a plain string stored before the time was kept is taken as fired now."""
+    if isinstance(p, str):
+        return [p, now.isoformat()]
+    if isinstance(p, (list, tuple)) and len(p) == 2 and isinstance(p[0], str):
+        return [p[0], p[1]]
+    return None
+
+
+def _fresh(pending: list, now: datetime) -> list[list]:
+    """The waiting texts that are under PENDING_FOR old."""
+    out = []
+    for p in pending:
+        e = _entry(p, now)
+        if not e:
+            continue
+        try:
+            if now - datetime.fromisoformat(e[1]) >= PENDING_FOR:
+                continue
+        except (ValueError, TypeError):
+            e[1] = now.isoformat()        # no readable time: counted from now
+        out.append(e)
+    return out
+
+
 def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver) -> bool:
-    """Send the texts waiting for one user in one message, and count it against their limits. When no channel got it,
-    the texts go back to waiting (tried again after RETRY_AFTER, so a user with no channel isn't retried every check)
-    and nothing is counted."""
+    """Send the texts waiting for one user in one message, and count it against their limits. They leave the waiting
+    list only once a channel got the message. When none did, they stay waiting (tried again after RETRY_AFTER, so a user
+    with no channel isn't retried every check) and nothing is counted."""
     subject, body = message(texts)
     try:
         reached = bool(send(profile, subject, body))
@@ -598,22 +632,51 @@ def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver
         print("stock alert failed:", uid, str(e)[:120])
         reached = False
     def done(row):
+        left, missing = list(row["pending"]), []
+        for t in texts:                 # the texts apply handed out are still on the list; one that came from elsewhere isn't
+            at = next((i for i, p in enumerate(left) if (_entry(p, now) or [None])[0] == t), None)
+            if at is None:
+                missing.append([t, now.isoformat()])
+            else:
+                left.pop(at)
+        row.pop("claim", None)
         if reached:
             row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
+            row["pending"] = left
             row.pop("retry_at", None)
         else:
-            row["pending"] = (texts + row["pending"])[-MAX_PENDING:]
+            row["pending"] = (missing + row["pending"])[-MAX_PENDING:]
             row["retry_at"] = (now + RETRY_AFTER).isoformat()
         return True, None
     _change(uid, done)
     return reached
 
 
+def hold(uid: str, texts: list[str], now: datetime) -> None:
+    """Put texts on the user's waiting list, for the next check to send (a message the limits don't allow yet)."""
+    def go(row):
+        row["pending"] = (_fresh(row["pending"], now) + [[t, now.isoformat()] for t in texts])[-MAX_PENDING:]
+        return True, None
+    _change(uid, go)
+
+
+def _claimed(row: dict, now: datetime) -> bool:
+    """Whether texts were handed out for sending less than CLAIM_FOR ago and not yet reported on by flush."""
+    try:
+        return datetime.fromisoformat(row["claim"]) > now - CLAIM_FOR
+    except (KeyError, ValueError, TypeError):
+        return False
+
+
 def apply(uid: str, changes: dict, now: datetime) -> list[str]:
     """Save each alert's new state, mark the fired ones triggered (or keep repeating ones on), and return the texts
-    to send now: everything waiting, when the user is under the message limits."""
+    to send now: everything waiting, when the user is under the message limits. The texts stay on the waiting list
+    until flush reports them sent."""
     def go(row):
         dirty = False
+        kept = _fresh(row["pending"], now)
+        if kept != row["pending"]:
+            row["pending"], dirty = kept, True
         for a in row["items"]:
             hit = changes.get(a["id"])
             if not hit or hit[2] != a.get("rev") or a.get("status") != "active":
@@ -627,10 +690,10 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
                 a.update(last_text=text, triggered_at=now.isoformat(), fired=int(a.get("fired") or 0) + 1)
                 if not a.get("repeat"):
                     a["status"] = "triggered"
-                row["pending"] = (row["pending"] + [text])[-MAX_PENDING:]
+                row["pending"] = (row["pending"] + [[text, now.isoformat()]])[-MAX_PENDING:]
         texts = []
-        if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now):
-            texts, row["pending"] = row["pending"], []
+        if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now) and not _claimed(row, now):
+            texts, row["claim"] = [t for t, _ in row["pending"]], now.isoformat()
             dirty = True
         return dirty, texts
     return _change(uid, go)
@@ -644,7 +707,7 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     if a["kind"] == "mtf":
         return _evaluate_mtf(a, rows, st)
     seen = [x for x in st.get("seen") or [] if isinstance(x, str)]
-    since = str(a.get("created_at") or "")[:10]
+    since = _day(a.get("created_at"), "Asia/Kolkata") or str(a.get("created_at") or "")[:10]     # filing dates are India's
     new = [d for d in rows if isinstance(d, dict) and d.get("kind") in EVENTS.get(a["kind"], ()) and d.get("symbol") == a["symbol"]
            and d.get("id") not in seen and str(d.get("filed") or d.get("date") or d.get("day") or "") >= since]
     if not new:
