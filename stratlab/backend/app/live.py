@@ -405,6 +405,7 @@ class LiveSession:
                     "unrealised": e.dir * e.qty * (px - e.entry) if e.qty else 0.0,
                     "realised": sum(t["pnl"] for t in e.trades),
                     "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
+                    "emptied_on": e.emptied_on,
                 },
             }
 
@@ -449,7 +450,7 @@ def stopped_snapshot(row: dict) -> dict:
                         "unrealised": d * qty * (px - entry) if held else 0.0,
                         "valued_at": px if held else None,
                         "realised": sum(t["pnl"] for t in trades), "trades": len(trades),
-                        "wins": sum(1 for t in trades if t["pnl"] > 0)}}
+                        "wins": sum(1 for t in trades if t["pnl"] > 0), "emptied_on": st.get("emptied_on")}}
 
 
 class LimitError(Exception):

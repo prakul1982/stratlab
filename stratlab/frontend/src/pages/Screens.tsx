@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
+import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, useRegion, type Region } from "../lib/research";
 import {
@@ -144,7 +144,9 @@ export function ScreensPage() {
     try { setSaved(await screensApi.remove(s.id)); if (open?.id === s.id) setOpen(null); notify(`Deleted “${s.name}”.`); } catch (e) { fail(e); }
   };
 
-  const cols = COLS.filter((c) => !c.india || region === "IN");
+  // the US column is the SEC's industry division (Manufacturing, Services), not a market sector (R13S-015)
+  const sectorName = region === "US" ? "Industry (SEC division)" : "Sector";
+  const cols = COLS.filter((c) => !c.india || region === "IN").map((c) => (c.id === "sector" ? { ...c, label: sectorName, short: region === "US" ? "Industry" : undefined } : c));
   const n = conditionCount(current);
   const full = !!saved && saved.count >= saved.limit;
   const help = meta?.help ?? {};
@@ -164,7 +166,7 @@ export function ScreensPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
-        info={out?.index_at ? <>List gathered as of {out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
+        info={out?.index_at ? <>List gathered as of {asOf(out.index_at) ?? out.index_at}. Facts from reported results, exchange filings and daily prices, not advice.</> : "Facts from reported results, exchange filings and daily prices, not advice."}
         lede="Pick the conditions; see every company that meets them. Nothing here scores companies: the list starts with the largest market value; sort by any column." />
       {latestDue(out?.as_of_newest ?? out?.as_of, out?.pending) && <p className="k-note" data-testid="screens-pending">{latestDue(out?.as_of_newest ?? out?.as_of, out?.pending)}</p>}
       {staleNote(out?.stale) && <p className="k-note" data-testid="screens-stale">{staleNote(out?.stale)}</p>}
@@ -192,9 +194,9 @@ export function ScreensPage() {
               <button className="btn quiet sm inv-toggle" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>{showFilters ? "Hide filters" : "Show filters"}{n ? ` (${n})` : ""}</button>
               <button className="btn quiet sm" onClick={clear} disabled={!n && sort === "market_cap" && desc}>Clear</button></>} />
             {!meta ? <Skeleton label="Loading the filters" lines={4} /> : showFilters && <>
-              <Group title="Sector" help={help.sector}>
+              <Group title={sectorName} help={help.sector}>
                 {meta.sectors.length === 0 ? <p className="k-small k-muted">No companies gathered yet.</p>
-                  : <ChipSet label="Sector" options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
+                  : <ChipSet label={sectorName} options={meta.sectors.map((s) => ({ value: s, label: s }))} on={filters.sector} onToggle={(v) => toggle("sector", v)} />}
               </Group>
               <Group title="Company size (market value)" help={help.cap}>
                 <ChipSet label="Company size" options={meta.cap.map((c) => ({ value: c.id, label: c.label }))} on={filters.cap} onToggle={(v) => toggle("cap", v as Filters["cap"][number])} />

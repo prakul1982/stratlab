@@ -56,6 +56,7 @@ export interface Stats {
   ret: number; pnl: number; cagr: number; mdd: number; sharpe: number; n: number; win: number;
   pf: number | null; avg: number; buy_hold_ret: number;
   skipped_size?: number;     // entry signals skipped because one share or lot cost more than the budget
+  emptied_on?: string | null; // the day the account reached zero (R13S-001): nothing traded after it, the loss stops at -100%
 }
 export interface Costs {
   gross_pnl: number; total: number; items: { label: string; amount: number }[]; net_pnl: number;
@@ -180,7 +181,7 @@ export interface LiveSnapshot {
   overlays: Record<string, (number | null)[]>; events: LiveEvent[]; equity_curve: { t: string; eq: number }[];
   account: { capital: number; equity: number; cash: number; qty: number; entry?: number | null; stop?: number | null;
     target?: number | null; unrealised: number; realised: number; trades: number; wins: number;
-    side?: "long" | "short"; valued_at?: number | null };
+    side?: "long" | "short"; valued_at?: number | null; emptied_on?: string | null };
   orders: LiveOrder[];
 }
 export interface LiveRow {

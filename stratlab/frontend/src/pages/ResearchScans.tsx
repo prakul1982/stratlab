@@ -9,6 +9,7 @@ import { marketState } from "../lib/marketHours";
 import { RegionSwitch } from "../components/Research";
 import { homeRegion } from "../lib/homeMarket";
 import { Info } from "../components/ui";
+import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
 import {
@@ -107,7 +108,7 @@ export function ScanPage() {
         lede="Which stocks match a chart rule right now. Each match is a fact about the chart on a date, not advice."
         asOf={preset?.as_of} asOfTz={marketTz(region)} info="The rules: Stage 2 with the Supertrend up, a 52-week high breakout, a golden cross, an RSI bounce, a volume surge, a Bollinger squeeze breakout, a stock near its 52-week low, or a pullback in an uptrend." infoLabel="Which rules" />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      {!pro && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
+      {!pro && me && <PlanNote>The trend scans and the Stage 2 + Supertrend alert are on the Basic plan.</PlanNote>}
       <Card>
         <CardHead title="Scan a group" />
         <FormGrid label="Scan a group" onSubmit={runScan}>
@@ -298,7 +299,7 @@ export function RotationPage() {
       {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} /></Card>}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`}
-          actions={<div className="rot-legend" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
+          actions={<div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
           <div className="k-stack">
             <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}</span>
@@ -348,7 +349,7 @@ export function RotationPage() {
 }
 
 interface FilingsOverview {
-  rows: { symbol: string; summary: FilingSummary; flags: FilingItem[] }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
+  rows: { symbol: string; summary: FilingSummary; flags: FilingItem[]; stale?: boolean }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
 }
 interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null; copies?: number }
 interface FlagType { id: string; label: string; severity: "red" | "amber"; count: number }
@@ -393,7 +394,7 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
               <Info>{`Checked once a day at ${data.send_at} IST, for the Indian stocks in your holdings and your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings.`}</Info></>} />
         </Card>
       )}
-      {busy && <Card><Skeleton label="Reading each company's filings" lines={4} /></Card>}
+      {busy && <Card><Skeleton label="Reading each company's filings" lines={4} /><p className="k-note">Every company is read at once and this takes a few seconds. One that is slow to answer is left out for now, and said so below.</p></Card>}
       {error && <ErrorState title="The filings couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>}
       {data && !busy && (data.rows.length === 0 && data.problems.length === 0
         ? <Card><EmptyState title="No Indian stocks held or watched yet" action={{ label: "Find a company", to: "/research?region=IN" }}>Add your holdings, or open a company and press Watch: their filings show up here.</EmptyState></Card>
@@ -402,13 +403,16 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
             {data.rows.map((r) => (
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
-                  actions={<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link>} />
+                  actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>
             ))}
-            {data.problems.length > 0 && <p className="k-note">Couldn't read: {data.problems.join(" · ")}</p>}
+            {data.problems.length > 0 && (
+              <p className="k-note" data-testid="filings-unread">{unreadLine(unreadSymbols(data.problems))}{" "}
+                <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button></p>
+            )}
           </>
         ))}
     </>
@@ -526,7 +530,7 @@ export function FilingsPage() {
         <RegionSwitch region={region} setRegion={pickRegion} />
         <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: region === "IN" ? "Your stocks" : "Your watchlist" }, { value: "all", label: "All companies" }]} />
       </div>
-      {!pro && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
+      {!pro && me && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}
       <p className="k-note inv-text">
         {region === "IN"

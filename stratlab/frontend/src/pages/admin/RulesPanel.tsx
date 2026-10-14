@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, dateOnly } from "../../lib/format";
+import { ago, dateOnly, fmtDate } from "../../lib/format";
 import { Card, CardHead, DataTable, Light, Skeleton, type Column } from "../../components/kit";
 
 type Rule = { id: string; area: string; name: string; value: string; where: string; source: string; since: string | null };
@@ -61,7 +61,7 @@ export function RulesPanel() {
             </p>
             {s.pending && (
               <div className="k-row k-small">
-                <span>{s.pending.items ? s.pending.items.map((c) => `${c.date}: ${c.subject}`).join(" · ")
+                <span>{s.pending.items ? s.pending.items.map((c) => `${fmtDate(c.date)}: ${c.subject}`).join(" · ")
                   : `${s.pending.why}: now ${s.pending.now}${s.pending.uses ? `, StratLab uses ${s.pending.uses}` : s.pending.was ? `, was ${s.pending.was}` : ""}`} <span className="k-muted">({s.where}, {ago(s.pending.at)})</span></span>
                 <button type="button" className="btn quiet sm" disabled={busy === s.id} onClick={() => go(s.id, `/admin/rules/watch/${s.id}/seen`, "Marked seen.")}>Mark seen</button>
               </div>

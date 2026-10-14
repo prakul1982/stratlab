@@ -51,10 +51,14 @@ const statusTone = (s: string) => (s === "running" ? "ok" : s === "paused" ? "wa
 function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
   const { fail, notify } = useApp();
   const [fresh, setFresh] = useState<string | null>(null);
-  const [ask, setAsk] = useState<"new" | "off" | null>(null);
+  const [ask, setAsk] = useState<"first" | "new" | "off" | null>(null);
   const make = async () => {
     setAsk(null);
-    try { const r = await api<{ path: string }>("/trade/signals/hook", { method: "POST" }); setFresh(CFG.API_BASE + r.path); reload(); } catch (e) { fail(e); }
+    try {
+      const r = await api<{ path: string }>("/trade/signals/hook", { method: "POST" });
+      setFresh(CFG.API_BASE + r.path); reload();
+      if (!ov.hook) notify("Your URL is on.", { label: "Turn it off", run: () => void off() });
+    } catch (e) { fail(e); }
   };
   const off = async () => {
     setAsk(null);
@@ -63,7 +67,7 @@ function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
   const copy = () => { if (fresh) navigator.clipboard?.writeText(fresh).then(() => notify("Copied."), () => {}); };
   return (
     <Card label="Your webhook URL">
-      <CardHead level={3} title="Your webhook URL" info="Paste it into a TradingView alert's Webhook URL (or a Chartink alert's webhook). Anyone who has it can move your signal sessions' paper positions, so keep it private. It's stored only as a fingerprint, so it can be shown once only." infoLabel="About the webhook URL" />
+      <CardHead level={2} title="Your webhook URL" info="Paste it into a TradingView alert's Webhook URL (or a Chartink alert's webhook). Anyone who has it can move your signal sessions' paper positions, so keep it private. It's stored only as a fingerprint, so it can be shown once only." infoLabel="About the webhook URL" />
       {fresh ? (
         <div className="k-stack k-tight">
           <div className="k-row">
@@ -76,10 +80,11 @@ function UrlCard({ ov, reload }: { ov: Overview; reload: () => void }) {
         <p className="k-small" data-testid="sg-hook">A URL starting <code>…/hooks/signal/{ov.hook.hint}</code> is on, made {at(ov.hook.created)}. {ov.hook.last_used ? `Last signal ${at(ov.hook.last_used)}.` : "No signal yet."}</p>
       ) : <p className="k-small k-muted">No URL yet.</p>}
       <div className="k-row">
-        <button type="button" className="btn sm" onClick={() => (ov.hook ? setAsk("new") : void make())}>{ov.hook || fresh ? "Make a new URL" : "Make my URL"}</button>
+        <button type="button" className="btn sm" onClick={() => setAsk(ov.hook || fresh ? "new" : "first")}>{ov.hook || fresh ? "Make a new URL" : "Make my URL"}</button>
         {(ov.hook || fresh) && <button type="button" className="btn sm quiet danger" onClick={() => setAsk("off")}>Turn off</button>}
       </div>
       <p className="k-note">At most {ov.limits.per_minute} signals a minute and {ov.limits.per_day.toLocaleString("en-IN")} a day, each up to {ov.limits.bytes.toLocaleString("en-IN")} bytes.</p>
+      {ask === "first" && <ConfirmDialog title="Make your URL?" confirmLabel="Make my URL" onConfirm={make} onClose={() => setAsk(null)} danger={false}>Anyone who has it can move your signal sessions' paper positions. It is shown once only, and can be turned off at any time.</ConfirmDialog>}
       {ask === "new" && <ConfirmDialog title="Make a new URL?" confirmLabel="Make a new URL" onConfirm={make} onClose={() => setAsk(null)}>The old one stops working at once, so alerts using it must be updated.</ConfirmDialog>}
       {ask === "off" && <ConfirmDialog title="Turn the URL off?" confirmLabel="Turn it off" onConfirm={off} onClose={() => setAsk(null)}>Every signal sent to it is refused from now on.</ConfirmDialog>}
     </Card>
@@ -107,7 +112,7 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
   };
   return (
     <Card label="New signal session">
-      <CardHead level={3} title="New signal session" />
+      <CardHead level={2} title="New signal session" />
       <div className="k-stack">
         {live.length > 1 && (
           <FormGrid label="Pick the instrument">
@@ -288,7 +293,7 @@ export function SignalsPage() {
         <>
           {(current.length > 0 || stopped.length > 0) && (
             <Card label="Your signal sessions">
-              <CardHead level={3} title="Your signal sessions" />
+              <CardHead level={2} title="Your signal sessions" />
               <div className="k-sessions">{current.map(card)}</div>
               {!current.length && <p className="k-small k-muted">None running.</p>}
               <Earlier label="Stopped sessions" count={stopped.length} open={!!sid && stopped.some((r) => r.id === sid)}>

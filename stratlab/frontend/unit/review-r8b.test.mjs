@@ -78,7 +78,8 @@ test("R8B-011: every 'Opening' state has the Reload after a wait, and the offlin
   assert.equal(res.status, 503);
   assert.match(res.body, /StratLab can't be reached/);
   assert.match(res.body, /<form method="get" action="\/research\/screens\?x=1"><button type="submit" data-testid="offline-reload"[^>]*>Reload<\/button><\/form>/);
-  assert.match(res.body, /<meta http-equiv="refresh" content="30">/);
+  assert.match(res.body, /<script>setTimeout\(function\(\)\{location\.reload\(\)\},30000\)<\/script>/);     // tries again by itself, with no <meta refresh> (R13S-013)
+  assert.doesNotMatch(res.body, /http-equiv="refresh"/);
   net = () => Promise.reject(new Error("dropped"));
   assert.match((await ask("https://stratlab.studio/invest")).body, /action="\/invest"><button type="submit"/);
   assert.match((await ask('https://stratlab.studio/a"<b>')).body, /action="\/a%22%3Cb%3E"/);     // the address is never markup

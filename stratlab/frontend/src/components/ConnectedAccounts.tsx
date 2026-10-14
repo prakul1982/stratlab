@@ -114,7 +114,7 @@ function InboxCard({ c, set, load }: P) {
         <FormGrid onSubmit={(e) => { e.preventDefault(); if (pw.trim()) void call(async () => { const r = await api<Conn>("/connect/inbox/password", { method: "PUT", body: { password: pw } }); setPw(""); return r; }, "Password saved."); }}
           label="Statement password">
           <Field label="Your statement password" type="password" autoComplete="off" value={pw} maxLength={64} onChange={(e) => setPw(e.target.value)}
-            placeholder={i.has_password ? "Saved. Type a new one to change it" : ""}
+            placeholder={i.has_password ? "Saved. Type to replace it" : ""}
             info="Statements arrive locked. NSDL and CDSL use your PAN in capital letters. CAMS and KFintech use the password you chose when you asked for the statement, so choose the same one every time. It is kept encrypted, never shown again, and used only to open your statements." />
           <FormActions>
             <button type="submit" className="btn" disabled={busy || !pw.trim()}>{i.has_password ? "Change password" : "Set your statement password"}</button>

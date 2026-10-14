@@ -10,6 +10,7 @@ import { NAV_GROUPS } from "../lib/navGroups";
 import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
+import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { AsOf, Fig, Loading, PanelSkel, VerdictBadge } from "../components/ui";
 import { Card, CardHead, PageHeader, Seg } from "../components/kit";
 import { Panel, QuoteGrid } from "../components/Research";
@@ -269,16 +270,27 @@ function ResultsToday({ region }: { region: Region }) {
   );
 }
 
-type Filings = { rows: { symbol: string; summary: FilingSummary }[] };
+type Filings = { rows: { symbol: string; summary: FilingSummary; stale?: boolean }[]; problems?: string[] };
 
 /** Held and watched companies with red flags filed lately (India; Basic and up, as on the red flags page). */
 function RedFlags({ region }: { region: Region }) {
   const { me } = useApp();
+  // until `me` has loaded the plan isn't known: the card shows its skeleton, never the Basic-plan note to a paying reader (R13S-003)
+  const known = !!me;
   const allowed = !!me?.plan_info?.features?.filings;
   const [data, setData] = useState<Filings | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
   const us = region === "US";
-  useEffect(() => { if (allowed && !us) api<Filings>("/research/filings").then(setData).catch(() => setData({ rows: [] })); }, [allowed, us]);
+  useEffect(() => {
+    if (!allowed || us) return;
+    setData(null); setFailed(false);
+    api<Filings>("/research/filings").then(setData).catch(() => setFailed(true));
+  }, [allowed, us, tries]);
   const flagged = data?.rows.filter((r) => r.summary.red > 0) ?? [];
+  // the feed not answering is not "you hold nothing": say which companies couldn't be read, and offer another try (R13S-002)
+  const unread = unreadSymbols(data?.problems);
+  const retry = <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button>;
   // red flags are read from India's exchange filings: none exist for US companies, so the card says that instead of showing India's (R9R-008)
   if (us) {
     return (
@@ -289,11 +301,18 @@ function RedFlags({ region }: { region: Region }) {
   }
   return (
     <Panel title="Red flags in your holdings and watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
-      {!allowed ? <p className="small muted">Red flags for all your holdings and watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
+      {!known ? <PanelSkel label="Checking your plan" />
+        : !allowed ? <p className="small muted">Red flags for all your holdings and watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
+        : failed ? <p className="small muted" data-testid="invest-redflags-failed">{unreadLine([])} {retry}</p>
         : data === null ? <PanelSkel label="Reading your companies' filings" />
+        : !data.rows.length && unread.length ? <p className="small muted" data-testid="invest-redflags-failed">{unreadLine(unread)} {retry}</p>
         : !data.rows.length ? <p className="small muted">You hold or watch no India stocks yet: their filings show here.</p>
-        : !flagged.length ? <p className="small muted">No red flags filed lately by the {data.rows.length} India compan{data.rows.length === 1 ? "y" : "ies"} you hold or watch.</p>
-        : (
+        : !flagged.length ? (
+          <>
+            <p className="small muted">No red flags filed lately by the {data.rows.length} India compan{data.rows.length === 1 ? "y" : "ies"} you hold or watch.</p>
+            {unread.length > 0 && <p className="small muted" data-testid="invest-redflags-failed">{unreadLine(unread)} {retry}</p>}
+          </>
+        ) : (
           <div className="k-stack snug">
             {flagged.slice(0, 5).map((r) => (
               <div key={r.symbol} className="space-line">
@@ -301,6 +320,7 @@ function RedFlags({ region }: { region: Region }) {
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
               </div>
             ))}
+            {unread.length > 0 && <p className="small muted" data-testid="invest-redflags-failed">{unreadLine(unread)} {retry}</p>}
           </div>
         )}
     </Panel>

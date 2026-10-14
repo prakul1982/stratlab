@@ -42,6 +42,7 @@ async function touchable(page: Page) {
 }
 
 const now = () => Date.now() / 1000;
+const BLOCKED_AT = Date.UTC(2026, 9, 9, 8, 35) / 1000;                       // 9 Oct 2026, 14:05 IST
 const model = (id: string, rank: number | null, extra: Record<string, unknown> = {}) => ({
   id, in_use: rank != null, rank, success: 96, tries: 25, median_ms: 1200, probe: { ok: 2, tries: 2, at: now() - 3600, error: null },
   last_error: null, last_error_at: null, open_until: null, open_reason: null, blocked: false, pinned: false, ctx: 128000, thinks: false, ...extra });
@@ -56,7 +57,8 @@ const provider = (name: string, label: string, extra: Record<string, unknown> = 
 function view(pinned: string | null, blocked: string[]) {
   const groqModels = [model("llama-3.3-70b-versatile", 1), model("openai/gpt-oss-120b", 2, { thinks: true, success: 88 }),
     model("qwen/qwen3-32b", null, { last_error: "empty reply (qwen/qwen3-32b)", success: 40 })]
-    .map((m) => ({ ...m, pinned: m.id === pinned, blocked: blocked.includes(m.id) }));
+    .map((m) => ({ ...m, pinned: m.id === pinned, blocked: blocked.includes(m.id),
+      ...(blocked.includes(m.id) ? { blocked_by: "owner@example.com", blocked_at: BLOCKED_AT } : {}) }));
   return {
     providers: [
       provider("groq", "Groq", { models: groqModels, pinned, pinned_by: pinned ? "admin" : null, blocked }),
@@ -95,7 +97,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
     const v = view(pinned, blocked);
     const out = path === "/admin/ai/test" ? { providers: [{ name: "groq", label: "Groq", ok: true, error: null, model: "llama-3.3-70b-versatile", ms: 812, quota: false },
       { name: "mistral", label: "Mistral", ok: false, error: "Free quota used up for now; it resets on its own.", model: null, ms: 300, quota: true }], view: v }
-      : path === "/admin/ai/rerank" ? { ...v, started: ["groq", "mistral"] } : v;
+      : path === "/admin/ai/rerank" ? { ...v, started: ["groq", "mistral"], undo: { groq: { order: ["llama-3.3-70b-versatile"], ranked_at: 1, rank_error: null } } } : v;
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(out) });
   });
   const errors = await open(page, "/admin/system", "Who is asked, in order");
@@ -126,21 +128,40 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
 
   await groq.getByRole("button", { name: "Pin openai/gpt-oss-120b" }).click();
   await expect(groq.getByText(/Pinned to openai\/gpt-oss-120b\./)).toBeVisible();
+  // Block and Re-rank ask first (R13S-004): nothing is sent until the dialog says yes; the page then says who blocked it and when, and offers an Undo
   await groq.getByRole("button", { name: "Block qwen/qwen3-32b" }).click();
+  await expect(page.getByRole("dialog", { name: "Block qwen/qwen3-32b?" })).toBeVisible();
+  expect(sent.filter((x) => x.path === "/admin/ai/block")).toEqual([]);
+  await page.getByRole("dialog").getByRole("button", { name: "Block it" }).click();
+  await expect(groq.getByRole("button", { name: "Unblock qwen/qwen3-32b" })).toBeVisible();
+  await expect(groq.getByTestId("ai-blocked-by")).toHaveText("Blocked by owner@example.com at 9 Oct 2026, 14:05 IST");
+  await page.getByRole("status").getByRole("button", { name: "Undo" }).click();
+  await expect(groq.getByRole("button", { name: "Block qwen/qwen3-32b" })).toBeVisible();
+  await groq.getByRole("button", { name: "Block qwen/qwen3-32b" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(groq.getByRole("button", { name: "Block qwen/qwen3-32b" })).toBeVisible();
+  await groq.getByRole("button", { name: "Block qwen/qwen3-32b" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Block it" }).click();
   await expect(groq.getByRole("button", { name: "Unblock qwen/qwen3-32b" })).toBeVisible();
   await groq.getByRole("button", { name: "Unpin" }).click();
   await expect(groq.getByText(/Pinned to/)).toHaveCount(0);
   await panel.getByRole("button", { name: "Test every provider" }).click();
   await expect(groq.getByText("Test: answered with llama-3.3-70b-versatile in 0.8 s")).toBeVisible();
   await panel.getByRole("button", { name: "Re-rank models" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Re-rank", exact: true }).click();
   await groq.getByRole("button", { name: "Re-rank Groq models" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Re-rank", exact: true }).click();
+  await page.getByRole("status").getByRole("button", { name: "Undo" }).click();
   await expect.poll(() => sent).toEqual([
     { path: "/admin/ai/pin", body: { provider: "groq", model: "openai/gpt-oss-120b" } },
+    { path: "/admin/ai/block", body: { provider: "groq", model: "qwen/qwen3-32b", blocked: true } },
+    { path: "/admin/ai/block", body: { provider: "groq", model: "qwen/qwen3-32b", blocked: false } },
     { path: "/admin/ai/block", body: { provider: "groq", model: "qwen/qwen3-32b", blocked: true } },
     { path: "/admin/ai/pin", body: { provider: "groq", model: null } },
     { path: "/admin/ai/test", body: null },
     { path: "/admin/ai/rerank", body: {} },
     { path: "/admin/ai/rerank", body: { provider: "groq" } },
+    { path: "/admin/ai/rank-restore", body: { ranks: { groq: { order: ["llama-3.3-70b-versatile"], ranked_at: 1, rank_error: null } } } },
   ]);
   await sane(page, errors);
 });

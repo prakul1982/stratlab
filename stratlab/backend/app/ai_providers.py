@@ -395,7 +395,8 @@ def _provider_view(name: str, now: float) -> dict:
                        "probe": {"ok": s.probe_ok, "tries": s.probe_tries, "at": s.probe_at or None, "error": s.probe_error},
                        "last_error": s.last_error, "last_error_at": s.last_error_at,
                        "open_until": s.open_until if s.open_until > now else None, "open_reason": s.open_reason if s.open_until > now else None,
-                       "blocked": R.blocked(name, m), "pinned": m == (pin_admin or pin_env), "ctx": s.ctx, "thinks": thinks(m)})
+                       "blocked": R.blocked(name, m), "blocked_by": (R.block_info(name, m) or {}).get("by"),
+                       "blocked_at": (R.block_info(name, m) or {}).get("at"), "pinned": m == (pin_admin or pin_env), "ctx": s.ctx, "thinks": thinks(m)})
     cooling = st.cooldown_until > now
     all_closed = bool(use) and all(R.ready(name, m, now) > 0 for m in use)
     # a stored Cloudflare id that a model of the same name already covers is the same model listed twice
@@ -449,7 +450,8 @@ def _provider_view(name: str, now: float) -> dict:
             "pinned": pin_admin or pin_env or None, "pinned_by": "admin" if pin_admin else "railway" if pin_env else None,
             "ranked_at": st.ranked_at or None, "rank_error": st.rank_error, "discovered": st.discovered, "skipped": st.skipped,
             "probing": st.probing, "models": models,
-            "blocked": [b.split("/", 1)[1] for b in R.blocks() if b.startswith(name + "/")]}
+            "blocked": [b.split("/", 1)[1] for b in R.blocks() if b.startswith(name + "/")],
+            "blocked_info": {b.split("/", 1)[1]: R.block_info(name, b.split("/", 1)[1]) or {} for b in R.blocks() if b.startswith(name + "/")}}
 
 
 def admin_view() -> dict:
@@ -484,8 +486,16 @@ def pin(name: str, model: str | None):
     R.pin(name, model)
 
 
-def block(name: str, model: str, on: bool = True):
-    R.block(name, model, on)
+def block(name: str, model: str, on: bool = True, by: str | None = None):
+    R.block(name, model, on, by)
+
+
+def snapshot_rank(names: list[str] | None = None) -> dict:
+    return R.snapshot_rank(names or [n for n in PROVIDERS if configured(n)])
+
+
+def restore_rank(snap: dict) -> list[str]:
+    return R.restore_rank(snap)
 
 
 job = R.RerankJob()

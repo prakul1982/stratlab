@@ -346,6 +346,12 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
         lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {/^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {withOpen(st.n, open)}</>}
         actions={<ShareMenu nb={nb} e={e} />} />
+      {st.emptied_on && (
+        <Notice tone="warn">
+          <b>Account emptied on {fmtDate(st.emptied_on)}.</b> The account's value reached zero, so every position was closed and nothing was traded after that day.
+          The loss stops at −100%{e.group ? ": each position is sized on the whole capital, so a group can hold more than the account has." : "."}
+        </Notice>
+      )}
       {(st.skipped_size ?? 0) > 0 && (
         <Notice tone="warn">
           {st.skipped_size} entry signal{st.skipped_size === 1 ? " was" : "s were"} skipped because one {e.instrument.market === "MCX" || e.instrument.market === "CDS" || e.instrument.fno ? "lot" : "unit"} cost more than the capital allowed for a trade
@@ -443,7 +449,7 @@ export function ExperimentPage() {
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);
-  if (!e) return <div className="k-page"><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
+  if (!e) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><EmptyState title="That experiment wasn't found." action={{ label: "Back to the notebook", to: `/n/${nb.id}` }} /></div>;
   return <ExperimentView nb={nb} e={e} />;
 }
 

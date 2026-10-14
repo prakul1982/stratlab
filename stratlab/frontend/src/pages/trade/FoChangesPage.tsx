@@ -119,7 +119,7 @@ export function FoChangesPage() {
         : (
           <>
             <Card label="Alert" compact>
-              <CardHead level={3} title="Alert" />
+              <CardHead title="Alert" />
               {a.allowed ? (
                 <CheckField checked={a.on} onChange={setAlert}
                   label={<>Tell me when a change touches a stock on my watchlist or in a running paper session

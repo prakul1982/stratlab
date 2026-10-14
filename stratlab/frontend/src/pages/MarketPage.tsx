@@ -87,7 +87,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
       )}
       {members.length > 0 && (
         <>
-          <div className="chip-row">
+          <div className="chip-row" role="group" aria-label={`The ${members.length} ${noun} in this group`} tabIndex={0}>
             {members.map((m) => (
               <span key={m.id ?? m.symbol} className="pill">{m.symbol}{market.id === "IN" && <> <SurvBadges region="IN" symbol={m.symbol} plain /></>}{pick === "custom" &&
                 <button type="button" className="chip-x" aria-label={`Remove ${m.symbol}`} onClick={() => setCustom(custom.filter((x) => x !== m))}>×</button>}</span>

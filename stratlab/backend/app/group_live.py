@@ -12,7 +12,7 @@ from datetime import datetime
 
 from . import risk
 from .engine import costs as C
-from .engine.core import Ctx, Engine
+from .engine.core import Ctx, Engine, write_off
 from .kite_service import IST, KiteService
 from .live import CandleBuilder, _closed, candle_end, close_at_auction, drop_forming, official_close, session_kind
 from .models import Strategy
@@ -122,6 +122,7 @@ class GroupLiveSession:
         state = row.get("state") or {}
         self.day = state.get("day")
         self.halted = state.get("halted", False)
+        self.emptied_on: str | None = state.get("emptied_on")      # the day the account reached zero: nothing opens after it
         self.day_start_realised = state.get("day_start_realised", 0.0)
         self.equity_curve: list[dict] = state.get("equity_curve", [])
         self.day_equity: dict = state.get("day_equity") or {}      # each day's closing equity, beyond the curve (R8B-002)
@@ -153,14 +154,29 @@ class GroupLiveSession:
 
     # ---------- the shared book ----------
     def free_slot(self) -> bool:
-        return not self.halted and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
+        return not self.halted and not self.emptied_on and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
 
     def realised(self) -> float:
         return sum(t["pnl"] for m in self.members for t in m.engine.trades)
 
     def equity(self) -> float:
         cap = self.strategy.risk.capital
-        return cap + self.realised() + sum(m.open_pnl() for m in self.members)
+        return max(cap + self.realised() + sum(m.open_pnl() for m in self.members), 0.0)
+
+    def _empty(self, day: str) -> list[dict]:
+        """The account is worth nothing: every position is closed at its last price, the loss is held to what the
+        account had (-100%) and nothing opens again (R13S-001). Returns the closing events."""
+        evs = []
+        for x in self.members:
+            if x.engine.qty > 0:
+                ev = x.engine._close(x.bars[-1], x.last_price, "Account emptied")
+                evs.append({**ev, "sym": x.sym})
+        self.emptied_on = day
+        left = self.strategy.risk.capital + self.realised()
+        if left < 0:
+            pairs = sorted(((t, m.engine) for m in self.members for t in m.engine.trades), key=lambda p: str(p[0]["exit_t"]))
+            write_off([t for t, _ in pairs], -left, [e for _, e in pairs])
+        return evs
 
     def _on_candle(self, m: Member, c: dict):
         day = str(c["t"])[:10]
@@ -182,6 +198,9 @@ class GroupLiveSession:
                         ev = x.engine._close(bar, x.last_price, "Daily loss cap")
                         self.mgr.on_order(self, {**ev, "sym": x.sym})
                 self.halted = True
+        if not self.emptied_on and self.strategy.risk.capital + self.realised() + sum(x.open_pnl() for x in self.members) <= 0:
+            for ev in self._empty(day):
+                self.mgr.on_order(self, ev)
         t = candle_end(c, self.tf)             # the value at the candle's close, stamped when it closed (R11C-011)
         if self.equity_curve and self.equity_curve[-1]["t"] == t:
             self.equity_curve[-1]["eq"] = round(self.equity(), 2)
@@ -239,7 +258,7 @@ class GroupLiveSession:
     # ---------- saving and showing ----------
     def state(self) -> dict:
         return {"members": {m.inst["id"]: {**m.engine.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym}
-                            for m in self.members}, "day": self.day, "halted": self.halted,
+                            for m in self.members}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
                 "day_equity": self._days()}
 
@@ -283,7 +302,7 @@ class GroupLiveSession:
                 "bars": [], "overlays": {}, "oscillators": {},
                 "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
                             "unrealised": sum(m.open_pnl() for m in self.members), "open": open_n, "max_open": self.max_open,
-                            "halted": self.halted, "today": self.realised() - self.day_start_realised + sum(m.open_pnl() for m in self.members),
+                            "halted": self.halted, "emptied_on": self.emptied_on, "today": self.realised() - self.day_start_realised + sum(m.open_pnl() for m in self.members),
                             "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0),
                             "skipped": {k: sum(m.skips[k] for m in self.members) for k in ("spread", "price")}},
                 "fast": self.fast,
@@ -326,5 +345,5 @@ def stopped_snapshot(row: dict) -> dict:
             "stopped_at": row.get("stopped_at"), "members": rows if n_open else [], "skipped": [], "events": events,
             "equity_curve": curve, "bars": [], "overlays": {}, "oscillators": {},
             "account": {"capital": cap, "equity": equity, "realised": realised, "unrealised": open_pnl, "open": n_open,
-                        "max_open": row["instrument"].get("maxOpen"), "halted": False, "today": 0, "trades": len(trades),
+                        "max_open": row["instrument"].get("maxOpen"), "halted": False, "emptied_on": st.get("emptied_on"), "today": 0, "trades": len(trades),
                         "wins": sum(1 for t in trades if t["pnl"] > 0)}}

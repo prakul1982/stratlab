@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate } from "../../lib/format";
-import { Badge, Card, CardHead, Disclosure, Light, Skeleton } from "../../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
+import { blockedLine } from "./aiBlocks";
 import { shortLinks } from "./attention";
 
 // Admin only: provider names are fine here (never on public pages).
@@ -11,7 +12,8 @@ type Model = {
   in_use: boolean; rank: number | null; success: number | null; tries: number; median_ms: number | null;
   probe: { ok: number; tries: number; at: number | null; error: string | null };
   last_error: string | null; last_error_at: number | null; open_until: number | null; open_reason: string | null;
-  blocked: boolean; pinned: boolean; ctx: number | null; thinks: boolean;
+  blocked: boolean; /** who blocked it and when (an epoch), kept from the day this was added */ blocked_by?: string | null; blocked_at?: number | null;
+  pinned: boolean; ctx: number | null; thinks: boolean;
 };
 type Provider = {
   name: string; label: string; configured: boolean; missing: string[]; key_url: string; free: string; terms: "ok" | "prototype" | "paid";
@@ -19,7 +21,7 @@ type Provider = {
   quota: { limited: boolean; reset_at: number | null; remaining: { requests?: number; tokens?: number } | null; remaining_at: number | null };
   last_ok: number | null; last_error: string | null; last_used_model: string | null; pinned: string | null; pinned_by: "admin" | "railway" | null;
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
-  models: Model[]; blocked: string[];
+  models: Model[]; blocked: string[]; blocked_info?: Record<string, { by?: string | null; at?: number | null }>;
 };
 type Step = { provider: string; label: string; model: string; ready: boolean; out_of_credit?: boolean };
 type Route = { label: string; budget_s: number; steps: Step[] };
@@ -29,6 +31,10 @@ export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
   rerank_every_hours: number; last_failure: { at: number; task: string; detail: string } | null;
 };
+/** What is waiting for a yes: Block and Re-rank change how every user's AI questions are routed (R13S-004). */
+type Ask = { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string };
+type RankSnap = Record<string, unknown>;
+
 type TestRow = { name: string; label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
 /** A provider's own words with any long link cut to its address (the whole text on hover), so a 150-character link can't fill a line (R11P-007). */
@@ -61,6 +67,7 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
   const [v, setV] = useState<AIView | null>(null);
   const [tests, setTests] = useState<Record<string, TestRow> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
   const load = useCallback(async () => { try { setV(await api<AIView>("/admin/ai")); } catch (e) { fail(e); } }, [fail]);
   useEffect(() => { load(); }, [load]);
   const probing = v?.providers.some((p) => p.probing);
@@ -79,9 +86,16 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
     setTests(Object.fromEntries(r.providers.map((t) => [t.name, t])));
     return r.view;
   });
+  const restoreRank = (snap: RankSnap) => act("rank-restore", async () => {
+    const r = await api<AIView>("/admin/ai/rank-restore", { method: "POST", body: { ranks: snap } });
+    notify("The earlier order is back.");
+    return r;
+  });
   const rerank = (provider?: string) => act(`rerank-${provider ?? "all"}`, async () => {
-    const r = await api<AIView & { started: string[] }>("/admin/ai/rerank", { method: "POST", body: provider ? { provider } : {} });
-    notify(r.started.length ? "Measuring the models now. This takes a minute or two; the list updates by itself." : "Already measuring.");
+    const r = await api<AIView & { started: string[]; undo?: RankSnap }>("/admin/ai/rerank", { method: "POST", body: provider ? { provider } : {} });
+    const msg = r.started.length ? "Measuring the models now. This takes a minute or two; the list updates by itself." : "Already measuring.";
+    if (r.started.length && r.undo) notify(msg, { label: "Undo", run: () => void restoreRank(r.undo!) });
+    else notify(msg);
     return r;
   });
   const pin = (p: Provider, model: string | null) => act(`pin-${p.name}`, async () => {
@@ -89,11 +103,18 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
     notify(model ? `${p.label} now uses only ${model}.` : `${p.label} is back on its measured models.`);
     return r;
   });
-  const block = (p: Provider, model: string, blocked: boolean) => act(`block-${p.name}-${model}`, async () => {
+  const setBlocked = (p: Provider, model: string, blocked: boolean) => act(`block-${p.name}-${model}`, async () => {
     const r = await api<AIView>("/admin/ai/block", { method: "POST", body: { provider: p.name, model, blocked } });
-    notify(blocked ? `${model} won't be used again.` : `${model} can be used again.`);
+    notify(blocked ? `${model} won't be used again.` : `${model} can be used again.`, { label: "Undo", run: () => void setBlocked(p, model, !blocked) });
     return r;
   });
+  const confirm = () => {
+    const a = ask;
+    setAsk(null);
+    if (!a) return;
+    if (a.kind === "rerank") void rerank(a.provider?.name);
+    else void setBlocked(a.p, a.model, true);
+  };
 
   const on = v?.providers.filter((p) => p.configured) ?? [];
   const off = v?.providers.filter((p) => !p.configured) ?? [];
@@ -108,7 +129,7 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
       <CardHead title="AI"
         actions={<>
           <button type="button" className="btn quiet sm" disabled={!!busy || !on.length} onClick={testAll}>{busy === "test" ? "Testing…" : "Test every provider"}</button>
-          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length || !!probing} onClick={() => rerank()}>
+          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length || !!probing} onClick={() => setAsk({ kind: "rerank" })}>
             {probing ? "Measuring…" : busy === "rerank-all" ? "Starting…" : "Re-rank models"}</button>
         </>} />
       {!v ? <Skeleton label="Loading the AI providers" lines={3} /> : (
@@ -133,7 +154,8 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
             </div>
           )}
 
-          {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={rerank} pin={pin} block={block} />)}
+          {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={(name) => setAsk({ kind: "rerank", provider: v.providers.find((x) => x.name === name) })} pin={pin}
+            block={(pp, model, blocked) => (blocked ? setAsk({ kind: "block", p: pp, model }) : void setBlocked(pp, model, false))} />)}
 
           {off.length > 0 && (
             <div className="k-stack" aria-label="More free providers">
@@ -151,8 +173,25 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
           )}
         </>
       )}
+      {ask && (
+        <ConfirmDialog title={askTitle(ask)} confirmLabel={askLabel(ask)} onConfirm={confirm} onClose={() => setAsk(null)} >
+          {askBody(ask)}
+        </ConfirmDialog>
+      )}
     </Card>
   );
+}
+
+function askTitle(a: Ask): string {
+  if (a.kind === "rerank") return a.provider ? `Re-rank ${a.provider.label}'s models?` : "Re-rank every provider's models?";
+  return `Block ${a.model}?`;
+}
+function askLabel(a: Ask): string {
+  return a.kind === "rerank" ? "Re-rank" : "Block it";
+}
+function askBody(a: Ask): string {
+  if (a.kind === "rerank") return "The models are measured again, which takes a minute or two and can change the order every user's AI questions are routed in. The message that follows has an Undo.";
+  return `${a.p.label} won't use ${a.model} again, for every user, until it is unblocked. The message that follows has an Undo.`;
 }
 
 const QUICK = ["groq", "gemini"];
@@ -219,6 +258,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
                 {m.pinned && <> <Badge tone="ok" dot={false}>Pinned</Badge></>}
                 {m.blocked && <> <Badge tone="warn" dot={false}>Blocked</Badge></>}
               </span>
+              {m.blocked && <span className="k-small k-muted" data-testid="ai-blocked-by">{blockedLine(m.blocked_by, m.blocked_at)}</span>}
               <span className="k-small k-muted">
                 {m.success != null ? `${m.success}% of ${m.tries} answered well` : "no answers yet"} · median {secs(m.median_ms)}
                 {m.thinks ? " · reasons first" : ""}
@@ -235,7 +275,8 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
         ))}
         {p.blocked.filter((b) => !p.models.some((m) => m.id === b)).map((b) => (
           <div key={b} className="ai-model">
-            <span className="k-small"><span className="adm-mono ai-id">{b}</span> <Badge tone="warn" dot={false}>Blocked</Badge></span>
+            <span className="k-stack"><span className="k-small"><span className="adm-mono ai-id">{b}</span> <Badge tone="warn" dot={false}>Blocked</Badge></span>
+              <span className="k-small k-muted" data-testid="ai-blocked-by">{blockedLine(p.blocked_info?.[b]?.by, p.blocked_info?.[b]?.at)}</span></span>
             <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => block(p, b, false)} aria-label={`Unblock ${b}`}>Unblock</button>
           </div>
         ))}

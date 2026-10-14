@@ -302,7 +302,7 @@ export function ReplayPage() {
           <>
             {ov.sessions.length > 0 && (
               <Card label="Unfinished">
-                <CardHead level={3} title="Unfinished" />
+                <CardHead title="Unfinished" />
                 <ul className="k-list plain">
                   {ov.sessions.map((x) => (
                     <li key={x.id} className="k-spread">
