@@ -148,6 +148,11 @@
   background: var(--card); color: var(--ink); font: inherit; font-size: 12.5px; padding: 6px; cursor: pointer; text-align: center; }
 .pc-tile svg { width: 22px; height: 22px; }
 .pc-tile[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+/* R13S-014: on a tablet the bar for the selected drawing sits along the foot of the chart, as on a phone, so it doesn't cover the legend at the top */
+@media (max-width: 1100px), (pointer: coarse) {
+  .pc-selbar { top: auto; bottom: 30px; right: 70px; left: 8px; max-width: none; width: auto; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; padding: 4px 6px; }
+  .pc-selbar > * { flex: none; }
+}
 @media (max-width: 640px) {
   .pc-selbar { top: auto; bottom: 28px; right: 6px; left: 6px; max-width: none; width: auto; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; padding: 4px 6px; }
   .pc-selbar > * { flex: none; }
@@ -158,3 +163,14 @@
 .pc.pc-full .pc-main { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .pc-info.info-btn { position: relative; }
 .pc-info.info-btn::before { display: none; }
+
+/* R13S-011: on a touch screen the top bar's buttons, the undo and redo pair and the drawing tools are 44px */
+@media (pointer: coarse) {
+  .pc-btn, .pc-sel, .pc-seg .pc-btn, .pc-rail .pc-btn.icon { min-height: 44px; }
+  .pc-btn.icon, .pc-rail .pc-btn.icon { width: 44px; }
+  .pc-pop button.item { min-height: 44px; }
+  .pc-pop input, .pc-text, .pc-risk input { min-height: 44px; font-size: 16px; }
+  .pc-info.info-btn { width: 44px; height: 44px; }
+}
+/* R13S-014: the keys beside a drawing tool (T, R, Shift+H) mean nothing on a screen with no keyboard */
+@media (hover: none) and (pointer: coarse) { .pc-pop button.item.row kbd { display: none; } }
