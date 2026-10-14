@@ -44,11 +44,13 @@ def kind_of(inst: dict | None) -> str:
     """Which cost model applies to an instrument."""
     inst = inst or {}
     market = inst.get("market", "IN")
+    opt = inst.get("type") in ("CE", "PE")
     if market == "MCX":
-        return "in_mcx_fut"
+        return "in_mcx_opt" if opt else "in_mcx_fut"
     if market == "CDS":
         cur = inst.get("currency") or "INR"
-        return f"in_cds_fut_{cur.lower()}" if cur in ("USD", "JPY") else "in_cds_fut"
+        base = "in_cds_opt" if opt else "in_cds_fut"
+        return f"{base}_{cur.lower()}" if cur in ("USD", "JPY") else base
     if market == "IN":
         t = inst.get("type")
         if t in ("CE", "PE"):
@@ -75,9 +77,9 @@ def rupees_per(currency: str) -> float:
 def order_costs(kind: str, side: str, qty: float, price: float, brokerage: float) -> dict[str, float]:
     """Itemised costs of one order, in the market's currency. Currency cross pairs (EURUSD, USDJPY) are priced in
     dollars or yen while brokerage is set in rupees, so it's converted at the day's rate."""
-    if kind in ("in_cds_fut_usd", "in_cds_fut_jpy"):
+    if kind.startswith("in_cds_") and kind[-4:] in ("_usd", "_jpy"):
         brokerage = brokerage / rupees_per(kind[-3:].upper())
-        kind = "in_cds_fut"
+        kind = kind[:-4]
     value = qty * price
     c = {"brokerage": brokerage}
     if kind.startswith("in_"):

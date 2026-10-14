@@ -3,12 +3,13 @@
 Every instrument has its own engine (its own position, stops and session limits), and they step
 through time together. A new trade only opens when a position slot is free (max positions at
 once), and the daily loss cap applies to the whole portfolio: when the day's loss across every
-position reaches it, everything is closed and nothing new opens until the next day."""
+position reaches it, everything is closed and nothing new opens until the next day. The capital is one account:
+each new trade is sized from the whole portfolio's value and can only use the cash the open positions leave free."""
 import copy
 from datetime import datetime
 
 from . import costs as C
-from .core import PER_YEAR, Ctx, Engine, clean, open_position, stats, write_off
+from .core import PER_YEAR, Ctx, Engine, clean, open_position, span_years, stats, write_off
 
 
 def _key(t: str) -> datetime:
@@ -42,8 +43,17 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
     def free_slot() -> bool:
         return not state["halted"] and not state["emptied_on"] and sum(1 for b in books if b["eng"].qty > 0) < max_open
 
+    def funds() -> tuple[float, float]:
+        """The pot's value (open positions at their last close) and its cash not tied up in an open position.
+        Each engine keeps its own books from `capital`; only what it has made or lost counts toward the pot."""
+        value = cap_total + sum(_gain(b) for b in books)
+        cash = cap_total + sum(_cash(b["eng"]) for b in books)
+        tied = sum(b["eng"].qty * b["eng"].entry for b in books) / strategy.risk.leverage
+        return value, cash - tied
+
     for b in books:
         b["eng"].gate = free_slot
+        b["eng"].funds = funds
 
     equity, hold, times = [], [], []
     episodes: list[list] = []        # stretches with any position open: [index before, last index] in [capital, *equity]
@@ -98,7 +108,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             open_trades.append({"symbol": b["inst"].get("symbol"), **open_position(e, px)})
     if not equity:
         equity, hold, times = [cap_total], [cap_total], []
-    st = stats(equity, trades, cap_total, PER_YEAR[strategy.tf])
+    st = stats(equity, trades, cap_total, PER_YEAR[strategy.tf], span_years(times[0], times[-1]) if times else None)
     items: dict[str, float] = {}
     for b in books:
         for name, v in b["eng"].cost_items.items():
@@ -154,6 +164,12 @@ def _gain(b: dict) -> float:
     if b["last"] is None:
         return 0.0
     return e.equity(b["bars"][b["last"]]["c"]) - e.r.capital
+
+
+def _cash(e: Engine) -> float:
+    """What this instrument's trades have added to or taken from the pot's cash: closed P&L less the open
+    trade's entry charges (its money still counts as the pot's, tied up in the position)."""
+    return e.cash + e.dir * e.qty * e.entry - e.r.capital
 
 
 def _open_pnl(b: dict) -> float:

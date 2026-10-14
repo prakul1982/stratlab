@@ -23,9 +23,9 @@ def _crash(start):
 
 
 def test_group_account_stops_at_zero_not_below():
-    """Each slot is sized on the whole capital, so three losing slots can lose more than the account has."""
+    """A leveraged position (the slots share one pot) can lose more than the account has."""
     data = [ds(s, _crash(100.0)) for s in "ABC"]
-    out = portfolio.run(data, _group_strategy(), max_open=3)
+    out = portfolio.run(data, _group_strategy(leverage=3), max_open=3)
     assert out["stats"]["ret"] == -100.0
     assert min(out["equity"]) == 0.0 and out["equity"][-1] == 0.0
     assert out["stats"]["emptied_on"] == "2026-01-05"
@@ -39,7 +39,7 @@ def test_group_account_stops_at_zero_not_below():
 
 def test_nothing_opens_after_the_account_is_empty():
     data = [ds(s, _crash(100.0) + day("2026-01-06", [100 + i for i in range(8)])) for s in "AB"]
-    out = portfolio.run(data, _group_strategy(), max_open=2)
+    out = portfolio.run(data, _group_strategy(leverage=3), max_open=2)
     assert out["stats"]["emptied_on"] == "2026-01-05"
     assert all(t["entry_t"][:10] == "2026-01-05" for t in out["trades"])
     assert out["equity"][-1] == 0.0

@@ -43,6 +43,20 @@ def test_kind_of_instruments():
     assert C.kind_of(None) == "in_eq"
 
 
+def test_kind_of_commodity_and_currency_options():
+    assert C.kind_of({"market": "MCX", "type": "FUT"}) == "in_mcx_fut"
+    assert C.kind_of({"market": "MCX", "type": "CE"}) == "in_mcx_opt"
+    assert C.kind_of({"market": "CDS", "type": "PE"}) == "in_cds_opt"
+    assert C.kind_of({"market": "CDS", "type": "FUT"}) == "in_cds_fut"
+    assert C.kind_of({"market": "CDS", "type": "CE", "currency": "USD"}) == "in_cds_opt_usd"
+    # option tables, not the futures ones: MCX options pay 0.05% CTT on sells, futures 0.01%
+    assert C.order_costs("in_mcx_opt", "sell", 100, 200, 0)["stt"] == pytest.approx(100 * 200 * 0.0005)
+    assert C.order_costs("in_cds_opt", "buy", 1000, 1, 0)["exchange"] == pytest.approx(1000 * (0.000311 + 0.000001))
+    # a cross pair's option converts the rupee brokerage as its future does
+    usd = C.order_costs("in_cds_opt_usd", "buy", 1000, 1, 88)
+    assert usd["brokerage"] == pytest.approx(88 / C.rupees_per("USD"))
+
+
 def test_floor_to_steps():
     assert C.floor_to(454.9, 1) == 454 and isinstance(C.floor_to(454.9, 1), int)
     assert C.floor_to(160, 75) == 150
