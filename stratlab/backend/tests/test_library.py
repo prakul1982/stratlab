@@ -12,6 +12,7 @@ def store(monkeypatch):
     monkeypatch.setattr(db, "get_setting", lambda k: kv.get(k))
     monkeypatch.setattr(db, "delete_setting", lambda k: kv.pop(k, None))
     monkeypatch.setattr(db, "settings_with_prefix", lambda p, limit=1000: [v for k, v in kv.items() if k.startswith(p)])
+    monkeypatch.setattr(db, "all_settings_with_prefix", lambda p, page=1000: [(k, v) for k, v in kv.items() if k.startswith(p)])
     return kv
 
 

@@ -318,7 +318,7 @@ def clear_hide(e: dict):
 
 def remove_of_notebook(owner: str, nid: str):
     """Take down every entry this user published from the notebook, whatever became of its experiment."""
-    for e in all_entries():
+    for e in all_entries(everything=True):
         if e.get("owner") == owner and (e.get("source") or {}).get("nid") == nid:
             remove(e.get("id"))
 

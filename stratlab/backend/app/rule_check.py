@@ -17,7 +17,7 @@ RANGES = {
     "price": PRICE, "open": PRICE, "high": PRICE, "low": PRICE, "prev_close": PRICE, "day_open": PRICE, "day_high": PRICE,
     "day_low": PRICE, "sma": PRICE, "ema": PRICE, "vwap": PRICE, "supertrend": PRICE, "dc_upper": PRICE, "dc_lower": PRICE,
     "rsi": UNIT, "stoch_k": UNIT, "adx": UNIT, "stage": (1.0, False, 4.0, False),
-    "volume": PRICE, "vol_sma": PRICE,
+    "volume": FROM_ZERO, "vol_sma": FROM_ZERO,             # a candle with no trades has volume 0 (indices, quiet FX)
     "atr": FROM_ZERO, "atr_pct": FROM_ZERO, "body": FROM_ZERO, "upper_wick": FROM_ZERO, "lower_wick": FROM_ZERO, "range": FROM_ZERO,
 }
 FLIP = {"gt": "lt", "lt": "gt", "xa": "xb", "xb": "xa", "eq": "eq"}

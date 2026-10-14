@@ -276,10 +276,10 @@ def test_export_has_billing_invoices_and_cards_and_no_secrets(w):
     assert db.get_setting(f"billing:{ME}") and invoices.of_user(ME)
 
 
-def test_clean_drops_secret_names_exactly_not_words_that_contain_them():
+def test_clean_drops_secret_names_and_names_holding_one_but_keeps_the_instrument_number():
     got = user_data._clean({"instrument_token": 408065, "token": "t", "access_token": "a", "inbox_password": "x", "api_key": "y",
                             "keys": {"p": 1}, "address": "inbox@x", "author": "z", "password": "p", "tokenizer": 1})
-    assert got == {"instrument_token": 408065, "author": "z", "tokenizer": 1}
+    assert got == {"instrument_token": 408065, "author": "z"}          # "tokenizer" holds "token": left out, safely
     assert user_data._clean({"address": "12 MG Road", "key": "k"}, {"address"}) == {"address": "12 MG Road"}
 
 
@@ -310,3 +310,10 @@ def test_a_refused_token_is_still_a_401(w):
     with pytest.raises(HTTPException) as e:
         auth.current_profile(authorization="Bearer made-up")
     assert e.value.status_code == 401 and "made-up" in auth._rejected
+
+
+def test_the_export_drops_any_name_with_a_secret_word_in_it_but_keeps_the_instrument_number():
+    from app import user_data
+    got = user_data._clean({"bot_token": "x", "kite_api_key": "k", "client_secret": "s", "private_key": "p",
+                            "feed_token": "f", "instrument_token": 408065, "name": "TCS"})
+    assert got == {"instrument_token": 408065, "name": "TCS"}
