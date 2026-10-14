@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 from ..engine import costs as C
 from ..models import OptionStrategy
+from . import greeks as G
 from . import strikes as SR
 
 TICK = 0.05
@@ -137,6 +138,12 @@ class OptionsEngine:
         if px is not None:
             leg["mark"] = px
         return leg.get("mark", leg["entry"])
+
+    def _stop_price(self, leg: dict, quotes: dict) -> float:
+        """What a leg stop judges: the bid-ask middle (the last price without a two-sided quote), not the ask a sold
+        leg's exit fills at, which sits a spread above where the leg was sold."""
+        px = G.mid(quotes.get(leg["key"]))
+        return px if px is not None else self._mark(leg, quotes)
 
     @staticmethod
     def _leg_pnl(leg: dict, px: float) -> float:
@@ -397,7 +404,7 @@ class OptionsEngine:
             if rk.legStopPct and any(l["side"] == "sell" for l in p["legs"]):
                 stopped = False
                 for leg in p["legs"]:
-                    if leg["open"] and leg["side"] == "sell" and self._mark(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
+                    if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg["entry"] * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
                         stopped = True
                 if stopped and not any(l["open"] and l["side"] == "sell" for l in p["legs"]):

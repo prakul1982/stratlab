@@ -23,7 +23,7 @@ What-if (the frontend's src/lib/greeks.ts is a port of this part, tested against
 
 Model outputs only: they describe today's prices under stated inputs. Real prices can differ."""
 import math
-from datetime import date, datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from ..data import sessions
@@ -93,10 +93,14 @@ def greeks(f: float, k: float, t: float, sigma: float, kind: str, r: float = RAT
     }
 
 
-def years_to(expiry: str, at: datetime) -> float:
-    """Time from `at` to when the expiry's settlement price is fixed (15:30 India time), in years of 365 days."""
+def years_to(expiry: str, at: datetime, exchange: str = "NFO") -> float:
+    """Time from `at` to when the expiry's settlement price is fixed, in years of 365 days: the F&O settlement time
+    (15:30 India time), or when MCX and currency options stop trading on their expiry day."""
     day = date.fromisoformat(expiry)
     end = datetime.combine(day, sessions.settle_at(day), IST)
+    if exchange in ("MCX", "CDS"):
+        from .data import expiry_time
+        end = datetime.combine(day, time.fromisoformat(expiry_time(exchange, day)), IST)
     if at.tzinfo is None:
         at = at.replace(tzinfo=IST)
     return (end - at).total_seconds() / (365 * 86400)
@@ -157,12 +161,12 @@ def mid(q: dict | None) -> float | None:
 
 
 def model(spot: float | None, expiry: str, atm: float | None, call: dict | None, put: dict | None, at: datetime,
-          r: float = RATE) -> dict | None:
+          r: float = RATE, exchange: str = "NFO") -> dict | None:
     """The inputs every option of one expiry shares: the forward (from parity at the at-the-money strike, else the
     spot), time to expiry, the rate and the at-the-money IV. None when there's no spot or the expiry has passed."""
     if not spot or spot <= 0:
         return None
-    t = years_to(expiry, at)
+    t = years_to(expiry, at, exchange)
     if t <= 0:
         return None
     c, p = mid(call), mid(put)
@@ -243,7 +247,8 @@ def add_to_chain(chain: dict, at: datetime) -> dict:
     rows = chain.get("rows") or []
     atm = chain.get("atm")
     row = next((r for r in rows if r["strike"] == atm), None)
-    m = model(chain.get("spot"), chain["expiry"], atm, row and row.get("ce"), row and row.get("pe"), at) if chain.get("expiry") else None
+    m = model(chain.get("spot"), chain["expiry"], atm, row and row.get("ce"), row and row.get("pe"), at,
+              exchange=chain.get("exchange", "NFO")) if chain.get("expiry") else None
     chain["model"] = public_model(m) if m else None
     for r in rows:
         r["ce_g"] = _round(option(r.get("ce"), r["strike"], "CE", m)) if m else None
@@ -259,4 +264,5 @@ def live_model(data, contracts, spot: float | None, at: datetime) -> dict | None
     atm = contracts.atm(spot)
     keys = [contracts.key("CE", atm), contracts.key("PE", atm)]
     q = data.quotes([k for k in keys if k])
-    return model(spot, contracts.expiry, atm, q.get(keys[0]) if keys[0] else None, q.get(keys[1]) if keys[1] else None, at)
+    return model(spot, contracts.expiry, atm, q.get(keys[0]) if keys[0] else None, q.get(keys[1]) if keys[1] else None, at,
+                 exchange=contracts.exchange)

@@ -1,6 +1,7 @@
 """Option contracts, chains, live quotes and margins from Kite (NSE, BSE, MCX and NSE currency options)."""
 import threading
 import time
+from datetime import date, timedelta
 
 from .engine import Contracts
 from ..kite_service import ist_date
@@ -8,6 +9,8 @@ from ..data.expiries import keep_listed
 
 # when currency options stop trading on their expiry day, India time
 CDS_EXPIRY_TIME = "12:30"
+# how long after the expiry time the live price still counts as the settlement estimate
+SETTLE_GRACE = timedelta(minutes=5)
 
 
 def expiry_time(exchange: str, day=None) -> str | None:
@@ -318,7 +321,7 @@ class OptionsData:
         keys = [c.key(o, k) for k in strikes for o in ("CE", "PE")]
         q = self.quotes([k for k in keys if k])
         rows = [{"strike": k, "ce": q.get(c.key("CE", k)), "pe": q.get(c.key("PE", k))} for k in strikes]
-        return {"expiry": c.expiry, "expiries": self.expiries(exchange, name)[:6], "lot": c.lot, "spot": spot,
+        return {"exchange": exchange, "expiry": c.expiry, "expiries": self.expiries(exchange, name)[:6], "lot": c.lot, "spot": spot,
                 "atm": mid, "step": c.step(mid), "rows": rows, "spot_ts": spot_q.get("ts") if spot_q else None,
                 "spot_from": spot_from, "freeze": freeze(name)}
 
@@ -327,9 +330,23 @@ class OptionsData:
         index close; for a stock, the auction close). Stock contracts settle at the volume-weighted average of the
         exchanges' closes; this uses the close on the exchange named here, nearly all the volume. None before the
         close is out. Commodity and currency options settle on other rules (the RBI reference rate, the futures'
-        final settlement price) that aren't available here: they get the underlying's last price, an estimate."""
+        final settlement price) that aren't available here: they get the underlying's last price, an estimate; checked
+        more than SETTLE_GRACE after the expiry time, the underlying's close on the expiry day, else None."""
         if exchange in ("MCX", "CDS"):
-            return self.spot(exchange, name, expiry)[0]
+            from datetime import datetime, time as dtime
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo("Asia/Kolkata"))
+            end = datetime.combine(date.fromisoformat(expiry), dtime.fromisoformat(expiry_time(exchange, expiry)), now.tzinfo)
+            if now - end <= SETTLE_GRACE:
+                return self.spot(exchange, name, expiry)[0]
+            from ..live import official_close
+            key = self.spot_key(exchange, name, expiry)
+            try:
+                inst = self.kite.by_symbol(*reversed(key.split(":", 1))) if key else None
+            except Exception as e:
+                print("settlement price: no instrument list:", e)
+                inst = None
+            return official_close(self.kite, inst, expiry) if inst else None
         if exchange not in ("NFO", "BFO"):
             return None
         from ..data import sessions

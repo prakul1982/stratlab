@@ -337,3 +337,36 @@ def test_mcx_and_cds_sessions_are_reported_at_their_own_exchange_close():
     from app.options.session import OptionSession
     assert OptionSession(None, opt_row(cds_strategy()), StubData()).market == "CDS"
     assert OptionSession(None, opt_row(straddle()), StubData()).market == "IN"
+
+
+def test_a_sold_leg_stop_judges_the_middle_not_the_ask_it_exits_at():
+    s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 20})
+    e, c = OptionsEngine(s), contracts()
+    q = {"NFO:NIFTY25000CE": {"bid": 5.0, "ask": 6.0, "ltp": 5.5}}
+    e.step(at("09:31"), 25000, c, q, True)
+    assert e.pos["legs"][0]["entry"] == 5.0
+    assert e.step(at("09:36"), 25000, c, q, True) == [] and e.pos       # same quotes: no stop
+    q = {"NFO:NIFTY25000CE": {"bid": 6.0, "ask": 7.0, "ltp": 6.5}}      # middle 6.5 is +30%
+    out = e.step(at("09:41"), 25000, c, q, True)
+    assert out and out[0]["why"] == "Leg stop" and out[0]["px"] == 7.0  # still exits at the ask
+
+
+class SettleData:
+    """OptionsData.settlement_price's collaborators."""
+    kite = type("K", (), {"by_symbol": lambda self, sym, ex: {"symbol": sym, "token": 1}})()
+
+    def spot_key(self, exchange, name, expiry):
+        return "MCX:CRUDEOILFUT"
+
+    def spot(self, exchange, name, expiry):
+        return 6500.0, {}, "quote"
+
+
+def test_mcx_and_cds_settle_at_the_expiry_days_close_when_checked_long_after_it(monkeypatch):
+    from app.options.data import OptionsData
+    from app import live
+    monkeypatch.setattr(live, "official_close", lambda kite, inst, day: 6400.0 if day == "2026-09-24" else None)
+    d = SettleData()
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-24") == 6400.0       # expiry passed days ago
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2026-09-23") is None         # no candle: hold the leg
+    assert OptionsData.settlement_price(d, "MCX", "CRUDEOIL", "2099-01-29") == 6500.0       # at the time: the live price

@@ -52,7 +52,8 @@ def model_for(contracts, atm: float, spot: float | None, quotes: dict, at) -> di
     if not spot:
         return None
     ce, pe = contracts.key("CE", atm), contracts.key("PE", atm)
-    return G.model(spot, contracts.expiry, atm, quotes.get(ce) if ce else None, quotes.get(pe) if pe else None, at)
+    return G.model(spot, contracts.expiry, atm, quotes.get(ce) if ce else None, quotes.get(pe) if pe else None, at,
+                   exchange=contracts.exchange)
 
 
 def strike_text(k: float) -> str:
