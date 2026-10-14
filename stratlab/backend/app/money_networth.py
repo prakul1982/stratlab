@@ -493,11 +493,20 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
     """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total (a source that
     couldn't be read or valued) is stored only as the month's snapshot, flagged with what's missing: a fund with neither
     NAV nor cost may never be valued, and history mustn't stop for it; any other partial total isn't stored, it would
-    show as a fall that didn't happen."""
-    if totals.get("partial") and why != "month":
+    show as a fall that didn't happen. A partial one never replaces a complete one of its day, and a month keeps one
+    "month" snapshot, the complete one if any. A "change" never overwrites an earlier day's complete snapshot (a Sunday
+    edit would replace Friday's, the one the headline change is read against): it is dated today instead."""
+    partial = bool(totals.get("partial"))
+    if partial and why != "month":
         return history(uid)
     d = (day or today()).isoformat()
-    rows = [h for h in history(uid) if h["d"] != d]
+    old = history(uid)
+    done = {h["d"] for h in old if not h.get("partial")}
+    if partial and (d in done or any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
+        return old
+    if why == "change" and d in done and d < today().isoformat():
+        d = today().isoformat()
+    rows = [h for h in old if h["d"] != d and not (why == "month" and h["d"][:7] == d[:7] and h.get("why") == "month" and h.get("partial"))]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
     if totals.get("partial"):
         snap["partial"] = list(totals["partial"])
@@ -558,9 +567,9 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
     elif k == "ppf":
         since = _date(i.get("as_of")) or at
         rate = i.get("rate", PPF_RATE)
-        now_v = provident(i["balance"], rate, since, at)
+        now_v = provident(i["balance"], rate, since, at, yearly=i.get("yearly") or 0)
         opened = _date(i.get("opened"))
-        row.update(value=now_v["value"], rule=f"Balance of {_day(since)}, plus interest at {rate:g}% a year, worked out monthly and "
+        row.update(value=now_v["value"], rule=f"Balance of {_day(since)}, plus {'the yearly deposit on each 1 April since, and ' if i.get('yearly') else ''}interest at {rate:g}% a year, worked out monthly and "
                                                "credited on 31 March" + (f" ({PPF_RATE_NOTE})" if rate == PPF_RATE else ""))
         facts = {"interest_so_far": _r(now_v["interest"]), "rate": rate, "maturity": None, "maturity_value": None}
         if opened:
@@ -1011,7 +1020,9 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
         if why and has_any:
             hist = record(uid, v["totals"], why, day)
-        elif has_any and not any(h["d"].startswith(this_month) for h in hist) and db.get_setting(SKIP + uid) != this_month:
+        elif (has_any and not any(h["d"].startswith(this_month) and not h.get("partial") for h in hist)
+              and (not v["totals"].get("partial") or not any(h["d"].startswith(this_month) for h in hist))
+              and db.get_setting(SKIP + uid) != this_month):
             hist = record(uid, v["totals"], "month", day)   # the 1st-of-the-month run missed this user: taken on the first visit
         plan = profile["_plan"]
         allowed = has_history(plan)

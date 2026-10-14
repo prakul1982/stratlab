@@ -2824,7 +2824,7 @@ app.include_router(money_networth.make_router(
 
 def _nw_value_of(uid: str) -> dict | None:
     p = connect_sync.profile_for(uid)                    # with its plan, which My Holdings reads (a bare profile failed every time)
-    return money_networth.build(money_networth.load(uid)["items"], (_quiet(_nw_stocks, p) or {"failed": True}) if p else None,
+    return money_networth.build(money_networth.load(uid)["items"], (_quiet(_nw_stocks, p) or {"failed": True}) if p else {"failed": True},
                                 money_networth.mf_value(uid), money_networth.Prices(_nw_gold, _nw_crypto, usd_inr))
 
 
