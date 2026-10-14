@@ -8,6 +8,8 @@ import { PublicFrame } from "../components/PublicFrame";
 import { publicGet, type ApiError } from "../lib/http";
 import { describePath } from "../lib/deepLinks";
 import { signIn } from "../lib/signin";
+import { hasSavedSession } from "../lib/entry";
+import { LoadFailed } from "../components/LoadGuard";
 import { useDocTitle, withBrand } from "../lib/title";
 
 /* The pages between a visitor and what they asked for: signed out on an app address ("Sign in to see …") and an address
@@ -49,6 +51,9 @@ export function SignInGate() {
     if (none) document.title = withBrand("Company not found");
     else if (co) document.title = withBrand(`Sign in · ${co.name}`);
   }, [none, co]);
+  // a saved sign-in, or settings that never loaded: signed out isn't known, so no sign-in prompt (R20-002)
+  const unsure = !window.STRATLAB_CONFIG || hasSavedSession(window.STRATLAB_CONFIG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })());
+  if (unsure) return <main><LoadFailed what="your account" /></main>;
   return (
     <PublicFrame className="gate">
       <PageHeader eyebrow="StratLab" title={title}

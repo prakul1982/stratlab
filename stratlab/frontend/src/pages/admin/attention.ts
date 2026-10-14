@@ -1,5 +1,6 @@
 import type { HealthState } from "../../components/kit";
 import { ago, dateOnly } from "../../lib/format";
+import { aiCountText } from "../../lib/connection";
 import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
 /* One reading of the server's status for all of Admin: Overview's lights and "Needs your attention", the rows on Data and
@@ -81,10 +82,9 @@ export function aiTile(ai: AIRow[]): Service {
   const notes = [quota ? `${quota} out of credit` : "", failing ? `${failing} failing` : "", paused ? `${paused} paused` : "",
     untested ? `${untested} not tried yet` : "", slow ? `${slow} with a model paused` : ""].filter(Boolean);
   const state: HealthState = !keys.length ? "bad" : up === 0 ? "bad" : working < keys.length || slow ? "warn" : "ok";
-  // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008); one denominator, not two ("12" beside "12 of 13"), R7M-008
-  const someUnset = ai.length > keys.length;
+  // the denominator is the providers with a key, said as System says it ("12 of 13 providers set up") when some have none (R8O-008); one denominator, not two ("12" beside "12 of 13"), R7M-008; Settings' Connection check words it the same way (aiCountText)
   return { key: "ai", label: "AI providers", state, to: "/admin/system",
-    detail: [someUnset ? `${working} working of ${keys.length} set up (${ai.length} known)` : `${working} of ${keys.length} working`, ...notes].join(" · ") };
+    detail: [aiCountText(working, keys.length, ai.length), ...notes].join(" · ") };
 }
 
 /** The invoice seller details still empty, said for Overview and Money (R7M-001): until a GSTIN is set every invoice is a

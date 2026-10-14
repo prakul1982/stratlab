@@ -7,9 +7,17 @@ import { identify, resetAnalytics, track, trackSignup } from "./analytics";
 import { plansCall } from "./offer";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
+import { CFG } from "./config";
+import { hasSavedSession } from "./entry";
 import { saveView, savedView, viewForFocus, viewFromSaved, viewToServer, type SpaceView } from "./spaces";
 
 const ME_RETRY_MS = 1500;
+const SESSION_RETRY_MS = [2000, 5000];
+
+/** No session, but one is saved in this browser: the sign-in service didn't answer while it was renewed (R20-002). The
+ * person is still signed in; the page says it couldn't load instead of offering sign-in. */
+export const sessionUnconfirmed = (ready: boolean, session: Session | null): boolean =>
+  ready && !session && hasSavedSession(CFG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })());
 
 type Toast = { msg: string; action?: { label: string; run: () => void } } | null;
 
@@ -122,12 +130,21 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       unauthorized: () => { supabase.auth.signOut(); },
       offline: () => setDataOffline(true),
     });
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
+    // a saved sign-in that can't be renewed right now (no answer) comes back as "no session" with the saved one kept: ask
+    // again a little later before anything is decided
+    let live = true;
+    const check = (tries: number) => supabase.auth.getSession().catch(() => ({ data: { session: null } })).then(({ data }) => {
+      if (!live) return;
+      if (data.session || tries >= SESSION_RETRY_MS.length || !sessionUnconfirmed(true, null)) { setSession(data.session); setReady(true); return; }
+      window.setTimeout(() => check(tries + 1), SESSION_RETRY_MS[tries]);
+    });
+    check(0);
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
       if (e === "SIGNED_OUT") writeViewAs(null);          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
       setSession(s);
+      if (s) setReady(true);
     });
-    return () => data.subscription.unsubscribe();
+    return () => { live = false; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {

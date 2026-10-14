@@ -160,7 +160,8 @@ export function JournalPage() {
     try { adopt(await api<Journal>("/trade/journal/settings", { method: "PUT", body: { ...j.settings, show } })); } catch (e) { fail(e); }
   };
 
-  const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.as_of}
+  // the date of the newest trade in the list, not today's date: "Data up to 15 Oct" over trades that end 4 Oct (R20-012)
+  const header = <PageHeader eyebrow="Trade · My trades" title="Trade journal" asOf={j?.trades.map((t) => t.exit_t.slice(0, 10)).sort().pop()} asOfLabel="Trades up to"
     lede={JOURNAL_LEDE} />;
   if (error && !j) return <div className="k-page j-page">{header}<ErrorState title="Your journal couldn't be opened" action={{ label: "Try again", onClick: () => { setError(null); load(); } }}>{error}</ErrorState></div>;
   if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
