@@ -13,7 +13,7 @@ NOW = datetime(2026, 10, 14, 10, 0, tzinfo=timezone.utc)      # a fixed Wednesda
 
 @pytest.fixture(autouse=True)
 def _pinned_clock():
-    with time_machine.travel(NOW, tick=False):
+    with time_machine.travel(NOW, tick=True):
         yield
 PROFILES = [
     {"id": "u1", "email": "owner@x.com", "plan": "free", "plan_status": None, "current_period_end": None,
