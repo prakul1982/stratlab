@@ -12,22 +12,39 @@ function valid(y: number, m: number, d: number): string | null {
 
 const year = (s: string) => { const n = Number(s); return s.length <= 2 ? 2000 + n : n; };
 
-/** "14 Aug 2025", "14 august 2025", "14/08/2025", "14-08-25", "14.08.2025" or "2025-08-14" → "2025-08-14"; null when
- * it isn't a real day. Numbers are read day first (14/08 is 14 August), never month first. */
-export function parseDay(text: string): string | null {
+const MONTH_NAMES = "january february march april may june july august september october november december".split(" ");
+
+/** The year, month and day a text spells, in any of the accepted ways, whether or not that day exists. */
+function partsOf(text: string): [number, number, number] | null {
   const s = text.trim().toLowerCase().replace(/,/g, " ").replace(/\s+/g, " ");
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return valid(+m[1], +m[2], +m[3]);
+  if (m) return [+m[1], +m[2], +m[3]];
   m = s.match(/^(\d{1,2})[/.\- ](\d{1,2})[/.\- ](\d{2}|\d{4})$/);
-  if (m) return valid(year(m[3]), +m[2], +m[1]);
+  if (m) return [year(m[3]), +m[2], +m[1]];
   m = s.match(/^(\d{1,2})[ \-]?([a-z]{3,9})\.?[ \-]?(\d{2}|\d{4})$/);
   if (m) {
     const k = MONTHS.indexOf(m[2].slice(0, 3));
-    return k >= 0 && (m[2].length === 3 || "january february march april may june july august september october november december".split(" ")[k].startsWith(m[2]))
-      ? valid(year(m[3]), k + 1, +m[1]) : null;
+    return k >= 0 && (m[2].length === 3 || MONTH_NAMES[k].startsWith(m[2])) ? [year(m[3]), k + 1, +m[1]] : null;
   }
   return null;
+}
+
+/** "14 Aug 2025", "14 august 2025", "14/08/2025", "14-08-25", "14.08.2025" or "2025-08-14" → "2025-08-14"; null when
+ * it isn't a real day. Numbers are read day first (14/08 is 14 August), never month first. */
+export function parseDay(text: string): string | null {
+  const p = partsOf(text);
+  return p ? valid(p[0], p[1], p[2]) : null;
+}
+
+/** What is wrong with a text that isn't a day: a date written the right way round that doesn't exist (31/02/2026) says
+ * which day is missing; anything else says how to write one (R13S-016: "Write the date day first" for 31 Feb). */
+export function whyNotDay(text: string): string {
+  const p = partsOf(text);
+  if (p && p[0] >= 1900 && p[0] <= 2200 && p[1] >= 1 && p[1] <= 12 && p[2] >= 1 && p[2] <= 31) {
+    return `There is no ${p[2]} ${MONTH_NAMES[p[1] - 1].replace(/^./, (c) => c.toUpperCase())} ${p[0]}.`;
+  }
+  return "Write the date day first, like 14 Aug 2025 or 14/08/2025.";
 }
 
 /** "2025-08-14" → "14 Aug 2025" (what the box shows); "" for nothing. */
