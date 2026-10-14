@@ -6,7 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, gapLine, legName, legRule, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, gapLine, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -225,7 +225,7 @@ function SessionModel({ snap }: { snap: OptionSnapshot }) {
             ariaLabel="The open trade's profit or loss at expiry and today across prices"
             expiry={[{ id: "expiry", label: "At expiry", values: view.ys },
               ...(charges != null ? [{ id: "after", label: "After charges", values: view.ys.map((y) => y - charges), dash: "4 4", width: 1.4 }] : [])]}
-            markers={[{ x: g.spot, label: `Spot ${Math.round(g.spot).toLocaleString("en-IN")}`, kind: "spot" }]} />
+            markers={[{ x: g.spot, label: `Spot ${levelText(g.spot, g.model.tick)}`, kind: "spot" }]} />
           <p className="k-note">From the fills of the open legs{booked ? ", plus the legs already closed in this trade" : ""}. After charges takes off {inr(p.costs)} paid so far
             {g.close_charges ? ` and about ${inr(g.close_charges.total)} to close what's open` : ""}. The session itself squares off at {s.timing.squareoff}.</p>
           {me?.plan_info?.features?.options_whatif && (

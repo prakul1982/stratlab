@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, fmtDate } from "../lib/format";
+import { modelStamp, optionsMarket } from "../lib/marketHours";
+import { levelText } from "../lib/options";
 import { curve, legGreeks, NO_MOVE, scenario, type GreekModel, type ModelLeg, type NetGreeks, type OptionGreeks, type WhatIf } from "../lib/greeks";
 import type { HeldLeg } from "../lib/options";
 import type { OptChain, OptRoll } from "../lib/types";
@@ -25,7 +27,8 @@ const inr = (v: number | null | undefined, dp = 0) => money(v, "INR", dp);
 const signed = (v: number, dp: number) => (v < 0 ? MINUS : "") + Math.abs(v).toLocaleString("en-IN", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 /** A small number to `n` significant figures: 0.00106, −0.159. */
 const sig = (v: number, n = 3) => (v === 0 ? "0" : (v < 0 ? MINUS : "") + String(+Math.abs(v).toPrecision(n)));
-const pts = (x: number) => Math.round(x).toLocaleString("en-IN");
+/** A price level at the contract's own precision: whole points, or a currency option's quarter paise (lib/options levelText). */
+const pts = (x: number, tick?: number | null) => levelText(x, tick);
 const dayWord = (d: number) => `${+d.toFixed(2)} day${Math.abs(d - 1) < 1e-9 ? "" : "s"}`;
 const pctIv = (v: number) => `${(v * 100).toFixed(1)}%`;
 const shortDate = (e: string) => fmtDate(e, { year: false });
@@ -45,13 +48,15 @@ export function useSmooth<T>(value: T, ms = 50): T {
 
 /** The model's inputs, in a line under every figure that uses them. */
 export function ModelInputs({ m, extra }: { m: GreekModel; extra?: string }) {
-  const time = new Date(m.as_of).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  const { markets } = useApp();
+  const stamp = modelStamp(m, optionsMarket(markets, m.exchange));
+  const fwd = m.tick && m.tick < 0.01 ? pts(m.forward, m.tick) : m.forward.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   return (
     <p className="k-note model-inputs" data-testid="model-inputs">
-      Model estimates, not prices: Black-76 on the forward {m.forward.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-      {m.forward_from === "parity" ? ` (from put-call parity at ${pts(m.atm ?? m.spot)})` : " (the spot: the at-the-money pair had no prices)"}, IV from each
-      option's bid-ask middle{m.atm_iv ? ` (at the money ${pctIv(m.atm_iv)})` : ""}, {dayWord(m.days)} to the {shortDate(m.expiry)} expiry, rate {+(m.rate * 100).toFixed(2)}%,
-      {" "}as of {time} IST.{extra ? ` ${extra}` : ""} Delta and gamma per point of the underlying, theta per calendar day, vega per 1 vol point. Real prices can differ.
+      Model estimates, not prices: Black-76 on the forward {fwd}
+      {m.forward_from === "parity" ? ` (from put-call parity at ${pts(m.atm ?? m.spot, m.tick)})` : " (the spot: the at-the-money pair had no prices)"}, IV from each
+      option's bid-ask middle{m.atm_iv ? ` (at the money ${pctIv(m.atm_iv)})` : ""}, {dayWord(m.days)} to the {shortDate(m.expiry)} expiry, rate {+(m.rate * 100).toFixed(2)}%{stamp ? `, ${stamp}` : ""}.
+      {extra ? ` ${extra}` : ""} Delta and gamma per point of the underlying, theta per calendar day, vega per 1 vol point. Real prices can differ.
     </p>
   );
 }
@@ -112,7 +117,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
 }) {
   const [raw, setRaw] = useState<WhatIf>(NO_MOVE);
   const w = useSmooth(whatif ? raw : NO_MOVE);
-  const r = model.rate;
+  const r = model.rate, tick = model.tick;
   const legs = useMemo(() => rows.map((x) => x.m).filter((x): x is ModelLeg => !!x), [rows]);
   const complete = legs.length === rows.length;
   const maxDays = Math.max(model.days, ...legs.map((l) => l.t * 365));
@@ -130,8 +135,8 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
     if (charges != null) curves.push({ id: "today-after", label: `${todayLabel} after charges (model)`, tipLabel: `${todayLabel.toLowerCase()} after charges, model estimate`,
       values: todayYs.map((y) => y - charges), color: "var(--series-3)", dash: "2 3", width: 1.4, shade: false });
   }
-  const allMarkers = [...markers, ...(w.spotPct !== 0 ? [{ x: spotW, label: `What-if ${pts(spotW)}`, kind: "other" as const, color: "var(--series-3)" }] : [])];
-  const settings = [w.spotPct !== 0 && `${name} ${w.spotPct > 0 ? "+" : MINUS}${Math.abs(w.spotPct)}% at ${pts(spotW)}`,
+  const allMarkers = [...markers, ...(w.spotPct !== 0 ? [{ x: spotW, label: `What-if ${pts(spotW, tick)}`, kind: "other" as const, color: "var(--series-3)" }] : [])];
+  const settings = [w.spotPct !== 0 && `${name} ${w.spotPct > 0 ? "+" : MINUS}${Math.abs(w.spotPct)}% at ${pts(spotW, tick)}`,
     w.ivShift !== 0 && `IV ${w.ivShift > 0 ? "+" : MINUS}${Math.abs(w.ivShift)} pts`, days > 0 && (atExpiry ? "at expiry" : `${dayWord(days)} on`)].filter(Boolean).join(", ");
   const missing = rows.filter((x) => !x.m).map((x) => x.label);
   const span = Math.max(0, ...curves.flatMap((c) => c.values.map((v) => Math.abs(v ?? 0))));     // one unit on the whole axis
@@ -144,7 +149,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
             <button type="button" className="btn quiet sm" data-testid="whatif-reset" disabled={raw === NO_MOVE} onClick={() => setRaw(NO_MOVE)}>Reset</button></div>
           <div className="whatif-grid">
             <Slider id="whatif-spot" label={`${name} moves`} value={raw.spotPct} min={-10} max={10} step={0.25}
-              show={`${raw.spotPct > 0 ? "+" : raw.spotPct < 0 ? MINUS : ""}${Math.abs(raw.spotPct)}% · ${pts(model.spot * (1 + raw.spotPct / 100))}`}
+              show={`${raw.spotPct > 0 ? "+" : raw.spotPct < 0 ? MINUS : ""}${Math.abs(raw.spotPct)}% · ${pts(model.spot * (1 + raw.spotPct / 100), tick)}`}
               onChange={(v) => setRaw((x) => ({ ...x, spotPct: v }))} />
             <Slider id="whatif-iv" label="IV shifts" value={raw.ivShift} min={-20} max={20} step={0.5}
               show={`${raw.ivShift > 0 ? "+" : raw.ivShift < 0 ? MINUS : ""}${Math.abs(raw.ivShift)} vol pts`} onChange={(v) => setRaw((x) => ({ ...x, ivShift: v }))} />
@@ -168,7 +173,7 @@ export function ModelPanel({ model, rows, xs, expiry, markers, base = 0, charges
         </div>
       )}
       <PayoffChart ariaLabel={ariaLabel} height={240} xs={xs} testId="payoff-chart" curves={curves} markers={allMarkers}
-        format={(v) => inr(v)} axisFormat={axisInrFor(span)} xFormat={(x) => pts(x)} />
+        format={(v) => inr(v)} axisFormat={axisInrFor(span)} xFormat={(x) => pts(x, tick)} />
       <div className="k-stack k-tight">
         <span className="k-eyebrow">Greeks, model estimate{settings ? ` (${settings})` : ""}</span>
         <GreeksTable rows={rows} spot={model.spot} w={{ ...w, days }} r={r} net={complete && sc ? sc : null} />
@@ -253,7 +258,7 @@ function RollResult({ r }: { r: OptRoll }) {
   ];
   return (
     <div className="k-stack" data-testid="roll-result">
-      <p className="k-small">Closes the {SIDE[o.side]} {pts(c.strike)} {c.opt} ({shortDate(c.expiry)}) at {inr(c.px, 2)} and opens a {SIDE[o.side]} {pts(o.strike)} {o.opt} ({shortDate(o.expiry)}) at {inr(o.px, 2)}, at today's bid and ask.</p>
+      <p className="k-small">Closes the {SIDE[o.side]} {pts(c.strike, r.model.tick)} {c.opt} ({shortDate(c.expiry)}) at {inr(c.px, 2)} and opens a {SIDE[o.side]} {pts(o.strike, r.model_to.tick)} {o.opt} ({shortDate(o.expiry)}) at {inr(o.px, 2)}, at today's bid and ask.</p>
       <StatRow label="Roll result">
         <Stat label={`Premium ${r.premium >= 0 ? "taken in" : "paid out"}`} value={inr(r.premium, 2)} tone={tone(r.premium)} />
         <Stat label="Charges, two orders" value={inr(r.charges.total, 2)} />
@@ -262,7 +267,7 @@ function RollResult({ r }: { r: OptRoll }) {
       </StatRow>
       <DataTable label="Net Greeks before and after" columns={cols} rows={rows} rowKey={(x) => x.key} rowAttrs={(x) => ({ "data-testid": `roll-${x.key}` })} />
       {!r.complete && <p className="k-note">A leg has no price right now, so the net Greeks leave it out.</p>}
-      <ModelInputs m={r.model_to} extra={r.model_to.expiry !== r.model.expiry ? `The other legs: the ${shortDate(r.model.expiry)} expiry, ${dayWord(r.model.days)} left, forward ${pts(r.model.forward)}.` : undefined} />
+      <ModelInputs m={r.model_to} extra={r.model_to.expiry !== r.model.expiry ? `The other legs: the ${shortDate(r.model.expiry)} expiry, ${dayWord(r.model.days)} left, forward ${pts(r.model.forward, r.model.tick)}.` : undefined} />
     </div>
   );
 }

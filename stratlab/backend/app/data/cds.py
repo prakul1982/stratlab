@@ -21,10 +21,9 @@ ALIASES = {"USD": "USDINR", "DOLLAR": "USDINR", "USD/INR": "USDINR", "USD INR": 
            "EUR/INR": "EURINR", "GBP": "GBPINR", "POUND": "GBPINR", "GBP/INR": "GBPINR", "JPY": "JPYINR", "YEN": "JPYINR",
            "JPY/INR": "JPYINR", "EUR/USD": "EURUSD", "EUR USD": "EURUSD", "GBP/USD": "GBPUSD", "GBP USD": "GBPUSD",
            "CABLE": "GBPUSD", "USD/JPY": "USDJPY", "USD JPY": "USDJPY"}
-PER_DAY = {"1h": 8, "15m": 32, "5m": 96}               # 09:00 to 17:00
 
 
 class CDSProvider(MCXProvider):
     market = exchange = "CDS"
-    contracts, default_names, aliases, per_day = CONTRACTS, DEFAULTS, ALIASES, PER_DAY
+    contracts, default_names, aliases = CONTRACTS, DEFAULTS, ALIASES
     noun = "Currency futures"

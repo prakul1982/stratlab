@@ -309,7 +309,7 @@ function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }
   if (!full) return <Stat label="IV percentile and rank" value={<Link to="/plans" className="link k-small">{plan} plan</Link>} note="Over StratLab's recorded days" />;
   const s = c.iv;
   if (!s || s.percentile == null)
-    return <Stat label="IV percentile and rank" value="–" note={s ? `${s.days} of ${s.need} recorded days needed so far` : undefined} />;
+    return <Stat label="IV percentile and rank" value="–" note={s ? `${s.days} of ${s.need} recorded days needed so far` : "Given for the nearest expiry only: the recorded days are its"} />;
   return <Stat label="IV percentile · rank" value={`${s.percentile.toFixed(0)} · ${s.rank == null ? "–" : s.rank.toFixed(0)}`}
     note={`Over ${s.days} recorded days (${s.low?.toFixed(1)}%–${s.high?.toFixed(1)}%)`} />;
 }

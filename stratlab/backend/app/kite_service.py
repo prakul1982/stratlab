@@ -141,7 +141,7 @@ class KiteService:
         self.session_close: dict[int, str] = {}   # token -> "HH:MM" IST when its segment closes (commodity and currency futures)
 
     def set_session_close(self, token: int, hhmm: str | None):
-        """A futures contract whose segment closes later than the stock market (currency 17:00, commodity 23:30 IST):
+        """A futures contract whose segment closes later than the stock market (currency 17:00, commodity 23:30 or 23:55 IST):
         its daily candle is read again after its own close, not the stock market's (R9R-005: a CDS candle read before
         17:00 was kept for six hours, so the check after the close still saw the day before)."""
         if hhmm:

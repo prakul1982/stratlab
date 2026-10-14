@@ -187,15 +187,18 @@ class OptionsData:
                     continue
                 k = (exch, r["name"])
                 u = seen.setdefault(k, {"exchange": exch, "name": r["name"], "lot": r["lot"], "lot_expiry": r["expiry"],
-                                        "expiries": set()})
+                                        "expiries": set(), "lots": {}})
                 if r["expiry"] < u["lot_expiry"]:        # the lot of the nearest listed expiry
                     u["lot"], u["lot_expiry"] = r["lot"], r["expiry"]
                 u["expiries"].add(r["expiry"])
+                u["lots"].setdefault(r["expiry"], r["lot"])
         rank = {k: i for i, k in enumerate(POPULAR)}
         out = []
         for k, u in seen.items():
             ex = keep_listed(u["exchange"], u["name"], sorted(u["expiries"]))
-            out.append({"exchange": u["exchange"], "name": u["name"], "lot": u["lot"], "expiries": ex[:6],
+            # "lot" is the nearest expiry's; a later series can have another (an exchange revises lots at a series boundary), so
+            # each listed expiry's own is in "lots"
+            out.append({"exchange": u["exchange"], "name": u["name"], "lot": u["lot"], "expiries": ex[:6], "lots": {e: u["lots"][e] for e in ex[:6]},
                         "venue": EXCHANGE_NAME[u["exchange"]], "popular": k in rank, "freeze": freeze(u["name"]),
                         "index": k in INDEX_SPOT})
         out.sort(key=lambda u: (rank.get((u["exchange"], u["name"]), 99), u["exchange"] != "NFO", u["name"]))
