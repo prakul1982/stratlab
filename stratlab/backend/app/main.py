@@ -87,6 +87,7 @@ from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
 from . import plan_interest
 from . import email_kit
 from . import mail_pages
+from . import leader
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -269,6 +270,41 @@ async def lifespan(app: FastAPI):
         kite.load_saved_token()
     except Exception as e:
         print("startup: Kite not ready:", e)
+    threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
+    threading.Thread(target=warm_caches, daemon=True).start()
+    # every container serves requests; only the lease's holder runs the jobs and live sessions (a deploy overlaps two)
+    leader.current.start(on_gain=lead, on_lose=follow)
+    yield
+    if leader.current.leading():
+        try:
+            manager.persist(only_dirty=False)     # a restart or deploy keeps every live session's latest state
+        except Exception as e:
+            print("shutdown: could not save live sessions:", e)
+    leader.current.release()     # the jobs' loops see it and stop; the next container takes over now
+
+
+_jobs_started = False
+
+
+def lead():
+    """This container holds the lease: start everything that must run in one place only, once."""
+    global _jobs_started
+    db.forget_mirror()           # the settings the old container wrote since this one booted
+    if _jobs_started:            # leading again after a lapse: the jobs are running; the live loop re-attaches the sessions
+        return
+    _jobs_started = True
+    # on its own thread: resuming sessions reads history and can take a while; the lease thread must keep renewing
+    threading.Thread(target=start_jobs, daemon=True, name="start-jobs").start()
+
+
+def follow():
+    """The lease is gone (another container holds it, or it couldn't be renewed in time): stop the live sessions
+    without saving them; the jobs check leader.leading() before each run."""
+    log.error("leader: this container lost the lease; live sessions dropped, jobs paused")
+    manager.drop_all()
+
+
+def start_jobs():
     try:
         manager.resume()  # crypto sessions always; India ones once Kite is logged in
     except Exception as e:
@@ -279,9 +315,7 @@ async def lifespan(app: FastAPI):
     scan_alerts_job.start()
     filing_alerts_job.start()
     deals_job.start()
-    threading.Thread(target=trading_calendar.warm, daemon=True).start()   # ~2 s, kept off the first request
     threading.Thread(target=money_mf_nav.keep_fresh, daemon=True, name="mf-nav").start()   # the mutual fund NAV file, read ahead of the pages (R9P-008)
-    threading.Thread(target=warm_caches, daemon=True).start()
     threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
     threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
     threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
@@ -317,11 +351,6 @@ async def lifespan(app: FastAPI):
     biz_job.start()
     holders_job.start()
     ai_providers.job.start()          # measures the AI models every 6 hours
-    yield
-    try:
-        manager.persist(only_dirty=False)     # a restart or deploy keeps every live session's latest state
-    except Exception as e:
-        print("shutdown: could not save live sessions:", e)
 
 
 log = logging.getLogger("stratlab")
@@ -5141,6 +5170,8 @@ def platform_job():
         if at <= now:
             at += timedelta(days=1)
         time.sleep((at - now).total_seconds())
+        if not leader.leading():
+            continue
         try:
             daily_platform_check()
         except Exception as e:

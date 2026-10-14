@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
+from . import leader
 from .config import settings
 from .kite_service import IST, KiteService
 
@@ -212,7 +213,8 @@ class AutoLogin:
             day = now.date().isoformat()
             if day != self._day:
                 self._day, self._attempts, self._gave_up = day, 0, False
-            if not self._gave_up and self._attempts < MAX_ATTEMPTS and login_due(now, self.kite.token_day):
+            # only the leading container logs in: a second login cancels the first one's token
+            if not self._gave_up and self._attempts < MAX_ATTEMPTS and leader.leading() and login_due(now, self.kite.token_day):
                 self._attempts += 1
                 try:
                     self.run_once()

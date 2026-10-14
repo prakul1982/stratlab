@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from . import admin, job_status
+from . import admin, job_status, leader
 
 router = APIRouter(tags=["admin"])
 
@@ -336,4 +336,5 @@ def rows() -> list[dict]:
 @router.get("/admin/jobs")
 def admin_jobs(_=Depends(admin.admin_profile)):
     """Every background job: when it last ran, its schedule, how the last run went, and the routes that run it now."""
-    return {"jobs": rows()}
+    # which container runs the jobs (a deploy overlaps two for a minute) and until when its lease holds
+    return {"jobs": rows(), "leader": leader.current.status()}
