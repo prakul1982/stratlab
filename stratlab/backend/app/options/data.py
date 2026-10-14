@@ -6,6 +6,8 @@ from datetime import date, timedelta
 from .engine import Contracts
 from ..kite_service import ist_date
 from ..data.expiries import keep_listed
+from ..data.calendar import is_trading_day
+from ..data.markets import BY_ID
 
 # when currency options stop trading on their expiry day, India time
 CDS_EXPIRY_TIME = "12:30"
@@ -74,6 +76,20 @@ WANT_FOR = 30        # a contract asked for in the last 30 s rides along with ev
 BATCH = 450          # contracts per quote request (Kite allows 500)
 
 
+def cds_hours() -> tuple[str, str]:
+    """When NSE currency trades, India time (09:00-17:00)."""
+    h = BY_ID["CDS"]["hours"]
+    return h["open"], h["close"]
+
+
+def cds_open(now) -> bool:
+    """Whether NSE currency is trading at a moment."""
+    from ..kite_service import IST
+    local = now.astimezone(IST)
+    lo, hi = cds_hours()
+    return is_trading_day("CDS", local.date()) and lo <= local.strftime("%H:%M") <= hi
+
+
 def broker_qty(key: str, units: float) -> int:
     """An order's quantity as the broker counts it: units of the underlying, except NSE currency contracts, which the
     broker counts in lots (one USDINR lot is 1,000 dollars; the app holds units, CDS_UNITS a lot). R11C-007: the margin
@@ -126,7 +142,8 @@ class OptionsData:
         self._wanted: dict[str, float] = {}      # contract key -> when a session last asked for it
         self._last_quote = 0.0
         self.quote_calls = 0
-        self.spot_source = None          # pair -> its price now ("USDINR=X" -> 96.76), set by main for currency options
+        self.spot_source = None          # pair -> its price now ("USDINR=X" -> 96.76) or {"price", "at"}, set by main for currency options
+        self.spot_close = None           # (pair, day) -> that day's close, set by main for currency options
 
     def ready(self) -> bool:
         return self.kite.ready()
@@ -305,8 +322,11 @@ class OptionsData:
             except Exception as e:                     # no spot either: the caller says the price can't be had
                 print("currency spot unavailable:", pair, str(e)[:120])
                 px = None
+            at = None
+            if isinstance(px, dict):                   # the price and when the source quoted it
+                px, at = px.get("price"), px.get("at")
             if px:
-                return round(float(px) * per, 4), {"ltp": round(float(px) * per, 4), "ts": None}, "spot"
+                return round(float(px) * per, 4), {"ltp": round(float(px) * per, 4), "ts": at}, "spot"
             return None, q, "none"
         return (q or {}).get("ltp"), q, "quote"
 
@@ -341,6 +361,19 @@ class OptionsData:
                 return self.spot(exchange, name, expiry)[0]
             from ..live import official_close
             key = self.spot_key(exchange, name, expiry)
+            if exchange == "CDS":
+                if now < datetime.combine(end.date(), dtime.fromisoformat(cds_hours()[1]), now.tzinfo):
+                    return None                    # the day's bar is still forming: the engine holds the live estimate
+                q = self.quotes([key]).get(key) if key else None
+                if name in SPOT_PAIRS and no_live_quote(q) and callable(self.spot_close):
+                    pair, per = SPOT_PAIRS[name]
+                    try:
+                        px = self.spot_close(pair, expiry)
+                    except Exception as e:
+                        print("currency spot close unavailable:", pair, str(e)[:120])
+                        px = None
+                    if px:
+                        return round(float(px) * per, 4)
             try:
                 inst = self.kite.by_symbol(*reversed(key.split(":", 1))) if key else None
             except Exception as e:
