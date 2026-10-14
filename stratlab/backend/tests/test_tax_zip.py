@@ -204,7 +204,8 @@ def test_a_tax_pnl_line_keeps_its_buy_and_isnt_taken_for_intraday():
     gross = 4300 + 13000 + 80
     lt_relief = 2000                                                     # WIPRO grandfathered at its 31 Jan 2018 value
     total = y["stcg"]["net"] + y["ltcg"]["net"] + y["intraday"]["pnl"]
-    assert total == pytest.approx(gross - lt_relief - charges, abs=0.05)
+    assert y["intraday"]["stt"] > 0                                      # the intraday lines are net of the STT in the files
+    assert total + y["intraday"]["stt"] == pytest.approx(gross - lt_relief - charges, abs=0.05)
     assert c["unmatched"] == [] and c["open"] == []
 
 

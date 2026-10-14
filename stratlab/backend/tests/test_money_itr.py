@@ -134,7 +134,7 @@ def test_business_and_tax_paid():
                                                 {"d": "2026-07-20", "amount": 3000.0}])
     t = I.t_business(g)
     intra = t["rows"][0]
-    assert intra[0].startswith("Intraday") and intra[2] == 100 and intra[6] == 100
+    assert intra[0].startswith("Intraday") and intra[2] == 99.72 and intra[6] == 99.72   # less 0.025% STT, estimated
     fno = next(r for r in t["rows"] if r[0].startswith("F&O"))
     assert fno[2:7] == [900000, 400000, 50000, 8000, 42000]
     assert any("sum of the absolute profit or loss" in n for n in t["notes"]) and any("separately" in n for n in t["notes"])
