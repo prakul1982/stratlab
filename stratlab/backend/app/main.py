@@ -1948,7 +1948,7 @@ def results_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 
 
 @app.post("/admin/results/refresh")
-def admin_results_refresh(_=Depends(admin.admin_profile)):
+def admin_results_refresh(_=Depends(admin.leader_admin)):
     """Refresh both regions' results calendars now, and say what each feed answered."""
     who = results_calendar.trackers()
     return {region: results_job.refresh(region, who) for region in results_calendar.REGIONS} | {"job": results_job.status}
@@ -2002,7 +2002,7 @@ def corp_actions_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
 
 
 @app.post("/admin/corp-actions/refresh")
-def admin_corp_actions_refresh(universe: bool = False, _=Depends(admin.admin_profile)):
+def admin_corp_actions_refresh(universe: bool = False, _=Depends(admin.leader_admin)):
     """Refresh both regions' corporate-actions calendars now, and say what each feed answered. With `universe`, also
     start the read of the whole US universe in the background (it takes several minutes)."""
     who = results_calendar.trackers()

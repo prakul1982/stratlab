@@ -686,14 +686,20 @@ def _evaluate_mtf(a: dict, rows: list[dict], st: dict) -> tuple[str | None, dict
             "From the exchange's margin trading disclosure"), st
 
 
-def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=None, kind_ok=None) -> int:
+def fire_events(*a, **kw) -> int:
+    """fire_events_counted's messages sent (the jobs that only count them)."""
+    return fire_events_counted(*a, **kw)[0]
+
+
+def fire_events_counted(rows: list[dict], now: datetime, limit, send=deliver, profile=None, kind_ok=None) -> tuple[int, int]:
     """Check every active alert on insider trades and deals against the disclosures in `rows` (the evening's read of
-    the whole market) and send what fired, within each user's plan and message limits. Returns messages sent."""
+    the whole market) and send what fired, within each user's plan and message limits. Returns (messages sent, users it
+    failed for)."""
     profile = profile or db.cached_profile
     by_sym: dict[str, list[dict]] = {}
     for d in rows:
         by_sym.setdefault(d.get("symbol"), []).append(d)
-    sent = 0
+    sent, failed = 0, 0
     for key, raw in db.all_settings_with_prefix(KEY):
         uid = key[len(KEY):]
         row = db.json_value(raw, {})
@@ -705,6 +711,7 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
             p = profile(uid)
             mine = active[:limit(p)]                 # over the plan's limit (after a downgrade): the oldest count
         except Exception:
+            failed += 1
             continue
         try:                                         # one user's malformed alert or a conflict never stops the rest
             changes = {}
@@ -720,5 +727,6 @@ def fire_events(rows: list[dict], now: datetime, limit, send=deliver, profile=No
             if texts and flush(uid, p, texts, now, send):
                 sent += 1
         except Exception as e:
+            failed += 1
             print("stock alerts: events for one user failed:", type(e).__name__, str(e)[:120])
-    return sent
+    return sent, failed

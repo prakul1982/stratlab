@@ -256,6 +256,42 @@ def test_alerts_of_a_stored_day_fire_once_even_after_a_failed_fire(w, monkeypatc
     assert len(fired) == 1                                          # once
 
 
+def test_a_fire_that_failed_for_a_user_is_tried_again(w, monkeypatch):
+    now = datetime(2026, 10, 1, 20, 0, tzinfo=IST)
+    results = [(0, 1), (1, 0)]
+    monkeypatch.setattr(stock_desks.runner, "fire", lambda events, at: results.pop(0))
+    monkeypatch.setattr(F.DESK, "after", lambda day, rows, prev: [{"kind": "mwpl", "symbol": "SAIL", "day": day}])
+    stock_desks.runner.catch_up(F.DESK, now)                        # fires on storing the day: fails for a user
+    assert F.DESK.store.state().get("fired") != "2026-10-01"        # not marked
+    X.Job(stock_desks.runner).tick(now)
+    assert F.DESK.store.state()["fired"] == "2026-10-01" and results == []
+
+
+def test_fire_events_counts_the_users_it_failed_for(w, monkeypatch):
+    for uid in ("u-basic", "u-pro"):
+        db.set_setting(f"stockalerts:{uid}", json.dumps({"items": [{"id": "a1", "region": "IN", "symbol": "SAIL", "kind": "mwpl",
+                                                                    "status": "active", "created_at": "2026-09-01T00:00:00+00:00", "rev": 1}]}))
+    monkeypatch.setattr(stock_alerts, "apply", lambda uid, changes, now: (_ for _ in ()).throw(RuntimeError("conflict")))
+    ev = [{"kind": "mwpl", "symbol": "SAIL", "day": "2026-10-01", "id": "2026-10-01:SAIL:mwpl:up", "text": "MWPL use rose to 81.0%."}]
+    assert stock_alerts.fire_events_counted(ev, datetime(2026, 10, 1, 20, 0, tzinfo=IST), lambda p: 25) == (0, 2)
+
+
+def test_the_walk_back_goes_on_when_the_alerts_cant_fire(w, monkeypatch):
+    now = datetime(2026, 10, 1, 20, 0, tzinfo=IST)
+    stock_desks.runner.catch_up(F.DESK, now)
+    F.DESK.store.set_state(fired=None)
+    calls = []
+    monkeypatch.setattr(stock_desks.runner, "alert", lambda d, *a, **k: calls.append(("alert", d.name)) or (_ for _ in ()).throw(RuntimeError("x")))
+    monkeypatch.setattr(stock_desks.runner, "backfill", lambda d, today, **k: calls.append(("back", d.name)) or {})
+    job = X.Job(stock_desks.runner)
+    job.tick(datetime(2026, 10, 1, 23, 50, tzinfo=IST))
+    assert ("alert", "fno") in calls and ("back", "fno") in calls
+    calls.clear()
+    monkeypatch.setattr(F.DESK.store, "get", lambda day: None)         # the expected day isn't stored: no alerts, the walk
+    job.tick(datetime(2026, 10, 1, 23, 50, tzinfo=IST))
+    assert ("alert", "fno") not in calls and ("back", "fno") in calls
+
+
 def test_an_outage_stops_the_run_and_says_why(w):
     w["faults"]["exchange"].mode = "500"
     now = datetime(2026, 10, 1, 20, 0, tzinfo=IST)

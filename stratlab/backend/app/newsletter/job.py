@@ -862,10 +862,10 @@ class Job:
             why = deliver_why(profile, issue, "my_stocks")
             if why == "sent":
                 sent += 1
-                if run:
-                    run.record(sub["uid"])    # after the send: a failed one is tried again if the run resumes
             else:
                 skipped[why] = skipped.get(why, 0) + 1
+            if run:
+                run.record(sub["uid"])        # after the send; one not sent got its teaser, so a resume doesn't repeat it
         words = {WHY.get(k, k): n for k, n in skipped.items()}
         if quiet:
             words[WHY["nothing_new"]] = quiet

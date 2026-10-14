@@ -528,7 +528,11 @@ class Job:
         """Look for the filings of results days just gone, and tell the people tracking each company."""
         symbols = {s for (r, s) in who if r == region}
         sent = 0
-        for r in check_out(region, self.sources(), symbols, day):
+        check_out(region, self.sources(), symbols, day)
+        frm = (day - timedelta(days=OUT_DAYS)).isoformat()
+        told = [r for r in load(region)["rows"] if frm <= r["date"] <= day.isoformat() and r.get("out")
+                and not r.get("told") and r["symbol"] in symbols]       # filed but not (fully) told: a cut-short run resumes
+        for r in told:
             for uid in who.get((region, r["symbol"]), []):
                 if run.seen(f"{uid}:{r['symbol']}"):
                     continue
@@ -542,6 +546,14 @@ class Job:
                     sent += 1
                 except Exception as e:         # one person's failure doesn't stop the rest
                     print("results message failed:", uid, str(e)[:160])
+        if told:
+            with _lock:
+                done = {(r["symbol"], r["date"]) for r in told}
+                rows = load(region)["rows"]
+                for r in rows:
+                    if (r["symbol"], r["date"]) in done:
+                        r["told"] = True
+                save(region, rows)
         return sent
 
 

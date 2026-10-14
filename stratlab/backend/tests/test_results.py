@@ -355,3 +355,40 @@ def test_us_release_lookback_counts_from_the_us_date(monkeypatch):
         def submissions(self, c, fresh=False): return {}
     R.us_out(None, Sec(), {"symbol": "AAPL", "date": "2026-09-30"})
     assert seen == [21]
+
+
+def test_follow_up_resumes_after_a_kill_without_doubling(w, monkeypatch):
+    from app import run_marks
+
+    class Killed(BaseException):
+        pass
+
+    watch("u-a", ("IN", "RELIANCE")); watch("u-b", ("IN", "RELIANCE"))
+    filed = notice("Outcome of Board Meeting - Financial Results", "Revenue from operations of Rs 2,35,481 crore", "2026-10-05T16:40",
+                   url="https://nsearchives.nseindia.com/res.pdf", category="results")
+    india = FakeIndia([meeting("RELIANCE", TODAY)], {"RELIANCE": [filed]})
+    R.refresh("IN", {"in": india}, set(), TODAY)
+    sent, kills = [], [1]
+
+    def snd(p, subject, text, url):
+        if "results are out" not in subject:
+            return
+        sent.append(p["id"])
+        if kills:
+            kills.pop()
+            raise Killed()
+    mk = lambda: R.Job(lambda: {"in": india, "us": FakeUS(), "sec": None}, send=snd, can_alert=lambda p: True)
+    t = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    with pytest.raises(Killed):
+        mk().tick(t)
+    monkeypatch.setattr(run_marks, "STALE", 0)
+    mk().tick(t.replace(minute=20))
+    assert sorted(sent) == ["u-a", "u-b"]
+
+
+def test_results_and_corp_actions_refresh_only_run_on_the_leader(w, monkeypatch):
+    from app import admin
+    c = w["client"]
+    monkeypatch.setattr(admin.leader, "leading", lambda: False)
+    assert c.post("/admin/results/refresh", headers=headers("admin-token")).status_code == 409
+    assert c.post("/admin/corp-actions/refresh", headers=headers("admin-token")).status_code == 409
