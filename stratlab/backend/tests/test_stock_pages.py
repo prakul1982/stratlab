@@ -146,3 +146,15 @@ def test_a_sitemap_name_with_a_huge_number_is_a_404_not_a_crash(w):
     c = w["client"]
     assert c.get("/sitemaps/stocks-in-" + "9" * 5000 + ".xml").status_code == 404
     assert c.get("/sitemaps/stocks-in-1.xml").status_code == 200
+
+
+def test_r16_pe_gap_note_and_plans_label():
+    f = {"region": "IN", "pe": 21.3, "market_cap": 1_800_000, "profit_ttm": 100_000}
+    pe, implied, profit = stock_pages.pe_profit_gap(f)
+    assert (pe, round(implied, 1), profit) == (21.3, 18.0, 100_000)
+    assert any("data-pe-basis" in n and "gives 18.0" in n for n in stock_pages._notes(f))
+    assert stock_pages.pe_profit_gap({**f, "market_cap": 2_100_000}) is None          # within 10%
+    assert stock_pages.pe_profit_gap({**f, "region": "US"}) is None
+    assert stock_pages.pe_profit_gap({**f, "profit_ttm": -5}) is None
+    nav = stock_pages._top()
+    assert ">Plans</a>" in nav and ">Pricing</a>" not in nav

@@ -6,6 +6,7 @@ import { HOME_TITLE, landingHeading } from "../content/seo";
 import { heldStartup } from "../lib/held";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
 import { Opening } from "../components/LoadGuard";
+import { importWithRetry } from "../lib/lazyRetry";
 
 /* What someone without an account sees, at any address: the landing page (at a section, or with a sign-in panel), the
  * policies, a shared verdict, StratLab's own strategy library, "Sign in to see …" on an address inside the app, or "Page
@@ -13,7 +14,7 @@ import { Opening } from "../components/LoadGuard";
  * visitor's page load runs only this (visitor/visitorMain.tsx), without the sign-in library. Each page's code loads when
  * it is opened. */
 
-const page = <K extends string>(load: () => Promise<Record<K, any>>, name: K) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType<any> })));
+const page = <K extends string>(load: () => Promise<Record<K, any>>, name: K) => lazy(() => importWithRetry(load).then((m) => ({ default: m[name] as ComponentType<any> })));
 export const loadLogin = () => import("../pages/Login");
 export const loadLegal = () => import("../pages/LegalPage");
 export const loadGate = () => import("../pages/Gate");

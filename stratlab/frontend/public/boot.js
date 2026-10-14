@@ -51,12 +51,13 @@
   window.__stratlabRecover = recover;
   window.__stratlabShowLoadError = show;
 
-  // a lazily loaded page (Vite raises this when its file or one it needs fails to download)
+  // a lazily loaded page (Vite raises this when its file or one it needs fails to download). Cancelled so the import arrives
+  // empty: the page's loader (src/lib/lazyRetry.ts) asks again, a little later, up to three times, and only then calls
+  // recover (one guarded reload per minute). An import with no loader of its own fails on the empty module and the
+  // start-up catch calls recover.
   window.addEventListener("vite:preloadError", function (e) {
     if (e && e.preventDefault) e.preventDefault();
-    // the page's code then arrives empty and the app fails on it: that failure is this download's, not the page's own
     window.__stratlabLoadFailed = true;
-    recover();
   });
   // the app's own file failed to download as a rejected import(): Safari's "Importing a module script failed" / "Load failed"
   // never reached the two handlers above (R9P-008). Only while the page is still the start-up text: once the app has drawn,

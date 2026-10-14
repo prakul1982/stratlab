@@ -195,7 +195,7 @@ def test_the_page_wears_the_sites_header_and_footer(w):
         assert part in t, part
     assert "Market cap (" not in t and "Sign up free" not in t
     # the table opens on the newest years on a phone, with a cue that there are earlier ones
-    assert ".tbl{overflow-x:auto;direction:rtl}" in t and "scroll-cue" in t
+    assert ".tbl{overflow-x:auto;direction:rtl;" in t and "scroll-padding-left:124px" in t and "scroll-cue" in t
     # dark mode: the button's text is the page's own on-ink colour, not white on a light green
     assert "#7CC4A6" not in t
 
