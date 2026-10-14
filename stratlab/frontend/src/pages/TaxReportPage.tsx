@@ -333,7 +333,7 @@ export function TaxReportPage() {
               <Stat label="Short-term gains (net)" value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
               <Stat label="Long-term gains (net)" value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} note={`${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses`} />
               <Stat label="Long-term exemption used" value={inr(y.exemption.used)} note={`of ${inr(y.exemption.limit)}${y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}`} />
-              <Stat label={<>Tax on share gains <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Shown before the 4% cess and any surcharge.</Info></>}
+              <Stat label={<>Tax on share gains, before basic exemption, rebate and surcharge <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>}
                 value={inr(y.tax)} note={`${inr(y.tax_with_cess)} with 4% cess`} />
             </StatRow>
             {y.exemption.limit > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}

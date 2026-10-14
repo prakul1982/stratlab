@@ -124,6 +124,65 @@ def test_losses_go_against_the_highest_rate_first():
     assert got["st_new"]["after_setoff"] < 5001 and got["st_old"]["after_setoff"] == 10_000
 
 
+def _bucket_row(bucket, gain, term="LT"):
+    return {"key": "X", "bucket": bucket, "gain": gain, "term": term, "sold": "2024-09-01", "fy": 2024, "sale": 0, "gf": None,
+            "cost": 0, "bought": "2020-01-01", "qty": 1, "bonus": False}
+
+
+def test_long_term_losses_go_against_the_12_5_percent_gains_with_no_exemption_first():
+    # lt_new 1,00,000 + fund lt_112 1,00,000, LT loss 1,00,000: against lt_112, and the exemption covers lt_new -> no tax
+    y = T.year(2024, [_bucket_row("lt_new", 100_000), _bucket_row("lt_112", 100_000), _bucket_row("lt_new", -100_000)], [])
+    got = {x["key"]: x for x in y["buckets"]}
+    assert got["lt_112"]["after_setoff"] == 0 and got["lt_new"]["after_setoff"] == 100_000 and got["lt_new"]["exempt"] == 100_000
+    assert y["tax"] == 0                                    # was 12,500 with lt_new first
+    # an ST loss left after ST gains takes the same order
+    y = T.year(2024, [_bucket_row("lt_new", 100_000), _bucket_row("lt_112", 100_000), _bucket_row("st_new", -100_000, "ST")], [])
+    assert y["tax"] == 0 and {x["key"]: x["after_setoff"] for x in y["buckets"]}["lt_112"] == 0
+
+
+def test_losses_carry_forward_into_later_years_in_the_report():
+    # FY 2023-24 LT loss 5,000; FY 2024-25 LT gain 1,40,000: 1,35,000 - 1,25,000 exempt = 10,000 at 12.5% = 1,250
+    trades = [b("2020-01-01", 1, 10_000, "X"), s("2023-06-01", 1, 5_000, "X"), b("2020-01-01", 1, 0, "Y"), s("2024-09-01", 1, 140_000, "Y")]
+    r = T.report(trades, {}, {}, {}, [], "2025-06-01")
+    ys = {y["fy"]: y for y in r["years"]}
+    assert ys[2023]["carry_forward"] == {"st": 0, "lt": 5_000}
+    y = ys[2024]
+    assert y["brought_forward"] == [{"fy": 2023, "label": "FY 2023-24", "kind": "lt", "amt": 5_000, "used": 5_000, "left": 0}]
+    lt = next(x for x in y["buckets"] if x["key"] == "lt_new")
+    assert lt["after_setoff"] == 135_000 and lt["taxable"] == 10_000 and y["tax"] == 1_250
+    assert any(st.startswith("Brought forward from FY 2023-24: long-term loss of ₹5,000") for st in y["steps"])
+    assert ys[2025]["brought_forward"] == []                 # all used
+    # a capital loss is carried 8 years only: FY 2015-16's short-term loss is gone by FY 2024-25
+    r = T.report([b("2015-05-01", 1, 10_000, "X"), s("2015-09-01", 1, 5_000, "X"), b("2024-05-01", 1, 0, "Y"), s("2024-09-01", 1, 10_000, "Y")],
+                 {}, {}, {}, [], "2025-06-01")
+    y = next(y for y in r["years"] if y["fy"] == 2024)
+    assert y["brought_forward"] == [] and y["tax"] == 2_000
+
+
+def test_intraday_and_business_losses_carry_forward_against_their_own_income():
+    fno = lambda fy_, pnl: {"seg": "fno", "fy": fy_, "first": f"{fy_}-05-01", "last": f"{fy_ + 1}-03-01", "pnl": pnl, "turnover": abs(pnl),
+                            "turnover_contract": abs(pnl), "charges": 0, "stt": 0, "trades": 1}
+    trades = [b("2023-09-01", 1, 20_000, "I", stt=0), s("2023-09-01", 1, 10_000, "I", stt=0),     # intraday loss 10,000
+              b("2024-09-02", 1, 10_000, "I", stt=0), s("2024-09-02", 1, 40_000, "I", stt=0)]     # intraday profit 30,000
+    r = T.report(trades, {}, {}, {}, [], "2025-06-01", business=[fno(2023, -50_000), fno(2024, 20_000)],
+                 inputs={2023: {"other": 6_00_000, "salary": 6_00_000}, 2024: {"other": 6_00_000, "salary": 6_00_000}})
+    ys = {y["fy"]: y for y in r["years"]}
+    assert ys[2023]["total"]["carry_forward"] == {"speculative": 10_000, "business": 50_000}     # none against salary
+    t = ys[2024]["total"]
+    # intraday loss against the intraday profit (30,000 -> 20,000); business loss against F&O 20,000, then intraday 20,000
+    assert [(p["kind"], p["used"], p["left"]) for p in t["brought_forward"]] == [("speculative", 10_000, 0), ("business", 40_000, 10_000)]
+    assert t["income"]["normal"] == 6_00_000 - 75_000          # salary less the standard deduction only
+    assert any(st.startswith("Brought forward from FY 2023-24: intraday (speculative) loss of ₹10,000") for st in t["steps"])
+    # what's left is carried on: 10,000 of business loss into FY 2025-26
+    assert [(p["kind"], p["amt"]) for p in ys[2025]["total"]["brought_forward"]] == [("business", 10_000)]
+
+
+def test_the_share_gains_tax_is_labelled_before_the_basic_exemption_and_rebate():
+    y = fy([b("2024-05-01", 1, 0), s("2024-09-01", 1, 10_000)], 2024)
+    labels = [a for a, _ in tax_export.summary_lines(y)]
+    assert "Tax on share gains, before basic exemption, rebate, surcharge and cess" in labels
+
+
 def test_fifo_across_lots_and_charges():
     r = realised([b("2023-01-02", 10, 100, charges=20), b("2024-01-02", 10, 110, charges=10), s("2024-06-01", 15, 120, charges=30)])
     assert [(x["qty"], x["term"]) for x in r] == [(10, "LT"), (5, "ST")]
@@ -340,7 +399,9 @@ def test_every_broker_combined_into_one_report(w):
     assert rep["fmv"]["WIPRO"]["source"] == "your file" and rep["fmv"]["SBIN"]["source"] == "looked up"
     old = next(y for y in rep["years"] if y["fy"] == 2019)
     assert old["rows"][0]["key"] == "SBIN" and old["rows"][0]["gf"] == "applied"               # ICICI's STABAN, by its ISIN
-    assert y["exemption"]["used"] == y["ltcg"]["net"] and y["tax"] == round(y["stcg"]["net"] * IN_STCG, 2)
+    # FY 2019-20's long-term loss (61.20) is brought forward and set off before the exemption
+    assert old["carry_forward"]["lt"] == 61.2 and y["brought_forward"][0]["used"] == 61.2
+    assert y["exemption"]["used"] == round(y["ltcg"]["net"] - 61.2, 2) and y["tax"] == round(y["stcg"]["net"] * IN_STCG, 2)
     assert {r["key"] for r in rep["below_cost"]["rows"]} <= {"TCS", "TATASTEEL", "ITC"}
     assert rep["names"]["NOTASTOCK"]["listed"] is False
 

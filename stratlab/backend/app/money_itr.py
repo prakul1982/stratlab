@@ -88,10 +88,10 @@ def gather(profile, fy: int) -> dict:
     i = M.tax_inputs(profile)
     c, equity, units = money_routes.tax_computed(profile, i)
     mf, usr = c["mf"], c["us"]
-    dv_total = money_routes.dividends_for_tax(profile).get(fy, 0.0)
+    dv = money_routes.dividends_for_tax(profile)
     unit_rows = instrument_kinds.bucket_rows(units, c["names"])
-    y = tax_lots.with_total(tax_lots.year(fy, equity, c["intraday"], limit=None, units=unit_rows), i["business"], i["income"].get(fy),
-                            dv_total, instrument_kinds.other_year(fy, units, c["names"]))
+    y = tax_lots.years_with_total([fy], equity, c["intraday"], unit_rows, units, c["names"], i["business"], i["income"], dv,
+                                  limit=None)[fy]
     # dividends: the year's lines, from the user's files or the estimate (as Tax tools shows them)
     stored, est, ahead, rate = money_routes.dividend_parts(uid, fetch=False)
     dview = divs.view(stored, est, ahead, rate, money_routes.today())
