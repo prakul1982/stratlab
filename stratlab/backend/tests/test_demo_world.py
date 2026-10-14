@@ -4,9 +4,10 @@ agree everywhere, and each company shows its own name, description and news (R3-
 exchange's events are on trading days, the ETF list and the holdings read one price, every index and sector has its own
 line, the screener's 52-week figures are the company page's, and the loss-years case is a made-up company (R4-005 to R4-104)."""
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import time_machine
 
 from app import main  # noqa: F401,I001  (first: the app wires the modules)
 from app import holdings
@@ -19,8 +20,29 @@ H = headers("pro-token")
 STOCKS = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC", "SBIN", "WIPRO"]
 
 
+DAY = datetime(2026, 10, 14, 6, 30, tzinfo=timezone.utc)       # a fixed Wednesday, 12:00 IST, market open
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _day_pinned_for_the_module():
+    """The world is built once for the module: the broker's login, the market's clock and every page it reads share one
+    pinned day, not whichever day or hour the run began."""
+    mp = pytest.MonkeyPatch()
+    mp.setattr(P, "FROZEN", DAY)
+    with time_machine.travel(DAY, tick=False):
+        yield
+    mp.undo()
+
+
+@pytest.fixture(autouse=True)
+def _day_pinned(monkeypatch):
+    monkeypatch.setattr(P, "FROZEN", DAY)
+    with time_machine.travel(DAY, tick=False):
+        yield
+
+
 @pytest.fixture(scope="module")
-def w():
+def w(_day_pinned_for_the_module):
     mp = pytest.MonkeyPatch()
     world = W.build(mp)
     fake_fundamentals.install(mp, main.research_hub.screener)

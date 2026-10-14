@@ -1,9 +1,16 @@
 from datetime import datetime, timedelta, timezone
 
-
+import pytest
+import time_machine
 from app.plans import IST, effective_plan, trial_end, trial_state
 
-NOW = datetime.now(timezone.utc)
+NOW = datetime(2026, 10, 14, 10, 0, tzinfo=timezone.utc)      # a fixed Wednesday midday, so no run depends on the date or the hour
+
+
+@pytest.fixture(autouse=True)
+def _pinned_clock():
+    with time_machine.travel(NOW, tick=False):
+        yield
 
 
 def test_paid_plan_needs_active_status():

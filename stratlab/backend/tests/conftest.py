@@ -53,6 +53,21 @@ def still_market_clock():
 
 
 @pytest.fixture(autouse=True)
+def market_clock_follows_the_day(monkeypatch):
+    """The session's frozen market clock (above) is set once, so a run that starts before India's midnight and carries
+    on past it, or a test clock that sits on another day, would read prices and candles stamped with yesterday's date.
+    When the clock is on a different India day than the frozen one, the fake market moves to now; within a day it
+    stands still, as the session fixture promises."""
+    from datetime import datetime, timedelta, timezone
+    from tests import fake_prices
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(timezone.utc)
+    if fake_prices.FROZEN is not None and fake_prices.FROZEN.astimezone(ist).date() != now.astimezone(ist).date():
+        monkeypatch.setattr(fake_prices, "FROZEN", now)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def fresh_settings_mirror():
     """The in-memory copy of the stored company pages (app/db.py) doesn't carry over from one test to the next."""
     from app import admin, db
