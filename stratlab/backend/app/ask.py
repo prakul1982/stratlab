@@ -7,6 +7,7 @@ import hashlib
 import re
 
 from .ideas import MARKETS, guess_market
+from .intel.grounding import ADVICE, _SENT
 
 ACTIONS = ("test", "paper", "research", "ideas", "answer", "library", "options", "open")
 PAGES = {"paper": "/paper", "options": "/options", "library": "/library", "research": "/research", "import": "/import",
@@ -77,7 +78,8 @@ def clean(raw, q: str) -> dict:
     if out["action"] == "open" and not out["page"]:
         return guess(q)
     if out["action"] == "answer":
-        ans = str(raw.get("answer") or "").strip()
+        # sentences worded as advice or a forecast never reach the reader (the check the research reads use)
+        ans = " ".join(x for x in _SENT.split(" ".join(str(raw.get("answer") or "").split())) if not ADVICE.search(x))
         if not ans:
             return guess(q)
         out["answer"] = ans[:1200]
@@ -87,7 +89,8 @@ def clean(raw, q: str) -> dict:
 
 
 def build(ask_json, q: str) -> dict:
-    return clean(ask_json(SYSTEM, q[:400], 700), q)
+    q = q[:400]                  # what the cache key covers: nothing past it may shape an answer another person gets
+    return clean(ask_json(SYSTEM, q, 700), q)
 
 
 def key(q: str) -> tuple:
