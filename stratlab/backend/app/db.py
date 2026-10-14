@@ -282,6 +282,8 @@ class SettingsMemo:
 
 
 def _read_setting(key: str) -> str | None:
+    if _mirrored(key):
+        return _mirror_rows(_mirrored(key)).get(key)
     ms = _market(key)
     if ms is not None:
         v = ms.get(key)
@@ -310,7 +312,7 @@ def prefetch_settings(keys) -> None:
     memo = _memo.get()
     if memo is None:
         return
-    want = sorted({k for k in keys if k not in memo and _market(k) is None})
+    want = sorted({k for k in keys if k not in memo and _market(k) is None and not _mirrored(k)})
     for i in range(0, len(want), 100):                  # keeps the address of one read short
         part, mark = want[i:i + 100], _writes[0]
         try:
@@ -329,6 +331,7 @@ def set_setting(key: str, value: str) -> None:
             ms.set(key, value)
             return
         sb().table("app_settings").upsert({"key": key, "value": value, "updated_at": now_iso()}).execute()
+        _mirror_put(key, value)
     finally:
         _forget_setting(key)
 
@@ -339,6 +342,7 @@ def delete_setting(key: str) -> None:
         if ms is not None:
             ms.delete(key)
         sb().table("app_settings").delete().eq("key", key).execute()
+        _mirror_put(key, None)
     finally:
         _forget_setting(key)
 
@@ -395,6 +399,12 @@ def settings_with_prefix(prefix: str, limit: int = 1000) -> list[str]:
 
 def all_settings_with_prefix(prefix: str, page: int = 1000) -> list[tuple[str, str]]:
     """(key, value) for every setting under a prefix, read a page at a time by key (the server caps one read)."""
+    if _mirrored(prefix):
+        return sorted((k, v) for k, v in _mirror_rows(_mirrored(prefix)).items() if k.startswith(prefix))
+    return _all_from_db(prefix, page)
+
+
+def _all_from_db(prefix: str, page: int = 1000) -> list[tuple[str, str]]:
     out, after = [], ""
     while True:
         q = sb().table("app_settings").select("key,value").like("key", prefix + "%")
@@ -411,6 +421,83 @@ def all_settings_with_prefix(prefix: str, page: int = 1000) -> list[tuple[str, s
         merged.update(ms.all_with_prefix(prefix))      # the second database's copy is the newer one
         out = sorted(merged.items())
     return out
+
+
+# ---------- settings kept in memory ----------
+# The stored company pages ("stocks:", some 15,000 rows and 25 MB) are read whole by the screens index (twice a region
+# every half hour), by the price refresh after each close (once a minute while it has a backlog) and by the sitemaps,
+# and one at a time by every page view, crawlers' included. Read from the database each time, that was gigabytes a
+# day out of it, over the free plan's monthly egress. One process writes them all (railway.json: one replica, one
+# worker), so they're read once, kept here, and changed here as this process writes them. A full read again every few
+# hours picks up anything written elsewhere (another instance during a deploy's overlap).
+MIRRORED = ("stocks:",)
+MIRROR_FOR = 6 * 3600
+_mirror: dict = {}                      # prefix -> {"at": monotonic time read, "client": id of the client, "rows": {key: value}}
+_mirror_lock = threading.Lock()         # guards _mirror and _mirror_log
+_mirror_loading = threading.Lock()      # one full read at a time
+_mirror_log: dict | None = None         # while a full read runs: the writes made meanwhile, laid over it when it lands
+
+
+def _mirrored(key_or_prefix: str) -> str | None:
+    return next((p for p in MIRRORED if key_or_prefix.startswith(p)), None)
+
+
+def _mirror_fresh(m: dict | None) -> bool:
+    return bool(m) and m["client"] == id(sb()) and time.monotonic() - m["at"] < MIRROR_FOR
+
+
+def _mirror_rows(prefix: str) -> dict:
+    """Every setting under a mirrored prefix, read from the database at most once every MIRROR_FOR seconds."""
+    global _mirror_log
+    with _mirror_lock:
+        m = _mirror.get(prefix)
+        if _mirror_fresh(m):
+            return m["rows"]
+    with _mirror_loading:
+        with _mirror_lock:
+            m = _mirror.get(prefix)
+            if _mirror_fresh(m):
+                return m["rows"]
+            _mirror_log = {}
+        client = id(sb())
+        try:
+            rows = dict(_all_from_db(prefix))
+        except Exception:
+            with _mirror_lock:
+                _mirror_log = None
+            raise
+        with _mirror_lock:
+            for k, v in (_mirror_log or {}).items():          # written while the read was on its way: the write is newer
+                if k.startswith(prefix):
+                    if v is None:
+                        rows.pop(k, None)
+                    else:
+                        rows[k] = v
+            _mirror_log = None
+            _mirror[prefix] = {"at": time.monotonic(), "client": client, "rows": rows}
+        return rows
+
+
+def _mirror_put(key: str, value: str | None) -> None:
+    """A write this process made to a mirrored key (None: deleted), into the copy and into any full read under way."""
+    p = _mirrored(key)
+    if not p:
+        return
+    with _mirror_lock:
+        if _mirror_log is not None:
+            _mirror_log[key] = value
+        m = _mirror.get(p)
+        if m is not None:
+            if value is None:
+                m["rows"].pop(key, None)
+            else:
+                m["rows"][key] = value
+
+
+def forget_mirror() -> None:
+    """Drop the in-memory copies (the next read goes to the database)."""
+    with _mirror_lock:
+        _mirror.clear()
 
 
 # ---------- size ----------

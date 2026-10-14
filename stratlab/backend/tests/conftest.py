@@ -41,6 +41,15 @@ def no_official_close_reads():
 
 
 @pytest.fixture(autouse=True)
+def fresh_settings_mirror():
+    """The in-memory copy of the stored company pages (app/db.py) doesn't carry over from one test to the next."""
+    from app import db
+    db.forget_mirror()
+    yield
+    db.forget_mirror()
+
+
+@pytest.fixture(autouse=True)
 def fresh_ai():
     """What the AI layer learnt about models, and the answers it cached, don't carry over from one test to the next;
     it keeps them in memory instead of the database."""

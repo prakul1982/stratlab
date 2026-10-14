@@ -30,4 +30,37 @@ export function dayName(day: string, long = false): string {
   return long ? d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : fmtDate(d, { weekday: true });
 }
 
+/** The Briefs page's tabs: a region's Market Brief, or My stocks. */
+export type NewsTab = "IN" | "US" | "mine";
+
+/** The tab an issue is listed under, from its id (market.US.2026-10-08, my_stocks.<uid>.2026-10-09); null for another id. */
+export function issueTab(id: string | null | undefined): NewsTab | null {
+  const m = /^(market|my_stocks)\.([^.]+)\./.exec(String(id ?? ""));
+  if (!m) return null;
+  if (m[1] === "my_stocks") return "mine";
+  return m[2] === "US" ? "US" : m[2] === "IN" ? "IN" : null;
+}
+
+/** The issue the reading pane shows for a tab: the one picked when it is this tab's, else (on a wide screen, where there is
+ * room for both) the tab's latest, else none. `rows` is this tab's list, or null while it loads. R13-004: switching to
+ * "Market brief: US" before the day's US issue existed kept India's brief open under the US tab, with no row highlighted. */
+export function issueToShow(tab: NewsTab, rows: { id: string }[] | null, picked: string | null, wide: boolean): string | null {
+  if (picked && issueTab(picked) === tab) return picked;
+  if (!rows) return null;
+  return wide && rows.length ? rows[0].id : null;
+}
+
+/** The stamp over an issue's numbers: a Market Brief's are the day's close ("the 16:00 ET close of 9 Oct 2026", R13-003),
+ * My stocks' the moment it was built. */
+export function issueStamp(issue: { kind: NewsKind; region: Region | null; day: string; weekly?: boolean }, built: string | null): string | null {
+  if (issue.kind === "market" && (issue.region === "US" || issue.region === "IN")) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(issue.day);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return `the ${issue.region === "US" ? "16:00 ET" : "15:30 IST"} close of ${d.getDate()} ${d.toLocaleDateString("en-GB", { month: "short" }).replace("Sept", "Sep")} ${d.getFullYear()}`;
+    }
+  }
+  return built;
+}
+
 export const NEWS_FOOTER = "Facts from exchange filings, company documents and market data. Not investment advice.";

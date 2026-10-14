@@ -28,7 +28,25 @@ export type BreadthView = {
   history: History | null; sectors: SectorTable | null; thrusts: string[] | null; live: LiveView | null;
   /** after the close, the session whose count isn't in yet (R8B-008) */
   pending?: Pending;
+  /** earlier days whose counts a later run changed, the last week's (R13-009) */
+  revised?: Revision[];
 };
+
+export type Revision = { day: string; before: { adv: number; dec: number; unch: number }; after: { adv: number; dec: number; unch: number }; at?: string };
+
+/** One line per earlier day whose rose / fell / unchanged counts a later run changed: "8 Oct revised: 338 rose, 163 fell,
+ * 1 unchanged (was 337, 163, 1)". A stock's price corrected after the day was published moves its count; the page says so
+ * instead of changing a published day without a word (R13-009). */
+export function revisionLines(revised: Revision[] | null | undefined, dayText: (iso: string) => string): string[] {
+  const latest = new Map<string, Revision>();
+  for (const r of revised ?? []) {
+    const had = latest.get(r.day);
+    latest.set(r.day, had ? { ...r, before: had.before } : r);   // several runs: from the first count to the last
+  }
+  return [...latest.values()].filter((r) => r.before.adv !== r.after.adv || r.before.dec !== r.after.dec || r.before.unch !== r.after.unch)
+    .sort((a, b) => (a.day < b.day ? 1 : -1))
+    .map((r) => `${dayText(r.day)} revised: ${r.after.adv} rose, ${r.after.dec} fell, ${r.after.unch} unchanged (was ${r.before.adv}, ${r.before.dec}, ${r.before.unch})`);
+}
 
 export const RANGES: [RangeId, string][] = [["3m", "3M"], ["6m", "6M"], ["1y", "1Y"], ["2y", "2Y"], ["all", "All"]];
 

@@ -19,6 +19,13 @@ export function levelText(x: number, tick?: number | null): string {
   return Math.round(x).toLocaleString("en-IN");
 }
 
+/** The underlying's price in the line under the form, at the contract's precision, saying when it is the spot rate
+ * (R13-002: "USDINR ₹96.14" from a future frozen at 96.135 for a month, with the dollar at 96.76). */
+export function spotText(name: string, spot: number, tick?: number | null, from?: string | null): string {
+  const px = tick && tick < 0.01 ? `₹${levelText(spot, tick)}` : `₹${spot.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${name} ${px}${from === "spot" ? " (the spot rate: the future has no live quote)" : ""}`;
+}
+
 /** The banner over a structure some of whose legs had no bid or ask to fill on (R11C-007: USDINR priced from last trades
  * hours old, under "Fills use the real bid and ask"). Empty when every leg had one. */
 export function staleQuoteLine(fromLast: number, legs: number): string {

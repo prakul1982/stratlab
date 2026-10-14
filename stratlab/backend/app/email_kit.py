@@ -312,6 +312,7 @@ class Row:
     lines: tuple = ()                    # more small lines: strings or (text, url)
     tone: str = "updown"
     since: str | None = None             # "since Mon 05 Oct", after the change
+    text_url: str | None = None          # the plain-text part's address, when the link's own is too long to print (R13-003)
 
 
 def _line(item) -> tuple[str, str | None]:
@@ -354,7 +355,7 @@ def card(title: str | None, rows: list[Row], foot: str | None = None) -> Block:
     for r in rows:
         right = " ".join(x for x in (r.value or "", delta(r.change, tone=r.tone)[1] if r.change is not None else "", r.since or "") if x)
         text.append(f"- {_t(r.title)}" + (f"  {_t(right)}" if right else "") + (f" ({_t(r.source)})" if r.source else "")
-                    + (f" ({plain_url(r.url)})" if plain_url(r.url) else ""))
+                    + (f" ({plain_url(r.text_url or r.url)})" if plain_url(r.text_url or r.url) else ""))
         for item in ([r.sub] if r.sub else []) + list(r.lines):
             t, u = _line(item)
             text.append(f"    {_t(t)}" + (f" ({plain_url(u)})" if plain_url(u) else ""))

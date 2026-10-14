@@ -125,7 +125,9 @@ def session_clock(now: datetime | None = None, market: str = "IN") -> datetime:
     now = (now or datetime.now(tz)).astimezone(tz)
     close = now.replace(hour=ch, minute=cm, second=0, microsecond=0)
     if trading_day(market, now.date()) and now >= now.replace(hour=oh, minute=om, second=0, microsecond=0):
-        return min(now, close)
+        # to the minute, as the broker's minute candles are: a test reading the price, then a page, a second apart in
+        # the session would otherwise see two different prices
+        return min(now.replace(second=0, microsecond=0), close)
     day = close - timedelta(days=1)
     while not trading_day(market, day.date()):
         day -= timedelta(days=1)

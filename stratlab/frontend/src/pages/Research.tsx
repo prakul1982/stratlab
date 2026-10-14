@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, STARTER_TICKERS, THEME_IDEAS, bigMoney, indexWhen, metricText, monthsOld, priceLabel, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
+  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -143,7 +143,9 @@ function NoSuchCompany({ region, sym, eyebrow }: { region: Region; sym: string; 
 export function CompanyPage() {
   const { region: r = "IN", symbol = "" } = useParams();
   const region: Region = r.toUpperCase() === "US" ? "US" : "IN";
-  const sym = symbol.toUpperCase();
+  // BRK.B is BRK-B's page, at BRK-B's address (R13-001): the server answers either, the address says one
+  const sym = canonTicker(region, symbol);
+  const moved = sym !== symbol.toUpperCase();
   const { fail, focus } = useApp();
   const test = useTestOnStratLab();
   const [c, setC] = useState<Company | null>(null);
@@ -151,6 +153,7 @@ export function CompanyPage() {
   const [results, setResults] = useState<{ next: ResultRow | null; last: ResultRow | null } | null>(null);
   const [tries, setTries] = useState(0);
   const nav = useNavigate();
+  useEffect(() => { if (moved) nav(`/research/${region}/${encodeURIComponent(sym)}${window.location.search}`, { replace: true }); }, [moved, region, sym, nav]);
   const share = useShareCompany(region, sym);
   // the name and the symbol, then the price (R8O-009); the name is kept for the next first frame (lib/title titleFor)
   useDocTitle(c ? `${c.name || c.symbol}${c.name && c.name.toUpperCase() !== c.symbol ? ` (${c.symbol})` : ""}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : null);
@@ -229,7 +232,7 @@ export function CompanyPage() {
             </div>
           </div>
           <div className="k-stack inv-head-price">
-            <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} />
+            <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"} />
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -464,7 +467,7 @@ export function PulsePage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/pulse")} title="How the market feels today"
-        lede={pulseLede(ai)} />
+        lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })())} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} /></Card>
       <Card>
@@ -624,8 +627,10 @@ export function ComparePage() {
 export function WatchlistPage() {
   const [region, setRegion] = useRegion();
   const { items, toggle, has } = useWatchlist();
-  const { fail, notify } = useApp();
+  const { fail, notify, markets } = useApp();
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
+  // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
+  const settling = settlingNow(markets.find((m) => m.id === region));
   const mine = (items ?? []).filter((w) => w.region === region);
   const key = mine.map((w) => w.symbol).join(",");
   useEffect(() => {
@@ -664,7 +669,7 @@ export function WatchlistPage() {
                 if (quotes == null) return "…";
                 if (q?.price == null) return "–";
                 const at = quoteAt(q.at, marketTz(region));
-                return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}</>;
+                return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
               { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },

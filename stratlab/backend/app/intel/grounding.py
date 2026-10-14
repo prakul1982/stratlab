@@ -434,6 +434,47 @@ def flow_facts(cash: dict | None) -> dict | None:
     return out
 
 
+# a sentence that gives a reason for the market's or a sector's move: what follows "because", "driven by", "helped by"…,
+# or what comes before "helped", "lifted", "drove"… (R13-011: "strong earnings helped lift most sectors")
+_CAUSE_AFTER = re.compile(r"\b(?:because of|because|due to|driven by|thanks to|on the back of|fuel(?:l)?ed by|boosted by|lifted by|"
+                          r"helped by|supported by|weighed (?:down )?by|dragged (?:down )?by|pressured by|spurred by|amid)\b(.+)$", re.I)
+_CAUSE_BEFORE = re.compile(r"^(.+?)\b(?:helped|helps|lifted|lifts|boosted|boosts|drove|drives|fuel(?:l)?ed|spurred|propelled|pushed|"
+                           r"weighed on|dragged|pressured|sent)\b(?!\s+by\b)", re.I)
+_PREVIEW = re.compile(r"\b(on tap|ahead|set for|await\w*|expected|could|may|might|preview|what to (watch|expect)|week ahead|look(s|ing)? ahead|due)\b", re.I)
+_PLAIN = {"strong", "weak", "solid", "robust", "the", "a", "an", "and", "of", "in", "on", "for", "with", "its", "their", "most",
+          "some", "many", "several", "investors", "market", "markets", "stocks", "shares", "index", "indices", "sector", "sectors",
+          "gains", "gain", "losses", "loss", "higher", "lower", "rise", "fall", "move", "moves", "session", "day", "today",
+          "broad", "broader", "news", "data", "reports", "report", "renewed", "continued", "positive", "negative", "upbeat",
+          "optimism", "pessimism", "sentiment", "mood", "buying", "selling", "pressure", "interest"}
+
+
+def _cause_words(clause: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z][a-z'&-]{3,}", clause.lower()) if w not in _PLAIN]
+
+
+def cause_backed(s: str, headlines: list[str]) -> bool:
+    """A sentence that gives a cause for a move is kept only when one headline on the page reports that cause: every word
+    of the cause is in a single headline that reports it as having happened (not a preview, "with earnings on tap"). A
+    sentence giving no cause is kept. R13-011: "strong earnings helped lift most sectors, with nine advancing and two
+    falling" stood on "Wall Street set for weekly gains with earnings, inflation data on tap"."""
+    text = " ".join(str(s or "").split())
+    m = _CAUSE_AFTER.search(text)              # "…, driven by X", "… because of X": the cause follows
+    clause = m.group(1) if m else None
+    if clause is None:
+        m = _CAUSE_BEFORE.search(text)         # "X helped lift …": the cause comes first
+        clause = m.group(1) if m else None
+    if clause is None:
+        return True
+    words = _cause_words(clause)
+    if not words:
+        return False                       # a cause in words that name nothing ("strong buying"): not backed by anything
+    for h in headlines:
+        low = str(h or "").lower()
+        if not _PREVIEW.search(low) and all(re.search(r"\b" + re.escape(w[:max(4, len(w) - 2)]), low) for w in words):
+            return True
+    return False
+
+
 def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors: dict | None = None, cash: dict | None = None) -> dict:
     """The market read with only what the index numbers and the headlines support: a sentence with a number not in
     them, a 52-week claim the levels contradict, a move the wrong way, a central bank, flow or sector no headline
@@ -447,9 +488,11 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
     if flows:                       # the day's figures name the institutions: FIIs, DIIs and their flows are backed
         support += " fii dii foreign investors foreign funds inflow outflow"
 
+    titles = [str(h.get("headline") or "") for h in headlines]
+
     def claim(s):
         return (range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
-                and flow_claim_ok(s, nets))
+                and flow_claim_ok(s, nets) and cause_backed(s, titles))
     res = dict(out)
     res["tone"] = keep_sentences(out.get("tone"), pool, claim) or template_tone(indices)
     named = lambda x: bool(x) and str(x).lower() in support          # noqa: E731
