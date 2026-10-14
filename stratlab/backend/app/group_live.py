@@ -14,6 +14,7 @@ from . import risk
 from .corp_actions import PaperActions
 from .engine import costs as C
 from .engine.core import Ctx, Engine, write_off
+from .engine.portfolio import _cash
 from .kite_service import IST, KiteService
 from .live import (CandleBuilder, _closed, _ts, candle_end, close_at_auction, day_close_minutes, drop_forming, official_close,
                    session_kind, split_missed, tick_time)
@@ -45,6 +46,7 @@ class Member:
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.engine.day_close = day_close_minutes(sess.market)
         self.engine.gate = sess.free_slot
+        self.engine.funds = sess.funds       # sized from the shared pot, as in the group backtest
         self.engine.veto = self.filtered
         # India: the member's session timetable (a stock with derivatives closes through the auction)
         self.kind = "cash" if sess.polled else session_kind(sess.mgr.kite, inst)
@@ -193,6 +195,14 @@ class GroupLiveSession:
     # ---------- the shared book ----------
     def free_slot(self) -> bool:
         return not self.halted and not self.emptied_on and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
+
+    def funds(self) -> tuple[float, float]:
+        """As the group backtest's: the pot's value at the last prices and its cash not tied up in an open position."""
+        r = self.strategy.risk
+        value = r.capital + self.realised() + sum(m.open_pnl() for m in self.members)
+        cash = r.capital + self.corp_cash + sum(_cash(m.engine) for m in self.members)
+        tied = sum(m.engine.qty * m.engine.entry for m in self.members) / r.leverage
+        return value, cash - tied
 
     def realised(self) -> float:
         return sum(t["pnl"] for m in self.members for t in m.engine.trades) + self.corp_cash

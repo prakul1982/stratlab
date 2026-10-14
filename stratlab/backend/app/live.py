@@ -508,7 +508,7 @@ class LiveSession:
                     "stop": e.sl if e.qty and e.sl > 0 else None,
                     "side": "short" if e.dir == -1 else "long",
                     "target": e.tg if e.qty and e.tg != float("inf") else None,
-                    "unrealised": e.dir * e.qty * (px - e.entry) if e.qty else 0.0,
+                    "unrealised": e.dir * e.qty * (px - e.entry) - e.entry_cost if e.qty else 0.0,   # net of entry costs, as equity is
                     "realised": sum(t["pnl"] for t in e.trades),
                     "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
                     "emptied_on": e.emptied_on,
@@ -553,7 +553,7 @@ def stopped_snapshot(row: dict) -> dict:
                         "stop": st.get("sl") if held and (st.get("sl") or 0) > 0 else None,
                         "target": tg if held and tg is not None else None,
                         "side": "short" if d == -1 else "long",
-                        "unrealised": d * qty * (px - entry) if held else 0.0,
+                        "unrealised": d * qty * (px - entry) - (st.get("entry_cost") or 0.0) if held else 0.0,
                         "valued_at": px if held else None,
                         "realised": sum(t["pnl"] for t in trades), "trades": len(trades),
                         "wins": sum(1 for t in trades if t["pnl"] > 0), "emptied_on": st.get("emptied_on")}}
