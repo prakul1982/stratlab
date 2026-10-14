@@ -110,7 +110,13 @@ def test_company_growth_matches_the_ai_read_facts(w):
 def test_ratios_stay_across_a_split_or_a_move_too_big_for_a_day(monkeypatch):
     from app import corp_actions
     s = {"price": 1000.0, "pe": 25.0, "book_value": 1000.0, "market_cap_cr": 100000.0, "div_yield": 1.0}
-    assert at_live_price(s, 200.0) is s                                  # 5:1 split: not a fifth of the company's value
+    # 5:1 split: not a fifth of the company's value. Changed from `is s`: the price is the close shown (200), and nothing
+    # read at the old price is kept past a move this size
+    big = at_live_price(s, 200.0)
+    assert (big["price"], big["pe"], big["market_cap_cr"], big["div_yield"]) == (200.0, None, None, None)
     monkeypatch.setattr(corp_actions, "actions_for", lambda *a, **k: [{"kind": "bonus", "factor": 1.1, "ex_date": "2026-10-10"}])
-    assert at_live_price(s, 910.0, "X", "2026-10-09T05:00+00:00") is s   # a 1:10 bonus after the page was read
+    # a 1:10 bonus after the page was read. Changed from `is s`: the price is the close shown (910); the market value and
+    # P/E, which a bonus doesn't change, stay as read, and P/B and yield, per share at the old price, are left out
+    bonus = at_live_price(s, 910.0, "X", "2026-10-09T05:00+00:00")
+    assert (bonus["price"], bonus["pe"], bonus["market_cap_cr"], bonus["pb"], bonus["div_yield"]) == (910.0, 25.0, 100000.0, None, None)
     assert at_live_price(s, 910.0, "X", "2026-10-11T05:00+00:00")["pe"] == pytest.approx(22.75)
