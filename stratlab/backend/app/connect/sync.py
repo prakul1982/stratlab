@@ -88,7 +88,12 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         found, missed = found + us_found, missed + us_missed
     before = holdings.load(uid)
     had = {_key(i) for i in before["items"] if i.get("via") == via}
-    whole = bool(found) and not missed            # only a whole read takes out what the source no longer names
+    # a line that didn't match but names a holding this source gave before (a market list down for a moment) makes the
+    # read partial: nothing is taken out. A line that never matched (a gold bond) doesn't stop sold stocks leaving.
+    names = {str(v).upper() for m in missed for v in (m.get("symbol"), m.get("isin")) if v}
+    unsure = any(i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names
+                 for i in before["items"] if i.get("via") == via)
+    whole = bool(found) and not unsure            # only a whole read takes out what the source no longer names
     merged, counts = merge_sync(before["items"], found, via, replace and whole)
     kept = 0 if whole else len(had - {_key(f) for f in found})
     limit = plans.holdings_limit(profile["_plan"])

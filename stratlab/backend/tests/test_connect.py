@@ -282,16 +282,28 @@ def test_a_live_broker_wins_over_a_statement_and_sold_stocks_leave(w, on):
     assert "INFY" not in {i["symbol"] for i in holdings.load(PRO_ID)["items"]}  # a whole read without it: sold
 
 
-def test_a_read_with_an_unmatched_line_keeps_what_the_source_gave_before(w, on):
+def test_a_read_with_an_unmatched_line_keeps_what_the_source_gave_before(w, on, monkeypatch):
     profile = sync.profile_for(PRO_ID)
     infy = {"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 10.0, "avg": 1400.0}
     itc = {"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": 380.0}
     sync.sync_holdings(profile, [infy, itc], "kite", "Zerodha Kite")
-    got = sync.sync_holdings(profile, [{**infy, "qty": 12.0}, {"symbol": "QQZZNOPE", "isin": None, "name": "QQZZNOPE", "qty": 1.0, "avg": None}],
-                             "kite", "Zerodha Kite")
+    real = holdings.Matcher.match                    # ITC's line comes back but can't be matched this time
+    monkeypatch.setattr(holdings.Matcher, "match", lambda self, r: (None, "offline") if r.get("symbol") == "ITC" else real(self, r))
+    got = sync.sync_holdings(profile, [{**infy, "qty": 12.0}, {**itc, "qty": 7.0}], "kite", "Zerodha Kite")
     items = {i["symbol"]: i for i in holdings.load(PRO_ID)["items"]}
-    assert items["INFY"]["qty"] == 12 and items["ITC"]["qty"] == 5 and items["ITC"]["avg"] == 380.0   # ITC wasn't in this read but stays
-    assert got["unmatched_count"] == 1 and got["kept"] == 1 and "QQZZNOPE" in sync.note(got, "Zerodha")
+    assert items["INFY"]["qty"] == 12 and items["ITC"]["qty"] == 5 and items["ITC"]["avg"] == 380.0   # kept as it was
+    assert got["unmatched_count"] == 1 and got["kept"] == 1 and "ITC" in sync.note(got, "Zerodha")
+
+
+def test_a_line_that_never_matches_doesnt_stop_a_sold_stock_leaving(w, on):
+    profile = sync.profile_for(PRO_ID)
+    infy = {"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 10.0, "avg": 1400.0}
+    itc = {"symbol": "ITC", "isin": "INE154A01025", "name": "ITC", "qty": 5.0, "avg": 380.0}
+    odd = {"symbol": "QQZZNOPE", "isin": None, "name": "QQZZNOPE", "qty": 2.0, "avg": None}     # never matches anything
+    sync.sync_holdings(profile, [infy, itc, odd], "kite", "Zerodha Kite")
+    got = sync.sync_holdings(profile, [infy, odd], "kite", "Zerodha Kite")                # ITC was sold
+    assert {i["symbol"] for i in holdings.load(PRO_ID)["items"]} == {"INFY"}
+    assert got["unmatched_count"] == 1 and got["kept"] == 0 and "QQZZNOPE" in sync.note(got, "Zerodha")
 
 
 def test_an_nps_balance_from_two_kinds_of_statement_is_one_entry(w, on):
