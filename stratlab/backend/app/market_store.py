@@ -40,6 +40,11 @@ create table if not exists option_snapshots (
 );
 create index if not exists option_snapshots_lookup on option_snapshots (name, expiry, taken_at);
 create index if not exists option_snapshots_taken on option_snapshots (taken_at);
+create table if not exists app_leader (
+  name text primary key,
+  owner text,
+  until timestamptz
+);
 """
 
 SNAP_COLS = ("taken_at", "exchange", "name", "expiry", "spot", "lot", "chain")

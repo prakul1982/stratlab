@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import db
+from . import leader
 from . import alerts
 from . import risk
 from .alerts import notify
@@ -569,6 +570,8 @@ class LiveManager:
         self.sessions: dict[str, LiveSession] = {}
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._stopped: set[str] = set()     # stopped here: a reconcile that read the row before the stop mustn't re-attach it
+        self._last_sync = time.time()       # resume() has just read the rows: the first reconcile comes 30 s on
 
     # ---------- lifecycle ----------
     def start_loop(self):
@@ -576,9 +579,11 @@ class LiveManager:
             self._thread = threading.Thread(target=self._loop, daemon=True)
             self._thread.start()
 
-    def resume(self):
-        for row in db.running_sessions():
-            if row["id"] in self.sessions:
+    def resume(self, rows: list[dict] | None = None):
+        if not leader.leading():       # only the leader runs sessions; it picks these up itself
+            return
+        for row in db.running_sessions() if rows is None else rows:
+            if row["id"] in self.sessions or row["id"] in self._stopped:
                 continue
             if (row.get("instrument") or {}).get("market", "IN") in ("IN", "MCX", "CDS") and not self.kite.ready():
                 continue  # resumes after today's Kite login; shown as paused until then
@@ -589,6 +594,20 @@ class LiveManager:
                                   stop_reason=f"Could not resume after restart: {e}")
 
     def _attach(self, row: dict):
+        s = self._build(row)
+        with self._lock:
+            if s.id in self.sessions:  # attached meanwhile (a start and a reconcile at once)
+                return self.sessions[s.id]
+            self.sessions[s.id] = s
+        if s.dirty:                    # caught up on candles missed while the server was down
+            self.persist([s])
+        if hasattr(s, "attach"):
+            s.attach(self.hub)
+        elif not s.polled:
+            self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
+        return s
+
+    def _build(self, row: dict):
         kind = (row.get("instrument") or {}).get("type")
         if (row.get("strategy") or {}).get("kind") == "signal":      # moved by outside signals (signal_session.py)
             from .signal_session import SignalSession
@@ -601,14 +620,6 @@ class LiveManager:
             s = GroupLiveSession(self, row)
         else:
             s = LiveSession(self, row)
-        with self._lock:
-            self.sessions[s.id] = s
-        if s.dirty:                    # caught up on candles missed while the server was down
-            self.persist([s])
-        if hasattr(s, "attach"):
-            s.attach(self.hub)
-        elif not s.polled:
-            self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
         return s
 
     def user_running(self, user_id: str) -> list[LiveSession]:
@@ -617,30 +628,71 @@ class LiveManager:
 
     def start(self, profile: dict, plan: str, strategy, inst: dict):
         limit = PLANS[plan]["live_limit"]
-        if len(self.user_running(profile["id"])) >= limit:
+        lead = leader.leading()
+        running = (len(self.user_running(profile["id"])) if lead else
+                   sum(r.get("status") == "running" for r in db.user_sessions(profile["id"])))
+        if running >= limit:
             raise LimitError(f"Your plan runs {limit} live strateg{'y' if limit == 1 else 'ies'} at a time. Stop one first.")
         row = db.create_session({
             "user_id": profile["id"], "name": strategy.name, "strategy": strategy.model_dump(),
             "instrument": inst, "status": "running",
         })
         try:
-            return self._attach(row)
+            if lead:
+                return self._attach(row)
+            # another container runs the sessions: built here only to check it can start; the leader attaches the
+            # running row on its next reconcile, a few seconds from now
+            s = self._build(row)
+            s.snapshot = lambda snap=s.snapshot: {**snap(), "pending": True}
+            return s
         except Exception as e:
             db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(), stop_reason=str(e))
             raise
 
     def stop(self, sid: str, reason: str):
-        with self._lock:
-            s = self.sessions.pop(sid, None)
+        s = self._detach(sid)
         if not s:
             return
+        with s.lock:
+            st = s.final_state() if hasattr(s, "final_state") else s.state()
+        db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
+
+    def _detach(self, sid: str):
+        with self._lock:
+            s = self.sessions.pop(sid, None)
+            if s:
+                self._stopped.add(sid)
+        if not s:
+            return None
         if hasattr(s, "detach"):
             s.detach(self.hub)
         elif not s.polled:
             self.hub.remove(sid)
-        with s.lock:
-            st = s.final_state() if hasattr(s, "final_state") else s.state()
-        db.update_session(sid, status="stopped", stopped_at=db.now_iso(), stop_reason=reason, state=st)
+        return s
+
+    def reconcile(self):
+        """Follow the database: attach running sessions started by another container, detach the ones stopped there
+        (keeping their final state, as a stop here would)."""
+        with self._lock:
+            before = set(self.sessions)          # sessions attached after the read below are left alone
+        rows = db.running_sessions()
+        running = {r["id"] for r in rows}
+        for sid in before - running:
+            s = self._detach(sid)
+            if s:
+                with s.lock:
+                    st = s.final_state() if hasattr(s, "final_state") else s.state()
+                db.update_session(sid, state=st)
+        self.resume(rows)
+
+    def drop_all(self):
+        """Leadership lost: stop running every session here without saving (the new leader owns their rows)."""
+        with self._lock:
+            sids = list(self.sessions)
+        for sid in sids:
+            self._detach(sid)
+        with self._lock:
+            self._stopped.difference_update(sids)     # the next leader term may attach them again
 
     # ---------- orders and alerts ----------
     def replay(self, s, run):
@@ -673,6 +725,8 @@ class LiveManager:
             caught_up.append(ev)
 
         def work():
+            if not leader.leading():
+                return
             try:
                 # the session's state is saved first, so a restart can't lose an order that was logged (or alerted)
                 if s.id in self.sessions:
@@ -708,6 +762,8 @@ class LiveManager:
                 report(e, where="live loop")
 
     def _tick(self):
+        if not leader.leading():
+            return
         now = datetime.now(IST)
         with self._lock:
             sessions = list(self.sessions.values())
@@ -718,6 +774,12 @@ class LiveManager:
                 print("timer error:", e)
                 report(e, where="live timer")
         t = time.time()
+        if t - self._last_sync > 30:
+            self._last_sync = t
+            try:
+                self.reconcile()
+            except Exception as e:
+                print("live reconcile failed:", e)
         if t - self._last_persist > 30:
             self._last_persist = t
             self.persist(sessions)
@@ -732,6 +794,8 @@ class LiveManager:
                 report(e, where="daily report")
 
     def persist(self, sessions: list[LiveSession] | None = None, only_dirty: bool = True):
+        if not leader.leading():       # never write over the leader's state
+            return
         if sessions is None:
             with self._lock:
                 sessions = list(self.sessions.values())

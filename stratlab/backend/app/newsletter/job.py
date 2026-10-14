@@ -12,7 +12,7 @@ import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from .. import alerts, db, email_kit as kit, newsletter_prefs
+from .. import alerts, db, email_kit as kit, leader, newsletter_prefs
 from ..plans import allows, plan_of
 from . import content, write
 
@@ -627,15 +627,23 @@ class Job:
         print(f"newsletters: stamped {n} stored US briefs in New York time")
 
     def _loop(self):
-        self.repair_once()
-        self.restyle_once()
-        self.headlines_once()
-        self.r7_once()
-        self.et_once()
-        self.facts_once()
+        booted = False
         while True:
+            if not booted and leader.leading():      # a database error at boot is tried again next pass
+                try:
+                    self.repair_once()
+                    self.restyle_once()
+                    self.headlines_once()
+                    self.r7_once()
+                    self.et_once()
+                    self.facts_once()
+                    booted = True
+                except Exception as e:
+                    self.status["last_error"] = str(e)[:200]
+                    print("newsletters: bootstrap:", e)
             try:
-                self.tick(datetime.now(ZoneInfo("UTC")))
+                if leader.leading():      # another container leads: it runs this pass
+                    self.tick(datetime.now(ZoneInfo("UTC")))
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("newsletters:", e)
