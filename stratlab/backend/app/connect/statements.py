@@ -189,7 +189,9 @@ def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:
     # each demat account has its own last statement day (one saved before that kept a single day: it stands for every account)
     seen = box.get("cas_asof_by") or {}
     accounts = parsed.accounts or sorted({r["acct"] for r in parsed.rows if r.get("acct")})
-    fresh = [a for a in accounts if not (parsed.asof and (seen.get(a) or box.get("cas_asof") or "") > parsed.asof)]
+    def last(a):                      # the account's key may have gained or lost its ids since
+        return max([v for k, v in seen.items() if sync.covers([a], k)] or [box.get("cas_asof") or ""])
+    fresh = [a for a in accounts if not (parsed.asof and last(a) > parsed.asof)]
     stale = bool(accounts) and not fresh
     rows = [r for r in parsed.rows if r.get("acct") in fresh]
     if rows:

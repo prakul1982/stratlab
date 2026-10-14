@@ -442,3 +442,12 @@ def test_made_up_tickers_on_the_company_route_store_nothing(w):
     C.company("IN", "NEWCO", {"in": feed}, TODAY)
     assert feed.asked == ["NEWCO"]                     # remembered for a while: not asked again
     assert C.history("IN", "HELD", {"in": feed}, TODAY) == [] and C.hist_load("IN", "HELD")["at"]   # holdings still store
+
+
+def test_a_bonus_scales_the_parts_per_account_and_undo_restores_them():
+    item = {"symbol": "INFY", "exchange": "NSE", "qty": 15.0, "avg": 100.0, "accts": {"NSDL": 10.0, "CDSL": 5.0}}
+    a = {"id": "b1", "short": "1:1", "kind": "bonus", "ratio": [1, 1], "factor": 2.0}
+    done = C.apply(item, a)
+    assert done["qty"] == 30 and done["accts"] == {"NSDL": 20, "CDSL": 10}
+    back = C.undo(done)
+    assert back["qty"] == 15 and back["accts"] == {"NSDL": 10, "CDSL": 5}

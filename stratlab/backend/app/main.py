@@ -2675,10 +2675,8 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
-        # a quantity typed over a statement's per-account one replaces it (no hidden second quantity); the next statement
-        # sets it again, as it does any statement holding without one
-        found = [{k: v for k, v in f.items() if k != "accts"} if f.get("accts") and abs(sum(f["accts"].values()) - f["qty"]) > 1e-9
-                 else f for f in found]
+        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
+        found = holdings.drop_stale_accts(found)
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
             return with_sectors(found, known), before["source"] or "Manual"

@@ -43,9 +43,21 @@ def _key(i: dict) -> str:
     return f"{i.get('exchange')}:{i['symbol']}"
 
 
+def same_account(a: str, b: str) -> bool:
+    """Whether two account keys name one demat account: equal, or the same depository where one statement printed the
+    ids ("NSDL:abc") and the other didn't ("NSDL")."""
+    da, _, ia = a.partition(":")
+    db_, _, ib = b.partition(":")
+    return a == b or (da == db_ and not (ia and ib))
+
+
+def covers(accounts, a: str) -> bool:
+    return any(same_account(a, c) for c in accounts)
+
+
 def _parts(i: dict, accounts) -> dict:
     """A statement holding's quantity per demat account, without the accounts in `accounts` (the ones a statement covers)."""
-    return {a: q for a, q in (i.get("accts") or {}).items() if a not in accounts}
+    return {a: q for a, q in (i.get("accts") or {}).items() if not covers(accounts, a)}
 
 
 def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = True,
