@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AccountWait } from "../components/AccountWait";
 import { Card, CardHead, ConfirmDialog, DataTable, Field, FieldGroup, FormGrid, Notice, PageHeader, Select, Seg, type Column } from "../components/kit";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "../components/LegalLinks";
@@ -49,7 +50,7 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
 export function PlansPage() {
-  const { me, fail, notify, refreshMe, viewAs: viewAsMe } = useApp();
+  const { me, session, ready, fail, notify, refreshMe, viewAs: viewAsMe } = useApp();
   // "View as" from /me once it has answered, and from this device's own choice before then: the page draws the buy
   // buttons from the public prices while /me is still on its way, and they must already be off (R7M-010, again in R8)
   const viewAs = me ? viewAsMe : readViewAs();
@@ -133,6 +134,8 @@ export function PlansPage() {
     return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
   };
 
+  // signed in: hold until the account has answered, so the signed-out page is never drawn for someone who is signed in
+  if (!ready || (session && !me)) return <div className="k-page"><PageHeader eyebrow="Account · Plans" title="Plans" /><Card label="Loading plans"><AccountWait label="Loading plans" /></Card></div>;
   return (
     <div className="k-page">
       <PageHeader eyebrow="Account · Plans" title="Plans"
@@ -160,8 +163,6 @@ export function PlansPage() {
         </FormGrid>
       )}
       {viewAs && billing && <div id="plans-viewas" data-testid="plans-viewas"><Notice tone="warn" role="status">{viewingPlansNote(planName(viewAs))}</Notice></div>}
-      {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
-        ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
       <div className="k-plans">
         {(["free", "basic", "pro"] as const).map((p) => {
           const cur = paid === p;
@@ -194,6 +195,8 @@ export function PlansPage() {
           );
         })}
       </div>
+      {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
+        ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
       <Compare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>

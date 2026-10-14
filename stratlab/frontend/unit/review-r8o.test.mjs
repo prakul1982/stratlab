@@ -39,7 +39,7 @@ test("R8O-002: Plans lists the fresh AI reads a day, from the same numbers as th
   assert.equal(LIMITS.basic.ai_reads_per_day, 60);
   assert.equal(LIMITS.pro.ai_reads_per_day, null);
   assert.ok(NUMBERS.some(([k, label]) => k === "ai_reads_per_day" && /market mood, never count/.test(label)));
-  assert.ok(FEATURES.pro.some((f) => /up to 200 a day/.test(f) && /fresh AI reads/.test(f)));
+  assert.ok(FEATURES.pro.some((f) => /up to 200 AI builds a day/.test(f) && /deep dives and decks/.test(f)));
   assert.match(read("src/pages/AccountPage.tsx"), /"Fresh AI reads today", aiReadsUse\(/);
 });
 

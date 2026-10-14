@@ -15,7 +15,7 @@ import { VisitorApp } from "./visitor/VisitorApp";
 import { LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
-import { fmtDate } from "./lib/format";
+import { endsAt } from "./lib/offer";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -161,7 +161,7 @@ function PromoBanner({ until }: { until: string }) {
   const key = `stratlab.promo.seen.${until.slice(0, 10)}`;
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } });
   if (hidden) return null;
-  const day = fmtDate(until, { year: false });
+  const day = endsAt(until);
   return (
     <div className="banner promo-banner">
       <span><b>Launch offer:</b> every Pro feature is free for everyone until {day}. After that, your plan's limits apply again.</span>
