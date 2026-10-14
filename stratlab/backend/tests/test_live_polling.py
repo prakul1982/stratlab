@@ -300,3 +300,34 @@ def test_futures_options_commodities_and_crypto_are_left_alone(monkeypatch):
     q = s.engine.qty
     s._on_candle(sbar(6, 0, 1000.0))
     assert s.engine.qty == q and not corp_events(s.engine)
+
+
+def test_a_long_catch_up_alert_lists_20_orders_and_counts_the_rest(monkeypatch):
+    from types import SimpleNamespace
+    mgr, reg = make_manager()
+    calls = offline_world(monkeypatch, mgr, [])
+    s = SimpleNamespace(user_id="u", name="Always in", id="s1", inst={"symbol": "BTC-USD"}, replaying=None)
+    evs = [{"side": "buy", "qty": 1, "px": 100.0, "why": "Entry rule", "t": f"2026-10-12T09:{i:02d}:00"} for i in range(30)]
+    mgr.replay(s, lambda: s.replaying.extend(evs))
+    (_, subject, text), = [c for c in calls if c[0] == "alert"]
+    assert "30 paper trades" in subject and text.count("BUY") == 20 and text.endswith("and 10 more on the session page")
+    assert len(text) < 4096
+
+
+def test_trade_alerts_are_capped_per_user_per_day_on_email_and_telegram(monkeypatch):
+    sent = []
+    monkeypatch.setattr(live, "TRADE_ALERTS_PER_DAY", 3)
+    monkeypatch.setattr(live, "notify", lambda p, subj, body, **k: sent.append(("all", subj)) or ["email"])
+    monkeypatch.setattr(live.db, "update_setting", lambda key, fn: store.update(v=fn(store.get("v"))))
+    store = {}
+    monkeypatch.setattr(live.alerts, "jobs_for", lambda p, subj, text, url="/paper": [
+        ("push", lambda: sent.append(("push", subj))), ("telegram", lambda: sent.append(("telegram", subj))),
+        ("email", lambda: sent.append(("email", subj)))])
+    p = {"id": "u"}
+    for i in range(6):
+        live.trade_notify(p, f"trade {i}", "text", url="/paper/s1")
+    assert [x for x in sent if x[0] == "all"] == [("all", f"trade {i}") for i in range(3)]           # under the cap: as before
+    over = [x for x in sent if x[0] != "all"]
+    assert [x for x in over if x[0] == "push"] == [("push", "trade 3"), ("push", "trade 4"), ("push", "trade 5")]
+    assert [x for x in over if x[0] != "push"] == [("telegram", "StratLab: trade alert limit for today"),
+                                                   ("email", "StratLab: trade alert limit for today")]     # one last message

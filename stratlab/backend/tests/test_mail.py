@@ -264,3 +264,21 @@ def test_the_alert_test_does_not_pass_on_telegrams_own_error(monkeypatch):
         assert "chat not found" not in r.text and "SECRET" not in r.text and "Telegram couldn't deliver to that chat" in r.text
     finally:
         w["close"]()
+
+
+def test_the_alert_test_hides_the_mail_services_words_from_users_but_not_admins(monkeypatch):
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        monkeypatch.setattr(alerts, "email_ready", lambda: True)
+        monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
+
+        def refuse(*a, **k):
+            raise RuntimeError("Brevo refused the email (401). Brevo only accepts emails from authorized IPs")
+        monkeypatch.setattr(alerts, "send_message", refuse)
+        db.update_profile("u-pro", alert_email="pro@example.com")
+        r = c.post("/me/alerts/test", headers=W.headers("pro-token"))
+        assert r.status_code == 502 and "The email couldn't be sent right now." in r.text and "Brevo" not in r.text
+        assert alerts.test({"id": "u-admin", "alert_email": "owner@example.com"}, admin=True)[1]["email"].startswith("Brevo refused")
+    finally:
+        w["close"]()

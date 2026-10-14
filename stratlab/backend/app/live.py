@@ -1,4 +1,5 @@
 """Live paper trading: builds candles from Kite ticks and runs the same Engine as backtests."""
+import json
 import threading
 import time
 from datetime import datetime, timedelta
@@ -257,6 +258,12 @@ def day_close_minutes(market: str):
             return None
         return int(hm[:2]) * 60 + int(hm[3:]) if hm else None
     return close
+
+
+TRADE_ALERTS = "tradealerts:"        # tradealerts:<uid>: {"day": India date, "n": paper-trade alerts sent that day}
+TRADE_ALERTS_PER_DAY = 40            # on email and Telegram; the phone has no cap
+TRADE_ALERTS_CAPPED = "More trade alerts today are on the session page."
+CATCH_UP_LINES = 20                  # a catch-up alert lists this many orders (Telegram stops at 4096 characters)
 
 
 class LiveSession:
@@ -710,9 +717,12 @@ class LiveManager:
             try:
                 profile = db.get_profile(s.user_id)
                 if alerts_on(profile):
+                    shown = evs[:CATCH_UP_LINES]
                     lines = [f"{ev['side'].upper()} {ev['qty']:g} {ev.get('sym') or s.inst['symbol']} at {ev['px']:,.2f} "
-                             f"({ev.get('why') or 'order'}, candle {str(ev['t'])[:16].replace('T', ' ')})" for ev in evs]
-                    notify(profile, f"{s.name}: {len(evs)} paper trade{'s' if len(evs) > 1 else ''} while offline",
+                             f"({ev.get('why') or 'order'}, candle {str(ev['t'])[:16].replace('T', ' ')})" for ev in shown]
+                    if len(evs) > len(shown):
+                        lines.append(f"and {len(evs) - len(shown)} more on the session page")
+                    trade_notify(profile, f"{s.name}: {len(evs)} paper trade{'s' if len(evs) > 1 else ''} while offline",
                            f"StratLab caught up on candles that closed while the server was down ({s.name}):\n" + "\n".join(lines),
                            background=False, url=f"/paper/{s.id}")
             except Exception as e:
@@ -745,7 +755,7 @@ class LiveManager:
                     else:                          # closing one
                         why = f"{str(ev.get('why') or 'closed').lower()}, " if ev.get("why") else ""
                         text = f"{head}, {why}P&L {ev['pnl']:,.0f} {cur} ({s.name})"
-                    notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
+                    trade_notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
             except Exception as e:
                 print("order record failed:", e)
         threading.Thread(target=work, daemon=True).start()
@@ -868,6 +878,36 @@ def session_needs(s, plan: str) -> str | None:
 def alerts_on(profile: dict) -> bool:
     """A message for every paper trade: for anyone who turned alerts on and whose plan has them."""
     return bool(profile.get("alerts_enabled")) and allows(plan_of(profile), "alerts")
+
+
+def trade_notify(profile: dict, subject: str, text: str, **kw):
+    """notify, with at most TRADE_ALERTS_PER_DAY a day per user on email and Telegram (a runaway strategy shouldn't flood
+    an inbox). Past it the phone still gets each one, and email and Telegram get one last line saying so."""
+    uid, day = profile.get("id"), datetime.now(IST).date().isoformat()
+    n = []
+
+    def count(raw):
+        have = db.json_value(raw, {})
+        n[:] = [(have["n"] if have.get("day") == day else 0) + 1]
+        return json.dumps({"day": day, "n": n[0]})
+    try:
+        db.update_setting(TRADE_ALERTS + uid, count)
+    except Exception as e:
+        print("trade alert count failed:", e)
+        return notify(profile, subject, text, **kw)
+    if n[0] <= TRADE_ALERTS_PER_DAY:
+        return notify(profile, subject, text, **kw)
+    url = kw.get("url", "/paper")
+    sends = [j for c, j in alerts.jobs_for(profile, subject, text, url) if c == "push"]
+    if n[0] == TRADE_ALERTS_PER_DAY + 1:
+        sends += [j for c, j in alerts.jobs_for(profile, "StratLab: trade alert limit for today", TRADE_ALERTS_CAPPED, url)
+                  if c != "push"]
+    for job in sends:
+        try:
+            job()
+        except Exception as e:
+            print("alert failed:", e)
+    return [] if not sends else ["push"]
 
 
 def report_on(profile: dict) -> bool:

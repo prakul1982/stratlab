@@ -404,10 +404,10 @@ def test_a_my_stocks_run_killed_mid_way_resumes_with_the_readers_left(w, monkeyp
     assert len(got) == 1
     assert job.Job().tick(AFTER_IN_CLOSE) == 0 and len(got) == 1          # the dead run still looks alive: left alone
     clock[0] += run_marks.STALE + 1
-    assert job.Job().tick(AFTER_IN_CLOSE) == 1                            # the reader the run never reached
-    assert len(got) == 2 and len(set(got)) == 2                           # none twice (the one cut off is dropped)
+    assert job.Job().tick(AFTER_IN_CLOSE) == 2                            # the one cut off (not recorded until sent) and the one never reached
+    assert len(got) == 3 and len(set(got)) == 3                           # none twice among those that were recorded
     clock[0] += run_marks.STALE + 1
-    assert job.Job().tick(AFTER_IN_CLOSE) == 0 and len(got) == 2          # done: skipped
+    assert job.Job().tick(AFTER_IN_CLOSE) == 0 and len(got) == 3          # done: skipped
 
 
 def test_the_market_issue_is_not_resent_while_its_send_is_still_going(w, monkeypatch, outbox):
@@ -436,3 +436,23 @@ def test_a_change_that_rounds_to_zero_carries_no_sign():
     assert kit.pct(0.004) == "0.00%" and kit.pct(-0.004) == "0.00%" and kit.pct(-0.04, 1) == "0.0%"
     assert kit.pct(0.6) == "+0.60%" and kit.pct(-1.25) == "−1.25%"
     assert kit.money(-0.4, "USD", 0, True) == "$0" and kit.money(-35, "USD", 0, True) == "−$35"
+
+
+def test_my_stocks_run_records_a_reader_only_after_the_email_went(w, monkeypatch, outbox):
+    monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
+    reader("u-pro", "pro@example.com", my_stocks="daily")
+    db.set_setting("watchlist:u-pro", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
+    qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
+           "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
+    monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
+
+    class Run:
+        sent = []
+        seen = lambda self, uid: False  # noqa: E731
+        beat = lambda self: None  # noqa: E731
+        record = lambda self, uid: self.sent.append(uid)  # noqa: E731
+    run = Run()
+    monkeypatch.setattr(job, "deliver_why", lambda *a, **k: "error")
+    assert job.Job().run_stocks(date(2026, 10, 1), False, run) == 0 and run.sent == []
+    monkeypatch.setattr(job, "deliver_why", lambda *a, **k: "sent")
+    assert job.Job().run_stocks(date(2026, 10, 1), False, run) == 1 and run.sent == ["u-pro"]

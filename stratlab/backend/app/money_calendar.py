@@ -496,6 +496,9 @@ def _send(profile: dict, channel: str, subject: str, text: str) -> list[str]:
     from . import alerts
     want = {"email", "push"} if channel == "both" else {channel}
     jobs = [(c, j) for c, j in alerts.jobs_for(profile, subject, text, "/money/calendar") if c in want]
+    to = alerts.newsletter_email(profile)          # no alert address: the sign-in address, as stock alerts do
+    if "email" in want and not any(c == "email" for c, _ in jobs) and to and alerts.email_ready() and alerts.email_confirmed(profile) and alerts.alert_emails_on(profile.get("id")):
+        jobs.append(("email", lambda: alerts.send_message(to, subject, text, "/money/calendar", uid=profile.get("id"))))
     sent = []
     for c, j in jobs:
         try:
@@ -523,11 +526,11 @@ def send_reminders(today: date, send=_send, run=None) -> int:
                 continue
             target = today + timedelta(days=r["days"])
             evs = events(uid, target, target, set(r["cats"]))
-            if evs and run:
-                run.record(uid)                    # before the send: a kill in between drops one, never doubles
             if evs and send(profile, r["channel"], f"StratLab: {len(evs)} money date{'s' if len(evs) != 1 else ''} coming up",
                             reminder_text(evs, r["days"])):
                 sent += 1
+                if run:
+                    run.record(uid)                # after the send: a failed one is tried again if the run resumes
         except Exception as e:
             print("money calendar reminders:", type(e).__name__)
     return sent

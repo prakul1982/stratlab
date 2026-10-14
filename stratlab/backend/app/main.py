@@ -910,7 +910,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
 def test_alert(profile=Depends(current_profile)):
     need(profile, "daily_report", "Alerts and the daily report")
     throttle(profile, "alert_test", 5, 3600, "You've sent 5 test alerts this hour. Try again later.")
-    sent, failed = alerts.test(profile)
+    sent, failed = alerts.test(profile, admin.is_admin(profile))
     if not sent and not failed:
         err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
             + (" or an email" if alerts.email_ready() else "") + ", first.")
@@ -991,7 +991,7 @@ def send_email_confirmation(profile=Depends(current_profile)):
         _, html, text = previews.confirm_email(to, link)
         alerts.send_email(to, "Confirm your StratLab email", text, html=html)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", "The email couldn't be sent right now." if not admin.is_admin(profile) else f"The email couldn't be sent: {str(e)[:200]}")
     return {"confirmed": False, "sent_to": to}
 
 
@@ -5300,10 +5300,9 @@ def weekly_facts(now: datetime) -> dict:
             if "mismatch" in levels or "error" in levels:
                 issues.append({"symbol": r.get("symbol"), "mismatches": levels.count("mismatch"), "errors": levels.count("error")})
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
-    origin = (settings.FRONTEND_ORIGINS or [""])[0].rstrip("/")
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
             "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
-            "admin_url": f"{origin}/admin" if origin else None}
+            "admin_url": email_kit.site("/admin")}
 
 
 def weekly_summary(now: datetime | None = None) -> tuple[str, str]:
@@ -5483,7 +5482,7 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
         _, html, text = previews.test_email()
         alerts.send_email(to, "StratLab test email", text, html=html)
     except Exception as e:
-        why = public_text(str(e))[:200]
+        why = str(e)[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():
             why += ". The host blocks outgoing mail ports: add BREVO_API_KEY or RESEND_API_KEY in Railway to send over HTTPS instead"
         err(502, "email_failed", f"The email couldn't be sent: {why}")
@@ -5512,7 +5511,7 @@ def admin_review_link(profile=Depends(admin.admin_profile)):
     try:
         alerts.send_email(to, "StratLab reviewer sign-in link", text, html=html)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
     return {"sent_to": to}
 
 
@@ -5548,7 +5547,7 @@ def admin_lifecycle_test(kind: str, profile=Depends(admin.admin_profile)):
     try:
         subject = lifecycle.send_test(kind, profile, to)
     except Exception as e:
-        err(502, "email_failed", f"The email couldn't be sent: {public_text(str(e))[:200]}")
+        err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
     return {"sent_to": to, "subject": subject}
 
 

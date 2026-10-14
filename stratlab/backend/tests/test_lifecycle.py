@@ -171,6 +171,51 @@ def test_a_failed_send_is_tried_again(w, monkeypatch):
     assert len(got) == 1
 
 
+def test_a_failed_receipt_or_plan_note_is_retried_by_the_sweep(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    got = []
+
+    def down(*a, **k):
+        raise RuntimeError("timed out")
+    monkeypatch.setattr(alerts, "send_email", down)
+    p = user(created=NOW - timedelta(days=100))
+    inv = {"number": "SL/2026-27/0001", "payment_id": "pay_1", "total": 499.0, "currency": "INR", "date": "2026-10-07"}
+    assert not lifecycle.receipt(p, inv, "pro", "month") and not lifecycle.plan_ended(p, "sub_1", "pro")
+    assert lifecycle.sent(p["id"]) == {}
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, *a, **k: got.append(subject))
+    assert lifecycle.sweep(NOW + timedelta(hours=1)) == 2
+    assert sorted(lifecycle.sent(p["id"])) == ["plan_ended:sub_1", "receipt:pay_1"] and len(got) == 2
+    assert lifecycle.sweep(NOW + timedelta(hours=2)) == 0 and len(got) == 2             # once
+
+
+def test_a_failing_account_email_is_given_up_after_a_few_tries(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    tries = []
+
+    def down(*a, **k):
+        tries.append(1)
+        raise RuntimeError("timed out")
+    monkeypatch.setattr(alerts, "send_email", down)
+    p = user(created=NOW - timedelta(days=100))
+    lifecycle.plan_ended(p, "sub_1", "pro")
+    for h in range(1, 9):
+        lifecycle.sweep(NOW + timedelta(hours=h))
+    assert len(tries) == lifecycle.RETRIES
+    assert db.json_value(db.get_setting(lifecycle.PENDING + p["id"]), {}) == {}
+
+
+def test_a_failed_invite_reward_keeps_its_end_date_for_the_retry(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    monkeypatch.setattr(alerts, "send_email", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("timed out")))
+    p = user(created=NOW - timedelta(days=100))
+    until = NOW + timedelta(days=30)
+    ctx = {"role": "newcomer", "kind": "use", "days": 30, "until": until, "banked": 0}
+    assert not lifecycle.send(p, "invite_reward", "invite_reward:x:newcomer", ctx, NOW)
+    got = []
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, text, **k: got.append(text))
+    assert lifecycle.sweep(NOW + timedelta(hours=1)) == 1 and "Your free Basic runs until" in got[0]
+
+
 def test_nothing_without_email_set_up_or_an_address(w, monkeypatch):
     monkeypatch.setattr(alerts, "email_ready", lambda: False)
     assert not lifecycle.send(user(), "welcome") and lifecycle.sweep(NOW) == 0

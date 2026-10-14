@@ -40,7 +40,8 @@ def _week(w, monkeypatch, now):
     main.market_audit_us.loaded = True
     monkeypatch.setattr(main, "RECENT_ERRORS", [{"ref": "A1", "at": (now - timedelta(days=1)).isoformat()},
                                                 {"ref": "B2", "at": (now - timedelta(days=9)).isoformat()}])
-    monkeypatch.setattr(settings, "FRONTEND_ORIGINS", ["https://stratlab.example", "http://localhost:5500"])
+    monkeypatch.setattr(settings, "FRONTEND_ORIGINS", ["http://localhost:5500", "https://stratlab.example"])
+    monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "https://stratlab.example")       # the admin link is the site's address, not the first origin
 
 
 def test_the_summary_has_the_weeks_numbers(monkeypatch):
