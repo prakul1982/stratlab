@@ -684,12 +684,15 @@ class Job:
                 problems.append(f"My stocks: {str(e)[:160]}")
                 ran = True
         tz, weekday, at = WEEKLY_AT
+        for region in SEND_AT:            # per region, like the daily brief: marked only once its issue is built
+            day = self.due(f"weekly-{region}", now, tz, at, weekday=weekday)
+            issue = build_market(region, day, True) if day else None
+            if issue:
+                self.mark(f"weekly-{region}", day)
+                sent += self._send(region, issue, True, problems)
         day = self.due("weekly", now, tz, at, weekday=weekday)
         if day:
             self.mark("weekly", day)
-            for region in SEND_AT:
-                issue = build_market(region, day, True)
-                sent += self._send(region, issue, True, problems) if issue else 0
             try:
                 sent, ran = sent + self.run_stocks(day, True), True
             except Exception as e:
@@ -718,7 +721,7 @@ class Job:
         for region, (tz, _) in SEND_AT.items():
             day = now.astimezone(ZoneInfo(tz)).date().isoformat()
             for weekly in (False, True):
-                if self.last.get("weekly" if weekly else f"market-{region}") != day:
+                if self.last.get(f"weekly-{region}" if weekly else f"market-{region}") != day:
                     continue
                 iid = issue_id("market", region, day, weekly)
                 if self._open.get(iid) is False:

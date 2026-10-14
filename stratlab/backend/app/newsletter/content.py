@@ -426,14 +426,18 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     bars = data["bars"]
     if not bars:
         return None
-    ref = reference_day(region, day, weekly).isoformat()
-    if region == "IN":                     # the change is measured between two official closes (R11P-002)
+    # measured from the session before the stock's own last bar (a week before it, for the weekly issue): a US stock's
+    # last bar is the previous US session when the India-dated issue goes out, which the day's reference would equal
+    last = str(bars[-1]["t"])[:10]
+    stale = last < previous_trading_day(region, day).isoformat()       # no new session since: nothing to measure
+    ref = (date.fromisoformat(last) - timedelta(days=7) if weekly else previous_trading_day(region, date.fromisoformat(last))).isoformat()
+    if region == "IN" and not stale:       # the change is measured between two official closes (R11P-002)
         try:
             bars = official_close.with_reference(bars, official_close.base_symbol(sym), ref)
         except Exception as e:
             print("official reference close:", sym, str(e)[:120])
     now = scan.analyse(bars)
-    before_bars = [b for b in bars if str(b["t"])[:10] <= ref]
+    before_bars = [b for b in bars if str(b["t"])[:10] <= ref] if not stale else []
     before = scan.analyse(before_bars) if before_bars else None
     if not now:
         return None
