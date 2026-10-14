@@ -5,7 +5,6 @@ token) or, for anonymous calls, per address; they're generous enough that normal
 tabs polling paper sessions, never reaches them."""
 import hashlib
 import json
-import os
 import re
 import threading
 import time
@@ -19,10 +18,6 @@ BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST, ("POST", "/trade/journal/i
 PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
-try:
-    TRUSTED_PROXIES = int(os.environ.get("TRUSTED_PROXIES", "1"))      # proxies in front of the app that append to X-Forwarded-For
-except ValueError:
-    TRUSTED_PROXIES = 1
 EXEMPT = ("/health",)               # the host's health check
 HOOKS = "/hooks/signal/"            # signal webhooks (signals_routes.py): limited per secret URL, not per address
 
@@ -65,11 +60,8 @@ class Window:
 
 
 def address(scope) -> str:
-    """The client's address. A client can set X-Forwarded-For itself, but each trusted proxy (Railway's, by default one)
-    appends the address it saw, so the entry that many places from the right is the real one."""
     headers = dict(scope.get("headers") or [])
-    hops = [h.strip() for h in headers.get(b"x-forwarded-for", b"").decode("latin-1").split(",") if h.strip()]
-    ip = hops[-TRUSTED_PROXIES] if 0 < TRUSTED_PROXIES <= len(hops) else ""
+    ip = (headers.get(b"x-real-ip") or headers.get(b"x-forwarded-for", b"").split(b",")[0]).strip().decode("latin-1")
     if not ip and scope.get("client"):
         ip = scope["client"][0]
     return ip or "?"
