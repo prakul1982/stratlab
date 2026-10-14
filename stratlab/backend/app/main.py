@@ -774,6 +774,14 @@ def prefs_of(uid: str) -> dict:
         return {}
 
 
+def change_prefs(uid: str, fn) -> dict:
+    """prefs:<uid> changed atomically (db.update_setting): fn(current prefs) returns the new ones, None to leave them."""
+    def go(raw):
+        new = fn(db.json_value(raw, {}))
+        return None if new is None else json.dumps(new)
+    return db.json_value(db.update_setting(daily_report.PREFS + uid, go), {})
+
+
 @app.get("/me/export")
 def export_my_data(profile=Depends(current_profile)):
     """Your own copy of everything StratLab keeps for you, as one JSON file (no tokens or passwords)."""
@@ -803,8 +811,7 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
     allowed."""
     given = {k: getattr(req, k) for k in PREF_KEYS}
-    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
-    db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
+    prefs = change_prefs(profile["id"], lambda cur: {**cur, **{k: v for k, v in given.items() if v}})
     return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
 
 
@@ -850,15 +857,15 @@ def established_of(uid: str) -> bool:
 @app.put("/me/onboarding")
 def set_onboarding(req: OnboardingReq, profile=Depends(current_profile)):
     """Remember that the welcome question or the tour was seen. Only moves forward: a tour that was done stays done."""
-    prefs = prefs_of(profile["id"])
-    cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
-    nxt = dict(cur)
-    if req.welcome and not cur.get("welcome"):
-        nxt["welcome"] = db.now_iso()
-    if req.tour and cur.get("tour") != "done":
-        nxt["tour"] = req.tour
-    if nxt != cur:
-        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "onboarding": nxt}))
+    def go(prefs):
+        cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
+        nxt = dict(cur)
+        if req.welcome and not cur.get("welcome"):
+            nxt["welcome"] = db.now_iso()
+        if req.tour and cur.get("tour") != "done":
+            nxt["tour"] = req.tour
+        return {**prefs, "onboarding": nxt} if nxt != cur else None
+    change_prefs(profile["id"], go)
     return {"onboarding": onboarding_of(profile["id"])}
 
 
@@ -895,7 +902,12 @@ def push_unsubscribe(req: PushReq, profile=Depends(current_profile)):
 
 @app.put("/me/alerts")
 def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
-    need(profile, "daily_report", "Alerts and the daily report")
+    # turning things off or clearing a field works on any plan; each field is empty or the one already saved
+    same = lambda new, old: not new or (new or "").strip().lower() == (old or "").strip().lower()
+    off_only = (not req.alerts_enabled and not req.daily_report and not req.alert_emails
+                and same(req.telegram_chat_id, profile.get("telegram_chat_id")) and same(req.alert_email, profile.get("alert_email")))
+    if not off_only:
+        need(profile, "daily_report", "Alerts and the daily report")
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
@@ -906,8 +918,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     if (req.alert_emails or (new_addr and new_addr != (profile.get("alert_email") or "").strip().lower())) and not alerts.alert_emails_on(profile["id"]):
         alerts.set_alert_emails(profile["id"], True)
     if req.daily_report is not None:
-        prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
-        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))
+        change_prefs(profile["id"], lambda cur: {**cur, "daily_report": req.daily_report})
     return {"saved": True}
 
 
@@ -2200,16 +2211,15 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
-    # the yield as the company page and the public page work it out (ex-dated dividends of the year), not the source's
-    # last reported year's, so the deck's tile agrees with them; without that list the source's figure stays, as on the page
+    # the yield as the public page works it out (ex-dated dividends of the year to the last close): the source's own
+    # figure never stays, so a missing list is n/a here as there, not the source's 0.00%
+    as_of = candle_day((base.get("trend") or {}).get("t")) or datetime.now(IST).date().isoformat()
     try:
-        today = datetime.now(IST).date().isoformat()
-        dy = (page_dividend_yield("US", sym, snap.get("price"), today) if us
-              else page_dividend_yield("IN", sym, snap.get("price"), today, {"sym": sym, "bse": None}))
+        dy = (us_page_dividend_yield(sym, snap.get("price"), as_of) if us
+              else page_dividend_yield("IN", sym, snap.get("price"), as_of, {"sym": sym, "bse": None}))
     except Exception:
         dy = None
-    if dy is not None:
-        snap = {**snap, "div_yield": dy}
+    snap = {**snap, "div_yield": dy}
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
@@ -3399,13 +3409,7 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         # history that couldn't be read is n/a (the filings' dividend line is missing for many foreign filers)
         p["ratios"] = sec.ratios(p, close, prices.get("high52"), prices.get("low52"))
         # the app's own dividends list first (its Corporate actions card), so both pages have one yield (R7O-004)
-        dy = page_dividend_yield("US", sym, close, prices.get("price_at"))
-        if dy is None:
-            try:
-                divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
-                dy = stock_pages.dividend_yield(divs, close, prices.get("price_at"))
-            except Exception:
-                dy = None
+        dy = us_page_dividend_yield(sym, close, prices.get("price_at"))
         if dy is None:
             p["ratios"].pop("Dividend Yield", None)
         else:
@@ -3525,6 +3529,19 @@ def page_dividend_yield(region: str, sym: str, close, as_of: str | None, co: dic
     if not divs:
         return None
     return stock_pages.dividend_yield(divs, close, as_of)
+
+
+def us_page_dividend_yield(sym: str, close, as_of: str | None) -> float | None:
+    """A US company's yield as the public page shows it: the app's own dividends list, else the price history's
+    dividends for the year, else None (n/a)."""
+    dy = page_dividend_yield("US", sym, close, as_of)
+    if dy is None and close and as_of:
+        try:
+            divs = research_hub.yahoo.events(sec.price_symbol(sym), 400)["dividends"]
+            dy = stock_pages.dividend_yield(divs, close, as_of)
+        except Exception:
+            dy = None
+    return dy
 
 
 def us_cap_checks(p: dict, sym: str) -> dict:
@@ -4146,6 +4163,14 @@ def live_overview(profile=Depends(current_profile)):
             snaps.append(s.snapshot())
         except Exception as e:
             print("overview: snapshot failed:", s.id, e)
+    if not leader.leading():      # another container runs the sessions: their last saved state
+        for r in db.user_sessions(profile["id"]):
+            row = db.get_session_row(profile["id"], r["id"]) if r["status"] == "running" else None
+            if row and row.get("status") == "running":
+                try:
+                    snaps.append(stored_snapshot(row))
+                except Exception as e:
+                    print("overview: stored snapshot failed:", r["id"], e)
     return risk.summary(snaps, datetime.now(IST).date().isoformat())
 
 
@@ -4154,8 +4179,8 @@ def list_live(profile=Depends(current_profile)):
     running = {s.id for s in manager.user_running(profile["id"])}
     rows = db.user_sessions(profile["id"])
     for r in rows:
-        if r["status"] == "running" and r["id"] not in running:
-            r["status"] = "paused"   # server restarted and the session could not reattach yet
+        if r["status"] == "running" and r["id"] not in running and leader.leading():
+            r["status"] = "paused"   # server restarted and the session could not reattach yet (another container: it runs there)
     return rows
 
 
@@ -4169,18 +4194,27 @@ def get_live(sid: str, profile=Depends(current_profile)):
         row = db.get_session_row(profile["id"], sid)
         if not row:
             err(404, "not_found", "Session not found.")
-        if (row.get("instrument") or {}).get("type") == "GROUP":
-            from .group_live import stopped_snapshot as group_stopped
-            snap = group_stopped(row)
-            snap["orders"] = orders_from(snap["events"])
-            return ok(snap)
-        if (row.get("instrument") or {}).get("type") == "OPTIONS":
-            snap = options_stopped(row)
-            snap["orders"] = orders_from(snap["events"])
-            return ok(snap)
-        snap = live_stopped(row)
+        snap = stored_snapshot(row)
     snap["orders"] = orders_from(snap.get("events") or [])
     return ok(snap)
+
+
+STORED_NOTICE = "Updating: these figures are from the session's last saved state."
+
+
+def stored_snapshot(row: dict) -> dict:
+    """A session not running here, from its saved state. A running one runs on another container (or is reattaching)."""
+    kind = (row.get("instrument") or {}).get("type")
+    if kind == "GROUP":
+        from .group_live import stopped_snapshot as group_stopped
+        snap = group_stopped(row)
+    elif kind == "OPTIONS":
+        snap = options_stopped(row)
+    else:
+        snap = live_stopped(row)
+    if row.get("status") == "running":
+        snap["notice"] = STORED_NOTICE
+    return snap
 
 
 def orders_from(events: list[dict]) -> list[dict]:

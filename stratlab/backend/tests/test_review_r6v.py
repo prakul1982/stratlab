@@ -395,3 +395,10 @@ def test_preview_times_are_india_time_and_the_tax_reminder_is_dated_when_sent():
     d = {"date": "2026-12-15", "label": "15 Dec 2026", "n": 2, "pct": 0.75}
     _, html, text = money_advance_tax.reminder_email(d, 7)
     assert "Tue 8 Dec" in text and "Advance tax · Tue 15 Dec" not in text           # the header: the day it goes out
+
+
+def test_the_sitemap_lists_only_library_pages_the_build_writes(monkeypatch):
+    from app import library, site_pages
+    seed = library_seed.entry_id(*next((slug, s["groups"][0][1]) for slug, s in library_seed.STRATEGIES.items()))
+    monkeypatch.setattr(library, "public_entries", lambda: [{"id": seed, "published_at": "2026-10-01"}, {"id": "seed-unbuilt", "published_at": "2026-10-01"}])
+    assert site_pages.library_pages() == [(f"/library/{seed}", "2026-10-01")]

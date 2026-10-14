@@ -33,6 +33,13 @@ def own_question(q: str | None) -> str:
     return "" if _RULES_QUESTION.match(q) else q
 
 
+def _indexed(equity: list, hold: list) -> dict:
+    """Both lines as the growth of 100 from the strategy's start: the account's own amounts would show the capital."""
+    base = next((x for x in equity if x), None)
+    scale = (lambda xs: [None if x is None else round(x * 100 / base, 2) for x in xs]) if base else (lambda xs: [])
+    return {"equity": scale(equity), "buy_hold": scale(hold), "indexed": True}
+
+
 def snapshot(nb: dict, exp: dict) -> dict:
     v = exp.get("verdict") or {}
     inst = exp.get("instrument") or {}
@@ -45,10 +52,10 @@ def snapshot(nb: dict, exp: dict) -> dict:
         "side": (exp.get("strategy") or {}).get("side", "long"), "created_at": exp.get("created_at"),
         "verdict": {k: v.get(k) for k in ("verdict", "headline", "summary", "passed", "total")}
                    | {"checks": [{k: c.get(k) for k in ("id", "title", "status", "detail")} for c in v.get("checks") or []]},
-        "stats": {k: (exp.get("stats") or {}).get(k) for k in ("ret", "buy_hold_ret", "mdd", "n")},      # no pnl: it would show the capital
-        "series": {"t": s.get("t") or [], "equity": s.get("equity") or [], "buy_hold": s.get("buy_hold") or [], "split": s.get("split")},
+        "stats": {k: (exp.get("stats") or {}).get(k) for k in ("ret", "buy_hold_ret", "mdd", "n")},      # no pnl, here or in the members: the amounts divided by the return would show the capital
+        "series": {"t": s.get("t") or [], **_indexed(s.get("equity") or [], s.get("buy_hold") or []), "split": s.get("split")},
         "group": None if not g else {"name": g.get("name"), "max_open": g.get("max_open"),
-                                      "members": [{k: m.get(k) for k in ("symbol", "trades", "pnl", "win", "buy_hold")} for m in g.get("members") or []]},
+                                      "members": [{k: m.get(k) for k in ("symbol", "trades", "win", "buy_hold")} for m in g.get("members") or []]},
     }
 
 
@@ -105,6 +112,12 @@ def load(token: str) -> dict | None:
     if isinstance(snap, dict) and isinstance(snap.get("verdict"), dict):
         from .engine.verdict import restated                     # a link shared with a claim for a headline (R11C-009)
         snap["verdict"] = restated(snap["verdict"], snap.get("stats"))
+    if isinstance(snap, dict) and isinstance(snap.get("series"), dict) and not snap["series"].get("indexed"):
+        s = snap["series"]                                       # a link shared with the account's own amounts
+        snap["series"] = {**s, **_indexed(s.get("equity") or [], s.get("buy_hold") or [])}
+    if isinstance(snap, dict) and isinstance(snap.get("group"), dict):
+        for m in snap["group"].get("members") or []:
+            m.pop("pnl", None)                                   # and with each member's P&L
     return snap
 
 

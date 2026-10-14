@@ -219,3 +219,57 @@ def test_the_engines_open_fill_gate_takes_the_backtests_argument(monkeypatch):
     mgr, _ = make_manager()
     s = group_live.GroupLiveSession(mgr, row())
     assert s.free_slot(at_open=True) is True and s.members[0].engine.gate(at_open=True) is True
+
+
+def test_a_member_whose_history_fails_at_a_restart_keeps_its_saved_position(monkeypatch):
+    from tests.test_live_polling import bar5
+    mgr, _ = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    hist = {iid: [bar5(i) for i in range(40)] for iid in row()["instrument"]["members"]}
+    down = {"CRYPTO:BTC-USD"}
+
+    def history(inst, tf, days, ttl=None):
+        if inst["id"] in down:
+            raise RuntimeError("no data")
+        return list(hist[inst["id"]])
+    prov = mgr.markets.provider("CRYPTO")
+    monkeypatch.setattr(prov, "history", history)
+    monkeypatch.setattr(prov, "closed_candles", lambda inst, tf, since: [])
+    monkeypatch.setattr(prov, "ltp", lambda inst: None)
+    down.clear()
+    s = group_live.GroupLiveSession(mgr, row())
+    s._on_candle(s.members[0], bar5(40))                          # BTC opens
+    saved = s.state()
+    btc = saved["members"]["CRYPTO:BTC-USD"]
+    assert btc["qty"] > 0
+    down.add("CRYPTO:BTC-USD")
+    s2 = group_live.GroupLiveSession(mgr, row(saved))
+    assert [m.inst["id"] for m in s2.members] == ["CRYPTO:ETH-USD", "CRYPTO:SOL-USD"]
+    assert s2.state()["members"]["CRYPTO:BTC-USD"] == btc        # written back unchanged
+    assert round(s2.equity(), 2) == round(s.equity(), 2)
+    s2._on_candle(s2.members[0], bar5(40))
+    assert s2.members[0].engine.qty == 0 and not s2.free_slot()  # nothing opens while BTC's position can't be counted
+    snap = s2.snapshot()
+    assert snap["account"]["open"] == 1 and "BTC" in snap["notice"] and "no new positions open" in snap["notice"]
+    assert any(r["id"] == "CRYPTO:BTC-USD" and r["position"] for r in snap["members"])
+    s2.on_timer(datetime.now(timezone.utc))
+    assert s2.waiting                                             # still down: tried again later
+    down.clear()
+    s2.next_retry = 0
+    s2.on_timer(datetime.now(timezone.utc))
+    assert not s2.waiting and s2.members[-1].inst["id"] == "CRYPTO:BTC-USD" and s2.members[-1].engine.qty == btc["qty"]
+    assert s2.free_slot() and s2.snapshot()["notice"] is None
+
+
+def test_a_candles_new_orders_go_out_before_the_loss_caps_closes(monkeypatch):
+    mgr, _ = make_manager()
+    orders = []
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: orders.append((ev["sym"], ev["side"], ev["why"])))
+    s = group_live.GroupLiveSession(mgr, row())
+    a, b, _ = s.members
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    a.last_price = 90.0                                             # a's open loss is past the cap
+    orders.clear()
+    s._on_candle(b, candle("2999-01-01T10:05:00+00:00", 100.0))   # b enters on this candle, then the cap closes both
+    assert [o[1] for o in orders if o[0] == b.sym] == ["buy", "sell"]
+    assert orders[0][:2] == (b.sym, "buy") and {o[2] for o in orders[1:]} == {"Daily loss cap"}

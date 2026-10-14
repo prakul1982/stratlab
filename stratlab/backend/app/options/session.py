@@ -154,7 +154,7 @@ def _position(e: OptionsEngine, q: dict) -> dict | None:
     return {"opened": p["opened"], "center": p["center"], "spot_in": p["spot_in"], "credit": p["credit"],
             "mtm": round(m, 2), "costs": round(p["costs"], 2), "net": round(m - p["costs"], 2),
             "best": p["peak"], "worst": p["low"], "rolls": p["rolls"], "units": p["units"], "orders": p["orders"],
-            "expiry": p["expiry"], "dir": p.get("dir")}
+            "expiry": p["expiry"], "dir": p.get("dir"), "held": p.get("held")}
 
 
 def account(e: OptionsEngine, q: dict | None) -> dict:

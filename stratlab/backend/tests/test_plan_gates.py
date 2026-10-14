@@ -233,6 +233,13 @@ def test_experience_level_is_saved_with_other_prefs(monkeypatch):
     store = {"prefs:u1": '{"daily_report": false}'}
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+
+    def update(k, fn):                        # /me/prefs saves through db.update_setting
+        new = fn(store.get(k))
+        if new is not None:
+            store[k] = new
+        return store.get(k)
+    monkeypatch.setattr(db, "update_setting", update)
     try:
         c = as_plan("free")
         assert c.put("/me/prefs", json={"level": "pro"}).json() == {"prefs": {"level": "pro", "focus": None, "space": None}}

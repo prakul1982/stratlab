@@ -43,7 +43,9 @@ test("only the app's own addresses go to index.html; anything else is a real 404
   // expected /library/<id> to be rewritten, which made /library/seed-nope a 200 with the home page's tags)
   const mine = [...links.APP_ROUTES.map((r) => r.replace(/:[A-Za-z]+/g, "x").replace(/\/\*$/, "/x")), "/terms", "/privacy", "/refunds", "/contact", "/verdict/abc", "/faq", "/about", "/help"];
   for (const p of mine.filter((x) => x !== "/" && x !== "/library")) assert.ok(re.test(p), `${p} would be a 404`);
-  for (const p of ["/nope", "/nowhere-at-all", "/config.js", "/boot.js", "/assets/x.js", "/favicon.ico", "/wp-admin", "/stocks", "/.env", "/termsx", "/research2", "/library/seed-nope"]) assert.ok(!re.test(p), `${p} is the app's`);
+  for (const p of ["/nope", "/nowhere-at-all", "/config.js", "/boot.js", "/assets/x.js", "/favicon.ico", "/wp-admin", "/stocks", "/.env", "/termsx", "/research2", "/library/seed-nope", "/pricing/foo", "/faq/x", "/terms/y", "/contact/z"]) assert.ok(!re.test(p), `${p} is the app's`);
+  // the public pages are matched exactly: a suffix is a real 404, not the home page's tags (indexable, canonical "/")
+  for (const p of ["/pricing", "/faq", "/terms", "/privacy", "/refunds", "/contact"]) assert.ok(re.test(p), p);
   // the forwarded addresses come first, so /stocks/… and the sitemaps still reach the API
   assert.equal(vercel.rewrites.at(-1), rule, "the app's rewrite is the last one");
   // /stocks itself is the API's list of public company pages (R5V-013), forwarded like /stocks/…, not sent home

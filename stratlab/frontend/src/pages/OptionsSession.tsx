@@ -88,6 +88,8 @@ export function OptionsSession() {
             : <><Badge tone={snap.status === "paused" ? "warn" : "plain"}>{snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></>}
         </>} />
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {snap.notice && <Notice tone="warn">{snap.notice}</Notice>}
+      {p?.held && <Notice tone="warn">{p.held}</Notice>}
       {running && a.halted && <Notice tone="warn">The daily loss cap was hit. No more trades today; it starts again tomorrow.</Notice>}
       {running && snap.note && !p && <Notice>{snap.note}</Notice>}
       {snap.signal && (
