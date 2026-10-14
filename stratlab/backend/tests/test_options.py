@@ -357,6 +357,77 @@ def test_a_restarted_session_with_a_position_open_loads_its_contracts():
     assert data.loads == 1 and s.snapshot()["expiry"] == "2026-09-29" and s.snapshot()["lot"] == 75
 
 
+def quiet_session():
+    from types import SimpleNamespace
+    from app.options.session import OptionSession
+    calls = []
+    mgr = SimpleNamespace(on_orders=lambda sess, evs, net=None: calls.append((list(evs), net)))
+    return OptionSession(mgr, opt_row(straddle()), StubData()), calls
+
+
+def poll(s, hm, sec=0):
+    s.next_poll = 0.0
+    s.on_timer(at(hm).replace(second=sec))
+
+
+def test_a_straddles_legs_make_one_alert_with_the_trades_net_pnl():
+    s, calls = quiet_session()
+    poll(s, "09:40")
+    (evs, net), = calls                                   # both legs of the entry together
+    assert [e["sym"] for e in evs] == ["NIFTY25000CE", "NIFTY25000PE"] and net is None
+    poll(s, "15:20")                                      # square-off: both legs close in one step
+    (_, _), (evs, net) = calls
+    assert len(evs) == 2 and all(e["pnl"] is not None for e in evs)
+    assert net == s.engine.trades[-1]["pnl"] != round(sum(e["pnl"] for e in evs), 2)     # net of charges, not the legs' sum
+
+
+def test_the_alert_text_names_the_structure_once():
+    from app.live import structure_alert
+    s, calls = quiet_session()
+    poll(s, "09:40")
+    poll(s, "15:20")
+    subject, text = structure_alert(s, calls[0][0], None)
+    assert subject == "x: opened" and text.count("SELL 75") == 2 and "NIFTY25000CE" in text and "NIFTY25000PE" in text
+    subject, text = structure_alert(s, calls[1][0], calls[1][1])
+    assert subject == "x: closed" and f"net P&L {calls[1][1]:,.0f} INR after charges" in text and "Square-off" in text
+
+
+def test_a_quiet_poll_does_not_mark_the_session_for_saving():
+    s, calls = quiet_session()
+    poll(s, "09:40")
+    assert s.dirty and len(calls) == 1
+    poll(s, "09:40", 20)                                  # the first mark-to-market sets the trade's worst point
+    s.dirty = False
+    poll(s, "09:40", 40)                                  # same minute, same prices, nothing happened
+    assert not s.dirty and len(calls) == 1
+    poll(s, "09:41")                                      # a new minute adds a point to the equity curve
+    assert s.dirty
+    s.dirty = False
+    flat, _ = quiet_session()
+    poll(flat, "16:00")                                   # past the entry window: the note says so, once
+    assert flat.dirty
+    flat.dirty = False
+    poll(flat, "16:00", 30)
+    assert not flat.dirty
+
+
+def test_one_alert_goes_out_for_all_the_orders_of_a_step(monkeypatch):
+    from types import SimpleNamespace
+    from tests.test_live_polling import make_manager, run_threads_now
+    from app import live
+    mgr, _ = make_manager()
+    run_threads_now(monkeypatch)
+    alerts, orders = [], []
+    monkeypatch.setattr(live.db, "get_profile", lambda uid: {"id": uid})
+    monkeypatch.setattr(live, "alerts_on", lambda p: True)
+    monkeypatch.setattr(live.db, "add_order", lambda o: orders.append(o["side"]))
+    monkeypatch.setattr(live, "trade_notify", lambda p, subj, text, **k: alerts.append((subj, text)))
+    sess = SimpleNamespace(kind="options", id="o1", user_id="u", name="Iron fly", inst={"symbol": "NIFTY", "currency": "INR"}, replaying=None)
+    evs = [{"t": "2026-09-24T09:40:00+05:30", "side": "sell", "qty": 75, "px": 100.0, "sym": f"NIFTY{k}", "why": "Entry"} for k in (1, 2, 3, 4)]
+    mgr.on_orders(sess, evs)
+    assert orders == ["sell"] * 4 and len(alerts) == 1 and alerts[0][0] == "Iron fly: opened" and alerts[0][1].count("SELL") == 4
+
+
 def test_mcx_and_cds_sessions_are_reported_at_their_own_exchange_close():
     from app.options.session import OptionSession
     assert OptionSession(None, opt_row(cds_strategy()), StubData()).market == "CDS"

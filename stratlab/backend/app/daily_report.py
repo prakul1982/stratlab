@@ -14,35 +14,47 @@ SEND_AT = {
     "EU": ("Europe/Berlin", time(17, 40)),
     "JP": ("Asia/Tokyo", time(15, 40)),
     "FX": ("America/New_York", time(17, 5)),     # the forex day ends at 17:00 New York
-    "MCX": ("Asia/Kolkata", time(23, 45)),       # after MCX's 23:30 close
+    "MCX": ("Asia/Kolkata", time(23, 40)),       # 10 minutes after MCX's 23:30 close (see start(): 00:05 on the next day once it closes at 23:55)
     "CDS": ("Asia/Kolkata", time(17, 15)),       # after the currency segment's 17:00 close
     "CMDTY": ("America/New_York", time(17, 10)),  # after CME's 17:00 daily break
     "CRYPTO": ("UTC", time(23, 55)),             # crypto never closes: the report covers the UTC day
 }
+MCX_AFTER = timedelta(minutes=10)                # MCX's report goes out this long after its close
 WINDOW = timedelta(hours=3)                      # after this, a missed report (server down) is skipped
 SETTING = "daily_reports_sent"
 PREFS = "prefs:"                                 # app_settings key prefix for per-person choices
 
 
+def start(market: str, day: date) -> datetime:
+    """When the report for `day` may go out, in the market's own time: after the close, which for MCX is 23:30 or, while
+    US daylight saving is off, 23:55 (options/data.py), so that report goes out after midnight."""
+    tz, at = SEND_AT[market]
+    if market == "MCX":
+        from .options.data import expiry_time
+        return datetime.combine(day, datetime.strptime(expiry_time("MCX", day), "%H:%M").time(), tzinfo=ZoneInfo(tz)) + MCX_AFTER
+    return datetime.combine(day, at, tzinfo=ZoneInfo(tz))
+
+
 def due(market: str, now: datetime) -> str | None:
-    """The market's local date if its report is due now, else None."""
+    """The report day (a date in the market's own time) if its report is due now, else None. A window that opens late
+    in the evening runs past midnight, so yesterday is the report day while still inside its window."""
     if market not in SEND_AT:
         return None
-    tz, at = SEND_AT[market]
-    local = now.astimezone(ZoneInfo(tz))
-    if not is_trading_day(market, local.date()):
-        return None
-    start = datetime.combine(local.date(), at, tzinfo=local.tzinfo)
-    return local.date().isoformat() if start <= local < start + WINDOW else None
+    local = now.astimezone(ZoneInfo(SEND_AT[market][0]))
+    for day in (local.date(), local.date() - timedelta(days=1)):
+        if is_trading_day(market, day) and start(market, day) <= local < start(market, day) + WINDOW:
+            return day.isoformat()
+    return None
 
 
 def traded_today(sessions: list, market: str, day: str) -> bool:
-    """False on a holiday: no session in that market saw a price today, so there's nothing to report."""
+    """False on a holiday: no session in that market saw a price that day, so there's nothing to report. A price from a
+    later day counts (a report sent after midnight, while crypto and MCX sessions already have the new day's prices)."""
     tz = zone_of(market)
     for s in sessions:
         t = getattr(s, "last_tick_at", None)
         try:
-            if t and datetime.fromisoformat(str(t)).astimezone(tz).date().isoformat() == day:
+            if t and datetime.fromisoformat(str(t)).astimezone(tz).date().isoformat() >= day:
                 return True
         except ValueError:
             continue

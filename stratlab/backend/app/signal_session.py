@@ -359,7 +359,7 @@ class SignalSession:
                     "trade_list": self.trades[-200:], "costs": C.breakdown(self.cost_items),
                     "account": {"capital": self.capital, "equity": eq, "cash": self.cash, "qty": abs(self.pos),
                                 "entry": self.avg if self.pos else None, "side": "short" if self.pos < 0 else "long",
-                                "unrealised": self.pos * ((px or self.avg) - self.avg) if self.pos else 0.0,
+                                "unrealised": self.pos * ((px or self.avg) - self.avg) - self.entry_cost if self.pos else 0.0,    # net of the entry's costs, as equity is
                                 "realised": sum(t["pnl"] for t in self.trades), "trades": len(self.trades),
                                 "wins": sum(1 for t in self.trades if t["pnl"] > 0)}}
 
@@ -380,6 +380,7 @@ def stopped_snapshot(row: dict) -> dict:
             "events": (st.get("events") or [])[-200:], "signals": (st.get("signals") or [])[-200:],
             "equity_curve": st.get("equity_curve") or [], "trade_list": trades[-200:], "costs": C.breakdown(st.get("cost_items") or {}),
             "account": {"capital": cap, "equity": cash + pos * last, "cash": cash, "qty": abs(pos), "entry": avg if pos else None,
-                        "side": "short" if pos < 0 else "long", "unrealised": pos * (last - avg) if pos else 0.0,
+                        "side": "short" if pos < 0 else "long",
+                        "unrealised": pos * (last - avg) - float(st.get("entry_cost") or 0.0) if pos else 0.0,
                         "realised": sum(t.get("pnl", 0) for t in trades), "trades": len(trades),
                         "wins": sum(1 for t in trades if t.get("pnl", 0) > 0)}}

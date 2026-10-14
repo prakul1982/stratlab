@@ -36,7 +36,7 @@ export interface Instrument {
 
 export interface Market {
   id: string; name: string; venues: string; currency: string | null; symbol: string; tz: string;
-  hours: { open: string | null; close: string | null; days: string } | null; what: string; costs: string;
+  hours: { open: string | null; close: string | null; days: string; fo_close?: string | null } | null; what: string; costs: string;
   brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
   holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
 }

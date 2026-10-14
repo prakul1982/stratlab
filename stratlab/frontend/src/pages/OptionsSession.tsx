@@ -17,7 +17,7 @@ import { moneyCompact } from "../lib/chartFormat";
 import "./trade/trade.css";
 import "./trade/options.css";
 import "./trade/paper.css";
-import { sessionFeed } from "../lib/marketHours";
+import { optionsMarket, sessionFeed } from "../lib/marketHours";
 
 const TZ = "Asia/Kolkata";
 const inr = (v: number | null | undefined) => money(v, "INR");
@@ -54,8 +54,8 @@ export function OptionsSession() {
   const orders = snap.events.filter((e) => e.kind !== "skip");
   const skips = snap.events.filter((e) => e.kind === "skip").slice(-5).reverse();
   const openOrders = p ? ordersSince(orders, p.opened) : [];
-  // the exchange's hours first (lib/marketHours): after the close it says so and when it opens, not "Reconnecting"
-  const closed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: null, market: markets.find((m) => m.id === "IN") });
+  // the strategy's own exchange's hours first (lib/marketHours): after the close it says so and when it opens, not "Reconnecting"
+  const closed = sessionFeed({ feedConnected: snap.feed_connected, lastTickAt: null, market: optionsMarket(markets, s.exchange) });
   const feed = closed.text.startsWith("Market closed") ? closed
     : !snap.feed_connected ? { text: "Reconnecting to prices", tone: "plain" as const } : snap.fresh ? { text: "Live option prices", tone: "live" as const } : { text: "Waiting for the first prices", tone: "plain" as const };
 

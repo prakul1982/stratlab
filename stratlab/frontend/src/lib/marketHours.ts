@@ -82,6 +82,17 @@ export function marketState(m: Market, now = new Date()): MarketState {
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
 }
 
+/** The market whose hours an options session keeps: its exchange's own. NFO and BFO trade with India's futures and
+ * options close (`fo_close`, 15:40 since 3 Aug 2026), MCX and CDS have their own markets; the server sends each market's
+ * hours as of today (MCX closes at 23:55 while US daylight saving is off), so none is written down here. */
+export function optionsMarket(markets: Market[], exchange: string | undefined): Market | null {
+  const id = exchange === "MCX" ? "MCX" : exchange === "CDS" ? "CDS" : "IN";
+  const m = markets.find((x) => x.id === id);
+  if (!m) return null;
+  const close = id === "IN" ? m.hours?.fo_close : null;
+  return close && m.hours ? { ...m, hours: { ...m.hours, close } } : m;
+}
+
 /** "Thu 8 Oct, 09:15 IST": a moment in an exchange's own zone, with the zone's short name. */
 export function exchangeTime(d: Date, tz: string): string {
   const day = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace(/\bSept\b/, "Sep");

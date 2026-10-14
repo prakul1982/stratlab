@@ -204,7 +204,7 @@ def users() -> set[str]:
     uids = {k.split(":", 1)[1] for k, _ in db.all_settings_with_prefix("watchlist:") if ":" in k}
     uids |= {db.json_value(raw, {}).get("uid") for _, raw in db.all_settings_with_prefix(newsletter_prefs.KEY)}
     try:
-        uids |= {r.get("user_id") for r in db.running_sessions()}
+        uids |= {r.get("user_id") for r in db.running_index()}
     except Exception:
         pass
     return {u for u in uids if isinstance(u, str) and u}

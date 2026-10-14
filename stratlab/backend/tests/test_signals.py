@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import daily_report, db, guard, live, main, signal_session as SS, signals as SG
+from app import daily_report, db, guard, leader, live, main, signal_session as SS, signals as SG
 from app.config import settings
 from app.engine import costs as C
 from tests import world
@@ -117,6 +117,18 @@ def test_a_body_over_the_cap_is_refused():
 
 
 # ---------- the webhook ----------
+def test_unrealised_is_net_of_the_entry_cost_live_and_after_a_stop(w):
+    c = w["client"]
+    path, s = url(c), session(c)
+    assert send(c, path, {"session": s["id"], "action": "buy", "qty": 0.5}).status_code == 200
+    entry_fee = C.total(C.order_costs("crypto", "buy", 0.5, LIVE, 0))
+    for _ in range(2):
+        a = c.get(f"/trade/signals/sessions/{s['id']}", headers=PRO).json()["account"]
+        assert a["qty"] == 0.5 and a["unrealised"] == pytest.approx(-entry_fee) and a["unrealised"] < 0
+        assert a["equity"] - a["capital"] == pytest.approx(a["realised"] + a["unrealised"])     # the same figures add up
+        assert c.post(f"/live/sessions/{s['id']}/stop", headers=PRO).status_code == 200         # then the stopped page says the same
+
+
 def test_a_signal_fills_at_stratlabs_price_with_charges(w):
     c = w["client"]
     path, s = url(c), session(c)
@@ -223,6 +235,19 @@ def test_a_stopped_session_refuses_signals(w):
     assert r.status_code == 409 and r.json()["detail"]["code"] == "stopped"
     snap = c.get(f"/trade/signals/sessions/{s['id']}", headers=PRO).json()
     assert snap["status"] == "stopped" and snap["signals"] == []
+
+
+def test_a_signal_landing_on_a_follower_is_answered_503_so_the_sender_retries(w, monkeypatch):
+    c = w["client"]
+    path, s = url(c), session(c)
+    # this container isn't the leader: the session runs in the other one, so it isn't in this manager
+    monkeypatch.setattr(leader, "leading", lambda: False)
+    monkeypatch.setattr(main.manager, "sessions", {})
+    r = send(c, path, {"session": s["id"], "action": "buy", "qty": 0.1})
+    assert r.status_code == 503 and r.headers["retry-after"] == "5"
+    assert r.json()["detail"]["code"] == "busy" and "again" in r.json()["detail"]["message"]
+    assert c.get("/trade/signals", headers=PRO).json()["misses"][0]["reason"] == r.json()["detail"]["message"]     # the miss is logged
+    assert db.get_session_row("u-pro", s["id"])["status"] == "running"        # and the session is left running
 
 
 def test_a_plan_without_it_refuses_signals(w, monkeypatch):
