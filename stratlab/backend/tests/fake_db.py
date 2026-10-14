@@ -65,8 +65,8 @@ class Query:
         self.op, self.payload = "insert", payload
         return self
 
-    def upsert(self, payload):
-        self.op, self.payload = "upsert", payload
+    def upsert(self, payload, ignore_duplicates=False):
+        self.op, self.payload, self.ignore = "upsert", payload, ignore_duplicates
         return self
 
     def update(self, payload):
@@ -121,6 +121,8 @@ class Query:
                 out = []
                 for p in self.payload if isinstance(self.payload, list) else [self.payload]:
                     old = next((r for r in rows if r.get(key) == p.get(key)), None)
+                    if old and getattr(self, "ignore", False):     # ON CONFLICT DO NOTHING: no row comes back
+                        continue
                     if old:
                         old.update(copy.deepcopy(p))
                         out.append(old)

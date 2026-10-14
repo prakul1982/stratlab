@@ -1,6 +1,8 @@
 """Admin -> Users -> "Delete this user's data": one user's app data goes (drawings, Connect records, holdings, net worth,
 notebooks, alerts, preferences), another user's stays, and only an admin can do it."""
 import json
+import threading
+import types
 
 import pytest
 
@@ -138,3 +140,108 @@ def test_erase_takes_down_share_links_and_library_entries(w):
     assert db.get_setting("share:tok-share-1") is None and db.get_setting("shareimg:tok-share-1") is None
     assert library.load("lib-entry-1") is None and library.load("lib-orphan-1") is None
     assert library.load("lib-theirs-1") is not None
+
+
+# ---------- every per-user store (newsletters, screens, reminders, MCP, invites, sessions, profile alert fields) ----------
+def seed_more(uid: str):
+    from app import company_cards, invite_rewards, market_events, mcp_keys, newsletter_prefs, plans, screens
+    from app.connect import kite_user
+    db.set_setting(newsletter_prefs.PREFIX + uid, json.dumps({"uid": uid}))
+    db.set_setting(screens.KEY + uid, json.dumps({"uid": uid, "items": [{"id": "s"}]}))
+    db.set_setting(market_events.USER_KEY + uid, json.dumps({"remind": True}))
+    db.set_setting(alerts.ALERT_OFF + uid, "1")
+    db.set_setting(lifecycle.SEEN + uid, "2026-10-01")
+    db.set_setting("watchlist:" + uid, json.dumps({"items": [{"symbol": "TCS"}]}))
+    token, _ = mcp_keys.create(uid, "Claude", True)
+    mcp_keys.log(uid, mcp_keys.resolve(token)[1], "quote", {}, "ok")
+    db.set_setting(mcp_keys.KEY_INDEX + "stale-" + uid, json.dumps({"uid": uid, "id": "gone"}))
+    db.set_setting(f"ref:user:{uid}", "CODE-" + uid)
+    db.set_setting(f"ref:code:CODE-{uid}", uid)
+    db.set_setting(f"ref:by:{uid}", json.dumps({"by": "u-someone", "at": "2026-09-01T00:00:00+00:00"}))
+    db.set_setting(f"ref:joined:{uid}", json.dumps([{"id": "u-friend", "at": "2026-09-02T00:00:00+00:00"}]))
+    db.set_setting(invite_rewards.DAYS + uid, json.dumps(["2026-09-02"]))
+    db.set_setting(invite_rewards.ROW + uid, json.dumps({"by": "u-someone", "status": "given"}))
+    db.set_setting(plans.FREE_KEY + uid, json.dumps({"until": None, "banked": 30}))
+    db.set_setting(f"cards:user:{uid}", json.dumps([{"t": "cardTok" + uid[-3:], "k": f"cardtok:{uid}:IN:TCS"}]))
+    db.set_setting(f"cardtok:{uid}:IN:TCS", "cardTok" + uid[-3:])
+    db.set_setting(f"card:cardTok{uid[-3:]}", "{}")
+    assert company_cards.TOKEN.match("cardTok" + uid[-3:])
+    db.set_setting(kite_user.PENDING + "p-" + uid, json.dumps({"uid": uid, "at": 0}))
+    s = db.create_session({"user_id": uid, "name": "paper", "status": "stopped"})
+    db.add_order({"session_id": s["id"], "user_id": uid, "side": "buy", "qty": 1, "price": 1.0})
+    db.add_usage(uid, "backtest")
+    db.sb().table("invoices").insert({"user_id": uid, "number": "INV-1"}).execute()
+    db.update_profile(uid, telegram_chat_id="12345", alert_email="a@b.com", alerts_enabled=True)
+    return token
+
+
+def more_keys(uid: str) -> list[str]:
+    from app import invite_rewards, market_events, mcp_keys, newsletter_prefs, plans, screens
+    from app.connect import kite_user
+    return [newsletter_prefs.PREFIX + uid, screens.KEY + uid, market_events.USER_KEY + uid, alerts.ALERT_OFF + uid,
+            lifecycle.SEEN + uid, "watchlist:" + uid, mcp_keys.KEY_USER + uid, mcp_keys.KEY_LOG + uid,
+            mcp_keys.KEY_INDEX + "stale-" + uid, f"ref:user:{uid}", f"ref:code:CODE-{uid}", f"ref:by:{uid}",
+            f"ref:joined:{uid}", invite_rewards.DAYS + uid, plans.FREE_KEY + uid, f"cards:user:{uid}",
+            f"cardtok:{uid}:IN:TCS", f"card:cardTok{uid[-3:]}", kite_user.PENDING + "p-" + uid]
+
+
+def test_erase_reaches_every_per_user_store(w):
+    from app import invite_rewards, mcp_keys
+    seed(ME), seed(OTHER)
+    mine, theirs = seed_more(ME), seed_more(OTHER)
+    from app import main
+    sid = db.create_session({"user_id": ME, "name": "running"})["id"]
+    main.manager.sessions[sid] = types.SimpleNamespace(id=sid, user_id=ME, lock=threading.Lock(), state=lambda: {},
+                                                    detach=lambda hub: None)
+    got = user_data.erase(ME)
+    assert got["failed"] == [] and "usage counts" in got["kept"]
+    assert sid not in main.manager.sessions                                  # stopped in the live manager first
+    assert [k for k in more_keys(ME) if db.get_setting(k) is not None] == []
+    assert mcp_keys.resolve(mine) is None                                 # the key stops working
+    gone = left(ME)
+    assert gone["connect"] == {} and gone["holdings"] == [] and gone["prefs"] == [None, None, None]
+    rows = lambda t: [r for r in db.sb().table(t).select("*").eq("user_id", ME).execute().data]  # noqa: E731
+    assert rows("live_sessions") == [] and rows("live_orders") == []
+    p = db.get_profile(ME)
+    assert (p["telegram_chat_id"], p["alert_email"], p["alerts_enabled"]) == (None, None, False)
+    # kept: usage counts, invoices, and the reward row the inviter's caps count
+    assert rows("usage_events") and rows("invoices") and db.get_setting(invite_rewards.ROW + ME)
+    # the other user's data is untouched
+    assert [k for k in more_keys(OTHER) if db.get_setting(k) is None] == []
+    assert mcp_keys.resolve(theirs) is not None
+    assert left(OTHER)["holdings"] and db.get_profile(OTHER)["telegram_chat_id"] == "12345"
+    assert db.sb().table("live_sessions").select("id").eq("user_id", OTHER).execute().data
+
+
+def test_export_has_sessions_assistant_referrals_usage_and_no_secrets(w):
+    token = seed_more(ME)
+    out = user_data.export(db.get_profile(ME))
+    assert out["not_included"] == []
+    assert len(out["sessions"]["sessions"]) == 1 and len(out["sessions"]["orders"]) == 1
+    assert out["ai_assistant"]["assistant_keys"][0]["name"] == "Claude" and len(out["ai_assistant"]["calls"]) == 1
+    assert out["referrals"]["code"] == "CODE-" + ME and out["referrals"]["invited_by"] == "u-someone"
+    assert out["usage"] == {"backtest": 1}
+    assert out["watchlist"]["watchlist"]["items"][0]["symbol"] == "TCS"
+    assert out["preferences"]["newsletters"] == {"uid": ME}
+    assert {"screens:user", "mktevents:user"} <= set(out["alerts"])
+    assert out["free_basic"]["freebasic"]["banked"] == 30
+    text = json.dumps(out)
+    from app import mcp_keys
+    assert token not in text and mcp_keys.digest(token) not in text
+
+
+def test_notebooks_are_read_past_the_servers_row_cap(w, monkeypatch):
+    from tests import fake_db
+    real = fake_db.Query.execute
+
+    def capped(self):                                     # the server returns at most 1000 rows a read
+        r = real(self)
+        if self.op == "select" and isinstance(r.data, list):
+            r.data = r.data[:1000]
+        return r
+    monkeypatch.setattr(fake_db.Query, "execute", capped)
+    w["db"].tables.setdefault("strategies", []).extend(
+        {"id": f"s{i:05d}", "user_id": ME, "name": "n", "body": {}} for i in range(1005))
+    assert len(user_data.export(db.get_profile(ME))["notebooks"]) == 1005
+    assert {r["key"]: r["count"] for r in user_data.erase(ME)["done"]}["notebooks"] == 1005
+    assert db.sb().table("strategies").select("id").eq("user_id", ME).execute().data == []

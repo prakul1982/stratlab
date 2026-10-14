@@ -774,6 +774,14 @@ def prefs_of(uid: str) -> dict:
         return {}
 
 
+def change_prefs(uid: str, fn) -> dict:
+    """prefs:<uid> changed atomically (db.update_setting): fn(current prefs) returns the new ones, None to leave them."""
+    def go(raw):
+        new = fn(db.json_value(raw, {}))
+        return None if new is None else json.dumps(new)
+    return db.json_value(db.update_setting(daily_report.PREFS + uid, go), {})
+
+
 @app.get("/me/export")
 def export_my_data(profile=Depends(current_profile)):
     """Your own copy of everything StratLab keeps for you, as one JSON file (no tokens or passwords)."""
@@ -803,8 +811,7 @@ def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
     allowed."""
     given = {k: getattr(req, k) for k in PREF_KEYS}
-    prefs = {**prefs_of(profile["id"]), **{k: v for k, v in given.items() if v}}
-    db.set_setting(daily_report.PREFS + profile["id"], json.dumps(prefs))
+    prefs = change_prefs(profile["id"], lambda cur: {**cur, **{k: v for k, v in given.items() if v}})
     return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
 
 
@@ -850,15 +857,15 @@ def established_of(uid: str) -> bool:
 @app.put("/me/onboarding")
 def set_onboarding(req: OnboardingReq, profile=Depends(current_profile)):
     """Remember that the welcome question or the tour was seen. Only moves forward: a tour that was done stays done."""
-    prefs = prefs_of(profile["id"])
-    cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
-    nxt = dict(cur)
-    if req.welcome and not cur.get("welcome"):
-        nxt["welcome"] = db.now_iso()
-    if req.tour and cur.get("tour") != "done":
-        nxt["tour"] = req.tour
-    if nxt != cur:
-        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "onboarding": nxt}))
+    def go(prefs):
+        cur = prefs.get("onboarding") if isinstance(prefs.get("onboarding"), dict) else {}
+        nxt = dict(cur)
+        if req.welcome and not cur.get("welcome"):
+            nxt["welcome"] = db.now_iso()
+        if req.tour and cur.get("tour") != "done":
+            nxt["tour"] = req.tour
+        return {**prefs, "onboarding": nxt} if nxt != cur else None
+    change_prefs(profile["id"], go)
     return {"onboarding": onboarding_of(profile["id"])}
 
 
@@ -895,7 +902,12 @@ def push_unsubscribe(req: PushReq, profile=Depends(current_profile)):
 
 @app.put("/me/alerts")
 def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
-    need(profile, "daily_report", "Alerts and the daily report")
+    # turning things off or clearing a field works on any plan; each field is empty or the one already saved
+    same = lambda new, old: not new or (new or "").strip().lower() == (old or "").strip().lower()
+    off_only = (not req.alerts_enabled and not req.daily_report and not req.alert_emails
+                and same(req.telegram_chat_id, profile.get("telegram_chat_id")) and same(req.alert_email, profile.get("alert_email")))
+    if not off_only:
+        need(profile, "daily_report", "Alerts and the daily report")
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
@@ -906,8 +918,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     if (req.alert_emails or (new_addr and new_addr != (profile.get("alert_email") or "").strip().lower())) and not alerts.alert_emails_on(profile["id"]):
         alerts.set_alert_emails(profile["id"], True)
     if req.daily_report is not None:
-        prefs = json.loads(db.get_setting(daily_report.PREFS + profile["id"]) or "{}")
-        db.set_setting(daily_report.PREFS + profile["id"], json.dumps({**prefs, "daily_report": req.daily_report}))
+        change_prefs(profile["id"], lambda cur: {**cur, "daily_report": req.daily_report})
     return {"saved": True}
 
 

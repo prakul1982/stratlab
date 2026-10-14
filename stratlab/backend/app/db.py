@@ -58,7 +58,9 @@ def get_profile(user_id: str, email: str | None = None) -> dict:
     r = sb().table("profiles").select("*").eq("id", user_id).limit(1).execute()
     if r.data:
         return r.data[0]
-    return sb().table("profiles").upsert({"id": user_id, "email": email, "plan": "free"}).execute().data[0]
+    # insert only when absent: a row another request made meanwhile (a payment, a plan change) is never overwritten
+    sb().table("profiles").upsert({"id": user_id, "email": email, "plan": "free"}, ignore_duplicates=True).execute()
+    return sb().table("profiles").select("*").eq("id", user_id).limit(1).execute().data[0]
 
 
 # Signed-in requests read the profile on every call (a paper page polls every 3 s), so keep it for a few
@@ -67,6 +69,7 @@ PROFILE_TTL = 10.0
 _profiles: dict[str, tuple[float, dict]] = {}
 _profiles_lock = threading.Lock()
 _profile_flights = Flights()
+_profile_versions: dict[str, int] = {}       # bumped by forget_profile: a read begun before a change isn't kept
 
 
 def cached_profile(user_id: str, email: str | None = None) -> dict:
@@ -81,17 +84,23 @@ def cached_profile(user_id: str, email: str | None = None) -> dict:
             hit = _profiles.get(user_id)
         if hit and hit[0] > time.monotonic():
             return dict(hit[1])
+        with _profiles_lock:
+            seen = _profile_versions.get(user_id, 0)
         row = get_profile(user_id, email)
         with _profiles_lock:
             if len(_profiles) > 5000:
                 _profiles.clear()
-            _profiles[user_id] = (time.monotonic() + PROFILE_TTL, dict(row))
+            if _profile_versions.get(user_id, 0) == seen:       # no update_profile since the read began
+                _profiles[user_id] = (time.monotonic() + PROFILE_TTL, dict(row))
     return dict(row)
 
 
 def forget_profile(user_id: str) -> None:
     with _profiles_lock:
         _profiles.pop(user_id, None)
+        if len(_profile_versions) > 5000:
+            _profile_versions.clear()
+        _profile_versions[user_id] = _profile_versions.get(user_id, 0) + 1
 
 
 def update_profile(user_id: str, **fields) -> dict:
@@ -106,9 +115,15 @@ def update_profile(user_id: str, **fields) -> dict:
 
 def all_profiles(page: int = 1000) -> list[dict]:
     """Every profile, read a page at a time by id (the server caps one read)."""
+    return paged(lambda: sb().table("profiles").select("*"), page)
+
+
+def paged(query, page: int = 1000) -> list[dict]:
+    """Every row of a query, read a page at a time by id (the server caps one read); `query()` gives a fresh one
+    selecting at least id."""
     out, after = [], ""
     while True:
-        q = sb().table("profiles").select("*")
+        q = query()
         if after:
             q = q.gt("id", after)
         rows = q.order("id").limit(page).execute().data

@@ -129,7 +129,7 @@ export function AccountPage() {
         <h3 className="k-sub">Delete everything</h3>
         <p className="k-small k-muted k-hint-line">
           Removes everything above, plus your chart drawings, connected accounts, alerts and preferences, with no way back. Your sign-in account,
-          plan and payment records stay: payment records are kept as the law asks, and closing the sign-in account itself is done by us on request,
+          plan, payment records and usage counts for your plan's limits stay: payment records are kept as the law asks, and closing the sign-in account itself is done by us on request,
           through Contact us at the bottom of this page.
         </p>
         <div className="k-row"><button type="button" className="btn quiet danger" onClick={() => setAsk("erase")}>Delete all my data…</button></div>
@@ -157,7 +157,7 @@ function DeleteMyData({ email, onClose }: { email: string; onClose: () => void }
     setBusy(true);
     try {
       const r = await api<{ ok: boolean; failed: { label: string }[] }>("/me/delete-data", { method: "POST", body: { confirm: typed } });
-      notify(r.ok ? "Your data is deleted. Your sign-in account and plan stay." : `Deleted, except: ${r.failed.map((f) => f.label).join(", ")}. Try again to finish.`);
+      notify(r.ok ? "Your data is deleted. Your sign-in account, plan, payment records and usage counts stay." : `Deleted, except: ${r.failed.map((f) => f.label).join(", ")}. Try again to finish.`);
       await refreshMe();
       onClose();
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -166,7 +166,7 @@ function DeleteMyData({ email, onClose }: { email: string; onClose: () => void }
     <Modal title="Delete all your data?" onClose={onClose}>
       <div className="k-stack">
         <p className="k-small k-muted">Your holdings, tradebooks, funds, net worth, notebooks and experiments, chart drawings, connected accounts, alerts and
-          preferences are removed, with no way back. Your sign-in account, plan and payment records stay.</p>
+          preferences are removed, with no way back. Your sign-in account, plan, payment records and usage counts stay.</p>
         <FormGrid label="Delete all my data" onSubmit={(e) => { e.preventDefault(); void erase(); }}>
           <Field label="Type your email to confirm" wide value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={email} autoComplete="off" spellCheck={false} />
           <FormActions>

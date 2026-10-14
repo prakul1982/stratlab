@@ -88,7 +88,7 @@ function EraseForm({ user, onBack, onDone }: { user: UserRow; onBack: () => void
   return (
     <div className="k-stack">
       <p className="k-small k-muted">This removes their chart drawings, connected accounts (tokens, inbox address and statement password), holdings, net worth
-        entries, notebooks, alerts and preferences, with no way back. Their sign-in account, plan and payment records stay.</p>
+        entries, notebooks, alerts and preferences, with no way back. Their sign-in account, plan, payment records and usage counts stay.</p>
       <FormGrid label="Delete this user's data" onSubmit={(e) => { e.preventDefault(); void erase(); }}>
         <Field label={user.email ? "Type their email to confirm" : "Type their user id to confirm"} wide value={typed} onChange={(e) => setTyped(e.target.value)}
           placeholder={word} autoComplete="off" spellCheck={false} />
