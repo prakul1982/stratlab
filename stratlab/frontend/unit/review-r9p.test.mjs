@@ -96,13 +96,13 @@ test("R9P-008: boot.js reloads once, then shows the card, when the main chunk's 
   assert.equal(shown, 1);
 });
 
-test("R7M-008 leftover: the AI tile has one denominator, not 12 beside 12 of 13", async () => {
+test("R7M-008 leftover: the AI tile has one denominator, not 11 beside 11 of 12", async () => {
   const { aiTile } = await import("../src/pages/admin/attention.ts");
   const row = (label, result, extra = {}) => ({ label, configured: true, in_use: true, model: "m", last_error: null, answering: result === "working", result, ...extra });
   const ai = [...["Groq", "Gemini", "OpenRouter", "Cloudflare"].map((l) => row(l, "working")),
     row("Cerebras", "quota", { answering: false }), row("SambaNova", "quota", { answering: false }),
-    ...["Mistral", "Z.ai", "Vercel", "GitHub", "NVIDIA", "Hugging Face"].map((l) => row(l, "untested")),
+    ...["Mistral", "Z.ai", "Vercel", "NVIDIA", "Hugging Face"].map((l) => row(l, "untested")),
     { label: "Anthropic", configured: false, in_use: false, model: null, last_error: null, result: null }];
-  assert.equal(aiTile(ai).detail, "4 working of 12 set up (13 known) · 2 out of credit · 6 not tried yet");
-  assert.equal(aiTile(ai.slice(0, 12)).detail, "4 of 12 working · 2 out of credit · 6 not tried yet");     // every provider has a key: as before
+  assert.equal(aiTile(ai).detail, "4 working of 11 set up (12 known) · 2 out of credit · 5 not tried yet");
+  assert.equal(aiTile(ai.slice(0, 11)).detail, "4 of 11 working · 2 out of credit · 5 not tried yet");     // every provider has a key: as before
 });

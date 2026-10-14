@@ -138,11 +138,11 @@ test("Admin: the AI providers tile counts what worked last (R7M-008)", async ({ 
   const row = (label: string, result: string) => ({ label, configured: true, in_use: true, model: "m", last_error: null, answering: result === "working", result });
   await overview(page, (s) => {
     s.ai = [...["Groq", "Gemini", "OpenRouter", "Cloudflare", "NVIDIA"].map((n) => row(n, "working")),
-      ...["Cerebras", "SambaNova", "Z.ai", "Vercel AI Gateway", "Hugging Face", "GitHub Models"].map((n) => row(n, "quota")), row("Mistral", "untested")];
+      ...["Cerebras", "SambaNova", "Z.ai", "Vercel AI Gateway", "Hugging Face"].map((n) => row(n, "quota")), row("Mistral", "untested")];
   });
   const errors = await open(page, "/admin");
-  await expect(page.getByText("5 of 12 working · 6 out of credit · 1 not tried yet")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/11 of 12 answering/)).toHaveCount(0);
+  await expect(page.getByText("5 of 11 working · 5 out of credit · 1 not tried yet")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/10 of 11 answering/)).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

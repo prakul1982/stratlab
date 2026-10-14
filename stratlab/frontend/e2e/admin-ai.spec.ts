@@ -63,9 +63,9 @@ function view(pinned: string | null, blocked: string[]) {
       provider("mistral", "Mistral", { state: "warn", state_text: "Free quota used up for now; it resets on its own.",
         quota: { limited: true, reset_at: now() + 3 * 3600, remaining: null, remaining_at: null },
         models: [model("mistral-small-latest", 1, { open_until: now() + 3 * 3600, open_reason: "rate limited (daily free quota)" })] }),
-      provider("github", "GitHub Models", { configured: false, missing: ["GITHUB_MODELS_TOKEN"], terms: "prototype", state: "off",
-        state_text: "No key yet.", free: "Free: 50 to 150 requests a day per model.", note: "Asked only after every other free provider.",
-        key_url: "https://github.com/settings/personal-access-tokens/new", models: [] }),
+      provider("nvidia", "NVIDIA API catalog", { configured: false, missing: ["NVIDIA_API_KEY"], terms: "prototype", state: "off",
+        state_text: "No key yet.", free: "Free for development: about 40 requests a minute.", note: "Asked only after every other free provider.",
+        key_url: "https://build.nvidia.com/settings/api-keys", models: [] }),
       provider("cloudflare", "Cloudflare Workers AI", { configured: false, missing: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
         state: "off", state_text: "No key yet.", key_url: "https://dash.cloudflare.com/profile/api-tokens", models: [] }),
     ],
@@ -112,7 +112,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   await expect(panel.getByText(/Groq · llama-3.3-70b-versatile → Mistral · mistral-small-latest \(paused\)/)).toBeVisible();
   await expect(panel.getByText(/30% of questions since the last restart were answered from the cache/)).toBeVisible();
   await expect(panel.getByText(/Last time nothing could answer/)).toBeVisible();
-  // the providers with no key are one click away, not 13 set-up guides on the page
+  // the providers with no key are one click away, not 12 set-up guides on the page
   const more = panel.locator("[aria-label='More free providers']");
   const fold = panel.getByTestId("ai-more-providers");
   await expect(fold).not.toHaveAttribute("open", /.*/);
@@ -120,7 +120,7 @@ test("admin: the AI panel shows each provider's models, quota and routing, and p
   await fold.locator("summary").click();
   await expect(more.getByText("Prototyping tier").first()).toBeVisible();
   await expect(more.getByText("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID")).toBeVisible();
-  await expect(more.getByRole("link", { name: "Get a key" }).first()).toHaveAttribute("href", "https://github.com/settings/personal-access-tokens/new");
+  await expect(more.getByRole("link", { name: "Get a key" }).first()).toHaveAttribute("href", "https://build.nvidia.com/settings/api-keys");
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);
 
@@ -150,11 +150,11 @@ test("admin: with no AI keys, the panel says so and lists every free provider wi
   const panel = page.locator("section[aria-label='AI']");
   await expect(panel.getByText("No AI keys yet")).toBeVisible();
   await expect(panel.getByText("GROQ_API_KEY")).toBeVisible();
-  // the two quickest in view; the other eleven one click away
+  // the two quickest in view; the other ten one click away
   await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(2);
   await expect(panel.getByRole("link", { name: "Get a key: Google Gemini" })).toBeVisible();
   await panel.getByTestId("ai-more-providers").locator("summary").click();
-  await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(13);
+  await expect(panel.getByRole("link", { name: "Get a key" })).toHaveCount(12);
   await expect(panel.getByRole("button", { name: "Test every provider" })).toBeDisabled();
   if (info.project.name === "phone") await touchable(page);
   await sane(page, errors);

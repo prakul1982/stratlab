@@ -78,7 +78,7 @@ function Privacy() {
       <ul>
         <li>Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.</li>
         <li>Razorpay processes payments.</li>
-        <li>AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these thirteen: Anthropic, Cerebras, Cloudflare Workers AI, GitHub Models, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova, Vercel AI Gateway and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.</li>
+        <li>AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these twelve: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova, Vercel AI Gateway and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.</li>
         <li>Telegram and our email provider deliver alerts you turn on. Sentry receives error reports without personal details.</li>
         <li>PostHog (hosted in the US) receives the usage analytics described above.</li>
       </ul>

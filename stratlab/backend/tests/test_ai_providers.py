@@ -89,9 +89,9 @@ def test_research_uses_its_own_order(monkeypatch):
 
 
 def test_prototype_only_providers_come_after_every_production_one(monkeypatch):
-    keys(monkeypatch, "github", "nvidia", "huggingface", "anthropic")
+    keys(monkeypatch, "vercel", "nvidia", "huggingface", "anthropic")
     o = P.order()
-    assert o[0] == "huggingface" and set(o[1:3]) == {"github", "nvidia"} and o[3] == "anthropic"
+    assert o[0] == "huggingface" and set(o[1:3]) == {"vercel", "nvidia"} and o[3] == "anthropic"
 
 
 def test_cloudflare_needs_its_account_id_too(monkeypatch):
@@ -205,10 +205,10 @@ def test_a_prompt_too_long_for_a_model_moves_on_without_blaming_it(monkeypatch):
 
 
 def test_long_documents_skip_models_whose_context_is_too_small(monkeypatch):
-    keys(monkeypatch, "github", "gemini")
-    doc = "x" * 60000                                             # ~17,000 tokens: more than GitHub's 8,000
+    keys(monkeypatch, "nvidia", "gemini")
+    doc = "x" * 130000                                            # ~37,000 tokens: more than NVIDIA's 32,000
     assert [n for n, _ in P.plan("long", int(len(doc) / 3.5))] == ["gemini"] * 3
-    assert "github" in [n for n, _ in P.plan("long", 500)]
+    assert "nvidia" in [n for n, _ in P.plan("long", 500)]
 
 
 # ---------- reasoning models ----------
@@ -286,14 +286,14 @@ def test_reasoning_models_are_asked_to_think_little_with_room_to_answer():
     assert C.body_for("zai", "glm-4.7-flash", "s", "t", 1500, True)["thinking"] == {"type": "disabled"}
     assert C.body_for("openrouter", "minimax/minimax-m3:free", "s", "t", 1500, True)["reasoning"] == {"effort": "low", "exclude": True}
     assert C.body_for("nvidia", "nvidia/llama-3.3-nemotron-super-49b-v1.5", "s", "t", 1500, True)["messages"][0]["content"].startswith("/no_think")
-    assert C.body_for("github", "openai/o4-mini", "s", "t", 1500, True)["max_tokens"] <= 4000     # GitHub's reply cap
+    assert C.body_for("cloudflare", "@cf/openai/gpt-oss-120b", "s", "t", 1500, True)["max_tokens"] <= 4000     # Cloudflare's reply cap
     plain = C.body_for("sambanova", "Meta-Llama-3.3-70B-Instruct", "s", "t", 1500, True)
     assert "chat_template_kwargs" not in plain and plain["max_tokens"] == 1500 and plain["messages"][1]["content"] == "t"
 
 
 def test_a_provider_that_refuses_a_setting_is_asked_without_it(monkeypatch):
-    keys(monkeypatch, "github")
-    R.pin("github", "openai/o4-mini")
+    keys(monkeypatch, "groq")
+    R.pin("groq", "openai/gpt-oss-120b")
     seen = []
 
     def handler(req: httpx.Request):
@@ -498,9 +498,7 @@ def test_every_providers_model_list_format_is_read():
     gm = {"models": [{"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"], "inputTokenLimit": 1048576},
                      {"name": "models/text-embedding-004", "supportedGenerationMethods": ["embedContent"]}]}
     assert C.parse_models(gm) == [{"id": "gemini-3.8-flash", "ctx": 1048576}]
-    gh = [{"id": "openai/gpt-4.1-mini", "supported_output_modalities": ["text"], "limits": {"max_input_tokens": 8000}},
-          {"id": "openai/text-embedding-3-small", "supported_output_modalities": ["embeddings"]}]
-    assert C.parse_models(gh) == [{"id": "openai/gpt-4.1-mini", "ctx": 8000}]
+    assert C.parse_models([{"id": "a", "context_length": 4096}, {"name": "b"}]) == [{"id": "a", "ctx": 4096}, {"id": "b", "ctx": None}]     # a plain list
     hf = {"data": [{"id": "meta-llama/Llama-3.3-70B-Instruct", "providers": [{"provider": "x", "context_length": 32768}, {"provider": "y", "context_length": 131072}]}]}
     assert C.parse_models(hf)[0]["ctx"] == 131072
     assert C.parse_models({"data": [{"id": "v/embed", "type": "embedding"}, {"id": "openai/gpt-oss-120b", "type": "language"}]}) == [{"id": "openai/gpt-oss-120b", "ctx": None}]
@@ -559,14 +557,14 @@ def test_rerank_stops_early_when_the_key_is_rejected(monkeypatch):
 
 
 def test_scores_favour_measured_success_then_speed_and_route_by_job(monkeypatch):
-    keys(monkeypatch, "groq", "mistral", "github")
+    keys(monkeypatch, "groq", "mistral", "nvidia")
     fast, strong = R.stats("groq", "llama-3.1-8b-instant"), R.stats("mistral", "mistral-large-latest")
     fast.probe_ok, fast.probe_tries, fast.probe_ms, fast.probe_json, fast.probe_len = 2, 2, [300, 400], 2, 2
     strong.probe_ok, strong.probe_tries, strong.probe_ms, strong.probe_json, strong.probe_len = 2, 2, [2500, 2600], 2, 2
     P.status("groq").order, P.status("mistral").order = ["llama-3.1-8b-instant"], ["mistral-large-latest"]
     assert P.plan("quick")[0] == ("groq", "llama-3.1-8b-instant")          # quick jobs: the fast one
     assert P.plan("research")[0] == ("mistral", "mistral-large-latest")    # research: the strong one
-    assert P.plan("quick")[-1][0] == "github"                              # prototype-only: after every other
+    assert P.plan("quick")[-1][0] == "nvidia"                              # prototype-only: after every other
     for _ in range(6):
         fast.live.append((False, 0.0))
     assert P.plan("quick")[0] == ("mistral", "mistral-large-latest")       # failures in real use count too
@@ -721,7 +719,7 @@ def test_health_and_admin_view_cover_every_provider(monkeypatch):
     view = P.admin_view()
     rows = {p["name"]: p for p in view["providers"]}
     assert rows["groq"]["state"] == "idle" and rows["cloudflare"]["missing"] == ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"]
-    assert rows["github"]["terms"] == "prototype" and rows["nvidia"]["key_url"].startswith("https://build.nvidia.com")
+    assert rows["nvidia"]["terms"] == "prototype" and rows["nvidia"]["key_url"].startswith("https://build.nvidia.com")
     assert [s["provider"] for s in view["routes"]["quick"]["steps"]] == ["groq"] * 3
     assert view["routes"]["long"]["budget_s"] == P.BUDGET["long"]
 

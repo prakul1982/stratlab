@@ -85,8 +85,6 @@ class Settings:
     HUGGINGFACE_MODEL = _env("HUGGINGFACE_MODEL", "auto")
     AI_GATEWAY_API_KEY = _env("AI_GATEWAY_API_KEY")                 # Vercel AI Gateway: $5 free every 30 days
     AI_GATEWAY_MODEL = _env("AI_GATEWAY_MODEL", "auto")
-    GITHUB_MODELS_TOKEN = _env("GITHUB_MODELS_TOKEN")               # GitHub Models: free, for prototyping (asked late)
-    GITHUB_MODEL = _env("GITHUB_MODEL", "auto")
     NVIDIA_API_KEY = _env("NVIDIA_API_KEY")                         # NVIDIA API catalog: free for development (asked late)
     NVIDIA_MODEL = _env("NVIDIA_MODEL", "auto")
     ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")

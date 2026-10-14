@@ -116,9 +116,9 @@ test("R8O-008: the AI tile's denominator is said as System says it", async () =>
   const row = (label, result, extra = {}) => ({ label, configured: true, in_use: true, model: "m", last_error: null, answering: result === "working", result, ...extra });
   const ai = [...["Groq", "Gemini", "OpenRouter", "Cloudflare", "NVIDIA"].map((l) => row(l, "working")),
     row("Cerebras", "quota", { answering: false }), row("SambaNova", "quota", { answering: false }), row("Hugging Face", "quota", { answering: false }),
-    ...["Mistral", "Z.ai", "Vercel", "GitHub"].map((l) => row(l, "untested")),
+    ...["Mistral", "Z.ai", "Vercel"].map((l) => row(l, "untested")),
     { label: "Anthropic", configured: false, in_use: false, model: null, last_error: null, result: null }];
-  assert.equal(aiTile(ai).detail, "5 working of 12 set up (13 known) · 3 out of credit · 4 not tried yet");
+  assert.equal(aiTile(ai).detail, "5 working of 11 set up (12 known) · 3 out of credit · 3 not tried yet");
 });
 
 test("R8O-011: the live price feed says when the options sessions are more than one person's", async () => {

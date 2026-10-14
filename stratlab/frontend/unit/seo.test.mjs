@@ -307,7 +307,7 @@ test("the Privacy page lists every AI provider the code can use, says what the b
   assert.ok(names.length >= 12, `${names.length} providers read`);
   const privacy = page.slice(page.indexOf("function Privacy"), page.indexOf("function Refunds"));
   for (const name of names.map((n) => n.replace(/ \(.*\)$/, ""))) assert.ok(privacy.includes(name), `${name} is in the catalog but not in the policy`);
-  assert.match(privacy, new RegExp(`any of these ${({ 13: "thirteen" })[names.length] ?? names.length}`));
+  assert.match(privacy, new RegExp(`any of these ${({ 12: "twelve" })[names.length] ?? names.length}`));
   assert.doesNotMatch(privacy, /such as Groq/);
   assert.match(privacy, /ph_/);
   assert.match(privacy, /Before you sign in/);
