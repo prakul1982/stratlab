@@ -99,7 +99,7 @@ def stock_lines(r: dict, since: str) -> list[dict]:
     if r.get("st_s2"):
         lines.append({"text": "Matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": None})
     for i in r.get("filings") or []:
-        lines.append({"text": f"New filing ({'red flag' if i['severity'] == 'red' else 'worth a look'}): {i['label']}. {i['subject']}".strip(), "url": i.get("url")})
+        lines.append({"text": f"New filing{' (red flag)' if i['severity'] == 'red' else ''}: {i['label']}. {i['subject']}".strip(), "url": i.get("url")})
     for d in r.get("deals") or []:
         lines.append({"text": f"New disclosure. {d['text']}", "url": d.get("url")})
     surv = r.get("surveillance") or {}
@@ -270,7 +270,16 @@ Use ONLY the FACTS given. Restate what happened; never say what to do or what ma
 Never: buy, sell, hold or accumulate; targets or price levels to watch; picks, "hot" names or favourites; outlook,
 forecasts, expectations or predictions; any company or ticker that is not in the facts; numbers not in the facts.
 A scan names its own fixed list of stocks: call it by that name, never "large caps" or the market, and never say a stock was the only one in the market.
-Plain English, no markdown, no emojis. Reply with ONLY this JSON: {"summary": "..."}"""
+Write it as short prose a person would say: whether each index rose or fell and by how much, with the % sign and thousands separators (22,520.45), never "the price is X with a Y percent change" for every index. Plain English, no markdown, no emojis. Reply with ONLY this JSON: {"summary": "..."}"""
+
+
+# a restatement of the tiles ("The NIFTY 50 price is 22520.45 with a 0.44 percent change"): the facts line and the tiles
+# already say it, so such a text is dropped rather than shown; so is a number without its separators (R19-003)
+_ROBOTIC = re.compile(r"\bprice is\b|\bpercent change\b|\b\d{4,}\.\d+|\b\d{5,}\b")
+
+
+def robotic(text: str) -> bool:
+    return bool(_ROBOTIC.search(text or ""))
 
 
 def ai_summary(f: dict) -> str | None:
@@ -283,7 +292,7 @@ def ai_summary(f: dict) -> str | None:
     except (AIError, ValueError, AttributeError, TypeError):
         return None
     text = own_weekday(re.sub(r"\s+", " ", text)[:700], f)
-    return text if grounded(text, f) else None
+    return text if grounded(text, f) and not robotic(text) else None
 
 
 def summary(f: dict) -> dict:
@@ -382,12 +391,12 @@ def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
     return out
 
 
-def _row(it: dict, text_url: str | None = None) -> kit.Row:
+def _row(it: dict) -> kit.Row:
     lines = tuple((ln["text"], ln.get("url")) for ln in it.get("lines") or [])
     if it.get("change_pct") is not None or it.get("price") is not None:
         return kit.Row(it["text"], value=kit.num(it["price"]) if it.get("price") is not None else None, change=it.get("change_pct"),
                        since=it.get("since"), url=it.get("url"), lines=lines)
-    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"), text_url=text_url)
+    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
 
 
 def link_path(issue_id: str, n: int) -> str:
@@ -430,12 +439,11 @@ def render(issue: dict) -> tuple[str, str]:
             continue                                         # already shown as tiles
         rows = []
         for it in sec["items"]:
-            short = None
             if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
-                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):
-                    short = kit.site(link_path(issue["id"], n))
+                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # an aggregator's long redirect: the short address in both parts
+                    it = {**it, "url": kit.site(link_path(issue["id"], n))}
                 n += 1
-            rows.append(_row(it, short))
+            rows.append(_row(it))
         blocks.append(kit.card(sec["title"], rows))
     when = close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
     if when:

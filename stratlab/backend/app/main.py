@@ -5400,7 +5400,7 @@ def send_weekly_summary(now: datetime) -> bool:
     if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == weekly.week_of(now):
         return False
     db.set_setting(weekly.WEEK_KEY, weekly.week_of(now))
-    tell_admins(*weekly_summary(now))
+    alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
     return True
 
 

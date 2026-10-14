@@ -300,7 +300,7 @@ def test_the_plain_text_brief_gives_every_headline_an_address_and_the_close_as_i
     html, text = write.render(issue)
     short = "https://stratlab.studio/news-link/market.US.2026-10-09/0"
     assert short in text and "(https://example.com/a)" in text and google not in text
-    assert google.replace("&", "&amp;") in html or google in html               # the HTML keeps the story's own link
+    assert short in html and google.replace("&", "&amp;") not in html and google not in html      # R19-006: the HTML links the same short address
     assert "Prices and numbers as of the 16:00 ET close of 9 Oct 2026" in text and "16:32" not in text
     job.save(issue)
     c = TestClient(main.app)

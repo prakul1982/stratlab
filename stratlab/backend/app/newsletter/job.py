@@ -256,9 +256,9 @@ def repair_headlines(region: str, days: int = 60) -> int:
                 continue
             keep = []
             for i in s.get("items") or []:
-                title = content.tidy_title(i.get("text"))
+                title = content.tidy_title(content.drop_publisher(i.get("text"), i.get("source")))
                 k = content.title_key(title)
-                if not content.MARKET_WORDS[region].search(title) or k in mine or (not issue.get("weekly") and k in seen):
+                if not content.MARKET_WORDS[region].search(title) or content.OFF_TOPIC.search(title) or k in mine or (not issue.get("weekly") and k in seen):
                     continue
                 mine.add(k)
                 keep.append({**i, "text": title})
@@ -268,9 +268,13 @@ def repair_headlines(region: str, days: int = 60) -> int:
             seen |= mine
         issue["sections"] = sections
         issue["summary"] = write.fix_counts(issue.get("summary") or "", sections)
-        if json.dumps(issue, sort_keys=True) == before:
+        if write.robotic(issue.get("ai_summary")):
+            issue.pop("ai_summary", None)             # the tiles' numbers restated (R19-003)
+            issue["ai"] = False
+        html, text = write.render(issue)              # also the links, close date and wording of today's render (R19-004, R19-006)
+        if json.dumps(issue, sort_keys=True) == before and (html, text) == (issue.get("html"), issue.get("text")):
             continue
-        issue["html"], issue["text"] = write.render(issue)
+        issue["html"], issue["text"] = html, text
         kind, scope, dkey = parse_id(issue["id"])
         db.set_setting(_key(kind, scope, dkey), json.dumps(issue))       # in place: the list keeps its order
         fixed += 1
@@ -583,7 +587,7 @@ class Job:
 
     def headlines_once(self):
         """Once per database: the stored briefs' headlines and counts by today's rules (see repair_headlines)."""
-        flag = "newsfix:headlines-counts-1"
+        flag = "newsfix:headlines-counts-2"
         if db.get_setting(flag):
             return
         try:
