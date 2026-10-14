@@ -268,50 +268,24 @@ def pin(name: str, model: str | None):
     save_prefs()
 
 
-def _block_one(name: str, model: str, on: bool, by: str | None, now: float):
-    key = f"{name}/{model}"
-    if on:
-        _prefs["blocks"].add(key)
-        _prefs["block_info"][key] = {"by": by, "at": now}       # who blocked it and when, shown on the Admin page (R13S-004)
-        if _prefs["pins"].get(name) == model:
-            _prefs["pins"].pop(name)
-    else:
-        _prefs["blocks"].discard(key)
-        _prefs["block_info"].pop(key, None)
-
-
 def block(name: str, model: str, on: bool = True, by: str | None = None):
     _load()
     with _lock:
-        _block_one(name, model, on, by, time.time())
-    save_prefs()
-
-
-def block_many(items: list[tuple[str, str]], on: bool, by: str | None = None):
-    """Block or unblock several models at once (one save): Admin's "Unblock all" and the undo of it."""
-    _load()
-    now = time.time()
-    with _lock:
-        for name, model in items:
-            _block_one(name, model, on, by, now)
+        key = f"{name}/{model}"
+        if on:
+            _prefs["blocks"].add(key)
+            _prefs["block_info"][key] = {"by": by, "at": time.time()}   # who blocked it and when, shown on the Admin page (R13S-004)
+            if _prefs["pins"].get(name) == model:
+                _prefs["pins"].pop(name)
+        else:
+            _prefs["blocks"].discard(key)
+            _prefs["block_info"].pop(key, None)
     save_prefs()
 
 
 def block_info(name: str, model: str) -> dict | None:
     _load()
     return _prefs["block_info"].get(f"{name}/{model}")
-
-
-def blocked_since(since: float | None = None) -> list[tuple[str, str]]:
-    """Every blocked model as (provider, model); with `since`, only those blocked at or after that time (an epoch)."""
-    _load()
-    out = []
-    for key in sorted(_prefs["blocks"]):
-        if since is not None and (_prefs["block_info"].get(key) or {}).get("at", 0) < since:
-            continue
-        name, model = key.split("/", 1)
-        out.append((name, model))
-    return out
 
 
 def snapshot_rank(names: list[str]) -> dict:

@@ -454,13 +454,6 @@ def _provider_view(name: str, now: float) -> dict:
             "blocked_info": {b.split("/", 1)[1]: R.block_info(name, b.split("/", 1)[1]) or {} for b in R.blocks() if b.startswith(name + "/")}}
 
 
-def today_start() -> float:
-    """The start of today in India (an epoch): what "blocked today" counts from."""
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("Asia/Kolkata")).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-
-
 def admin_view() -> dict:
     """Everything the Admin page's AI panel shows."""
     now = time.time()
@@ -477,8 +470,7 @@ def admin_view() -> dict:
         routes[task] = {"label": TASK_LABELS[task], "budget_s": BUDGET[task], "steps": steps[:10]}
     return {"providers": views, "routes": routes,
             "cache": {"entries": len(cache.items), "hits": cache.hits, "misses": cache.misses},
-            "rerank_every_hours": R.RERANK_EVERY / 3600, "last_failure": dict(last_failure) or None,
-            "blocked": {"total": len(R.blocks()), "today": len(R.blocked_since(today_start()))}}
+            "rerank_every_hours": R.RERANK_EVERY / 3600, "last_failure": dict(last_failure) or None}
 
 
 def rerank(names: list[str] | None = None, transport=None, wait: bool = False) -> list[str]:
@@ -496,14 +488,6 @@ def pin(name: str, model: str | None):
 
 def block(name: str, model: str, on: bool = True, by: str | None = None):
     R.block(name, model, on, by)
-
-
-def block_many(items: list[tuple[str, str]], on: bool, by: str | None = None):
-    R.block_many(items, on, by)
-
-
-def blocked_since(since: float | None = None) -> list[tuple[str, str]]:
-    return R.blocked_since(since)
 
 
 def snapshot_rank(names: list[str] | None = None) -> dict:

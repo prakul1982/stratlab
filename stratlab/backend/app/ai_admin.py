@@ -21,15 +21,6 @@ class PinReq(BaseModel):
     model: str | None = Field(None, max_length=200)
 
 
-class BlockManyReq(BaseModel):
-    items: list[PinReq] = Field(..., min_length=1, max_length=200)
-    blocked: bool = True
-
-
-class UnblockAllReq(BaseModel):
-    scope: str = Field("all", pattern="^(all|today)$")
-
-
 class RestoreReq(BaseModel):
     ranks: dict = Field(..., max_length=40)
 
@@ -87,19 +78,3 @@ def ai_block(req: BlockReq, profile=Depends(admin.admin_profile)):
     """Never use this model (or allow it again). A block keeps who made it and when."""
     AI.block(_provider(req.provider), req.model.strip(), req.blocked, profile.get("email"))
     return AI.admin_view()
-
-
-@router.post("/block-many")
-def ai_block_many(req: BlockManyReq, profile=Depends(admin.admin_profile)):
-    """Block or allow several models at once: the undo of "Unblock all"."""
-    items = [(_provider(i.provider), (i.model or "").strip()) for i in req.items if (i.model or "").strip()]
-    AI.block_many(items, req.blocked, profile.get("email"))
-    return AI.admin_view()
-
-
-@router.post("/unblock-all")
-def ai_unblock_all(req: UnblockAllReq, profile=Depends(admin.admin_profile)):
-    """Allow every blocked model again, or only the ones blocked today (India's day). Says which, so it can be undone."""
-    items = AI.blocked_since(AI.today_start() if req.scope == "today" else None)
-    AI.block_many(items, False, profile.get("email"))
-    return {"unblocked": [{"provider": n, "model": m} for n, m in items], **AI.admin_view()}

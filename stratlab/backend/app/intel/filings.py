@@ -8,6 +8,7 @@ import json
 import re
 import threading
 import time
+import weakref
 from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -1481,7 +1482,7 @@ def followed_symbols(uid: str) -> list[str]:
 OVERVIEW_WAIT = 8.0                  # seconds the watchlist view waits for the exchange before it answers with what it has
 OVERVIEW_KEEP = 24 * 3600            # a company's last good row is shown (marked stale) for a day when the feed doesn't answer
 _overview_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="filings-overview")
-_last_rows: dict[tuple[int, str], tuple[float, dict]] = {}
+_last_rows: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()      # feed -> {symbol: (when, last good row)}
 
 
 def _overview_row(feed, sym: str) -> dict:
@@ -1500,22 +1501,26 @@ def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
     jobs = {sym: _overview_pool.submit(_overview_row, feed, sym) for sym in symbols}
     done, _ = futures_wait(jobs.values(), timeout=wait)
     rows, problems, now = [], [], time.time()
+    try:
+        kept_rows = _last_rows.setdefault(feed, {})
+    except TypeError:                            # a feed that can't be weakly referenced has no "last good row"
+        kept_rows = {}
     for sym, job in jobs.items():
         row, why = None, None
         if job in done:
             try:
                 row = job.result()
-                _last_rows[(id(feed), sym)] = (now, row)
+                kept_rows[sym] = (now, row)
             except SourceError as e:
                 why = str(e)
             except Exception:                    # one company's odd answer must not take the whole list down
                 why = "The exchange sent something unexpected for this one."
         else:
             job.cancel()
-            why = "Still reading this one: the exchange is slow. Try again in a moment."
+            why = "The exchange is slow to answer for this one."
         if row is None:
             problems.append(f"{sym}: {why}")
-            kept = _last_rows.get((id(feed), sym))
+            kept = kept_rows.get(sym)
             if kept and now - kept[0] <= OVERVIEW_KEEP:
                 row = {**kept[1], "stale": True}
         if row is not None:
