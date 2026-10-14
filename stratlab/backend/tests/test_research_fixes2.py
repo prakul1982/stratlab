@@ -30,8 +30,9 @@ def adr():
 
 
 def test_an_inr_reporting_adr_is_converted_like_any_foreign_filer():
-    note = deepdive.profit_note(adr())          # 50,000 m INR is $600 m against $500 m of earnings: 1.2x, no note
-    assert note is None
+    p = adr()
+    p["pl"]["rows"]["Net Profit"][-1] = 43000    # 43,000 m INR is $516 m against $500 m of earnings: about 1x, no note
+    assert deepdive.profit_note(p) is None
     p = adr()
     p["pl"]["rows"]["Net Profit"][-1] = 100000   # $1,200 m: 2.4x the $500 m the P/E rests on
     assert "2.4×" in deepdive.profit_note(p)
