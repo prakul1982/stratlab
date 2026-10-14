@@ -253,6 +253,8 @@ class Source:
             raise SourceError(self.name, f"{self.name} is rate limiting us right now. Try again in a minute.", busy=True)
         if r.status_code >= 500:
             raise SourceError(self.name, f"{self.name} is having trouble ({r.status_code}).", busy=True)
+        if r.status_code in (401, 403):
+            raise SourceError(self.name, f"{self.name} isn't answering us right now ({r.status_code}). Try again in a minute.", busy=True)
         if r.status_code == 404:
             raise SourceError(self.name, f"{self.name} has nothing for that.")
         if r.status_code >= 400:

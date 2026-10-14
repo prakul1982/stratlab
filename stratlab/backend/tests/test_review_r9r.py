@@ -255,7 +255,7 @@ def test_a_futures_daily_candle_read_before_its_close_is_read_again_after_it(mon
     monkeypatch.setattr(KiteService, "_close_out_at", staticmethod(lambda n, hhmm: now - 60))       # the segment's own: a minute ago
     stale = [{"t": "2026-10-08T00:00:00+05:30", "o": 96.0, "h": 96.5, "l": 95.9, "c": 96.14, "v": 1}]
     ks._cache[(777, "1d", 30, False)] = (now - 600, stale)                                         # read ten minutes ago, before its close
-    ks._cache[(778, "1d", 30, False)] = (now - 600, stale)
+    ks._cache[(778, "1d", 30, False)] = (now - 30, stale)                                          # within the minute a session-time bar is kept
     ks.set_session_close(777, "17:00")
     assert ks.history(777, "1d", 30, continuous=False)[-1]["c"] == 96.7 and calls == [777]         # its segment closed since: read again
     assert ks.history(778, "1d", 30, continuous=False)[-1]["c"] == 96.14 and calls == [777]        # a token without a close of its own: as before

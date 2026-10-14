@@ -92,6 +92,8 @@ def closed_only(bars: list[dict], tf: str, market: str | None = None, now: datet
     a run at 13:37 opened a trade on the 13:37 candle, which the next run then saw differently). A candle has closed once
     its length has passed, or the market's close has, whichever comes first (an hour candle from 15:15 in India closes at
     15:30)."""
+    if tf == "1d":
+        return _closed_days(bars, market, now)
     mins = TF_MINUTES.get(tf)
     if not mins or not bars:
         return bars
@@ -115,6 +117,25 @@ def closed_only(bars: list[dict], tf: str, market: str | None = None, now: datet
     except (KeyError, ValueError, TypeError):
         pass
     return bars[:-1] if end > now else bars
+
+
+def _closed_days(bars: list[dict], market: str | None, now: datetime | None = None) -> list[dict]:
+    """Daily candles without today's while its market is open (crypto: the current UTC day): the same bar reads
+    differently on the next run. Live paper trading reads its own candles and is not cut here."""
+    if not bars:
+        return bars
+    now = now or datetime.now(timezone.utc)
+    from .data.markets import BY_ID
+    m = BY_ID.get(market or "")
+    day = str(bars[-1].get("t") or "")[:10]
+    if not m or not m.get("hours"):         # crypto, or no hours known: the UTC day is never over before midnight
+        return bars[:-1] if day == now.astimezone(timezone.utc).date().isoformat() else bars
+    from . import stock_pages
+    from zoneinfo import ZoneInfo
+    local = now.astimezone(ZoneInfo(m["tz"]))
+    close = stock_pages.close_of(market, local.date())
+    shut = close and local.strftime("%H:%M") >= close
+    return bars[:-1] if day == local.date().isoformat() and not shut else bars
 
 
 def _default_meta():

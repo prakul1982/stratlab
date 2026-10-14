@@ -418,3 +418,17 @@ def test_the_headline_links_are_numbered_in_the_order_the_brief_lists_them(mem):
     # the brief's issue as stored keeps its sections in order for the headline links
     issue = {"sections": [{"title": "Indices", "items": [{"text": "x"}]}, {"title": "Headlines", "items": [{"text": "a", "url": "https://a"}, {"text": "b"}]}]}
     assert write.headline_urls(json.loads(json.dumps(issue))) == ["https://a", None]
+
+
+def test_an_early_close_day_settles_from_its_own_close():
+    half = datetime(2026, 11, 27, 13, 20, tzinfo=timezone(timedelta(hours=-5)))        # the day after Thanksgiving: 13:00 close
+    assert stock_pages.close_of("US", half.date()) == "13:00" and stock_pages.close_of("US", date(2026, 11, 25)) == "16:00"
+    assert stock_pages.settling("US", half) == "2026-11-27"
+    assert stock_pages.settling("US", half.replace(hour=16, minute=10)) is None
+    after = half.replace(minute=50)
+    assert stock_pages.last_close("US", after)[0] == date(2026, 11, 27)
+    bars = [{"t": "2026-11-25T00:00:00-05:00"}, {"t": "2026-11-27T00:00:00-05:00"}]
+    assert stock_pages.closed_bars(bars, "US", after) == bars
+    assert stock_pages.closed_bars(bars, "US", half) == bars[:1]                          # still settling
+    from app.intel.company import market_open
+    assert market_open("US", half.replace(hour=12, minute=59)) and not market_open("US", half)

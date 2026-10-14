@@ -52,8 +52,10 @@ def extra_holidays(market: str) -> set:
         days = {str(d)[:10] for d in json.loads(raw)} if raw else set()
         auto = json.loads(db.get_setting(AUTO + key) or "{}")
         days |= {str(d)[:10] for d in auto.get("days") or []}
-    except Exception:                 # no database (tests, an outage): the built-in calendar alone
+    except Exception:                 # no database (tests, an outage): the built-in calendar alone, asked again in 30 s
         days = hit[1] if hit else set()
+        _extra[key] = (time.time() - 570, days)
+        return days
     _extra[key] = (time.time(), days)
     return days
 
@@ -69,6 +71,8 @@ def _stored(key: str) -> set:
         days = {str(d)[:10] for d in json.loads(db.get_setting(AUTO + key) or "{}").get("days") or []}
     except Exception:
         days = hit[1] if hit else set()
+        _extra[key] = (time.time() - 570, days)
+        return days
     _extra[key] = (time.time(), days)
     return days
 
