@@ -125,7 +125,9 @@ recorder = Recorder(options_data, db.add_option_snapshot, parse_targets(settings
                     prune=db.delete_option_snapshots_before, keep_days=settings.OPTION_SNAPSHOT_KEEP_DAYS)
 research_hub = Research(kite, yahoo=markets.providers["US"].yahoo)   # one Yahoo client (and cache) for both
 # a currency option's underlying when its future has no live quote: the spot pair it settles against (R13-002)
-options_data.spot_source = lambda pair: research_hub.yahoo.meta(pair).get("price")
+options_data.spot_source = lambda pair: (lambda m: {"price": m.get("price"), "at": m.get("at")})(research_hub.yahoo.meta(pair))
+options_data.spot_close = lambda pair, day: next((b["c"] for b in research_hub.yahoo.chart(pair, "1d", 7, ttl=60, exact=True)["candles"]
+                                                  if b["t"][:10] == day), None)
 
 
 def after_login() -> str:

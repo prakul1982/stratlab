@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from ..models import OptionStrategy
 from .. import risk
-from .data import OptionsData, freeze
+from .data import OptionsData, cds_open, freeze
 from .engine import VIX_KEY, OptionsEngine, next_entry
 from . import strikes as SR
 from .signal import SignalFeed
@@ -107,7 +107,7 @@ class OptionSession:
             return
         with self.lock:
             self.quotes = q
-            self.fresh = spot_from == "spot" or self.data.fresh(sq, now)
+            self.fresh = self.data.fresh(sq, now) and (spot_from != "spot" or cds_open(now))   # the spot pair's own quote time
             if self.fresh:
                 self.last_tick_at = now.isoformat()
             want = self.signal.want() if self.signal else None
