@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
+import { blockedLine } from "./aiBlocks";
 import { shortLinks } from "./attention";
 
 // Admin only: provider names are fine here (never on public pages).
@@ -29,18 +30,11 @@ const stepText = (s: Step) => `${s.label} · ${s.model}${s.out_of_credit ? " (ou
 export type AIView = {
   providers: Provider[]; routes: Record<string, Route>; cache: { entries: number; hits: number; misses: number };
   rerank_every_hours: number; last_failure: { at: number; task: string; detail: string } | null;
-  blocked?: { total: number; today: number };
 };
-/** What is waiting for a yes: Block, Re-rank and Test every provider change how every user's AI questions are routed (R13S-004). */
-type Ask = { kind: "test" } | { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string } | { kind: "unblock-all"; scope: "today" | "all"; n: number };
+/** What is waiting for a yes: Block and Re-rank change how every user's AI questions are routed (R13S-004). */
+type Ask = { kind: "rerank"; provider?: Provider } | { kind: "block"; p: Provider; model: string };
 type RankSnap = Record<string, unknown>;
 
-/** "Blocked by owner@example.com on 9 Oct 2026", or what is known of it (a block made before this was recorded has neither). */
-export function blockedLine(by?: string | null, at?: number | null): string {
-  const when = at ? fmtDate(at * 1000) : null;
-  if (!by && !when) return "Blocked (who and when weren't recorded)";
-  return `Blocked${by ? ` by ${by}` : ""}${when ? ` on ${when}` : ""}`;
-}
 type TestRow = { name: string; label: string; ok: boolean; quota?: boolean; error: string | null; model: string | null; ms: number };
 
 /** A provider's own words with any long link cut to its address (the whole text on hover), so a 150-character link can't fill a line (R11P-007). */
@@ -109,33 +103,17 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
     notify(model ? `${p.label} now uses only ${model}.` : `${p.label} is back on its measured models.`);
     return r;
   });
-  const setBlocked = async (p: Provider, model: string, blocked: boolean) =>
-    api<AIView>("/admin/ai/block", { method: "POST", body: { provider: p.name, model, blocked } });
-  const block = (p: Provider, model: string, blocked: boolean) => act(`block-${p.name}-${model}`, async () => {
-    const r = await setBlocked(p, model, blocked);
-    // one tap each way, and the toast says how to take it back
-    notify(blocked ? `${model} won't be used again.` : `${model} can be used again.`,
-      { label: "Undo", run: () => void act(`block-${p.name}-${model}`, async () => { const u = await setBlocked(p, model, !blocked); notify(blocked ? `${model} can be used again.` : `${model} won't be used.`); return u; }) });
-    return r;
-  });
-  const unblockAll = (scope: "today" | "all") => act("unblock-all", async () => {
-    const r = await api<AIView & { unblocked: { provider: string; model: string }[] }>("/admin/ai/unblock-all", { method: "POST", body: { scope } });
-    const back = r.unblocked;
-    notify(`${back.length} model${back.length === 1 ? "" : "s"} can be used again.`, back.length ? { label: "Undo", run: () => void act("block-many", async () => {
-      const u = await api<AIView>("/admin/ai/block-many", { method: "POST", body: { items: back, blocked: true } });
-      notify(`${back.length} model${back.length === 1 ? "" : "s"} blocked again.`);
-      return u;
-    }) } : undefined);
+  const setBlocked = (p: Provider, model: string, blocked: boolean) => act(`block-${p.name}-${model}`, async () => {
+    const r = await api<AIView>("/admin/ai/block", { method: "POST", body: { provider: p.name, model, blocked } });
+    notify(blocked ? `${model} won't be used again.` : `${model} can be used again.`, { label: "Undo", run: () => void setBlocked(p, model, !blocked) });
     return r;
   });
   const confirm = () => {
     const a = ask;
     setAsk(null);
     if (!a) return;
-    if (a.kind === "test") void testAll();
-    else if (a.kind === "rerank") void rerank(a.provider?.name);
-    else if (a.kind === "block") void block(a.p, a.model, true);
-    else void unblockAll(a.scope);
+    if (a.kind === "rerank") void rerank(a.provider?.name);
+    else void setBlocked(a.p, a.model, true);
   };
 
   const on = v?.providers.filter((p) => p.configured) ?? [];
@@ -150,7 +128,7 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
     <Card label="AI">
       <CardHead title="AI"
         actions={<>
-          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length} onClick={() => setAsk({ kind: "test" })}>{busy === "test" ? "Testing…" : "Test every provider"}</button>
+          <button type="button" className="btn quiet sm" disabled={!!busy || !on.length} onClick={testAll}>{busy === "test" ? "Testing…" : "Test every provider"}</button>
           <button type="button" className="btn quiet sm" disabled={!!busy || !on.length || !!probing} onClick={() => setAsk({ kind: "rerank" })}>
             {probing ? "Measuring…" : busy === "rerank-all" ? "Starting…" : "Re-rank models"}</button>
         </>} />
@@ -176,16 +154,8 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
             </div>
           )}
 
-          {(v.blocked?.total ?? 0) > 0 && (
-            <div className="k-row" data-testid="ai-unblock-all">
-              <span className="k-small k-muted">{v.blocked!.total} model{v.blocked!.total === 1 ? " is" : "s are"} blocked{v.blocked!.today ? `, ${v.blocked!.today} of them today` : ""}.</span>
-              {v.blocked!.today > 0 && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => setAsk({ kind: "unblock-all", scope: "today", n: v.blocked!.today })}>Unblock all blocked today</button>}
-              {v.blocked!.total > v.blocked!.today && <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => setAsk({ kind: "unblock-all", scope: "all", n: v.blocked!.total })}>Unblock all</button>}
-            </div>
-          )}
-
           {on.map((p) => <ProviderBlock key={p.name} p={p} test={tests?.[p.name]} busy={busy} rerank={(name) => setAsk({ kind: "rerank", provider: v.providers.find((x) => x.name === name) })} pin={pin}
-            block={(pp, model, blocked) => (blocked ? setAsk({ kind: "block", p: pp, model }) : void block(pp, model, false))} />)}
+            block={(pp, model, blocked) => (blocked ? setAsk({ kind: "block", p: pp, model }) : void setBlocked(pp, model, false))} />)}
 
           {off.length > 0 && (
             <div className="k-stack" aria-label="More free providers">
@@ -204,7 +174,7 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
         </>
       )}
       {ask && (
-        <ConfirmDialog title={askTitle(ask)} confirmLabel={askLabel(ask)} onConfirm={confirm} onClose={() => setAsk(null)} danger={ask.kind !== "test"}>
+        <ConfirmDialog title={askTitle(ask)} confirmLabel={askLabel(ask)} onConfirm={confirm} onClose={() => setAsk(null)} >
           {askBody(ask)}
         </ConfirmDialog>
       )}
@@ -213,19 +183,15 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
 }
 
 function askTitle(a: Ask): string {
-  if (a.kind === "test") return "Test every provider now?";
   if (a.kind === "rerank") return a.provider ? `Re-rank ${a.provider.label}'s models?` : "Re-rank every provider's models?";
-  if (a.kind === "block") return `Block ${a.model}?`;
-  return a.scope === "today" ? `Unblock the ${a.n} model${a.n === 1 ? "" : "s"} blocked today?` : `Unblock all ${a.n} blocked model${a.n === 1 ? "" : "s"}?`;
+  return `Block ${a.model}?`;
 }
 function askLabel(a: Ask): string {
-  return a.kind === "test" ? "Test every provider" : a.kind === "rerank" ? "Re-rank" : a.kind === "block" ? "Block it" : "Unblock";
+  return a.kind === "rerank" ? "Re-rank" : "Block it";
 }
 function askBody(a: Ask): string {
-  if (a.kind === "test") return "A tiny request goes to every provider with a key, and spends a little free quota. It can set a provider's rate-limit state.";
-  if (a.kind === "rerank") return "The models are measured again, which takes a minute or two and can change the order every user's AI questions are routed in. You can undo it from the message that follows.";
-  if (a.kind === "block") return `${a.p.label} will never use ${a.model} again, for every user, until it is unblocked. You can undo it from the message that follows.`;
-  return "These models can be asked again, for every user. You can undo it from the message that follows.";
+  if (a.kind === "rerank") return "The models are measured again, which takes a minute or two and can change the order every user's AI questions are routed in. The message that follows has an Undo.";
+  return `${a.p.label} won't use ${a.model} again, for every user, until it is unblocked. The message that follows has an Undo.`;
 }
 
 const QUICK = ["groq", "gemini"];

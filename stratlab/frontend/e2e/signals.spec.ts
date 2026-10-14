@@ -57,6 +57,8 @@ test("signal forward test: the URL, a session, a test signal and a webhook signa
   const errors = await open(page, "/trade/signals", "No URL yet", sessionFor(n));
   await sane(page, errors);
   await page.getByRole("button", { name: "Make my URL" }).click();
+  await expect(page.getByRole("dialog", { name: "Make your URL?" })).toBeVisible();      // a secret is made only after a yes (R13S-004)
+  await page.getByRole("dialog").getByRole("button", { name: "Make my URL" }).click();
   const box = page.getByRole("textbox", { name: "Webhook URL", exact: true });
   await expect(box).toHaveValue(/\/hooks\/signal\/[A-Za-z0-9_-]{43}$/);
   const hookUrl = await box.inputValue();
