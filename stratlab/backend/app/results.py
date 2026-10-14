@@ -143,7 +143,8 @@ def reported(r: dict) -> list[dict]:
     """The numbers a US company reported, as the results feed carries them: EPS and revenue (never the estimates)."""
     out = []
     if isinstance(r.get("epsActual"), (int, float)):
-        out.append({"label": "EPS", "value": f"${r['epsActual']:.2f}"})
+        eps = round(r["epsActual"], 2) + 0.0         # -0.001 is $0.00, never -$0.00
+        out.append({"label": "EPS", "value": f"-${-eps:.2f}" if eps < 0 else f"${eps:.2f}"})
     rev = r.get("revenueActual")
     if isinstance(rev, (int, float)) and rev > 0:
         out.append({"label": "Revenue", "value": f"${rev / 1e9:,.2f} billion" if rev >= 1e9 else f"${rev / 1e6:,.1f} million"})
