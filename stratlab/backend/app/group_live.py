@@ -22,6 +22,7 @@ from .models import Strategy
 
 POLL_SECONDS = 60          # each polled member is checked this often for a newly closed candle
 POLLS_PER_PASS = 3         # members polled per 5-second pass, so a big group doesn't burst the data source
+RETRY_SECONDS = 300        # a member whose history didn't load at the restart is tried again this often
 FAST_EVAL_SECONDS = 15     # with fast entries on, each flat member's entry rules are checked this often on the forming candle
 QUOTE_MAX_AGE = 60         # an order book older than this can't vouch for the spread
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="group-live")
@@ -163,6 +164,10 @@ class GroupLiveSession:
         self.members: list[Member] = [Member(self, inst, bars, saved.get(inst["id"]), forming)
                                       for inst, bars, forming in loaded if inst and bars]
         self.skipped = [iid.split(":", 1)[-1] for iid, (inst, bars, _) in zip(self.inst.get("members") or [], loaded) if not (inst and bars)]
+        # members with a saved state whose history didn't load: the state is kept as saved (and saved back) until they load
+        self.waiting: dict[str, dict] = {iid: saved[iid] for iid, (inst, bars, _) in zip(self.inst.get("members") or [], loaded)
+                                         if not (inst and bars) and iid in saved}
+        self.next_retry = time.time() + RETRY_SECONDS
         if len(self.members) < 2:
             raise ValueError("Fewer than two of the group's instruments have enough live price history to start.")
         self.lids: list[str] = []
@@ -174,6 +179,31 @@ class GroupLiveSession:
         for m in self.members:
             m.missed = []
             m.builder.resume(m.bars[-1], m.forming)
+
+    def _retry(self):
+        """Load the members kept as saved again; each that loads rejoins the group and catches up on its missed candles."""
+        for iid in list(self.waiting):
+            inst, bars, forming = self._load(iid)
+            if not (inst and bars):
+                continue
+            with self.lock:
+                m = Member(self, inst, bars, self.waiting[iid], forming)
+                del self.waiting[iid]
+                self.members.append(m)
+                self.skipped = [x for x in self.skipped if x != iid.split(":", 1)[-1]]
+                missed, m.missed = m.missed, []
+                if missed:
+                    self.mgr.replay(self, lambda: [self._on_candle(m, c) for c in missed])
+                m.builder.resume(m.bars[-1], m.forming)
+                if self.lids:                # attached to the live feed: this one too
+                    lid = f"{self.id}:{len(self.members) - 1}"
+                    self.mgr.hub.add(lid, int(m.inst["token"]), m.on_tick, full=bool(self.fast.get("maxSpreadPct")))
+                    self.lids.append(lid)
+                self.dirty = True
+
+    def _waiting_open(self) -> list[str]:
+        """The symbols of members kept as saved with an open position."""
+        return [st.get("symbol") or iid.split(":", 1)[-1] for iid, st in self.waiting.items() if (st.get("qty") or 0) > 0]
 
     def _load(self, iid: str):
         try:
@@ -195,22 +225,30 @@ class GroupLiveSession:
     # ---------- the shared book ----------
     def free_slot(self, at_open: bool = False) -> bool:
         # at_open: the backtest's candle-open fill rule; live entries fill at the price of the moment, so it changes nothing
-        return not self.halted and not self.emptied_on and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open
+        # a member kept as saved with an open position: the slots and the pot can't be counted, so nothing opens
+        return (not self.halted and not self.emptied_on and not self._waiting_open()
+                and sum(1 for m in self.members if m.engine.qty > 0) < self.max_open)
 
     def funds(self) -> tuple[float, float]:
         """As the group backtest's: the pot's value at the last prices and its cash not tied up in an open position."""
         r = self.strategy.risk
-        value = r.capital + self.realised() + sum(m.open_pnl() for m in self.members)
-        cash = r.capital + self.corp_cash + sum(_cash(m.engine) for m in self.members)
+        value = r.capital + self.realised() + self.open_pnl()
+        cash = (r.capital + self.corp_cash + sum(_cash(m.engine) for m in self.members)
+                + sum((st.get("cash") or r.capital) - r.capital for st in self.waiting.values() if not st.get("qty")))
         tied = sum(m.engine.qty * m.engine.entry for m in self.members) / r.leverage
         return value, cash - tied
 
     def realised(self) -> float:
-        return sum(t["pnl"] for m in self.members for t in m.engine.trades) + self.corp_cash
+        return (sum(t["pnl"] for m in self.members for t in m.engine.trades) + self.corp_cash
+                + sum(t["pnl"] for st in self.waiting.values() for t in st.get("trades", [])))
+
+    def open_pnl(self) -> float:
+        """The open positions' P&L at their last prices, those kept as saved at their last saved price."""
+        return sum(m.open_pnl() for m in self.members) + sum(_saved_open(st)[0] for st in self.waiting.values())
 
     def equity(self) -> float:
         cap = self.strategy.risk.capital
-        return max(cap + self.realised() + sum(m.open_pnl() for m in self.members), 0.0)
+        return max(cap + self.realised() + self.open_pnl(), 0.0)
 
     def _empty(self, day: str) -> list[dict]:
         """The account is worth nothing: every position is closed at its last price, the loss is held to what the
@@ -229,7 +267,7 @@ class GroupLiveSession:
 
     def _on_candle(self, m: Member, c: dict):
         day = str(c["t"])[:10]
-        if day != self.day:
+        if self.day is None or day > self.day:      # a member catching up late on older candles doesn't turn the day back
             self.day, self.halted = day, False
             self.day_start_realised = self.realised()
         m.corp_day(day)
@@ -241,8 +279,10 @@ class GroupLiveSession:
         m.last_price = c["c"]
         ctx = Ctx(m.bars, intraday=self.tf != "1d")
         new = m.engine.step(m.bars, ctx, len(m.bars) - 1)
+        for ev in new:                         # the candle's own orders first, then the cap's or the emptied account's closes
+            self.mgr.on_order(self, {**ev, "sym": m.sym})
         if self.loss_cap and not self.halted:
-            today = self.realised() - self.day_start_realised + sum(x.open_pnl() for x in self.members)
+            today = self.realised() - self.day_start_realised + self.open_pnl()
             if today <= -self.loss_cap:
                 for x in self.members:
                     if x.engine.qty > 0:
@@ -250,18 +290,16 @@ class GroupLiveSession:
                         ev = x.engine._close(bar, x.last_price, "Daily loss cap")
                         self.mgr.on_order(self, {**ev, "sym": x.sym})
                 self.halted = True
-        if not self.emptied_on and self.strategy.risk.capital + self.realised() + sum(x.open_pnl() for x in self.members) <= 0:
+        if not self.emptied_on and self.strategy.risk.capital + self.realised() + self.open_pnl() <= 0:
             for ev in self._empty(day):
                 self.mgr.on_order(self, ev)
         t = candle_end(c, self.tf)             # the value at the candle's close, stamped when it closed (R11C-011)
         if self.equity_curve and self.equity_curve[-1]["t"] == t:
             self.equity_curve[-1]["eq"] = round(self.equity(), 2)
-        else:
+        elif not self.equity_curve or self.equity_curve[-1]["t"] < t:
             self.equity_curve.append({"t": t, "eq": round(self.equity(), 2)})
             self.equity_curve = self.equity_curve[-600:]
         self.dirty = True
-        for ev in new:
-            self.mgr.on_order(self, {**ev, "sym": m.sym})
 
     # ---------- feeds ----------
     def attach(self, hub):
@@ -278,6 +316,9 @@ class GroupLiveSession:
         self.lids = []
 
     def on_timer(self, now: datetime):
+        if self.waiting and time.time() >= self.next_retry:
+            self.next_retry = time.time() + RETRY_SECONDS
+            self._retry()
         with self.lock:
             for m in self.members:
                 m.corp_day(m.corp.today(now), timer=True)
@@ -312,16 +353,16 @@ class GroupLiveSession:
 
     # ---------- saving and showing ----------
     def state(self) -> dict:
-        return {"members": {m.inst["id"]: {**m.engine.dump(), **m.corp.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
+        return {"members": {**self.waiting, **{m.inst["id"]: {**m.engine.dump(), **m.corp.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
                                            "last_bar_t": m.bars[-1]["t"]}      # a restart catches up from here
-                            for m in self.members}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
+                            for m in self.members}}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
                 "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
                 "day_equity": self._days(), "corp_cash": self.corp_cash}
 
     def final_state(self, now: datetime | None = None) -> dict:
         """The state kept at the stop: open positions stay open, each valued at its last price, and the account's value at
         those prices is the curve's last point (R11C-002)."""
-        if any(m.engine.qty > 0 for m in self.members):
+        if any(m.engine.qty > 0 for m in self.members) or self._waiting_open():
             eq = round(self.equity(), 2)
             if not self.equity_curve or self.equity_curve[-1]["eq"] != eq:
                 self.equity_curve.append({"t": (now or datetime.now(IST)).isoformat(timespec="seconds"), "eq": eq})
@@ -347,8 +388,11 @@ class GroupLiveSession:
                                                                   "entry": e.entry, "unrealised": round(m.open_pnl(), 2),
                                                                   "stop": e.sl if e.sl > 0 else None,
                                                                   "target": e.tg if e.tg != float("inf") else None}})
+            names = self.inst.get("names") or {}
+            rows += [_saved_row(iid, st, names) for iid, st in self.waiting.items()]
             rows.sort(key=lambda r: (r["position"] is None, -r["pnl"]))
-            open_n = sum(1 for m in self.members if m.engine.qty > 0)
+            held = self._waiting_open()
+            open_n = sum(1 for m in self.members if m.engine.qty > 0) + len(held)
             return {
                 "id": self.id, "name": self.name, "kind": "group", "status": "running", "instrument": self.inst,
                 "strategy": self.strategy.model_dump(), "started_at": self.started_at,
@@ -357,12 +401,35 @@ class GroupLiveSession:
                 "day_equity": self._days(), "closed": risk.closed_list(trades),
                 "bars": [], "overlays": {}, "oscillators": {},
                 "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
-                            "unrealised": sum(m.open_pnl() for m in self.members), "open": open_n, "max_open": self.max_open,
-                            "halted": self.halted, "emptied_on": self.emptied_on, "today": self.realised() - self.day_start_realised + sum(m.open_pnl() for m in self.members),
+                            "unrealised": self.open_pnl(), "open": open_n, "max_open": self.max_open,
+                            "halted": self.halted, "emptied_on": self.emptied_on, "today": self.realised() - self.day_start_realised + self.open_pnl(),
                             "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0),
                             "skipped": {k: sum(m.skips[k] for m in self.members) for k in ("spread", "price")}},
                 "fast": self.fast,
+                "notice": (f"{', '.join(held)}: price history hasn't loaded since the restart. The open position is kept as "
+                           f"saved, and no new positions open in this group until it loads (tried again every "
+                           f"{RETRY_SECONDS // 60} minutes).") if held else None,
             }
+
+
+def _saved_open(m: dict) -> tuple[float, bool]:
+    """A saved member's open P&L at its last saved price, and whether it has an open position without one."""
+    qty, d, px = m.get("qty") or 0, m.get("dir") or 1, m.get("last_price")
+    if qty <= 0:
+        return 0.0, False
+    return d * qty * ((px or m.get("entry") or 0) - (m.get("entry") or 0)) - (m.get("entry_cost") or 0), not px
+
+
+def _saved_row(iid: str, m: dict, names: dict) -> dict:
+    """A member's row on the page, from its saved state."""
+    qty, d = m.get("qty") or 0, m.get("dir") or 1
+    pos = None
+    if qty > 0:
+        pos = {"side": "short" if d == -1 else "long", "qty": qty, "entry": m.get("entry"), "unrealised": round(_saved_open(m)[0], 2),
+               "stop": m["sl"] if (m.get("sl") or 0) > 0 else None, "target": m.get("tg")}
+    return {"symbol": m.get("symbol") or names.get(iid, iid.split(":", 1)[-1]), "id": iid, "price": m.get("last_price"),
+            "trades": len(m.get("trades", [])), "skipped": sum((m.get("skips") or {}).values()), "spread": None,
+            "pnl": round(sum(t["pnl"] for t in m.get("trades", [])), 2), "position": pos}
 
 
 def stopped_snapshot(row: dict) -> dict:
@@ -377,18 +444,10 @@ def stopped_snapshot(row: dict) -> dict:
     # (R11C-002: the page showed the realised P&L alone and no position)
     rows, open_pnl, unpriced = [], 0.0, False
     for iid, m in (st.get("members") or {}).items():
-        qty, d, px = m.get("qty") or 0, m.get("dir") or 1, m.get("last_price")
-        pnl = round(sum(t["pnl"] for t in m.get("trades", [])), 2)
-        pos = None
-        if qty > 0:
-            unpriced = unpriced or not px
-            u = d * qty * ((px or m.get("entry") or 0) - (m.get("entry") or 0)) - (m.get("entry_cost") or 0)
-            open_pnl += u
-            pos = {"side": "short" if d == -1 else "long", "qty": qty, "entry": m.get("entry"), "unrealised": round(u, 2),
-                   "stop": m["sl"] if (m.get("sl") or 0) > 0 else None, "target": m.get("tg")}
-        rows.append({"symbol": m.get("symbol") or names.get(iid, iid.split(":", 1)[-1]), "id": iid, "price": px,
-                     "trades": len(m.get("trades", [])), "skipped": sum((m.get("skips") or {}).values()), "spread": None,
-                     "pnl": pnl, "position": pos})
+        rows.append(_saved_row(iid, m, names))
+        u, no_px = _saved_open(m)
+        open_pnl += u
+        unpriced = unpriced or no_px
     rows.sort(key=lambda r: (r["position"] is None, -r["pnl"]))
     curve = st.get("equity_curve", [])
     equity = cap + realised + open_pnl

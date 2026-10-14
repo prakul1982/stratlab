@@ -412,6 +412,9 @@ class LiveSession:
         hours = m.get("hours") or {}
         local = now.astimezone(ZoneInfo(m.get("tz") or "UTC"))
         close = day_close(self.market, local.date()) or hours.get("close")      # the calendar knows early closes
+        if self.market == "MCX":
+            from .options.data import expiry_time
+            close = expiry_time("MCX", local.date())       # 23:55 while US daylight saving is off
         if not is_trading_day(self.market, local.date()) or (
                 hours.get("open") and not hours["open"] <= local.strftime("%H:%M") < close):
             return f"{m.get('name') or self.market} is closed now, so there's no live price to fill a paper order at."

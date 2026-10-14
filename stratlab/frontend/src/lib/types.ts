@@ -176,7 +176,7 @@ export interface LiveEvent { t: string; side: "buy" | "sell"; px: number; qty: n
   kind?: "corp" }
 export interface LiveOrder { side: "buy" | "sell"; qty: number; price: number; reason: string | null; pnl: number | null; ts: string }
 export interface LiveSnapshot {
-  id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
+  id: string; name: string; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
   instrument: Instrument; strategy: Strategy; started_at: string; stopped_at?: string | null;
   last_price?: number | null; last_tick_at?: string | null; feed_connected?: boolean;
   bars: { t: string; o: number; h: number; l: number; c: number }[]; forming?: { t: string; c: number } | null;
@@ -257,12 +257,14 @@ export interface OptLegLive { sym: string; opt: "CE" | "PE"; side: "sell" | "buy
 export interface OptTrade { opened: string; closed: string; why: string; pnl: number; gross: number; costs: number; credit: number; rolls: number;
   units: number; orders: number; best: number; worst: number; expiry: string; legs: { sym: string; side: string; qty: number; entry: number; exit: number | null }[] }
 export interface OptionSnapshot {
-  id: string; name: string; kind: "options"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
+  id: string; name: string; kind: "options"; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
   instrument: { symbol: string; exchange: string; underlying: string }; strategy: OptionStrategy; started_at: string; stopped_at?: string | null;
   spot: number | null; last_tick_at?: string | null; fresh: boolean; feed_connected?: boolean; expiry?: string | null; lot?: number | null; note: string;
   legs: OptLegLive[];
   position: { opened: string; center: number; spot_in: number; credit: number; mtm: number; costs: number; net: number; best: number; worst: number;
-    rolls: number; units: number; orders: number; expiry: string; dir?: "long" | "short" | null } | null;
+    rolls: number; units: number; orders: number; expiry: string; dir?: "long" | "short" | null;
+    /** why an expired position is still open (no settlement price yet) */
+    held?: string | null } | null;
   signal?: { tf: Tf; position: "long" | "short" | null; since: string | null; last_candle: string | null; price: number | null; ok: boolean;
     name: string; short: "mirror" | "none" } | null;
   events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number;

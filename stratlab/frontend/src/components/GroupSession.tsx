@@ -15,7 +15,7 @@ import "../pages/trade/paper.css";
 import { sessionFeed } from "../lib/marketHours";
 
 export interface GroupSnapshot {
-  id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null;
+  id: string; name: string; kind: "group"; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
   instrument: { symbol: string; market: string; currency?: string; tz?: string; maxOpen?: number };
   strategy: { tf: string; risk: { capital: number } }; started_at: string; last_tick_at?: string | null; feed_connected?: boolean;
   members: { symbol: string; id: string; price: number; trades: number; pnl: number; skipped?: number; spread?: number | null;
@@ -76,6 +76,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
       {!running && a.open > 0 && <Notice className="stopped-open">{a.open === 1 ? "1 position was" : `${a.open} positions were`} open at the stop and stay open, each valued at its last price before the stop. Nothing more is traded.</Notice>}
+      {snap.notice && <Notice tone="warn">{snap.notice}</Notice>}
       {a.emptied_on && <Notice tone="warn"><b>Account emptied on {fmtDate(a.emptied_on)}.</b> The account reached zero, so every position was closed and nothing opens again; the loss stops at −100%.</Notice>}
       {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</Notice>}
       {snap.skipped.length > 0 && <p className="k-note">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}

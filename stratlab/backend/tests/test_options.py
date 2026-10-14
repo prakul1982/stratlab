@@ -247,6 +247,30 @@ def test_a_currency_option_settles_at_the_underlying_after_12_30_and_says_it_is_
     assert e.pos is None and e.trades[-1]["why"] == "Expiry settlement"
 
 
+def test_an_expired_position_without_a_settlement_price_is_held_not_squared_off():
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
+    price = {"px": None}
+    e, c = OptionsEngine(cds_strategy(), settle_fn=lambda ex: price["px"]), cds_contracts()
+    e.step(at("09:31"), 96.0, c, q, True)
+    # the next day, after downtime: the underlying has left the instrument list and no price was seen on the expiry day
+    e.pos.pop("expiry_spot", None)
+    assert e.step(at("10:00", day=25), None, None, q, True) == [] and e.pos and e.pos["legs"][0]["open"]
+    assert "Settlement price not available yet" in e.pos["held"]
+    price["px"] = 96.2
+    out = e.step(at("10:05", day=25), None, None, q, True)
+    assert "Expiry settlement at 96.20" in out[0]["why"] and e.pos is None
+
+
+def test_an_expired_currency_option_settles_at_the_last_expiry_day_price_when_no_other_is_found():
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
+    e, c = OptionsEngine(cds_strategy(), settle_fn=lambda ex: None), cds_contracts()
+    e.step(at("09:31"), 96.0, c, q, True)
+    e.step(at("11:00"), 96.4, c, q, True)
+    out = e.step(at("10:00", day=25), None, None, q, True)
+    assert out[0]["px"] == 0.4 and "Expiry settlement at 96.40" in out[0]["why"]
+    assert "estimate: the last underlying price seen on the expiry day" in out[0]["why"] and e.pos is None
+
+
 def test_no_entry_on_expiry_day_after_the_exchange_stopped_trading():
     q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
     e, c = OptionsEngine(cds_strategy()), cds_contracts()
@@ -346,9 +370,33 @@ def test_a_sold_leg_stop_judges_the_middle_not_the_ask_it_exits_at():
     e.step(at("09:31"), 25000, c, q, True)
     assert e.pos["legs"][0]["entry"] == 5.0
     assert e.step(at("09:36"), 25000, c, q, True) == [] and e.pos       # same quotes: no stop
-    q = {"NFO:NIFTY25000CE": {"bid": 6.0, "ask": 7.0, "ltp": 6.5}}      # middle 6.5 is +30%
+    q = {"NFO:NIFTY25000CE": {"bid": 6.5, "ask": 7.5, "ltp": 7.0}}      # middle 7.0 is +27% on the entry middle 5.5
     out = e.step(at("09:41"), 25000, c, q, True)
-    assert out and out[0]["why"] == "Leg stop" and out[0]["px"] == 7.0  # still exits at the ask
+    assert out and out[0]["why"] == "Leg stop" and out[0]["px"] == 7.5  # still exits at the ask
+
+
+def test_a_wide_spread_doesnt_stop_a_sold_leg_without_a_move():
+    s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 25})
+    e, c = OptionsEngine(s), contracts()
+    q = {"NFO:NIFTY25000CE": {"bid": 1.0, "ask": 1.5, "ltp": 1.2}}
+    e.step(at("09:31"), 25000, c, q, True)
+    leg = e.pos["legs"][0]
+    assert leg["entry"] == 1.0 and leg["entry_mid"] == 1.25
+    assert e.step(at("09:36"), 25000, c, q, True) == [] and e.pos       # middle 1.25 is the entry middle: no stop
+    q = {"NFO:NIFTY25000CE": {"bid": 1.4, "ask": 1.8, "ltp": 1.6}}      # middle 1.6 is +28%
+    out = e.step(at("09:41"), 25000, c, q, True)
+    assert out and out[0]["why"] == "Leg stop"
+
+
+def test_a_leg_saved_before_the_entry_middle_stops_on_its_entry_price():
+    s = straddle(legs=[{"side": "sell", "opt": "CE", "offset": 0}], risk={"stopType": "none", "legStopPct": 20})
+    e, c = OptionsEngine(s), contracts()
+    q = {"NFO:NIFTY25000CE": {"bid": 5.0, "ask": 6.0, "ltp": 5.5}}
+    e.step(at("09:31"), 25000, c, q, True)
+    del e.pos["legs"][0]["entry_mid"]
+    q = {"NFO:NIFTY25000CE": {"bid": 6.0, "ask": 7.0, "ltp": 6.5}}      # middle 6.5 is +30% on the entry 5.0
+    out = e.step(at("09:36"), 25000, c, q, True)
+    assert out and out[0]["why"] == "Leg stop"
 
 
 class SettleData:
