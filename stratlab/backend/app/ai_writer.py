@@ -89,6 +89,9 @@ Allowed types for this user: %TYPES%
   atr_pct: average true range as % of price (p = length); atr: average true range in price points (p = length);
   dc_upper / dc_lower: highest high / lowest low of the previous p candles (use "price" "xa" "dc_upper" for a
   breakout); volume and vol_sma (p = length) compare volume with its average.
+  "52-week low" / "52-week high" = dc_lower / dc_upper with p 252 (a trading year of daily candles; on intraday candles
+  add "tf": "1d"). "Touches its 52-week low" = low lt dc_lower p 252; "closes below the 52-week low" = price lt dc_lower
+  p 252. Never stand in for a level you can't express with a number such as 0: leave the rule out and say so in notes.
   The candle: "open", "high", "low", "body" (|close - open|), "upper_wick", "lower_wick", "range" (high - low).
   The trading day: "prev_close" (previous day's close), "day_open", "day_high", "day_low" (so far today),
   "day_chg" (% change from the previous day's close, e.g. -2 means down 2%).
@@ -242,6 +245,7 @@ def _universe(u) -> dict | None:
 
 # ---------- the AI's rules checked against the sentence they came from (R11C-004, R11C-005) ----------
 # values on the price's own scale: compared with a number, it must be a price above 0
+FLIP = {"gt": "lt", "lt": "gt", "xa": "xb", "xb": "xa", "eq": "eq"}
 PRICE_LIKE = {"price", "open", "high", "low", "prev_close", "day_open", "day_high", "day_low", "sma", "ema", "vwap",
               "bb_upper", "bb_mid", "bb_lower", "supertrend", "dc_upper", "dc_lower"}
 # values on a 0-100 scale, and how a sentence names them
@@ -276,10 +280,30 @@ def _scaled_from_text(kind: str, period, text: str) -> dict | None:
     return {"l": {"t": kind, **({"p": period} if period else {})}, "op": op, "r": {"t": "num", "v": v}}
 
 
+_W52 = re.compile(r"\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b", re.I)
+_TOUCH = re.compile(r"\b(?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?|mak(?:e|es|ing) a new)\b", re.I)
+
+
+def _year_rule(c: dict, price: dict, price_on_left: bool, text: str, tf: str | None) -> dict | None:
+    """A rule that set a price against 0 or less, read as the 52-week low or high the sentence names: the lowest low /
+    highest high of the previous 252 daily candles (a daily one on intraday candles). "Touches" reads the candle's low or
+    high; any other wording keeps the price the rule had. With both named, a rule that looks down takes the low."""
+    found = {(m.group(1) or m.group(2)).lower() for m in _W52.finditer(text)}
+    if not found:
+        return None
+    op = c.get("op") if price_on_left else FLIP.get(c.get("op"), "gt")
+    low = "low" in found and ("high" not in found or op in ("lt", "xb"))
+    level = {"t": "dc_lower" if low else "dc_upper", "p": 252, **({"tf": "1d"} if tf in ("1h", "15m", "5m") else {})}
+    if _TOUCH.search(text) and price.get("t") == "price":
+        price, op = {"t": "low" if low else "high"}, "lt" if low else "gt"
+    return {"l": price, "op": op, "r": level, **({"w": c["w"]} if c.get("w") is not None else {})}
+
+
 def check_against_text(out: dict, text: str) -> dict:
     """The AI builder's rules, checked against the person's own sentence before anyone sees them. Each change is said in
     the notes, so nothing is fixed silently:
-    - a rule that can never mean anything ("Price crosses below 0", a value against itself) is left out;
+    - a rule that can never mean anything ("Price crosses below 0", a value against itself) is left out, unless the sentence
+      names a 52-week low or high, which the rule was reaching for: it is then read as that level (R18-002);
     - a 0-100 value set against the price ("Price is above RSI 14" from "RSI 14 is above 55") is read again from the
       sentence, or left out when the sentence doesn't say it;
     - "sell" means selling what was bought: a short side only when the sentence says short ("sell short", "go short");
@@ -296,9 +320,19 @@ def check_against_text(out: dict, text: str) -> dict:
             bad = None
             for a, b in ((l, r), (r, l)):
                 if a.get("t") in PRICE_LIKE and b.get("t") == "num" and (b.get("v") is None or b["v"] <= 0):
-                    bad = f"A rule comparing the price with {b.get('v', 0):g} was left out: it can't mean anything."
+                    bad = f"A rule comparing the price with {b.get('v') or 0:g} was left out: it can't mean anything."
+                    read = _year_rule(c, a, a is l, text, out.get("tf")) if a.get("t") in ("price", "open", "high", "low", "day_high", "day_low") else None
+                    if read:
+                        kept.append(read)
+                        notes.append(f"A rule comparing the price with {b.get('v') or 0:g} was read as the "
+                                     f"{'lowest low' if read['r']['t'] == 'dc_lower' else 'highest high'} of the last 252 candles "
+                                     "(52 weeks), from your words.")
+                        bad = "done"
+                        break
                 if a.get("t") in SCALED and b.get("t") == "num" and b.get("v") is not None and not 0 <= b["v"] <= 100:
                     bad = f"A rule comparing a 0-100 value with {b['v']:g} was left out: it can't mean anything."
+            if bad == "done":
+                continue
             if bad:
                 notes.append(bad)
                 continue
@@ -317,7 +351,11 @@ def check_against_text(out: dict, text: str) -> dict:
         return kept
 
     for k in ("entry", "exit", "shortEntry", "shortExit"):
+        before = len(out.get(k) or [])
         out[k] = clean(list(out.get(k) or []))
+        if k in ("entry", "shortEntry") and out[k] and len(out[k]) < before and out.get("entryJoin") in ("any", "score"):
+            # the rest of an "any of these" list decides alone once a rule is gone (R18-002: volume alone opened 3,014 trades)
+            notes.append("A rule was left out of the entry rules, so the ones left now decide the entry on their own. Check them before you run it.")
     # "Sell when it crosses below" is the way out of a buy, not a short sale (R11C-004)
     if out.get("side") in ("short", "both") and not _SHORT.search(text):
         if out["side"] == "both":
