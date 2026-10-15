@@ -54,7 +54,7 @@ class Query:
     def __init__(self, db, table):
         self.db, self.table, self.filters = db, table, []
         self.op, self.cols, self.count, self.payload = "select", "*", None, None
-        self._order, self._limit = None, None
+        self._order, self._limit, self.returning = None, None, None
 
     # building
     def select(self, cols="*", count=None):
@@ -69,12 +69,13 @@ class Query:
         self.op, self.payload, self.ignore = "upsert", payload, ignore_duplicates
         return self
 
-    def update(self, payload):
-        self.op, self.payload = "update", payload
+    def update(self, payload, count=None, returning=None):
+        self.op, self.payload, self.count, self.returning = "update", payload, count, returning
         return self
 
-    def delete(self):
-        self.op = "delete"
+    def delete(self, count=None, returning=None):
+        """returning="minimal": no rows come back; count="exact": how many were removed, as .count."""
+        self.op, self.count, self.returning = "delete", count, returning
         return self
 
     def _f(self, fn):
@@ -134,10 +135,10 @@ class Query:
             if self.op == "update":
                 for r in match:
                     r.update(copy.deepcopy(self.payload))
-                return SimpleNamespace(data=copy.deepcopy(match), count=None)
+                return self._answer(match)
             if self.op == "delete":
                 self.db.tables[self.table] = [r for r in rows if r not in match]
-                return SimpleNamespace(data=copy.deepcopy(match), count=None)
+                return self._answer(match)
             if self._order:
                 c, desc = self._order
                 match.sort(key=lambda r: (r.get(c) is None, str(r.get(c))), reverse=desc)
@@ -145,6 +146,11 @@ class Query:
             if self._limit is not None:
                 match = match[: self._limit]
             return SimpleNamespace(data=[_project(r, self.cols) for r in match], count=n if self.count else None)
+
+    def _answer(self, match):
+        """What a write answers: the rows, or with returning="minimal" none of them; the count when asked for."""
+        return SimpleNamespace(data=[] if self.returning == "minimal" else copy.deepcopy(match),
+                               count=len(match) if self.count else None)
 
     def _fill(self, p):
         """Column defaults, as in supabase/schema.sql."""

@@ -306,3 +306,13 @@ def test_sp500_list_is_committed_with_its_source_and_date():
     assert all(isinstance(c, int) and c > 0 for c in universes.sp500_ciks().values())
     assert set(universes.sp500_names()) == set(syms)
     assert set(universes.us_universe()) >= set(syms) and len(universes.us_universe()) == len(set(universes.us_universe()))
+
+
+def test_a_stock_with_no_candle_for_weeks_is_not_matched_as_of_today():
+    flat = [100.0] * 200 + list(np.linspace(100, 130, 30))
+    live = P.evaluate(bars(flat, end=date(2026, 9, 30)))
+    halted = P.evaluate(bars(flat, end=date(2026, 8, 14)))
+    doc = P.build({"LIVE": live, "HALT": halted})
+    assert doc["checked"] == 1 and doc["as_of"] == "2026-09-30"
+    assert all(r["s"] != "HALT" for r in doc["rows"])
+    assert P.is_stale("2026-08-14", "2026-09-30") and not P.is_stale("2026-09-25", "2026-09-30")

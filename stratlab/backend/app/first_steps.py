@@ -67,7 +67,7 @@ def has_activity(uid: str) -> bool:
     you here?" question is for an empty account only; an established one is never asked. A failed look counts as activity
     (better to skip the question than to ask someone who has been here for months)."""
     try:
-        return bool(holdings.load(uid)["items"]) or _watchlist(uid) or db.has_strategy(uid) or bool(db.user_sessions(uid, 1))
+        return bool(holdings.load(uid)["items"]) or _watchlist(uid) or db.has_strategy(uid) or bool(db.user_sessions(uid, 1, running=False))
     except Exception:
         return True
 
@@ -81,7 +81,7 @@ def done(profile: dict, st: dict | None = None) -> dict[str, bool]:
         "backtest": db.count_usage(uid, "backtest", EVER) > 0,
         "watchlist": _watchlist(uid),
         "deepdive": bool(st.get("deepdive")),
-        "paper": bool(db.user_sessions(uid, 1)),
+        "paper": bool(db.user_sessions(uid, 1, running=False)),
         "alerts": (any(v != "off" for v in news.values()) or bool(profile.get("telegram_chat_id"))
                    or bool(push.devices(uid))),
     }

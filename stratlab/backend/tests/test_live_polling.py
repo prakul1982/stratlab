@@ -61,6 +61,59 @@ def test_india_sessions_wait_for_kite_login(monkeypatch):
     assert attached == ["b"]   # India waits: Kite isn't logged in
 
 
+def test_a_transient_error_resuming_leaves_the_session_running_and_a_permanent_one_stops_it(monkeypatch):
+    mgr, _ = make_manager()
+    writes = []
+    monkeypatch.setattr(live.db, "update_session", lambda sid, **f: writes.append((sid, f)))
+    rows = [{"id": "a", "instrument": {"market": "CRYPTO"}}]
+    fail = [RuntimeError("503 service unavailable")]
+
+    def attach(row):
+        if fail:
+            raise fail[0]
+    monkeypatch.setattr(mgr, "_attach", attach)
+    for _ in range(live.RESUME_TRIES - 1):
+        mgr.resume(rows)
+    assert writes == []                         # still running: the next reconcile tries again
+    fail.clear()
+    mgr.resume(rows)                            # it attaches: the count starts over
+    fail.append(RuntimeError("timeout"))
+    for _ in range(live.RESUME_TRIES - 1):
+        mgr.resume(rows)
+    assert writes == []
+    mgr.resume(rows)                            # the tenth failure in a row stops it, with the reason
+    assert len(writes) == 1 and writes[0][0] == "a" and writes[0][1]["status"] == "stopped"
+    assert "10 tries" in writes[0][1]["stop_reason"] and "timeout" in writes[0][1]["stop_reason"]
+    # what the builders raise for good stops it at once
+    writes.clear()
+    fail[:] = [ValueError("That market isn't connected.")]
+    mgr.resume(rows)
+    assert len(writes) == 1 and writes[0][1]["stop_reason"] == "Could not resume after restart: That market isn't connected."
+
+
+def test_a_manual_paper_order_is_stamped_in_the_markets_own_zone(monkeypatch):
+    """A US position opened at 15:00 New York is dated the 13th in India (00:30 IST), but its candles are dated the 12th:
+    stamped in India's zone it looked a day old and was squared off at the next candle's open."""
+    from zoneinfo import ZoneInfo
+    from app.engine.core import Ctx
+    mgr, reg = make_manager()
+    strat = {**STOP1, "session": {"start": "09:30", "end": "15:30", "squareoff": "15:55"}}
+    row = {"id": "s1", "user_id": "u", "name": "US", "strategy": strat, "instrument": reg.resolve("CRYPTO:BTC-USD")[1],
+           "started_at": "2026-10-12T09:00:00+00:00"}
+    with time_machine.travel(datetime(2026, 10, 12, 19, 0, tzinfo=timezone.utc), tick=False):     # 15:00 in New York, 00:30 the next day in India
+        s = live.LiveSession(mgr, row)
+        assert s._stamp() == "2026-10-12T19:00:00+00:00"                  # a coin's candles are in UTC
+        s.inst = {**s.inst, "tz": "America/New_York", "market": "US"}
+        s.market = "US"
+        assert s._stamp() == "2026-10-12T15:00:00-04:00"
+        ny = ZoneInfo("America/New_York")
+        bars = [{"t": datetime(2026, 10, 12, 15, m, tzinfo=ny).isoformat(), "o": 100.0, "h": 100.0, "l": 100.0, "c": 100.0, "v": 1}
+                for m in (0, 5)]
+        s.engine.open_manual(s._stamp(), 100.0, 1, 10, "by hand")
+        s.engine.step(bars, Ctx(bars, intraday=True), 1)                  # the next candle, still the same trading day
+    assert s.engine.qty == 10 and not s.engine.trades
+
+
 # ---------- restarts: the state is saved with each order, and candles closed while down are caught up on ----------
 STOP1 = {"name": "Always in", "tf": "5m", "side": "long", "entryJoin": "all",
          "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}], "exit": [],

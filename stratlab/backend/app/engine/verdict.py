@@ -10,11 +10,12 @@
 4. Enough trades: under 15 trades, luck dominates; 30+ is a fair sample.
 All returns are after costs."""
 import copy
+import re
 
 import numpy as np
 
 from ..models import Ref
-from .core import SPLIT, Ctx, simulate
+from .core import SPLIT, Ctx, simulate, write_off
 from .indicators import MARKET, params, ref_name
 
 SHUFFLES = 1000
@@ -425,6 +426,83 @@ def restated(v: dict | None, stats: dict | None) -> dict | None:
     hold = st.get("buy_hold_ret")
     return {**v, "headline": fact_headline(v.get("verdict") or "", list(v.get("checks") or []), n, ret,
                                            float(hold) if isinstance(hold, (int, float)) else None, n == 0 and abs(ret) < 1e-9)}
+
+
+def _cap_percent(text: str, only_minus: bool) -> str:
+    """A figure of the account's change or fall that passes 100% written as 100.0%: every percent in a bad-luck line, or
+    only the losses ("−250.0%") in an unseen-data line, where a gain over 100% is real."""
+    pat = r"−(\d[\d,]*(?:\.\d+)?)%" if only_minus else r"(\d[\d,]*(?:\.\d+)?)%"
+    return re.sub(pat, lambda m: m.group(0).replace(m.group(1), "100.0") if float(m.group(1).replace(",", "")) > 100 else m.group(0), text)
+
+
+def restate_verdict(v: dict | None, old_ret: float, ret: float, hold: float | None, n: int) -> dict | None:
+    """A stored verdict whose run showed a loss past 100% (saved before an account stopped at zero) with the account's
+    figures held to 100% and the headline and summary worded from the restated return."""
+    if not isinstance(v, dict):
+        return v
+    checks = []
+    for c in v.get("checks") or []:
+        d = dict(c.get("data") or {})
+        if c.get("id") == "unseen":
+            d = {k: max(x, -100.0) if k in ("built_ret", "unseen_ret") and isinstance(x, (int, float)) else x for k, x in d.items()}
+        elif c.get("id") == "shuffle":
+            d = {k: min(x, 100.0) if k in ("yours", "p95", "worst") and isinstance(x, (int, float)) else x for k, x in d.items()}
+        c = {**c, "data": d or c.get("data")}
+        if isinstance(c.get("detail"), str) and c.get("id") in ("unseen", "shuffle"):
+            c["detail"] = _cap_percent(c["detail"], only_minus=c["id"] == "unseen")
+        checks.append(c)
+    summary = v.get("summary")
+    if isinstance(summary, str) and hold is not None:
+        old = versus_hold(old_ret, hold)
+        summary = (summary[: -len(old)] if summary.endswith(old) else summary) + versus_hold(ret, hold)
+    out = {**v, "checks": checks, "summary": summary}
+    if v.get("headline") and v.get("verdict"):
+        out["headline"] = fact_headline(v["verdict"], checks, n, ret, hold, n == 0 and abs(ret) < 1e-9)
+    return out
+
+
+def restate_empty(e: dict) -> dict:
+    """An experiment stored before accounts stopped at zero (R13S-001, R18-008: a notebook still showed -352.6% and "In
+    your pocket" -Rs17,63,044 on Rs5,00,000) with its account held to what it had: the return at -100%, the loss at the
+    capital, the worst fall at -100%, the value curve at zero from the day it first got there, the newest losing trades
+    reduced by the excess (so the trades still add up to the account's change), and the verdict worded from those
+    figures. `stats.shown_ret` keeps the figure it was stored with. Any other experiment comes back as it is."""
+    st, costs, ser = e.get("stats") or {}, e.get("costs") or {}, e.get("series") or {}
+    cap = ((e.get("strategy") or {}).get("risk") or {}).get("capital")
+    num = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)       # noqa: E731
+    if not num(cap) or cap <= 0 or not num(st.get("ret")):
+        return e
+    equity = ser.get("equity") or []
+    low = min((x for x in equity if num(x)), default=None)
+    if not (st["ret"] < -100 or (num(st.get("mdd")) and st["mdd"] < -100) or (low is not None and low < 0)):
+        return e
+    ret, pnl = max(st["ret"], -100.0), max(st["pnl"], -cap) if num(st.get("pnl")) else -cap
+    times = ser.get("t") or []
+    day = next((str(t)[:10] for t, x in zip(times, equity) if num(x) and x <= 0), None) or (str(times[-1])[:10] if times else None)
+    new_stats = {**st, "ret": ret, "pnl": pnl, "mdd": max(st["mdd"], -100.0) if num(st.get("mdd")) else -100.0,
+                 "cagr": -100.0 if num(st.get("cagr")) else st.get("cagr"), "emptied_on": st.get("emptied_on") or day,
+                 "shown_ret": st["ret"]}
+    trades = [dict(t) for t in e.get("trades") or []]
+    if num(st.get("pnl")) and st["pnl"] < -cap:
+        write_off(trades, -cap - st["pnl"])
+    net = max(costs["net_pnl"], -cap) if num(costs.get("net_pnl")) else costs.get("net_pnl")
+    new_costs = {**costs, "net_pnl": net}
+    if num(net):
+        new_costs["gross_pnl"] = round(net + (costs.get("total") or 0.0), 2)
+        if num(costs.get("kept")):
+            new_costs["kept"] = max(costs["kept"], -cap)
+    hold = st.get("buy_hold_ret")
+    group = e.get("group")
+    if isinstance(group, dict):          # each member's P&L follows the trades that were reduced
+        back: dict = {}
+        for old, new in zip(e.get("trades") or [], trades):
+            back[old.get("symbol")] = back.get(old.get("symbol"), 0.0) + new["pnl"] - old["pnl"]
+        group = {**group, "members": [{**m, "pnl": round(m["pnl"] + back.get(m.get("symbol"), 0.0), 2)} if num(m.get("pnl")) else m
+                                      for m in group.get("members") or []]}
+        e = {**e, "group": group}
+    return {**e, "stats": new_stats, "costs": new_costs, "trades": trades,
+            "series": {**ser, "equity": [max(x, 0.0) if num(x) else x for x in equity]},
+            "verdict": restate_verdict(e.get("verdict"), st["ret"], ret, float(hold) if num(hold) else None, int(st.get("n") or 0))}
 
 
 def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None) -> dict:

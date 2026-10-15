@@ -13,7 +13,7 @@ Where the answers come from:
   500 stocks is one read, not 500 chart requests."""
 import json
 import math
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -29,6 +29,7 @@ MAX_BARS = 330                     # only the latest candles matter (the longest
 YEAR = 252                         # trading days in 52 weeks
 SQUEEZE_DAYS, SQUEEZE_PCT = 120, 0.2
 # groups whose results the daily run stores (the group ids of breadth.GROUPS)
+STALE_DAYS = 10                    # a stock whose last candle is this much older than the group's newest is suspended or delisted: left out
 STORED = {"IN": "nifty500", "US": "sp500"}
 
 
@@ -179,13 +180,21 @@ def on_last_trade(detail: str, read_px: float, close: float) -> str:
 
 
 # ---------- the daily results ----------
+def is_stale(last: str, newest: str | None) -> bool:
+    """A last candle ("YYYY-MM-DD..." ) more than STALE_DAYS before the newest one in the group."""
+    try:
+        return bool(newest) and (date.fromisoformat(newest[:10]) - date.fromisoformat(str(last)[:10])).days > STALE_DAYS
+    except ValueError:
+        return False
+
+
 def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:
     """The stored shape for one group from {symbol: evaluate() answer}: only stocks that match something get a row."""
     rows, counts = [], {p["id"]: 0 for p in PRESETS}
+    newest = max((r["as_of"] for r in per_stock.values() if r), default=None)
+    per_stock = {k: r for k, r in per_stock.items() if r and not is_stale(r["as_of"], newest)}   # a suspended or delisted stock's last candle isn't the day's
     for sym in sorted(per_stock):
         r = per_stock[sym]
-        if not r:
-            continue
         for pid in r["matches"]:
             counts[pid] += 1
         if r["matches"]:

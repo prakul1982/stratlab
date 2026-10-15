@@ -2,7 +2,7 @@ import { lazy, StrictMode, Suspense, useCallback, useEffect, useLayoutEffect, us
 import { titleFor } from "./lib/title";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { AppProvider, useApp } from "./lib/app";
+import { AppProvider, sessionUnconfirmed, useApp } from "./lib/app";
 import { takeNext } from "./lib/returnTo";
 import { isPublicForAll } from "./lib/entry";
 import { applySeo, seoFor } from "./lib/seo";
@@ -12,7 +12,7 @@ import { PageLock } from "./components/PageLock";
 import { ViewAsBanner } from "./components/ViewAs";
 import { Toast } from "./components/Toast";
 import { VisitorApp } from "./visitor/VisitorApp";
-import { LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
+import { LoadFailed, LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt } from "./lib/offer";
@@ -199,6 +199,8 @@ function Routed() {
   useLayoutEffect(() => { if (!everyone && (!ready || session)) document.title = titleFor(loc.pathname); }, [everyone, ready, session, loc.pathname]);
   if (everyone) return <VisitorApp />;
   if (!ready) return <main><h1 className="sr-only">Opening StratLab</h1><Opening label="Opening StratLab" /></main>;
+  // a saved sign-in the sign-in service didn't answer for is not "signed out": say it couldn't load, offer Reload (R20-002)
+  if (!session && sessionUnconfirmed(ready, session)) return <main><LoadFailed what="your account" /></main>;
   if (!session) return <VisitorApp />;
   return (
     <Shell>

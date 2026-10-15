@@ -81,7 +81,9 @@
 .tbar-bar.neg { fill: var(--down); }
 .tbar-year { font-size: var(--t-note); color: var(--muted); }
 .tbar-sub { line-height: 1.35; }
-@media (max-width: 560px) { .tbar-num { font-size: 11px; } }
+.tbar-short { display: none; }
+/* a bar a few pixels wide shows the figure in at most five characters, not cut with an ellipsis (R20-017) */
+@media (max-width: 560px) { .tbar-num { font-size: 11px; } .tbar-num:has(.tbar-short) .tbar-full { display: none; } .tbar-num:has(.tbar-short) .tbar-short { display: inline; } }
 
 /* the AI read */
 .inv-summary { font-family: var(--serif); font-size: 19px; line-height: 1.45; }

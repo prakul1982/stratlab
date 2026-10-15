@@ -354,8 +354,8 @@ def test_the_weekly_email_separates_paying_from_given_and_matches_admin_errors()
              "checks": [], "audits": {}, "errors": 22, "errors_since_restart": 0, "errors_before_restart": 23, "admin_url": None}
     _, text = weekly.summary(datetime(2026, 10, 5, 9, 0, tzinfo=IST), facts)
     assert "- Paying: none" in text and "- Given by the owner, not paying: Pro 6" in text and "Paid: Pro 6" not in text
-    # R9P-004: the words and numbers of Admin → System ("0 since the last restart, 23 kept from before it"), not a second wording
-    assert "- 22 errors this week (0 since the last restart, 23 kept from before it)" in text
+    # R19-008: the errors line is plain ("23 more from before the last restart are kept")
+    assert "- 22 server errors this week; 23 more from before the last restart are kept" in text
 
 
 def test_admin_emails_say_why_an_admin_gets_them(monkeypatch):

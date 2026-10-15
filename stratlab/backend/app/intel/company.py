@@ -127,11 +127,19 @@ def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=
     """The fundamentals summary re-priced at the live price, so the market value, P/E, P/B and dividend yield on a
     company's page agree with the price at the top of it. The fundamentals source prices its ratios once a day; the
     reported numbers behind them (earnings, book value, dividend) don't move with the price, so each ratio scales with it.
-    Left as read across a split or bonus (`symbol`, with an ex-date after `since`) or a move too large for a day's."""
-    from ..stock_pages import can_reprice
+    Across a split or bonus (`symbol`, with an ex-date after `since`) or a move too large for a day's the ratios can't
+    follow the price: the price is still the close shown, the market value and P/E (a split changes neither) stay as
+    read, and what rests on the old per-share price (P/B, dividend yield) is left out; past a move too large for a day's
+    nothing read at the old price is kept."""
+    from ..stock_pages import MOVE_BOUNDS, can_reprice
     old = s.get("price")
-    if not live or live <= 0 or not old or old <= 0 or not can_reprice(old, live, "IN", symbol, since):
+    if not live or live <= 0 or not old or old <= 0:
         return s
+    if not can_reprice(old, live, "IN", symbol, since):
+        out = dict(s, price=live, pb=None, div_yield=None)
+        if not MOVE_BOUNDS[0] <= live / old <= MOVE_BOUNDS[1]:
+            out.update(pe=None, market_cap_cr=None)
+        return out
     k = live / old
     out = dict(s, price=live)
     if s.get("pe") is not None:

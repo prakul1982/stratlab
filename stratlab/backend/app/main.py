@@ -65,7 +65,8 @@ from .responses import err, ok
 from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
-from .engine.verdict import restated as verdict_restated
+from . import rule_check
+from .engine.verdict import restate_empty, restated as verdict_restated
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -564,6 +565,10 @@ def get_instrument(inst_id: str) -> tuple:
 
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
+    never = rule_check.problems(strategy)["never"]
+    if never:      # R18-002: "Price is below 0" never holds, and the other rule of an "any of these" list traded alone
+        err(400, "rule_never_true", f"{'These rules' if len(never) > 1 else 'This rule'} can never be true, so nothing was run: "
+            + "; ".join(f"\"{t}\"" for t in dict.fromkeys(never)) + ". Change or remove it in the rules.")
     if not fno(profile) and needs_fno(inst):
         upgrade("Indian F&O is on the Pro plan.")
     if not all_indicators(profile) and needs_indicators(strategy):
@@ -730,7 +735,9 @@ def me(profile=Depends(current_profile)):
                   "ai_builds_per_day": AI_BUILDS_PER_DAY if info["ai_builds_per_month"] is None else None,
                   "lifted_by": "the launch offer" if promo_active() and not seen else None},
         "trial": trial_state(profile) if plan == "free" else None,
-        "live_running": len(manager.user_running(profile["id"])), "live_limit": info["live_limit"],
+        # a follower runs no sessions: the running rows are in the database
+        "live_running": len(manager.user_running(profile["id"])) if leader.leading() else db.count_running(profile["id"]),
+        "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
@@ -1342,6 +1349,16 @@ def unique_name(profile, name: str) -> str:
     return f"{name[:76]} {n}"
 
 
+def with_rule_problems(nb: dict) -> dict:
+    """The notebook, plus `rule_problems` when its rules include one that can never be true (it can't be run) or is true on
+    every candle: saved as written, said with the notebook, never silently run (R18-002)."""
+    try:
+        found = {k: v for k, v in rule_check.problems(Strategy(**(nb.get("strategy") or {}))).items() if v}
+    except (ValidationError, TypeError):
+        return nb
+    return {**nb, "rule_problems": found} if found else nb
+
+
 @app.post("/notebooks")
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
@@ -1352,15 +1369,16 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
     if req.gaps is not None:
         nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
-    return save_notebook(profile, nb)
+    return with_rule_problems(save_notebook(profile, nb))
 
 
 @app.get("/notebooks/{nid}")
 def read_notebook(nid: str, profile=Depends(current_profile)):
     nb = get_notebook(profile, nid)
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
-    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in nb.get("experiments") or []]
-    return ok(nb)
+    # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
+    nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    return ok(with_rule_problems(nb))
 
 
 @app.put("/notebooks/{nid}")
@@ -1386,7 +1404,7 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb["gaps"] = req.gaps.model_dump()
     if req.clearGaps:
         nb.pop("gaps", None)
-    return ok(save_notebook(profile, nb))
+    return ok(with_rule_problems(save_notebook(profile, nb)))
 
 
 def group_body(g) -> dict:
@@ -2744,7 +2762,7 @@ def holdings_corp_action(req: CorpActionReq, profile=Depends(current_profile)):
         if not item:
             err(404, "not_held", f"{sym} isn't in your holdings.")
         today = datetime.now(IST).date()
-        saved = (h["updated_at"] or today.isoformat())[:10]
+        saved = corp_actions.saved_day(h["updated_at"], today)
         if req.action == "undo":
             if not item.get("adjusted"):
                 err(409, "nothing_to_undo", f"{sym} has no adjustment to undo.")
@@ -3019,8 +3037,8 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     merged, added, dup = tax_lots.merge(old, trades)
     over = max(0, len(merged) - tax_lots.MAX_TRADES)
     files = [] if mode == "replace" else before["files"]
-    business, b_added, b_replaced, b_same = tax_lots.merge_business([] if mode == "replace" else before["business"],
-                                                                   parsed.get("business") or [])
+    business, b_added, b_replaced, b_same, b_overlaps = tax_lots.merge_business([] if mode == "replace" else before["business"],
+                                                                               parsed.get("business") or [])
     lines = sum(f["lines"] for f in parsed.get("files", []) if f["section"] in holdings_file.SEGMENT_NAMES.values()) or \
         sum(b["trades"] for b in parsed.get("business") or [])
     if added or b_added or b_replaced:
@@ -3030,10 +3048,10 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     elif mode == "replace":
         tax_lots.save(profile["id"], merged, files, before["fmv"], business)
     return ok({"broker": parsed["broker"], "kind": parsed["kind"], "read": len(trades), "added": added, "duplicates": dup,
-               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same,
+               "business": {"lines": lines, "added": b_added, "replaced": b_replaced, "same": b_same, "overlap": len(b_overlaps),
                             "years": sorted({b["fy"] for b in parsed.get("business") or []})},
                "over_limit": over, "problems": parsed["problems"][:200], "problem_count": len(parsed["problems"]),
-               "not_listed": missed[:50], "skipped": parsed.get("skipped", []), "check": parsed.get("check", []),
+               "not_listed": missed[:50], "skipped": parsed.get("skipped", []) + b_overlaps, "check": parsed.get("check", []),
                "files": parsed.get("files", []), "dividends_added": div_added, "report": tax_view(profile)})
 
 
@@ -4898,14 +4916,28 @@ def admin_sessions(_=Depends(admin.admin_profile)):
                     "equity": account.get("equity"), "trades": account.get("trades"),
                     # the account's currency, so its money is grouped as that currency writes it (Rs47,53,636, $10,000)
                     "currency": s.inst.get("currency") or ("INR" if getattr(s, "market", s.inst.get("market")) == "IN" else "USD")})
+    if not out:      # live sessions run on the leader only: a follower lists the running rows from the database
+        for r in db.running_sessions():
+            inst = r.get("instrument") or {}
+            try:
+                if r.get("user_id") not in emails:
+                    emails[r.get("user_id")] = (db.get_profile(r.get("user_id")) or {}).get("email")
+            except Exception as e:
+                print("admin sessions:", r.get("id"), e)
+            market = inst.get("market")
+            out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
+                        "market": market, "kind": (r.get("strategy") or {}).get("kind") or "rules", "started_at": r.get("started_at"),
+                        "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
+                        "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
     return out
 
 
 @app.post("/admin/sessions/{sid}/stop")
 def admin_stop_session(sid: str, _=Depends(admin.admin_profile)):
-    if sid not in manager.sessions:
+    if sid in manager.sessions:
+        manager.stop(sid, "Stopped by the site owner.")
+    elif not db.stop_running_session(check_id(sid), "Stopped by the site owner."):   # running on the leader: its row says stop
         err(404, "not_found", "That session isn't running.")
-    manager.stop(sid, "Stopped by the site owner.")
     return {"ok": True}
 
 
@@ -5400,7 +5432,7 @@ def send_weekly_summary(now: datetime) -> bool:
     if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == weekly.week_of(now):
         return False
     db.set_setting(weekly.WEEK_KEY, weekly.week_of(now))
-    tell_admins(*weekly_summary(now))
+    alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
     return True
 
 

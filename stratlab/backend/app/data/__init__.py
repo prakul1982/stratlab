@@ -17,6 +17,21 @@ from .yahoo_markets import YahooProvider
 KITE_MAX_DAYS = {"1d": 3650, "1h": 730, "15m": 365, "5m": 120}
 
 
+def _hours(m: dict, day) -> dict | None:
+    """The market's hours as of `day`: MCX closes at 23:55 while US daylight saving is off (options/data.py), and India's
+    futures and options trade past the cash close (`fo_close`, from the timetable in data/sessions.py)."""
+    h = m.get("hours")
+    if not h:
+        return h
+    if m["id"] == "MCX":
+        from ..options.data import expiry_time
+        return {**h, "close": expiry_time("MCX", day) or h["close"]}
+    if m["id"] == "IN":
+        from . import sessions
+        return {**h, "fo_close": sessions.fo_close(day).strftime("%H:%M")}
+    return h
+
+
 class KiteProvider:
     market = "IN"
     max_days = KITE_MAX_DAYS
@@ -123,7 +138,7 @@ class Registry:
                 status = "live" if prov.ready() else "offline"
             local = datetime.now(ZoneInfo(m["tz"])).date()
             public = {k: v for k, v in m.items() if k != "provider"}     # which data provider is internal
-            out.append({**public, "status": status, "max_days": getattr(prov, "max_days", None),
+            out.append({**public, "hours": _hours(m, local), "status": status, "max_days": getattr(prov, "max_days", None),
                         "holidays": calendar.holidays(m["id"], local)})
         return out
 

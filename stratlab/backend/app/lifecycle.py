@@ -296,9 +296,12 @@ def receipt_blocks(inv: dict) -> list:
                      kit.money(inv["total"], cur, 2)])
         out.append(kit.table(["Item", "Amount"], rows, right=(1,), title=("Tax invoice " if s.get("gstin") else "Invoice ") + str(inv.get("number") or "")))
     parties = []
-    if s.get("legal_name") or s.get("gstin"):
-        parties.append(kit.Row("From", sub=s.get("legal_name") or "StratLab",
-                               lines=(f"GSTIN {s['gstin']}" if s.get("gstin") else "Not registered under GST",)))
+    if s.get("gstin"):
+        parties.append(kit.Row("From", sub=s.get("legal_name") or "StratLab", lines=(f"GSTIN {s['gstin']}",)))
+    elif s.get("legal_name"):
+        parties.append(kit.Row("From", sub=s["legal_name"], lines=("Not registered under GST",)))
+    else:                                       # seller details not set yet: just the name, nothing a customer would read as a placeholder
+        parties.append(kit.Row("From", sub="StratLab"))
     if b.get("name") or b.get("gstin"):
         parties.append(kit.Row("Billed to", sub=b.get("name") or b.get("email") or "",
                                lines=tuple(x for x in (f"GSTIN {b['gstin']}" if b.get("gstin") else "",
@@ -340,8 +343,6 @@ def sample_invoice(now: datetime) -> dict:
     real payment gets today (no GST lines, "not registered under GST"), never one with made-up GST details (R9P-003)."""
     from . import invoices
     s = invoices.seller()
-    if not s.get("legal_name"):
-        s = {**s, "legal_name": "StratLab (invoice details not set yet)"}
     buyer = {"name": "A. Reader", "email": "you@example.com", "address": "", "state": s.get("state") or "27", "country": "IN", "gstin": ""}
     total = float(PLANS["pro"]["price"])
     lines, supply, note = invoices.tax_lines(total, s, buyer)

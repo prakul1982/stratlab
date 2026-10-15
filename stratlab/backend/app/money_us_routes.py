@@ -63,7 +63,8 @@ def _yahoo():
 def stock_history(trades: list[dict], t: date, closes_from: date | None = None) -> dict:
     """{"splits": {sym: [...]}, "dividends": {sym: [{d, per_share}]}, "closes": {sym: {day: close}}, "missing": [sym]}
     for the stocks in the trades. Closes (in today's shares) only from `closes_from`, for Schedule FA. A stock whose
-    history can't be read is listed in `missing`; its lots are then matched without splits."""
+    history can't be read, or past the first MAX_SYMBOLS, is listed in `missing`; its lots are then matched without
+    splits."""
     first: dict[str, str] = {}
     for x in trades:
         first[x["sym"]] = min(first.get(x["sym"], x["d"]), x["d"])
@@ -73,6 +74,7 @@ def stock_history(trades: list[dict], t: date, closes_from: date | None = None) 
     except Exception:
         out["missing"] = sorted(first)
         return out
+    out["missing"] = sorted(first)[MAX_SYMBOLS:]
     for sym in sorted(first)[:MAX_SYMBOLS]:
         days = min((t - date.fromisoformat(first[sym])).days + 10, 3650 * 3)
         try:
@@ -85,6 +87,7 @@ def stock_history(trades: list[dict], t: date, closes_from: date | None = None) 
         except Exception as e:
             print("US tax history:", sym, str(e)[:120])
             out["missing"].append(sym)
+    out["missing"].sort()
     return out
 
 
@@ -130,18 +133,40 @@ def for_tax(profile, fetch: bool = True) -> dict:
     m = us.match(data["trades"], h["splits"])
     rows = us.realised(m, hist)
     years: dict[int, dict] = {}
+
+    def year(fy: int) -> dict:
+        return years.setdefault(fy, {"count": 0, "st": 0.0, "lt": 0.0, "unpriced": 0, "fallback": False, "missing": [], "short": {}})
     for r in rows:
-        y = years.setdefault(r["fy"], {"count": 0, "st": 0.0, "lt": 0.0, "unpriced": 0, "fallback": False})
+        y = year(r["fy"])
         y["count"] += 1
+        if r["sym"] in h["missing"] and r["sym"] not in y["missing"]:
+            y["missing"].append(r["sym"])
         if r["unpriced"]:
             y["unpriced"] += 1
             continue
         y["st" if r["term"] == "ST" else "lt"] += r["gain_inr"]
         y["fallback"] |= r["fallback"]
+    for x in m["short_sales"]:
+        y = year(fy_of(x["d"]))
+        y["short"][x["sym"]] = round(y["short"].get(x["sym"], 0.0) + x["qty"], 6)
     allowed = allows(profile["_plan"], "us_tax")
     return {"rows": us.tax_rows(rows) if allowed else [], "names": us.names(data["trades"], _known(profile["id"])),
-            "years": {fy: {**y, "st": round(y["st"], 2), "lt": round(y["lt"], 2)} for fy, y in years.items()},
+            "years": {fy: {**y, "st": round(y["st"], 2), "lt": round(y["lt"], 2), "missing": sorted(y["missing"]),
+                           "warning": us_warning(y["missing"], y["short"])} for fy, y in years.items()},
             "allowed": allowed, "count": len(data["trades"]), "plan": PLANS[FEATURE_PLAN["us_tax"]]["name"]}
+
+
+def us_warning(missing: list[str], short: dict[str, float]) -> str | None:
+    """One line on what the year's US gains leave out or couldn't check: stocks whose split history couldn't be read
+    (their sales matched without splits) and shares sold with no purchase (not counted). None when there is neither."""
+    out = []
+    if missing:
+        out.append(f"The split history of {', '.join(sorted(missing))} couldn't be read, so {'its' if len(missing) == 1 else 'their'} "
+                   f"sales are matched without splits; check them against your broker's statement.")
+    if short:
+        out.append("Sold with no purchase in your US trades: " + ", ".join(f"{k} ({v:g} shares)" for k, v in sorted(short.items()))
+                   + ". That part isn't counted; add the purchases.")
+    return " ".join(out) or None
 
 
 def _known(uid: str) -> dict[str, str]:

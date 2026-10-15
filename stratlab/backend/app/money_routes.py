@@ -204,13 +204,16 @@ def advance_view(profile, fy: int | None = None) -> dict:
     div_events = divs.events(dv, stored, est, rate, fy)
     inputs = i["income"].get(fy)
 
+    earlier = divs.for_total(dv)
+
     def tax_by(cut: str | None) -> float:
+        """The year's total tax as the report works it out (years_with_total, with the losses brought forward), on the
+        sales and dividends up to `cut`."""
         rows = [r for r in equity if cut is None or r["sold"] <= cut]
         other = [r for r in units if cut is None or r["sold"] <= cut]
         div = sum(a for d, a in div_events if cut is None or d <= cut)
-        y = tax_lots.with_total(tax_lots.year(fy, rows, c["intraday"], limit=0, units=instrument_kinds.bucket_rows(other, c["names"])),
-                                i["business"], inputs, div,
-                                instrument_kinds.other_year(fy, other, c["names"]))
+        y = tax_lots.years_with_total([fy], rows, c["intraday"], instrument_kinds.bucket_rows(other, c["names"]), other, c["names"],
+                                      i["business"], i["income"], {**earlier, fy: div}, limit=0)[fy]
         return (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
     full_tax = tax_by(None)
     upto = [tax_by(d["date"]) for d in adv.due_dates(fy)[:3]] + [full_tax]

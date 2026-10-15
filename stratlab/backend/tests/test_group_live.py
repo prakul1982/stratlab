@@ -132,6 +132,60 @@ def test_fast_entries_use_the_forming_candle(monkeypatch):
     assert b.engine.qty == 0                                                 # off: waits for the candle to close
 
 
+EARLY = {**STRAT, "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 99}},
+                            {"l": {"t": "price"}, "op": "lt", "r": {"t": "num", "v": 101}}],
+         "session": {"dailyLossPct": 0},
+         "risk": {"capital": 1000000, "riskPct": 1, "maxAlloc": 100, "sl": 1, "tgt": 1, "stopType": "points", "sizing": "capital",
+                  "perTrade": 100000, "leverage": 1}}
+
+
+def early_ticks(monkeypatch, prices):
+    """Ticks of one member with fast entries on, one per (minute, second, price); returns the member and the orders."""
+    mgr, _ = make_manager()
+    orders = []
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: orders.append(ev))
+    s = group_live.GroupLiveSession(mgr, fast_row({"ticks": True}, EARLY))
+    a = s.members[0]
+    for m, sec, px in prices:
+        tick_at(a, m, sec, px)
+    return a, orders
+
+
+def tick_at(a, minute, sec, px):
+    from zoneinfo import ZoneInfo
+    a.next_eval = 0                                       # fast entries are throttled to one check per 15 s
+    a.on_tick({"last_price": px, "exchange_timestamp": datetime(2999, 1, 1, 10, minute, sec, tzinfo=ZoneInfo("Asia/Kolkata"))})
+
+
+def test_an_early_entry_is_not_stopped_out_by_the_part_of_its_candle_before_the_fill(monkeypatch):
+    # the 10:00 candle opens at 98 and rises to 100: entered at 100.05 with the stop at 99.05, the candle's low of 98
+    # is from before the entry
+    a, orders = early_ticks(monkeypatch, [(0, 1, 98.0), (0, 20, 100.0), (1, 0, 100.0), (5, 1, 100.2)])
+    assert a.engine.qty > 0 and a.bars[-1]["l"] == 98.0       # the 10:00 candle has closed
+    assert a.engine.sl == pytest.approx(99.05, abs=0.01) and a.engine.trades == []
+    assert [o["side"] for o in orders] == ["buy"]
+    # the next candle is judged as usual
+    tick_at(a, 6, 0, 99.0)
+    tick_at(a, 10, 1, 99.0)
+    assert a.engine.qty == 0 and a.engine.trades[-1]["why"] == "Stop loss"
+
+
+def test_an_early_entry_does_not_hit_a_target_the_candle_reached_before_the_fill(monkeypatch):
+    a, orders = early_ticks(monkeypatch, [(0, 1, 105.0), (0, 20, 100.0), (1, 0, 100.0), (5, 1, 100.2)])
+    assert a.bars[-1]["h"] == 105.0 and a.engine.qty > 0 and a.engine.trades == []
+    assert a.engine.tg == pytest.approx(101.05, abs=0.01) and a.engine.best == pytest.approx(a.engine.entry)
+    assert [o["side"] for o in orders] == ["buy"]
+
+
+def test_the_early_entry_flag_is_kept_over_a_restart_and_cleared_by_the_candle(monkeypatch):
+    from app.engine.core import Engine
+    a, _ = early_ticks(monkeypatch, [(0, 1, 98.0), (0, 20, 100.0)])
+    assert a.engine.early_t == a.builder.cur["start"].isoformat()
+    assert Engine(a.s.each, state=a.engine.dump()).early_t == a.engine.early_t
+    tick_at(a, 5, 1, 100.0)
+    assert a.engine.early_t is None
+
+
 def test_a_restart_runs_missed_candles_across_the_group_in_time_order(monkeypatch):
     from tests.test_live_polling import bar5, run_threads_now
     mgr, reg = make_manager()

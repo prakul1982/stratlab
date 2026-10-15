@@ -264,13 +264,13 @@ def split_factor(s: dict) -> float | None:
 def match(trades: list[dict], splits: dict[str, list[dict]] | None = None, upto: str | None = None) -> dict:
     """First in, first out per stock, with splits applied to the lots open before each split's date. {"realised":
     [{sym, bought, sold, qty, cost_usd, sale_usd, lot}], "open": [{sym, d, qty, cost_usd, lot, qty0}], "short":
-    {sym: shares sold with no purchase}}. `lot` numbers each purchase, so Schedule FA can follow it. `upto` stops
-    after that day."""
+    {sym: shares sold with no purchase}, "short_sales": [{sym, d, qty}] (the same, sale by sale)}. `lot` numbers each
+    purchase, so Schedule FA can follow it. `upto` stops after that day."""
     by: dict[str, list[dict]] = {}
     for t in trades:
         if upto is None or t["d"] <= upto:
             by.setdefault(t["sym"], []).append(t)
-    out = {"realised": [], "open": [], "short": {}}
+    out = {"realised": [], "open": [], "short": {}, "short_sales": []}
     n = 0
     for sym in sorted(by):
         events = [(t["d"], 1 if t["side"] == "B" else 2, t) for t in by[sym]]
@@ -303,6 +303,7 @@ def match(trades: list[dict], splits: dict[str, list[dict]] | None = None, upto:
                     lots.pop(0)
             if left > 1e-7:
                 out["short"][sym] = out["short"].get(sym, 0.0) + left
+                out["short_sales"].append({"sym": sym, "d": d, "qty": left})
         out["open"] += [l for l in lots if l["qty"] > 1e-7]
     return out
 

@@ -94,7 +94,11 @@ ADVICE_TITLE = re.compile(
     r"|\bwill (triple|double|quadruple|soar|skyrocket|explode|10x)\b|\bmade (its )?(investors|shareholders|holders) rich\b"
     r"|\bmake (you|investors) rich\b|\bmy (position|stake|bet|take|view|stance) on\b|\boverpaying\b|\bunderpaying\b"
     r"|\bbreakouts?\b|\bbuying into (the )?hype\b|\bcosts? you\b|\b(we|i) (just )?(bought|sold|added|trimmed)\b"
-    r"|\b(millionaire|retire rich|get rich)\b|\bno[- ]brainer\b|\b(screaming|table-pounding) buy\b", re.I)
+    r"|\b(millionaire|retire rich|get rich)\b|\bno[- ]brainer\b|\b(screaming|table-pounding) buy\b"
+    # R20-019: a verdict on the stock ("Jim Cramer says this healthcare stock is still a buy", "… is a sell", "a strong buy")
+    # and a moment to act ("time to sell", "time to buy"); "sell-off" and "buy-and-hold" are stories, not verdicts
+    r"|\bstill an? (strong |clear )?(buy|sell)\b|\b(is|are|remains?|looks?|rated|as) (still )?an? (strong |clear )?(buy|sell)\b(?![- ]?(off|back|side|and|out|in\b))"
+    r"|\bstrong (buy|sell)\b|\btime to (buy|sell|exit|get in|get out|load up|take profits?|cash out)\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

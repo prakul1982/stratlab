@@ -51,6 +51,16 @@ export function trendValue(v: number, unit: string): string {
   return minus(a >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : a >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.round(v).toLocaleString("en-US"));
 }
 
+/** The same value in at most five characters for a bar that is only a few pixels wide on a phone ("28,046" → "28.0k",
+ * "1,46,882" → "147k"), where the whole figure is cut with an ellipsis (R20-017). Only for figures in crore that are six
+ * characters or more; null when the whole figure already fits. The full figure stays in the bar's tooltip. */
+export function trendShort(v: number, unit: string): string | null {
+  if (/billion|lakh/i.test(unit) || !/cr/i.test(unit) || Math.abs(v) < 10000) return null;
+  const a = Math.abs(v) / 1000;
+  const r = a >= 100 ? Math.round(a) : Math.round(a * 10) / 10;           // "40k", never "40.0k"
+  return minus(`${v < 0 ? "-" : ""}${r}k`);
+}
+
 export function metricText(m: MetricItem, currency: string): string {
   const v = m.value;
   // a percentage that isn't zero never reads as "0.0%": a tiny one keeps two decimals (a 0.01% net margin)

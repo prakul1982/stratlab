@@ -64,7 +64,8 @@ def fallback(q: str) -> list[dict]:
 
 def build(ask_json, q: str) -> dict:
     from .ai_providers import AIError
-    ideas = clean(ask_json(SYSTEM, q[:300], 1800), q)
+    q = q[:300]                  # what the cache key covers: nothing past it may shape an answer another person gets
+    ideas = clean(ask_json(SYSTEM, q, 1800), q)
     if not ideas:
         raise AIError("The AI didn't return any usable ideas.")
     return {"ideas": ideas}

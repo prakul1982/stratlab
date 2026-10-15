@@ -278,7 +278,7 @@ def active_days(profile: dict) -> list[str]:
                 days.add(_day(t))
         except (TypeError, ValueError):
             continue
-    for s in db.user_sessions(profile["id"], 50):
+    for s in db.user_sessions(profile["id"], 50, running=False):
         try:
             t = _dt(s.get("started_at") or s.get("created_at"))
             if made <= t < end:

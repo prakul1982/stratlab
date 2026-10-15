@@ -21,8 +21,8 @@ def _unreachable(e: Exception) -> bool:
         return False
     if isinstance(e, AuthRetryableError):
         return True
-    if isinstance(e, AuthApiError):
-        return False
+    if isinstance(e, AuthApiError):          # a refusal of the token is a 4xx; rate limits (429) and server errors (5xx) are the service struggling
+        return (getattr(e, "status", 0) or 0) >= 429
     import httpx
     return isinstance(e, (httpx.TransportError, ConnectionError, TimeoutError))
 

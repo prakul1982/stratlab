@@ -52,8 +52,13 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
     elif not failed_runs:
         lines.append(f"- {_n(len(checks), 'run')}, all passed")
     else:
-        names = sorted({n for c in failed_runs for n in c.get("failed") or []})
-        lines.append(f"- {_n(len(checks), 'run')}, {len(failed_runs)} with failures: {', '.join(names[:8]) or 'see Admin'}")
+        # every failed run is told: a check that failed in several runs says how many ("Prices: IN (3 runs)")
+        counts: dict[str, int] = {}
+        for c in failed_runs:
+            for n in c.get("failed") or []:
+                counts[n] = counts.get(n, 0) + 1
+        names = [f"{n} ({k} runs)" if k > 1 else n for n, k in sorted(counts.items())]
+        lines.append(f"- {_n(len(checks), 'run')}, {len(failed_runs)} with failures: {', '.join(names) or 'see Admin'}")
     lines.append("")
 
     lines.append("New listings (whole-market audit)")
@@ -69,13 +74,15 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         else:
             line += ", no mismatches or errors"
         lines.append(line)
-    # Admin → System's own words and split: "N since the last restart, M kept from before it" (R9P-004)
-    since, before = facts.get("errors_since_restart"), facts.get("errors_before_restart")
-    split = (f" ({since} since the last restart" + (f", {before} kept from before it" if before else "") + ")") if since is not None else ""
-    lines += ["", "Server errors", f"- {_n(facts['errors'], 'error')} this week{split}"]
+    before = facts.get("errors_before_restart")
+    kept = f"; {before} more from before the last restart {'is' if before == 1 else 'are'} kept" if before else ""
+    lines += ["", "Server errors", f"- {_n(facts['errors'], 'server error')} this week{kept}"]
     if facts.get("admin_url"):
         lines += ["", f"Admin page: {facts['admin_url']}"]
 
-    trouble = len(failed_runs) + sum(len(a.get("issues") or []) for a in facts["audits"].values()) + facts["errors"]
-    subject = f"StratLab weekly: {_n(st['new'], 'new user')}, " + ("all quiet" if not trouble else f"{_n(trouble, 'thing')} to look at")
+    listings = sum(len(a.get("issues") or []) for a in facts["audits"].values())
+    trouble = [x for x in ((f"{_n(len(failed_runs), 'run')} with failures" if failed_runs else ""),
+                           (f"{_n(listings, 'listing')} with problems" if listings else ""),
+                           (_n(facts["errors"], "server error") if facts["errors"] else "")) if x]
+    subject = f"StratLab weekly: {_n(st['new'], 'new user')}, " + (", ".join(trouble) or "all quiet")
     return subject, "\n".join(lines)

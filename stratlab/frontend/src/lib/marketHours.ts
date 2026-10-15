@@ -82,6 +82,17 @@ export function marketState(m: Market, now = new Date()): MarketState {
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
 }
 
+/** The market whose hours an options session keeps: its exchange's own. NFO and BFO trade with India's futures and
+ * options close (`fo_close`, 15:40 since 3 Aug 2026), MCX and CDS have their own markets; the server sends each market's
+ * hours as of today (MCX closes at 23:55 while US daylight saving is off), so none is written down here. */
+export function optionsMarket(markets: Market[], exchange: string | undefined): Market | null {
+  const id = exchange === "MCX" ? "MCX" : exchange === "CDS" ? "CDS" : "IN";
+  const m = markets.find((x) => x.id === id);
+  if (!m) return null;
+  const close = id === "IN" ? m.hours?.fo_close : null;
+  return close && m.hours ? { ...m, hours: { ...m.hours, close } } : m;
+}
+
 /** "Thu 8 Oct, 09:15 IST": a moment in an exchange's own zone, with the zone's short name. */
 export function exchangeTime(d: Date, tz: string): string {
   const day = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace(/\bSept\b/, "Sep");
@@ -108,6 +119,19 @@ export function sessionFeed(o: { feedConnected: boolean | undefined; lastTickAt:
   const quiet = o.lastTickAt ? (now.getTime() - Date.parse(o.lastTickAt)) / 60000 : null;
   if (quiet != null && quiet > 10) return { text: `No prices for ${inWords(quiet)}: the price feed is down, orders wait for it`, tone: "warn" };
   return { text: "Reconnecting to prices", tone: "plain" };
+}
+
+/** What an option chain says about its prices (R20-012: "bid / ask, IV and Greeks, live" at 03:25 IST with the market shut):
+ * "live" while the exchange trades, else when the latest quote was struck and that the market is closed ("as of Wed 14 Oct,
+ * 15:30 IST (market closed)"). `times` are the chain's quote times; the exchange's own zone is assumed for one without an
+ * offset (the broker's feed sends none). Without a market to judge by, "live" stays. */
+export function chainStamp(o: { market?: Market | null; times?: (string | null | undefined)[]; now?: Date }): string {
+  const st = o.market ? marketState(o.market, o.now ?? new Date()) : null;
+  if (!st || !o.market || st.open || st.always || st.offline) return "live";
+  const tz = o.market.tz;
+  const stamps = (o.times ?? []).filter((t): t is string => !!t)
+    .map((t) => Date.parse(/(Z|[+-]\d\d:?\d\d)$/.test(t) || tz !== "Asia/Kolkata" ? t : `${t}+05:30`)).filter((n) => Number.isFinite(n));
+  return stamps.length ? `as of ${exchangeTime(new Date(Math.max(...stamps)), tz)} (market closed)` : "last prices (market closed)";
 }
 
 /** The line under "Today" when it adds a US session to India's (R6O-015: Today ₹192 = an India day that had closed plus

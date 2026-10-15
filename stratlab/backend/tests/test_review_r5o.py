@@ -59,7 +59,9 @@ def test_holdings_totals_add_up_with_a_us_stock_without_a_buy_price():
     assert round(t["value"] - t["invested"], 2) == t["pnl"]                       # was 1,39,858 - 63,500 against -21,381
     assert t["no_cost"]["symbols"] == ["AAPL"] and t["no_cost"]["value"] == round(3 * 336.67 * 96.77, 2)
     # the day's change is India's session
-    assert t["session"] == "2026-10-08" and t["other_session"] == []               # AAPL is out of the totals anyway
+    # AAPL has no buy price, so it is out of the value and gain, but its move is a day figure: from the 7 Oct session, so it is
+    # named as left out of Today (R3D: the day figures no longer skip a stock with no buy price; this expected [])
+    assert t["session"] == "2026-10-08" and t["other_session"] == ["AAPL"]
     assert t["day"] == round(-100 - 21.5 + 40, 2)
     # one sector for both technology labels
     assert [a["sector"] for a in v["allocation"]].count("Information Technology") == 1

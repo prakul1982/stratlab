@@ -490,6 +490,19 @@ def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | Non
     return round(new, 4), (round(qty * avg / new, 4) if avg and new > 0 else None)
 
 
+def saved_day(stamp: str | None, today: date) -> str:
+    """The India day a holdings file was saved on, from its stamp (UTC, as `updated_at` is kept), else today's: the day
+    the quantity is as of, so an action that went ex that day is already in it. A bare date is taken as it is."""
+    s = str(stamp or "")
+    try:
+        t = datetime.fromisoformat(s) if len(s) > 10 else None
+    except ValueError:
+        t = None
+    if t is None:
+        return s[:10] or today.isoformat()
+    return (t.astimezone(ZoneInfo("Asia/Kolkata")) if t.tzinfo else t).date().isoformat()
+
+
 def _included(a: dict, item: dict, since: str) -> bool:
     """Whether the saved quantity already reflects an action: it was before the quantity was saved, or the user
     applied it, or said their broker's file already showed it."""
@@ -532,7 +545,7 @@ def holdings_view(items: list[dict], actions: dict[str, list[dict]], today: date
     """For the user's holdings: dividends ahead (amount a share × the shares that will be held on the ex-date), the
     dividends of the last twelve months (estimated with today's holding, worked back through any bonus or split),
     the bonuses and splits waiting to be applied, and the last adjustment of each stock (to undo)."""
-    fallback = (fallback_since or today.isoformat())[:10]
+    fallback = saved_day(fallback_since, today)
     year_ago = (today - timedelta(days=365)).isoformat()
     ahead, received, notices, undo = [], [], [], []
     from .tax_lots import fy_label, fy_of     # the financial-year slices use the tax tools' own rule: a dividend sits in the year of its record date

@@ -44,6 +44,8 @@ def _group_of(nb: dict, exp: dict) -> dict | None:
 
 
 def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_id: str | None = None) -> dict:
+    from .engine.verdict import restate_empty
+    exp = restate_empty(exp)                 # a run saved before accounts stopped at zero is published with its account held to what it had
     v = exp.get("verdict") or {}
     st = exp.get("stats") or {}
     inst = exp.get("instrument") or {}
@@ -228,6 +230,10 @@ def restated(e: dict) -> dict:
 
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
+    st = e.get("stats") or {}
+    if (st.get("ret") or 0) < -100 or (st.get("mdd") or 0) < -100:      # published before accounts stopped at zero
+        e = {**e, "stats": {**st, "ret": max(st["ret"], -100.0) if isinstance(st.get("ret"), (int, float)) else st.get("ret"),
+                            "mdd": max(st["mdd"], -100.0) if isinstance(st.get("mdd"), (int, float)) else st.get("mdd")}}
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
     out["ran"], out["reason"], out["vs_hold"] = ran(e), reason(e), versus_hold(e)
     out["verdict"] = restated(e)
@@ -379,9 +385,10 @@ def public_entries() -> list[dict]:
     return _official_cache[1]
 
 
-def all_entries() -> list[dict]:
+def all_entries(everything: bool = False) -> list[dict]:
+    """The newest 1000 entries, or with `everything` every one (a read of the whole prefix, a page at a time)."""
     out = []
-    for raw in db.settings_with_prefix(PREFIX):
+    for raw in ([v for _, v in db.all_settings_with_prefix(PREFIX)] if everything else db.settings_with_prefix(PREFIX)):
         try:
             out.append(json.loads(raw))
         except (TypeError, ValueError):

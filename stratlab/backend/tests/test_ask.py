@@ -31,3 +31,17 @@ def test_ai_answers_are_checked_and_bad_ones_fall_back():
 def test_ask_key_covers_exactly_the_text_the_ai_is_sent():
     assert ask.key("z" * 350 + "a") != ask.key("z" * 350 + "b")            # both inside the 400 sent
     assert ask.key("z" * 400 + "a") == ask.key("z" * 400 + "b")
+
+
+def test_answer_drops_advice_sentences():
+    a = ask.clean({"action": "answer", "answer": "RSI measures recent gains against losses. You should buy the stock when it dips. "
+                                                 "It runs from 0 to 100."}, "what is rsi?")["answer"]
+    assert a == "RSI measures recent gains against losses. It runs from 0 to 100."
+    # nothing left once the advice is out: the word rules answer instead
+    assert ask.clean({"action": "answer", "answer": "Buy the stock now."}, "buy x when rsi < 30 then sell")["action"] == "test"
+
+
+def test_cached_answer_is_built_from_the_keyed_text_only():
+    head = "x" * 400
+    a = ask.build(lambda s, t, n: {"action": "test", "text": ""}, head + " secret tail one")
+    assert a["text"] == head and ask.key(head + " one") == ask.key(head + " two")

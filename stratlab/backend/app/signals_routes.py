@@ -19,7 +19,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import db, guard
+from . import db, guard, leader
 from . import journal as J
 from . import signals as SG
 from .auth import current_profile
@@ -185,7 +185,10 @@ def deliver(uid: str, sig: dict) -> tuple[int, dict]:
     if not isinstance(s, SignalSession) or s.user_id != uid:
         row = db.get_session_row(uid, sig["session"])
         mine = row is not None and (row.get("strategy") or {}).get("kind") == KIND
-        if mine and row.get("status") == "running":
+        if mine and row.get("status") == "running" and not leader.leading():
+            # another container runs the sessions and this one can't hand it the signal: the sender should retry
+            why, status, code = "Busy for a moment. Send the signal again in a few seconds.", 503, "busy"
+        elif mine and row.get("status") == "running":
             why, status, code = "The session is paused until market data is back. Nothing was filled.", 409, "paused"
         elif mine:
             why, status, code = "That session has stopped. Start a new one to keep forward-testing.", 409, "stopped"
@@ -214,7 +217,7 @@ def _answer(status: int, code: str, message: str, extra: dict | None = None) -> 
     if status < 400:
         return JSONResponse(status_code=status, content=extra or {})
     return JSONResponse(status_code=status, content={"detail": {"code": code, "message": message}},
-                        headers={"retry-after": "60"} if status == 429 else None)
+                        headers={"retry-after": "60"} if status == 429 else {"retry-after": "5"} if status == 503 else None)
 
 
 async def _body(request: Request) -> bytes | None:

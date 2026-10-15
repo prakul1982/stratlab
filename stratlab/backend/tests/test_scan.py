@@ -196,3 +196,14 @@ def test_a_daily_alert_run_killed_mid_way_resumes_with_the_subscribers_left(monk
     clock[0] += run_marks.STALE + 1
     mk().tick(at)
     assert len(sent) == 3                                   # done: skipped
+
+
+def test_run_leaves_out_a_stock_whose_last_candle_is_weeks_old(monkeypatch):
+    reg = fake_setup(monkeypatch)
+    live = bars_from(list(np.linspace(100, 200, 300)) + list(np.linspace(200, 185, 12)) + list(np.linspace(185, 198, 4)))
+    halted = live[:-40]                         # suspended: its last candle is 40 days before the others'
+    series = {"AAA": live, "BBB": halted}
+    monkeypatch.setattr(scan, "_bars", lambda registry, iid: series[iid.split(":")[1]])
+    out = scan.run(reg, "US", [{"symbol": "AAA"}, {"symbol": "BBB"}])
+    assert [r["symbol"] for r in out["rows"]] == ["AAA"]
+    assert out["problems"] == ["BBB: no recent daily prices"]

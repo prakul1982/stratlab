@@ -150,7 +150,7 @@ def activate(profile: dict, sub: dict):
     # Save the new subscription first, so the "cancelled" webhook for the old one is ignored
     db.update_profile(profile["id"], plan=plan, plan_status="active", razorpay_subscription_id=sub["id"],
                       current_period_end=_ts(sub.get("current_end")), pending_subscription_id=None,
-                      cancel_at_period_end=False)
+                      cancel_at_period_end=old == sub["id"] and bool(profile.get("cancel_at_period_end")))
     try:                                   # a subscription now: no longer a plan given by hand
         from . import admin
         admin.mark_granted(profile["id"], False)
@@ -169,8 +169,8 @@ def _stale(profile: dict, sub: dict) -> bool:
     if sub.get("status") in ("cancelled", "completed", "halted", "expired"):
         return True
     cur = profile.get("razorpay_subscription_id")
-    if profile.get("plan_status") == "refunded" and cur == sub["id"]:
-        return True
+    if profile.get("plan_status") in ("refunded", "cancelled", "completed", "expired") and cur == sub["id"]:
+        return True                            # ended for good: a late "activated" or "charged" for it can't bring it back
     return bool(profile.get("plan_status") == "active" and cur and cur != sub["id"]
                 and sub["id"] != profile.get("pending_subscription_id"))
 

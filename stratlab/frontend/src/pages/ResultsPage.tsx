@@ -106,10 +106,10 @@ export function ResultsPage() {
       {!data && !error && <Card><Skeleton label="Opening the results calendar" lines={4} /></Card>}
       {data && empty && (
         <Card>
-          <EmptyState title={scope === "mine" ? "None of your stocks has a results date yet" : "No results dates found"}
+          <EmptyState title={scope === "mine" ? (data.mine_count ? "None of your stocks has a results date in these two weeks" : "No stocks to show results dates for yet") : "No results dates found"}
             action={scope === "mine" ? { label: "See all companies", onClick: () => setScope("all") } : undefined}>
             {scope === "mine"
-              ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has a results date in these two weeks.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, notebooks and paper sessions.`)
+              ? (data.mine_count ? `A later date, if a company has set one, shows on its own page.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, notebooks and paper sessions.`)
               : q ? "No company by that name has a results date in these two weeks." : "No results dates announced for these two weeks yet."}
           </EmptyState>
         </Card>

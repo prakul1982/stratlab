@@ -28,7 +28,7 @@ from datetime import date, datetime, timezone
 
 import numpy as np
 
-from . import db
+from . import corp_actions, db, tax_lots
 from . import holdings_file as hf
 from .engine import costs as C
 from .engine import verdict as V
@@ -552,6 +552,14 @@ class _Episode:
         self.pos = 0.0
         self.expired = False
 
+    def scale(self, k: float):
+        """A split or bonus: the shares so far count k times as many, each at 1/k of the price (the money is the same)."""
+        def one(f: dict) -> dict:
+            return {**f, "qty": f["qty"] * k, "price": f["price"] / k, "p0": f.get("p0", f["price"])}
+        self.entries = [(one(f), round(q * k, 6)) for f, q in self.entries]
+        self.exits = [(one(f), round(q * k, 6)) for f, q in self.exits]
+        self.pos = round(self.pos * k, 6)
+
     def trade(self, s: dict) -> dict:
         first, last = self.entries[0][0], self.exits[-1][0]
         intraday = first["d"] == last["d"]
@@ -572,7 +580,7 @@ class _Episode:
         exit_ = sum(f["price"] * q for f, q in self.exits) / max(sum(q for _, q in self.exits), EPS)
         hold_s, days = _hold(first["d"], first.get("t") or "", last["d"], last.get("t") or "")
         gross = sv - bv
-        return {"id": _hid("f", self.key, first["d"], first.get("t") or "", first.get("tid") or first["price"], self.sign),
+        return {"id": _hid("f", self.key, first["d"], first.get("t") or "", first.get("tid") or first.get("p0", first["price"]), self.sign),
                 "symbol": self.symbol, "u": self.info["u"], "segment": _seg(self.info["group"], intraday),
                 "side": "long" if self.sign > 0 else "short", "entry_t": _at(first["d"], first.get("t") or ""),
                 "exit_t": _at(last["d"], last.get("t") or ""), "qty": round(qty, 6), "entry": entry, "exit": exit_,
@@ -584,8 +592,33 @@ def _fill_order(f: dict) -> tuple:
     return (f["d"], f.get("t") or "")
 
 
-def pair_fills(fills: list[dict], s: dict, today: date) -> tuple[list[dict], list[dict], list[dict]]:
-    """(closed trades, open positions, sales with no purchase before them) from tradebook fills."""
+def split_factor(a: dict, held: float) -> float:
+    """How many times as many shares a bonus or split leaves on `held` shares: the tax report's rule (a bonus adds whole
+    shares only, a split multiplies), 1 when the action doesn't change them."""
+    if a.get("kind") == "bonus" and a.get("ratio") and len(a["ratio"]) == 2 and all(isinstance(x, (int, float)) and x > 0 for x in a["ratio"]):
+        new = tax_lots._bonus([{"d": "", "qty": held, "src": "trades"}], a) if held > EPS else None
+        return (held + new["qty"]) / held if new else 1.0
+    f = a.get("factor")
+    return float(f) if isinstance(f, (int, float)) and math.isfinite(f) and f > 0 else 1.0
+
+
+def corporate_actions(fills: list[dict], today: date) -> dict[str, list[dict]]:
+    """{symbol: bonuses and splits} for the shares in the fills, from what is stored (nothing is fetched): what the tax
+    report adjusts its lots for."""
+    syms = sorted({clean_symbol(f.get("symbol") or f.get("name") or f.get("isin")) for f in fills
+                   if classify(f.get("symbol") or f.get("name") or "", f.get("exchange", ""), f.get("seg", ""))["group"] == "eq"})
+    if not syms:
+        return {}
+    corp_actions.prefetch("IN", syms)
+    cal = corp_actions.load("IN")["rows"]
+    out = {k: [a for a in corp_actions.actions_for("IN", k, None, today, fetch=False, cal=cal) if corp_actions.adjusts(a)] for k in syms}
+    return {k: v for k, v in out.items() if v}
+
+
+def pair_fills(fills: list[dict], s: dict, today: date, actions: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+    """(closed trades, open positions, sales with no purchase before them) from tradebook fills. `actions`: each share's
+    bonuses and splits (corporate_actions), which scale the position held on the ex-date: a buy before a split is
+    matched against the sale after it in the shares of the day of the sale."""
     groups: dict[str, list[tuple[int, dict]]] = {}
     for i, f in enumerate(fills):
         k = f.get("isin") or clean_symbol(f.get("symbol"))
@@ -595,7 +628,23 @@ def pair_fills(fills: list[dict], s: dict, today: date) -> tuple[list[dict], lis
         fs.sort(key=lambda x: (_fill_order(x[1]), x[0]))      # by time; the file's order within a time
         info = classify(fs[0][1].get("symbol") or k, fs[0][1].get("exchange", ""), fs[0][1].get("seg", ""))
         ep: _Episode | None = None
+        sym = clean_symbol(fs[0][1].get("symbol") or fs[0][1].get("name") or fs[0][1].get("isin"))
+        acts, seen = [], set()
+        for a in sorted((actions or {}).get(sym) or [], key=lambda a: a.get("ex_date") or "") if info["group"] == "eq" else []:
+            ex = a.get("ex_date") or ""
+            if fs[0][1]["d"] < ex <= today.isoformat() and (ex, a.get("kind")) not in seen:
+                seen.add((ex, a.get("kind")))
+                acts.append(a)
+
+        def adjust(until: str | None):
+            nonlocal acts
+            while acts and (until is None or acts[0]["ex_date"] <= until):
+                a, acts = acts[0], acts[1:]
+                if ep is not None:
+                    ep.scale(split_factor(a, ep.pos))
+
         for _, f in fs:
+            adjust(f["d"])
             sign = 1 if f["side"] == "B" else -1
             q = float(f["qty"])
             while q > EPS:
@@ -613,6 +662,7 @@ def pair_fills(fills: list[dict], s: dict, today: date) -> tuple[list[dict], lis
                     if ep.pos <= EPS:
                         trades.append(ep.trade(s))
                         ep = None
+        adjust(None)                           # the actions since the last fill change what is still open
         if ep is None:
             continue
         exp = expiry(ep.symbol) if info["opt"] else None
@@ -711,7 +761,7 @@ def trades(uid: str, data: dict, today: date) -> dict:
     hit = _paired.get(ck)
     if hit is None:
         s = data["settings"]
-        a, open_, unmatched = pair_fills(data["fills"], s, today)
+        a, open_, unmatched = pair_fills(data["fills"], s, today, corporate_actions(data["fills"], today))
         lines = covered(data["fills"], data["lines"])
         all_ = a + line_trades(lines, s) + manual_trades(data["manual"], s) + manual_trades(data.get("practice") or [], s, "practice")
         ids: dict[str, int] = {}

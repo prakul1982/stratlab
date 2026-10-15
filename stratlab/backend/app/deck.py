@@ -7,7 +7,7 @@ measured with the PDF font (wider than the PowerPoint one), so what fits in the 
 import io
 import os
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from .deepdive import money, scale_for
@@ -136,15 +136,19 @@ class Slide:
         return self
 
 
-def plan(v: dict) -> tuple[list[Slide], str]:
-    """The deck's slides for one deep-dive view, and the footer line."""
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
+    """The deck's slides for one deep-dive view, and the footer line (dated in IST, as the page is: after 5:30 AM IST the UTC
+    date is a day behind, R20-016)."""
     name, sym = v["name"], v["symbol"]
     n = v["numbers"]
     years = [y for y in n["years"] if y.get("sales") is not None]
     us = v.get("region") == "US" or (n.get("unit") or "").startswith("$")
     unit = n.get("unit") or ("$ million" if us else "₹ crore")      # a foreign filer's own currency: "CAD million"
     bank = bool(n.get("bank"))
-    today = datetime.now(timezone.utc).strftime("%d %b %Y")
+    today = (now or datetime.now(timezone.utc)).astimezone(IST).strftime("%d %b %Y")
     footer = f"{name} ({sym}) · Deep dive · {today}"
     month = date(2000, int(n.get("fye") or 3), 1).strftime("%B")
     amt = lambda x: "–" if x is None else money(x, unit)  # noqa: E731

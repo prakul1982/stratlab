@@ -101,3 +101,21 @@ def test_ids_and_registry_markets():
     assert inst["symbol"] == "ETH/USD"
     hits = reg.search("eth", None, True)   # India is offline and no stock matches, so only crypto answers
     assert hits and all(r["market"] == "CRYPTO" for r in hits)
+
+
+def test_markets_carry_the_days_mcx_close_and_the_futures_and_options_close():
+    """What the Market pages and an options session's feed line read: MCX closes at 23:55 while US daylight saving is off,
+    India's futures and options trade past the cash close (15:40 from 3 Aug 2026, 15:30 before)."""
+    from datetime import datetime, timezone
+    import time_machine
+    from app.kite_service import KiteService
+    reg = Registry(KiteService(), CoinbaseProvider(transport=fake_coinbase()))
+    hours = lambda: {m["id"]: m["hours"] for m in reg.markets()}
+    with time_machine.travel(datetime(2026, 10, 14, 6, 0, tzinfo=timezone.utc), tick=False):
+        h = hours()
+        assert h["MCX"]["close"] == "23:30" and h["IN"]["close"] == "15:30" and h["IN"]["fo_close"] == "15:40"
+    with time_machine.travel(datetime(2026, 11, 11, 6, 0, tzinfo=timezone.utc), tick=False):
+        assert hours()["MCX"]["close"] == "23:55"
+    with time_machine.travel(datetime(2026, 7, 1, 6, 0, tzinfo=timezone.utc), tick=False):
+        assert hours()["IN"]["fo_close"] == "15:30"
+    assert hours()["US"] == {"open": "09:30", "close": "16:00", "days": "Mon–Fri"}

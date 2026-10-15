@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, meaningful, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, ruleWarnings, withDefaultExit } from "../lib/rules";
@@ -142,10 +142,13 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
   const [note, setNote] = useState<string | null>(null);
   const [stuck, setStuck] = useState(false);     // a build found no rule: offer another go, the classic ideas, the manual builder
 
+  const building = useRef(false);            // Ctrl+Enter in the box while a build runs must not start a second one
   const build = async (idea = text) => {
+    if (building.current) return;
     idea = idea.trim();
     setStuck(false);
     if (idea.length < 5) { setNote("Describe your idea first, for example: \"Buy NIFTY 50 when it's above the 50-day average\"."); return; }
+    building.current = true;
     setBusy(true);
     setNote(null);
     try {
@@ -157,6 +160,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     } catch (e) {
       fail(e);
     } finally {
+      building.current = false;
       setBusy(false);
     }
   };

@@ -2,7 +2,7 @@
 the way the Income Tax Act does it, as an estimate.
 
 Buys and sales are matched first in, first out, per company; a tax P&L line, a sale already with its own buy, stays
-as the broker matched it. A sale more than 12 months after its buy is long term.
+as the broker matched it, unless a tradebook has the same sale and buy. A sale more than 12 months after its buy is long term.
 Sales from 23 July 2024 pay the new rates (STCG 20%, LTCG 12.5%); earlier ones the old (15%, 10%). Long-term gains
 are exempt up to ₹1.25 lakh a financial year from FY 2024-25 (₹1 lakh before). Shares held on 31 Jan 2018 cost at
 least their price that day (grandfathering), and before 1 April 2018 long-term gains were exempt. Buying and selling
@@ -55,10 +55,12 @@ SETOFF_RULES = [
 ]
 NOTES = [
     "Rates before 4% cess and any surcharge. Your basic exemption limit and rebate can change the amount.",
-    "Buys and sales are matched first in, first out, per company, across every file you uploaded.",
+    "Buys and sales are matched first in, first out, per company, across every file you uploaded. A sale in both a "
+    "tradebook and a tax P&L file is counted once.",
     "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible from capital gains.",
     "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the purchase date.",
-    "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate. Their STT "
+    "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate. Where the "
+    "files have trade times, a sale made before that day's purchase comes out of the shares already held. Intraday STT "
     "is deducted (section 36(1)(xv)): the figure in your file, or 0.025% of the sale value where the file has none.",
     "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",
@@ -196,17 +198,28 @@ def save(uid: str, trades: list[dict], files: list[dict], fmv: dict | None = Non
                                           "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, separators=(",", ":")))
 
 
-def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int, int]:
-    """(totals, added, replaced, same): a new file's F&O, commodity and currency totals beside the saved ones. Lines
-    aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates overlap a saved
-    one replaces it (a full year after a quarter), one inside a saved range is already counted, and one that doesn't
-    overlap is added (the next quarter)."""
+def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int, int, list[dict]]:
+    """(totals, added, replaced, same, overlaps): a new file's F&O, commodity and currency totals beside the saved
+    ones. Lines aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates cover a
+    saved one's replaces it (a full year after a quarter), one inside a saved range is already counted, and one that
+    doesn't overlap is added (the next quarter). One that overlaps a saved range only in part is left out, the saved
+    one kept, and listed in `overlaps` ({name, reason}, as the import's skipped files) with the dates."""
     out = list(old)
     added = replaced = same = 0
+    overlaps = []
     for c in new:
         hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and not (c["last"] < o["first"] or c["first"] > o["last"])]
         if any(_same(o, c) for o in hits) or (hits and any(o["first"] <= c["first"] and c["last"] <= o["last"] for o in hits)):
             same += 1                  # the same file again, or one inside a saved range (a quarter after the year)
+            continue
+        part = [o for o in hits if not (c["first"] <= o["first"] and o["last"] <= c["last"])]
+        if part:
+            o = part[0]
+            overlaps.append({"name": f"{SEGMENT_NAMES[c['seg']]} {fy_label(c['fy'])}",
+                             "reason": f"This file's {_dmy(c['first'])} to {_dmy(c['last'])} overlaps {_dmy(max(c['first'], o['first']))} to "
+                                       f"{_dmy(min(c['last'], o['last']))} of a file already uploaded ({_dmy(o['first'])} to {_dmy(o['last'])}), "
+                                       f"so it isn't added and the earlier figures are kept. Upload one file for the whole "
+                                       f"period, or start again with this file."})
             continue
         out = [o for o in out if not any(o is h for h in hits)]
         out.append(c)
@@ -214,7 +227,12 @@ def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, i
             replaced += 1
         else:
             added += 1
-    return out, added, replaced, same
+    return out, added, replaced, same, overlaps
+
+
+def _dmy(d: str) -> str:
+    """2025-09-01 -> 1 Sep 2025."""
+    return _date(d).strftime("%-d %b %Y")
 
 
 def _same(a: dict, b: dict) -> bool:
@@ -356,6 +374,46 @@ def _pairs(trades: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
     return pairs, rest
 
 
+def _covered(pairs: list[tuple[dict, dict]], rest: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
+    """(pairs, rest) with a sale that is in both a tradebook and a tax P&L file counted once, as journal.covered does
+    for the journal. A P&L line whose sale and buy the tradebook both has on those days is dropped, and the
+    tradebook's fills, with their times, are matched the usual way. Otherwise the line stays as the broker matched it,
+    and the tradebook's sale or buy of it on those days is taken out, so neither is counted twice and a buy sold only
+    in the P&L file isn't left open."""
+    left: dict[tuple, float] = {}           # (side, day): tradebook shares not yet claimed by a P&L line
+    for t in rest:
+        if t.get("src") != "pnl":
+            left[(t["side"], t["d"])] = left.get((t["side"], t["d"]), 0.0) + t["qty"]
+    keep, take = [], {}
+    for b, s in pairs:
+        q = min(b["qty"], s["qty"])
+        sk, bk = ("S", s["d"]), ("B", b["d"])
+        if left.get(sk, 0.0) >= q - EPS and left.get(bk, 0.0) >= q - EPS:
+            left[sk] -= q
+            left[bk] -= q
+            continue
+        keep.append((b, s))
+        for k in (sk, bk):
+            n = min(q, left.get(k, 0.0))
+            if n > EPS:
+                left[k] -= n
+                take[k] = take.get(k, 0.0) + n
+    if not take:
+        return keep, rest
+    out = []
+    for t in rest:
+        k = (t["side"], t["d"])
+        n = min(take.get(k, 0.0), t["qty"]) if t.get("src") != "pnl" else 0.0
+        if n > EPS:
+            take[k] -= n
+            if t["qty"] - n <= EPS:
+                continue
+            f = (t["qty"] - n) / t["qty"]
+            t = {**t, "qty": t["qty"] - n, **{x: t[x] * f for x in ("charges", "stt") if isinstance(t.get(x), (int, float))}}
+        out.append(t)
+    return keep, out
+
+
 def _intraday_stt(sells: list[dict], frac: float) -> tuple[float, bool]:
     """(STT to deduct, whether it's an estimate) on `frac` of these sales: the file's figure, else the intraday rate on
     the sale value. Capital gains never use it."""
@@ -432,9 +490,13 @@ def _one(key: str, trades: list[dict], actions: list[dict], fmv: float | None, t
 
 def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
     """One day's trades in one company: what was bought and sold the same day is intraday; the rest opens a lot or
-    is matched to the oldest lots."""
+    is matched to the oldest lots. With every trade's time known, the day goes in time order (_timed)."""
     buys = [t for t in trades if t["side"] == "B"]
     sells = [t for t in trades if t["side"] == "S"]
+    clocks = [_clock(t.get("t")) for t in trades]
+    if buys and sells and all(clocks):
+        _timed(key, d, [t for _, t in sorted(zip(clocks, trades), key=lambda x: (x[0], x[1]["side"] == "S"))], lots, out)
+        return
     bq, sq = sum(t["qty"] for t in buys), sum(t["qty"] for t in sells)
     bval, sval = sum(t["qty"] * t["price"] for t in buys), sum(t["qty"] * t["price"] for t in sells)
     bchg, schg = sum(t.get("charges") or 0 for t in buys), sum(t.get("charges") or 0 for t in sells)
@@ -455,6 +517,64 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
     if left <= EPS:
         return
     each, chg_each = sval / sq, schg / sq
+    left = _sell(key, d, lots, left, each, chg_each, out)
+    if left > EPS:
+        out["unmatched"].append({"key": key, "d": d, "qty": left, "sale": left * (each - chg_each)})
+
+
+def _clock(t) -> str | None:
+    """A trade's time as HH:MM:SS ("09:15:02", "9:15 AM", "2024-05-01 14:30"), or None when it has none."""
+    m = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?", str(t or ""), re.I)
+    if not m:
+        return None
+    h, mi, sec = int(m[1]), int(m[2]), int(m[3] or 0)
+    if m[4]:
+        h = h % 12 + (12 if m[4].upper() == "PM" else 0)
+    return f"{h:02d}:{mi:02d}:{sec:02d}" if h < 24 and mi < 60 and sec < 60 else None
+
+
+def _timed(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
+    """One day's trades, in time order (a buy before a sale at the same time, so the pair is intraday): a sale is
+    intraday only against the same day's earlier buys. A sale before them is matched to the oldest lots, and only what
+    the lots don't cover is a short sale, intraday against the day's later buys. What is bought and not sold that day
+    opens a lot."""
+    held: list[list] = []                  # [shares, the buy]: the day's buys not yet sold
+    short: list[list] = []                 # [shares, the sale]: the day's sales not yet bought back
+    for t in trades:
+        q = t["qty"]
+        opp = short if t["side"] == "B" else held
+        while q > EPS and opp:
+            n = min(q, opp[0][0])
+            b, s = (t, opp[0][1]) if t["side"] == "B" else (opp[0][1], t)
+            buy = n * b["price"] + (b.get("charges") or 0) * n / b["qty"]
+            stt, est = _intraday_stt([s], n / s["qty"])
+            sell = n * s["price"] - (s.get("charges") or 0) * n / s["qty"] - stt
+            out["intraday"].append({"key": key, "d": d, "fy": fy_of(d), "qty": n, "buy": buy, "sell": sell, "pnl": sell - buy,
+                                    "stt": stt, "stt_est": est})
+            q -= n
+            opp[0][0] -= n
+            if opp[0][0] <= EPS:
+                opp.pop(0)
+        if q <= EPS:
+            continue
+        if t["side"] == "B":
+            held.append([q, t])
+            continue
+        q = _sell(key, d, lots, q, t["price"], (t.get("charges") or 0) / t["qty"], out)
+        if q > EPS:
+            short.append([q, t])
+    if held:
+        q = sum(n for n, _ in held)
+        fmv = sum(t["fmv"] * n for n, t in held) if all(t.get("fmv") for _, t in held) else None
+        lots.append(Lot(d=d, qty=q, cost=sum(n * t["price"] + (t.get("charges") or 0) * n / t["qty"] for n, t in held), fmv=fmv,
+                        src="trades" if any(t.get("src") != "pnl" for _, t in held) else "pnl", bonus=False))
+    for n, t in short:
+        out["unmatched"].append({"key": key, "d": d, "qty": n, "sale": n * (t["price"] - (t.get("charges") or 0) / t["qty"])})
+
+
+def _sell(key: str, d: str, lots: list[Lot], left: float, each: float, chg_each: float, out: dict) -> float:
+    """`left` shares sold on day `d` at `each` (less `chg_each` charges a share), matched to the oldest lots. Returns
+    the shares no lot covered."""
     while left > EPS and lots:
         l = lots[0]
         q = min(l["qty"], left)
@@ -479,8 +599,7 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
         out["realised"].append({"key": key, "bought": l["d"], "sold": d, "fy": fy_of(d), "qty": q, "cost": cost, "sale": net,
                                 "gain": net - cost, "term": "LT" if lt else "ST", "bonus": l.get("bonus", False), "gf": gf,
                                 "actual_cost": actual, "fmv_total": f if gf == "applied" else None, "sale_gross": gross})
-    if left > EPS:
-        out["unmatched"].append({"key": key, "d": d, "qty": left, "sale": left * (each - chg_each)})
+    return left
 
 
 def compute(trades: list[dict], actions: dict[str, list[dict]] | None = None, fmv: dict[str, float] | None = None,
@@ -499,7 +618,7 @@ def compute(trades: list[dict], actions: dict[str, list[dict]] | None = None, fm
         n["isin"] = n["isin"] or t.get("isin") or ""
     out = {"realised": [], "intraday": [], "open": [], "unmatched": [], "names": names}
     for k, ts in by.items():
-        pairs, rest = _pairs(ts)
+        pairs, rest = _covered(*_pairs(ts))
         for b, s in pairs:
             _pair(k, b, s, (fmv or {}).get(k), out)
         rest.sort(key=lambda t: (t["d"], t.get("t") or ""))

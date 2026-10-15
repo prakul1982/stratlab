@@ -3,9 +3,11 @@ the labelled RBI fallback), the 24-month rule and the rates either side of 23 Ju
 split, the foreign tax credit, Schedule FA's peak and closing values per lot, reading a US broker's file, the tax
 report with US sales set off against Indian ones, the page, the plans and deleting. Every rate here is made up."""
 import base64
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
+import time_machine
 
 from app import db, money_fx as fx, money_us_tax as us
 from app.config import settings
@@ -317,3 +319,50 @@ def test_schedule_fa_csv_and_stored_privately(w):
     other = c.get("/money/us-tax", headers=FREE).json()
     assert other["trades"] == []
     assert db.get_setting("ustax:u-pro")
+
+
+class _History:
+    """The stock-history reader with `bad` failing, and the symbols it was asked for."""
+    def __init__(self, bad=()):
+        self.bad, self.asked = set(bad), []
+
+    def events(self, sym, days):
+        self.asked.append(sym)
+        if sym in self.bad:
+            raise RuntimeError("no data")
+        return {"splits": [], "dividends": []}
+
+
+def test_stocks_past_the_cap_or_with_no_history_are_missing(monkeypatch):
+    from app import money_us_routes as R
+    y = _History(bad={"BBB"})
+    monkeypatch.setattr(R, "_yahoo", lambda: y)
+    monkeypatch.setattr(R, "MAX_SYMBOLS", 2)
+    h = R.stock_history([tr("2024-01-02", "B", s, 1, 10) for s in ("CCC", "AAA", "BBB")], date(2026, 10, 14))
+    assert y.asked == ["AAA", "BBB"] and h["missing"] == ["BBB", "CCC"] and set(h["splits"]) == {"AAA"}
+
+
+@time_machine.travel(datetime(2026, 10, 14, 5, 0, tzinfo=ZoneInfo("UTC")))
+def test_the_tax_report_and_itr_say_when_splits_are_missing_or_a_sale_has_no_purchase(w, monkeypatch):
+    from app import money_us_routes as R
+    c = w["client"]
+    real = R._yahoo()
+
+    class Failing:
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+        def events(self, sym, days):
+            if sym == "AAPL":
+                raise RuntimeError("no data")
+            return real.events(sym, days)
+    monkeypatch.setattr(R, "_yahoo", lambda: Failing())
+    add(c, PRO, "2023-03-01", "B", "AAPL", 3, 150)
+    add(c, PRO, "2025-08-14", "S", "AAPL", 2, 220)
+    add(c, PRO, "2025-09-01", "S", "TSLA", 3, 300)                         # no purchase
+    y = next(x for x in c.get("/tax", headers=PRO).json()["years"] if x["fy"] == 2025)
+    warn = y["us"]["warning"]
+    assert "AAPL" in warn and "without splits" in warn and "TSLA (3 shares)" in warn
+    cg = next(t for t in c.get("/money/itr?fy=2025", headers=PRO).json()["tables"] if t["key"] == "cg")
+    assert any(n == "US shares: " + warn for n in cg["notes"])
+    assert R.us_warning([], {}) is None

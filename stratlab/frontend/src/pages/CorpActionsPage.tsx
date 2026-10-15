@@ -99,7 +99,7 @@ export function CorpActionsPage() {
       {!data && !error && <Card><Skeleton label="Opening the corporate actions calendar" lines={4} /></Card>}
       {data && empty && (
         <Card>
-          <EmptyState title={scope === "mine" ? "None of your stocks has an ex-date yet" : "Nothing announced for this window"}
+          <EmptyState title={scope === "mine" ? (data.mine_count ? "None of your stocks has an ex-date in this window" : "No stocks to show ex-dates for yet") : "Nothing announced for this window"}
             action={scope === "mine" ? { label: "See all companies", onClick: () => setParam("scope", "all") } : undefined}>
             {scope === "mine"
               ? (data.mine_count ? `None of your ${REGION_NAME[region]} stocks has an ex-date in this window.` : `You have no ${REGION_NAME[region]} stocks yet: they come from your watchlist, holdings, notebooks and paper sessions.`)

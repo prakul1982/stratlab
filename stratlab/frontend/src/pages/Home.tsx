@@ -21,7 +21,7 @@ export type Where = { market: string; instrument: Instrument | null };
 export function useCreateNotebook(where?: Where | null) {
   const nav = useNavigate();
   const loc = useLocation();
-  const { refreshNotebooks, fail } = useApp();
+  const { refreshNotebooks, fail, notify } = useApp();
   return async (b: Built) => {
     // what you picked above wins over what the idea text mentions
     const instrument = where?.instrument ?? (where?.market === "CSV" ? null : b.instrument);
@@ -32,7 +32,9 @@ export function useCreateNotebook(where?: Where | null) {
         body: { name: strategy.name, question: b.question, strategy, instrument: instrument?.id ?? null },
       });
       if (b.group && !where?.instrument) {
-        await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: b.group } });
+        // the notebook exists by now: a group that couldn't be attached is said, not a reason to leave it unopened (a second try would make a second notebook)
+        try { await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: b.group } }); }
+        catch { notify("The notebook was made, but its group couldn't be set. Pick it under Testing on."); }
       }
       await refreshNotebooks();
       if (new URLSearchParams(loc.search).get("then") === "group" && !b.group) nav(`/n/${nb.id}/market#group`);

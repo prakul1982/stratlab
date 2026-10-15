@@ -4,6 +4,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
+import { endsAt } from "../../lib/offer";
 import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
 import { PLAN_FILTERS, PLAN_NAME, planNote, usersPath, type PlanFilter, type UserRow } from "./users";
@@ -165,7 +166,7 @@ export function UsersSection() {
         <CardHead title="Launch offer" actions={until ? <Badge tone="ok">On</Badge> : <Badge>Off</Badge>} />
         {until ? (
           <div className="k-spread">
-            <span>Every user has every Pro feature free until <b>{new Date(until).toLocaleString("en-GB")}</b>. Then plans apply again by themselves.</span>
+            <span>Every user has every Pro feature free until <b>{endsAt(until)}</b>. Then plans apply again by themselves.</span>
             <button type="button" className="btn quiet sm danger" onClick={() => setPromo("end")}>End now</button>
           </div>
         ) : (

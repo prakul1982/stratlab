@@ -68,3 +68,9 @@ export function fyLink(path: string, fy: number): string {
 export function yearHasTrades(y: { count: number; intraday?: { count: number }; business?: { segments: unknown[] }; units?: unknown }): boolean {
   return y.count > 0 || (y.intraday?.count ?? 0) > 0 || (y.business?.segments.length ?? 0) > 0 || !!y.units;
 }
+
+/** Whether the tax report has anything to work from: sales in tradebooks, F&O lines, mutual fund sales or US stock trades
+ * (the Money home's card and the tax report must agree on when to ask for tradebooks). */
+export function taxHasData(t: { trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number }): boolean {
+  return t.trades > 0 || (t.business_lines ?? 0) > 0 || (t.mf?.count ?? 0) > 0 || (t.us_trades ?? 0) > 0;
+}

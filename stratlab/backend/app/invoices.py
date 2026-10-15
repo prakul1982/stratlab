@@ -34,10 +34,19 @@ SAC = "998431"     # online information and database access or retrieval service
 FIELDS = ("legal_name", "address", "state", "gstin", "pan", "lut_arn", "email", "prefix")
 
 
+def _read(key: str, default=None):
+    """A stored JSON value, `default` when it is missing or damaged. A database error is raised: where a number is at
+    stake (make), a blip must not read as "nothing there"."""
+    raw = db.get_setting(key)
+    try:
+        return json.loads(raw) if raw else default
+    except ValueError:
+        return default
+
+
 def _get(key: str, default=None):
     try:
-        raw = db.get_setting(key)
-        return json.loads(raw) if raw else default
+        return _read(key, default)
     except Exception:
         return default
 
@@ -130,42 +139,105 @@ def tax_lines(total: float, s: dict, buyer: dict) -> tuple[list[dict], str, str]
             "Intra-state", "GST included in the price.")
 
 
-def make(payment: dict, user: dict, plan: str, period: str) -> dict:
-    """The invoice for one payment, created once (a second call for the same payment returns the first). The number,
-    the payment's claim and the lists are compare-and-set writes, so two servers never share or overwrite one."""
+PENDING_FOR = 120      # seconds a payment's claim may wait for its number before another attempt takes it over
+
+
+class InvoiceBusy(RuntimeError):
+    """Another request is issuing this payment's invoice right now; the caller tries again later."""
+
+
+def _body(payment: dict, user: dict, plan: str, period: str) -> dict:
+    """Everything on a payment's invoice but its number, from the seller's and buyer's details (read so that an error
+    is raised, never taken for "not set": a blip must not drop the buyer's GSTIN from an invoice that can't be redone)."""
     pid = payment["id"]
+    _read(SELLER)            # a database error is raised here, not taken for an empty seller by seller() below
+    s = seller()
+    at = datetime.fromtimestamp(int(payment.get("created_at") or datetime.now(timezone.utc).timestamp()), timezone.utc)
+    billing = _read(f"billing:{user['id']}", {}) or {}
+    country = billing.get("country") or ("XX" if payment.get("international") else "IN")
+    if country == "IN" and payment.get("international") and not billing.get("gstin") and not billing.get("state"):
+        country = "XX"       # the form pre-fills India: a payer abroad with no GSTIN or state isn't a domestic buyer
+    buyer = {"name": billing.get("name") or user.get("email") or "", "email": user.get("email") or payment.get("email") or "",
+             "address": billing.get("address") or "", "state": billing.get("state") or "", "country": country,
+             "gstin": billing.get("gstin") or ""}
+    currency = payment.get("currency") or "INR"
+    total = round((payment.get("amount") or 0) / 100, 2)
+    lines, supply, note = tax_lines(total, s, buyer)
+    tax = round(sum(x["amount"] for x in lines), 2)
+    return {"fy": fy(at), "date": at.astimezone(IST).date().isoformat(), "payment_id": pid,
+            "user_id": user["id"], "seller": s, "buyer": buyer, "supply": supply, "note": note, "currency": currency,
+            "item": {"description": f"StratLab {plan.title()} plan, {'yearly' if period == 'year' else 'monthly'} subscription",
+                     "sac": SAC, "taxable": round(total - tax, 2)},
+            "taxes": lines, "total": total,
+            "place_of_supply": "Outside India" if country != "IN" else STATES.get(buyer["state"] or s.get("state"), "India")}
+
+
+def _store(inv: dict) -> None:
+    """The lists, then the record last: a payment whose number has no record yet is finished by its next call."""
+    _append(f"invoices:{inv['user_id']}", inv["number"])
+    _append(f"invoices:fy:{inv['fy']}", inv["number"])
+    db.set_setting(f"invoice:{inv['number']}", json.dumps(inv))
+
+
+def _issued(number: str, payment: dict, user: dict, plan: str, period: str) -> dict:
+    """The invoice of a payment that has its number: its record, or (a call that stopped after taking the number)
+    the record made again under the same number."""
+    got = _read(f"invoice:{number}")
+    if got:
+        return got
+    inv = {"number": number, **_body(payment, user, plan, period)}
+    _store(inv)
+    return inv
+
+
+def make(payment: dict, user: dict, plan: str, period: str) -> dict:
+    """The invoice for one payment, created once (a second call for the same payment returns the first). The payment's
+    claim, the number and the lists are compare-and-set writes, so two servers never share or overwrite one. The claim
+    comes first and the number only after it is won, so a lost race leaves no numbered record and no gap in the series.
+    The claim holds the number once taken; a call that stops after that is finished by the next one, under that number."""
+    import time
+    import uuid
+    pid = payment["id"]
+    key = f"invoice-of:{pid}"
     with _lock:
-        existing = _get(f"invoice-of:{pid}")
-        if existing:
-            return _get(f"invoice:{existing}")
-        s = seller()
-        at = datetime.fromtimestamp(int(payment.get("created_at") or datetime.now(timezone.utc).timestamp()), timezone.utc)
-        year = fy(at)
-        n = json.loads(db.update_setting(f"invoice:counter:{year}", lambda raw: json.dumps(int(json.loads(raw) if raw else 0) + 1)))
-        number = f"{s['prefix']}/{year}/{n:04d}"
-        billing = _get(f"billing:{user['id']}", {}) or {}
-        country = billing.get("country") or ("XX" if payment.get("international") else "IN")
-        if country == "IN" and payment.get("international") and not billing.get("gstin") and not billing.get("state"):
-            country = "XX"       # the form pre-fills India: a payer abroad with no GSTIN or state isn't a domestic buyer
-        buyer = {"name": billing.get("name") or user.get("email") or "", "email": user.get("email") or payment.get("email") or "",
-                 "address": billing.get("address") or "", "state": billing.get("state") or "", "country": country,
-                 "gstin": billing.get("gstin") or ""}
-        currency = payment.get("currency") or "INR"
-        total = round((payment.get("amount") or 0) / 100, 2)
-        lines, supply, note = tax_lines(total, s, buyer)
-        tax = round(sum(x["amount"] for x in lines), 2)
-        inv = {"number": number, "fy": year, "date": at.astimezone(IST).date().isoformat(), "payment_id": pid,
-               "user_id": user["id"], "seller": s, "buyer": buyer, "supply": supply, "note": note, "currency": currency,
-               "item": {"description": f"StratLab {plan.title()} plan, {'yearly' if period == 'year' else 'monthly'} subscription",
-                        "sac": SAC, "taxable": round(total - tax, 2)},
-               "taxes": lines, "total": total,
-               "place_of_supply": "Outside India" if country != "IN" else STATES.get(buyer["state"] or s.get("state"), "India")}
-        db.set_setting(f"invoice:{number}", json.dumps(inv))
-        won = json.loads(db.update_setting(f"invoice-of:{pid}", lambda raw: None if raw else json.dumps(number)))
-        if won != number:          # another server issued this payment's invoice first (its record is already saved)
-            return _get(f"invoice:{won}")
-        _append(f"invoices:{user['id']}", number)
-        _append(f"invoices:fy:{year}", number)
+        have = _read(key)
+        if isinstance(have, str):
+            return _issued(have, payment, user, plan, period)
+        body = _body(payment, user, plan, period)          # every read that can fail comes before the claim
+        mine = {"pending": uuid.uuid4().hex, "at": time.time()}
+
+        def claim(raw):
+            if raw:
+                try:
+                    cur = json.loads(raw)
+                except ValueError:
+                    cur = None
+                if isinstance(cur, str) or (isinstance(cur, dict) and time.time() - float(cur.get("at") or 0) <= PENDING_FOR):
+                    return None                            # numbered, or another request is on it
+            return json.dumps(mine)
+        got = json.loads(db.update_setting(key, claim))
+        if isinstance(got, str):                           # another server issued this payment's invoice first
+            return _issued(got, payment, user, plan, period)
+        if got != mine:
+            raise InvoiceBusy(f"invoice for {pid} is being issued")
+        try:
+            year = body["fy"]
+            n = json.loads(db.update_setting(f"invoice:counter:{year}", lambda raw: json.dumps(int(json.loads(raw) if raw else 0) + 1)))
+            number = f"{body['seller']['prefix']}/{year}/{n:04d}"
+
+            def fill(raw):
+                return json.dumps(number) if raw and json.loads(raw) == mine else None
+            filled = db.update_setting(key, fill)
+            if not filled or json.loads(filled) != number:       # taken over while this call was slow: the number is let go
+                raise InvoiceBusy(f"invoice for {pid} was taken over")
+        except BaseException:
+            try:       # no number is held in the claim: let it go so a retry can take it (a claim holding the number stays)
+                db.update_setting(key, lambda raw: db.REMOVE if raw and json.loads(raw) == mine else None)
+            except Exception as e:
+                print("invoice claim release failed:", str(e)[:160])
+            raise
+        inv = {"number": number, **body}
+        _store(inv)
         return inv
 
 

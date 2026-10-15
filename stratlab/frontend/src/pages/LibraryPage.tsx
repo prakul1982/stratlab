@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { checksOf, HoldLine, Rules, shownStats, VERDICTS, type LibEntry } from "../components/LibraryBits";
+import { checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, type LibEntry } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
@@ -49,13 +49,14 @@ export function LibraryPage() {
   const [layout, setLayout] = usePersisted<"cards" | "table">("stratlab.library.view", "cards");
 
   useEffect(() => {
+    let live = true;       // a slower answer for an earlier search must not replace the one for the search now on screen
     const t = window.setTimeout(() => {
       const p = new URLSearchParams({ q, market, verdict, sort, ...(official ? { official: "true" } : {}) });
       setFailed(false);
       api<{ entries: LibEntry[]; total: number; reasons?: Record<string, string> }>(`/library?${p}`)
-        .then((r) => { setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { setRows([]); setFailed(true); fail(e); });
+        .then((r) => { if (!live) return; setRows(r.entries); setTotal(r.total); if (r.reasons) setReasons(r.reasons); }).catch((e) => { if (!live) return; setRows([]); setFailed(true); fail(e); });
     }, 200);
-    return () => window.clearTimeout(t);
+    return () => { live = false; window.clearTimeout(t); };
   }, [q, market, verdict, sort, official, fail, again]);
 
   const copy = async (e: LibEntry) => {
@@ -153,6 +154,7 @@ export function LibraryPage() {
                         </div>
                         <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         <HoldLine e={e} />
+                        {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}
                         {e.description && <p className={`k-small ${phone ? "lib-oneline" : "lib-clamp"}`} title={plainTerms(e.description)}>{plainTerms(e.description)}</p>}

@@ -36,7 +36,7 @@ export interface Instrument {
 
 export interface Market {
   id: string; name: string; venues: string; currency: string | null; symbol: string; tz: string;
-  hours: { open: string | null; close: string | null; days: string } | null; what: string; costs: string;
+  hours: { open: string | null; close: string | null; days: string; fo_close?: string | null } | null; what: string; costs: string;
   brokerage: number; status: "live" | "offline" | "soon"; max_days: Record<Tf, number> | null;
   holidays?: string[];      // weekday closures in the next few weeks, as dates in the exchange's own calendar
 }
@@ -57,6 +57,7 @@ export interface Stats {
   pf: number | null; avg: number; buy_hold_ret: number;
   skipped_size?: number;     // entry signals skipped because one share or lot cost more than the budget
   emptied_on?: string | null; // the day the account reached zero (R13S-001): nothing traded after it, the loss stops at -100%
+  shown_ret?: number;        // a run saved before accounts stopped at zero: the return it was stored with (R18-008)
 }
 export interface Costs {
   gross_pnl: number; total: number; items: { label: string; amount: number }[]; net_pnl: number;
@@ -113,6 +114,8 @@ export interface NotebookItem {
 export interface Notebook extends NotebookItem {
   kind: "notebook"; notes: string; strategy: Strategy; instrument: Instrument | null; experiments: Experiment[];
   group?: Group | null;
+  /** Rules that can never be true or are true on every candle, as they read (R18-002). A run is refused with the first kind. */
+  rule_problems?: { never?: string[]; always?: string[] };
   /** The questions about the idea still open, and the answers so far (R5O-010). */
   gaps?: import("../components/Gaps").GapInfo | null;
 }
@@ -214,7 +217,7 @@ export interface OptQuote { ltp: number | null; bid: number | null; ask: number 
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
   model?: GreekModel | null;       // the inputs every strike's IV and Greeks share (model estimates)
-  spot_from?: "quote" | "spot" | "none" }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
+  spot_from?: "quote" | "spot" | "none"; spot_ts?: string | null }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
 /** A position's model view (options/greeks.py position): each leg's IV and Greeks per option, the what-if inputs of the
  * legs that have an IV, and the net Greeks (× quantity, sold legs negative). */
 export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: ModelLeg[]; complete: boolean; net: (NetGreeks & { pnl: number }) | null }

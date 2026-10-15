@@ -254,7 +254,7 @@ def confirm_url(uid: str, address: str) -> str:
 ADMIN_WHY = "You get this because you are a StratLab admin. It goes to every admin address."
 
 
-def tell_admins(subject: str, text: str) -> int:
+def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
     """Something an admin should know (a daily check failing, the broker login failing): sent to each admin's email,
     plus any phone or Telegram they set in Account. Returns how many admins were reached."""
     from . import db
@@ -267,10 +267,10 @@ def tell_admins(subject: str, text: str) -> int:
             rows = []
         try:
             if rows:
-                if notify(rows[0], subject, text, background=False, url="/admin", why=ADMIN_WHY, label="Admin alert"):
+                if notify(rows[0], subject, text, background=False, url="/admin", why=ADMIN_WHY, label=label):
                     reached += 1
             elif email_ready():
-                send_message(email, subject, text, "/admin", "Admin alert", ADMIN_WHY)
+                send_message(email, subject, text, "/admin", label, ADMIN_WHY)
                 reached += 1
         except Exception as e:
             print("admin alert failed:", e)

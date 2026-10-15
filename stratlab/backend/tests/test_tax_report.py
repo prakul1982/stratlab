@@ -229,6 +229,73 @@ def test_a_sale_with_no_buy_in_the_files():
     assert c["realised"][0]["qty"] == 5 and c["unmatched"] == [{"key": "A", "d": "2024-02-01", "qty": 3, "sale": 360}]
 
 
+PNL_ID = "pnl:2024-05-01:2024-09-01:10:100.0000:150.0000"
+
+
+def test_a_sale_in_both_a_tradebook_and_a_tax_pnl_file_counts_once():
+    tb = [b("2024-05-01", 10, 100, "X", src="trades", tid="t1"), s("2024-09-01", 10, 150, "X", src="trades", tid="t2")]
+    pnl = [b("2024-05-01", 10, 100, "X", src="pnl", tid=PNL_ID + ":b"), s("2024-09-01", 10, 150, "X", src="pnl", tid=PNL_ID + ":s")]
+    merged, added, dup = T.merge(tb, pnl)
+    assert (added, dup) == (2, 0)                              # different ids, so the merge keeps both
+    c = T.compute(merged, today=TODAY)
+    assert [(r["qty"], r["gain"]) for r in c["realised"]] == [(10, 500)] and c["open"] == [] and c["unmatched"] == []
+    y = T.year(2024, c["realised"], c["intraday"])
+    assert y["stcg"]["gains"] == 500 and y["tax"] == 100
+    assert [(r["qty"], r["gain"]) for r in realised(T.merge(pnl, tb)[0])] == [(10, 500)]      # the other order of upload
+
+
+def test_a_tradebook_buy_sold_only_in_a_tax_pnl_file_isnt_left_open():
+    pid = "pnl:2024-05-01:2025-06-02:10:100.0000:150.0000"
+    # the tradebook has the buy (and another); the sale is only in the next year's tax P&L
+    c = T.compute([b("2024-05-01", 10, 100, "X", src="trades", tid="t1"), b("2024-06-03", 5, 120, "X", src="trades", tid="t3"),
+                   b("2024-05-01", 10, 100, "X", src="pnl", tid=pid + ":b"), s("2025-06-02", 10, 150, "X", src="pnl", tid=pid + ":s")], today=TODAY)
+    assert [(r["bought"], r["qty"], r["gain"], r["term"]) for r in c["realised"]] == [("2024-05-01", 10, 500, "LT")]
+    assert [(l["d"], l["qty"]) for l in c["open"]] == [("2024-06-03", 5)] and c["unmatched"] == []
+    # the tradebook has the sale but not its buy (older than the tradebook): the P&L line's buy is used, once
+    c = T.compute([b("2023-01-02", 10, 100, "X", src="pnl", tid=PNL_ID.replace("2024-05-01", "2023-01-02") + ":b"),
+                   s("2024-09-01", 10, 150, "X", src="pnl", tid=PNL_ID.replace("2024-05-01", "2023-01-02") + ":s"),
+                   s("2024-09-01", 10, 150, "X", src="trades", tid="t2")], today=TODAY)
+    assert [(r["bought"], r["qty"], r["gain"]) for r in c["realised"]] == [("2023-01-02", 10, 500)] and c["unmatched"] == []
+
+
+def test_a_sale_then_a_buy_the_same_day_is_not_intraday_when_the_times_say_so():
+    # LTCG harvesting: 100 held since 2022, sold at 10:00 and bought back at 14:00
+    c = T.compute([b("2022-01-03", 100, 100), s("2025-06-10", 100, 200, t="10:00:00"), b("2025-06-10", 100, 200, t="14:00:00")], today=TODAY)
+    assert [(r["bought"], r["sold"], r["qty"], r["gain"], r["term"]) for r in c["realised"]] == [("2022-01-03", "2025-06-10", 100, 10000, "LT")]
+    assert c["intraday"] == [] and [(l["d"], l["qty"], l["cost"]) for l in c["open"]] == [("2025-06-10", 100, 20000)]
+    # times as brokers write them: 9:30 AM is before 1:15 PM
+    c = T.compute([b("2022-01-03", 100, 100), s("2025-06-10", 100, 200, t="9:30 AM"), b("2025-06-10", 100, 200, t="1:15 PM")], today=TODAY)
+    assert [r["qty"] for r in c["realised"]] == [100] and c["intraday"] == []
+    # bought first, then sold: intraday, and the old lot stays
+    c = T.compute([b("2022-01-03", 100, 100), b("2025-06-10", 100, 200, t="10:00"), s("2025-06-10", 100, 210, t="14:00")], today=TODAY)
+    assert c["realised"] == [] and [(i["qty"], i["buy"]) for i in c["intraday"]] == [(100, 20000)]
+    assert [(l["d"], l["qty"]) for l in c["open"]] == [("2022-01-03", 100)]
+    # nothing held: a short sale, intraday against the later buy
+    c = T.compute([s("2025-06-10", 10, 200, t="10:00"), b("2025-06-10", 10, 190, t="14:00")], today=TODAY)
+    assert [(i["qty"], i["pnl"]) for i in c["intraday"]] == [(10, pytest.approx(99.5))] and c["open"] == [] and c["unmatched"] == []
+    # 5 held: 5 come out of the lot, the other 5 are short and bought back; the rest of the buy opens a lot
+    c = T.compute([b("2024-01-02", 5, 100), s("2025-06-10", 10, 200, t="10:00"), b("2025-06-10", 10, 190, t="14:00")], today=TODAY)
+    assert [(r["qty"], r["gain"]) for r in c["realised"]] == [(5, 500)] and [i["qty"] for i in c["intraday"]] == [5]
+    assert [(l["d"], l["qty"], l["cost"]) for l in c["open"]] == [("2025-06-10", 5, 950)]
+    # without times: what was bought and sold that day is intraday, as before
+    c = T.compute([b("2022-01-03", 100, 100), s("2025-06-10", 100, 200), b("2025-06-10", 100, 200)], today=TODAY)
+    assert c["realised"] == [] and [i["qty"] for i in c["intraday"]] == [100]
+
+
+def test_an_fno_file_overlapping_a_saved_one_in_part_is_left_out_with_the_dates():
+    ch = lambda first, last, pnl: {"seg": "fno", "fy": 2025, "first": first, "last": last, "pnl": pnl, "turnover": 10,
+                                   "turnover_contract": 5, "charges": 0.0, "stt": 0.0, "trades": 3}
+    apr_sep, sep_mar = ch("2025-04-02", "2025-09-26", 100000), ch("2025-09-01", "2026-03-27", 50000)
+    out, added, replaced, same, overlaps = T.merge_business([apr_sep], [sep_mar])
+    assert (added, replaced, same) == (0, 0, 0) and out == [apr_sep]           # the saved figures are kept
+    [o] = overlaps
+    assert o["name"] == "F&O FY 2025-26" and "1 Sep 2025 to 26 Sep 2025" in o["reason"] and "isn't added" in o["reason"]
+    # a file covering the saved one's dates replaces it; one inside them is already counted
+    whole = ch("2025-04-01", "2026-03-31", 150000)
+    assert T.merge_business([apr_sep], [whole])[:5] == ([whole], 0, 1, 0, [])
+    assert T.merge_business([whole], [apr_sep])[:5] == ([whole], 0, 0, 1, [])
+
+
 def test_bonus_shares_cost_nothing_and_are_held_from_the_bonus_date():
     acts = {"A": [{"kind": "bonus", "ratio": [1, 1], "factor": 2.0, "ex_date": "2024-03-01", "id": "x"}]}
     c = T.compute([b("2023-01-02", 10, 200), s("2024-06-01", 20, 150)], actions=acts, today=TODAY)
