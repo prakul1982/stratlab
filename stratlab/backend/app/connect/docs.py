@@ -354,7 +354,12 @@ def _save_entry(uid: str, kind: str, fields: dict, asof: str | None, plan: str |
         if typed and not mine:
             why.append(f"You already have an {kind.upper()} entry in Net worth, so this balance was not added.")
             return None
-        entry = money_networth.clean(money_networth.ItemReq(kind=kind, name=kind.upper(), as_of=asof, **fields))
+        if mine and asof and str(mine[0].get("as_of") or "") > asof:
+            why.append(f"Net worth already has a newer {kind.upper()} balance, so this passbook's balance was not added.")
+            return None
+        keep = {k: mine[0][k] for k in ("monthly", "rate") if mine and mine[0].get(k) is not None}
+        entry = money_networth.clean(money_networth.ItemReq(
+            kind=kind, name=(mine[0].get("name") if mine else None) or kind.upper(), as_of=asof, **{**keep, **fields}))
         entry["auto"] = "passbook"
         if mine:
             entry["id"] = mine[0]["id"]

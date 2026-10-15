@@ -893,11 +893,14 @@ def net_worth_value(uid: str) -> dict:
     Holdings). {"value", "as_of", "at_cost": funds counted at cost, "missing": funds with neither a NAV nor a cost}."""
     data = load(uid)
     if not data["txns"]:
-        return {"value": 0.0, "as_of": None, "at_cost": 0, "missing": 0}
+        return {"value": 0.0, "as_of": None, "stmt_nav": 0, "at_cost": 0, "missing": 0}
     held = [r for r in holdings(data, worked(data), today_ist())["schemes"] if (r["units"] or 0) > EPS]
     no_nav = [r for r in held if r["value"] is None]
     value = sum(r["value"] for r in held if r["value"] is not None) + sum(r["invested"] or 0 for r in no_nav)
-    return {"value": float(value), "as_of": None, "at_cost": sum(1 for r in no_nav if r["invested"] is not None),
+    dates = sorted(r["nav_date"] for r in held if r["value"] is not None and r.get("nav_date"))
+    return {"value": float(value), "as_of": dates[0] if dates else None,
+            "stmt_nav": sum(1 for r in held if r["value"] is not None and r.get("nav_source") == "statement"),
+            "at_cost": sum(1 for r in no_nav if r["invested"] is not None),
             "missing": sum(1 for r in no_nav if r["invested"] is None)}
 
 

@@ -206,6 +206,10 @@ def apply(profile: dict, parsed: Parsed, filename: str = "") -> dict:
             out["not_saved"] = len(got["over_limit"])
             lim = plans.holdings_limit(profile["_plan"])
             notes.append(f"{len(got['over_limit'])} not saved: your plan keeps {lim} {'stock' if lim == 1 else 'stocks'}.")
+        if got.get("skipped"):
+            n = got["skipped"]
+            notes.append(f"{n} {'holding' if n == 1 else 'holdings'} already read from Zerodha Kite {'was' if n == 1 else 'were'} kept, "
+                         "because this statement is dated no later than the last Kite read.")
         if got.get("kept"):
             notes.append(f"{got['kept']} holdings read from an earlier statement are kept as they were until every line matches.")
         if parsed.asof:

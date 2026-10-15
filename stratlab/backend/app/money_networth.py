@@ -24,6 +24,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from . import db, leader, run_marks
+from . import holdings
+from .holdings import pct_split  # noqa: F401  (largest-remainder shares, shared with My Holdings)
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -287,16 +289,6 @@ def next_due(due: date, frequency: str, at: date) -> date | None:
         k += 1
         d = add_months(due, k * step)
     return d
-
-
-def pct_split(values: list[float]) -> list[float]:
-    """Shares of the total in tenths of a percent, rounded by largest remainder so they add to exactly 100."""
-    total = sum(values)
-    raw = [v / total * 1000 for v in values]
-    out = [int(x) for x in raw]
-    for i in sorted(range(len(raw)), key=lambda i: raw[i] - out[i], reverse=True)[:1000 - sum(out)]:
-        out[i] += 1
-    return [x / 10 for x in out]
 
 
 def yearly_premium(premium: float, frequency: str) -> float:
@@ -768,6 +760,8 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     # statement's holding has no buy price) has no value to count, so the total leaves it out and says so
     n_nv = sum(((stocks or {}).get("unvalued") or {}).values())
     notes = []
+    if mf and mf.get("stmt_nav"):
+        notes.append(f"{mf['stmt_nav']} mutual {'fund' if mf['stmt_nav'] == 1 else 'funds'} valued at the NAV on the statement (no newer NAV found)")
     if stocks and stocks.get("count") and n_nv:
         partial.append(f"no price or buy price for {n_nv} {'stock' if n_nv == 1 else 'stocks'}")
     if stocks and stocks.get("count") and n_np - n_nv > 0:
@@ -797,6 +791,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
                        "as_of": mf.get("as_of"), "basis": "market price", "rule": "From your mutual fund statement, at the latest NAV"
+                       + (f"; {mf['stmt_nav']} {'fund' if mf['stmt_nav'] == 1 else 'funds'} at the statement's NAV" if mf.get("stmt_nav") else "")
                        + (f"; {mf['at_cost']} {'fund' if mf['at_cost'] == 1 else 'funds'} without a NAV at cost" if mf.get("at_cost") else ""),
                        "facts": {}, "linked": mf.get("link")})
     rows = linked + assets
@@ -913,7 +908,7 @@ def mf_value(uid: str) -> dict:
     if isinstance(got, dict):
         v = got.get("value")
         return {"value": float(v) if isinstance(v, (int, float)) and math.isfinite(v) else 0, "as_of": got.get("as_of"),
-                "link": got.get("link") or "/money/mutual-funds", "at_cost": got.get("at_cost") or 0, "missing": got.get("missing") or 0}
+                "link": got.get("link") or "/money/mutual-funds", "at_cost": got.get("at_cost") or 0, "stmt_nav": got.get("stmt_nav") or 0, "missing": got.get("missing") or 0}
     return {"value": float(got) if isinstance(got, (int, float)) and math.isfinite(got) else 0, "as_of": None, "link": "/money/mutual-funds"}
 
 
@@ -1001,8 +996,9 @@ class Job:
         if (local.day == 1 and local.hour < 16) or not (run := run_marks.claim(RUN, month)):
             return 0
         n, failed = 0, 0
-        for key, _ in db.all_settings_with_prefix(KEY):
-            uid = key[len(KEY):]
+        # users with typed entries, and those whose net worth is only imported holdings or mutual funds
+        users = dict.fromkeys(k[len(p):] for p in (KEY, "holdings:", "mf:") for k, _ in db.all_settings_with_prefix(p))
+        for uid in sorted(users):
             if run.seen(uid):
                 continue
             # already has this month's complete snapshot (a visit took it when the run was late), or removed this
@@ -1014,8 +1010,8 @@ class Job:
             run.beat()
             try:
                 v = self.value_of(uid)
-                if v:                                       # a partial total is stored flagged (see record)
-                    record(uid, v["totals"], "month", local.date())
+                if v and not (v.get("assets") == [] and v.get("liabilities") == []):   # a partial total is stored flagged (see record)
+                    record(uid, v["totals"], "month", holdings.saved_day(now))   # dated by the last close, as a visit is
                     n += 1
                 run.record(uid)                             # after a record, or when there is nothing to take; a kill in between records that one again
             except Exception as e:                          # one user's data never stops the others'

@@ -547,7 +547,7 @@ def test_capital_gains_and_total_value_hooks(w):
 
 def test_net_worth_counts_a_fund_without_a_nav_at_cost(w, monkeypatch):
     upload(w["client"], statement(flexi(), debt()))
-    assert M.net_worth_value("u-pro") == {"value": 42500.0, "as_of": None, "at_cost": 0, "missing": 0}
+    assert M.net_worth_value("u-pro") == {"value": 42500.0, "as_of": "2026-10-03", "stmt_nav": 0, "at_cost": 0, "missing": 0}
     real = M.holdings
 
     def no_nav(data, wk, today):

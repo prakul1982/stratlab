@@ -9,6 +9,7 @@ out (sold), but only when that read was whole: it had rows and every row matched
 match, keeps what the source gave before (an empty broker reply is a failed read, not "sold everything"). Where two
 sources name the same stock, the live broker wins over a statement and a statement over a file or typed entry."""
 from .. import holdings, plans
+from . import state
 
 PRIORITY = {"kite": 3, "ibkr": 3, "cas": 2}
 
@@ -61,12 +62,14 @@ def _parts(i: dict, accounts) -> dict:
 
 
 def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = True,
-               accounts: set[str] | None = None) -> tuple[list[dict], dict]:
+               accounts: set[str] | None = None, asof: str | None = None,
+               reads: dict[str, str] | None = None) -> tuple[list[dict], dict]:
     """(holdings, counts). `found` are matched holdings from one source (`via`). `accounts`: the demat accounts a statement
     covers; a holding's parts from other accounts ("accts") stay and add up with this read's. One without "accts" (saved
     before statements kept them, or edited by hand) belongs to whatever account the read covers. A part added from a file
     or typed in on top of this source's (holdings.ADDED) is never the read's: it stays, and stays alone (a plain holding)
-    once the source no longer names the stock."""
+    once the source no longer names the stock. A higher-priority source's row is replaced by a read dated (`asof`) after
+    that source's last read (`reads`: its day), else the read's stock is skipped and counted."""
     mine = PRIORITY.get(via, 1)
     market = {holdings.market_of(f) for f in found}
     accounts = (accounts or set()) | {via}        # the source's own part ("kite": its quantity under its name) is the read's
@@ -84,7 +87,8 @@ def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = 
     for f in found:
         k = _key(f)
         cur = kept.get(k) or prev.get(k)
-        if cur and k in kept and PRIORITY.get(cur.get("via"), 1) > mine:
+        if cur and k in kept and PRIORITY.get(cur.get("via"), 1) > mine and not (
+                asof and (reads or {}).get(cur.get("via")) and asof > reads[cur["via"]]):
             skipped += 1
             continue
         new = {**f, "via": via}
@@ -152,6 +156,8 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         found, missed = found + us_found, missed + us_missed
     limit = plans.holdings_limit(profile["_plan"])
     out = {}
+    read = str(state.section(uid, "kite").get("refreshed_at") or "")[:10]
+    reads = {"kite": read} if read else {}
 
     def merged(before):                   # runs again on the newer holdings if the user saves one meanwhile
         had = {_key(i) for i in before["items"] if i.get("via") == via}
@@ -161,7 +167,7 @@ def sync_holdings(profile: dict, rows: list[dict], via: str, source: str, replac
         unsure = any(i["symbol"].upper() in names or str(i.get("isin") or "").upper() in names
                      for i in before["items"] if i.get("via") == via)
         whole = bool(found) and not unsure        # only a whole read takes out what the source no longer names
-        items, counts = merge_sync(before["items"], found, via, replace and whole, accounts)
+        items, counts = merge_sync(before["items"], found, via, replace and whole, accounts, since, reads)
         out["kept"] = 0 if whole else len(had - {_key(f) for f in found})
         items, out["over"] = holdings.cap(items, before["items"], limit)   # a downgrade deletes nothing
         out["counts"], out["had"] = counts, bool(had)
