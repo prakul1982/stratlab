@@ -382,3 +382,18 @@ def test_a_company_read_is_not_given_the_live_price(research):
     c = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "quote": {"price": 150.0, "change_pct": -5.0}}
     f = A.company_facts(c)
     assert "price" not in f and "day_change_pct" not in f      # kept up to 12 hours: it would sit beside a different live quote
+
+
+def test_the_build_locks_are_trimmed_without_dropping_one_in_progress():
+    import threading
+    from app.intel import routes
+    held = threading.Lock()
+    held.acquire()
+    routes._building.clear()
+    routes._building.update({f"k{i}": threading.Lock() for i in range(2500)})
+    routes._building["running"] = held
+    with routes._building_lock:
+        routes._drop_finished_builds()
+    assert list(routes._building) == ["running"]
+    routes._building.clear()
+    held.release()

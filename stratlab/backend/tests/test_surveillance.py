@@ -391,3 +391,13 @@ def test_a_run_where_some_lists_failed_keeps_its_slot(w):
     job = S.Job(lambda: feed, lambda changes, now: 0)
     job.tick(datetime(2026, 10, 5, 8, 30, tzinfo=F.IST))
     assert db.get_setting("newsjob:surv-am") == "2026-10-05" and job.status["last_error"]
+
+
+def test_a_run_that_raises_gives_its_slot_back(w):
+    feed = Feed()
+    job = S.Job(lambda: feed, lambda changes, now: 0)
+    monday = datetime(2026, 10, 5, 8, 30, tzinfo=F.IST)
+    job.run = lambda now, day: (_ for _ in ()).throw(RuntimeError("db blip"))
+    with pytest.raises(RuntimeError):
+        job.tick(monday)
+    assert db.get_setting("newsjob:surv-am") is None

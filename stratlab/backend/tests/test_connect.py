@@ -1660,3 +1660,12 @@ def test_an_epf_member_id_label_at_a_line_end_takes_nothing_from_the_next_line()
     assert docs.read_epf(text) == {"balance": 7000.0, "as_of": "2026-03-31", "passbooks": 2}
     assert docs.read_epf("Member ID: MH1 \nClosing Balance as on 31/03/2026 1,500 2,500 600\n"
                          "Member Id :\tMH2\nClosing Balance as on 31/03/2026 1,000 2,000 0\n")["balance"] == 7000
+
+
+def test_the_connect_jobs_keep_their_own_errors_and_their_status(w, monkeypatch):
+    monkeypatch.setattr(ibkr, "run_daily", lambda now=None: (_ for _ in ()).throw(RuntimeError("flex down")))
+    monkeypatch.setattr(jobs, "run_reminders", lambda now=None: 2)
+    job = jobs.Job()
+    job.tick(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc), part="all")
+    assert "flex down" in job.status["ibkr_error"] and job.status["reminders_error"] is None and job.status["reminders"] == 2
+    assert json.loads(db.get_setting("jobstatus:connect"))["reminders"] == 2          # kept for after a restart

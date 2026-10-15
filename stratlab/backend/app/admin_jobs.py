@@ -111,7 +111,7 @@ def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
 
 
-KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
+KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains", "connect")
 
 
 def breadth_live_row(st: dict, job: dict | None = None, now: datetime | None = None) -> dict:
@@ -138,6 +138,12 @@ def breadth_live_row(st: dict, job: dict | None = None, now: datetime | None = N
             if age * 60 > BL.LATE_AFTER:
                 row["state"], row["error"] = "warn", f"Late: the last round was at {s['time']} IST, {age} minutes ago (the {slot} round is due)."
     return row
+
+
+def _connect_status(m) -> dict:
+    """The connect jobs' status: this server's once it has run, else the one kept before the restart."""
+    from . import job_status
+    return job_status.kept("connect", dict(m.connect_job.status or {}))
 
 
 def rows() -> list[dict]:
@@ -336,10 +342,10 @@ def rows() -> list[dict]:
     add("Option chain recording", recorder)
 
     def ibkr_daily():
-        st = dict(m.connect_job.status or {})
+        st = _connect_status(m)
         r = st.get("ibkr") or {}
         row = _row("ibkr-daily", "IBKR daily pull", "Every 30 minutes from 7 AM IST until each connected account has its day's read",
-                   st.get("ibkr_at"), st.get("last_error"),
+                   st.get("ibkr_at"), st.get("ibkr_error") or st.get("last_error"),
                    [f"{r['users']} accounts due, {r['ok']} read, {r['failed']} failed" if r else ""],
                    [{"label": "Run now", "path": "/admin/connect/run?part=ibkr"}], running=m.connect_job.running)
         if row["state"] == "ok" and r.get("failed"):      # a run that read some accounts and not others is a Check, not "OK"
@@ -348,9 +354,9 @@ def rows() -> list[dict]:
     add("IBKR daily pull", ibkr_daily)
 
     def inbox_reminder():
-        st = dict(m.connect_job.status or {})
+        st = _connect_status(m)
         return _row("statement-reminder", "Statement inbox reminder", "Checked every 30 minutes; one reminder when no statement has come in 40 days",
-                    st.get("reminders_at"), st.get("last_error"),
+                    st.get("reminders_at"), st.get("reminders_error") or st.get("last_error"),
                     [f"{st['reminders']} reminders sent in the last check" if st.get("reminders_at") else ""],
                     [{"label": "Run now", "path": "/admin/connect/run?part=reminders"}], running=m.connect_job.running)
     add("Statement inbox reminder", inbox_reminder)

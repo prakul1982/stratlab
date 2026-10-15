@@ -124,6 +124,13 @@ _building: dict[str, threading.Lock] = {}
 _building_lock = threading.Lock()
 
 
+def _drop_finished_builds() -> None:
+    """Forget the builds that are over; one still running keeps its lock, so a second request waits for it instead of
+    starting its own. Called with `_building_lock` held."""
+    for k in [k for k, one in _building.items() if not one.locked()]:
+        del _building[k]
+
+
 def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, counted: bool = True, min_age: float = 0,
             kind_used: str = "research_ai", cap: int | None = None):
     """Serve an AI read from the shared cache (every user's, one read per company or market per key), or build it.
@@ -153,7 +160,7 @@ def ai_call(profile, kind: str, key: tuple, ttl: float, refresh: bool, build, co
         finally:
             with _building_lock:
                 if len(_building) > 2000:
-                    _building.clear()
+                    _drop_finished_builds()
         if fresh and counted:
             db.add_usage(profile["id"], kind_used)
     return out

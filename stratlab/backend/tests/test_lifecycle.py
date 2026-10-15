@@ -538,3 +538,13 @@ def test_r23_005_the_welcome_promises_the_brief_the_plan_gives(w):
         assert daily in lifecycle.build("welcome", basic)[2]
     finally:
         plans.set_promo(None)
+
+
+def test_a_sweep_that_raises_doesnt_use_the_hour_up(w, monkeypatch):
+    j = lifecycle.Job()
+    monkeypatch.setattr(lifecycle, "sweep", lambda now=None: (_ for _ in ()).throw(RuntimeError("db blip")))
+    with pytest.raises(RuntimeError):
+        j.tick(NOW)
+    assert db.get_setting(lifecycle.MARK) is None
+    monkeypatch.setattr(lifecycle, "sweep", lambda now=None: 3)
+    assert j.tick(NOW + timedelta(minutes=5)) == 3 and db.get_setting(lifecycle.MARK) is not None

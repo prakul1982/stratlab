@@ -17,6 +17,7 @@ KEYS = [p.key_env for p in PROVIDERS.values()] + ["CLOUDFLARE_ACCOUNT_ID"]
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
+    R._auth_fails.clear()
     for k in KEYS:
         monkeypatch.setattr(settings, k, "")
     for p in PROVIDERS.values():
@@ -795,3 +796,21 @@ def test_a_refresh_asks_the_provider_again_instead_of_the_answer_cache(monkeypat
     with P.ask_again():
         P.complete("s-refresh", "t", transport=t)
     assert len(bodies(seen)) == 2
+
+
+def test_a_rejected_key_backs_the_automatic_rerank_off_and_it_grows_to_a_cap(monkeypatch):
+    keys(monkeypatch, "groq")
+    R._auth_fails.clear()
+    t = httpx.MockTransport(lambda r: httpx.Response(401, json={"error": {"message": "Invalid API Key"}}))
+    P.status("groq").ranked_at = 0.0
+    assert R.stale("groq")
+    P.rerank(["groq"], transport=t, wait=True)
+    assert not R.stale("groq") and 0 < R.auth_wait("groq") <= R.AUTH_BACKOFF_BASE
+    first = R.auth_wait("groq")
+    R._auth_fails["groq"] = (3, time.time())
+    assert R.auth_wait("groq") > first * 3
+    R._auth_fails["groq"] = (30, time.time())
+    assert R.auth_wait("groq") <= R.AUTH_BACKOFF_MAX
+    R._auth_fails["groq"] = (1, time.time() - R.AUTH_BACKOFF_BASE - 1)
+    assert R.auth_wait("groq") == 0 and R.stale("groq")
+    R._auth_fails.clear()

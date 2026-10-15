@@ -142,11 +142,19 @@ class Reporter:
         self.sent: dict[str, str] | None = None          # "user:market" -> last day sent
 
     def _load(self):
-        if self.sent is None:
-            try:
-                self.sent = json.loads(self.db.get_setting(SETTING) or "{}")
-            except Exception:
-                self.sent = {}
+        """The sent list as the database has it now (another container may have led and sent since), merged with what
+        this one marked: the newer day per key wins, so a stale copy is never written back."""
+        try:
+            stored = json.loads(self.db.get_setting(SETTING) or "{}")
+            if not isinstance(stored, dict):
+                stored = {}
+        except Exception:
+            stored = {}
+        merged = dict(self.sent or {})
+        for k, v in stored.items():
+            if v >= merged.get(k, ""):
+                merged[k] = v
+        self.sent = merged
 
     def run(self, sessions: list, now: datetime | None = None, *, can_alert, send, market_name) -> list[tuple[str, str]]:
         """Send what's due. Returns (user, market) pairs sent, for tests and logs."""

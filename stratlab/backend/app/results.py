@@ -469,8 +469,9 @@ class Job:
                 print("results calendar:", e)
             time.sleep(300)
 
-    def due(self, name: str, now: datetime, region: str, at: str, stamp: str = "%Y-%m-%d") -> date | None:
-        """The local day when `name` is due (at or after `at`) and its marker (the day, or the hour) isn't set yet."""
+    def due(self, name: str, now: datetime, region: str, at: str, stamp: str = "%Y-%m-%d", commit: bool = True) -> date | None:
+        """The local day when `name` is due (at or after `at`) and its marker (the day, or the hour) isn't set yet.
+        `commit=False` leaves the marker for the caller to set (`mark`) once the run has finished."""
         local = now.astimezone(ZoneInfo(TZ[region]))
         mark = local.strftime(stamp)
         if local.strftime("%H:%M") < at or self.last.get(name) == mark:
@@ -478,9 +479,13 @@ class Job:
         if db.get_setting(f"resultsjob:{name}") == mark:          # already ran (before a restart)
             self.last[name] = mark
             return None
+        if commit:
+            self.mark(name, mark)
+        return local.date()
+
+    def mark(self, name: str, mark: str) -> None:
         self.last[name] = mark
         db.set_setting(f"resultsjob:{name}", mark)
-        return local.date()
 
     def claim(self, name: str, now: datetime, region: str, at: str, stamp: str = "%Y-%m-%d"):
         """Like due(), for a run that sends: (local day, run marker), or (None, None) when it isn't due, is done or is
@@ -503,24 +508,35 @@ class Job:
                 name = f"refresh-{region}-{at}"
                 if now < self.retry.get(name, now):
                     continue
-                day = self.due(name, now, region, at)
+                day = self.due(name, now, region, at, commit=False)      # marked once the refresh has finished
                 if day:
                     try:
                         out = self.refresh(region, who(), day)
-                    except Exception:
-                        self.unmark(name)
-                        raise
-                    if out["rows"] is None:      # every feed failed: the slot isn't used up, it is asked again in half an hour
-                        self.unmark(name)
+                    except Exception as e:       # this region's failure stops neither the other region nor the sends below
+                        print("results refresh failed:", region, str(e)[:160])
+                        self.down[region] = f"{region}: {type(e).__name__}: {str(e)[:120]}"
+                        self.status["last_error"] = self.down[region]
                         self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
+                        ran = True
+                        continue
+                    if out["rows"] is None:      # every feed failed: the slot isn't used up, it is asked again in half an hour
+                        self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
+                    else:
+                        self.mark(name, day.strftime("%Y-%m-%d"))
                     ran = True
-            day, run = self.claim(f"morning-{region}", now, region, MORNING_AT[region])
-            if day:
-                sent, ran = sent + self.morning(region, day, who, run), True
-                run.done()
-            day, run = self.claim(f"check-{region}", now, region, CHECK_FROM[region], stamp="%Y-%m-%dT%H")
-            if day:
-                sent, ran = sent + self.follow_up(region, day, who, run), True
+            for step, at, stamp, work in (("morning", MORNING_AT[region], "%Y-%m-%d", self.morning),
+                                          ("check", CHECK_FROM[region], "%Y-%m-%dT%H", self.follow_up)):
+                day, run = self.claim(f"{step}-{region}", now, region, at, stamp=stamp)
+                if not day:
+                    continue
+                ran = True
+                try:
+                    sent += work(region, day, who, run)
+                except Exception as e:           # this region's failure stops neither the other region nor the next step
+                    print(f"results {step} failed:", region, str(e)[:160])
+                    self.down[region] = f"{region}: {type(e).__name__}: {str(e)[:120]}"
+                    self.status["last_error"] = self.down[region]
+                    continue                     # the run isn't marked done: it resumes at a later pass
                 run.done()
         if ran:
             self.status.update(last_run=now.isoformat(), sent=sent, last_error=next(iter(self.down.values()), None))

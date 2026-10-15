@@ -191,3 +191,16 @@ def test_walkforward_tunes_the_vix_cut_off_over_its_own_steps(monkeypatch):
     assert all(w["chosen"][0]["value"] in (-3.0, -2.0, -1.0, 0.0, 1.0) for w in out["windows"])
     # nothing trades (no VIX history on these days): ties go to the user's own settings
     assert all([c["value"] for c in w["chosen"]] == [-1.0, 20] for w in out["windows"])
+
+
+def test_a_close_that_never_came_isnt_reported_as_fine(w, monkeypatch):
+    from app.data import calendar
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
+    monkeypatch.setattr(V, "daily", lambda *a, **k: [("2026-10-02", 15.0)])
+    monkeypatch.setattr(V, "fetch", lambda *a, **k: {})
+    job = V.Job(lambda: Nse(), sleep=lambda s: None)
+    job.tick(datetime(2026, 10, 5, 21, 30, tzinfo=IST).astimezone(timezone.utc))       # Monday, nothing for the day
+    assert job.status["last_error"] and "2026-10-05" in job.status["last_error"]
+    monkeypatch.setattr(V, "fetch", lambda *a, **k: {"2026-10-06": 15.2})
+    job.tick(datetime(2026, 10, 6, 21, 30, tzinfo=IST).astimezone(timezone.utc))       # Tuesday, the close is there
+    assert job.status["last_error"] is None
