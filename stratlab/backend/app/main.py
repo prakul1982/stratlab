@@ -81,7 +81,7 @@ from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteSer
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
-from .options.engine import fill_price, from_last, tick_for
+from .options.engine import fill_price, from_last, tick_for, margin_units as opt_margin_units
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
 from . import breadth, breadth_live, build_info, redflags, redflags_routes, scan_presets
@@ -4604,32 +4604,36 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
         # a currency option with no bid, no ask and nothing traded has no live quote: it isn't priced from a last trade
         # that can be weeks old (R13-002: USDINR's ATM straddle "priced" at ₹1.10 and ₹1.09, OI 0, volume 0)
         l["no_live"] = bool(l["key"]) and s.exchange == "CDS" and no_live_quote(l["quote"])
-        l["fill"] = None if l["no_live"] else fill_price(l["quote"], l["side"], s.costs.slippageTicks, tick_for(s.exchange))
+        l["fill"] = None if l["no_live"] else fill_price(l["quote"], l["side"], s.costs.slippageTicks, c.tick(l["key"]))
         # no bid or ask on the side it fills on: priced from the last trade, which may be hours old (R11C-007)
         l["from_last"] = l["fill"] is not None and from_last(l["quote"], l["side"])
         l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
     freeze = s.costs.freeze or freeze_limit(s.underlying)
     units = s.sizing.lots
     margin_one = margin_all = None
+    sizing_note = ""
     if all(l["key"] for l in legs):
         basket = [{"key": l["key"], "side": l["side"], "qty": l["lots"] * c.lot} for l in legs]
-        margin_one = options_data.margin(basket)
-        if s.sizing.mode == "margin" and margin_one:
-            units = max(0, int(s.sizing.capital * s.sizing.safety // margin_one))
-        if margin_one and units:
-            margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
+        if s.sizing.mode == "margin":    # sized as the session sizes it (options/engine.py margin_units)
+            units, margin_one, margin_all, sizing_note = opt_margin_units(options_data.margin, basket,
+                                                                          s.sizing.capital * s.sizing.safety)
+        else:
+            margin_one = options_data.margin(basket)
+            if margin_one and units:
+                margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
     priced = [{"side": l["side"], "opt": l["opt"], "strike": l["strike"], "fill": l["fill"], "qty": l["lots"] * units * c.lot}
               for l in legs if l["strike"] is not None and l["fill"] is not None]
     charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
                if units and priced and len(priced) == len(legs) else None)
     no_live = sum(1 for l in legs if l.get("no_live"))
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
-            "tick": tick_for(s.exchange), "from_last": sum(1 for l in legs if l.get("from_last")),
+            "tick": c.tick(next((l["key"] for l in legs if l["key"]), None)), "from_last": sum(1 for l in legs if l.get("from_last")),
             # the underlying's source: its own quote, or for a currency option with no live future the spot rate it settles at
             "spot_from": spot_from, "no_live": no_live,
             "no_live_text": NO_LIVE.format(name=s.underlying) if no_live else None,
             "impossible": impossible(priced) if priced and len(priced) == len(legs) else None,
-            "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
+            "units": units, "margin_one": margin_one, "margin": margin_all, "sizing_note": sizing_note or None,
+            "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (spot_q or {}).get("ts"),
             **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"))}

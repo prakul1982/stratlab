@@ -598,3 +598,79 @@ def test_cds_with_no_live_future_settles_on_the_spot_pairs_close(monkeypatch):
     assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") == 96.76
     d.spot_close = None
     assert OptionsData.settlement_price(d, "CDS", "USDINR", "2026-09-24") == 96.135
+
+
+def test_margin_sizing_shrinks_until_the_full_size_fits():
+    from app.options.engine import margin_units
+
+    def marg(legs):                      # dearer per unit as size grows, as a SPAN margin is
+        q = sum(l["qty"] for l in legs)
+        return q * 150 * (1 + q / 40000)
+    legs = [{"key": "a", "side": "sell", "qty": 75}, {"key": "b", "side": "sell", "qty": 75}]
+    units, one, need, note = margin_units(marg, legs, 4900000)
+    assert units > 0 and need == marg([{**l, "qty": l["qty"] * units} for l in legs]) and need <= 4900000 and not note
+    assert units == 120                  # 216 units by margin_one alone, whose margin (8.8M) is above the cap
+    s = straddle(sizing={"mode": "margin", "capital": 5000000, "safety": 0.98})
+    e, c = OptionsEngine(s, margin_fn=marg), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    assert e.pos["units"] == units
+    assert margin_units(lambda legs: None, legs, 1e6) == (1, None, None, "Couldn't get the margin for this structure; used 1 unit.")
+
+
+def test_a_leg_the_leg_stop_closed_is_not_reopened_by_a_recentre():
+    s = straddle(risk={"stopType": "none", "legStopPct": 50},
+                 recenter={"enabled": True, "every": 5, "threshold": 1, "roll": "shorts"})
+    e, c = OptionsEngine(s), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    q = quotes(25000)
+    q["NFO:NIFTY25000CE"] = {"bid": 200, "ask": 201, "ltp": 200}
+    out = e.step(at("09:31"), 25000, c, q, True)
+    assert [(x["sym"], x["why"]) for x in out] == [("NIFTY25000CE", "Leg stop")]
+    out = e.step(at("09:40"), 25100, c, quotes(25100), True)
+    assert [(x["sym"], x["side"]) for x in out] == [("NIFTY25000PE", "buy"), ("NIFTY25100PE", "sell")]
+    assert [l["sym"] for l in e.pos["legs"] if l["open"]] == ["NIFTY25100PE"]
+    # it survives a restart
+    e2 = OptionsEngine(s, state=e.dump())
+    out = e2.step(at("09:50"), 25200, c, quotes(25200), True)
+    assert [(x["sym"], x["side"]) for x in out] == [("NIFTY25100PE", "buy"), ("NIFTY25200PE", "sell")]
+
+
+def test_a_recentre_keeps_credit_as_the_premium_taken_in():
+    s = straddle(risk={"stopType": "credit_pct", "stop": 50},
+                 recenter={"enabled": True, "every": 5, "threshold": 1, "roll": "all"})
+    e, c = OptionsEngine(s), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    first = e.pos["credit"]
+    out = e.step(at("09:40"), 25100, c, quotes(25100), True)
+    sold = sum(x["px"] * x["qty"] for x in out if x["side"] == "sell")
+    assert e.pos["rolls"] == 1 and e.pos["closed_pnl"] < 0
+    assert e.pos["credit"] == pytest.approx(first + sold)        # realised P&L isn't netted into it
+    e.step(at("15:15"), 25100, c, quotes(25100), True)
+    assert e.trades[-1]["credit"] == round(first + sold, 2)
+
+
+def test_totals_count_every_trade_past_the_saved_500():
+    from app.options.session import account
+    s = straddle()
+    e = OptionsEngine(s)
+    for i in range(600):
+        e.pos = {"opened": at("09:30").isoformat(), "legs": [], "closed_pnl": 100.0 if i % 3 else -50.0, "costs": 0.0,
+                 "credit": 0.0, "rolls": 0, "units": 1, "orders": 0, "peak": 0.0, "low": 0.0, "spot_in": 25000,
+                 "expiry": "2026-09-29"}
+        e._exit(at("10:00"), {}, "Square-off", [])
+    a = account(OptionsEngine(s, state=e.dump()), {})
+    assert a["trades"] == 600 and a["wins"] == 400 and a["realised"] == 400 * 100 - 200 * 50
+    # a state saved before the totals were kept sums what it holds
+    old = {k: v for k, v in e.dump().items() if k != "totals"}
+    a = account(OptionsEngine(s, state=old), {})
+    assert a["trades"] == 500 and a["realised"] == sum(t["pnl"] for t in old["trades"])
+
+
+def test_fills_use_the_instrument_lists_tick():
+    rows = [{"opt": o, "strike": k, "symbol": f"NIFTY{int(k)}{o}", "tick": 0.5} for k in STRIKES for o in ("CE", "PE")]
+    c = Contracts(rows, 75, "2026-09-29", "NFO")
+    assert c.tick("NFO:NIFTY25000CE") == 0.5 and c.tick("NFO:OTHER") == 0.05
+    e = OptionsEngine(straddle(costs={"slippageTicks": 2}))
+    out = e.step(at("09:30"), 25000, c, quotes(25000), True)
+    assert out[0]["px"] == premium("CE", 25000, 25000) - 0.5 - 2 * 0.5
+    assert contracts().tick("NFO:NIFTY25000CE") == 0.05        # no tick listed: the exchange's

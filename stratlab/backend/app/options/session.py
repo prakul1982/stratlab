@@ -89,7 +89,10 @@ class OptionSession:
         now = now.astimezone(IST)
         try:
             if self.contracts is None or (self._contracts_day != now.date() and not self.engine.pos):   # also after a restart with a position open
-                self.contracts = self.data.contracts(s.exchange, s.underlying, s.expiry)
+                # with a position open, the open legs' series (the strategy's "current" can name a later one by now)
+                pe = (self.engine.pos or {}).get("expiry")
+                self.contracts = (pe and self.data.contracts(s.exchange, s.underlying, pe)) or \
+                    self.data.contracts(s.exchange, s.underlying, s.expiry)
                 self._contracts_day = now.date()
             sk = self.data.spot_key(s.exchange, s.underlying, self.contracts.expiry if self.contracts else None)
             q = self.data.quotes(self._keys(sk))
@@ -168,8 +171,9 @@ def _position(e: OptionsEngine, q: dict) -> dict | None:
 
 def account(e: OptionsEngine, q: dict | None) -> dict:
     return {"capital": e.s.sizing.capital, "equity": e.equity(q), "cash": e.cash,
-            "realised": sum(t["pnl"] for t in e.trades), "today": e.day_realised, "halted": e.halted,
-            "entries_today": e.entries_today, "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
+            # running totals over every closed trade (the saved list keeps only the last 500)
+            "realised": round(e.realised_total, 2), "today": e.day_realised, "halted": e.halted,
+            "entries_today": e.entries_today, "trades": e.trade_count, "wins": e.win_count,
             # the earliest time the gap between trades allows the next entry (None when there's no gap, or it runs past the
             # day's last entry), for the page's "Next entry from 13:41" (R7T-013)
             "cool_until": e.cool_until, "next_entry": next_entry(e.cool_until, e.s.timing) if not e.pos else None,
