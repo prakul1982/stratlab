@@ -129,6 +129,31 @@ def _day(v: str, order: str) -> str | None:
     return hf.day(v)
 
 
+def _side_col(rows: list[list[str]], head: int, c: dict[str, int]) -> dict[str, int]:
+    """The side column whose lines say buy or sell: a file can have another column under a side's name before it (an
+    order "Type" of Market or Limit beside the "Side"), which would read every line as neither."""
+    keys = [hf.key(x) for x in rows[head]]
+    taken = {i for f, i in c.items() if f != "side"}
+    options = [i for i, k in enumerate(keys) if k in COLUMNS["side"] and i not in taken]
+    if len(options) < 2:
+        return c
+    data = [r for r in rows[head + 1:head + 1 + 500] if any(x.strip() for x in r)]
+
+    def says(i):
+        return sum(1 for r in data if i < len(r) and _side(r[i]))
+    best = max(options, key=lambda i: (says(i), -i))
+    return {**c, "side": best} if says(best) else c
+
+
+def _head(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
+    """(index, columns) of the table's column names: a date, the ticker, the quantity and the price or value."""
+    for i, row in enumerate(rows[:hf.HEADER_SCAN]):
+        c = _cols(row)
+        if {"date", "symbol", "qty"} <= c.keys() and ("price" in c or "value" in c):
+            return i, _side_col(rows, i, c)
+    return None
+
+
 def parse_upload(data: bytes, filename: str = "") -> dict:
     """US trades from a CSV or Excel file: the date, purchase or sale, the ticker, the quantity and the price in dollars
     (and optionally fees). {"rows", "problems", "month_first"}. Raises FileError when nothing can be read."""
@@ -136,12 +161,15 @@ def parse_upload(data: bytes, filename: str = "") -> dict:
         raise hf.FileError("That file is empty.")
     if len(data) > MAX_BYTES:
         raise hf.FileError(f"That file is larger than {MAX_BYTES // (1024 * 1024)} MB.")
-    tables = [rows for _, rows in hf.sheets(data, hf.MAX_ROWS)] if data[:4] == b"PK\x03\x04" else [hf.table(data, MAX_BYTES)]
+    if data[:4] == b"PK\x03\x04":                      # a workbook: the sheet with the trades, read whole; the others only at the top
+        tables = [rows for _, rows in hf.sheets(data, hf.MAX_ROWS, wanted=lambda rows: _head(rows) is not None)][:1]
+    else:
+        tables = [hf.table(data, MAX_BYTES)]
     for rows in tables:
-        for i, row in enumerate(rows[:hf.HEADER_SCAN]):
-            c = _cols(row)
-            if {"date", "symbol", "qty"} <= c.keys() and ("price" in c or "value" in c):
-                return _rows(rows[i + 1:], c, i + 2)
+        got = _head(rows)
+        if got:
+            i, c = got
+            return _rows(rows[i + 1:], c, i + 2)
     raise hf.FileError("No US trades were found in that file. It needs columns for the date, the trade (purchase or sale), "
                        "the ticker, the quantity and the price in dollars.")
 

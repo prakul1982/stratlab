@@ -175,16 +175,20 @@ def splits(root: ET.Element) -> dict[str, list[tuple[str, float]]]:
     return {k: sorted(set(v)) for k, v in out.items()}
 
 
-def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | None = None) -> list[dict]:
-    """Round trips by first in, first out per stock, as the journal's added-by-hand trades (segment "us"). A sale with no
-    purchase before it in the data (bought before the query's period) is left out, never guessed: a sale opens a short
-    position only when IBKR marks it as opening one (openCloseIndicator "O"), and a purchase marked as closing one ("C")
-    opens nothing. `split` (splits): the
-    shares bought before a split count as the shares after it, at the price of each after it, from the split's first
-    day on."""
+def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | None = None,
+                  done: dict[str, list[tuple[str | None, float]]] | None = None) -> list[dict]:
+    """Round trips by first in, first out per stock, as the journal's added-by-hand trades (segment "us"), each with the
+    ids of its entry and exit fills (`ef`, `xf`). A sale with no purchase before it in the data (bought before the query's
+    period) is left out, never guessed: when IBKR marks each fill (openCloseIndicator), a sale opens a short position only
+    when marked as opening one ("O") and a purchase marked as closing one ("C") opens nothing; a query without the mark
+    lets either side open a position. `split` (splits): the shares bought before a split count as the shares after it, at
+    the price of each after it, from the split's first day on. `done` (paired): {exit fill id: [(entry fill id, qty)]} of
+    the trades read before. A query over the last 365 days sees a different window each day: the part of an exit that was
+    paired with a fill no longer in the data is taken off it, so the rest pairs as it did when that fill was there."""
     out = []
     book: dict[str, list[list]] = {}                  # symbol -> open lots [side, qty left, fill, fee left]
     ahead = {k: list(v) for k, v in (split or {}).items()}
+    here = {f["id"] for f in fs}
     for f in fs:
         lots = book.setdefault(f["sym"], [])
         while ahead.get(f["sym"]) and ahead[f["sym"]][0][0] <= f["d"]:
@@ -192,19 +196,22 @@ def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | No
             for lot in lots:
                 lot[1] *= k
                 lot[2] = {**lot[2], "price": lot[2]["price"] / k}
-        q, fee = f["qty"], f["fee"]
         total = f["qty"]
+        gone = sum(q for e, q in (done or {}).get(f["id"], ()) if e not in here)      # paired before, with a fill now out of the data
+        q = max(total - gone, 0.0)
+        fee = f["fee"] * q / total
         while q > 1e-9 and lots and lots[0][0] != f["side"]:
             lot = lots[0]
             c = min(q, lot[1])
-            fee_part = fee * c / total
+            fee_part = f["fee"] * c / total
             lot_fee = lot[3] * c / lot[1]
             e, x = lot[2], f
             long = lot[0] == "B"
             ident = hashlib.sha1(f"{e['id']}|{x['id']}|{round(c, 4)}".encode()).hexdigest()[:10]
             out.append({"id": "ib" + ident, "sym": f["sym"], "segment": "us", "side": "long" if long else "short",
                         "ed": e["d"], "et": e["t"] or None, "xd": x["d"], "xt": x["t"] or None, "qty": round(c, 6),
-                        "entry": e["price"], "exit": x["price"], "charges": round(fee_part + lot_fee, 4), "via": "ibkr"})
+                        "entry": e["price"], "exit": x["price"], "charges": round(fee_part + lot_fee, 4), "via": "ibkr",
+                        "ef": e["id"], "xf": x["id"]})
             lot[1] -= c
             lot[3] -= lot_fee
             q -= c
@@ -212,7 +219,7 @@ def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | No
             if lot[1] <= 1e-9:
                 lots.pop(0)
         oc = (f.get("oc") or "").split(";")
-        opens = "O" in oc if f["side"] == "S" else oc == [""] or "O" in oc
+        opens = "O" in oc if f.get("oc") else True
         if q > 1e-9 and opens:
             lots.append([f["side"], q, f, fee])
     return [t for t in out if t["xd"] >= t["ed"]]
@@ -222,40 +229,100 @@ def _sig(m: dict) -> tuple:
     return (m["sym"], m["ed"], m["xd"], round(float(m["qty"]), 4), round(float(m["entry"]), 4), round(float(m["exit"]), 4))
 
 
-def _redo(fs: list[dict], split: dict[str, list[tuple[str, float]]]) -> dict[str, str]:
-    """{symbol: its first fill in the statement} for each stock with a split in the statement. A trade read from IBKR
-    before, from these same fills, may have counted the split differently: a different quantity, so a different id."""
-    first: dict[str, str] = {}
+def _legacy_id(e: dict, x: dict, qty) -> str:
+    return "ib" + hashlib.sha1(f"{e['id']}|{x['id']}|{round(float(qty), 4)}".encode()).hexdigest()[:10]
+
+
+def _backfill(manual: list[dict], fs: list[dict]) -> bool:
+    """Gives the trades read from IBKR before fill ids were kept (no `xf`) the ids of their fills, when the fills are in
+    this statement: the exit by its stock, day, time, side and price, the entry by its stock, day, time and side (a split
+    changes its price), the pair the trade's id was made from first. True when one was given."""
+    by: dict[tuple, list[dict]] = {}
     for f in fs:
-        if f["sym"] in split and f["d"] < first.get(f["sym"], "9999-99-99"):
-            first[f["sym"]] = f["d"]
-    return first
+        by.setdefault((f["sym"], f["d"], f["t"], f["side"]), []).append(f)
+    changed = False
+    for m in manual:
+        if m.get("via") != "ibkr" or m.get("xf"):
+            continue
+        long = m.get("side") == "long"
+        xs = [f for f in by.get((m["sym"], m["xd"], m.get("xt") or "", "S" if long else "B"), [])
+              if abs(f["price"] - float(m["exit"])) <= 1e-6 * max(1.0, abs(f["price"]))]
+        es = by.get((m["sym"], m["ed"], m.get("et") or "", "B" if long else "S"), [])
+        pair = next(((e, x) for x in xs for e in es if _legacy_id(e, x, m["qty"]) == m["id"]), None)
+        x = pair[1] if pair else xs[0] if xs else None
+        e = pair[0] if pair else es[0] if es else None
+        if x:
+            m["xf"] = x["id"]
+            changed = True
+            if e:
+                m["ef"] = e["id"]
+    return changed
 
 
-def save_trades(uid: str, trades: list[dict], redo: dict[str, str] | None = None) -> int:
-    """New closed trades into the journal (those already there, by id or by the same trade, are skipped): how many added.
-    `redo` (_redo): trades read from IBKR before in those stocks, bought from that day on and not among `trades`, are
-    taken out first, so a statement read again after a split has each trade once, as it is read now."""
+def paired(manual: list[dict]) -> dict[str, list[tuple[str | None, float]]]:
+    """{exit fill id: [(entry fill id or None, qty)]} of the trades read from IBKR before (for closed_trades' `done`)."""
+    out: dict[str, list[tuple[str | None, float]]] = {}
+    for m in manual:
+        if m.get("via") == "ibkr" and m.get("xf"):
+            out.setdefault(m["xf"], []).append((m.get("ef"), float(m["qty"])))
+    return out
+
+
+def _redo(fs: list[dict], split: dict[str, list[tuple[str, float]]]) -> dict[str, set[str]]:
+    """{symbol: the ids of its fills in the statement} for each stock with a split in the statement. A trade read from
+    IBKR before, from these same fills, may have counted the split differently: a different quantity, so a different id."""
+    out: dict[str, set[str]] = {}
+    for f in fs:
+        if f["sym"] in split:
+            out.setdefault(f["sym"], set()).add(f["id"])
+    return out
+
+
+def save_trades(uid: str, trades: list[dict], redo: dict[str, set[str]] | None = None, fs: list[dict] | None = None) -> int:
+    """New closed trades into the journal: how many added. Those already there are skipped: by id, by the same trade, or
+    by their exit fill, as an exit paired in an earlier read is not paired again from a later window. `redo` (_redo):
+    in a stock with a split in the statement, the trades read before whose exit and entry fills are both in it, and whose
+    exit is among `trades`, are recomputed: those not among `trades` are taken out first, so a statement read again after
+    a split has each trade once, as it is read now. `fs` (the statement's fills) gives trades saved before fill ids were
+    kept the ids of theirs."""
     j = journal.load(uid)
     before = len(j["manual"])
-    if redo:
-        now = {t["id"] for t in trades}
-        j["manual"] = [m for m in j["manual"] if not (m.get("via") == "ibkr" and m.get("sym") in redo and m.get("id") not in now
-                                                       and str(m.get("ed") or "") >= redo[m["sym"]])]
+    dirty = _backfill(j["manual"], fs) if fs else False
+    now = {t["id"] for t in trades}
+    exits = {t["xf"] for t in trades if t.get("xf")}
+    saved: dict[str, list[dict]] = {}
+    for m in j["manual"]:
+        if m.get("via") == "ibkr" and m.get("xf"):
+            saved.setdefault(m["xf"], []).append(m)
+    redone: set[str] = set()                                # exit fills whose trades are recomputed from this statement
+    for sym, ids in (redo or {}).items():
+        for xf, ms in saved.items():
+            if xf in ids and xf in exits and all(m["sym"] == sym and m.get("ef") in ids for m in ms):
+                redone.add(xf)
+    if redone:
+        j["manual"] = [m for m in j["manual"] if not (m.get("via") == "ibkr" and m.get("xf") in redone and m["id"] not in now)]
     dropped = len(j["manual"]) != before
     have_ids = {m["id"] for m in j["manual"]}
     have_sig = {_sig(m) for m in j["manual"]}
     added = 0
     for t in trades:
-        if t["id"] in have_ids or _sig(t) in have_sig or len(j["manual"]) >= journal.MAX_MANUAL:
+        if (t["id"] in have_ids or _sig(t) in have_sig or (t.get("xf") in saved and t["xf"] not in redone)
+                or len(j["manual"]) >= journal.MAX_MANUAL):
             continue
         j["manual"].append({k: v for k, v in t.items() if v is not None})
         have_ids.add(t["id"])
         have_sig.add(_sig(t))
         added += 1
-    if added or dropped:
+    if added or dropped or dirty:
         journal.save(uid, j)
     return added
+
+
+def read_trades(uid: str, fs: list[dict], sp: dict[str, list[tuple[str, float]]]) -> int:
+    """The statement's closed trades into the journal, paired with what was read from IBKR before: how many added."""
+    manual = [dict(m) for m in journal.load(uid)["manual"]]
+    _backfill(manual, fs)
+    return save_trades(uid, closed_trades(fs, sp, paired(manual)), _redo(fs, sp), fs)
 
 
 # ---------- the connection ----------
@@ -272,7 +339,7 @@ def ingest(uid: str, root: ET.Element) -> dict:
     rows, left = positions(root)
     got = sync.sync_holdings(profile, rows, "ibkr", "Interactive Brokers") if rows or _had_ibkr(uid) else {"count": 0, "unmatched_count": 0}
     fs, sp = fills(root), splits(root)
-    n = save_trades(uid, closed_trades(fs, sp), _redo(fs, sp))
+    n = read_trades(uid, fs, sp)
     why = sync.note(got, "Interactive Brokers")      # an empty statement or an unmatched line keeps the US holdings read before
     state.update(uid, "ibkr", synced_at=state.now(), status="partial" if why else "ok", detail=why, positions=got["count"], trades=n)
     return {"positions": got["count"], "unmatched": got["unmatched_count"], "left_out": left, "trades_added": n}

@@ -123,6 +123,19 @@ def test_us_trades_and_dividends_over_their_caps_are_refused():
     assert len(divs.parse_upload(div(divs.MAX_ROWS), "d.csv")["rows"]) == divs.MAX_ROWS
 
 
+def test_a_workbook_with_a_long_sheet_of_something_else_is_read_by_its_dividend_or_trades_sheet():
+    trades = [["Date", "Action", "Symbol", "Quantity", "Price"], ["03/20/2025", "Buy", "AAPL", "10", "170"], ["04/10/2025", "Sell", "AAPL", "10", "190"]]
+    cash = [["Date", "Description", "Amount"]] + [["03/20/2025", "Interest", "0.01"] for _ in range(hf.MAX_ROWS + 200)]
+    for order in ([("Trades", trades), ("Cash", cash)], [("Cash", cash), ("Trades", trades)]):
+        assert len(us.parse_upload(xlsxmaker.make_workbook(order), "us.xlsx")["rows"]) == 2
+    dividends = [["Date", "Symbol", "Amount"], ["2025-03-15", "TCS", "100"]]
+    ledger = [["Date", "Symbol", "Qty"]] + [["2025-03-15", "TCS", "1"] for _ in range(hf.MAX_ROWS + 200)]
+    assert len(divs.parse_upload(xlsxmaker.make_workbook([("Trades", ledger), ("Dividends", dividends)]), "d.xlsx")["rows"]) == 1
+    assert len(divs.parse_upload(xlsxmaker.make_workbook([("Sheet1", dividends), ("Ledger", ledger)]), "d.xlsx")["rows"]) == 1
+    with pytest.raises(hf.FileError, match="more than 5,000 lines"):          # the trades sheet itself over the cap: still refused
+        us.parse_upload(xlsxmaker.make_workbook([("Trades", trades + trades[1:2] * (hf.MAX_ROWS + 1))]), "us.xlsx")
+
+
 # ---------- 4. a US broker's side and fee columns ----------
 ROBINHOOD = (b"Activity Date,Process Date,Settle Date,Instrument,Description,Trans Code,Quantity,Price,Amount\n"
              b"3/20/2025,3/20/2025,3/21/2025,AAPL,Apple Inc,Buy,10,$170.00,($1700.00)\n"
@@ -150,6 +163,11 @@ def test_a_file_with_no_side_column_and_no_negative_quantity_is_refused():
     assert [r["side"] for r in got["rows"]] == ["B", "S"]
 
 
+def test_an_order_type_column_before_the_side_column_is_not_the_side():
+    got = us.parse_upload(b"Date,Ticker,Type,Side,Quantity,Price\n2025-03-20,AAPL,Market,Buy,10,170\n2025-04-10,AAPL,Limit,Sell,10,190\n", "v.csv")
+    assert [(r["side"], r["qty"], r["price"]) for r in got["rows"]] == [("B", 10.0, 170.0), ("S", 10.0, 190.0)] and got["problems"] == []
+
+
 # ---------- 5. the same dividends from several sources ----------
 def row(d, sym, amount, src):
     return {"d": d, "sym": sym, "name": "", "isin": "", "qty": None, "ps": None, "amount": amount, "tds": None, "cur": "INR", "src": src}
@@ -165,11 +183,12 @@ def fy2025(v):
 
 
 def test_ais_lines_are_set_aside_for_a_year_the_brokers_sheet_covers():
+    # the broker's sheet has TCS's payment: the AIS line for it is set aside; Beta Bank's, which the sheet doesn't list, is counted
     v = dividend_view([row("2025-06-12", "TCS", 1000.0, "statement"), row("2025-06-12", "TATA CONSULTANCY SERVICES LTD", 1000.0, "AIS"),
                        row("2025-12-20", "BETA BANK LTD", 500.0, "AIS")])
     y = fy2025(v)
-    assert y["total"] == 1000.0 and y["count"] == 1 and y["ais_set_aside"] == 2 and "2 AIS dividend lines not counted" in y["ais_note"]
-    assert divs.for_total(v) == {2025: 1000.0}
+    assert y["total"] == 1500.0 and y["count"] == 2 and y["ais_set_aside"] == 1 and "1 AIS dividend line not counted" in y["ais_note"]
+    assert divs.for_total(v) == {2025: 1500.0}
     assert divs.events(v, {"rows": [row("2025-06-12", "TCS", 1000.0, "statement"), row("2025-06-12", "TCS LTD", 1000.0, "AIS")]},
                        [], None, 2025) == [("2025-06-12", 1000.0)]
 
@@ -183,6 +202,32 @@ def test_a_users_csv_also_wins_over_the_ais_and_the_ais_alone_is_counted():
 def test_the_same_line_from_a_trusted_source_replaces_the_ais_one():
     merged, added, dup = divs.merge([row("2025-06-12", "TCS", 1000.0, "AIS")], [row("2025-06-12", "TCS", 1000.0, "statement")])
     assert (added, dup) == (0, 1) and [r["src"] for r in merged] == ["statement"]
+
+
+def test_a_us_dividend_csv_does_not_set_aside_the_years_indian_ais_dividends():
+    usd = {**row("2025-06-01", "AAPL", 10.0, "csv"), "cur": "USD"}
+    rows = [usd, row("2025-06-12", "TATA CONSULTANCY SERVICES LTD", 1000.0, "AIS"), row("2025-09-12", "INFOSYS LTD", 500.0, "AIS")]
+    stored = {"rows": rows, "files": [], "include": {}, "updated_at": None}
+    v = divs.view(stored, [], [], 85.0, date(2026, 10, 15))
+    y = fy2025(v)
+    assert y["india_total"] == 1500.0 and y["us_total"] == 850.0 and y["ais_set_aside"] == 0 and y["ais_note"] is None
+    assert divs.for_total(v) == {2025: 2350.0}
+    assert [a for _, a in divs.events(v, stored, [], 85.0, 2025)] == [850.0, 1000.0, 500.0]
+
+
+def test_one_brokers_dividend_sheet_sets_aside_only_its_own_payments_from_the_ais():
+    rows = [row("2025-06-12", "TCS", 1000.0, "statement"), row("2025-08-01", "INFY", 450.0, "statement"),
+            row("2025-06-20", "TATA CONSULTANCY SERVICES LTD", 1000.0, "AIS"),        # the same payment, under the payer's name
+            {**row("2025-08-20", "INFOSYS LIMITED", 500.0, "AIS"), "tds": 50.0},     # the same, the sheet's amount after TDS
+            row("2025-07-01", "HDFC BANK LIMITED", 800.0, "AIS"),                    # a stock held with another broker
+            row("2025-11-01", "TATA CONSULTANCY SERVICES LTD", 600.0, "AIS")]        # TCS's next payment, not on the sheet
+    y = fy2025(dividend_view(rows))
+    assert y["ais_set_aside"] == 2 and y["total"] == 1000.0 + 450.0 + 800.0 + 600.0
+    assert "2 AIS dividend lines not counted" in y["ais_note"] and "same payments" in y["ais_note"]
+    # one sheet line stands for one AIS line: two AIS payments of the same amount are not both set aside by it
+    y = fy2025(dividend_view([row("2025-06-12", "TCS", 1000.0, "statement"), row("2025-06-12", "TCS LTD", 1000.0, "AIS"),
+                              row("2025-10-12", "TCS LTD", 1000.0, "AIS")]))
+    assert y["total"] == 2000.0 and y["ais_set_aside"] == 1
 
 
 # ---------- 6. the AIS JSON ----------
@@ -202,6 +247,34 @@ def test_the_year_comes_from_the_year_keys_not_from_a_date():
     assert docs.read_ais_json(json.dumps({"x": [line]}).encode())["fy"] is None                                  # 2025-03 is a month, not a year
 
 
+def test_an_ais_grouped_by_payer_counts_each_payment_with_its_payer():
+    doc = {"assessmentYear": "2025-26", "tds": [
+        {"informationDescription": "Dividend", "sourceName": "ALPHA LTD", "amount": 500, "tdsDeducted": 50,
+         "details": [{"dateOfPayment": "15/06/2024", "amount": 250, "tdsDeducted": 25}, {"dateOfPayment": "15/12/2024", "amount": 250, "tdsDeducted": 25}]},
+        {"informationDescription": "Dividend", "sourceName": "BETA LTD", "amount": 250, "tdsDeducted": 25,
+         "details": [{"dateOfPayment": "15/06/2024", "amount": 250, "tdsDeducted": 25}]}]}
+    got = docs.read_ais_json(json.dumps(doc).encode())
+    assert got["dividend"] == 750.0 and got["tds"] == 75.0 and got["fy"] == 2024
+    assert [(x["d"], x["sym"], x["amount"]) for x in got["lines"]] == [("2024-06-15", "ALPHA LTD", 250.0), ("2024-12-15", "ALPHA LTD", 250.0),
+                                                                     ("2024-06-15", "BETA LTD", 250.0)]
+
+
+def test_an_ais_entry_with_a_detail_below_it_still_counts_its_own_amount():
+    doc = {"financialYear": "2024-25", "sft": [{"informationDescription": "Dividend", "sourceName": "GAMMA", "amount": 1000,
+                                                "dateOfPayment": "2024-08-01", "reportedBy": {"name": "GAMMA LTD", "type": "Company", "value": 1}}]}
+    got = docs.read_ais_json(json.dumps(doc).encode())
+    assert got["dividend"] == 1000.0 and [(x["sym"], x["amount"]) for x in got["lines"]] == [("GAMMA", 1000.0)]
+
+
+def test_the_ais_year_from_a_whole_year_or_from_text_that_names_both_years():
+    line = {"informationDescription": "Dividend", "amount": 10, "dateOfPayment": "2024-08-01", "sourceName": "A"}
+    assert docs.read_ais_json(json.dumps({"financialYear": 2024, "x": [line]}).encode())["fy"] == 2024
+    assert docs.read_ais_json(json.dumps({"assessmentYear": 2025, "x": [line]}).encode())["fy"] == 2024
+    assert docs.read_ais_json(json.dumps({"title": "AIS for AY 2025-26 (FY 2024-25)", "x": [line]}).encode())["fy"] == 2024
+    assert docs.read_ais_json(json.dumps({"title": "Annual Information Statement, AY 2025-26", "x": [line]}).encode())["fy"] == 2024
+    assert docs._year_in("Assessment Year 2025-26 Financial Year 2024-25") == 2024 and docs._year_in("Report 2025-26") == 2025
+
+
 def test_a_deeply_nested_or_broken_ais_file_is_a_clean_error():
     for raw in (b"[" * 200000, b'{"a": ' * 100000, b"{broken", b"\xff\xfe"):
         with pytest.raises(docs.DocError) as e:
@@ -216,7 +289,7 @@ def test_a_deeply_nested_or_broken_ais_file_is_a_clean_error():
 def test_text_that_starts_like_a_formula_is_escaped(guard):
     for v in ("=1+1", "=9", "=HYPERLINK(\"http://x\",\"a\")", "@SUM(1+1)", "@1", "+1+2", "-2+3", "-1-1", "+cmd|' /C calc'!A0", "-", "\t=1", "\r1"):
         assert guard(v) == "'" + v, v
-    for v in ("-5", "+5", "-1,234.50", "-0.5", "+.5", "-1e5", "plain", "", "5-3"):
+    for v in ("-5", "+5", "-1,234.50", "-0.5", "+.5", "-1e5", "plain", "", "5-3", "-1,23,456", "-12,34,567.50", "+1,00,000"):
         assert guard(v) == v, v
     assert guard(-5) == -5
 
@@ -238,6 +311,19 @@ def test_a_three_digit_year_is_not_a_date():
 def test_a_tradebook_uploaded_as_holdings_is_refused_with_where_to_take_it(name):
     with pytest.raises(hf.FileError, match="tradebook.*tax report or the trade journal"):
         hf.parse((TRADEBOOKS / name).read_bytes(), name)
+
+
+def test_a_tax_pnl_uploaded_as_holdings_is_refused_with_where_to_take_it():
+    with pytest.raises(hf.FileError, match="tax P&L.*Upload it to the tax report"):
+        hf.parse((TRADEBOOKS / "zerodha_tax_pnl.xlsx").read_bytes(), "zerodha_tax_pnl.xlsx")
+    pnl = b"Symbol,ISIN,Quantity,Entry Date,Exit Date,Buy Value,Sell Value,Profit\nINFY,INE009A01021,10,2023-01-02,2024-01-02,15000,16000,1000\n"
+    with pytest.raises(hf.FileError, match="tax P&L.*Upload it to the tax report"):
+        hf.parse(pnl, "tradewise_exits.csv")
+
+
+def test_a_holdings_file_with_a_type_and_a_date_column_is_not_a_tradebook():
+    got = hf.parse(b"Symbol,Type,Quantity,Avg Price,Date\nINFY,Equity,10,1500,2024-03-31\nNIFTYBEES,ETF,5,200,2024-03-31\n", "h.csv")
+    assert [(r["symbol"], r["qty"], r["avg"]) for r in got["rows"]] == [("INFY", 10.0, 1500.0), ("NIFTYBEES", 5.0, 200.0)]
 
 
 # ---------- 11. smaller items ----------

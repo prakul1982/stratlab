@@ -2,6 +2,7 @@
 lines, the portal's consolidated line, Schedule CG by section and by period, dividends by period, the ITR-3 business
 figures, tax paid, the workbook, the ZIP and the PDF, the label on every file, and the plans."""
 import base64
+import csv
 import io
 import zipfile
 from datetime import datetime
@@ -80,6 +81,11 @@ def test_112a_missing_fmv_and_the_portal_layout():
     assert ae[0][2:4] == ["INNOTREQUIRD", "CONSOLIDATED"] and ae[0][4] is None and ae[0][6] == 100 and ae[0][14] == 50
     out = I.portal_csv(p)
     assert out.splitlines()[0].startswith("Share/Unit acquired (1a)") and "Note" not in out and I.LABEL not in out
+
+
+def test_the_portal_csv_keeps_text_that_starts_like_a_formula_as_text():
+    out = I.portal_csv({"columns": ["Name", "Value"], "rows": [["=HYPERLINK(\"http://x\")", "-1,23,456"], ["@SUM(1)", -5], ["+1+2", None]]})
+    assert list(csv.reader(io.StringIO(out))) == [["Name", "Value"], ["'=HYPERLINK(\"http://x\")", "-1,23,456"], ["'@SUM(1)", "-5"], ["'+1+2", ""]]
 
 
 # ---------- Schedule CG, OS and the rest ----------

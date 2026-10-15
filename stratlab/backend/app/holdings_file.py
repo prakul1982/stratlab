@@ -297,14 +297,23 @@ def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None, whole: b
     return rows
 
 
-def sheets(data: bytes, limit: int = MAX_ROWS, whole: bool = True, only=None) -> list[tuple[str, list[list[str]]]]:
+def sheets(data: bytes, limit: int = MAX_ROWS, whole: bool = True, only=None, wanted=None) -> list[tuple[str, list[list[str]]]]:
     """(name, rows) for every sheet in a workbook (those `only` accepts by name, when given), each read with the same caps
-    as one sheet (`whole` False: a longer sheet is cut at the cap, for a caller that only looks at the top)."""
+    as one sheet (`whole` False: a longer sheet is cut at the cap, for a caller that only looks at the top). `wanted`, a
+    test on a sheet's rows read up to the cap: only the sheets it accepts are read (whole, with the cap's error), so a
+    long sheet of something else in the workbook is no reason to refuse it."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
         raise FileError("That file looks like Excel but couldn't be opened. Save it again as .xlsx or CSV.") from None
-    return [(name, _xlsx(data, limit, path, whole)) for name, path in _sheet_list(zf) if only is None or only(name)]
+    out = []
+    for name, path in _sheet_list(zf):
+        if only is not None and not only(name):
+            continue
+        if wanted is not None and not wanted(_xlsx(data, limit, path, whole=False)):
+            continue
+        out.append((name, _xlsx(data, limit, path, whole)))
+    return out
 
 
 class _Tables(HTMLParser):
@@ -437,6 +446,13 @@ def _cell(row: list[str], i: int | None) -> str:
     return row[i].strip() if i is not None and i < len(row) else ""
 
 
+def _says_side(body: list[list[str]], i: int) -> bool:
+    """Whether the column holds buy or sell on most of the lines that have something in it (a holdings file's "Type"
+    column holds Equity or ETF)."""
+    vals = [r[i].strip() for r in body[:200] if i < len(r) and r[i].strip()]
+    return bool(vals) and sum(1 for v in vals if side(v)) * 2 >= len(vals)
+
+
 def parse(data: bytes, filename: str = "") -> dict:
     """{"broker", "rows": [{line, symbol, isin, name, exchange, qty, avg}], "problems": [{line, text, reason}]}.
     Raises FileError when there's no holdings table in the file at all."""
@@ -449,7 +465,11 @@ def parse(data: bytes, filename: str = "") -> dict:
     found = _header(rows)
     if found:
         at, cols = found
-        if {"date", "side"} <= _trade_columns(rows[at]).keys():
+        tc = _trade_columns(rows[at])
+        if {"buy_date", "sell_date"} <= tc.keys():
+            raise FileError("That looks like a tax P&L (it has a buy date and a sell date on each line), not a holdings "
+                            "file. Upload it to the tax report instead.")
+        if "date" in tc and any(_says_side(rows[at + 1:], i) for i, c in enumerate(rows[at]) if key(c) in TRADE_COLUMNS["side"]):
             raise FileError("That looks like a tradebook (it has a trade date and buy or sell on each line), not a holdings "
                             "file. Upload it to the tax report or the trade journal instead.")
         name = broker(rows[at], rows[:at], filename)
@@ -976,20 +996,34 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
             if raw[:4] == b"PK\x03\x04" and not _is_xlsx(raw):
                 raise FileError("That ZIP has another ZIP inside it. Unzip it and upload the files in it instead.")
             section = next(((label, kind) for rx, label, kind in TAX_EQUITY if rx.search(base)), None)
+            book = not section and _is_xlsx(raw) and raw[:4] == b"PK\x03\x04"
             try:
                 rows = table(raw, TAX_MAX_BYTES, MAX_TRADE_ROWS, TOO_BIG)
+                long_first = None
+            except TooManyLines as e:
+                if not book:
+                    skipped.append({"name": base, "reason": str(e)})
+                    continue
+                rows, long_first = None, e      # a first sheet too long for trades: its other sheets may still be totals
             except FileError as e:
                 skipped.append({"name": base, "reason": str(e)})
                 continue
-            totals = summary(rows) if not section else {}
-            if not section and _is_xlsx(raw) and raw[:4] == b"PK\x03\x04":
-                for name, srows in sheets(raw, whole=False):      # the workbook's F&O, commodity and currency sheets
+            totals = summary(rows) if not section and rows is not None else {}
+            from_here = False
+            if book:
+                for i_, (name, srows) in enumerate(sheets(raw, whole=False)):   # the workbook's F&O, commodity and currency sheets
+                    if i_ == 0 and rows is None:
+                        totals = summary(srows)
                     s_seg = business_kind(name)
-                    if s_seg and (got_ := business_summary(srows)) and s_seg not in biz_sheet:
-                        biz_sheet[s_seg] = got_
-            if not section and (totals or biz_sheet):
+                    if s_seg and (got_ := business_summary(srows)):
+                        from_here = True
+                        biz_sheet.setdefault(s_seg, got_)
+            if not section and (totals or biz_sheet) and (rows is not None or totals or from_here):
                 sheet.update({k_: v for k_, v in totals.items() if k_ not in sheet})
                 continue                     # the summary workbook: its totals check the files read
+            if long_first is not None:
+                skipped.append({"name": base, "reason": str(long_first)})
+                continue
             try:
                 got = _read_trades(rows, base)
                 if section and section[1] == "non_equity":

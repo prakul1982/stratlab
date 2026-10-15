@@ -4,9 +4,10 @@ dividends with the US tax withheld (a foreign tax credit figure), and the year's
 Three sources, in this order of trust: the dividend sheet of the user's broker tax P&L (read when the ZIP or workbook
 is uploaded to the tax report), a dividend CSV the user uploads, and, when neither covers a year, an estimate from
 My Holdings × the dividends the companies declared (the stored corporate actions), labelled "estimated". Each stored line
-keeps its source ("statement", "csv" or "AIS" for lines the user confirmed from the AIS), and for a year that has lines from
-the broker's sheet or the user's CSV the AIS lines are set aside: the AIS names payers differently, so the same dividend
-can't be matched across sources and would be counted twice.
+keeps its source ("statement", "csv" or "AIS" for lines the user confirmed from the AIS). An AIS line is set aside when a
+line in rupees from the broker's sheet or the user's CSV is plausibly the same payment (the same payer by symbol or name,
+and the amount or the date), so it isn't counted twice; any other AIS line, like a payment from a stock held with
+another broker, is counted.
 
 Stored per user in app_settings (moneydiv:<uid>), seen only by that user, and deleted with the tax data. Facts and
 arithmetic on the user's own dividends; never a view on any company."""
@@ -140,7 +141,8 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
 
 def _workbook(raw: bytes, src: str, only_dividend_sheets: bool) -> tuple[list[dict], list[dict]]:
     out, problems = [], []
-    for name, rows in hf.sheets(raw, hf.MAX_ROWS, only=(lambda n: bool(re.search(r"(?i)dividend", n))) if only_dividend_sheets else None):
+    only = (lambda n: bool(re.search(r"(?i)dividend", n))) if only_dividend_sheets else None
+    for name, rows in hf.sheets(raw, hf.MAX_ROWS, only=only, wanted=lambda rows: _header(rows) is not None):
         got, probs = rows_from_table(rows, src)
         out += got
         problems += probs
@@ -251,13 +253,69 @@ def merge(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int]:
     return out, added, dup
 
 
+_FILLER = {"LTD", "LIMITED", "THE", "OF", "AND", "CO", "COMPANY", "INC", "CORP", "CORPORATION", "PLC", "PVT", "PRIVATE", "EQ"}
+SAME_DAYS = 7                     # a payer's two lines this many days apart or less are the same payment
+
+
+def _words(v) -> list[str]:
+    return [w for w in re.sub(r"[^A-Z0-9]+", " ", str(v or "").upper().replace("&", " AND ")).split() if w not in _FILLER]
+
+
+def _payer(r: dict) -> tuple[set[str], list[str]]:
+    """(the line's payer written without spaces, each way it is named: symbol, name, ISIN; the name's words)."""
+    words = _words(r.get("name")) or _words(r.get("sym"))
+    keys = {"".join(_words(r.get("sym"))), "".join(words), str(r.get("isin") or "").upper()} - {""}
+    return keys, words
+
+
+def _within(seq: str, text: str) -> bool:
+    """`seq`'s letters in order in `text`, from its first letter: a symbol like TCS or INFY in the name its company
+    reports under (TATA CONSULTANCY SERVICES, INFOSYS)."""
+    if len(seq) < 3 or not text or seq[0] != text[0]:
+        return False
+    it = iter(text)
+    return all(ch in it for ch in seq)
+
+
+def _same_payment(a: dict, s: dict) -> bool:
+    """Whether the AIS line `a` and the statement or CSV line `s` (in rupees) are plausibly the same payment: the same
+    payer, by symbol, name or ISIN written the same way, with the amount (gross, or after the AIS's TDS) within a
+    rupee or half a percent or a date within a week; or a symbol whose letters run in order through the AIS payer's
+    name, with the amount matching."""
+    ka, wa = _payer(a)
+    ks, ws = _payer(s)
+    strong = bool(ka & ks)
+    weak = strong or any(_within(x, y) or _within(y, x) for x in ks for y in ka) or (wa and ws and wa[0] == ws[0] and len(wa[0]) >= 4)
+    if not weak:
+        return False
+    tol = max(1.0, 0.005 * a["amount"])
+    amount = abs(a["amount"] - s["amount"]) <= tol or (bool(a.get("tds")) and abs(a["amount"] - a["tds"] - s["amount"]) <= tol)
+    if amount:
+        return True
+    try:
+        near = abs((date.fromisoformat(a["d"]) - date.fromisoformat(s["d"])).days) <= SAME_DAYS
+    except ValueError:
+        near = False
+    return strong and near
+
+
 def trusted(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """(rows to use, AIS lines set aside) for one year's stored lines: when the year has lines from the broker's sheet or the
-    user's CSV, the AIS lines (the same dividends under the payer's registered name) are left out; with only AIS lines
-    they are used."""
+    """(rows to use, AIS lines set aside) for one year's stored lines. An AIS line is set aside only when a line in
+    rupees from the broker's sheet or the user's CSV is plausibly the same payment (_same_payment), each such line
+    standing for one AIS line at most; every other AIS line is used. The AIS has no foreign dividends, and a broker's sheet
+    has only the stocks held with that broker, so a payment it doesn't list is counted from the AIS."""
     ais = [r for r in rows if r.get("src") == AIS]
+    if not ais:
+        return rows, []
     rest = [r for r in rows if r.get("src") != AIS]
-    return (rest, ais) if rest and ais else (rows, [])
+    free = [r for r in rest if r.get("cur") == "INR"]
+    aside_ids = set()
+    for a in ais:
+        hit = next((s for s in free if _same_payment(a, s)), None)
+        if hit is not None:
+            free.remove(hit)
+            aside_ids.add(id(a))
+    return [r for r in rows if id(r) not in aside_ids], [a for a in ais if id(a) in aside_ids]
 
 
 def add(uid: str, rows: list[dict], filename: str, source: str) -> tuple[int, int]:
@@ -397,8 +455,8 @@ def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float 
         y = year(fy, own or est, usd_inr, full)
         y["source"] = source
         y["ais_set_aside"] = len(aside)
-        y["ais_note"] = (f"{len(aside)} AIS dividend line{'s' if len(aside) != 1 else ''} not counted: this year's dividends come from "
-                         "your broker's statement or your CSV, and the AIS lists the same payments.") if aside else None
+        y["ais_note"] = (f"{len(aside)} AIS dividend line{'s' if len(aside) != 1 else ''} not counted: the same payment"
+                         f"{'s are' if len(aside) != 1 else ' is'} in your broker's statement or your CSV.") if aside else None
         y["include"] = stored["include"].get(fy, source == "files") and source != "none" and y["taxed"]
         y["include_saved"] = fy in stored["include"]
         y["estimate_total"] = round(sum(_inr(r, usd_inr) or 0 for r in est), 2) if est else None

@@ -504,18 +504,18 @@ def portal_csv(t: dict) -> str:
     """The 112A upload layout: the header and the lines only, nothing above or below."""
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\r\n")
-    w.writerow(t["columns"])
+    w.writerow([_safe(v) for v in t["columns"]])
     for r in t["rows"]:
-        w.writerow(["" if v is None else v for v in r])
+        w.writerow([_safe(v) for v in r])           # a name or ISIN that starts like a formula is kept as text
     return out.getvalue()
 
 
-_NUMBER = re.compile(r"[+-](?:\d+(?:\.\d*)?|\.\d+|\d{1,3}(?:,\d{3})+(?:\.\d*)?)(?:[eE][+-]?\d+)?")
+_NUMBER = re.compile(r"[+-](?:\d+(?:\.\d*)?|\.\d+|(?:\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})+,\d{3})(?:\.\d*)?)(?:[eE][+-]?\d+)?")
 
 
 def _safe(v):
     """A text cell a spreadsheet won't run as a formula. "=" and "@" (and a tab or return) are always escaped; "+" and "-"
-    only when the whole value isn't a plain signed number ("-1,234.50" is one, "-2+3" is not)."""
+    only when the whole value isn't a plain signed number ("-1,234.50" and "-1,23,456" are, "-2+3" is not)."""
     if v is None:
         return ""
     if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not (v[:1] in ("+", "-") and _NUMBER.fullmatch(v)):
