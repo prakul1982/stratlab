@@ -84,6 +84,7 @@ def connect_view(profile=Depends(current_profile)):
 def connect_delete(profile=Depends(current_profile)):
     """Disconnect everything: the forwarding address, every stored password and token."""
     kite_user.disconnect(profile["id"])
+    kite_user.drop_pending(profile["id"])
     state.drop_all(profile["id"])
     return {"deleted": True}
 

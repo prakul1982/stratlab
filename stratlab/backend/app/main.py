@@ -3111,7 +3111,10 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
     trades, missed = tax_match(parsed["trades"])
-    div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
+    try:
+        div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
+    except holdings_file.FileError as e:
+        err(400, "bad_file", str(e))
     before = tax_lots.load(profile["id"])
     old = [] if mode == "replace" else before["trades"]
     merged, added, dup = tax_lots.merge(old, trades)

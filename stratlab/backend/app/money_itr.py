@@ -28,6 +28,7 @@ US trades, dividend files or the estimate from holdings, and the advance tax and
 and arithmetic; never a view on what to do."""
 import csv
 import io
+import re
 import zipfile
 from datetime import datetime, timezone
 
@@ -509,10 +510,15 @@ def portal_csv(t: dict) -> str:
     return out.getvalue()
 
 
+_NUMBER = re.compile(r"[+-](?:\d+(?:\.\d*)?|\.\d+|\d{1,3}(?:,\d{3})+(?:\.\d*)?)(?:[eE][+-]?\d+)?")
+
+
 def _safe(v):
+    """A text cell a spreadsheet won't run as a formula. "=" and "@" (and a tab or return) are always escaped; "+" and "-"
+    only when the whole value isn't a plain signed number ("-1,234.50" is one, "-2+3" is not)."""
     if v is None:
         return ""
-    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not v[1:2].isdigit():
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not (v[:1] in ("+", "-") and _NUMBER.fullmatch(v)):
         return "'" + v
     return v
 

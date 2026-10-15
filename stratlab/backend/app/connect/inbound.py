@@ -284,27 +284,39 @@ def _forwarding_code(mail: Mail) -> str | None:
     return m.group(1) if m else None
 
 
+# outcomes that a later try can change: the password is set or corrected, or the download works. A mail that ended with one
+# of these is not marked as seen, so sending it again is read again.
+RETRY = ("no_password", "wrong_password", "unreadable")
+
+
+def _seen(uid: str, mail: Mail) -> None:
+    """Remember a mail's id, so the provider's repeat of it is not read again."""
+    if mail.message_id:
+        seen = state.section(uid, "inbox").get("seen") or []
+        state.update(uid, "inbox", seen=([i for i in seen if i != mail.message_id] + [mail.message_id])[-30:])
+
+
 def handle_mail(mail: Mail) -> dict:
-    """One incoming mail for one user (unknown recipients are dropped): what happened, for the tests. Never raises."""
+    """One incoming mail for one user (unknown recipients are dropped): what happened, for the tests. Never raises. The
+    mail's id is remembered once it was read or can never be (not when it ended with an outcome in RETRY)."""
     uid = user_for(mail.recipients)
     if not uid:
         return {"handled": False}
     if not _allow_user(uid):
         return {"handled": False}
     box = state.section(uid, "inbox")
-    if mail.message_id:
-        seen = box.get("seen") or []
-        if mail.message_id in seen:
-            return {"handled": False}
-        state.update(uid, "inbox", seen=(seen + [mail.message_id])[-30:])
+    if mail.message_id and mail.message_id in (box.get("seen") or []):
+        return {"handled": False}
     code = _forwarding_code(mail)
     if code:
         state.update(uid, "inbox", confirm={"code": code, "at": state.now()})
+        _seen(uid, mail)
         return {"handled": True, "confirm": True}
     pdfs = [a for a in mail.attachments if is_pdf(a)][:MAX_ATTACHMENTS]
     if not pdfs:
         state.update(uid, "inbox", last={"at": state.now(), "status": "no_pdf", "kind": None, "via": "email",
                                          "detail": "An email arrived with no PDF statement attached."})
+        _seen(uid, mail)
         return {"handled": True, "pdfs": 0}
     results = []
     for a in pdfs:
@@ -322,6 +334,8 @@ def handle_mail(mail: Mail) -> dict:
             continue
         results.append(statements.process(uid, data, a.name, via="email"))
         data = b""
+    if not any(r.get("status") in RETRY for r in results):
+        _seen(uid, mail)
     return {"handled": True, "pdfs": len(pdfs), "results": results}
 
 

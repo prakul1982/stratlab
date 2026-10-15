@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import math
+import re
 import secrets
 import threading
 import time
@@ -895,9 +896,13 @@ def mf_value(uid: str) -> dict:
 
 
 # ---------- the CSV export ----------
+_NUMBER = re.compile(r"[+-](?:\d+(?:\.\d*)?|\.\d+|\d{1,3}(?:,\d{3})+(?:\.\d*)?)(?:[eE][+-]?\d+)?")
+
+
 def _cell(v):
-    """A text cell that a spreadsheet won't run as a formula (a name or note starting with = + - @ is typed text)."""
-    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not v[1:2].isdigit():
+    """A text cell that a spreadsheet won't run as a formula (a name or note starting with = + - @ is typed text). "=" and "@"
+    (and a tab or return) are always escaped; "+" and "-" only when the whole value isn't a plain signed number."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not (v[:1] in ("+", "-") and _NUMBER.fullmatch(v)):
         return "'" + v
     return v
 

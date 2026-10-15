@@ -22,7 +22,7 @@ type DivYear = {
   fy: number; label: string; total: number; india_total: number; us_total: number; count: number; companies_count: number; unpriced: number; taxed: boolean;
   tds: { threshold: number | null; rate: number; section: string; expected: number; companies_over: number; in_file: number | null };
   us: { gross_usd: number; gross: number; rate: number; withheld_usd: number; withheld: number } | null;
-  companies: Company[]; locked: boolean; source: "files" | "estimated" | "none"; include: boolean; include_saved: boolean; estimate_total: number | null;
+  companies: Company[]; locked: boolean; source: "files" | "estimated" | "none"; include: boolean; include_saved: boolean; estimate_total: number | null; ais_note?: string | null;
 };
 type Ahead = { symbol: string; ex_date: string; label: string | null; qty: number; per_share: number; currency: string; amount: number };
 type Dividends = {
@@ -199,6 +199,7 @@ function DividendsTab() {
                   : "Dividends were exempt in your hands before FY 2020-21 (the company paid dividend distribution tax)."}</p>
                 <p className="k-note">Added up by financial year, each payment in the year of its record date. <Link className="link" to="/holdings">My Holdings</Link> shows the last 12 months instead, a different slice of the same dividends.</p>
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
+                {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
                 {y.locked ? <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>
                   : y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
