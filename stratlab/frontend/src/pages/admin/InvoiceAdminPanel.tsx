@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money } from "../../lib/format";
+import { dateOnly, money } from "../../lib/format";
 import { openInvoice } from "../../components/InvoicesCard";
-import { Card, CardHead, DataTable, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, ErrorState, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
 
 type Seller = { legal_name: string; address: string; state: string; gstin: string; pan: string; lut_arn: string; email: string; prefix: string };
@@ -18,8 +18,9 @@ export function InvoiceAdminPanel() {
   const [rows, setRows] = useState<Row[]>([]);
   const [year, setYear] = useState("");
   const [asked, setAsked] = useState("");
+  const [failed, setFailed] = useState(false);
   const load = (y = "") => api<{ seller: Seller; states: Record<string, string>; year: string; invoices: Row[] }>(`/admin/invoices${y ? `?year=${y}` : ""}`)
-    .then((x) => { setS(x.seller); setStates(x.states); setYear(x.year); setAsked(x.year); setRows(x.invoices); }).catch(fail);
+    .then((x) => { setS(x.seller); setStates(x.states); setYear(x.year); setAsked(x.year); setRows(x.invoices); setFailed(false); }).catch((e) => { setFailed(true); fail(e); });
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     try { const x = await api<{ seller: Seller }>("/admin/invoices/seller", { method: "PUT", body: s }); setS(x.seller); notify("Invoice details saved."); void reload(); }
@@ -36,18 +37,18 @@ export function InvoiceAdminPanel() {
     <Field label={label} info={info} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} />);
   const cols: Column<Row>[] = [
     { key: "n", header: "Number", rowHeader: true, cell: (r) => <span className="adm-mono">{r.number}</span> },
-    { key: "d", header: "Date", cell: (r) => r.date },
+    { key: "d", header: "Date", cell: (r) => dateOnly(r.date) },
     { key: "c", header: "Customer", wrap: true, cell: (r) => r.email },
     { key: "s", header: "Supply", cell: (r) => r.supply },
     { key: "t", header: "Total", numeric: true, cell: (r) => money(r.total, r.currency, 2) },
     { key: "g", header: "GST", numeric: true, cell: (r) => money(r.tax, r.currency, 2) },
-    { key: "o", header: <span className="sr-only">Open</span>, action: true, cell: (r) => <button type="button" className="btn quiet sm" onClick={() => openInvoice(r.number).catch(fail)}>Open</button> },
+    { key: "o", header: <span className="sr-only">Open</span>, action: true, cell: (r) => <button type="button" className="btn quiet sm" aria-label={`Open invoice ${r.number}`} onClick={() => openInvoice(r.number).catch(fail)}>Open</button> },
   ];
   return (
     <>
       <Card id="invoice-details" label="Invoice details">
         <CardHead title="Invoice details" info="Every payment gets an invoice, numbered per financial year. Prices include GST: 18% split CGST + SGST within your state, IGST across states. Customers outside India are an export of services: zero-rated with your LUT number, otherwise IGST is shown as included. Without a GSTIN the invoice says you aren't registered for GST. Have your accountant confirm the setup." />
-        {!s ? <Skeleton label="Loading invoice details" lines={3} /> : (
+        {!s ? (failed ? <ErrorState title="The invoice details couldn't be read" action={{ label: "Try again", onClick: () => void load(asked.trim()) }} /> : <Skeleton label="Loading invoice details" lines={3} />) : (
           <FormGrid label="Who the invoices are from" onSubmit={(e) => { e.preventDefault(); save(); }}>
             {text("legal_name", "Legal name")}
             {text("address", "Address")}

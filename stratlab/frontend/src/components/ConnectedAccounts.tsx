@@ -182,6 +182,7 @@ function ZerodhaCard({ c, set }: P) {
   const { fail, notify } = useApp();
   const [busy, setBusy] = useState(false);
   const k = c.kite;
+  const [asking, setAsking] = useState(false);
   const login = async () => {
     setBusy(true);
     try { const r = await api<{ url: string }>("/connect/kite/login"); window.location.href = r.url; } catch (e) { fail(e); setBusy(false); }
@@ -199,7 +200,7 @@ function ZerodhaCard({ c, set }: P) {
   };
   const drop = async () => {
     setBusy(true);
-    try { set(await api<Conn>("/connect/kite", { method: "DELETE" })); notify("Zerodha is disconnected and its stored login is deleted."); } catch (e) { fail(e); } finally { setBusy(false); }
+    try { set(await api<Conn>("/connect/kite", { method: "DELETE" })); setAsking(false); notify("Zerodha is disconnected and its stored login is deleted."); } catch (e) { fail(e); } finally { setBusy(false); }
   };
   return (
     <Card id="zerodha" label="Zerodha">
@@ -211,10 +212,12 @@ function ZerodhaCard({ c, set }: P) {
         <p className="k-small" data-testid="kite-line">{zerodhaLine(k)}</p>
         <FormActions>
           <button type="button" className="btn" disabled={busy} onClick={() => void (k.live ? refresh() : login())}>{k.live ? "Refresh" : "Log in to Zerodha"}</button>
-          <button type="button" className="btn quiet" disabled={busy} onClick={() => void drop()}>Disconnect</button>
+          <button type="button" className="btn quiet" disabled={busy} onClick={() => setAsking(true)}>Disconnect</button>
         </FormActions>
       </>}
       {k.detail && <Notice tone="warn" role="status">{k.detail}</Notice>}
+      {asking && <ConfirmDialog title="Disconnect Zerodha?" confirmLabel="Disconnect" busy={busy} onClose={() => setAsking(false)} onConfirm={() => void drop()}>
+        Its stored login is deleted. You can connect again any time.</ConfirmDialog>}
     </Card>
   );
 }

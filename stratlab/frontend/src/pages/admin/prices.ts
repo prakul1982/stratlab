@@ -15,3 +15,11 @@ export function rateNote(errors: string[], rows: Record<string, { no_rate?: bool
   if (none.length) parts.push(`No exchange rate yet for ${none.join(", ")}: ${none.length === 1 ? "it isn't" : "they aren't"} shown to visitors until one is read. Fix a price here to show one anyway.`);
   return parts.join(" ");
 }
+
+/** A typed price: a number (commas allowed) or null for an empty box (Automatic); undefined when it isn't a positive number. */
+export function parsePrice(v: string | undefined): number | null | undefined {
+  const t = (v ?? "").trim();
+  if (!t) return null;
+  const n = /^\d[\d,]*(\.\d+)?$/.test(t) ? Number(t.replace(/,/g, "")) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}

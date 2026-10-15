@@ -12,7 +12,7 @@ import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
 import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
-import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
 /** Every limit and feature side by side, from the server's plans when signed in. */
 function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
@@ -128,11 +128,16 @@ export function PlansPage() {
   const RANK: Record<PlanId, number> = { free: 0, basic: 1, pro: 2 };
   /** What the card is charged, in words: "₹699 incl. 18% GST, every month". */
   const chargeWords = (p: "basic" | "pro") => {
-    const rs = rupeeCharge(rupees(p, period), gst);
     const shown = priceOf(p, period);
+    // a currency with its own Razorpay plan is charged in that currency: its amount, no rupees or GST
+    const own = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency;
+    if (own) return `${money(row, (row as unknown as Record<string, number>)[period === "year" ? `${p}_year` : p], currency)}, every ${period}`;
+    const rs = rupeeCharge(rupees(p, period), gst);
     // charged in rupees from another currency's card: the dialog says what that is there today ("₹699 (about $7.23 today)")
     return `${rs}${chargeAboutNote(!!shown.charged, shown.shown, shown.about)}${shown.charged || currency === "INR" ? "" : ` (shown as ${shown.shown})`}, every ${period}`;
   };
+
+  const ownCurrency = row && currency !== "INR" && (period === "year" ? row.yearly_charged_in : row.charged_in) === currency ? currency : undefined;
 
   // signed in: hold until the account has answered, so the signed-out page is never drawn for someone who is signed in
   if (!ready || (session && !me)) return <div className="k-page"><PageHeader eyebrow="Account · Plans" title="Plans" /><Card label="Loading plans"><AccountWait label="Loading plans" /></Card></div>;
@@ -217,8 +222,8 @@ export function PlansPage() {
           onClose={() => setSwitching(null)} onConfirm={() => { const p = switching; setSwitching(null); void subscribe(p); }}>
           <span data-testid="plan-confirm">
             {planName(switching)} plan, billed {period === "year" ? "yearly" : "monthly"}: {chargeWords(switching)}. It renews automatically
-            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period)}
-            {paid !== "free" && me && !given ? " Your current subscription stops billing once the new one is active." : ""}
+            each {period} until you cancel, any time from Account. {paymentWindowLine(planName(switching), period, ownCurrency)}
+            {paid !== "free" && me && !given ? ` ${switchEndsNote(planName(paid as PlanId))}` : ""}
           </span>
         </ConfirmDialog>
       )}

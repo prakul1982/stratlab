@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Pager, Seg, Skeleton, type Column } from "../../components/kit";
 import { endsAt } from "../../lib/offer";
 import { useAdmin } from "./AdminContext";
 import { UserDialog } from "./UserDialog";
@@ -24,7 +24,9 @@ function InviteRewards({ onChanged }: { onChanged: () => void }) {
   const { notify, fail } = useApp();
   const [v, setV] = useState<RewardsView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  useEffect(() => { api<RewardsView>("/admin/invite-rewards").then(setV).catch(fail); }, [fail]);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => { setFailed(false); api<RewardsView>("/admin/invite-rewards").then(setV).catch((e) => { setFailed(true); fail(e); }); }, [fail, tries]);
   const decide = async (r: RewardRow, decision: "approve" | "reject") => {
     setBusy(r.newcomer);
     try {
@@ -37,7 +39,7 @@ function InviteRewards({ onChanged }: { onChanged: () => void }) {
       onChanged();
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
-  if (!v) return <Card label="Invite rewards"><Skeleton label="Loading invite rewards" lines={2} /></Card>;
+  if (!v) return <Card label="Invite rewards">{failed ? <ErrorState title="Invite rewards couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading invite rewards" lines={2} />}</Card>;
   const review: Column<RewardRow>[] = [
     { key: "friend", header: "Friend", rowHeader: true, cell: (r) => r.newcomer_email ?? r.newcomer },
     { key: "by", header: "Invited by", cell: (r) => r.referrer_email ?? r.referrer },
@@ -79,6 +81,8 @@ export function UsersSection() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<UserRow | null>(null);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [usersFailed, setUsersFailed] = useState(false);
+  const [sessionsFailed, setSessionsFailed] = useState(false);
   const [stopping, setStopping] = useState<SessionRow | null>(null);
   const [promo, setPromo] = useState<"start" | "end" | null>(null);
   const [promoDays, setPromoDays] = useState("10");
@@ -88,9 +92,9 @@ export function UsersSection() {
   const seq = useRef(0);       // the answer to the last search or filter is the one shown, whatever order they come in
   const loadUsers = useCallback(async (query: string, on: PlanFilter) => {
     const n = ++seq.current;
-    try { const r = await api<UserRow[]>(usersPath(query, on)); if (n === seq.current) setUsers(r); } catch (e) { if (n === seq.current) fail(e); }
+    try { const r = await api<UserRow[]>(usersPath(query, on)); if (n === seq.current) { setUsers(r); setUsersFailed(false); } } catch (e) { if (n === seq.current) { setUsersFailed(true); fail(e); } }
   }, [fail]);
-  const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); } catch (e) { fail(e); } }, [fail]);
+  const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); setSessionsFailed(false); } catch (e) { setSessionsFailed(true); fail(e); } }, [fail]);
   useEffect(() => {
     if (!me?.is_admin) return;
     const t = window.setTimeout(() => loadUsers(q, plan), q ? 300 : 0);
@@ -136,7 +140,7 @@ export function UsersSection() {
     { key: "at", header: "Started", cell: (s) => ago(s.started_at) },
     { key: "eq", header: "Equity", numeric: true, cell: (s) => (s.equity != null ? money(s.equity, s.currency ?? "INR") : "–") },
     { key: "tr", header: "Trades", numeric: true, cell: (s) => s.trades ?? 0 },
-    { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" onClick={() => setStopping(s)}>Stop</button> },
+    { key: "do", header: <span className="sr-only">Actions</span>, action: true, cell: (s) => <button type="button" className="btn quiet sm" aria-label={`Stop ${s.name} (${s.email ?? "no email"})`} onClick={() => setStopping(s)}>Stop</button> },
   ];
   const until = ov?.server.promo_until;
   const pages = Math.max(1, Math.ceil((users?.length ?? 0) / PAGE));
@@ -151,7 +155,7 @@ export function UsersSection() {
           <input className="k-input adm-search" type="search" placeholder="Search by email" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Search users by email" />
           <Seg label="Plan" options={PLAN_FILTERS} value={plan} onChange={(v) => { setPlan(v as PlanFilter); setPage(1); }} />
         </div>
-        {!users ? <Skeleton label="Loading users" /> : users.length === 0 ? (
+        {!users ? (usersFailed ? <ErrorState title="The users couldn't be read" action={{ label: "Try again", onClick: () => void loadUsers(q, plan) }} /> : <Skeleton label="Loading users" />) : users.length === 0 ? (
           <EmptyState title="No users match">{plan === "all" ? "Try part of an email address." : `No ${PLAN_NAME[plan]} users${q ? " with that in their email" : ""}.`}</EmptyState>
         ) : (
           <>
@@ -182,7 +186,7 @@ export function UsersSection() {
 
       <Card label="Paper trading now">
         <CardHead title={`Paper trading now (${sessions?.length ?? 0})`} />
-        {!sessions ? <Skeleton label="Loading sessions" lines={2} /> : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." />}
+        {!sessions ? (sessionsFailed ? <ErrorState title="The sessions couldn't be read" action={{ label: "Try again", onClick: () => void loadSessions() }} /> : <Skeleton label="Loading sessions" lines={2} />) : <DataTable label="Paper trading sessions" rows={sessions} rowKey={(s) => s.id} columns={sess} empty="No sessions running." />}
       </Card>
 
       {open && <UserDialog user={open} onClose={() => setOpen(null)} onChanged={() => { void loadUsers(q, plan); void reload(); }} />}

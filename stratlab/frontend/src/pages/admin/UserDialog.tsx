@@ -38,6 +38,9 @@ export function UserDialog({ user, onClose, onChanged }: { user: UserRow; onClos
   );
 }
 
+/** The server's own refusal (admin.set_plan), said before Save so the button isn't offered. */
+export const PAYS_RAZORPAY = "Cancel their subscription in Razorpay first, then change the plan.";
+
 function PlanForm({ user, onBack, onSaved }: { user: UserRow; onBack: () => void; onSaved: () => void }) {
   const { notify, fail } = useApp();
   const [plan, setPlan] = useState<Plan>(user.plan === "free" ? "basic" : user.plan);
@@ -55,14 +58,14 @@ function PlanForm({ user, onBack, onSaved }: { user: UserRow; onBack: () => void
   return (
     <div className="k-stack">
       <p className="k-small k-muted">Now on <b>{PLAN_NAME[user.plan]}</b>{user.plan !== "free" ? ` (${planNote(user)})` : ""}.</p>
-      {user.paying && <Notice tone="warn">This user has a Razorpay subscription. Its next payment or cancellation will overwrite what you set here.</Notice>}
+      {user.paying && <Notice tone="warn">{PAYS_RAZORPAY}</Notice>}
       <FormGrid label="Change plan" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <FieldGroup label="Plan" wide><Seg label="Plan" value={plan} onChange={(v) => setPlan(v as Plan)} options={(["free", "basic", "pro"] as Plan[]).map((p) => ({ value: p, label: PLAN_NAME[p] }))} /></FieldGroup>
         {plan !== "free" && (
           <FieldGroup label="For how long" info="When it ends, they go back to Free automatically." wide><Seg label="Duration" value={days} onChange={setDays} options={DURATIONS} /></FieldGroup>
         )}
         <FormActions>
-          <button type="submit" className="btn" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+          <button type="submit" className="btn" disabled={busy || user.paying}>{busy ? "Saving…" : "Save"}</button>
           <button type="button" className="btn quiet" onClick={onBack}>Back</button>
         </FormActions>
       </FormGrid>

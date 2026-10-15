@@ -140,8 +140,14 @@ export function checkoutDescription(plan: string, period: string): string {
 
 /** What the confirm step says about the payment window that opens next: it names the plan and the period (R6V-009, and
  * the line "shows the amount only" was stale once it did). */
-export function paymentWindowLine(plan: string, period: string): string {
-  return `The payment window that opens next is headed "StratLab · ${plan}, ${period === "year" ? "yearly" : "monthly"}" and shows the amount in rupees.`;
+export function paymentWindowLine(plan: string, period: string, currency?: string): string {
+  return `The payment window that opens next is headed "StratLab · ${plan}, ${period === "year" ? "yearly" : "monthly"}" and shows the amount in ${currency && currency !== "INR" ? currency : "rupees"}.`;
+}
+
+/** The confirm step's fact about a switch: billing cancels the old subscription as soon as the new one is active (also for
+ * monthly to yearly on the same plan), and the unused time is not refunded. */
+export function switchEndsNote(current: string): string {
+  return `Your current ${current} plan ends as soon as the new one is active. The unused time on it is not refunded.`;
 }
 
 /** Why the Plans page's buy buttons are off while the owner views the app as a plan (R7M-010: they opened a checkout the

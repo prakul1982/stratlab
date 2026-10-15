@@ -47,10 +47,11 @@ export function NewslettersCard() {
     setBusy(key);
     try {
       const p = await api<NewsletterPrefs>("/me/newsletters", { method: "PUT", body: { [key]: c } });
-      if (p && p.market_in) setPrefs(p);
+      // this row's answer; the other rows keep what they show now, so a save still in flight isn't overwritten
+      if (p && p.market_in) setPrefs((cur) => (cur ? { ...p, ...Object.fromEntries(ROWS.filter(([k]) => k !== key).map(([k]) => [k, cur[k]])) } : p));
       if (before[key] === "off" && c !== "off") track("newsletter subscribed", { kind: key, period: c });
       notify("Newsletter settings saved.");
-    } catch (e) { setPrefs(before); fail(e); } finally { setBusy(null); }
+    } catch (e) { setPrefs((cur) => (cur && cur[key] === c ? { ...cur, [key]: before[key] } : cur)); fail(e); } finally { setBusy(null); }
   };
   const confirmEmail = async () => {
     setBusy("confirm");
