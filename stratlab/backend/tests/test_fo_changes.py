@@ -378,3 +378,23 @@ def test_a_false_exit_stored_by_an_earlier_run_is_not_shown(w):
     assert "exit:INFY:2026-12" not in {e["id"] for e in v["events"]}
     assert not any(b["kind"] == "exit" for b in v["badges"].get("INFY", []))
     assert "exit:EXIDEIND:2026-11" in {e["id"] for e in v["events"]}           # a real one stays
+
+
+def test_a_run_where_both_sources_failed_is_an_error_and_asked_again(w, monkeypatch):
+    from app.newsletter import job as news_job
+    feed, sent = Feed(), []
+    feed.nse.busy = False
+    feed.nse.down = {"lots": 99, "circulars": 99}
+    job = F.Job(lambda: feed, lambda new: sent.append(new) or 1)
+    clock = [3_000_000.0]
+    monkeypatch.setattr(news_job.time, "time", lambda: clock[0])
+    morning = datetime(2026, 10, 5, 8, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+    job.tick(morning)
+    assert job.status["last_error"] and len(job.status["problems"]) == 2
+    assert db.get_setting("newsjob:fochanges-am") is None               # the slot is not used up
+    feed.nse.down = {}
+    job.tick(morning)
+    assert db.get_setting("newsjob:fochanges-am") is None               # it waits half an hour
+    clock[0] += 1801
+    job.tick(morning)
+    assert db.get_setting("newsjob:fochanges-am") == "2026-10-05" and job.status["last_error"] is None

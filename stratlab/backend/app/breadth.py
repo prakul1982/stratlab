@@ -50,6 +50,7 @@ SECTOR_KEEP = 70                      # sessions of sector counts kept (three mo
 MIN_SECTOR = 5                        # sectors with fewer stocks with data are left out of the table
 GAP = 0.25                            # seconds between stocks, on top of each source's own pacing
 GIVE_UP = 25                          # this many failures in a row: the source is down, the run stops and keeps the old
+MIN_LOADED, MAX_FAILED = 0.5, 0.25    # a run that read under half the stocks, or lost over a quarter to errors, is thin: it keeps the old
 MIN_MEMBERS = 20                      # an exchange list shorter than this is taken as a broken answer
 
 # the counts kept for each day; the stored rows hold them in this order, then the group's index close
@@ -523,6 +524,13 @@ class Runner:
                     scans.setdefault(g, {})[sym] = res
         if not loaded:
             raise RuntimeError(f"No stock's prices could be read ({last_error or 'no data'}).")
+        total = len(by_stock)
+        if loaded < MIN_LOADED * total - 1e-9 or failed > MAX_FAILED * total + 1e-9:
+            # most of the market failed after the first stock loaded (a cancelled token, a throttled source): laying
+            # this thin universe over the stored days would rewrite months of counts, so the stored history stays
+            # and the job tries again (Admin shows why)
+            raise RuntimeError(f"Only {loaded} of {total} stocks could be read, {failed} failed ({last_error or 'no data'}); "
+                               "the stored history is kept.")
         out = {}
         for g in groups:
             if not who[g]:              # nothing to count: the stored history stays as it is

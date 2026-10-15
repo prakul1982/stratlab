@@ -63,10 +63,21 @@ def ids(kind: str, scope: str) -> list[str]:
 
 
 def save(issue: dict) -> dict:
-    """Store an issue and put it first in its index (the newest 60 are kept listed)."""
+    """Store an issue and put it first in its index (the newest 60 are kept listed). A reader's My Stocks issue that
+    falls off the index is deleted with its sent-to ledger: nothing lists it, and each reader adds one a day."""
     kind, scope, dkey = parse_id(issue["id"])
     db.set_setting(_key(kind, scope, dkey), json.dumps(issue))
-    db.set_setting(_index_key(kind, scope), json.dumps([issue["id"]] + [i for i in ids(kind, scope) if i != issue["id"]][:INDEX_CAP - 1]))
+    old = ids(kind, scope)
+    kept = [issue["id"]] + [i for i in old if i != issue["id"]][:INDEX_CAP - 1]
+    db.set_setting(_index_key(kind, scope), json.dumps(kept))
+    if kind == "my_stocks":
+        for iid in old:
+            if iid not in kept and (parts := parse_id(iid)):
+                try:
+                    db.delete_setting(_key(*parts))
+                    db.delete_setting(SENT + iid)
+                except Exception as e:             # a row left behind never stops a save
+                    print("newsletters: couldn't prune", iid, str(e)[:120])
     return issue
 
 
@@ -544,6 +555,8 @@ class Job:
         if status_key:
             self.status_key = status_key
         self.last: dict[str, str] = {}
+        self.hold: dict[str, float] = {}          # run name -> not asked again before this time (give_back)
+        self.all_failed = False                   # the last record() was a read where every source failed
         self._open: dict[str, bool] = {}          # issue id -> whether some reader may still be sent it today (catch_up)
         # stores itself whenever a run is written into it, so Admin has it after a restart (R6O-003)
         self.status = job_status.Status(self.status_key, {"last_run": None, "sent": 0, "last_error": None})
@@ -553,6 +566,7 @@ class Job:
         after a newer good one): when, the problems (one per source that failed; the first is the last error) and,
         for a job that reads several sources, how many it tried (`parts`)."""
         problems = [str(p) for p in problems or []]
+        self.all_failed = bool(problems) and bool(parts) and len(problems) >= parts
         self.status.update(last_run=now.isoformat(), problems=problems[:5], last_error=problems[0][:200] if problems else None,
                            parts=parts, **extra)
 
@@ -665,7 +679,7 @@ class Job:
         from ..data.calendar import is_trading_day
         local = now.astimezone(ZoneInfo(tz))
         day = local.date()
-        if local.strftime("%H:%M") < at or self.last.get(name) == day.isoformat():
+        if local.strftime("%H:%M") < at or self.last.get(name) == day.isoformat() or time.time() < self.hold.get(name, 0):
             return None
         if (weekday is not None and day.weekday() != weekday) or (region and not is_trading_day(region, day)):
             return None
@@ -685,6 +699,13 @@ class Job:
         self.last[name] = day.isoformat()
         db.set_setting(f"newsjob:{name}", day.isoformat())
         self.keep()
+
+    def give_back(self, name: str, seconds: float = 1800) -> None:
+        """A read where every source failed doesn't use its slot up: the day mark is taken back, and the run is asked
+        again after `seconds` (not on every five-minute check)."""
+        self.last.pop(name, None)
+        db.delete_setting(f"newsjob:{name}")
+        self.hold[name] = time.time() + seconds
 
     def keep(self):
         if self.status_key:

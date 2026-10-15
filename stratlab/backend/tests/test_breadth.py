@@ -264,10 +264,48 @@ def test_later_runs_read_recent_months_and_keep_old_days(mem):
     assert rows[min(first)] == first[min(first)]                # days before the recent window stand as stored
 
 
+def wide_runner(n=10, fail=()):
+    """A universe of n stocks (UP, DOWN and FLAT among clones of UP) whose `fail` ones raise."""
+    base = market()
+    names = ["UP", "DOWN", "FLAT"] + [f"S{i}" for i in range(n - 3)]
+    data = {s: base.get(s) or base["UP"] for s in names}
+
+    def load(region, sym, days):
+        if sym in fail:
+            raise RuntimeError("source down")
+        return cut(data[sym], days)
+    return breadth.Runner(load, lambda region, sym, days: cut(bars([20000.0 + i for i in range(N)]), days), lambda name: names,
+                          lambda: [{"symbol": s} for s in names], sectors=lambda region: {}, gap=0)
+
+
 def test_a_failing_stock_is_left_out(mem):
-    out = runner(fail={"DOWN"}).run("IN", IST_OPEN)
-    assert out["failed"] == 1 and out["loaded"] == 2
+    # a tenth of the universe may fail (with 3 stocks, one failing is a third and stops the run: see the thin-run tests)
+    out = wide_runner(10, fail={"DOWN"}).run("IN", IST_OPEN)
+    assert out["failed"] == 1 and out["loaded"] == 9
     assert breadth.view("nifty500")["today"]["dec"]["value"] == 0
+
+
+def test_a_thin_run_keeps_the_stored_history(mem):
+    wide_runner(10).run("IN", IST_OPEN)
+    before = {k: v for k, v in mem.items() if k.startswith(breadth.HIST_KEY)}
+    for gone in ({"DOWN", "FLAT", "S0"}, {f"S{i}" for i in range(7)} | {"DOWN", "FLAT"}):     # 30% failed; 90% failed after the first loaded
+        with pytest.raises(RuntimeError, match="stored history is kept"):
+            wide_runner(10, fail=gone).run("IN", IST_OPEN)
+        assert {k: v for k, v in mem.items() if k.startswith(breadth.HIST_KEY)} == before
+
+
+def test_a_thin_run_is_retried_and_shown(mem, monkeypatch):
+    job = breadth.Job(wide_runner(10, fail={"DOWN", "FLAT", "S0", "S1"}), ready=lambda r: r == "IN")
+    evening = datetime(2026, 9, 30, 13, 30, tzinfo=timezone.utc)
+    assert job.tick(evening) == 0
+    assert mem.get("newsjob:breadth-IN") is None and "4 failed" in job.status["last_error"]
+    assert "4 failed" in breadth.status()["IN"]["last_error"] and breadth.status()["IN"]["failed_at"]
+    assert not any(k.startswith(breadth.HIST_KEY) for k in mem)
+    job.runner = wide_runner(10)
+    t = __import__("time").time()
+    monkeypatch.setattr(breadth.time, "time", lambda: t + 1801)
+    assert job.tick(evening) == 1
+    assert mem["newsjob:breadth-IN"] == "2026-09-30" and job.status["last_error"] is None
 
 
 def test_source_down_keeps_the_stored_history(mem):
@@ -522,3 +560,9 @@ def test_alert_endpoints(w, monkeypatch):
     paid(monkeypatch)
     r = c.post("/invest/breadth/alerts", headers=headers("free-token"), json={"group": "nifty500", "level": 60})
     assert r.status_code == 402 and "Basic" in r.text
+
+
+def test_a_few_failed_stocks_dont_hold_the_day_back(mem):
+    """Suspended or missing stocks on an ordinary day (2 of 10 here) are left out; the day is still stored."""
+    wide_runner(10, fail={"DOWN", "FLAT"}).run("IN", IST_OPEN)
+    assert any(k.startswith(breadth.HIST_KEY) for k in mem)

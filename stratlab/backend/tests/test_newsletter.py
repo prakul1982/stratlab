@@ -476,3 +476,31 @@ def test_my_stocks_resume_doesnt_send_the_teaser_again_to_a_reader_not_emailed(w
     job.Job().run_stocks(date(2026, 10, 1), False, Run())
     job.Job().run_stocks(date(2026, 10, 1), False, Run())              # the resumed run
     assert asked == [1]
+
+
+def test_my_stocks_issues_off_the_index_are_deleted_with_their_ledger(monkeypatch):
+    store: dict = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr(db, "delete_setting", lambda k: store.pop(k, None))
+    d0 = date(2026, 1, 1)
+    first = job.issue_id("my_stocks", "u1", d0.isoformat(), False)
+    for i in range(120):
+        iid = job.issue_id("my_stocks", "u1", (d0 + timedelta(days=i)).isoformat(), False)
+        job.save({"id": iid, "html": "x", "text": "y"})
+        store[job.SENT + iid] = json.dumps({"done": True})            # the ledger of who it was sent to
+    rows = [k for k in store if k.startswith("news:my_stocks:u1:")]
+    assert len(rows) == job.INDEX_CAP                                  # 60 remain, not 120
+    assert len(json.loads(store["news-index:my_stocks:u1"])) == job.INDEX_CAP
+    assert job.load(first) is None and job.SENT + first not in store
+    newest = job.issue_id("my_stocks", "u1", (d0 + timedelta(days=119)).isoformat(), False)
+    assert job.load(newest) and job.SENT + newest in store
+    assert [i["id"] for i in job.recent("my_stocks", "u1", 5)][0] == newest
+    # re-saving an issue already on the index drops nothing; another reader's and the Market Briefs' are untouched
+    job.save({"id": job.issue_id("my_stocks", "u2", "2026-01-01", False), "html": "x", "text": "y"})
+    job.save({"id": newest, "html": "again", "text": "y"})
+    assert len([k for k in store if k.startswith("news:my_stocks:u1:")]) == job.INDEX_CAP
+    assert any(k.startswith("news:my_stocks:u2:") for k in store)
+    for i in range(70):
+        job.save({"id": job.issue_id("market", "IN", (d0 + timedelta(days=i)).isoformat(), False), "html": "x", "text": "y"})
+    assert len([k for k in store if k.startswith("news:market:IN:")]) == 70     # briefs are not pruned here

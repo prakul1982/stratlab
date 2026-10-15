@@ -208,3 +208,40 @@ def test_cancelled_token_goes_offline_and_alerts_once(monkeypatch):
     assert len(alerts) == 1
     ks._set_token("new", today_ist())   # a fresh login brings it back
     assert ks.ready()
+
+
+def test_a_login_another_run_finished_while_this_one_waited_is_not_repeated(monkeypatch):
+    import threading
+    calls = []
+    inside, release = threading.Event(), threading.Event()
+
+    class FakeKite:
+        token_day = "2026-09-23"
+        kite = type("K", (), {"login_url": staticmethod(lambda: LOGIN_URL)})()
+
+        def accept_request_token(self, rt):
+            self.token_day = "2026-09-24"                      # today's token is saved
+            calls.append(("token", rt))
+
+    def slow_fetch(url):
+        calls.append("fetch")
+        inside.set()
+        release.wait(2)
+        return "TOKEN42"
+    monkeypatch.setattr(kite_auto, "fetch_request_token", slow_fetch)
+    al = kite_auto.AutoLogin(FakeKite(), lambda: calls.append("on_login"))
+    now = datetime(2026, 9, 24, 9, 0, tzinfo=IST)
+    admin = threading.Thread(target=al.run_once, daemon=True)          # Admin's button: logging in
+    admin.start()
+    assert inside.wait(2)
+    loop = []
+    waiting = threading.Thread(target=lambda: loop.append(al.run_once(only_if_due=True, now=now)), daemon=True)
+    waiting.start()                                                    # the daily loop was due a moment ago, and waits for the lock
+    release.set()
+    admin.join(2)
+    waiting.join(2)
+    assert loop == [False] and calls == ["fetch", ("token", "TOKEN42"), "on_login"]       # one login, one token
+    # still due (no token today): the loop's run goes ahead
+    al.kite.token_day = "2026-09-23"
+    release.set()
+    assert al.run_once(only_if_due=True, now=now) is True and calls.count("fetch") == 2

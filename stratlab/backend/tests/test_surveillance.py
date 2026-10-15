@@ -362,3 +362,32 @@ def test_newsletter_lines_for_changes_and_current_lists(w):
     assert content.surveillance_lines("TCS", TODAY.isoformat()) is None
     for t in lines:
         assert not write.banned(t) and not PROVIDERS.search(t)
+
+
+def test_a_run_where_every_list_failed_is_an_error_and_asked_again(w, monkeypatch):
+    from app.newsletter import job as news_job
+    feed = Feed()
+    feed.down = set(S.PARTS)
+    job = S.Job(lambda: feed, lambda changes, now: 0)
+    monday = datetime(2026, 10, 5, 8, 30, tzinfo=F.IST)
+    from app.data import calendar
+    assert calendar.is_trading_day("IN", monday.date())
+    clock = [2_000_000.0]
+    monkeypatch.setattr(news_job.time, "time", lambda: clock[0])
+    job.tick(monday)
+    assert job.status["last_error"] and len(job.status["problems"]) == len(S.PARTS)
+    assert db.get_setting("newsjob:surv-am") is None                    # the slot is not used up
+    feed.down = set()
+    job.tick(monday)
+    assert db.get_setting("newsjob:surv-am") is None                    # but it waits half an hour
+    clock[0] += 1801
+    job.tick(monday)
+    assert db.get_setting("newsjob:surv-am") == "2026-10-05" and job.status["last_error"] is None
+
+
+def test_a_run_where_some_lists_failed_keeps_its_slot(w):
+    feed = Feed()
+    feed.down = {"asm"}
+    job = S.Job(lambda: feed, lambda changes, now: 0)
+    job.tick(datetime(2026, 10, 5, 8, 30, tzinfo=F.IST))
+    assert db.get_setting("newsjob:surv-am") == "2026-10-05" and job.status["last_error"]

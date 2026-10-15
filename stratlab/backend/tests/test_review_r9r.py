@@ -296,6 +296,8 @@ def test_a_positioning_run_is_written_in_words():
     text, waiting = P.run_sentence({"participants": "the exchange is having trouble (503).", "cash": "missing", "chains": 0})
     assert "couldn't be read (the exchange is having trouble (503).)" in text and "FII/DII numbers not out yet" in text and waiting
     assert "{" not in text and P.run_sentence(None) == ("", False)
+    text, waiting = P.run_sentence({"participants": "ok", "cash": "boom", "chains": 0})        # a file that couldn't be read is a Check too
+    assert "FII/DII numbers couldn't be read (boom)" in text and waiting
 
 
 def test_the_jobs_table_shows_positioning_as_check_while_a_file_is_missing(w):

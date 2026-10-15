@@ -66,4 +66,5 @@ def test_run_now_for_connect_once_runs_and_records_the_last_run(w, monkeypatch):
             break
         time.sleep(0.05)
     row = {j["id"]: j for j in c.get("/admin/jobs", headers=headers("admin-token")).json()["jobs"]}["ibkr-daily"]
-    assert row["last_run"] and row["state"] == "ok" and "2 accounts due, 1 read, 1 failed" in row["log"][0]
+    assert row["last_run"] and row["state"] == "warn" and "2 accounts due, 1 read, 1 failed" in row["log"][0]
+    assert "1 account could not be read" in row["note"]      # was "ok": a run with failed accounts is a Check (R3G)

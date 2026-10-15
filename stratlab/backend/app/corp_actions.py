@@ -685,6 +685,7 @@ class Job:
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None, "problems": []}
         self.universe_running, self.universe_retry = False, 0.0
+        self.down: dict[str, str] = {}               # region -> why its last refresh read nothing (shown until one does)
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="corporate-actions").start()
@@ -732,8 +733,11 @@ class Job:
             for at in REFRESH_AT[region]:
                 day, run = self.claim(f"refresh-{region}-{at}", now, region, at)
                 if day:
-                    self.refresh(region, who(), day)
-                    sent, ran = sent + self.announce(region, day, who, run), True
+                    out = self.refresh(region, who(), day)
+                    ran = True
+                    if out["rows"] is None:      # every feed failed: not done, so the slot is resumed once its beat is stale
+                        continue
+                    sent += self.announce(region, day, who, run)
                     run.done()
             if region == "US" and self._universe_due(now):
                 self.start_universe(who())
@@ -747,7 +751,7 @@ class Job:
                 sent, ran = sent + self.eve(region, day, who, run), True
                 run.done()
         if ran:
-            self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            self.status.update(last_run=now.isoformat(), sent=sent, last_error=next(iter(self.down.values()), None))
             from . import job_status
             job_status.keep("corp", self)          # Admin shows this run after a restart too
         return sent
@@ -786,6 +790,11 @@ class Job:
         who = who if who is not None else results.trackers()
         out = refresh(region, self.sources(), {s for (r, s) in who if r == region}, day)
         self.status["problems"] = out["problems"][:10]
+        if out["rows"] is None:                      # no feed answered: Admin says so, not "OK"
+            self.down[region] = f"{region}: {(out['problems'] or ['no feed answered'])[0]}"[:200]
+        else:
+            self.down.pop(region, None)
+        self.status["last_error"] = next(iter(self.down.values()), None)
         return out
 
     def _send_each(self, per_user: dict[str, list[dict]], subject, text, url: str, run) -> int:
