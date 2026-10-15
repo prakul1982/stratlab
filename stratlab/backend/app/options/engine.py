@@ -219,12 +219,13 @@ class OptionsEngine:
             if not leg["open"]:
                 continue
             k = leg["strike"]
-            px = round(max(0.0, under - k) if leg["opt"] == "CE" else max(0.0, k - under), 2)
+            # to 4 decimals: a currency option settles on the reference rate (96.1825 on a 96 call is 0.1825)
+            px = round(max(0.0, under - k) if leg["opt"] == "CE" else max(0.0, k - under), 4)
             pnl = self._leg_pnl(leg, px)
             leg.update(open=False, exit=px, mark=px)
             p["closed_pnl"] += pnl
             ev = {"t": now.isoformat(), "side": "buy" if leg["side"] == "sell" else "sell", "qty": leg["qty"], "px": px,
-                  "why": f"Expiry settlement at {under:,.2f}{estimate}", "sym": leg["sym"], "strike": k, "opt": leg.get("opt"),
+                  "why": f"Expiry settlement at {under:,.{2 if round(under, 2) == under else 4}f}{estimate}", "sym": leg["sym"], "strike": k, "opt": leg.get("opt"),
                   "slices": 0, "pnl": round(pnl, 2)}
             self.events.append(ev)
             out.append(ev)

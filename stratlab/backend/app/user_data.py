@@ -105,7 +105,7 @@ def _tax(uid: str) -> None:
 ALERT_KEYS = ("stock_alerts.KEY", "scan.ALERT_KEY", "results.ALERT_KEY", "corp_actions.ALERT_KEY", "intel.filings.ALERT_KEY",
               "breadth.ALERT_KEY", "fo_changes.ALERT_KEY", "shareholders.FOLLOW_KEY", "screens.KEY", "market_events.USER_KEY")
 PREF_KEYS = ("daily_report.PREFS", "lifecycle.PREFS", "lifecycle.SEEN", "alerts.CONFIRMED", "alerts.ALERT_OFF", "push.PREFIX",
-             "first_steps.KEY", "plan_interest.KEY", "newsletter_prefs.PREFIX")
+             "first_steps.KEY", "plan_interest.KEY", "newsletter_prefs.PREFIX", "alerts.TG_VERIFY")
 WATCHLIST = "watchlist:"
 
 
@@ -302,7 +302,11 @@ def _x_alerts(uid: str) -> dict:
 
 
 def _x_prefs(uid: str) -> dict:
-    return _settings_of(*_keys(n for n in PREF_KEYS if n != "push.PREFIX"))(uid)       # push keys are secrets
+    out = _settings_of(*_keys(n for n in PREF_KEYS if n != "push.PREFIX"))(uid)       # push keys are secrets
+    tg = out.get("tgverify")
+    if isinstance(tg, dict) and isinstance(tg.get("pending"), dict):                  # the Telegram code's hash is a secret
+        tg["pending"] = {k: v for k, v in tg["pending"].items() if k != "code_hash"}
+    return out
 
 
 def _x_sessions(uid: str) -> dict:

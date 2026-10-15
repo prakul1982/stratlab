@@ -388,13 +388,20 @@ class Engine:
         if self.qty > 0 or self.cool > 0:
             return []
         date, closes_at = bar_clock(bars[i]["t"], self.tf_min, self.close_min)
-        if date != self.day:
-            self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+        self.roll_day(date)
         self.sq = self._squareoff(date)
         new = self._try_enter(bars, ctx, i, closes_at)
         if new and self.qty > 0:
             self.early_t = bars[i]["t"]
         return new
+
+    def roll_day(self, t: str, mark: float | None = None) -> None:
+        """Start the trading day of `t` (a candle's or an order's stamp, in the market's zone) when it is a new one, as a
+        candle of that day would. `mark` is the previous close, the day mark of a position carried in from an earlier day."""
+        date = bar_clock(t, self.tf_min, self.close_min)[0]
+        if date != self.day:
+            self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+            self.day_mark = mark if self.qty > 0 else None
 
     # --- paper orders placed by hand (the AI assistant's paper tools), live only ---
     def manual_cost(self, side: str, q: float, px: float) -> float:
@@ -406,6 +413,9 @@ class Engine:
     def open_manual(self, t: str, px: float, d: int, q: float, why: str) -> dict:
         """Open a position of `q` at the latest price `px`, with the same slippage and charges as a rule's entry. No
         stop or target is set; the strategy's exit rules, time exit and square-off still apply from the next candle."""
+        # a position opened by hand on a new day, before that day's first candle: the day starts now, so the day's P&L
+        # counts from this entry and not from yesterday's close
+        self.roll_day(t)
         open_side = "buy" if d == 1 else "sell"
         fill = px * (1 + self.r.slippage / 100 * d)
         self._slip(q, fill, px)
@@ -421,8 +431,10 @@ class Engine:
         self.events.append(ev)
         return ev
 
-    def close_manual(self, t: str, px: float, why: str) -> dict:
-        """Close the open position at the latest price `px`, as an exit rule would."""
+    def close_manual(self, t: str, px: float, why: str, mark: float | None = None) -> dict:
+        """Close the open position at the latest price `px`, as an exit rule would. On a new day, before its first candle,
+        the day starts first, so the close counts in today's P&L (from `mark`, the previous close, for a carried position)."""
+        self.roll_day(t, mark)
         return self._close({"t": t}, px, why)
 
     def _hit_exit(self, ctx: Ctx, i: int) -> bool:

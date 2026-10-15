@@ -114,6 +114,54 @@ def test_a_manual_paper_order_is_stamped_in_the_markets_own_zone(monkeypatch):
     assert s.engine.qty == 10 and not s.engine.trades
 
 
+
+def test_a_position_opened_by_hand_on_a_new_day_counts_the_days_loss_from_its_entry():
+    """Opened by hand before the day's first candle closed, the first candle saw a new day with a position already open and
+    took yesterday's close (100) as its day mark: a buy at 95 marked at 95.5 looked like -1,350 for the day and the
+    daily loss cap closed it. The day starts with the order, so the day's P&L counts from the entry."""
+    from app.engine.core import Ctx, Engine
+    from app.models import Strategy
+    strat = Strategy(**{"name": "x", "tf": "5m", "side": "long", "entryJoin": "all",
+                        "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1e9}}], "exit": [],
+                        "session": {"dailyLossPct": 1},
+                        "risk": {"capital": 100000, "riskPct": 1, "maxAlloc": 100, "sl": 0, "sizing": "capital",
+                                 "perTrade": 100000, "leverage": 1, "brokerage": 0, "slippage": 0}})
+    e = Engine(strat, 1, cost_kind="flat")
+    e.next_open = False
+    bars = [{"t": f"2026-10-14T15:{m:02d}:00-04:00", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1} for m in range(0, 55, 5)]
+    for i in range(len(bars)):
+        e.step(bars, Ctx(bars, intraday=True), i)
+    assert e.day == "2026-10-14"
+    e.open_manual("2026-10-15T09:31:00-04:00", 95.0, 1, 300, "by hand")
+    assert e.day == "2026-10-15" and e.day_trades == 1
+    bars.append({"t": "2026-10-15T09:30:00-04:00", "o": 95, "h": 96, "l": 94.9, "c": 95.5, "v": 1})
+    new = e.step(bars, Ctx(bars, intraday=True), len(bars) - 1)
+    assert new == [] and e.qty == 300 and e.day_mark is None
+    assert e.day_open_pnl(95.5) == pytest.approx(300 * 0.5 - e.entry_cost)
+
+
+def test_a_position_closed_by_hand_on_a_new_day_counts_in_that_days_loss():
+    """Closed by hand before the day's first candle, the loss was added to yesterday's total and dropped when the candle
+    started the new day, so the daily loss cap never saw it. It counts today, from yesterday's close."""
+    from app.engine.core import Ctx, Engine
+    from app.models import Strategy
+    strat = Strategy(**{"name": "x", "tf": "5m", "side": "long", "entryJoin": "all",
+                        "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1e9}}], "exit": [],
+                        "session": {"dailyLossPct": 1},
+                        "risk": {"capital": 100000, "riskPct": 1, "maxAlloc": 100, "sl": 0, "sizing": "capital",
+                                 "perTrade": 100000, "leverage": 1, "brokerage": 0, "slippage": 0}})
+    e = Engine(strat, 1, cost_kind="flat")
+    e.next_open = False
+    bars = [{"t": f"2026-10-14T15:{m:02d}:00-04:00", "o": 100, "h": 100, "l": 100, "c": 100, "v": 1} for m in range(0, 55, 5)]
+    for i in range(len(bars)):
+        e.step(bars, Ctx(bars, intraday=True), i)
+    e.open_manual("2026-10-14T15:56:00-04:00", 100.0, 1, 500, "by hand")
+    e.close_manual("2026-10-15T09:31:00-04:00", 97.0, "closed by hand", mark=100.0)
+    assert e.day == "2026-10-15" and e.day_pnl == pytest.approx(-1500.0) and e.halted
+    bars.append({"t": "2026-10-15T09:30:00-04:00", "o": 97, "h": 97, "l": 97, "c": 97, "v": 1})
+    e.step(bars, Ctx(bars, intraday=True), len(bars) - 1)
+    assert e.day_pnl == pytest.approx(-1500.0) and e.halted          # the next candle keeps the day's loss
+
 # ---------- restarts: the state is saved with each order, and candles closed while down are caught up on ----------
 STOP1 = {"name": "Always in", "tf": "5m", "side": "long", "entryJoin": "all",
          "entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}], "exit": [],

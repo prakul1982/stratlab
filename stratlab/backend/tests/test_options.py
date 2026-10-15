@@ -247,6 +247,15 @@ def test_a_currency_option_settles_at_the_underlying_after_12_30_and_says_it_is_
     assert e.pos is None and e.trades[-1]["why"] == "Expiry settlement"
 
 
+def test_a_currency_option_settles_at_its_intrinsic_value_to_four_decimals():
+    """A settlement of 96.1825 on a short 96 call is 0.1825 a unit, not 0.18 (rounded to 2 decimals)."""
+    q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
+    e, c = OptionsEngine(cds_strategy(), settle_fn=lambda ex: 96.1825), cds_contracts()
+    e.step(at("09:31"), 96.0, c, q, True)
+    out = e.step(at("12:30"), 96.1825, c, q, True)
+    assert out[0]["px"] == 0.1825 and "Expiry settlement at 96.1825" in out[0]["why"]
+    assert out[0]["pnl"] == round((0.5 - 0.1825) * out[0]["qty"], 2)
+
 def test_an_expired_position_without_a_settlement_price_is_held_not_squared_off():
     q = {"CDS:USDINR96CE": {"bid": 0.5, "ask": 0.51, "ltp": 0.5}}
     price = {"px": None}
@@ -392,6 +401,31 @@ def test_the_alert_text_names_the_structure_once():
     subject, text = structure_alert(s, calls[1][0], calls[1][1])
     assert subject == "x: closed" and f"net P&L {kit.money(calls[1][1], 'INR', signed=True)} after charges" in text and "INR" not in text and "Square-off" in text
 
+
+def test_the_structure_alert_says_what_happened_to_the_position():
+    """"Re-centred" was said whenever a step had both opening and closing legs, which an abandoned entry and a re-centre
+    that closed everything also have; a single leg stop was called "closed" while the structure stayed open."""
+    from types import SimpleNamespace
+    from app.live import structure_alert
+    s = SimpleNamespace(name="Iron fly", inst={"symbol": "NIFTY", "currency": "INR"})
+    buy = {"side": "buy", "qty": 75, "sym": "NIFTY 24000 PE", "px": 40.0, "why": "Entry"}
+    # an entry whose second leg had no price: the first leg opened and was closed again in the same step
+    abandoned = [buy, {"side": "sell", "qty": 75, "sym": "NIFTY 24000 PE", "px": 39.5, "why": "A leg couldn't open", "pnl": -37.5}]
+    subject, text = structure_alert(s, abandoned, -80.0)
+    assert subject == "Iron fly: closed" and "re-centred" not in text and "A leg couldn't open: net P&L" in text
+    # a re-centre whose new leg couldn't open: everything closed
+    failed = [{"side": "buy", "qty": 75, "sym": "NIFTY 24200 CE", "px": 90.0, "why": "Re-centre", "pnl": -10.0},
+              {"side": "sell", "qty": 75, "sym": "NIFTY 24300 CE", "px": 50.0, "why": "Re-centre"},
+              {"side": "buy", "qty": 75, "sym": "NIFTY 24300 CE", "px": 51.0, "why": "Re-centre: a leg couldn't open", "pnl": -75.0}]
+    subject, text = structure_alert(s, failed, -200.0)
+    assert subject == "Iron fly: closed" and "Re-centre: a leg couldn't open: net P&L" in text
+    # a re-centre that rebuilt the position
+    subject, text = structure_alert(s, failed[:2], None)
+    assert subject == "Iron fly: re-centred" and "P&L of the closed legs" in text
+    # one leg stopped out: the structure stays open
+    stop = [{"side": "buy", "qty": 75, "sym": "NIFTY 24200 CE", "px": 90.0, "why": "Leg stop", "pnl": -3000.0}]
+    subject, text = structure_alert(s, stop, None)
+    assert subject == "Iron fly: leg stopped, position still open" and "closed (" not in text and "Leg stop: P&L" in text
 
 def test_a_quiet_poll_does_not_mark_the_session_for_saving():
     s, calls = quiet_session()

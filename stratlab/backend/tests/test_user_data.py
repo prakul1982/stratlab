@@ -256,3 +256,17 @@ def test_notebooks_are_read_past_the_servers_row_cap(w, monkeypatch):
     assert len(user_data.export(db.get_profile(ME))["notebooks"]) == 1005
     assert {r["key"]: r["count"] for r in user_data.erase(ME)["done"]}["notebooks"] == 1005
     assert db.sb().table("strategies").select("id").eq("user_id", ME).execute().data == []
+
+
+
+def test_erase_and_export_include_the_telegram_verification(w):
+    """The Telegram verification record (the confirmed chat and a code waiting to be entered) was neither erased nor
+    exported."""
+    for uid in (ME, OTHER):
+        db.set_setting(alerts.TG_VERIFY + uid, json.dumps({"verified": "12345", "pending": {"chat": "678", "code_hash": "h-" + uid,
+                                                                                           "expires": 0, "tries": 0}}))
+    out = user_data.export(db.get_profile(ME))
+    tg = out["preferences"]["tgverify"]
+    assert tg["verified"] == "12345" and tg["pending"]["chat"] == "678" and "h-" + ME not in json.dumps(out)
+    assert user_data.erase(ME)["failed"] == []
+    assert db.get_setting(alerts.TG_VERIFY + ME) is None and db.get_setting(alerts.TG_VERIFY + OTHER) is not None

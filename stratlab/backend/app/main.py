@@ -956,13 +956,16 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
     new_chat = (req.telegram_chat_id or "").strip()
-    chat_changed = bool(new_chat) and new_chat.lower() != (profile.get("telegram_chat_id") or "").strip().lower()
+    old_chat = (profile.get("telegram_chat_id") or "").strip().lower()
+    chat_changed = bool(new_chat) and new_chat.lower() != old_chat
     if chat_changed and alerts.telegram_ready():
         throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
     code_sent = None
-    if chat_changed or (req.telegram_chat_id is not None and not new_chat):       # a new chat, or the chat cleared
+    # a new chat, or the saved chat cleared: the save above clears it for "" and for null (the form sends null for an
+    # emptied field) alike, so the verification goes with it
+    if chat_changed or (not new_chat and old_chat):
         alerts.reset_telegram(profile["id"])       # a new chat starts unverified; nothing is sent there until its code is entered
     if chat_changed and alerts.telegram_ready():
         try:
@@ -1018,6 +1021,9 @@ def test_alert(profile=Depends(current_profile)):
     throttle(profile, "alert_test", 5, 3600, "You've sent 5 test alerts this hour. Try again later.")
     sent, failed = alerts.test(profile, admin.is_admin(profile))
     if not sent and not failed:
+        if profile.get("telegram_chat_id") and alerts.telegram_ready() and not alerts.telegram_verified(profile):
+            err(400, "no_channels", "Your Telegram chat isn't confirmed yet: enter the code sent to it on this page, "
+                "or send a new code. Test alerts go only to a confirmed chat.")
         err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
             + (" or an email" if alerts.email_ready() else "") + ", first.")
     if not sent:
