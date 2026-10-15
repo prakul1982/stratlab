@@ -97,7 +97,11 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
   .promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
   .promo-banner .promo-text { min-width: 0; }
   .promo-banner .promo-more { display: none; }
+  /* the dismiss control is an icon on the same row as the text, a 40 px target (R30-009) */
+  .promo-banner .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+  .promo-banner .promo-got-text { display: none; }
 }
+@media (min-width: 641px) { .promo-banner .promo-x { display: none; } }
 
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: var(--ctl-sm); padding: 0 12px; font-size: 14px; }

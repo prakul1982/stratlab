@@ -10,6 +10,7 @@ import { marketState } from "../lib/marketHours";
 import { RegionSwitch } from "../components/Research";
 import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
+import { scanningText } from "../lib/scanText";
 import { Info } from "../components/ui";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
@@ -47,7 +48,7 @@ const sessions = (n: number) => (n === 0 ? "On the latest close" : `${n} session
 function ScanElapsed({ count }: { count?: number }) {
   const [sec, setSec] = useState(0);
   useEffect(() => { const t0 = Date.now(); const id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
-  return <>{count ? `Scanning ${count} stock${count === 1 ? "" : "s"}…` : "Scanning…"} {sec} s</>;
+  return <>{scanningText(count)} {sec} s</>;
 }
 
 export function ScanPage() {
@@ -148,7 +149,7 @@ export function ScanPage() {
               options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
           </Field>
           <FormActions>
-            <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? "Scanning…" : "Scan"}</button>
+            <button className="btn" disabled={busy || !pro || !cur?.count}>{busy ? scanningText(cur?.count) : "Scan"}</button>
             {sets && scan.id === "st_s2" && <CheckField checked={sets.alerts} disabled={!pro} onChange={toggleAlerts}
               label={<>Alert me after each close when a watchlist stock newly meets both (Stage 2 + Supertrend)
                 <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />}
