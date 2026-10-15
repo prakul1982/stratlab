@@ -288,18 +288,18 @@ def test_a_failing_stock_is_left_out(mem):
 def test_a_thin_run_keeps_the_stored_history(mem):
     wide_runner(10).run("IN", IST_OPEN)
     before = {k: v for k, v in mem.items() if k.startswith(breadth.HIST_KEY)}
-    for gone in ({"DOWN", "FLAT"}, {f"S{i}" for i in range(7)} | {"DOWN", "FLAT"}):     # 20% failed; 90% failed after the first loaded
+    for gone in ({"DOWN", "FLAT", "S0"}, {f"S{i}" for i in range(7)} | {"DOWN", "FLAT"}):     # 30% failed; 90% failed after the first loaded
         with pytest.raises(RuntimeError, match="stored history is kept"):
             wide_runner(10, fail=gone).run("IN", IST_OPEN)
         assert {k: v for k, v in mem.items() if k.startswith(breadth.HIST_KEY)} == before
 
 
 def test_a_thin_run_is_retried_and_shown(mem, monkeypatch):
-    job = breadth.Job(wide_runner(10, fail={"DOWN", "FLAT", "S0"}), ready=lambda r: r == "IN")
+    job = breadth.Job(wide_runner(10, fail={"DOWN", "FLAT", "S0", "S1"}), ready=lambda r: r == "IN")
     evening = datetime(2026, 9, 30, 13, 30, tzinfo=timezone.utc)
     assert job.tick(evening) == 0
-    assert mem.get("newsjob:breadth-IN") is None and "3 failed" in job.status["last_error"]
-    assert "3 failed" in breadth.status()["IN"]["last_error"] and breadth.status()["IN"]["failed_at"]
+    assert mem.get("newsjob:breadth-IN") is None and "4 failed" in job.status["last_error"]
+    assert "4 failed" in breadth.status()["IN"]["last_error"] and breadth.status()["IN"]["failed_at"]
     assert not any(k.startswith(breadth.HIST_KEY) for k in mem)
     job.runner = wide_runner(10)
     t = __import__("time").time()
@@ -540,3 +540,9 @@ def test_alert_endpoints(w, monkeypatch):
     paid(monkeypatch)
     r = c.post("/invest/breadth/alerts", headers=headers("free-token"), json={"group": "nifty500", "level": 60})
     assert r.status_code == 402 and "Basic" in r.text
+
+
+def test_a_few_failed_stocks_dont_hold_the_day_back(mem):
+    """Suspended or missing stocks on an ordinary day (2 of 10 here) are left out; the day is still stored."""
+    wide_runner(10, fail={"DOWN", "FLAT"}).run("IN", IST_OPEN)
+    assert any(k.startswith(breadth.HIST_KEY) for k in mem)

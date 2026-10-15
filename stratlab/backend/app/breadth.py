@@ -50,7 +50,7 @@ SECTOR_KEEP = 70                      # sessions of sector counts kept (three mo
 MIN_SECTOR = 5                        # sectors with fewer stocks with data are left out of the table
 GAP = 0.25                            # seconds between stocks, on top of each source's own pacing
 GIVE_UP = 25                          # this many failures in a row: the source is down, the run stops and keeps the old
-MIN_LOADED, MAX_FAILED = 0.9, 0.1     # a run that read under 90% of the stocks, or lost over 10%, is thin: it keeps the old
+MIN_LOADED, MAX_FAILED = 0.5, 0.25    # a run that read under half the stocks, or lost over a quarter to errors, is thin: it keeps the old
 MIN_MEMBERS = 20                      # an exchange list shorter than this is taken as a broken answer
 
 # the counts kept for each day; the stored rows hold them in this order, then the group's index close
