@@ -580,3 +580,13 @@ def test_stocks_no_longer_listed_are_left_out_not_counted_as_failures(mem):
     r.load = load
     r.run("IN", IST_OPEN)
     assert any(k.startswith(breadth.HIST_KEY) for k in mem)
+
+
+# ---------- 15 Oct: a stored revision stopped the US run ("unhashable type: 'dict'") ----------
+def test_a_run_with_revisions_already_stored_completes_and_keeps_them_once(mem):
+    assert runner().run("IN", IST_OPEN)["ok"]
+    rev = {"day": "2026-09-01", "before": {"adv": 1, "dec": 2, "unch": 0}, "after": {"adv": 2, "dec": 1, "unch": 0}, "at": "x"}
+    breadth.save_hist("nifty500", breadth.load_hist("nifty500"), [rev])
+    assert runner().run("IN", IST_OPEN)["ok"]               # the second run reads the stored revision back
+    assert [r["day"] for r in breadth.load_revised("nifty500")].count("2026-09-01") == 1
+    assert breadth._rev_key(rev) == ("2026-09-01", (("adv", 2), ("dec", 1), ("unch", 0)))

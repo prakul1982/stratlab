@@ -257,6 +257,13 @@ def revisions(old: dict[str, list], new: dict[str, list], through: str | None) -
     return out
 
 
+def _rev_key(r: dict) -> tuple:
+    """A revision's identity, to drop a stored one a new run repeats: its day and its new counts. The counts are a dict,
+    which a set can't hold, so they go in as sorted pairs (15 Oct: the US run stopped on "unhashable type: 'dict'")."""
+    after = r.get("after")
+    return (r.get("day"), tuple(sorted(after.items())) if isinstance(after, dict) else after)
+
+
 def merge(old: dict[str, list], new: dict[str, list], keep_from: str | None) -> dict[str, list]:
     """The stored days with the new run's days laid over them, from `keep_from` on (earlier new days lack a full
     year of lookback, so the stored ones stand). The latest KEEP_ROWS days are kept."""
@@ -549,7 +556,8 @@ class Runner:
             for d, r in rows.items():   # an index close the stored day didn't have yet
                 if r[-1] is None and d in index:
                     r[-1] = index[d]
-            kept = [r for r in load_revised(g) if (r["day"], r.get("after")) not in {(c["day"], c["after"]) for c in changed}]
+            fresh_keys = {_rev_key(c) for c in changed}
+            kept = [r for r in load_revised(g) if _rev_key(r) not in fresh_keys]
             save_hist(g, rows, (kept + changed) if (kept or changed) else None)
             db.set_setting(SECTOR_KEY + g, json.dumps(sectors_of(tally, g)))
             out[g] = {"days": len(rows), "stocks": tally.stocks.get(g, 0), "members": len(who[g]),
