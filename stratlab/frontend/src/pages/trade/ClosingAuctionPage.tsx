@@ -203,16 +203,23 @@ export function ClosingAuctionPage() {
   const [v, setV] = useState<CasView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [again, setAgain] = useState(0);
+  const [stale, setStale] = useState(false);   // a poll failed while the last read is still on the page
 
   useEffect(() => {
-    let live = true, timer: number | undefined;
+    let live = true, timer: number | undefined, have = false;
     const load = () => api<CasView>("/trade/closing-auction").then((x) => {
       if (!live) return;
+      have = true;
       setV(x);
-      setError(null);
+      setError(null); setStale(false);
       if (LIVE_PHASES.includes(x.phase)) timer = window.setTimeout(load, REFRESH_MS);
       else if (x.phase === "preopen") timer = window.setTimeout(load, 5 * 60_000);          // so the page moves to "continuous trading" at the open
-    }).catch(() => { if (live) setError("The closing auction couldn't be read just now. Try again in a minute."); });
+    }).catch(() => {
+      if (!live) return;
+      // with a read already on the page, keep it, say so, and keep polling; the error card is for a page with nothing to show
+      if (have) { setStale(true); timer = window.setTimeout(load, REFRESH_MS); }
+      else setError("The closing auction couldn't be read just now. Try again in a minute.");
+    });
     load();
     return () => { live = false; window.clearTimeout(timer); };
   }, [again]);
@@ -224,6 +231,7 @@ export function ClosingAuctionPage() {
       {error ? <ErrorState title="The closing auction couldn't be read" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>{error}</ErrorState>
         : !v ? <Card><Skeleton label="Reading the closing auction" /></Card> : (
         <>
+          {stale && <p className="k-note" role="status" data-testid="cas-stale">The latest update didn't come through, so this is the last one received. It tries again every {REFRESH_MS / 1000} seconds.</p>}
           <Status v={v} />
           <Expiry v={v} />
           <Timeline v={v} />

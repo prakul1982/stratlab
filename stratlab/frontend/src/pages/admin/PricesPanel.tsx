@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
-import { Badge, Card, CardHead, DataTable, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
+import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
 import { rateNote } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
@@ -25,7 +25,9 @@ export function PricesPanel() {
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-prices", 2);     // the yearly prices: one click away, so the table fits a laptop
   const shown = more.on ? PRICE : PRICE.slice(0, 2);
-  useEffect(() => { api<View>("/admin/prices").then(show).catch(fail); }, [fail]);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => { setFailed(false); api<View>("/admin/prices").then(show).catch((e) => { setFailed(true); fail(e); }); }, [fail, tries]);
   const readRates = async () => {
     setBusy(true);
     try { show(await api<View>("/admin/prices/rates", { method: "POST" })); notify("Exchange rates read."); } catch (e) { fail(e); } finally { setBusy(false); }
@@ -43,7 +45,7 @@ export function PricesPanel() {
     const body: Record<string, Record<string, number | string | null>> = {};
     for (const [c, ch] of Object.entries(edit)) {
       body[c] = {};
-      for (const [f, v] of Object.entries(ch)) body[c][f] = (PRICE as readonly string[]).includes(f) ? (v?.trim() ? Number(v) : null) : (v ?? "").trim();
+      for (const [f, v] of Object.entries(ch)) body[c][f] = (PRICE as readonly string[]).includes(f) ? (v?.trim() ? Number(v.replace(/,/g, "")) : null) : (v ?? "").trim();
     }
     setBusy(true);
     try { show(await api<View>("/admin/prices", { method: "PUT", body: { currencies: body } })); setEdit({}); notify("Prices saved."); } catch (e) { fail(e); } finally { setBusy(false); }
@@ -73,7 +75,7 @@ export function PricesPanel() {
         </>} />
       <p className="k-note k-muted">{fx.at ? `Exchange rates read ${ago(fx.at)}.` : "Exchange rates not read yet: the built-in amounts are shown."}
         {rows ? ` ${rateNote(fx.errors, rows)}` : ""}</p>
-      {!rows ? <Skeleton label="Loading prices" /> : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
+      {!rows ? (failed ? <ErrorState title="The prices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading prices" />) : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
       {open && rows?.[open] && (
         <FormGrid label={`${open} Razorpay plans`}>
           {PLAN.map((f) => (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -165,6 +165,8 @@ export function DeepDivePage() {
   const [carding, setCarding] = useState(false);
   const [decking, setDecking] = useState<"pptx" | "pdf" | null>(null);
   const [span, setSpan] = useState(2);            // years of documents a read looks back over
+  const here = useRef("");                         // the company on the page now: a read or a check that finishes for another is ignored
+  here.current = `${region}:${sym}`;
 
   const downloadDeck = async (format: "pptx" | "pdf") => {
     setDecking(format);
@@ -181,7 +183,7 @@ export function DeepDivePage() {
 
   useEffect(() => {
     let live = true;
-    setV(null); setError(null); setLimited(false);
+    setV(null); setError(null); setLimited(false); setReading(false); setCarding(false);
     api<DeepView>(`/research/deep/${encodeURIComponent(sym)}${q()}`)
       .then((x) => { if (live) { setV(x); void refreshMe(); } })
       .catch((e) => { if (live) { setError((e as Error).message); setLimited(e instanceof ApiError && e.status === 402); } });
@@ -189,21 +191,25 @@ export function DeepDivePage() {
   }, [sym, region]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readDocs = async (refresh = false) => {
+    const mine = here.current;
     setReading(true);
     try {
       const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/read${q(`years=${span}${refresh ? "&refresh=true" : ""}`)}`, { method: "POST" });
+      if (mine !== here.current) return;
       setV(x);
       if (x.reads?.problems?.length) notify(`Read with ${x.reads.problems.length} document${x.reads.problems.length === 1 ? "" : "s"} skipped.`);
-    } catch (e) { fail(e); } finally { setReading(false); }
+    } catch (e) { if (mine === here.current) fail(e); } finally { if (mine === here.current) setReading(false); }
   };
 
   const checkCalls = async (refresh = false) => {
+    const mine = here.current;
     setCarding(true);
     try {
       const x = await api<DeepView>(`/research/deep/${encodeURIComponent(sym)}/card${q(`years=${span}${refresh ? "&refresh=true" : ""}`)}`, { method: "POST" });
+      if (mine !== here.current) return;
       setV(x);
       if (x.card?.problems?.length) notify(`Checked with ${x.card.problems.length} call${x.card.problems.length === 1 ? "" : "s"} skipped.`);
-    } catch (e) { fail(e); } finally { setCarding(false); }
+    } catch (e) { if (mine === here.current) fail(e); } finally { if (mine === here.current) setCarding(false); }
   };
 
   const n = v?.numbers;

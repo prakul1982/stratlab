@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, dateOnly, inr, money, qty as qtyText, signTone } from "../../lib/format";
+import { ET, ago, dateOnly, dayIn, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Download, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { fyLink, movedYearNote, rememberFy, savedFy } from "../../lib/fy";
@@ -40,7 +40,7 @@ type ImportReply = { read: number; added: number; duplicates: number; problems: 
 
 const usd = (v: number | null | undefined, dp = 2) => money(v, "USD", dp);
 const rateText = (r: Rate) => (r ? `₹${r.rate.toFixed(2)} (${dateOnly(r.on)}${r.fallback ? ", RBI" : ""})` : "not known");
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => dayIn(new Date(), ET) ?? "";      // New York's day: the US market's, not UTC's
 const blank = { d: "", side: "B" as "B" | "S", sym: "", qty: "", price: "", fees: "" };
 const tone = (v: number | null | undefined) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
 
@@ -257,7 +257,7 @@ export function UsTaxPage() {
               <Card>
                 <CardHead title="Each sale in rupees" />
                 {!y.rows?.length ? <EmptyState title={`No US sales in ${y.label}`}>Sales you add or upload show here with the rate used for each.</EmptyState>
-                  : <DataTable label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}`} />}
+                  : <DataTable label="US sales in rupees" columns={saleCols} rows={y.rows} rowKey={(r, i) => `${r.symbol}${r.bought}${r.sold}${r.qty}${r.cost_usd}-${i}`} />}
                 <p className="k-note">Rule 115: the sale at SBI's TT buying rate on the last day of the month before the sale, the cost at the rate on the last day of the month before the purchase; the last rate SBI published when it has none that day. "RBI" marks the RBI reference rate, used where SBI's rate isn't known.</p>
               </Card>
 
@@ -277,7 +277,7 @@ export function UsTaxPage() {
           <Card>
             <CardHead title="Shares you still hold" />
             {!v.open_lots.length ? <EmptyState title="No US shares open">Your trades leave no US shares open.</EmptyState>
-              : <DataTable label="Open US lots" columns={lotCols} rows={v.open_lots} rowKey={(l) => `${l.symbol}${l.bought}${l.qty}`} />}
+              : <DataTable label="Open US lots" columns={lotCols} rows={v.open_lots} rowKey={(l, i) => `${l.symbol}${l.bought}${l.qty}-${i}`} />}
             <p className="k-note">Facts only: when each lot turns long term under the 24-month rule.</p>
           </Card>
 

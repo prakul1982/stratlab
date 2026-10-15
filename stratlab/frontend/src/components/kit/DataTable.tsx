@@ -34,7 +34,7 @@ function usePhone(): boolean {
 }
 
 export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort, phonePage }: {
-  label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R) => string; empty?: ReactNode;
+  label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
   sticky?: boolean;
   /** On a phone, each row becomes a card (the first column as its title, every other cell under its own column name),
@@ -75,10 +75,10 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
         </thead>
         <tbody>
           {rows.length === 0 && <tr><td className="k-empty-row" colSpan={columns.length}>{empty}</td></tr>}
-          {rows.map((r) => {
+          {rows.map((r, ri) => {
             const note = rowNote?.(r);
             return (
-              <tr key={rowKey(r)} role={stack ? "row" : undefined} {...rowAttrs?.(r)}>
+              <tr key={rowKey(r, ri)} role={stack ? "row" : undefined} {...rowAttrs?.(r)}>
                 {columns.map((c, i) => {
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
                   const label = typeof c.header === "string" ? c.header : undefined;

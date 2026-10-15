@@ -142,8 +142,8 @@ export function TaxReportPage() {
     for (const f of all) if (f.size > capMb(f.name) * 1024 * 1024) notify(`${f.name} is larger than ${capMb(f.name)} MB. Split it by year (or quarter) and upload each one.`);
     if (!list.length) { reset(); return; }
     setBusy(true);
+    let got: ImportReply | null = null;
     try {
-      let got: ImportReply | null = null;
       for (const [i, f] of list.entries()) {
         // the file itself is the body; with several files, only the first one replaces: the rest are added to it
         const q = new URLSearchParams({ filename: f.name.slice(0, 200), mode: i === 0 ? mode : "add" });
@@ -151,8 +151,9 @@ export function TaxReportPage() {
         got = combine(got, one);
         track("tax file imported", { rows: one.added, method: mode, zip: /\.zip$/i.test(f.name) });
       }
-      if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
     } catch (e) { fail(e); } finally {
+      // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
+      if (got) { setResult(got); setRep(got.report); setFy(open(got.report, null)); setMode("add"); }
       setBusy(false);
       reset();
     }

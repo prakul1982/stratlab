@@ -56,6 +56,9 @@ export function ResultsPage() {
   const [data, setData] = useState<ResultsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
+  const [shownFor, setShownFor] = useState(`${region}|${scope}`);
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); }
 
   useEffect(() => {
     let live = true;
@@ -91,7 +94,7 @@ export function ResultsPage() {
       {(scope === "all" || data) && (
         <Card>
           {scope === "all" && (
-            <Field label="Find a company">
+            <Field key={region} label="Find a company">
               {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder="Find a company, like TCS or Infosys" />}
             </Field>
           )}

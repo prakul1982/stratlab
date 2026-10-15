@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, fmtDate } from "../../lib/format";
-import { Card, CardHead, DataTable, Light, Skeleton, type Column } from "../../components/kit";
+import { Card, CardHead, DataTable, ErrorState, Light, Skeleton, type Column } from "../../components/kit";
 
 type Rule = { id: string; area: string; name: string; value: string; where: string; source: string; since: string | null };
 type Area = { area: string; label: string; reviewed: string; days: number; due: boolean; passed: { date: string; what: string }[]; next: { date: string; what: string } | null };
@@ -19,12 +19,14 @@ export function RulesPanel() {
   const [r, setR] = useState<Rules | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
-  useEffect(() => { api<Rules>("/admin/rules").then(setR).catch(() => {}); }, []);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => { setFailed(false); api<Rules>("/admin/rules").then(setR).catch(() => setFailed(true)); }, [tries]);
   const go = async (key: string, path: string, done?: string) => {
     setBusy(key);
     try { setR(await api<Rules>(path, { method: "POST" })); if (done) notify(done); } catch (e) { fail(e); } finally { setBusy(null); }
   };
-  if (!r) return <Card label="Rates and rules"><Skeleton label="Loading the rates and rules" /></Card>;
+  if (!r) return <Card label="Rates and rules">{failed ? <ErrorState title="The rates and rules couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading the rates and rules" />}</Card>;
   const label = Object.fromEntries(r.areas.map((a) => [a.area, a.label]));
   const areas: Column<Area>[] = [
     { key: "a", header: "Area", rowHeader: true, cell: (a) => a.label },

@@ -18,8 +18,8 @@ import { aiReadsUse } from "../lib/aiReason";
 const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
 
-/** Where each kind of saved data can be deleted. There is no single export or delete-everything call, so each one links to
- * the page that has its own delete button. */
+/** Where each kind of saved data can be deleted on its own page: each one links to the page that has its own delete button.
+ * The card also has one download of everything (`/me/export`) and one delete-everything button. */
 const DATA: { to: string; title: string; what: string }[] = [
   { to: "/holdings", title: "My Holdings", what: "Your shares and ETFs. Delete them on that page." },
   { to: "/tax-report", title: "Tax report", what: "Your uploaded tradebooks. Delete them on that page." },
@@ -120,7 +120,7 @@ export function AccountPage() {
       </Card>
 
       <Card id="data" label="Your data">
-        <CardHead title="Your data" info="StratLab doesn't have a download of everything yet. Each kind of data can be deleted on its own page, or all of it at once below." />
+        <CardHead title="Your data" info="Download everything StratLab keeps for you as one file (tokens and passwords are left out), delete each kind of data on its own page, or delete all of it at once below." />
         <p className="k-small k-muted k-hint-line">What you have saved stays with your account and is never shared. Each kind can be deleted on its own page.</p>
         <div className="k-linkcards">{DATA.map((d) => <LinkCard key={d.to} to={d.to} title={d.title}>{d.what}</LinkCard>)}</div>
         <h3 className="k-sub">Download everything</h3>
