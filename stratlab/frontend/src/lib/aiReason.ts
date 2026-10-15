@@ -25,3 +25,10 @@ export function aiReadsUse(used: number, limit: number | null, capFor: string | 
   if (limit == null) return `${used.toLocaleString("en-IN")} (no daily cap${capFor === "admin" ? " for the site's admins" : " on Pro"})`;
   return `${used.toLocaleString("en-IN")} of ${limit.toLocaleString("en-IN")} (starts again at midnight India time)`;
 }
+
+/** What the search box says when its AI answer is a fallback: the server's own words when the day's answers are used up
+ * (the count starts again at midnight India time), else the plain "isn't available" line. */
+export function searchAiNotice(a: { limit?: boolean; message?: string }): string {
+  if (a.limit && a.message) return a.message;
+  return "The AI isn't available to answer right now. The matches below may help, or try again in a minute.";
+}

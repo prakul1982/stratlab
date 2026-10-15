@@ -151,6 +151,14 @@ def _override(fn, name: str, system: str, text: str, max_tokens: int, want_json:
 _asking_again: contextvars.ContextVar[bool] = contextvars.ContextVar("asking_again", default=False)
 
 
+_from_cache: contextvars.ContextVar[bool] = contextvars.ContextVar("answer_from_cache", default=False)
+
+
+def last_from_cache() -> bool:
+    """Whether the latest complete() call in this request was answered from the answer cache (no model was asked)."""
+    return _from_cache.get()
+
+
 @contextlib.contextmanager
 def ask_again():
     """Inside the block complete() skips its answer cache: a "Refresh" asks the provider again."""
@@ -173,9 +181,11 @@ def complete(system: str, text: str, gemini=None, anthropic=None, transport=None
                        detail="No AI provider has a key. Add a free one such as GROQ_API_KEY or GEMINI_API_KEY in Railway → Variables.")
     key = AnswerCache.key(task, system, text, max_tokens, want_json)
     use_cache = use_cache and not _asking_again.get()
+    _from_cache.set(False)
     if use_cache:
         hit = cache.get(key)
         if hit is not None:
+            _from_cache.set(True)
             return hit
     overrides = {n: f for n, f in (("gemini", gemini), ("anthropic", anthropic)) if callable(f) and not getattr(f, "_builtin", False)}
     need = int((len(system) + len(text)) / 3.5) + max_tokens

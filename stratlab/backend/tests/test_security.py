@@ -317,3 +317,27 @@ def test_parallel_research_reads_cannot_pass_the_daily_cap(monkeypatch):
         assert db.count_usage("u-free", "research_ai", "2000-01-01T00:00:00+00:00") == before
     finally:
         w["close"]()
+
+from app import ai_providers as _providers
+REAL_COMPLETE = _providers.complete               # taken at import: the world swaps in a fake that never caches
+
+
+def test_a_strategy_answer_from_the_cache_is_not_charged(monkeypatch):
+    from app import ai_providers, db
+    w = W.build(monkeypatch)
+    try:
+        calls = []
+        out = '{"entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}]}'
+        monkeypatch.setattr(main.ai_writer, "complete", REAL_COMPLETE)
+        monkeypatch.setattr(ai_providers, "_names", lambda task: (["gemini"], []))
+        monkeypatch.setattr(ai_providers, "plan", lambda task, need: [("gemini", "m")])
+        monkeypatch.setattr(ai_providers.R, "ready", lambda *a, **k: 0)
+        monkeypatch.setattr(ai_providers.R, "ask_model", lambda *a, **k: calls.append(1) or out)
+        ai_providers.cache.clear()
+        c = w["client"]
+        body = [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy when rsi is low"}).json() for _ in range(3)]
+        assert len(calls) == 1
+        assert [b["usage"]["ai_used"] for b in body] == [1, 1, 1]
+        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 1
+    finally:
+        w["close"]()

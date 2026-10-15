@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { searchAiNotice } from "../lib/aiReason";
 import { useApp } from "../lib/app";
 import { match, resolve } from "../lib/features";
 import { matchHelp } from "../lib/helpTopics";
@@ -16,7 +17,7 @@ import { asksContract, compareTo, namesFeature, offerIdeas, pickCompany } from "
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
 interface Row { key: string; icon: ReactNode; title: string; sub?: string; space?: Space | null; run: () => void }
-interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean }
+interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean; limit?: boolean; message?: string }
 
 const PAGES: Record<string, string> = { paper: "/paper", options: "/options", library: "/library", research: "/research", import: "/import",
   notebooks: "/notebooks", new: "/new", trade: "/trade", invest: "/invest", money: "/money", account: "/account", settings: "/settings", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
@@ -122,7 +123,11 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const getIdeas = async () => {
     if (cancelled.current) return;
     setThinking(true); setIdeasFor(text);
-    try { setIdeas((await api<{ ideas: Idea[] }>("/search/ideas", { method: "POST", body: { q: text } })).ideas); setSel(0); }
+    try {
+      const r = await api<{ ideas: Idea[]; limit?: boolean; message?: string }>("/search/ideas", { method: "POST", body: { q: text } });
+      setIdeas(r.ideas); setSel(0);
+      if (r.limit && r.message) setAnswer({ q: text, text: r.message, problem: true });
+    }
     catch (e) { fail(e); } finally { setThinking(false); }
   };
 
@@ -197,7 +202,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       setSteps(null);
       if (a.action === "import") return go("/import", { importText: q });
       if (a.action === "answer") {
-        setAnswer({ q: text, text: a.answer || "The AI isn't available to answer right now. The matches below may help, or try again in a minute." });
+        // at the day's limit the words say so (and when the count starts again), not that the AI is unavailable
+        setAnswer(a.limit && a.message ? { q: text, text: a.message, problem: true } : { q: text, text: a.answer || searchAiNotice(a) });
         return;
       }
       if (a.action === "ideas") return getIdeas();

@@ -51,6 +51,7 @@ from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from .ai_providers import last_from_cache
 from .ai_providers import health as ai_health
 from . import ai_admin, ai_providers
 from . import ai_writer
@@ -1218,6 +1219,12 @@ def ai_slot(profile):
 AI_BUILDS_PER_DAY = 200
 
 
+def limit_notice(e: HTTPException) -> dict:
+    """At the search box's daily limit the reader is told so ("You've used today's 40 AI answers…"), not given a bare fallback."""
+    d = e.detail if isinstance(e.detail, dict) else {}
+    return {"limit": True, "message": d.get("message") or ""} if d.get("code") == "search_ai_limit" else {}
+
+
 @app.post("/search/ideas")
 def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     """Testable strategy ideas for anything typed into search. Shared cache; built-in ideas if the AI is down."""
@@ -1228,7 +1235,7 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
         return {"ideas": out["ideas"], "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
-            return {"ideas": ideas.fallback(q), "fallback": True}
+            return {"ideas": ideas.fallback(q), "fallback": True, **limit_notice(e)}
         raise
 
 
@@ -1244,7 +1251,7 @@ def ask_route(req: IdeasReq, profile=Depends(current_profile)):
         return {**out, "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
-            return {**ask.guess(q), "fallback": True}
+            return {**ask.guess(q), "fallback": True, **limit_notice(e)}
         raise
 
 
@@ -1265,8 +1272,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     try:
         with ai_slot(profile) as (used, limit):
             out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
-            db.add_usage(profile["id"], "ai")
-        used_ai, usage = True, {"ai_used": used + 1, "ai_limit": limit}
+            cached = last_from_cache()          # an answer served from the cache costs nothing
+            if not cached:
+                db.add_usage(profile["id"], "ai")
+        used_ai, usage = True, {"ai_used": used + (not cached), "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
             out, used_ai = importer.pine(req.text), False
     except AIError as e:
@@ -1295,8 +1304,10 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
         except AIError as e:
             err(422, "ai_failed", str(e))
         out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
-        db.add_usage(profile["id"], "ai")
-    out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
+        cached = last_from_cache()              # an answer served from the cache costs nothing
+        if not cached:
+            db.add_usage(profile["id"], "ai")
+    out["usage"] = {"ai_used": used + (not cached), "ai_limit": limit}
     return out
 
 
@@ -4782,9 +4793,11 @@ def import_options(text: str, profile) -> dict:
                 "The AI translator couldn't run just now, so this options strategy couldn't be imported. Try again in a minute.")
         except ValueError as e:
             err(422, "nothing_imported", str(e))
-        db.add_usage(profile["id"], "ai")
+        cached = last_from_cache()              # an answer served from the cache costs nothing
+        if not cached:
+            db.add_usage(profile["id"], "ai")
     return {"kind": "options", "strategy": strategy.model_dump(), "notes": notes, "used_ai": True,
-            "usage": {"ai_used": used + 1, "ai_limit": limit}}
+            "usage": {"ai_used": used + (not cached), "ai_limit": limit}}
 
 
 # ---------- billing ----------

@@ -32,7 +32,7 @@ SECTOR_AI = {"sector": "AI data centers", "summary": "Power is the bottleneck.",
 PULSE_AI = {"tone": "Calm.", "hot": [{"name": "Reliance", "ticker": "RELIANCE", "why": "Jio"}],
             "flows": [{"title": "Selling at the close", "detail": "Selling", "direction": "outflow"}, {"title": "x", "detail": "y", "direction": "weird"}],
             "themes": [{"theme": "Capex", "detail": "Rails", "example": "RVNL"}]}
-COMPARE_AI = {"verdict": "NVDA is stronger.", "winner": "nvda", "differences": ["Margins"], "a": {"composite": 80, "valuation": "RICH"},
+COMPARE_AI = {"verdict": "NVDA and AAPL are both US-listed.", "winner": "nvda", "differences": ["Margins"], "a": {"composite": 80, "valuation": "RICH"},
               "b": {"composite": 60, "valuation": "fair"}}
 
 US_LIST = [{"symbol": "NVDA", "name": "NVIDIA CORP"}, {"symbol": "VRT", "name": "Vertiv Holdings Co"},
