@@ -196,6 +196,7 @@ def test_confirming_the_newsletter_address(monkeypatch):
         assert c.post("/email/confirm", params={"t": "forged"}).status_code == 400
         r = c.get(link[link.index("/email/confirm"):])
         assert r.status_code == 200 and "pro@example.com" in r.text and "<form method=post" in r.text
+        assert "alert emails you turned on" in r.text       # confirming covers the alert emails, not only newsletters
         assert not alerts.email_confirmed(db.get_profile("u-pro"))     # opening the link (a mail scanner) confirms nothing
         r = c.post(link[link.index("/email/confirm"):])                  # the button on that page
         assert r.status_code == 200 and "pro@example.com" in r.text
@@ -300,7 +301,7 @@ def test_the_alert_test_hides_the_mail_services_words_from_users_but_not_admins(
         db.update_profile("u-pro", alert_email="pro@example.com")
         r = c.post("/me/alerts/test", headers=W.headers("pro-token"))
         assert r.status_code == 502 and "The email couldn't be sent right now." in r.text and "Brevo" not in r.text
-        assert alerts.test({"id": "u-admin", "alert_email": "owner@example.com"}, admin=True)[1]["email"].startswith("Brevo refused")
+        assert alerts.test({"id": "u-admin", "alert_email": "owner@example.com", "_plan": "basic"}, admin=True)[1]["email"].startswith("Brevo refused")
     finally:
         w["close"]()
 

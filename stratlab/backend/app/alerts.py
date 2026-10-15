@@ -373,17 +373,29 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: str | None = None,
              label: str = "Alert", force_email: bool = False) -> list[tuple[str, object]]:
     """(channel, send) for every channel the user set up that the server can use. Email is skipped once the person
-    unsubscribed from alert emails, except for a test they asked for (`force_email`)."""
+    unsubscribed from alert emails, except for a test they asked for (`force_email`). Telegram and email are Basic and
+    up (the plan's "alerts"), so they stop after a downgrade to Free; the phone stays."""
     from . import push
+    from .plans import allows, plan_of
     jobs = []
     if profile.get("id") and push.enabled() and push.devices(profile["id"]):
         jobs.append(("push", lambda: push.send(profile["id"], subject, text, url)))
+    from .admin import admin_emails
+    own = (profile.get("email") or "").strip().lower()
+    if not allows(plan_of(profile), "alerts") and own not in admin_emails():      # an admin's notes aren't a plan's feature
+        return jobs
     if profile.get("telegram_chat_id") and telegram_ready() and telegram_verified(profile):
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
     if to and email_ready() and email_confirmed(profile) and (force_email or alert_emails_on(profile.get("id"))):   # only an address its owner confirmed from a link
         jobs.append(("email", lambda: send_message(to, subject, text, url, label, uid=profile.get("id"), **({"why": why} if why else {}))))
     return jobs
+
+
+def reached(channel: str, result) -> bool:
+    """Whether a job from jobs_for got through: push.send returns how many devices it reached (0 when the push service
+    failed or every device was gone), the other channels raise when they fail."""
+    return not (channel == "push" and result == 0)
 
 
 def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper", why: str | None = None,
@@ -413,8 +425,10 @@ def test(profile: dict, admin: bool = False) -> tuple[list[str], dict[str, str]]
     sent, failed = [], {}
     for channel, job in jobs_for(profile, "StratLab test alert", "StratLab test alert: your alerts are working.", "/account", force_email=True):
         try:
-            job()
-            sent.append(channel)
+            if reached(channel, job()):
+                sent.append(channel)
+            else:
+                failed[channel] = "No phone received it. Check that notifications are on for this device."
         except Exception as e:
             # Telegram's own words say whether a chat id exists, and any chat id can be typed in: not passed on
             print(f"alert test on {channel} failed:", str(e)[:200])

@@ -1142,8 +1142,8 @@ def confirm_email_page(t: str = ""):
     got = _confirm_token(t)
     if not got:
         return _confirm_link_bad()
-    return HTMLResponse(content=mail_pages.ask(f"Send StratLab newsletters to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
-                                               "If you didn't ask for this, close this page.", manage=False))
+    return HTMLResponse(content=mail_pages.ask(f"Send StratLab emails to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
+                                               "Confirming also lets StratLab send the alert emails you turned on, not only newsletters. If you didn't ask for this, close this page.", manage=False))
 
 
 @app.post("/email/confirm", response_class=HTMLResponse)
@@ -1153,7 +1153,7 @@ def confirm_email(t: str = ""):
         return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
-    return mail_page("Email confirmed", f"Newsletters you choose {WHERE_EMAILS} will go to {address}.")
+    return mail_page("Email confirmed", f"The newsletters and alert emails you choose {WHERE_EMAILS} will go to {address}.")
 
 
 # ---------- markets and instruments ----------
@@ -1952,6 +1952,8 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
     q = alert_seed(body["region"], body["symbol"])
     try:
         a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))
+    except stock_alerts.AlertError as e:             # e.g. the same alert twice
+        err(400, "bad_alert", str(e))
     except stock_alerts.LimitReached as e:
         nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["stock_alerts"] > e.limit), None)
         upgrade(f"Your plan has {e.limit} active alert{'s' if e.limit != 1 else ''}. Delete one"

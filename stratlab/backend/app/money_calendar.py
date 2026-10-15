@@ -502,8 +502,8 @@ def _send(profile: dict, channel: str, subject: str, text: str) -> list[str]:
     sent = []
     for c, j in jobs:
         try:
-            j()
-            sent.append(c)
+            if alerts.reached(c, j()):
+                sent.append(c)
         except Exception as e:
             print("money calendar reminder failed:", c, type(e).__name__)
     return sent
