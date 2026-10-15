@@ -244,7 +244,7 @@ export function HoldingsPage() {
       {view && rows.length === 0 && (zerodhaEmpty(view.zerodha) ? (
         // Zerodha was asked and had nothing: say so, instead of "connect Zerodha" to someone who has (R7M-009)
         <EmptyState title={zerodhaEmpty(view.zerodha) ?? "Zerodha is connected; it returned 0 holdings"}>
-          If you hold shares at Zerodha, check that the right account is connected in <Link className="link" to="/settings#accounts">Settings</Link>. You can also upload your broker's holdings file above, or add stocks one at a time below.
+          If you hold shares at Zerodha, check that the right account is connected in <Link className="link" to="/settings#accounts">Settings</Link>. You can also upload your broker's holdings file above, or add stocks one at a time below. The tax report doesn't use this connection; it is built from the statements you upload there.
         </EmptyState>
       ) : (
         <EmptyState title="No holdings yet">Upload your broker's holdings file above, or add stocks one at a time below.</EmptyState>

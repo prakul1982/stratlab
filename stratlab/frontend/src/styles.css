@@ -92,6 +92,12 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
 .promo-banner { background: var(--blue-soft, var(--paper-2)); }
+/* a phone: one line, the second sentence left to the Plans page (R31-018) */
+@media (max-width: 640px) {
+  .promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
+  .promo-banner .promo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .promo-banner .promo-more { display: none; }
+}
 
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: var(--ctl-sm); padding: 0 12px; font-size: 14px; }
@@ -571,7 +577,7 @@ td.num, .num { font-family: var(--sans); }
 .lp { min-height: 100vh; background: var(--paper); }
 .lp-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
 .lp-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 12px clamp(16px, 4vw, 40px);
-  background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  background: var(--paper); border-bottom: 1px solid var(--line); }
 .lp-nav nav { display: flex; gap: 22px; margin-left: auto; }
 .lp-nav nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14.5px; }
 .lp-nav nav a:hover { color: var(--ink); }
@@ -1964,7 +1970,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-checks > *, .lp-steps > *, .lp-tools > *, .lp-markets > * { min-width: 0; }
 .lp-art { max-width: 100%; min-width: 0; overflow: hidden; }
 .lp-art svg { max-width: 100%; }
-.lp-art-tag { position: absolute; top: 10px; right: 10px; font: 600 12.5px var(--sans); color: var(--orange-ink); }
+.lp-art-tag { display: block; margin-top: 4px; text-align: right; font: 600 12.5px var(--sans); color: var(--orange-ink); }
 
 /* plans: amounts are held back until the prices have come, so nothing flashes and nothing moves */
 @keyframes lp-skel { from { background-position: 100% 0; } to { background-position: -100% 0; } }

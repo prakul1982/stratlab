@@ -43,6 +43,13 @@ const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 const FIRST_SCAN: ScanInfo = { id: "st_s2", name: "Stage 2 + Supertrend", text: "", rules: [], within: 1 };
 const sessions = (n: number) => (n === 0 ? "On the latest close" : `${n} session${n === 1 ? "" : "s"} before the latest close`);
 
+/** "Scanning 50 stocks… 12 s": the scan reports no progress, so the count and the time spent so far. */
+function ScanElapsed({ count }: { count?: number }) {
+  const [sec, setSec] = useState(0);
+  useEffect(() => { const t0 = Date.now(); const id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
+  return <>{count ? `Scanning ${count} stock${count === 1 ? "" : "s"}…` : "Scanning…"} {sec} s</>;
+}
+
 export function ScanPage() {
   const [region, setRegion] = useRegion();
   const [params, setParams] = useSearchParams();
@@ -151,7 +158,7 @@ export function ScanPage() {
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
       {!out && !busy && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
-      {busy && <Card><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
+      {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
         <Card>
           <CardHead title={`${preset.scan_name}: ${preset.name}`} info={preset.stored

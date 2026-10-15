@@ -47,7 +47,7 @@ const L = LIMITS;
 // full grid is on Plans.
 export const FEATURES: Record<PlanId, string[]> = {
   free: [`${L.free.backtests_per_month} backtests a month, each with a full verdict, and ${L.free.ai_builds_per_month} AI strategy builds`,
-    "Paper trading free for 5 market days, and the options builder with Greeks and breakevens after charges",
+    "A free paper-trading trial of 5 market days from your first start (after that, paper trading needs Basic or Pro), and the options builder with Greeks and breakevens after charges",
     `Today's derivatives positioning, F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
     `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",

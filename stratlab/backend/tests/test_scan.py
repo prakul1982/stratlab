@@ -224,6 +224,15 @@ def test_scan_fills_a_blank_name_from_the_stored_company_lists(monkeypatch):
     assert scan.company_name("US", {"symbol": "AAA", "name": None}, "US:AAA") == "Aaa From Facts"
 
 
+def test_scan_names_a_stock_as_its_company_page_does(monkeypatch):
+    """R31-020: the page's full name wins over the exchange's short name, which stays as the fallback."""
+    from app import stock_pages
+    monkeypatch.setattr(stock_pages, "companies", lambda region: {"ADANIPORTS": {"name": "Adani Ports and Special Economic Zone Ltd", "sym": "ADANIPORTS", "bse": None}})
+    monkeypatch.setattr(stock_pages, "_setting", lambda key: None)
+    assert scan.company_name("IN", {"symbol": "ADANIPORTS", "name": "ADANI PORT & SEZ"}, "NSE:ADANIPORTS") == "Adani Ports and Special Economic Zone Ltd"
+    assert scan.company_name("IN", {"symbol": "XYZ", "name": "XYZ SHORT"}, "NSE:XYZ") == "XYZ SHORT"
+
+
 def test_stage_days_flag_a_stage_that_began_before_the_look_back():
     """R29D-002: a stage running since the first candle read is a lower bound, not a fact."""
     r = scan.analyse(bars_from(list(np.linspace(100, 300, 420))))
