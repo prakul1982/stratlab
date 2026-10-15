@@ -79,7 +79,7 @@ The full list, with where each thing lives in the app, is in **[docs/FEATURES.md
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/verdict-dark.png">
-  <img alt="A verdict page: 'No edge here', with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
+  <img alt="A verdict page: the result against buy and hold after costs, with four honesty checks: unseen data, nearby settings, bad-luck drawdown and enough trades" src="docs/images/verdict-light.png">
 </picture>
 
 **Invest: research**
