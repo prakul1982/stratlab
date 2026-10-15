@@ -113,6 +113,6 @@ test.describe("analytics in the app", () => {
     expect(sent).not.toMatch(/\$snapshot|\$autocapture|\$rageclick/);
     // the owner's way in, on Admin → Overview
     await page.goto("/admin");
-    await expect(page.getByTestId("posthog-dashboard")).toHaveAttribute("href", "https://us.posthog.com");
+    await expect(page.getByTestId("posthog-dashboard")).toHaveAttribute("href", /^https:\/\/us\.posthog\.com\/?$/);   // safeHref normalises the address
   });
 });
