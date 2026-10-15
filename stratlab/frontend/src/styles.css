@@ -92,10 +92,10 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
 .promo-banner { background: var(--blue-soft, var(--paper-2)); }
-/* a phone: one line, the second sentence left to the Plans page (R31-018) */
+/* a phone: one short sentence, the second left to the Plans page; it wraps rather than cutting off the end date (R31-018) */
 @media (max-width: 640px) {
   .promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
-  .promo-banner .promo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .promo-banner .promo-text { min-width: 0; }
   .promo-banner .promo-more { display: none; }
 }
 
