@@ -15,8 +15,8 @@ test("today's own snapshot (an entry changed today) is passed over", () => {
   assert.deepEqual(netWorthDelta(130, null, withToday, "2026-10-15"), { change: 10, since: "2026-09-01" });
 });
 
-test("no change is shown when the live total is partial or no snapshot is complete", () => {
-  assert.equal(netWorthDelta(130, ["EPF"], hist), null);
+test("no change is shown when no snapshot left out the same as the live total", () => {
+  assert.equal(netWorthDelta(130, ["BTC"], hist), null);
   assert.equal(netWorthDelta(130, null, [hist[2]]), null);
   assert.equal(netWorthDelta(130, null, []), null);
 });
@@ -36,4 +36,11 @@ test("before the first reset the note names the sanctioned rate, never a missing
 test("a Sunday edit snapshots today, so the change reads against Friday's snapshot", () => {
   const h = [{ d: "2026-10-09", net: 100 }, { d: "2026-10-11", net: 130 }];
   assert.deepEqual(netWorthDelta(130, null, h, "2026-10-11"), { change: 30, since: "2026-10-09" });
+});
+
+test("B2: a partial total reads against the latest snapshot that left out exactly the same", () => {
+  const left = ["no price or buy price for 1 stock"];
+  const h = [{ d: "2026-09-01", net: 100 }, { d: "2026-10-01", net: 150, partial: left }, { d: "2026-10-05", net: 90, partial: ["mutual funds couldn't be read"] }];
+  assert.deepEqual(netWorthDelta(170, left, h, "2026-10-10"), { change: 20, since: "2026-10-01" });
+  assert.deepEqual(netWorthDelta(170, null, h, "2026-10-10"), { change: 70, since: "2026-09-01" });
 });

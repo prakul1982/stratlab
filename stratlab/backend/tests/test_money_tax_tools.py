@@ -83,7 +83,7 @@ def test_the_brokers_dividend_sheet_in_the_tax_zip():
 
 
 def test_a_dividend_csv_with_us_lines_and_bad_lines():
-    csv = ("Date,Symbol,Amount,TDS,Currency\n2025-06-10,INFY,2100,0,INR\n10/07/2025,AAPL,26.5,6.63,USD\n"
+    csv = ("Date,Symbol,Amount,TDS,Currency\n2025-06-10,INFY,2100,0,INR\n07/10/2025,AAPL,26.5,6.63,USD\n"
            ",RELIANCE,500,,INR\n2025-08-01,HDFCBANK,abc,,\nTotal,,2626.5,,\n")
     got = D.parse_upload(csv.encode(), "divs.csv")
     assert [(r["sym"], r["d"], r["amount"], r["cur"]) for r in got["rows"]] == [("INFY", "2025-06-10", 2100, "INR"), ("AAPL", "2025-07-10", 26.5, "USD")]
@@ -474,3 +474,12 @@ def test_an_advance_tax_run_killed_mid_way_skips_the_readers_already_sent(w, mon
     clock[0] += run_marks.STALE + 1
     A.Job().tick(eve)
     assert sent == ["u-basic", "u-free"]                                       # not u-basic again; u-pro was cut off mid-send
+
+
+def test_a_us_dividend_files_dates_read_month_first():
+    """B7: a US line's slashed date is month first, as a US broker writes it (03/05/2025 is 5 March), unless a date in the
+    file can only be read day first; an Indian line stays day first. An explicit 0 withheld on a US line stays 0 (b)."""
+    got = D.parse_upload(b"Date,Symbol,Amount,TDS,Currency\n03/05/2025,AAPL,26,0,USD\n04/06/2025,INFY,100,10,INR\n", "x.csv")
+    assert [(r["sym"], r["d"], r["tds"]) for r in got["rows"]] == [("AAPL", "2025-03-05", 0), ("INFY", "2025-06-04", 10)]
+    got = D.parse_upload(b"Date,Symbol,Amount,Currency\n03/05/2025,AAPL,26,USD\n24/06/2025,MSFT,10,USD\n", "x.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-05-03", "2025-06-24"]                       # 24/06 can only be day first

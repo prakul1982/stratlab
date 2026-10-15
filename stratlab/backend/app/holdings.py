@@ -87,7 +87,7 @@ def _data(before: list[dict], items: list[dict], source: str, stamped: bool, sin
     if not stamped:
         items = stamp(items, before, min(since, saved_day().isoformat()) if since else saved_day().isoformat())
     return {"items": items, "source": source if source in SOURCES else "CSV",
-            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="microseconds")}   # a stale-list check tells saves apart
 
 
 def save(uid: str, items: list[dict], source: str, stamped: bool = False, since: str | None = None) -> dict:
@@ -215,15 +215,39 @@ def match_us(rows: list[dict], find) -> tuple[list[dict], list[dict]]:
     return found, missed
 
 
+ADDED = "added"          # the part of a source's holding added from a file or by hand ("accts" key), kept through its syncs
+
+
+def _add_part(base: dict, r: dict) -> dict:
+    """A source's holding (base, with "via") with shares from a file or typed in (r) on top: the source's next read sets
+    only its own part, so these shares stay. The quantity is kept per part in "accts" (the source's own part under its
+    name, or a statement's per-account parts) and the added part's cost in "added_cost" (a bonus or split changes the
+    quantity, never the cost)."""
+    out = dict(base)
+    accts = dict(base.get("accts") or {base["via"]: base["qty"]})
+    had = accts.get(ADDED, 0)
+    accts[ADDED] = round(had + r["qty"], 4)
+    cost = base.get("added_cost") if had else 0.0
+    out["added_cost"] = round(cost + r["qty"] * r["avg"], 4) if cost is not None and r.get("avg") else None
+    q = base["qty"] + r["qty"]
+    out["avg"] = (base["avg"] * base["qty"] + r["avg"] * r["qty"]) / q if base.get("avg") and r.get("avg") else None
+    out["qty"], out["accts"] = round(q, 4), accts
+    return out
+
+
 def merge(rows: list[dict]) -> list[dict]:
     """One holding per company: lines for the same stock (on NSE and on BSE, or split by the broker) add up, and the
-    average price is weighted by quantity (none if any line has none)."""
+    average price is weighted by quantity (none if any line has none). A line from a file or typed in that adds to a
+    holding a broker or statement keeps ("via") is kept as its own part, so that source's next read doesn't drop it."""
     out: dict[str, dict] = {}
     for r in rows:
         k = f"{r['exchange']}:{r['symbol']}"
         cur = out.get(k)
         if not cur:
             out[k] = dict(r)
+            continue
+        if bool(cur.get("via")) != bool(r.get("via")):
+            out[k] = _add_part(cur, r) if cur.get("via") else _add_part(r, cur)
             continue
         q = cur["qty"] + r["qty"]
         if cur.get("avg") and r.get("avg"):
@@ -237,8 +261,8 @@ def merge(rows: list[dict]) -> list[dict]:
 def drop_stale_accts(rows: list[dict]) -> list[dict]:
     """The rows without "accts" where its parts no longer add up to the quantity (typed or added over a statement's
     per-account one: no hidden second quantity; the next statement sets it again)."""
-    return [{k: v for k, v in r.items() if k != "accts"} if r.get("accts") and abs(sum(r["accts"].values()) - r["qty"]) > 1e-9
-            else r for r in rows]
+    return [{k: v for k, v in r.items() if k not in ("accts", "added_cost")}
+            if r.get("accts") and abs(sum(r["accts"].values()) - r["qty"]) > 1e-9 else r for r in rows]
 
 
 def cap(items: list[dict], before: list[dict], limit: int) -> tuple[list[dict], list[str]]:

@@ -110,3 +110,14 @@ def test_prices_follow_the_rupee_price_at_todays_rate(store, monkeypatch):
 
 def test_nice_amounts():
     assert [pricing.nice(v) for v in (0.3, 11.35, 99.6, 137, 1694, 12340)] == [1, 11, 100, 135, 1700, 12500]
+
+
+def test_a_failed_read_keeps_the_old_rate_with_its_old_time(store):
+    """Item a: a day whose dollar read fails keeps the last good rate and the time it was read; it isn't stamped as read
+    now (the pages would show an old rate as today's)."""
+    pricing._rates_cache[0] = 0.0
+    first = pricing.refresh_rates(lambda code: 88.0)
+    assert not first["errors"] and pricing.rate_at("USD") == first["at"] == first["read_at"]["USD"]
+    again = pricing.refresh_rates(lambda code: 1 / 0 if code == "USD" else 90.0)
+    assert again["rates"]["USD"] == 88.0 and again["read_at"]["USD"] == first["at"] and pricing.rate_at("USD") == first["at"]
+    assert again["at"] == first["at"] and again["read_at"]["GBP"] > first["at"]

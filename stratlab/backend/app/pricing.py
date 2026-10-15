@@ -74,6 +74,15 @@ def rates() -> dict:
     return got
 
 
+def rate_at(code: str) -> str | None:
+    """When the stored rate of `code` was read (ISO, UTC); None before the first read."""
+    try:
+        got = json.loads(db.get_setting(RATES) or "{}")
+    except Exception:
+        return None
+    return (got.get("read_at") or {}).get(code) or (got.get("at") if code in (got.get("rates") or {}) else None)
+
+
 # units of a currency per US dollar, fixed by its central bank: used only when no market rate can be read
 PEGS = {"SAR": 3.75, "QAR": 3.64, "AED": 3.6725, "HKD": 7.80}
 
@@ -103,23 +112,28 @@ def cross_rate(code: str, quote) -> float:
 
 
 def refresh_rates(fetch) -> dict:
-    """Read every currency's rate (rupees per unit) with `fetch(code)`; keep the last good one for any that fails."""
+    """Read every currency's rate (rupees per unit) with `fetch(code)`; keep the last good one for any that fails.
+    "read_at" has each rate's own time of reading, and "at" moves only when every rate was read: a rate kept from an
+    earlier day is never stamped as read now."""
     from datetime import datetime, timezone
     try:
         old = json.loads(db.get_setting(RATES) or "{}")
     except Exception:
         old = {}
+    now = datetime.now(timezone.utc).isoformat()
     out, errors = dict(old.get("rates") or {}), []
+    read_at = {c: (old.get("read_at") or {}).get(c) or old.get("at") for c in out}
     for code in CURRENCIES:
         if code == "INR":
             continue
         try:
             r = float(fetch(code))
-            if r > 0:
-                out[code] = r
+            if not r > 0:
+                raise ValueError("no rate")
+            out[code], read_at[code] = r, now
         except Exception as e:
             errors.append(f"{code}: {str(e)[:60]}")
-    state = {"at": datetime.now(timezone.utc).isoformat(), "rates": out, "errors": errors}
+    state = {"at": old.get("at") if errors else now, "read_at": read_at, "rates": out, "errors": errors}
     db.set_setting(RATES, json.dumps(state))
     _rates_cache[0] = 0.0
     return state

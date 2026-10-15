@@ -199,8 +199,23 @@ class HoldingItem(BaseModel):
     market: Literal["IN", "US"] = "IN"                             # listed in India (NSE symbol or BSE code), or a US ticker
 
 
+class HoldingChange(BaseModel):
+    """One change to the saved holdings: "set" a stock's quantity or average price (a field left out keeps the saved
+    one; a stock not held yet is added), "add" shares to it, or "remove" it."""
+    op: Literal["set", "add", "remove"] = "set"
+    symbol: str = Field(..., min_length=1, max_length=20)
+    market: Literal["IN", "US"] = "IN"
+    qty: Optional[float] = Field(None, gt=0, le=1e9)
+    avg: Optional[float] = Field(None, ge=0, le=1e8)
+
+
 class HoldingsReq(BaseModel):
-    items: list[HoldingItem] = Field(default_factory=list, max_length=500)
+    """Either `changes` (applied to the holdings as saved now, so a sync that lands while the page is open is kept), or
+    the whole list as `items` (the older form). With `items`, `updated_at` is the saved holdings' stamp the list was
+    read at: a list read before another save is refused (409), so it can't undo that save."""
+    changes: Optional[list[HoldingChange]] = Field(None, max_length=500)
+    items: Optional[list[HoldingItem]] = Field(None, max_length=500)
+    updated_at: Optional[str] = Field(None, max_length=40)
 
 
 class CorpActionReq(BaseModel):

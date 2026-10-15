@@ -113,11 +113,18 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
     def cell(r, f):
         i = c.get(f)
         return r[i].strip() if i is not None and i < len(r) else ""
+
+    def is_us(r):
+        return (bool(re.search(r"\b(USD|US|USA|UNITED STATES)\b", (cell(r, "currency") + " " + cell(r, "country")).upper()))
+                or cell(r, "isin").upper().startswith("US"))
+    from .money_us_tax import _dates, _day           # a US line's date is month first, as on a US broker's file
+    us_order = _dates([cell(r, "date") for r in rows[start + 1:] if is_us(r)])
     for n, r in enumerate(rows[start + 1:], start + 2):
         if not any(x.strip() for x in r):
             continue
         sym, name, isin = _sym(cell(r, "symbol")), cell(r, "name")[:60], cell(r, "isin").upper()[:12]
-        d = hf.day(cell(r, "date"))
+        us = is_us(r)
+        d = _day(cell(r, "date"), us_order) if us else hf.day(cell(r, "date"))
         if not (sym or name or isin) or re.match(r"(?i)total", cell(r, "symbol") or cell(r, "name")):
             continue
         qty, ps = hf.number(cell(r, "qty")), hf.number(cell(r, "per_share"))
@@ -128,14 +135,13 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
             problems.append({"line": n, "text": " · ".join(x for x in (sym or name, cell(r, "date"), cell(r, "amount")) if x)[:80],
                              "reason": "No date" if not d else "No dividend amount"})
             continue
-        cur_text = (cell(r, "currency") + " " + cell(r, "country")).upper()
-        us = bool(re.search(r"\b(USD|US|USA|UNITED STATES)\b", cur_text)) or isin.startswith("US")
         tds = hf.number(cell(r, "tds"))
         if len(out) >= MAX_ROWS:
             raise hf.too_many(MAX_ROWS)
         out.append({"d": d, "sym": sym or isin or name.upper()[:20], "name": name, "isin": isin,
                     "qty": qty if qty and qty > 0 else None, "ps": ps if ps and ps > 0 else None, "amount": round(amount, 4),
-                    "tds": round(abs(tds), 4) if tds else None, "cur": "USD" if us else "INR", "src": src})
+                    "tds": round(abs(tds), 4) if tds or (us and tds is not None) else None,   # a US line's 0 withheld stays 0
+                    "cur": "USD" if us else "INR", "src": src})
     return out, problems[:100]
 
 

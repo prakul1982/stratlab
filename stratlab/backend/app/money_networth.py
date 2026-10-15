@@ -491,22 +491,23 @@ def history(uid: str) -> list[dict]:
 
 
 def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[dict]:
-    """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total (a source that
-    couldn't be read or valued) is stored only as the month's snapshot, flagged with what's missing: a fund with neither
-    NAV nor cost may never be valued, and history mustn't stop for it; any other partial total isn't stored, it would
-    show as a fall that didn't happen. A partial one never replaces a complete one of its day, and a month keeps one
-    "month" snapshot, the complete one if any. A "change" never overwrites an earlier day's complete snapshot (a Sunday
-    edit would replace Friday's, the one the headline change is read against): it is dated today instead."""
+    """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total is stored flagged
+    with what's missing: as the month's snapshot always (a fund with neither NAV nor cost may never be valued, and
+    history mustn't stop for it), and as a "change" when what's missing is a holding or entry that has nothing to value
+    it by (`partial_lasting`: the total leaves out the same thing until it gets a price, so the history goes on, marked).
+    A total missing a whole source that couldn't be read is stored only as the month's: any other snapshot of it would
+    show as a fall that didn't happen. A partial month snapshot never replaces a complete one of its day, and a month
+    keeps one "month" snapshot, the complete one if any. A "change" is always dated today, the day the entry changed
+    (dated by the last close, a weekend edit would replace Friday's snapshot, the one the headline change is read
+    against, and read as no change)."""
     partial = bool(totals.get("partial"))
-    if partial and why != "month":
+    if partial and not (why == "month" or (why == "change" and totals.get("partial_lasting"))):
         return history(uid)
-    d = (day or today()).isoformat()
+    d = (today() if why == "change" else day or today()).isoformat()
     old = history(uid)
     done = {h["d"] for h in old if not h.get("partial")}
-    if partial and (d in done or any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
+    if partial and why != "change" and (d in done or any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
         return old
-    if why == "change" and d in done and d < today().isoformat():
-        d = today().isoformat()
     rows = [h for h in old if h["d"] != d and not (why == "month" and h["d"][:7] == d[:7] and h.get("why") == "month" and h.get("partial"))]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
     if totals.get("partial"):
@@ -695,6 +696,19 @@ def data_day(rows: list[dict], at: date) -> date:
     return min(max(days), at) if days else at
 
 
+def rate_day(at: str | None, now: datetime | None = None) -> str:
+    """" (the rate of 9 Oct 2026)" for a dollar rate read more than a day ago (an old rate kept while a day's read
+    failed), else ""."""
+    try:
+        t = datetime.fromisoformat(str(at)) if at else None
+    except ValueError:
+        return ""
+    if t is None:
+        return ""
+    t = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+    return f" (the rate of {_day(t.astimezone(IST).date())})" if (now or datetime.now(timezone.utc)) - t > timedelta(days=1) else ""
+
+
 def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Prices, at: date | None = None) -> dict:
     """The whole page: totals, the allocation by asset class, every asset and loan with its value and as-of date, and the
     insurance register (kept apart: policies aren't counted in net worth). `stocks` is {"in", "us", "as_of", "count"} in
@@ -742,6 +756,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
         partial.append("US stocks (no dollar rate right now)")
     if mf and mf.get("failed"):
         partial.append("mutual funds couldn't be read")
+    unread = len(partial)                                   # whole sources that couldn't be read
     if mf and mf.get("missing"):
         partial.append(f"{mf['missing']} mutual {'fund' if mf['missing'] == 1 else 'funds'} without a NAV or a cost")
     unpriced = [r["name"] for r in assets if r["value"] is None]
@@ -749,8 +764,14 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
         partial.append("no price for " + ", ".join(unpriced))
     no_price = (stocks or {}).get("unpriced") or {}
     n_np = sum(no_price.values())
-    if stocks and stocks.get("count") and n_np:          # counted at cost, or not at all without one
-        partial.append(f"no price for {n_np} {'stock' if n_np == 1 else 'stocks'}")
+    # a stock without a price counts at cost, so the total is whole; one with neither a price nor a buy price (a
+    # statement's holding has no buy price) has no value to count, so the total leaves it out and says so
+    n_nv = sum(((stocks or {}).get("unvalued") or {}).values())
+    notes = []
+    if stocks and stocks.get("count") and n_nv:
+        partial.append(f"no price or buy price for {n_nv} {'stock' if n_nv == 1 else 'stocks'}")
+    if stocks and stocks.get("count") and n_np - n_nv > 0:
+        notes.append(f"{n_np - n_nv} {'stock' if n_np - n_nv == 1 else 'stocks'} counted at cost (no price)")
 
     def stock_basis(m: str) -> tuple[str, str]:          # (basis, what the rule adds) for a market's row
         n = no_price.get(m) or 0
@@ -771,7 +792,7 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
             linked.append({"id": "stocks_us", "kind": "stocks_us", "label": "US stocks", "name": "My Holdings: US stocks", "class": "stocks_us",
                            "value": _r(stocks["us"]), "as_of": stocks.get("as_of"), "basis": basis,
                            "rule": ("From My Holdings, at today's prices in rupees" if basis == "market price" else "From My Holdings, at cost in rupees (no price right now)")
-                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" if stocks.get("usd_inr") else "") + more,
+                                   + (f", at ₹{stocks['usd_inr']:.2f} a dollar" + rate_day(stocks.get("usd_inr_at")) if stocks.get("usd_inr") else "") + more,
                            "facts": {}, "linked": "/holdings"})
     if mf and mf.get("value"):
         linked.append({"id": "mf", "kind": "mf", "label": "Mutual funds", "name": "Mutual funds", "class": "mf", "value": _r(mf["value"]),
@@ -791,7 +812,8 @@ def build(items: list[dict], stocks: dict | None, mf: dict | None, prices: Price
     upcoming_due = sorted((p for p in policies if p["due_in"] is not None), key=lambda p: p["due_in"])
     return {"as_of": data_day(rows, at).isoformat(), "computed_at": now_iso,
             "totals": {"assets": _r(total_assets), "liabilities": _r(total_loans), "net": _r(total_assets - total_loans),
-                       "oldest_as_of": min(dated) if dated else None, "partial": partial or None},
+                       "oldest_as_of": min(dated) if dated else None, "partial": partial or None,
+                       "partial_lasting": bool(partial) and not unread, "notes": notes or None},
             "allocation": allocation, "assets": rows, "liabilities": loans,
             "insurance": {"policies": policies, "yearly_premium": _r(sum(p["yearly_premium"] or 0 for p in policies)),
                           "cover": {t: _r(sum(p["sum_assured"] or 0 for p in policies if p["entry"].get("policy_type") == t))
@@ -937,6 +959,19 @@ def to_csv(view: dict, hist: list[dict] | None) -> str:
     return buf.getvalue()
 
 
+# ---------- the plan's limit ----------
+def limit_message(cap: int) -> str:
+    return (f"Your plan keeps up to {cap} entries in Net worth (assets, loans and policies). "
+            "Basic keeps as many as you like, with the history chart.")
+
+
+def over_limit(items: list[dict], plan: str) -> str | None:
+    """The plan's limit message when one more entry would pass it (an import adds one as a typed entry would), else None."""
+    from .plans import networth_items
+    cap = networth_items(plan)
+    return limit_message(cap) if cap is not None and len(items) + 1 > cap else None
+
+
 # ---------- the 1st-of-the-month snapshot ----------
 class Job:
     """Checks every half hour; from the 1st of each month (India time, after 4 pm, so stock prices are the day's close)
@@ -969,6 +1004,12 @@ class Job:
         for key, _ in db.all_settings_with_prefix(KEY):
             uid = key[len(KEY):]
             if run.seen(uid):
+                continue
+            # already has this month's complete snapshot (a visit took it when the run was late), or removed this
+            # month's on purpose: nothing to take
+            if db.get_setting(SKIP + uid) == month or any(h["d"][:7] == month and h.get("why") == "month" and not h.get("partial")
+                                                          for h in history(uid)):
+                run.record(uid)
                 continue
             run.beat()
             try:
@@ -1049,8 +1090,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
     def _limit_check(profile, n: int):
         cap = item_limit(profile["_plan"])
         if cap is not None and n > cap:
-            bad(402, "networth_limit", f"Your plan keeps up to {cap} entries in Net worth (assets, loans and policies). "
-                                       "Basic keeps as many as you like, with the history chart.")
+            bad(402, "networth_limit", limit_message(cap))
 
     @r.post("/items")
     def add_item(req: ItemReq, profile=Depends(current_profile)):
@@ -1080,7 +1120,10 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
                 entry = clean(req)
             except EntryError as e:
                 bad(422, "bad_entry", str(e))
-            return [{**entry, "id": iid} if i["id"] == iid else i for i in items]
+            old = next(i for i in items if i["id"] == iid)
+            # an entry read from a statement or passbook stays that (the next one updates it) while it stays the same kind
+            keep = {"auto": old["auto"]} if old.get("auto") and old["kind"] == entry["kind"] else {}
+            return [{**entry, **keep, "id": iid} if i["id"] == iid else i for i in items]
         update(profile["id"], edit)
         return page(profile, "change")
 

@@ -61,18 +61,23 @@ def _date(s: str) -> str | None:
 
 # ---------- EPF ----------
 def read_epf(text: str) -> dict:
-    """The passbook's closing balances: "Closing Balance as on dd/mm/yyyy <employee> <employer> <pension>", one per member id.
-    The balance is the employee and employer shares (the pension scheme isn't a provident fund balance)."""
-    total, found, as_of = 0.0, 0, None
+    """The passbook's closing balances: "Closing Balance as on dd/mm/yyyy <employee> <employer> <pension>", the latest
+    one of each member id (a passbook of two years has a closing line for each year: the later one is the balance), added
+    up over the member ids. The balance is the employee and employer shares (the pension scheme isn't a provident fund
+    balance)."""
+    members = [(m.start(), m.group(1)) for m in re.finditer(r"(?i)member\s*id\s*[:\-]?\s*([A-Z0-9][A-Z0-9/]*)", text)]
+    latest: dict = {}                          # member id (None before any) -> (day, balance)
     for m in re.finditer(r"(?i)closing\s+balance\s+as\s+on\s+(\d{2}[/-]\d{2}[/-]\d{4})\s+" + NUM + r"\s+" + NUM, text):
         ee, er = _money(m.group(2)), _money(m.group(3))
         if ee is None or er is None:
             continue
-        total += ee + er
-        found += 1
-        d = _date(m.group(1))
-        as_of = max(as_of or "", d or "")
-    return {"balance": round(total, 2) if found else None, "as_of": as_of or None, "passbooks": found}
+        who = next((mid for at, mid in reversed(members) if at < m.start()), None)
+        d = _date(m.group(1)) or ""
+        if who not in latest or d >= latest[who][0]:
+            latest[who] = (d, ee + er)
+    found = len(latest)
+    as_of = max((d for d, _ in latest.values()), default="")
+    return {"balance": round(sum(b for _, b in latest.values()), 2) if found else None, "as_of": as_of or None, "passbooks": found}
 
 
 # ---------- NPS ----------
@@ -294,7 +299,7 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
         if bal is None:
             raise DocError("bad_figure", "Enter the balance as a number.")
         asof = _day(figures.get("as_of"))
-        note = _save_entry(uid, "epf", {"balance": bal}, asof)
+        note = _save_entry(uid, "epf", {"balance": bal}, asof, profile["_plan"])
         docs["epf"] = {"balance": bal, "as_of": asof, "confirmed_at": now}
         out = {"detail": note or "EPF balance saved in Net worth."}
     elif kind == "nps":
@@ -328,7 +333,9 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
     return out
 
 
-def _save_entry(uid: str, kind: str, fields: dict, asof: str | None) -> str:
+def _save_entry(uid: str, kind: str, fields: dict, asof: str | None, plan: str | None = None) -> str:
+    """The balance as a Net worth entry marked as read from a passbook: the one read before is updated; a new one is
+    added only within the plan's limit, as a typed one would be. Returns why it wasn't saved, or ""."""
     why = []
 
     def put(items):             # runs again on the newer entries if the user edits Net worth meanwhile
@@ -343,6 +350,10 @@ def _save_entry(uid: str, kind: str, fields: dict, asof: str | None) -> str:
         if mine:
             entry["id"] = mine[0]["id"]
             return [entry if i["id"] == entry["id"] else i for i in items]
+        full = money_networth.over_limit(items, plan) if plan else None
+        if full:
+            why.append(f"The {kind.upper()} balance was not added. {full}")
+            return None
         entry["id"] = secrets.token_hex(4)
         return items + [entry]
     money_networth.update(uid, put)

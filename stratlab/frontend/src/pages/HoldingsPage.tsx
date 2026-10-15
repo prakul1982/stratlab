@@ -15,6 +15,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
+import { dollarRate, editChange, type Change, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -32,11 +33,10 @@ type View = {
   totals: { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced: number;
     no_cost?: { count: number; symbols: string[]; value: number } | null; session?: string | null; other_session?: string[] };
   source: string | null; updated_at: string | null; prices: boolean; prices_at?: string | null; limit: number; facts_max: number;
-  us?: UsTotals | null; usd_inr?: number | null; us_prices?: boolean | null;
+  us?: UsTotals | null; usd_inr?: number | null; usd_inr_at?: string | null; us_prices?: boolean | null;
   /** the connected Zerodha account's last read (R7M-009); absent when it isn't connected */
   zerodha?: ZerodhaRead | null;
 };
-type Mkt = "IN" | "US";
 type Facts = {
   stage: number | null; st_up: boolean | null; signal: string | null; red: number | null; amber: number | null; flags: string[];
   recent: { at: string; label: string; severity: string; subject: string; url: string | null }[]; results: { date: string; subject: string; url: string | null } | null;
@@ -122,11 +122,12 @@ export function HoldingsPage() {
     }
   };
 
-  /** Save the list; a symbol no listed company has comes back to `onMissing` (said under the box) or as a toast. */
-  const save = async (items: { symbol: string; qty: number; avg: number | null; market: Mkt }[], done?: string, onMissing?: (msg: string) => void) => {
+  /** Send only what changed: the server applies it to the holdings as saved now, so a sync that landed while the page was
+   * open stays. A symbol no listed company has comes back to `onMissing` (said under the box) or as a toast. */
+  const save = async (changes: Change[], done?: string, onMissing?: (msg: string) => void) => {
     setBusy(true);
     try {
-      const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { items } });
+      const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { changes } });
       show(r.holdings);
       const missing = r.unmatched.length
         ? `${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}. Pick one from the suggestions.` : null;
@@ -140,8 +141,6 @@ export function HoldingsPage() {
       return false;
     } finally { setBusy(false); }
   };
-  const current = () => (view?.rows ?? []).map((r) => ({ symbol: r.symbol, qty: r.qty, avg: r.avg, market: (r.market ?? "IN") as Mkt }));
-  const same = (x: { symbol: string; market: Mkt }, r: Row) => x.symbol === r.symbol && x.market === (r.market ?? "IN");
 
   const addOne = async () => {
     const errs = problems({
@@ -151,7 +150,7 @@ export function HoldingsPage() {
     setAddErr(errs);
     if (Object.keys(errs).length) return;
     const q = Number(add.qty.replace(/,/g, "")), a = add.avg.trim() ? Number(add.avg) : null;
-    if (await save([...current(), { symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`,
+    if (await save([{ op: "add", symbol: add.symbol.trim(), qty: q, avg: a, market: add.market }], `${add.symbol.trim().toUpperCase()} added.`,
       (msg) => setAddErr({ symbol: msg }))) {
       setAdd({ symbol: "", qty: "", avg: "", market: add.market }); setPicked(""); setBoxes((n) => n + 1); setAddErr({});
     }
@@ -266,7 +265,7 @@ export function HoldingsPage() {
             </p>
             {t.no_cost && (
               <p className="k-note">
-                Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ₹${view.usd_inr.toFixed(2)} a dollar)` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.
+                Not in these totals: {t.no_cost.symbols.join(", ")} ({t.no_cost.count === 1 ? "no buy price" : "no buy prices"}), worth {inr(t.no_cost.value)} now{view.usd_inr && rows.some((r) => isUS(r) && t.no_cost!.symbols.includes(r.symbol)) ? ` (at ${dollarRate(view.usd_inr, view.usd_inr_at)})` : ""}, except Today, which includes {t.no_cost.count === 1 ? "its" : "their"} change.
                 Add {t.no_cost.count === 1 ? "its buy price" : "their buy prices"} with Edit to count {t.no_cost.count === 1 ? "it" : "them"}.
               </p>
             )}
@@ -278,7 +277,7 @@ export function HoldingsPage() {
               <p className="k-small" aria-label="US stocks">
                 <b>US stocks</b> ({view.us.count}): {usd(view.us.value)} · invested {usd(view.us.invested)}
                 {view.us.pnl != null && <> · <span className={tone(view.us.pnl)}>{usd(view.us.pnl)} ({pct(view.us.pnl_pct)})</span></>}
-                <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ₹${view.usd_inr.toFixed(2)} a dollar` : "not in the rupee totals above: the exchange rate isn't available right now"}
+                <span className="k-note"> · {view.us.in_total && view.usd_inr ? `in the rupee totals above at ${dollarRate(view.usd_inr, view.usd_inr_at)}` : "not in the rupee totals above: the exchange rate isn't available right now"}
                   {view.us_prices === false && " · US prices are offline right now, so these are at cost"}. US stocks aren't part of the tax report, which works out Indian capital gains.</span>
               </p>
             )}
@@ -369,8 +368,8 @@ export function HoldingsPage() {
 
       {edit && (
         <EditHolding row={edit} busy={busy} onClose={() => setEdit(null)} fallback={() => afterRemove(editAt.current)}
-          onSave={async (q, a) => { if (await save(current().map((x) => (same(x, edit) ? { ...x, qty: q, avg: a } : x)), `${edit.symbol} updated.`)) setEdit(null); }}
-          onRemove={async () => { if (await save(current().filter((x) => !same(x, edit)), `${edit.symbol} removed.`)) setEdit(null); }} />
+          onSave={async (q, a) => { if (await save([editChange(edit, q, a)], `${edit.symbol} updated.`)) setEdit(null); }}
+          onRemove={async () => { if (await save([{ op: "remove", symbol: edit.symbol, market: edit.market ?? "IN" }], `${edit.symbol} removed.`)) setEdit(null); }} />
       )}
       {asking && <ConfirmDialog title="Delete my holdings?" confirmLabel="Delete my holdings" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every saved position is removed from StratLab. Your broker account isn't touched.</ConfirmDialog>}
     </div>

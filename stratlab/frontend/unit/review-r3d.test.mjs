@@ -26,7 +26,7 @@ test("the Money home asks for tradebooks only when the tax report has nothing to
 test("My space net worth uses the Net worth page's change and leaves partial snapshots out of the chart", () => {
   const hist = [{ d: "2026-08-01", net: 100 }, { d: "2026-09-01", net: 120 }, { d: "2026-10-01", net: 40, partial: ["EPF"] }];
   assert.deepEqual(netWorthDelta(130, null, hist, "2026-10-14"), { change: 10, since: "2026-09-01" });   // the partial October one is passed over
-  assert.equal(netWorthDelta(130, ["EPF"], hist, "2026-10-14"), null);                                    // a partial live total shows no change
+  assert.equal(netWorthDelta(130, ["BTC"], hist, "2026-10-14"), null);                                    // a partial live total: no like-for-like snapshot, no change
   const card = read("pages/MineHome.tsx");
   assert.match(card, /netWorthDelta\(v\.totals\.net, v\.totals\.partial, hist\)/);
   assert.match(card, /hist\.filter\(\(h\) => !h\.partial\?\.length\)/);
