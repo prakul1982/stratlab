@@ -20,3 +20,13 @@ export function dollarRate(rate: number, at: string | null | undefined, now: num
   const day = old ? new Date(t).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : "";
   return `₹${rate.toFixed(2)} a dollar${old ? ` (the rate of ${day})` : ""}`;
 }
+
+const VIA_NAMES: Record<string, string> = { kite: "Kite", ibkr: "IBKR" };
+
+/** What an edit does to a row a broker or statement syncs (the server's holdings.set_qty and connect.sync). */
+export function syncedNote(via: string): string {
+  if (via === "cas") return "From your depository statement. The next statement sets the quantity and average it reads, replacing what you type here.";
+  const name = VIA_NAMES[via] ?? via;
+  return `Synced from ${name}. A quantity you type is kept: the shares above ${name}'s are kept as your own, through its next read. ` +
+    `An average price typed alone is replaced by ${name}'s average on its next read.`;
+}

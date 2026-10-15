@@ -258,6 +258,42 @@ def merge(rows: list[dict]) -> list[dict]:
     return drop_stale_accts(list(out.values()))
 
 
+VIA_NAMES = {"kite": "Kite", "ibkr": "IBKR", "cas": "the statement"}
+SYNCED = ("kite", "ibkr")      # a broker that syncs; a statement's quantity typed over is replaced by the next statement
+
+
+def set_qty(old: dict, qty: float, avg: float | None) -> tuple[dict, str | None]:
+    """(row, note) for a quantity typed over a broker's holding (old, with "via" in SYNCED). The source's own part
+    stays the source's; the difference becomes the user's added part (holdings.ADDED), so the next read keeps the
+    total typed. Its cost is the typed total cost (quantity x the average, the one typed or else the one shown) less the
+    source's part's cost, so the average stays as shown until the source's own average moves. Below the source's part
+    there's nothing to keep it by: the quantity is saved as typed, and the note says the next read sets it back."""
+    accts = dict(old.get("accts") or {old["via"]: old["qty"]})
+    had = accts.pop(ADDED, 0)
+    own = round(sum(accts.values()), 4)
+    out = {k: v for k, v in old.items() if k not in ("accts", "added_cost")}
+    out["qty"], out["avg"] = qty, avg
+    extra = round(qty - own, 4)
+    if extra < 0:
+        name = VIA_NAMES.get(old["via"], old["via"])
+        return out, (f"{old['symbol']}: {qty:g} is below the {own:g} {name} holds, so the next {name} read sets it "
+                     f"back to {own:g}. Sell or move the shares there to lower it for good.")
+    if not extra:
+        return {**out, "accts": accts} if old.get("accts") and set(accts) != {old["via"]} else out, None
+    own_cost = None
+    if old.get("avg") is not None:
+        if not had:
+            own_cost = old["avg"] * own
+        elif old.get("added_cost") is not None:
+            own_cost = old["avg"] * old["qty"] - old["added_cost"]
+    cost = qty * avg - own_cost if avg is not None and own_cost is not None else None
+    if cost is None or cost < 0:          # the source's part's cost unknown (or above the total typed)
+        cost = extra * avg if avg is not None else None
+    out["accts"] = {**accts, ADDED: extra}
+    out["added_cost"] = round(cost, 4) if cost is not None else None
+    return out, None
+
+
 def drop_stale_accts(rows: list[dict]) -> list[dict]:
     """The rows without "accts" where its parts no longer add up to the quantity (typed or added over a statement's
     per-account one: no hidden second quantity; the next statement sets it again)."""
@@ -364,7 +400,8 @@ def _position(i: dict, q: dict) -> dict:
             "kind_label": None if kind == "stock" else instrument_kinds.label(code),
             "sector": instrument_kinds.SECTORS.get(kind) or sector_name(i.get("sector")), "qty": qty, "avg": _r(avg), "price": _r(price),
             "value": _r(val), "invested": _r(inv), "pnl": _r(pnl), "pnl_pct": _r(pnl / inv * 100) if pnl is not None and inv else None,
-            "day": _r(chg), "day_pct": _r(q.get("change_pct")), "session": session_day(q, "US" if us else "IN") if price else None}
+            "day": _r(chg), "day_pct": _r(q.get("change_pct")), "session": session_day(q, "US" if us else "IN") if price else None,
+            "via": i.get("via")}
 
 
 def _counted(r: dict) -> bool:

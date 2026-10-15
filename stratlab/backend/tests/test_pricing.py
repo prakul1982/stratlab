@@ -121,3 +121,24 @@ def test_a_failed_read_keeps_the_old_rate_with_its_old_time(store):
     again = pricing.refresh_rates(lambda code: 1 / 0 if code == "USD" else 90.0)
     assert again["rates"]["USD"] == 88.0 and again["read_at"]["USD"] == first["at"] and pricing.rate_at("USD") == first["at"]
     assert again["at"] == first["at"] and again["read_at"]["GBP"] > first["at"]
+
+
+def test_admin_rates_time_is_each_rates_own_and_the_oldest_of_them(store):
+    """rev6a: "at" moves only when every rate was read, so Admin showed None after a first read with one error, and a stuck
+    time while one currency kept failing. Admin now has each rate's own read time and the oldest of them."""
+    import time_machine
+    from datetime import datetime, timezone
+    from app import main
+    with time_machine.travel(datetime(2026, 10, 1, 6, 0, tzinfo=timezone.utc)):
+        pricing.refresh_rates(lambda code: 1 / 0 if code == "EUR" else 90.0)           # a first read with an error
+    v = main.prices_view()
+    assert v["rates_at"] and v["rates_at"].startswith("2026-10-01T06:00") and "EUR" not in v["rates_read_at"]
+    assert v["rates_read_at"]["USD"] == v["rates_at"] and any(e.startswith("EUR") for e in v["rate_errors"])
+    with time_machine.travel(datetime(2026, 10, 2, 6, 0, tzinfo=timezone.utc)):
+        pricing.refresh_rates(lambda code: 90.0)
+    with time_machine.travel(datetime(2026, 10, 3, 6, 0, tzinfo=timezone.utc)):
+        pricing.refresh_rates(lambda code: 1 / 0 if code == "EUR" else 91.0)           # EUR keeps failing from here
+    v = main.prices_view()
+    assert v["rates_read_at"]["USD"].startswith("2026-10-03") and v["rates_read_at"]["EUR"].startswith("2026-10-02")
+    assert v["rates_at"] == v["rates_read_at"]["EUR"]                                    # the oldest rate shown
+    assert pricing.rate_at("USD").startswith("2026-10-03")                              # what Holdings shows is unchanged

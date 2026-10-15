@@ -101,9 +101,10 @@ def _sym(v: str) -> str:
     return re.sub(r"^(NSE|BSE)[:\s]+|(-EQ|\.NS|\.BO)$", "", str(v or "").strip().upper())[:20]
 
 
-def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[dict]]:
+def rows_from_table(rows: list[list[str]], src: str, filename: str = "", notes: list[str] | None = None) -> tuple[list[dict], list[dict]]:
     """(dividends, problems) from one table with a header row. Each dividend is {d, sym, name, isin, qty, ps,
-    amount (gross, in its currency), tds, cur, src}. A total line or a line without a date is left out."""
+    amount (gross, in its currency), tds, cur, src}. A total line or a line without a date is left out. How US lines'
+    dates were read, when they read either way, goes to `notes`."""
     got = _header(rows)
     if not got:
         return [], []
@@ -117,8 +118,12 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
     def is_us(r):
         return (bool(re.search(r"\b(USD|US|USA|UNITED STATES)\b", (cell(r, "currency") + " " + cell(r, "country")).upper()))
                 or cell(r, "isin").upper().startswith("US"))
-    from .money_us_tax import _dates, _day           # a US line's date is month first, as on a US broker's file
-    us_order = _dates([cell(r, "date") for r in rows[start + 1:] if is_us(r)])
+    # a US line's date is month first, as on a US broker's file; day first in an Indian broker's export (a tax P&L too)
+    from .money_us_tax import _day, date_order, indian_export
+    broker = indian_export(rows, start, filename) or ("the broker's tax P&L" if src == "statement" else None)
+    us_order, note = date_order([cell(r, "date") for r in rows[start + 1:] if is_us(r)], broker)
+    if note and notes is not None and note not in notes:
+        notes.append(note)
     for n, r in enumerate(rows[start + 1:], start + 2):
         if not any(x.strip() for x in r):
             continue
@@ -145,11 +150,12 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
     return out, problems[:100]
 
 
-def _workbook(raw: bytes, src: str, only_dividend_sheets: bool) -> tuple[list[dict], list[dict]]:
+def _workbook(raw: bytes, src: str, only_dividend_sheets: bool, filename: str = "",
+              notes: list[str] | None = None) -> tuple[list[dict], list[dict]]:
     out, problems = [], []
     only = (lambda n: bool(re.search(r"(?i)dividend", n))) if only_dividend_sheets else None
     for name, rows in hf.sheets(raw, hf.MAX_ROWS, only=only, wanted=lambda rows: _header(rows) is not None):
-        got, probs = rows_from_table(rows, src)
+        got, probs = rows_from_table(rows, src, filename, notes)
         out += got
         problems += probs
     return out, problems
@@ -190,19 +196,20 @@ def parse_upload(data: bytes, filename: str = "") -> dict:
         raise hf.FileError("That file is empty.")
     if len(data) > hf.TAX_MAX_BYTES:
         raise hf.FileError(f"That file is larger than {hf.TAX_MAX_BYTES // (1024 * 1024)} MB.")
-    rows, problems = [], []
+    rows, problems, notes = [], [], []
     if data[:4] == b"PK\x03\x04" and not hf._is_xlsx(data):
         rows = from_tax_file(data, filename)
     elif data[:4] == b"PK\x03\x04":
-        rows, problems = _workbook(data, "csv", True)
+        rows, problems = _workbook(data, "csv", True, filename, notes)
         if not rows:
-            rows, problems = _workbook(data, "csv", False)
+            notes.clear()
+            rows, problems = _workbook(data, "csv", False, filename, notes)
     else:
-        rows, problems = rows_from_table(hf.table(data, MAX_BYTES), "csv")
+        rows, problems = rows_from_table(hf.table(data, MAX_BYTES), "csv", filename, notes)
     if not rows:
         raise hf.FileError("No dividends were found in that file. It needs columns for the date, the company (symbol, "
                            "name or ISIN) and the amount (or quantity and dividend a share).")
-    return {"rows": rows, "problems": problems}
+    return {"rows": rows, "problems": problems, "date_note": " ".join(notes) or None}
 
 
 # ---------- stored ----------

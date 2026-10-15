@@ -562,3 +562,72 @@ def test_a_file_added_to_a_brokers_holdings_keeps_its_shares_through_the_next_sy
     assert rows["INFY"]["qty"] == 4 and rows["INFY"]["avg"] == pytest.approx(1500) and not rows["INFY"].get("via")
     kite_sync([{"symbol": "TCS", "isin": None, "name": "TCS", "qty": 1.0, "avg": 3100.0}])
     assert stored()["INFY"]["qty"] == 4
+
+
+# ---------- review rev6a: a quantity typed over a broker's holding is the user's own part ----------
+def test_a_quantity_typed_over_a_brokers_holding_keeps_the_total_through_the_next_sync(w):
+    """A quantity edit on a synced row keeps the broker's part as the broker's and the difference as the added part,
+    with the cost that keeps the average shown (typed or not): the next sync keeps the total and that average."""
+    c = w["client"]
+    kite_sync([INFY_KITE])
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    assert stored()["INFY"]["accts"] == {"kite": 10, "added": 4}
+    shown = stored()["INFY"]["avg"]
+    r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 20}]})
+    assert r.status_code == 200 and r.json()["notes"] == []
+    row = stored()["INFY"]
+    assert (row["qty"], row["accts"], row["avg"]) == (20, {"kite": 10, "added": 10}, shown)
+    assert row["added_cost"] == pytest.approx(20 * shown - 10 * 1400)
+    kite_sync([INFY_KITE])
+    row = stored()["INFY"]
+    assert row["qty"] == 20 and row["avg"] == pytest.approx(shown) and row["via"] == "kite"
+    # quantity and average typed together: both kept through the sync; the broker's average moves only its part
+    c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 15, "avg": 1300}]})
+    kite_sync([INFY_KITE])
+    assert (stored()["INFY"]["qty"], stored()["INFY"]["avg"]) == (15, pytest.approx(1300))
+    kite_sync([{**INFY_KITE, "avg": 1500.0}])
+    assert stored()["INFY"]["avg"] == pytest.approx((15 * 1300 + 10 * 100) / 15)
+    # back to the broker's own quantity: no added part left
+    c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 10}]})
+    assert "accts" not in stored()["INFY"] and "added_cost" not in stored()["INFY"]
+
+
+def test_a_quantity_typed_on_a_plain_synced_row_and_through_the_whole_list(w):
+    c = w["client"]
+    kite_sync([INFY_KITE])
+    items = [{"symbol": "INFY", "qty": 12, "avg": 1400, "market": "IN"}]          # the older whole-list form
+    assert c.put("/holdings", headers=PRO, json={"items": items}).status_code == 200
+    assert stored()["INFY"]["accts"] == {"kite": 10, "added": 2} and stored()["INFY"]["added_cost"] == pytest.approx(2800)
+    kite_sync([INFY_KITE])
+    assert (stored()["INFY"]["qty"], stored()["INFY"]["avg"]) == (12, pytest.approx(1400))
+
+
+def test_a_quantity_typed_below_the_brokers_part_says_the_next_sync_sets_it_back(w):
+    c = w["client"]
+    kite_sync([INFY_KITE])
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 6}]})
+    assert r.status_code == 200
+    assert r.json()["notes"] == ["INFY: 6 is below the 10 Kite holds, so the next Kite read sets it back to 10. "
+                                 "Sell or move the shares there to lower it for good."]
+    assert stored()["INFY"]["qty"] == 6 and "accts" not in stored()["INFY"]
+    kite_sync([INFY_KITE])
+    assert stored()["INFY"]["qty"] == 10
+
+
+def test_an_average_alone_typed_over_a_synced_row_follows_the_brokers_on_the_next_sync(w):
+    c = w["client"]
+    kite_sync([INFY_KITE])
+    upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\n", mode="add")
+    c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "avg": 1000}]})
+    assert stored()["INFY"]["avg"] == 1000 and stored()["INFY"]["accts"] == {"kite": 10, "added": 4}
+    kite_sync([INFY_KITE])
+    assert stored()["INFY"]["qty"] == 14 and stored()["INFY"]["avg"] == pytest.approx((10 * 1400 + 4 * 1500) / 14)
+
+
+def test_a_quantity_typed_over_a_statements_holding_is_not_kept_as_an_added_part(w):
+    """rev6a: only a broker that syncs keeps a typed quantity as the user's part; a statement's row is replaced as before."""
+    holdings.save("u-pro", [{"symbol": "INFY", "exchange": "NSE", "name": "INFY", "qty": 10.0, "avg": 1400.0, "via": "cas",
+                             "accts": {"IN300": 10.0}}], "Statement")
+    assert w["client"].put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "INFY", "qty": 12}]}).status_code == 200
+    assert stored()["INFY"]["qty"] == 12 and "accts" not in stored()["INFY"]

@@ -706,7 +706,12 @@ def prices_view() -> dict:
         fx = json.loads(db.get_setting(pricing.RATES) or "{}")
     except Exception:
         fx = {}
-    return {"currencies": pricing.table(), "rates_at": fx.get("at"), "rate_errors": fx.get("errors") or []}
+    # each rate's own time of reading (one kept from before has its older time), and the oldest of them: "at" moves only
+    # when every rate was read, so it stays still (or None on a first read with an error) while one currency keeps failing
+    read = {c: pricing.rate_at(c) for c in (fx.get("rates") or {})}
+    read = {c: t for c, t in read.items() if t}
+    return {"currencies": pricing.table(), "rates_at": min(read.values()) if read else None, "rates_read_at": read,
+            "rate_errors": fx.get("errors") or []}
 
 
 @app.get("/admin/prices")
@@ -2793,6 +2798,18 @@ def _same_avg(old: dict, sent) -> bool:
     return old.get("avg") is not None and sent is not None and abs(round(old["avg"], 2) - sent) < 1e-9
 
 
+def _typed_qty(old: dict, new: dict, out: dict) -> dict:
+    """An edited holding. A quantity typed over a synced broker's one keeps the difference as the user's added part, so
+    the next sync keeps the total typed (holdings.set_qty); one below the broker's part gets a note. A quantity typed
+    over a statement's per-account one replaces it (the next statement sets it again). Any other edit leaves the parts
+    as they are (an average alone follows the source's average on its next read)."""
+    if old.get("via") in holdings.SYNCED and abs(float(new["qty"]) - float(old["qty"])) > 1e-9:
+        new, note = holdings.set_qty(old, new["qty"], new.get("avg"))
+        if note:
+            out["notes"].append(note)
+    return holdings.drop_stale_accts([new])[0]
+
+
 @app.put("/holdings")
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     """Change the holdings by hand: add a stock, change a quantity or average price, remove one. `changes` are applied
@@ -2825,7 +2842,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
                 new = {**old, **({"qty": c.qty} if c.qty is not None else {})}
                 if "avg" in c.model_fields_set and not _same_avg(old, c.avg):
                     new["avg"] = c.avg or None
-                rows[k] = holdings.drop_stale_accts([new])[0]
+                rows[k] = _typed_qty(old, new, out)
             elif c.qty is None:
                 err(422, "bad_change", f"Enter the quantity of {k[1]}.")
             else:
@@ -2848,13 +2865,13 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
         for n, i in enumerate(req.items, 1):
             old = saved.get((i.market, i.symbol.strip().upper()))
             if old:                       # already matched: kept as it is, even while market data is offline
-                kept.append({**old, "qty": i.qty, "avg": old["avg"] if _same_avg(old, i.avg) else i.avg or None})
+                kept.append(_typed_qty(old, {**old, "qty": i.qty, "avg": old["avg"] if _same_avg(old, i.avg) else i.avg or None}, out))
             else:
                 (us_lines if i.market == "US" else lines).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
-        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
-        return holdings.drop_stale_accts(kept), lines, us_lines
+        return kept, lines, us_lines
 
     def edited(before):                   # runs again on the newer holdings if another save lands first
+        out["notes"] = []
         saved = {(holdings.market_of(i), i["symbol"]) for i in before["items"]}
         kept, rows, us_rows = changed(before) if req.changes is not None else whole(before)
         found, out["missed"] = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
@@ -2872,7 +2889,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             return with_sectors(found, known), before["source"] or "Manual"
         return None if out["missed"] else db.REMOVE      # every row removed
     holdings.update(profile["id"], edited)
-    return ok({"unmatched": out["missed"], "holdings": holdings_view(profile)})
+    return ok({"unmatched": out["missed"], "notes": out["notes"], "holdings": holdings_view(profile)})
 
 
 HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetched while the page waits; the rest after

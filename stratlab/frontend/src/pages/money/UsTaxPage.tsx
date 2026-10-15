@@ -36,7 +36,7 @@ type View = {
   years: Year[]; fa: Fa | null; facts: string[]; assumptions: string[]; missing_history: string[];
   rates: { available: boolean; sbi_from: string | null; sbi_to: string | null; source: string; fallback: string }; names: Record<string, string>;
 };
-type ImportReply = { read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; month_first: boolean; us: View };
+type ImportReply = { read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; month_first: boolean; date_note?: string | null; us: View };
 
 const usd = (v: number | null | undefined, dp = 2) => money(v, "USD", dp);
 const rateText = (r: Rate) => (r ? `₹${r.rate.toFixed(2)} (${dateOnly(r.on)}${r.fallback ? ", RBI" : ""})` : "not known");
@@ -105,7 +105,7 @@ export function UsTaxPage() {
     try {
       const r = await api<ImportReply>(`/money/us-tax/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
       setV(r.us);
-      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.month_first ? " Dates like 03/04/2025 were read month first, the US way." : ""}`);
+      setNote(`${r.added} trade${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : r.month_first ? " Dates like 03/04/2025 were read month first, the US way." : ""}`);
       track("us trades imported", { rows: r.added });
     } catch (e) { fail(e); } finally { setBusy(false); reset(); }
   };

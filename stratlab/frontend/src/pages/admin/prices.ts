@@ -15,3 +15,16 @@ export function rateNote(errors: string[], rows: Record<string, { no_rate?: bool
   if (none.length) parts.push(`No exchange rate yet for ${none.join(", ")}: ${none.length === 1 ? "it isn't" : "they aren't"} shown to visitors until one is read. Fix a price here to show one anyway.`);
   return parts.join(" ");
 }
+
+/** "Exchange rates read …": the newest read, and when the rates kept from an earlier read (one that failed since) were
+ * read, named. `readAt`: each rate's own time of reading (ISO); `ago` words a time. */
+export function ratesRead(readAt: Record<string, string> | null | undefined, ago: (iso: string) => string): string {
+  const times = Object.entries(readAt ?? {});
+  if (!times.length) return "Exchange rates not read yet: the built-in amounts are shown.";
+  const newest = times.reduce((a, [, t]) => (t > a ? t : a), times[0][1]);
+  const older = times.filter(([, t]) => t < newest).sort((a, b) => (a[1] < b[1] ? -1 : 1));
+  if (!older.length) return `Exchange rates read ${ago(newest)}.`;
+  const byTime = new Map<string, string[]>();
+  for (const [c, t] of older) byTime.set(t, [...(byTime.get(t) ?? []), c]);
+  return `Exchange rates read ${ago(newest)}; ${[...byTime].map(([t, cs]) => `${cs.join(", ")} ${ago(t)}`).join("; ")}.`;
+}

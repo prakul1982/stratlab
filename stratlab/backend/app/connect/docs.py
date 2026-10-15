@@ -63,21 +63,30 @@ def _date(s: str) -> str | None:
 def read_epf(text: str) -> dict:
     """The passbook's closing balances: "Closing Balance as on dd/mm/yyyy <employee> <employer> <pension>", the latest
     one of each member id (a passbook of two years has a closing line for each year: the later one is the balance), added
-    up over the member ids. The balance is the employee and employer shares (the pension scheme isn't a provident fund
-    balance)."""
-    members = [(m.start(), m.group(1)) for m in re.finditer(r"(?i)member\s*id\s*[:\-]?\s*([A-Z0-9][A-Z0-9/]*)", text)]
-    latest: dict = {}                          # member id (None before any) -> (day, balance)
+    up over the member ids. With no member id read, the lines of the latest financial year are added up (each is a
+    member's, as one passbook has one closing line a year). The balance is the employee and employer shares (the pension
+    scheme isn't a provident fund balance)."""
+    members = [(m.start(), m.group(1)) for m in re.finditer(r"(?i)member[ \t]*id[ \t]*[:\-]?[ \t]*([A-Z0-9][A-Z0-9/]*)", text)]
+    lines = []                                 # (member id or None, day, balance)
     for m in re.finditer(r"(?i)closing\s+balance\s+as\s+on\s+(\d{2}[/-]\d{2}[/-]\d{4})\s+" + NUM + r"\s+" + NUM, text):
         ee, er = _money(m.group(2)), _money(m.group(3))
         if ee is None or er is None:
             continue
         who = next((mid for at, mid in reversed(members) if at < m.start()), None)
-        d = _date(m.group(1)) or ""
-        if who not in latest or d >= latest[who][0]:
-            latest[who] = (d, ee + er)
-    found = len(latest)
-    as_of = max((d for d, _ in latest.values()), default="")
-    return {"balance": round(sum(b for _, b in latest.values()), 2) if found else None, "as_of": as_of or None, "passbooks": found}
+        lines.append((who, _date(m.group(1)) or "", ee + er))
+    if members:
+        latest: dict = {}                      # member id (None before any) -> (day, balance)
+        for who, d, b in lines:
+            if who not in latest or d >= latest[who][0]:
+                latest[who] = (d, b)
+        got = list(latest.values())
+    else:
+        fy = lambda d: int(d[:4]) + (int(d[5:7]) > 3) if d else 0       # the financial year a closing line ends
+        last = max((fy(d) for _, d, _ in lines), default=0)
+        got = [(d, b) for _, d, b in lines if fy(d) == last]
+    found = len(got)
+    as_of = max((d for d, _ in got), default="")
+    return {"balance": round(sum(b for _, b in got), 2) if found else None, "as_of": as_of or None, "passbooks": found}
 
 
 # ---------- NPS ----------
