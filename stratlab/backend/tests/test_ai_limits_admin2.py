@@ -50,3 +50,15 @@ def test_the_daily_ai_build_message_says_when_it_comes_back(monkeypatch):
     with pytest.raises(HTTPException) as e:
         main.ai_allowance({"id": "p", "email": "p@x.com", "_plan": "pro"})
     assert e.value.detail["code"] == "ai_daily_limit" and "midnight India time" in e.value.detail["message"]
+
+
+def test_at_the_search_limit_the_reader_gets_the_real_message(usage, monkeypatch):
+    monkeypatch.setattr(routes, "SEARCH_AI_PER_DAY", 1)
+    monkeypatch.setattr(main.ideas, "build", lambda ask_json, q: {"ideas": [{"title": q}]})
+    monkeypatch.setattr(main.ask, "build", lambda ask_json, q: {"action": "answer", "answer": q, "title": "t"})
+    main.ask_route(main.IdeasReq(q="what is one"), FREE)
+    for out in (main.ask_route(main.IdeasReq(q="what is two"), FREE), main.search_ideas(main.IdeasReq(q="gold two"), FREE)):
+        assert out["fallback"] is True and out["limit"] is True
+        assert out["message"].startswith("You've used today's 1 AI answers") and "midnight India time" in out["message"]
+    other = HTTPException(422, {"code": "ai_failed", "message": "No."})
+    assert main.limit_notice(other) == {}                                   # another failure carries no limit message

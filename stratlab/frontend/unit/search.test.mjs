@@ -31,3 +31,11 @@ test("a question names a feature by its words, not by 'is' inside 'list'", () =>
   assert.equal(match("what is walk-forward?", 1)[0].id, "walkforward");
   assert.ok(!match("what is walk-forward?", 5).some((f) => f.to === "/research/watchlist"));
 });
+
+test("at the day's limit the search box shows the server's message, not 'isn't available'", async () => {
+  const { searchAiNotice } = await import("../src/lib/aiReason.ts");
+  const msg = "You've used today's 40 AI answers in the search box. The count starts again at midnight India time.";
+  assert.equal(searchAiNotice({ limit: true, message: msg }), msg);
+  assert.match(searchAiNotice({}), /isn't available/);
+  assert.match(searchAiNotice({ limit: false, message: msg }), /isn't available/);
+});

@@ -308,7 +308,9 @@ def summary(f: dict) -> dict:
         return hit
     text = ai_summary(f)
     out = {"text": text, "ai": True} if text else {"text": template(f), "ai": False}
-    _cache.set(key, out, 24 * 3600)
+    # a written summary is kept the day; the template stands in for a failed AI call only for a few minutes, so a one-off
+    # failure doesn't freeze it as the issue's summary
+    _cache.set(key, out, 24 * 3600 if text else 10 * 60)
     return out
 
 

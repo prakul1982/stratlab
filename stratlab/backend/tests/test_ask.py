@@ -84,3 +84,20 @@ def test_an_emptied_answer_is_neither_counted_nor_cached(monkeypatch):
         assert db.count_usage("u-free", "search_ai", "2000-01-01") == 1
     finally:
         w["close"]()
+
+
+# ---------- rev7b: a recommendation about any named company, in any case, is dropped ----------
+def test_advice_about_any_named_company_is_dropped():
+    for s in ("Tata Motors is a strong buy.", "Consider buying SBI before results.", "Go long on Apple now.",
+              "Reliance looks like a bargain at this level.", "Nifty will hit 25000 by December.",
+              "Many analysts say Infosys is undervalued.", "Analysts say Apple could double from here."):
+        assert ask.recommends(s), s
+
+
+def test_education_answers_still_pass_the_ask_filter():
+    for s in (SHORT, BREAKOUT, "Buy and hold means keeping shares for years.", "RSI above 70 is often read as overbought.",
+              "In StratLab you can backtest a rule on Indian stocks.", "A stop loss sells a position when price falls to a set level.",
+              "Your money will double in about 72 divided by the rate years."):
+        assert not ask.recommends(s), s
+    a = ask.clean({"action": "answer", "answer": "RSI runs from 0 to 100. Tata Motors is a strong buy."}, "what is rsi?")["answer"]
+    assert a == "RSI runs from 0 to 100."

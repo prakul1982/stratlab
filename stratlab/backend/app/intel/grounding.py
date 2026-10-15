@@ -190,7 +190,21 @@ ADVICE = re.compile(
     r"|\b(will|should|could|may|might)\s+(rise|fall|go|climb|drop|rally|gain|continue|outperform|underperform|benefit|recover|rebound|see|drive|lead|weigh|boost|pressure|support)\b"
     r"|\bopportunit(y|ies)\b|\bmultibagger\b|\b(good|great|right|ideal) time\b|\brecommend"
     # R12-004: a buy level or a pick repeated from a headline ("Jim Cramer set a buy level for Starbucks")
-    r"|\bbuy[- ](level|point|zone|signal|range|alert)s?\b|\b(his|her|their) (take|picks?) on\b|\bstocks? to watch\b|\bbreakouts?\b", re.I)
+    r"|\bbuy[- ](level|point|zone|signal|range|alert)s?\b|\b(his|her|their) (take|picks?) on\b|\bstocks? to watch\b|\bbreakouts?\b"
+    # a call on any subject, in any form ("buying chances", "a strong buy", "look like a buy", "add equities", "accumulate on dips")
+    r"|\b(buy|buying|sell|selling|hold|holding)\s+(chances?|opportunit\w+|ideas?|calls?|ratings?|recommendations?|candidates?|(on|the) dips?)\b"
+    r"|\b(a|an|the|strong|outright|clear|rated)\s+(strong\s+)?(buy|sell)\b(?!\s+(back|side|order|price|volume|rate))|\b(strong|clear) hold\b|\ba hold\b"
+    r"|\b(you|investors?|traders?|buyers?)\s+(can|could|may|might|should|must|ought to|would do well to)\s+(buy|sell|hold|add|pick|accumulate|trim|load)\b"
+    r"|\baccumulat(e|es|ing)\b|\bgo(ing)? long\b|\bgo(ing)? short\b|\bload(ing)? up\b|\bbuy(ing)? the dips?\b"
+    r"|\badd(ing)?\s+(to\s+)?(equit\w+|stocks?|shares?|positions?|exposure|your|the (stock|shares)|it|them)\b"
+    r"|\b(good|great|solid|safe|core|ideal|best)\s+(long[- ]term\s+)?(hold|holding)s?\b|\blong[- ]term (hold|holding)\b"
+    r"|\b(top|better|best|safer|stock|favou?rite|my|our)\s+picks?\b|\bpick(ing)? (up )?(the |this )?(stock|shares|it|them)\b"
+    r"|\bwinners?\b|\b(safer|better|best|smarter)\s+(choice|bet|option|investment|buy)\b|\b(a |the )(good|great|safe|smart|sound) (investment|bet)\b"
+    r"|\battractive\b|\bprefer(s|red)?\s+(alpha|beta|the|this|that|it|\w+ (over|to))\b|\b(should|would|may|might|could|can) prefer\b"
+    r"|\bworth (owning|holding|a place|adding|picking)\b|\bdeserves?\b|\bplace in (a|your|any|every) (\w+ )?(portfolio|watchlist)\b"
+    r"|\bbargains?\b|\bstrong buy\b"
+    # a forecast of a price level or a multiple ("will hit 25000", "will double by 2030")
+    r"|\b(will|could|may|might|should|would|can|to|is set to|is likely to|is expected to)\s+(hit|reach|touch|cross|surpass|double|triple|quadruple|halve|soar|plunge|crash|tank|surge|skyrocket)\b(?<!\bto hit)(?<!\bto touch)(?<!\bto cross)(?<!\bto reach)", re.I)
 
 # subjects a market read may mention only when a headline (or the facts) does: central banks, macro data, flows, sectors
 TOPICS = ("fed", "federal reserve", "fomc", "minutes", "powell", "ecb", "boj", "rbi", "repo", "rate cut", "rate hike", "inflation",
@@ -642,6 +656,7 @@ _RESULTS = re.compile(r"\b(results?|earnings|report(s|ed|ing)?|release)\b", re.I
 # a label on the business or its figures, which the read must leave to the reader ("strong earnings momentum", "a
 # forward P/E of 9.45 indicating low valuation", "indicating leverage exposure")
 JUDGE = re.compile(r"\b(strong|weak|healthy|poor|excellent|robust|solid|impressive|stellar|sluggish)\b"
+                   r"|\b(stronger|weaker|better|worse|healthier|safer|superior|inferior|more (attractive|robust|resilient|solid))\b"
                    r"|\b(low|high|rich|stretched|modest|lofty|full|undemanding|demanding|reasonable) valuation\b"
                    r"|\b(indicating|suggesting|signalling|signaling)\b", re.I)
 _WATCH_PAST = re.compile(r"\b(actual|reported|beat|beats|missed|came in)\b", re.I)

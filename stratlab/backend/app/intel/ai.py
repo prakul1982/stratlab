@@ -5,6 +5,7 @@ All of them go through the same free provider chain as the idea builder. Answers
 cached and shared between users, so a popular stock or theme costs one AI call."""
 import hashlib
 import json
+import re
 import time
 
 from ..ai_providers import AIError, complete, extract_json
@@ -70,15 +71,15 @@ def _share(v) -> int | None:
 
 def company_facts(c: dict) -> dict:
     """The compact, factual view of a profile the model is allowed to reason from."""
-    q = c.get("quote") or {}
+    # no live price or day move: the read is kept up to 12 hours (shared by everyone), and a figure for "today" would sit
+    # beside a different live quote on the page; what it says holds whenever it is read
     # each figure under its group's name: India's "3Y CAGR" is in both Sales growth and Profit growth, and one
     # flat label kept only the profit one (R6O-001)
     # each figure as the page writes it ("0.9%", "2.56"), never the raw 2.55977229601518 the model then copies (R7O-001)
     metrics = {f"{g['title']}: {i['label']}": grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
                for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
-             "currency": c.get("currency"), "industry": c.get("industry"), "price": q.get("price"),
-             "day_change_pct": q.get("change_pct"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c),
+             "currency": c.get("currency"), "industry": c.get("industry"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c),
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
              "shareholding": c.get("shareholding"),
@@ -237,6 +238,27 @@ def clean_company(read: dict) -> dict:
     return out
 
 
+_CALL_OPENING = re.compile(r"^\W*(buy|sell|accumulate|avoid|add|pick|hold|load|go long)\b(?![-\w])", re.I)
+
+
+def theme_text(text, length: int) -> str:
+    """A theme read's sentence as it goes out: none that advises or forecasts (the model has no source to forecast from),
+    and a sentence with a figure marked as the AI's own estimate, since no fact backs it."""
+    kept = []
+    for x in grounding._SENT.split(" ".join(str(text or "").split())):
+        if not x or grounding.ADVICE.search(x) or _CALL_OPENING.search(x):
+            continue
+        if grounding._numbers(x) and "(AI estimate)" not in x:
+            x = x.rstrip()
+            x = f"{x[:-1]} (AI estimate){x[-1]}" if x[-1:] in ".!?" else f"{x} (AI estimate)"
+        kept.append(x)
+    return " ".join(kept)[:length]
+
+
+def theme_list(x, n: int, length: int = 400) -> list:
+    return [t for t in (theme_text(i, length) for i in _clip(x, n, 2000)) if t]
+
+
 def sector(q: str, region: str, ai) -> dict:
     where = ("INDIAN MARKET ONLY: every company must be listed on NSE/BSE (use NSE symbols as tickers), use rupees "
              "(crore/lakh) and Indian context; ETFs must be Indian." if region == "IN" else
@@ -262,23 +284,23 @@ companies with the most direct link to the theme, in value-chain order, not rank
         return [{"name": str(c.get("name") or "")[:60], "ticker": str(c.get("ticker") or "").upper()[:20]}
                 for c in (x or []) if isinstance(c, dict) and c.get("name")][:8]
     return {
-        "sector": str(r.get("sector") or q)[:80], "summary": str(r.get("summary") or "")[:900],
+        "sector": str(r.get("sector") or q)[:80], "summary": theme_text(r.get("summary"), 900),
         # no market size or growth rate: the model gives no source for them ("₹1.85 trillion (2025), 12.5% a year"), so
         # none is shown (R7O-012)
         "market_size": "", "cagr": None, "cagr_note": "",
         "etfs": [{"ticker": str(e.get("ticker") or "")[:20], "name": str(e.get("name") or "")[:80]}
                  for e in (r.get("etfs") or []) if isinstance(e, dict)][:4],
-        "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": str(s.get("detail") or "")[:400]}
+        "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": theme_text(s.get("detail"), 400)}
                        for s in (r.get("sub_themes") or []) if isinstance(s, dict)][:6],
-        "core": str(r.get("core") or "")[:120],
+        "core": theme_text(r.get("core"), 120),
         "clusters": [{"name": str(c.get("name") or "")[:60], "companies": cos(c.get("companies"))}
                      for c in (r.get("clusters") or []) if isinstance(c, dict)][:6],
         "screen": [{"name": str(s.get("name") or "")[:60], "ticker": str(s.get("ticker") or "").upper()[:20],
-                    "layer": str(s.get("layer") or "")[:40], "composite": None, "one_line": str(s.get("one_line") or "")[:300]}
+                    "layer": str(s.get("layer") or "")[:40], "composite": None, "one_line": theme_text(s.get("one_line"), 300)}
                    for s in (r.get("screen") or []) if isinstance(s, dict) and s.get("name")][:8],
-        "value_chain": [{"layer": str(v.get("layer") or "")[:60], "description": str(v.get("description") or "")[:600],
+        "value_chain": [{"layer": str(v.get("layer") or "")[:60], "description": theme_text(v.get("description"), 600),
                          "companies": cos(v.get("companies"))} for v in (r.get("value_chain") or []) if isinstance(v, dict)][:6],
-        "tailwinds": _clip(r.get("tailwinds"), 5), "risks": _clip(r.get("risks"), 5),
+        "tailwinds": theme_list(r.get("tailwinds"), 5), "risks": theme_list(r.get("risks"), 5),
     }
 
 

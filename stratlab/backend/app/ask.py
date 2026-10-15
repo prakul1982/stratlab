@@ -71,12 +71,26 @@ RECOMMEND = re.compile(
     r"\b(target price|price target)s?\b|\btarget(s|ed)?\b[^.\d%]{0,14}(₹|rs\.?\s*|inr\s*|\$)?\d[\d,]{2,}"
     rf"|\b(should|ought to)\s+{_ACTS}\b|\brecommend|\bworth (buying|owning|selling)\b|\bmultibagger"
     r"|\b(good|great|right|ideal|best) time to (buy|sell|invest|enter|exit)\b|\bstocks? to (buy|watch|sell)\b"
-    rf"|^\W*{_ACTS}\b[^.]*\b(now|today|immediately)\b", re.I)
+    rf"|^\W*{_ACTS}\b[^.]*\b(now|today|immediately)\b"
+    # a call on anyone, in any wording ("a strong buy", "go long on", "consider buying", "a bargain", "will hit 25000")
+    r"|\b(strong|clear|outright) (buy|sell)\b|\b(looks?|is|are|rated|seems?) (like )?an? (buy|sell|hold|bargain)\b|\bgo(ing)? long\b"
+    r"|\b(consider|think about|look at|time for)\s+(buying|selling|adding|accumulating|holding)\b|\b(buying|selling) (chances?|opportunit\w+)\b"
+    r"|\baccumulate on\b|\b(will|could|may|might|should)\s+(hit|reach|touch|cross|surpass|top)\s+[₹$]?\d"
+    r"|\b(top|better|best) picks?\b|\bsafer (choice|bet)\b|\b(better|best) (investment|bet)\b", re.I)
 # what a named stock (a ticker in capitals) is advised or forecast to do
 _CALL = re.compile(r"\b(buy|sell|hold|accumulate|avoid|short|undervalued|overvalued|upside|downside|cheap|expensive|target)\b"
                    r"|\b(will|could|may|might|is likely to|is set to|is poised to)\s+(rise|fall|rally|climb|drop|gain|"
                    r"outperform|underperform|recover|rebound|double)\b", re.I)
 _TICKER = re.compile(r"\b[A-Z][A-Z0-9&]{1,}(?:-[A-Z]{1,3})?\b")
+# a company named in ordinary case ("Tata Motors", "Apple", "Reliance"): a capitalised word that doesn't open the sentence
+_NAME = re.compile(r"(?<=[a-z0-9,;:)] )[A-Z][a-z]{2,}[A-Za-z&.]*")
+_NOT_NAMES = {"Indian", "American", "British", "European", "Japanese", "Chinese", "StratLab", "January", "February", "March", "April",
+              "May", "June", "July", "August", "September", "October", "November", "December", "Monday", "Tuesday", "Wednesday",
+              "Thursday", "Friday", "Saturday", "Sunday", "India", "Nifty", "Sensex", "Stop", "Loss", "Bollinger", "Bands", "Moving",
+              "Average", "Relative", "Strength", "Index", "Fibonacci", "Dow", "Bank", "Fund", "Reserve", "Federal", "The", "This", "That"}
+_NAMED_CALL = re.compile(r"\b(buy|buying|sell|selling|accumulate|accumulating|undervalued|overvalued|upside|downside|bargain|cheap|"
+                         r"expensive|avoid|target)\b|\b(will|could|may|might|is likely to|is set to|is poised to)\s+"
+                         r"(rise|fall|rally|climb|drop|gain|outperform|underperform|recover|rebound|double|triple|hit|reach)\b", re.I)
 TERMS = {"RSI", "EMA", "SMA", "WMA", "MACD", "VWAP", "ATR", "ADX", "OBV", "CCI", "MFI", "ROC", "DMI", "NSE", "BSE", "NYSE",
          "NASDAQ", "LSE", "ETF", "ETFS", "IPO", "SIP", "FO", "PE", "EPS", "ROE", "ROCE", "GDP", "CPI", "RBI", "SEBI", "US",
          "UK", "EU", "USD", "INR", "OHLC", "AI", "API", "CSV", "PDF", "SL", "TP", "PNL", "FII", "DII", "OI", "PCR", "IV",
@@ -89,7 +103,9 @@ def recommends(sentence: str) -> bool:
     if RECOMMEND.search(sentence):
         return True
     named = [t for t in _TICKER.findall(sentence) if t.replace("-", "") not in TERMS]
-    return bool(named) and bool(_CALL.search(sentence))
+    if named and _CALL.search(sentence):
+        return True
+    return any(n not in _NOT_NAMES for n in _NAME.findall(sentence)) and bool(_NAMED_CALL.search(sentence))
 
 
 def clean(raw, q: str, strict: bool = False) -> dict:
