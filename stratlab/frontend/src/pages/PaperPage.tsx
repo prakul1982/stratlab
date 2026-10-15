@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format"
+import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
 import { viewedFreeKeepsSessions } from "../lib/account";
 import { sessionPath, upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
