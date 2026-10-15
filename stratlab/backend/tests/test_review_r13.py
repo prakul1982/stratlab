@@ -306,7 +306,8 @@ def test_the_plain_text_brief_gives_every_headline_an_address_and_the_close_as_i
     c = TestClient(main.app)
     r = c.get("/news-link/market.US.2026-10-09/0", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == google
-    assert c.get("/news-link/market.US.2026-10-09/7", follow_redirects=False).status_code == 404
+    gone = c.get("/news-link/market.US.2026-10-09/7", follow_redirects=False)       # R23-004: a story no longer listed opens the brief
+    assert gone.status_code == 302 and gone.headers["location"].endswith("/news?tab=US&issue=market.US.2026-10-09")
     assert c.get("/news-link/my_stocks.u1.2026-10-09/0", follow_redirects=False).status_code == 404     # only a market brief's
 
 

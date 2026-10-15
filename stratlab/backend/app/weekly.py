@@ -27,6 +27,17 @@ def _n(k: int, word: str, plural: str = "") -> str:
     return f"{k} {word if k == 1 else plural or word + 's'}"
 
 
+def _when(at, now: datetime) -> str:
+    """" (Mon 12 Oct, 09:30)" for a run's time, in the summary's own zone; empty when the run has none."""
+    try:
+        t = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return ""
+    if t.tzinfo and now.tzinfo:
+        t = t.astimezone(now.tzinfo)
+    return f" ({t:%a} {t.day} {t:%b}, {t:%H:%M})"
+
+
 def summary(now: datetime, facts: dict) -> tuple[str, str]:
     """(subject, text) from the week's facts: users, checks, audits, errors and the admin link."""
     since = now - timedelta(days=7)
@@ -52,13 +63,12 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
     elif not failed_runs:
         lines.append(f"- {_n(len(checks), 'run')}, all passed")
     else:
-        # every failed run is told: a check that failed in several runs says how many ("Prices: IN (3 runs)")
-        counts: dict[str, int] = {}
-        for c in failed_runs:
-            for n in c.get("failed") or []:
-                counts[n] = counts.get(n, 0) + 1
-        names = [f"{n} ({k} runs)" if k > 1 else n for n, k in sorted(counts.items())]
-        lines.append(f"- {_n(len(checks), 'run')}, {len(failed_runs)} with failures: {', '.join(names) or 'see Admin'}")
+        # each failed run once, when it ran and the checks that failed in it: the list is as long as the count (R23-003:
+        # "9 runs, 5 with failures" listed per-check counts adding up to 8)
+        runs = [f"{', '.join(c.get('failed') or []) or 'see Admin'}{_when(c.get('at'), now)}" for c in failed_runs]
+        lines.append(f"- {_n(len(checks), 'run')}, {len(failed_runs)} with failures: {'; '.join(runs)}")
+        lines.append("- Counted: every run of the daily checks in these 7 days, automatic and Run now. Each failed run is "
+                     "listed once, with the checks that failed in it.")
     lines.append("")
 
     lines.append("New listings (whole-market audit)")
@@ -74,9 +84,12 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         else:
             line += ", no mismatches or errors"
         lines.append(line)
-    before = facts.get("errors_before_restart")
-    kept = f"; {before} more from before the last restart {'is' if before == 1 else 'are'} kept" if before else ""
-    lines += ["", "Server errors", f"- {_n(facts['errors'], 'server error')} this week{kept}"]
+    # each error once (R23-003: "4 this week; 23 more from before the restart" counted the 4 twice): the week's errors,
+    # split by the last restart when the split is known
+    since_restart, before = facts.get("errors_week_since_restart"), facts.get("errors_week_before_restart")
+    split = (f" ({since_restart} since the last restart, {before} before it)"
+             if facts["errors"] and since_restart is not None and before is not None else "")
+    lines += ["", "Server errors", f"- {_n(facts['errors'], 'server error')} this week{split}"]
     if facts.get("admin_url"):
         lines += ["", f"Admin page: {facts['admin_url']}"]
 

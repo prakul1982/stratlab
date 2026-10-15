@@ -94,6 +94,15 @@ def recorded_through(targets: list[str]) -> str | None:
     return max(days) if days else None
 
 
+def news_run_at(at: str) -> str:
+    """When a newsletter run went, in UTC as the job records it: "14 Oct 10:47 UTC"."""
+    try:
+        t = datetime.fromisoformat(str(at).replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return str(at)
+    return f"{t.day} {t:%b %H:%M} UTC"
+
+
 def plural(n: int, one: str) -> str:
     return f"{n} {one}{'' if n == 1 else 's'}"
 
@@ -154,18 +163,30 @@ def rows() -> list[dict]:
         st = _plain(m.newsletter_job, "newsletters")
         label = {"IN": "India", "US": "US", "IN-weekly": "India, weekly", "US-weekly": "US, weekly", "stocks": "My stocks", "stocks-weekly": "My stocks, weekly"}
         log, failed = [], 0
+        regions = st.get("regions") or {}
         for key in label:
-            rep = (st.get("regions") or {}).get(key)
+            rep = regions.get(key)
             if not rep:
                 continue
             why = rep.get("skipped") or {}
             failed += sum(n for w, n in why.items() if w in (news.WHY["error"], news.WHY["profile"]))
-            line = f"{label[key]}, {rep.get('day')}: sent to {rep.get('sent', 0)} of {plural(rep.get('readers', 0), 'reader')}"
+            readers = rep.get("readers")
+            line = f"{label[key]}, {rep.get('day')}: sent to {rep.get('sent', 0)}" + (f" of {plural(readers, 'reader')}" if readers is not None else "")
             if rep.get("other_edition"):
                 line += f"; {rep['other_edition']} chose the other edition"
             # the skipped count and why, said even when it is none, so a reader left out is never invisible (R8B-007)
             line += f"; skipped {sum(why.values())}" + (": " + ", ".join(f"{n} {w}" for w, n in why.items()) if why else "")
+            if rep.get("error"):
+                line += f"; {rep['error']}"
+            if rep.get("at"):
+                line += f" (run {news_run_at(rep['at'])})"    # each market's own last run (R23-002)
             log.append(line)
+        # a market whose daily brief was due today and has no run recorded says so, rather than nothing (R23-002)
+        for region in news.SEND_AT:
+            due = news.due_today(region)
+            rep = regions.get(region) or {}
+            if due and rep.get("day") != due:
+                log.append(f"{label[region]}, {due}: no run recorded yet (due at {news.SEND_AT[region][1]} {'IST' if region == 'IN' else 'New York time'})")
         at, extra = _ran(st, "last_run", data=lambda: max((i.get("at") or "" for r in news.SEND_AT for i in news.recent("market", r, 1)), default="") or None)
         error = st.get("last_error") or (f"{plural(failed, 'reader')} couldn't be sent an issue; it is tried again during the day" if failed else None)
         return _row("newsletters", "Newsletters", f"{news.SEND_WORDS} on trading days; the weekly digest on Saturday 8 AM IST",

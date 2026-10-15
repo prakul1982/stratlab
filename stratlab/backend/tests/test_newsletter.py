@@ -595,3 +595,118 @@ def test_a_confirm_link_for_a_deleted_account_makes_no_new_profile(w):
     assert c.post("/email/confirm", params={"t": t}).status_code == 400
     assert not db.sb().table("profiles").select("id").eq("id", "u-deleted").execute().data
     assert db.get_setting(alerts.CONFIRMED + "u-deleted") is None
+
+
+# ---------- R23-002: an India brief built but not mailed, and Admin saying nothing of it ----------
+AFTER_US_CLOSE = datetime(2026, 10, 1, 20, 55, tzinfo=timezone.utc)   # 16:55 New York, the closes settled
+
+
+def test_r23_002_a_failure_starting_the_send_leaves_the_day_open_and_the_brief_goes_at_the_next_check(w, monkeypatch, outbox):
+    """The day used to be marked as run before the issue's ledger was written: a database error (or a deploy) in between
+    left the India issue built and marked with no ledger, which reads as "sent before ledgers existed", so it was never
+    mailed and Admin had no India line at all."""
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-pro", "pro@example.com", market_in="daily")
+    real, failed = db.set_setting, []
+
+    def flaky(key, value):
+        if key.startswith(job.SENT) and not failed:
+            failed.append(key)
+            raise RuntimeError("Server disconnected")
+        return real(key, value)
+    monkeypatch.setattr(db, "set_setting", flaky)
+    j = job.Job("newsletters")
+    assert j.tick(AFTER_IN_CLOSE) == 0 and outbox == [] and failed
+    assert job.load("market.IN.2026-10-01")                                   # built and stored, as on 14 Oct
+    assert "couldn't start the send" in j.status["regions"]["IN"]["error"]    # and said in Admin
+    assert j.tick(AFTER_IN_CLOSE + timedelta(minutes=5)) == 1
+    assert [to for to, *_ in outbox] == ["pro@example.com"]
+    assert j.tick(AFTER_IN_CLOSE + timedelta(minutes=10)) == 0 and len(outbox) == 1
+
+
+def test_r23_002_admin_keeps_indias_run_after_a_restart_before_the_us_run(w, monkeypatch, outbox):
+    from app import admin_jobs
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-pro", "pro@example.com", market_in="daily", market_us="daily")
+    assert job.Job("newsletters").tick(AFTER_IN_CLOSE) == 1
+    restarted = job.Job("newsletters")                                        # a deploy between the two sends
+    assert restarted.tick(AFTER_US_CLOSE) == 1
+    regions = restarted.status["regions"]
+    assert (regions["IN"]["day"], regions["IN"]["sent"], regions["US"]["sent"]) == ("2026-10-01", 1, 1)
+    monkeypatch.setattr(main, "newsletter_job", restarted)
+    log = next(r for r in admin_jobs.rows() if r["id"] == "newsletters")["log"]
+    india = [x for x in log if x.startswith("India, 2026-10-01: sent to 1 of 1 reader; skipped 0")]
+    us = [x for x in log if x.startswith("US, 2026-10-01: sent to 1 of 1 reader; skipped 0")]
+    assert india and us and "(run " in india[0] and india[0].endswith(" UTC)"), log      # each market's own last run
+
+
+def test_r23_002_a_daily_reader_whose_plan_has_weekly_only_is_said_as_such(w, monkeypatch, outbox, paid):
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-free", "free@example.com", plan="free", market_in="daily")
+    j = job.Job("newsletters")
+    j.tick(AFTER_IN_CLOSE)
+    rep = j.status["regions"]["IN"]
+    assert outbox == [] and rep["other_edition"] == 0
+    assert rep["skipped"] == {"chose daily, but their plan has the weekly edition only": 1}
+
+
+def test_r23_002_admin_says_when_a_due_brief_has_no_run(monkeypatch):
+    from app import admin_jobs
+    at = datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc)                   # 17:30 IST on a trading day
+    assert job.due_today("IN", at) == "2026-10-14" and job.due_today("US", at) is None
+    monkeypatch.setattr(job, "due_today", lambda region, now=None: "2026-10-14" if region == "IN" else None)
+    st = {"last_run": "2026-10-13T20:55:00+00:00", "sent": 1, "last_error": None, "regions": {
+        "US": {"issue": "market.US.2026-10-13", "day": "2026-10-13", "readers": 1, "sent": 1, "other_edition": 0, "skipped": {},
+               "at": "2026-10-13T20:55:00+00:00"}}}
+    monkeypatch.setattr(main.newsletter_job, "status", st)
+    log = next(r for r in admin_jobs.rows() if r["id"] == "newsletters")["log"]
+    assert "India, 2026-10-14: no run recorded yet (due at 16:15 IST)" in log, log
+
+
+# ---------- R23-004: a sent brief's links keep working after a headline rule shrinks its list ----------
+def test_r23_004_a_sent_briefs_link_numbers_survive_a_later_headline_filter(w, monkeypatch, outbox):
+    heads = [{"headline": f"Wall Street story {i}", "url": f"https://news.google.com/rss/articles/CBMi{i}?oc=5"} for i in range(3)]
+    facts = lambda region, day, weekly=False: {**market(region, weekly, day), "headlines": heads}   # noqa: E731
+    monkeypatch.setattr(content, "market_facts", facts)
+    reader("u-pro", "pro@example.com", market_us="daily")
+    assert job.Job().tick(AFTER_US_CLOSE) == 1
+    iid = "market.US.2026-10-01"
+    assert f"/news-link/{iid}/2" in outbox[0][2]
+    issue = job.load(iid)                                                     # a later rule drops the first story, in place
+    for s in issue["sections"]:
+        if s["title"] == "Headlines":
+            s["items"] = s["items"][1:]
+    db.set_setting(f"news:market:US:2026-10-01", json.dumps(issue))
+    c = w["client"]
+    r = c.get(f"/news-link/{iid}/2", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == heads[2]["url"]  # the story the email named, not a 404
+    gone = c.get(f"/news-link/{iid}/9", follow_redirects=False)
+    assert gone.status_code == 302 and gone.headers["location"].endswith(f"/news?tab=US&issue={iid}")
+    html = c.get(f"/news/{iid}", headers=headers("pro-token")).json()["html"]
+    assert f"/news-link/{iid}/2" in html and f"/news-link/{iid}/0" not in html   # the page numbers its links as the email did
+
+
+# ---------- R23-006: My Stocks prices carry their currency ----------
+def test_r23_006_my_stocks_prices_have_their_currency_sign():
+    f = {"kind": "my_stocks", "uid": "u", "day": "2026-10-15", "weekly": False, "since": "2026-10-14",
+         "stocks": [{"symbol": "TATAMOTORS", "region": "IN", "price": 925.4, "change_pct": 3.4},
+                    {"symbol": "AAPL", "region": "US", "price": 341.27, "change_pct": -0.5}]}
+    html, text = write.render({"id": "my_stocks.u.2026-10-15", "kind": "my_stocks", "subject": "My Stocks", "summary": "x",
+                               "sections": write.sections(f)})
+    assert "TATAMOTORS  ₹925.40 ▲ 3.40%" in text and "AAPL  $341.27 ▼ 0.50%" in text
+    assert "₹925.40" in html and "$341.27" in html
+
+
+# ---------- R23-007: the AI's paragraph prints the index numbers as the tiles do ----------
+def test_r23_007_the_india_summary_numbers_match_the_tiles():
+    indices = [{"name": "NIFTY 50", "price": 22622.7, "change_pct": -0.44}, {"name": "SENSEX", "price": 72781.89, "change_pct": -0.34},
+               {"name": "NIFTY BANK", "price": 55316.0, "change_pct": -0.3}]
+    ai = ("India's major indices fell on October 14, with the NIFTY 50 at 22,622.7 (-0.44%), the SENSEX at 72,781.89 (-0.34%) "
+          "and NIFTY BANK at 55,316.0 (-0.30%). Nifty slipped below 22,650.")
+    issue = {"id": "market.IN.2026-10-14", "kind": "market", "region": "IN", "day": "2026-10-14", "weekly": False,
+             "subject": "s", "summary": "NIFTY 50 −0.44% today.", "ai_summary": ai, "indices": indices, "sections": []}
+    html, text = write.render(issue)
+    assert "NIFTY 50 at 22,622.70 (−0.44%)" in text and "SENSEX at 72,781.89 (−0.34%)" in text
+    assert "NIFTY BANK at 55,316.00 (−0.30%)" in text and "below 22,650." in text and "October 14" in text
+    assert "22,622.7 " not in text and "(-0" not in text
+    assert "22,622.70 ▼ 0.44%" in text                                        # the tile it now agrees with

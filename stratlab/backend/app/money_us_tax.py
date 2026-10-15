@@ -108,14 +108,13 @@ def _side(v: str) -> str | None:
 
 
 def _dates(values: list[str]) -> str:
-    """"mdy" when a slashed date in the column only reads month first (03/24/2025), else "dmy" (Indian files)."""
-    first = second = False
+    """How a US broker's file writes its dates: "mdy", month first, the US way (03/05/2025 is 5 March), unless a date
+    in the column can only be read day first (24/03/2025, an Indian app's export): then "dmy"."""
     for v in values:
         m = re.match(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})", v or "")
-        if m:
-            first |= int(m.group(1)) > 12
-            second |= int(m.group(2)) > 12
-    return "mdy" if second and not first else "dmy"
+        if m and int(m.group(1)) > 12:
+            return "dmy"
+    return "mdy"
 
 
 def _day(v: str, order: str) -> str | None:
@@ -426,7 +425,7 @@ def dividends(rows: list[dict], hist: dict, fy: int, indian_rate: float) -> dict
         if not rt:
             unpriced += 1
             continue
-        tax_usd = r["tds"] if r.get("tds") else r["amount"] * US_WITHHOLDING
+        tax_usd = r["tds"] if r.get("tds") is not None else r["amount"] * US_WITHHOLDING      # 0 withheld stays 0
         c = by.setdefault(r["sym"], {"symbol": r["sym"], "count": 0, "usd": 0.0, "tax_usd": 0.0, "inr": 0.0, "tax_inr": 0.0, "fallback": False,
                                      "lines": []})
         c["count"] += 1

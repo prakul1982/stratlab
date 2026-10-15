@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { Badge, Card, CardHead, EmptyState, ErrorState, Seg, Skeleton } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
+import { sendErrorLine, sentLine } from "./testSend";
 
 type Item = { kind: string; name: string; group: string; subject?: string; unsubscribe?: boolean; transactional?: boolean; error?: string };
 type Full = { kind: string; name: string; group: string; subject: string; html: string; text: string; unsubscribe: boolean; transactional: boolean };
@@ -48,17 +49,29 @@ function One({ kind }: { kind: string }) {
   const [bad, setBad] = useState(false);
   const [view, setView] = useState<View>("desktop");
   const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const sending = useRef(false);
   useEffect(() => {
-    setMail(null); setBad(false);
+    setMail(null); setBad(false); setResult(null);
     api<Full>(`/admin/email-previews/${encodeURIComponent(kind)}`).then(setMail).catch((e) => { setBad(true); fail(e); });
   }, [kind, fail]);
   const sendable = kind.startsWith("lifecycle_") && !!ov?.server.admin_alerts?.email_ready;
+  // every press gets an answer that stays under the button until the next one (R23-009), and a second press while the
+  // first is still sending does nothing
   const test = async () => {
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
+    setResult(null);
     try {
       const r = await api<{ sent_to: string; subject: string }>(`/admin/lifecycle/${kind.replace("lifecycle_", "")}/test`, { method: "POST" });
-      notify(`"${r.subject}" sent to ${r.sent_to}. Check your inbox (and spam).`);
-    } catch (e) { fail(e); } finally { setBusy(false); }
+      const line = sentLine(r.subject, r.sent_to, new Date());
+      setResult({ ok: true, text: line });
+      notify(line);
+    } catch (e) {
+      setResult({ ok: false, text: sendErrorLine(e, new Date()) });
+      fail(e);
+    } finally { sending.current = false; setBusy(false); }
   };
   if (bad) return <ErrorState title="Couldn't build this email" action={{ label: "All emails", to: "/admin/emails" }}>It may have been removed. Open the list to pick another.</ErrorState>;
   if (!mail) return <Card label="Email"><Skeleton label="Building the email" /></Card>;
@@ -66,8 +79,10 @@ function One({ kind }: { kind: string }) {
     <Card label={mail.name}>
       <CardHead title={mail.name} actions={<>
         <Link className="btn quiet sm" to="/admin/emails">All emails</Link>
-        {sendable && <button type="button" className="btn quiet sm" disabled={busy} onClick={test}>{busy ? "Sending…" : "Send me a test"}</button>}
+        {sendable && <button type="button" className="btn quiet sm" disabled={busy} aria-busy={busy} onClick={test}>{busy ? "Sending…" : "Send me a test"}</button>}
       </>} />
+      {sendable && busy && <p className="k-small k-muted" role="status">Sending the test email…</p>}
+      {sendable && !busy && result && <p className={`k-small${result.ok ? "" : " k-warn-text"}`} role={result.ok ? "status" : "alert"} data-testid="test-send-result">{result.text}</p>}
       <p className="k-small"><b>Subject:</b> {mail.subject}</p>
       <div className="k-toolbar">
         <Seg label="Email view" options={VIEWS} value={view} onChange={(v) => setView(v as View)} />

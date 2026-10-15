@@ -122,3 +122,50 @@ def test_the_summary_prints_days_the_way_the_app_does_and_its_email_title_is_the
     html, plain = kit.message(subject, text, "/admin", "Weekly summary", "You get this because you are an admin.")
     assert subject == "StratLab weekly: 2 new users, all quiet"
     assert f"\n{subject}\n" in plain and "\nWeekly: " not in plain and f"{subject}</h1>" in html.replace("\n", "")
+
+
+# ---------- R23-003: totals that match the list, each error once, and its own label ----------
+def test_r23_003_failed_runs_listed_once_each_and_errors_counted_once():
+    at = lambda d, h: datetime(2026, 10, d, h, 30, tzinfo=IST).isoformat()      # noqa: E731
+    checks = [{"at": at(6, 9), "fail": 1, "failed": ["Prices: IN"]}, {"at": at(7, 9), "fail": 2, "failed": ["Prices: IN", "Prices: US"]},
+              {"at": at(8, 9), "fail": 1, "failed": ["Fund"]}, {"at": at(9, 9), "fail": 1, "failed": ["Fund"]},
+              {"at": at(10, 9), "fail": 1, "failed": ["Fund"]}] + [{"at": at(11, h), "fail": 0} for h in (9, 10, 11, 12)]
+    facts = {"stats": {"users": 9, "new": 4, "paid": {}, "paying": {}, "given": {}, "experiments": 0, "ai": 0}, "checks": checks,
+             "audits": {}, "errors": 4, "errors_since_restart": 0, "errors_before_restart": 23,
+             "errors_week_since_restart": 0, "errors_week_before_restart": 4, "admin_url": None}
+    subject, text = weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)
+    line = next(x for x in text.splitlines() if x.startswith("- 9 runs, 5 with failures: "))
+    assert len(line.split(": ", 1)[1].split("; ")) == 5                                   # five failed runs, five entries
+    assert "Prices: IN, Prices: US (Wed 7 Oct, 09:30)" in line
+    assert "- Counted: every run of the daily checks in these 7 days, automatic and Run now." in text
+    assert "- 4 server errors this week (0 since the last restart, 4 before it)" in text and "23" not in text
+    assert subject == "StratLab weekly: 4 new users, 5 runs with failures, 4 server errors"
+
+
+def test_r23_003_the_weeks_errors_are_split_by_the_restart_not_added_to_it(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        _week(w, monkeypatch, MONDAY)
+        started = MONDAY - timedelta(days=2)
+        monkeypatch.setattr(main, "SERVER_STARTED_AT", started.isoformat())
+        monkeypatch.setattr(main, "RECENT_ERRORS", [{"ref": "A", "at": (MONDAY - timedelta(days=1)).isoformat()},
+                                                    {"ref": "B", "at": (MONDAY - timedelta(days=4)).isoformat()},
+                                                    {"ref": "C", "at": (MONDAY - timedelta(days=20)).isoformat()}])
+        f = main.weekly_facts(MONDAY)
+        assert (f["errors"], f["errors_week_since_restart"], f["errors_week_before_restart"]) == (2, 1, 1)
+        assert "- 2 server errors this week (1 since the last restart, 1 before it)" in main.weekly_summary(MONDAY)[1]
+    finally:
+        w["close"]()
+
+
+def test_r23_003_send_now_is_labelled_weekly_summary(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        labels = []
+        monkeypatch.setattr(alerts, "tell_admins", lambda subject, text, label="Admin alert": labels.append(label) or 1)
+        assert w["client"].post("/admin/weekly/test", headers=W.headers("admin-token")).status_code == 200
+        assert labels == ["Weekly summary"]
+    finally:
+        w["close"]()

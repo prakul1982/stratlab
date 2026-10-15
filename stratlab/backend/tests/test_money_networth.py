@@ -364,23 +364,29 @@ def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monk
 
 
 def test_stocks_without_a_price_make_the_total_partial(w, monkeypatch):
+    """B2: a stock without a price counts at cost and leaves the total whole (said in a note); only one with neither a
+    price nor a buy price makes it partial, and then the change is still recorded, flagged."""
     c = w["client"]
     assert c.put("/holdings", headers=PRO, json={"items": [{"symbol": "RELIANCE", "qty": 10, "avg": 2500},
                                                            {"symbol": "TCS", "qty": 3}]}).status_code == 200
-    before = nw.history("u-pro")
     monkeypatch.setattr(main.kite, "ready", lambda: False)                      # no quotes: TCS has no cost either
     v = add(c, {"kind": "cash", "value": 1000})
     row = next(r for r in v["assets"] if r["kind"] == "stocks_in")
-    assert v["totals"]["partial"] == ["no price for 2 stocks"] and nw.history("u-pro") == before
+    assert v["totals"]["partial"] == ["no price or buy price for 1 stock"] and v["totals"]["partial_lasting"]
+    assert v["totals"]["notes"] == ["1 stock counted at cost (no price)"]
+    assert [(h["why"], h.get("partial")) for h in nw.history("u-pro") if h["d"] == nw.today().isoformat()] == [
+        ("change", ["no price or buy price for 1 stock"])]
     assert row["value"] == 25000 and row["basis"] == "at cost" and "at cost" in row["rule"]
-    # some priced, some not: market price, and the rule says how many are at cost
-    t = nw.build([], {"in": 100.0, "us": 0, "count": 3, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 2, "us": 0}}, None, nw.Prices())
+    # some priced, some at cost: market price, the rule says how many are at cost, and the total is whole
+    t = nw.build([], {"in": 100.0, "us": 0, "count": 3, "unpriced": {"in": 1, "us": 0}, "unvalued": {"in": 0, "us": 0},
+                      "priced": {"in": 2, "us": 0}}, None, nw.Prices())
     r = t["assets"][0]
     assert r["basis"] == "market price" and "1 without a price counted at cost" in r["rule"]
-    assert t["totals"]["partial"] == ["no price for 1 stock"]
+    assert t["totals"]["partial"] is None and t["totals"]["notes"] == ["1 stock counted at cost (no price)"]
     # every stock unpriced and none with a cost: no row, but the total says so (it used to be silently left out)
-    t = nw.build([], {"in": 0, "us": 0, "count": 1, "unpriced": {"in": 1, "us": 0}, "priced": {"in": 0, "us": 0}}, None, nw.Prices())
-    assert t["assets"] == [] and t["totals"]["partial"] == ["no price for 1 stock"]
+    t = nw.build([], {"in": 0, "us": 0, "count": 1, "unpriced": {"in": 1, "us": 0}, "unvalued": {"in": 1, "us": 0},
+                      "priced": {"in": 0, "us": 0}}, None, nw.Prices())
+    assert t["assets"] == [] and t["totals"]["partial"] == ["no price or buy price for 1 stock"]
 
 
 def test_damaged_rows_never_break_the_page(w):
@@ -486,7 +492,8 @@ def test_the_catch_up_on_a_weekend_first_is_taken_once_and_a_delete_stays_delete
 
 
 def test_a_sunday_edit_does_not_overwrite_fridays_snapshot(w):
-    nw.record("u-t", _t(100), "change", date(2026, 10, 9))                                      # Friday
+    with time_machine.travel(datetime(2026, 10, 9, 5, 0, tzinfo=timezone.utc)):                 # Friday
+        nw.record("u-t", _t(100), "change", date(2026, 10, 9))
     with time_machine.travel(datetime(2026, 10, 11, 5, 0, tzinfo=timezone.utc)):                # Sunday, IST
         rows = nw.record("u-t", _t(130), "change", date(2026, 10, 9))                           # priced as of Friday's close
     assert [(h["d"], h["net"]) for h in rows] == [("2026-10-09", 100), ("2026-10-11", 130)]
@@ -505,3 +512,123 @@ def test_a_user_whose_profile_cannot_be_read_gets_a_partial_total(w, monkeypatch
     monkeypatch.setattr(main.connect_sync, "profile_for", lambda uid: None)
     db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000}]}))
     assert main._nw_value_of("u-pro")["totals"]["partial"] == ["My Holdings couldn't be read"]
+
+
+# ---------- review rev5a ----------
+def _fake_mf(monkeypatch, fn):
+    fake = types.ModuleType("app.money_mf")
+    fake.net_worth_value = fn
+    monkeypatch.setitem(sys.modules, "app.money_mf", fake)
+    import app
+    monkeypatch.setattr(app, "money_mf", fake, raising=False)
+
+
+def test_a_stock_at_cost_keeps_the_history_going(w):
+    """B2: one held stock without a price (a suspended company) counts at cost: the total is whole, said in a note, and
+    the change and month snapshots are taken as before (they used to stop for good)."""
+    from app import holdings
+    c = w["client"]
+    holdings.save("u-pro", [{"symbol": "RELIANCE", "exchange": "NSE", "name": "Reliance", "qty": 10.0, "avg": 2400.0},
+                            {"symbol": "ZOMBIECO", "exchange": "BSE", "name": "Suspended Co", "qty": 100.0, "avg": 12.0}], "Statement")
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000, "as_of": "2026-09-01"}]}))
+    v = c.get("/money/net-worth", headers=PRO).json()
+    assert v["totals"]["partial"] is None and v["totals"]["notes"] == ["1 stock counted at cost (no price)"]
+    v = add(c, {"kind": "cash", "name": "x", "value": 1000})
+    assert v["history"] and (v["history"][-1]["why"], v["history"][-1].get("partial"), v["history"][-1]["net"]) == ("change", None, v["totals"]["net"])
+    assert nw.Job(main._nw_value_of).tick(datetime(2026, 11, 1, 11, 30, tzinfo=timezone.utc)) == 1
+    assert [(h["d"], h["why"], h.get("partial")) for h in nw.history("u-pro")][-1] == ("2026-11-01", "month", None)
+
+
+def test_a_holding_with_nothing_to_value_it_by_is_named_and_the_history_goes_on_marked(w, monkeypatch):
+    """B2: a statement's holding (no buy price) without a price can't be counted: the total names it and is partial, and
+    each change is still recorded, flagged with what it leaves out (the chart marks it)."""
+    from app import holdings
+    c = w["client"]
+    holdings.save("u-pro", [{"symbol": "ZOMBIECO", "exchange": "BSE", "name": "Suspended Co", "qty": 100.0, "avg": None}], "Statement")
+    add(c, {"kind": "cash", "value": 7000})
+    v = add(c, {"kind": "cash", "value": 1000})
+    assert v["totals"]["partial"] == ["no price or buy price for 1 stock"] and v["totals"]["partial_lasting"]
+    assert v["history"][-1]["why"] == "change" and v["history"][-1]["partial"] == ["no price or buy price for 1 stock"]
+    assert v["history"][-1]["net"] == 8000
+
+
+def test_a_weekend_edit_is_dated_the_day_it_was_made(w, monkeypatch):
+    """B3: an entry added on Saturday, with prices as of Friday's close, is snapshotted on Saturday (dated Friday it became
+    the baseline, and the headline read "₹0 since Fri")."""
+    _fake_mf(monkeypatch, lambda uid: {"value": 250000.0, "as_of": "2026-10-09T15:30:00+05:30"} if uid == "u-pro" else 0)
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000, "as_of": "2026-09-01"}]}))
+    nw.record("u-pro", {"net": 257000, "assets": 257000, "liabilities": 0}, "month", date(2026, 10, 1))
+    with time_machine.travel(datetime(2026, 10, 10, 5, 0, tzinfo=timezone.utc)):                # Saturday 10 Oct, 10:30 IST
+        v = add(w["client"], {"kind": "cash", "name": "FD matured", "value": 50000})
+    assert v["as_of"] == "2026-10-09"                                                            # the prices' day
+    assert [(h["d"], h["why"], h["net"]) for h in v["history"]] == [("2026-10-01", "month", 257000), ("2026-10-10", "change", 307000)]
+
+
+def test_editing_an_imported_entry_keeps_it_updated_by_the_next_import(w):
+    """B4: an EPF entry read from a passbook, or an NPS one from a statement, stays marked as read when edited (renamed,
+    a monthly amount added), so the next passbook or statement updates it instead of being refused."""
+    from app.connect import docs, statements, sync
+    c = w["client"]
+    prof = sync.profile_for("u-pro")
+    docs.confirm(prof, "epf", {"balance": 500000, "as_of": "2025-03-31"})
+    statements.save_nps("u-pro", {"tier1": 300000, "tier2": 0}, "2026-08-31", "pro")
+    for e in nw.load("u-pro")["items"]:
+        form = ({"kind": "epf", "name": "My EPF", "balance": e["balance"], "as_of": e["as_of"], "monthly": 3600} if e["kind"] == "epf"
+                else {"kind": "nps", "name": "My NPS", "tier1": e["tier1"], "as_of": e["as_of"]})
+        assert c.put(f"/money/net-worth/items/{e['id']}", headers=PRO, json=form).status_code == 200
+    assert all(i.get("auto") for i in nw.load("u-pro")["items"])
+    assert docs.confirm(prof, "epf", {"balance": 650000, "as_of": "2026-03-31"})["detail"] == "EPF balance saved in Net worth."
+    assert statements.save_nps("u-pro", {"tier1": 320000, "tier2": 0}, "2026-09-30", "pro") == ""
+    got = {i["kind"]: i for i in nw.load("u-pro")["items"]}
+    assert len(nw.load("u-pro")["items"]) == 2 and got["epf"]["balance"] == 650000 and got["nps"]["tier1"] == 320000
+    # changed to another kind, it is the user's own entry
+    e = got["nps"]
+    c.put(f"/money/net-worth/items/{e['id']}", headers=PRO, json={"kind": "cash", "name": "Cash", "value": 5})
+    assert not next(i for i in nw.load("u-pro")["items"] if i["id"] == e["id"]).get("auto")
+
+
+def test_imports_keep_to_the_free_plans_entries(w, monkeypatch):
+    """B5: an EPF passbook or NPS statement adds an entry only within the plan's limit, as a typed one would; the import
+    says so with the same message. An entry imported before is still updated."""
+    from app.connect import docs, statements, sync
+    payments_live(monkeypatch)
+    c = w["client"]
+    for n in range(4):
+        add(c, {"kind": "cash", "name": f"c{n}", "value": 100}, FREE)
+    prof = sync.profile_for("u-free")
+    assert docs.confirm(prof, "epf", {"balance": 500000, "as_of": "2026-03-31"})["detail"] == "EPF balance saved in Net worth."
+    typed = c.post("/money/net-worth/items", headers=FREE, json={"kind": "cash", "name": "c6", "value": 100})
+    assert typed.status_code == 402
+    msg = typed.json()["detail"]["message"]
+    got = docs.confirm(prof, "nps", {"tier1": 300000, "as_of": "2026-03-31"})
+    assert msg in got["detail"] and "NPS" in got["detail"]
+    assert msg in statements.save_nps("u-free", {"tier1": 300000, "tier2": 0}, "2026-09-30", prof["_plan"])
+    assert len(nw.load("u-free")["items"]) == 5
+    assert docs.confirm(prof, "epf", {"balance": 600000, "as_of": "2026-09-30"})["detail"] == "EPF balance saved in Net worth."
+    assert [i["balance"] for i in nw.load("u-free")["items"] if i["kind"] == "epf"] == [600000]
+
+
+def test_the_monthly_job_skips_a_month_already_taken_or_removed(w):
+    """B8: the job, late, doesn't take a second "month" snapshot when a visit already took this month's, and doesn't put
+    back one the user removed this month."""
+    c = w["client"]
+    db.set_setting("networth:u-pro", json.dumps({"items": [{"id": "a", "kind": "cash", "value": 7000, "as_of": "2026-09-01"}]}))
+    with time_machine.travel(datetime(2026, 11, 2, 5, 0, tzinfo=timezone.utc)):                  # Monday 2 Nov, a visit
+        c.get("/money/net-worth", headers=PRO)
+    assert [(h["d"], h["why"]) for h in nw.history("u-pro")] == [("2026-11-02", "month")]
+    nw.Job(main._nw_value_of).tick(datetime(2026, 11, 3, 11, 30, tzinfo=timezone.utc))
+    assert [(h["d"], h["why"]) for h in nw.history("u-pro")] == [("2026-11-02", "month")]
+    with time_machine.travel(datetime(2026, 12, 2, 5, 0, tzinfo=timezone.utc)):
+        c.get("/money/net-worth", headers=PRO)
+        assert c.delete("/money/net-worth/history/2026-12-02", headers=PRO).status_code == 200
+    nw.Job(main._nw_value_of).tick(datetime(2026, 12, 2, 11, 30, tzinfo=timezone.utc))
+    assert [h["d"] for h in nw.history("u-pro")] == ["2026-11-02"]
+
+
+def test_an_old_dollar_rate_is_dated_where_it_is_used():
+    """Item a: a dollar rate read more than a day ago (kept while the day's read failed) is named with its date."""
+    now = datetime(2026, 10, 12, 6, 0, tzinfo=timezone.utc)
+    assert nw.rate_day("2026-10-09T03:00:00+00:00", now) == " (the rate of 9 Oct 2026)"
+    assert nw.rate_day("2026-10-12T01:00:00+00:00", now) == "" and nw.rate_day(None, now) == ""
+    t = nw.build([], {"in": 0, "us": 8800.0, "count": 1, "usd_inr": 88.0, "usd_inr_at": "2026-09-01T03:00:00+00:00"}, None, nw.Prices())
+    assert "at ₹88.00 a dollar (the rate of 1 Sep 2026)" in t["assets"][0]["rule"]

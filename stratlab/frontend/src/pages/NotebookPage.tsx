@@ -394,7 +394,7 @@ function NotebookView() {
             <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`}>
               <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
               <span className="market-btn-main">
-                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span></>
+                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}</>
                   : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
                   : "Pick a market and instrument"}
               </span>

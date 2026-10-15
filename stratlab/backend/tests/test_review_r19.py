@@ -58,5 +58,6 @@ def test_the_weekly_admin_summary_counts_what_it_lists():
              "errors": 4, "errors_since_restart": 0, "errors_before_restart": 23, "admin_url": None}
     subject, text = weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)
     assert subject == "StratLab weekly: 4 new users, 5 runs with failures, 4 server errors"
-    assert "5 with failures: Fund (3 runs), Prices: IN (2 runs), Prices: US" in text
-    assert "- 4 server errors this week; 23 more from before the last restart are kept" in text
+    # R23-003: each failed run once, so the list is as long as the count (per-check counts added up to 6 here)
+    assert "5 with failures: Prices: IN; Prices: IN, Prices: US; Fund; Fund; Fund" in text
+    assert "- 4 server errors this week" in text and "more from before" not in text

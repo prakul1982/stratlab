@@ -38,12 +38,13 @@ def test_brevo_request_shape_and_sender_falls_back_to_the_first_admin(no_email, 
     assert url == "https://api.brevo.com/v3/smtp/email" and kw["headers"]["api-key"] == "xkeysib-test"
     assert kw["json"] == {"sender": {"name": "StratLab", "email": "owner@example.com"}, "to": [{"email": "a@b.c"}],
                           "subject": "Hello", "textContent": "Plain", "htmlContent": "<p>Rich</p>",
-                          "headers": {"List-Unsubscribe": "<https://x>"}, "replyTo": {"email": settings.REPLY_TO_EMAIL}}
+                          "headers": {"List-Unsubscribe": "<https://x>", **alerts.NO_TRACKING}, "replyTo": {"email": settings.REPLY_TO_EMAIL}}
     assert settings.REPLY_TO_EMAIL == "support@stratlab.studio"                # replies go to support@
     monkeypatch.setattr(settings, "ALERT_FROM_EMAIL", "news@stratlab.studio")
     alerts.send_email("a@b.c", "Hello", "Plain")                          # the old three-argument call
     assert calls[1][1]["json"]["sender"]["email"] == "news@stratlab.studio"
-    assert "htmlContent" not in calls[1][1]["json"] and "headers" not in calls[1][1]["json"]
+    # R23-001: an email with no unsubscribe of its own names StratLab's Manage emails page, never the mail service's link
+    assert "htmlContent" not in calls[1][1]["json"] and calls[1][1]["json"]["headers"] == {**alerts.manage_unsubscribe_headers(), **alerts.NO_TRACKING}
 
 
 def test_brevo_refusal_is_reported(no_email, monkeypatch):
@@ -64,7 +65,7 @@ def test_provider_order_brevo_then_resend_then_smtp(no_email, monkeypatch):
     monkeypatch.setattr(settings, "BREVO_API_KEY", "")
     alerts.send_email("a@b.c", "s", "b", html="<b>b</b>", headers={"X-Test": "1"})
     assert [u for u, _ in calls] == ["https://api.brevo.com/v3/smtp/email", "https://api.resend.com/emails"]
-    assert calls[1][1]["json"]["html"] == "<b>b</b>" and calls[1][1]["json"]["headers"] == {"X-Test": "1"}
+    assert calls[1][1]["json"]["html"] == "<b>b</b>" and calls[1][1]["json"]["headers"] == {"X-Test": "1", **alerts.manage_unsubscribe_headers()}
 
     sent = []
 
@@ -302,3 +303,33 @@ def test_the_alert_test_hides_the_mail_services_words_from_users_but_not_admins(
         assert alerts.test({"id": "u-admin", "alert_email": "owner@example.com"}, admin=True)[1]["email"].startswith("Brevo refused")
     finally:
         w["close"]()
+
+
+# ---------- R23-001: no tracking on any email, and no mail-service unsubscribe on the always-sent ones ----------
+def test_r23_001_every_kind_goes_untracked_and_always_sent_ones_name_our_manage_page(no_email, monkeypatch):
+    from app import email_kit as kit, email_previews as P, lifecycle
+    monkeypatch.setattr(settings, "BREVO_API_KEY", "xkeysib-test")
+    monkeypatch.setattr(settings, "PUBLIC_SITE_URL", "https://stratlab.studio")
+    monkeypatch.setattr(db, "get_setting", lambda k: None)
+    calls = _capture(monkeypatch)
+    manage = "<https://stratlab.studio/settings#newsletters>"
+    subject, html, text = P.test_email()
+    alerts.send_email("a@b.c", subject, text, html=html)                                   # test email
+    subject, html, text = P.confirm_email("a@b.c", "https://stratlab.studio/email/confirm?t=x")
+    alerts.send_email("a@b.c", subject, text, html=html)                                   # confirm your email
+    for kind in ("receipt", "plan_ended"):                                                  # receipts and plan changes
+        subject, html, text = lifecycle.build(kind, {"id": "u-1", "email": "a@b.c"}, lifecycle.sample(kind))
+        html, text, h = kit.finish(html, text, "u-1", None)
+        alerts.send_email("a@b.c", subject, text, html=html, headers=h)
+    alerts.send_message("owner@example.com", "2 checks failing", "- Prices", "/admin", "Admin alert", alerts.ADMIN_WHY)   # admin note, no account
+    for _, kw in calls:
+        h = kw["json"]["headers"]
+        assert h["List-Unsubscribe"] == manage and "List-Unsubscribe-Post" not in h, h
+        assert h["X-Mailin-Track"] == h["X-Mailin-Track-Clicks"] == h["X-Mailin-Track-Opens"] == "0"
+    assert len(calls) == 5
+    calls.clear()
+    html, text, h = kit.finish("<p>{unsubscribe_url}</p>", "{unsubscribe_url}", "u-1", "market_in")      # a newsletter keeps its own
+    alerts.send_email("a@b.c", "Market Brief India", text, html=html, headers=h)
+    h = calls[0][1]["json"]["headers"]
+    assert h["List-Unsubscribe"].startswith("<https://stratlab.studio/unsubscribe?t=") and h["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert h["X-Mailin-Track-Clicks"] == "0" and h["X-Mailin-Track-Opens"] == "0"

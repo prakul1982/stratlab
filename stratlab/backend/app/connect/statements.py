@@ -162,6 +162,10 @@ def save_nps(uid: str, figures: dict, asof: str | None, plan: str, how: str = "s
         if mine and asof and str(mine[0].get("as_of") or "") > asof:
             why.append("Net worth already has a newer NPS balance, so this statement's balance was not added.")
             return None
+        full = None if mine else money_networth.over_limit(items, plan)      # a new entry, within the plan's limit
+        if full:
+            why.append(f"The NPS balance was not added. {full}")
+            return None
         entry = money_networth.clean(money_networth.ItemReq(kind="nps", name="NPS", tier1=figures.get("tier1") or 0,
                                                             tier2=figures.get("tier2") or None, as_of=asof))
         entry["auto"] = how

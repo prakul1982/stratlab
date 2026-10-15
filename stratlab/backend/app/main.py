@@ -2628,10 +2628,17 @@ connect_job = connect_jobs.Job()
 
 def usd_inr() -> float | None:
     """Rupees a dollar: the day's stored rate, else read now; None when neither is there."""
+    return usd_inr_read()[0]
+
+
+def usd_inr_read() -> tuple[float | None, str | None]:
+    """(rupees a dollar, when that rate was read): the stored rate with its own time of reading (an old one kept while
+    a day's read failed keeps its old time), else one read now."""
     got = pricing.rates().get("USD")
-    if not got:
-        got = _quiet(fx_rate, "USD")
-    return float(got) if got else None
+    if got:
+        return float(got), pricing.rate_at("USD")
+    got = _quiet(fx_rate, "USD")
+    return (float(got), datetime.now(timezone.utc).isoformat(timespec="minutes")) if got else (None, None)
 
 
 _PRICED: dict[tuple, tuple[float, dict]] = {}       # (user, symbols) -> (when read, the prices read)
@@ -2657,8 +2664,8 @@ def _read_prices(ind: list[dict], us: list[str]) -> dict:
     us_quotes = {}
     for n in range(0, len(us), 24):          # the US prices are read 24 at a time
         us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
-    rate = usd_inr() if us else None
-    return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate,
+    rate, rate_at = usd_inr_read() if us else (None, None)
+    return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate, "rate_at": rate_at,
             "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes else None}
 
 
@@ -2683,7 +2690,7 @@ def holdings_view(profile) -> dict:
     live, us_quotes = got["live"], got["us_quotes"]
     return {**holdings.view(h["items"], got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
             "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"],
-            "us_prices": bool(us_quotes) if us else None,
+            "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
 
@@ -2772,35 +2779,85 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
                "unmatched_count": len(missed), "over_limit": over, "limit": limit, "holdings": holdings_view(profile)})
 
 
+def _same_avg(old: dict, sent) -> bool:
+    """Whether an average sent back is the saved one as the page shows it (2 decimals): the saved one is kept, unrounded."""
+    return old.get("avg") is not None and sent is not None and abs(round(old["avg"], 2) - sent) < 1e-9
+
+
 @app.put("/holdings")
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
-    """Save the holdings as edited by hand: add a stock, change a quantity or average price, remove one. Symbols
-    that match no listed company are sent back and left out."""
+    """Change the holdings by hand: add a stock, change a quantity or average price, remove one. `changes` are applied
+    to the holdings as saved now, so every other holding stays exactly as saved (a broker sync that landed while the
+    page was open included). Symbols that match no listed company are sent back and left out."""
     throttle(profile, "holdings_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
+    if req.changes is None and req.items is None:
+        err(400, "no_changes", "Nothing to change.")
+    for c in req.changes or []:
+        if c.op == "add" and c.qty is None:
+            err(422, "bad_change", f"Enter the quantity of {c.symbol.strip().upper()} to add.")
     limit = holdings_limit(profile["_plan"])
     out = {}
 
-    def edited(before):                   # runs again on the newer holdings if another save lands first
+    def over():
+        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
+
+    def changed(before):                  # the changes, on the holdings as saved now
+        rows = {(holdings.market_of(i), i["symbol"]): dict(i) for i in before["items"]}
+        lines, us_lines = [], []
+        for n, c in enumerate(req.changes, 1):
+            k = (c.market, c.symbol.strip().upper())
+            old = rows.get(k)
+            if c.op == "remove":
+                rows.pop(k, None)          # one already gone stays gone
+            elif old and c.op == "add":
+                rows[k] = holdings.merge([old, {"exchange": old.get("exchange"), "symbol": old["symbol"], "qty": c.qty,
+                                                "avg": c.avg or None}])[0]
+            elif old:                      # "set": only the fields sent change
+                new = {**old, **({"qty": c.qty} if c.qty is not None else {})}
+                if "avg" in c.model_fields_set and not _same_avg(old, c.avg):
+                    new["avg"] = c.avg or None
+                rows[k] = holdings.drop_stale_accts([new])[0]
+            elif c.qty is None:
+                err(422, "bad_change", f"Enter the quantity of {k[1]}.")
+            else:
+                (us_lines if c.market == "US" else lines).append({"line": n, "symbol": c.symbol, "qty": c.qty, "avg": c.avg or None, "text": c.symbol})
+        if (lines or us_lines) and len(rows) + len(lines) + len(us_lines) > limit:
+            over()                         # a new stock needs room under the plan's limit (one held can still change)
+        return list(rows.values()), lines, us_lines
+
+    def whole(before):                    # the older form: the whole list as the page had it
+        if req.updated_at and before.get("updated_at") and req.updated_at != before["updated_at"]:
+            err(409, "holdings_changed", "Your holdings changed since this page was opened (a sync or an upload). "
+                                         "They're shown again as saved now; make the change again.")
         saved = {(holdings.market_of(i), i["symbol"]): i for i in before["items"]}
         # over the limit after a downgrade: a list of stocks already held, no longer than the saved one, still saves,
         # so stocks come off one at a time
         new = any((i.market, i.symbol.strip().upper()) not in saved for i in req.items)
         if len(req.items) > limit and (new or len(req.items) > len(before["items"])):
-            upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
-        kept, rows, us_rows = [], [], []
+            over()
+        kept, lines, us_lines = [], [], []
         for n, i in enumerate(req.items, 1):
             old = saved.get((i.market, i.symbol.strip().upper()))
             if old:                       # already matched: kept as it is, even while market data is offline
-                kept.append({**old, "qty": i.qty, "avg": i.avg or None})
+                kept.append({**old, "qty": i.qty, "avg": old["avg"] if _same_avg(old, i.avg) else i.avg or None})
             else:
-                (us_rows if i.market == "US" else rows).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
+                (us_lines if i.market == "US" else lines).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
+        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
+        return holdings.drop_stale_accts(kept), lines, us_lines
+
+    def edited(before):                   # runs again on the newer holdings if another save lands first
+        saved = {(holdings.market_of(i), i["symbol"]) for i in before["items"]}
+        kept, rows, us_rows = changed(before) if req.changes is not None else whole(before)
         found, out["missed"] = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
         if us_rows:
             us_found, us_missed = holdings.match_us(us_rows, _us_find)
             found, out["missed"] = found + us_found, out["missed"] + us_missed
         found = holdings.merge(kept + found)
-        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
-        found = holdings.drop_stale_accts(found)
+        # over the limit after a downgrade: no stock is added, but the ones held can still change or come off
+        if len(found) > limit and any((holdings.market_of(i), i["symbol"]) not in saved for i in found):
+            over()
+        if req.changes is not None and found == before["items"]:
+            return None                   # nothing changed (a stock that matched nothing, or one already removed)
         if found:
             known = {i["symbol"]: i.get("sector") for i in holdings.indian(before["items"])}
             return with_sectors(found, known), before["source"] or "Manual"
@@ -2925,7 +2982,8 @@ def _nw_crypto(coin: str):
 def _nw_stocks(profile) -> dict:
     """My Holdings in rupees: Indian and US stocks apart (a position without a price counts at cost, as on Holdings).
     `us_no_rate` when there are US stocks but no dollar rate to count them in rupees; `unpriced` the stocks without a
-    price, by market ("in", "us"), and `priced` those with one."""
+    price, by market ("in", "us"), `unvalued` those of them without a buy price either (nothing to count them at), and
+    `priced` those with a price."""
     h = holdings_view(profile)
     worth = (lambda r: r["value"] if r["value"] is not None else r["invested"] or 0)
     rate = h.get("usd_inr")
@@ -2935,7 +2993,9 @@ def _nw_stocks(profile) -> dict:
             "us": sum(worth(r) for r in h["rows"] if r.get("market") == "US") * rate if rate else 0,
             "as_of": h.get("prices_at") or h.get("updated_at"), "count": len(h["rows"]), "usd_inr": rate,
             "us_no_rate": has_us and not rate,
+            "usd_inr_at": h.get("usd_inr_at"),
             "unpriced": {m: sum(r["value"] is None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")},
+            "unvalued": {m: sum(r["value"] is None and r["invested"] is None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")},
             "priced": {m: sum(r["value"] is not None and mkt(r) == m for r in h["rows"]) for m in ("in", "us")}}
 
 
@@ -5495,8 +5555,8 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
     return out
 
 
-def tell_admins(subject: str, text: str) -> int:
-    return alerts.tell_admins(subject, text)
+def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
+    return alerts.tell_admins(subject, text, label=label)
 
 
 def platform_job():
@@ -5563,8 +5623,18 @@ def weekly_facts(now: datetime) -> dict:
             if "mismatch" in levels or "error" in levels:
                 issues.append({"symbol": r.get("symbol"), "mismatches": levels.count("mismatch"), "errors": levels.count("error")})
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
+    week = [e for e in RECENT_ERRORS if after(e.get("at"))]
+    start = datetime.fromisoformat(SERVER_STARTED_AT)
+
+    def since_start(e) -> bool:
+        try:
+            return datetime.fromisoformat(str(e.get("at")).replace("Z", "+00:00")) >= start
+        except ValueError:
+            return False
+    fresh = sum(1 for e in week if since_start(e))
+    # the week's errors, each once, split by the last restart (R23-003: the kept ones were added on top of the week's)
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
+            "errors": len(week), **error_counts(), "errors_week_since_restart": fresh, "errors_week_before_restart": len(week) - fresh,
             "admin_url": email_kit.site("/admin")}
 
 
@@ -5821,7 +5891,8 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
     """This week's summary, built and sent to the admins now. Monday's automatic one still goes out."""
     throttle(profile, "admin_weekly_test", 5, 3600, "You've sent 5 summaries this hour. Try again later.")
     subject, text = weekly_summary()
-    return {"subject": subject, "text": text, "reached": tell_admins(subject, text)}
+    # labelled as the Monday one is, not "Admin alert" (R23-003)
+    return {"subject": subject, "text": text, "reached": tell_admins(subject, text, label="Weekly summary")}
 
 
 # ---------- newsletters: the Market Brief and My Stocks ----------
@@ -5842,8 +5913,13 @@ def news_link(iid: str, n: int):
     are ever forwarded to, so it is no open redirect; a reader needs no sign-in to follow a link from their email."""
     parts = news.parse_id(iid)
     issue = news.load(iid) if parts and parts[0] == "market" else None
+    # the links frozen when the brief was sent, else its headlines as stored: a later headline rule that dropped a story
+    # used to turn a sent email's link into a 404 (R23-004)
     urls = news.write.headline_urls(issue) if issue else []
     url = news.write.kit.safe_url(urls[n]) if 0 <= n < len(urls) else None
+    if not url and issue:
+        # the story is no longer listed: the brief itself, rather than an error page
+        return RedirectResponse(news.write.kit.news_url(iid), status_code=302)
     if not url:
         return HTMLResponse(mail_pages.notice("That link isn't available", "The story may have been taken down. The brief is on the "
                                             "Briefs page in the app."), status_code=404)
