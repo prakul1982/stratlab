@@ -129,14 +129,15 @@ def at_live_price(s: dict, live: float | None, symbol: str | None = None, since=
     reported numbers behind them (earnings, book value, dividend) don't move with the price, so each ratio scales with it.
     Across a split or bonus (`symbol`, with an ex-date after `since`) or a move too large for a day's the ratios can't
     follow the price: the price is still the close shown, the market value and P/E (a split changes neither) stay as
-    read, and what rests on the old per-share price (P/B, dividend yield) is left out; past a move too large for a day's
-    nothing read at the old price is kept."""
+    read, and what rests on the old per-share price (P/B, dividend yield) is left out, as is the book value per share
+    (on the old share count, beside a price on the new one); past a move too large for a day's nothing read at the old
+    price is kept."""
     from ..stock_pages import MOVE_BOUNDS, can_reprice
     old = s.get("price")
     if not live or live <= 0 or not old or old <= 0:
         return s
     if not can_reprice(old, live, "IN", symbol, since):
-        out = dict(s, price=live, pb=None, div_yield=None)
+        out = dict(s, price=live, pb=None, div_yield=None, book_value=None)
         if not MOVE_BOUNDS[0] <= live / old <= MOVE_BOUNDS[1]:
             out.update(pe=None, market_cap_cr=None)
         return out
