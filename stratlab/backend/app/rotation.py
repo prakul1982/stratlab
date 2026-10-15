@@ -63,12 +63,24 @@ def closes(bars: list[dict], interval: str) -> pd.Series:
     """Closing prices by date; weekly takes each week's last close, dated by that day (the current week so far counts)."""
     s = pd.Series([float(b["c"]) for b in bars], index=pd.to_datetime([str(b["t"])[:10] for b in bars]))
     s = s[~s.index.duplicated(keep="last")].sort_index().dropna()
-    return s.groupby(s.index.to_period("W-FRI")).tail(1) if interval == "weekly" else s
+    if interval != "weekly":
+        return s
+    w = s.groupby(s.index.to_period("W-FRI")).tail(1)
+    w.attrs["weekly"] = True          # path() pairs weekly closes by their week, not by the day of each one's last bar
+    return w
 
 
 def path(member: pd.Series, bench: pd.Series, tail: int) -> list[dict]:
-    """The last `tail` points of (relative strength, momentum), oldest first."""
-    df = pd.concat([member, bench], axis=1, join="inner").dropna()
+    """The last `tail` points of (relative strength, momentum), oldest first. Weekly closes (closes(..., "weekly")) are
+    paired by week, so a member whose last bar of a week fell on another day than the benchmark's (a missing Friday)
+    keeps that week; each point is dated by the benchmark's last day in it."""
+    if member.attrs.get("weekly") and bench.attrs.get("weekly"):
+        wk = lambda s: s.index.to_period("W-FRI")
+        df = pd.concat([pd.Series(member.values, index=wk(member)), pd.Series(bench.values, index=wk(bench))], axis=1, join="inner").dropna()
+        days = pd.Series(bench.index, index=wk(bench))
+        df.index = pd.DatetimeIndex(days.reindex(df.index).values)
+    else:
+        df = pd.concat([member, bench], axis=1, join="inner").dropna()
     if len(df) < 2 * WINDOW + SMOOTH + 2:
         return []
     rs = (100 * df.iloc[:, 0] / df.iloc[:, 1]).ewm(span=SMOOTH, adjust=False).mean()

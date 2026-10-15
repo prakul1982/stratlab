@@ -438,11 +438,13 @@ def iv_stats(today: float | None, past: list[float]) -> dict:
 
 
 def chain_stats(rows: list[list], spot: float | None, expiry: str, at: datetime) -> dict:
-    """Every fact the page and the daily summary keep for one chain."""
+    """Every fact the page and the daily summary keep for one chain. The headline PCR and max pain are over the recorder's
+    window (NEAR strikes either side of the money), so a live chain of 61-81 strikes and the history's recordings of 31
+    give one figure for one chain; the top strikes are over every strike read."""
     win = near(rows, spot)
     iv = atm_iv(rows, spot, expiry, at)
     return {"expiry": expiry, "spot": spot, "pcr": pcr(rows), "pcr_near": pcr(win)["oi"], "pcr_near_vol": pcr(win)["vol"],
-            "max_pain": max_pain(rows), "top": top_strikes(rows), "atm_iv": iv["iv"] if iv else None,
+            "max_pain": max_pain(win), "top": top_strikes(rows), "atm_iv": iv["iv"] if iv else None,
             "atm": iv["strike"] if iv else None}
 
 
@@ -597,8 +599,9 @@ def participants_today(now: datetime | None = None) -> dict:
     prev = latest("part", before=day, need="oi")
     out["prev"] = prev[0] if prev else None
     out["oi"] = participant_view(v.get("oi") or {}, (prev[1].get("oi") if prev else None))
-    pv = latest("part", before=day, need="vol")
-    out["vol"] = participant_view(v.get("vol") or {}, (pv[1].get("vol") if pv else None)) if v.get("vol") else []
+    # the volume change is against the same day as the label ("Changes are from <prev>"), never an older day's volume
+    # file: without that day's, the change is left blank
+    out["vol"] = participant_view(v.get("vol") or {}, (prev[1].get("vol") if prev else None)) if v.get("vol") else []
     return out
 
 
@@ -992,7 +995,7 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     near_pcr = pcr(near(rows, got.get("spot")))
     out.update(source=got["source"], at_close=bool(got.get("at_close")), as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
                spot=got.get("spot"), rows=strikes, change_from=_taken(prev).astimezone(IST).isoformat(timespec="minutes") if prev else None,
-               strikes_counted=len(rows), lot=lot, unit="lots" if lot else "shares", near_strikes=NEAR, top=top,
+               strikes_counted=len(rows), window_strikes=len(near(rows, got.get("spot"))), lot=lot, unit="lots" if lot else "shares", near_strikes=NEAR, top=top,
                pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")})
     out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
                   **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
@@ -1020,9 +1023,12 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
     if chain_time(now)[1] == "live":
         chains = live_chains(options_data, tuple(names), "current", quick=True)
     else:
+        close_day = chain_time(now)[0][:10]
         for name in names:
             rec = recorded_chain(name, "current", now.date(), now)
-            if rec and str(rec["expiry"])[:10] >= now.astimezone(IST).date().isoformat():     # not an expiry that has passed
+            # the close's own recording only: an older one (the recorder down that day) is shown with its date, not as "the close"
+            if (rec and str(rec["expiry"])[:10] >= now.astimezone(IST).date().isoformat()     # not an expiry that has passed
+                    and rec["taken_at"][:10] == close_day):
                 chains[name] = {**rec, "at_close": True}
         left = tuple(n for n in names if not chains.get(n))
         if left:

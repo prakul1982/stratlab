@@ -4705,7 +4705,9 @@ def _held(req: OptGreeksReq, expiry: str | None = None):
         err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
     m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), (spot_q or {}).get("ts"))
     if not m:
-        err(409, "expired", "That expiry has passed, so there's nothing left to model.")
+        # on its last day the settlement price is fixed at the close (15:30 IST for NSE and BSE) while contracts still trade
+        # to the derivatives close (15:40): "has passed" was wrong at 15:35
+        err(409, "expired", "That expiry's settlement price is already fixed, so there's nothing left to model.")
     return c, spot, m
 
 
