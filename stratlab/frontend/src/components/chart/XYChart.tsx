@@ -1,3 +1,4 @@
+import { clampNote } from "../../lib/phoneFit";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { dayTicks, distinctTicks, honestTicks, isIntraday, niceDomain, niceTicks, plainTick, RANGE_PRESETS, spansDays, tickOnPoint, timeTicks, tipTime, toMs } from "../../lib/chartFormat";
 import { signCls, tzLabel } from "../../lib/format";
@@ -573,7 +574,8 @@ export function XYChart(p: XYChartProps) {
           {p.split != null && p.splitNotes && p.split > 0 && p.split < n && sx(X[p.split]) > padL && sx(X[p.split]) < padL + plotW && (
             <>
               <text className="ch-note" x={sx(X[p.split]) - 8} y={padT - 6} textAnchor="end">{W < 560 ? "" : p.splitNotes[0]}</text>
-              <text className="ch-note unseen" x={Math.min(sx(X[p.split]) + 8, padL + plotW - 4)} y={padT - 6} textAnchor={sx(X[p.split]) > padL + plotW * 0.75 ? "end" : "start"}>{p.splitNotes[1]}</text>
+              {(() => { const at = clampNote(sx(X[p.split]) + 8, p.splitNotes[1].length * 6.8, padL, padL + plotW - 4);   // R25-006: a long note ends at the plot's right edge, never past it
+                return <text className="ch-note unseen" x={at.x} y={padT - 6} textAnchor={at.anchor}>{p.splitNotes[1]}</text>; })()}
             </>
           )}
           {/* x axis */}

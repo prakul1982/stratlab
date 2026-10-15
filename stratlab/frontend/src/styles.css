@@ -1601,6 +1601,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   /* the first column never takes the width: its words wrap inside 40vw (a cell with no-wrap text ignores max-width), so the next
      column's figures are in view and the rest scroll inside the box (R20-008: only the first column showed on three tables) */
   .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { white-space: normal; overflow-wrap: break-word; max-width: 40vw; min-width: 0; }
+  /* R25-004: and it keeps a floor, so a label wraps to two or three lines, not five to nine; an email breaks anywhere, not only at a hyphen */
+  .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { min-width: min(9rem, 40vw); overflow-wrap: anywhere; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
@@ -2021,6 +2023,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
    screen every field is 16px or more */
 @media (max-width: 640px), (pointer: coarse) {
   :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]), select, textarea) { font-size: 16px; }
+  /* R25-002: the line above has no weight, so a field with its own size (.pc-sel 13.5px, .k-search input, .k-textarea) kept it and iOS
+     zoomed on focus; this one outweighs any single-class rule */
+  html :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"]), select, textarea) { font-size: 16px; }
   .field input, .field select, .field textarea, .input, .k-input { font-size: 16px; }
 }
 /* R13S-006: a switch's long label ("Yearly · about 2 months free") wraps inside its button instead of spilling out of the pill */

@@ -99,7 +99,7 @@ test("Admin: the currencies without an exchange rate are named, and the 'last ra
 
 test("System: Loading, not the all-clear, while the status comes (R7M-007)", () => {
   const sys = read("src/pages/admin/SystemSection.tsx");
-  assert.match(sys, /\{!sv \? <Skeleton label="Loading the server errors" lines=\{2\} \/> : !errors\.length \? <EmptyState/);
+  assert.match(sys, /\{!sv \? <Skeleton label="Loading the server errors" lines=\{2\} onRetry=\{\(\) => \{ void reload\(\); \}\} \/> : !errors\.length \? <EmptyState/);
   assert.match(sys, /title=\{sv \? `Server errors \(/);
 });
 

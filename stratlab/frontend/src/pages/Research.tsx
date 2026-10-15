@@ -244,7 +244,7 @@ export function CompanyPage() {
   if (!c) return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={sym} />
-      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} /></Card>
+      <Card><Skeleton label={`Pulling live data for ${sym}`} lines={5} onRetry={() => setTries((n) => n + 1)} /></Card>
     </div>
   );
 

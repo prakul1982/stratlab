@@ -224,7 +224,7 @@ export function NotebooksHome({ hide = [] }: { hide?: string[] }) {
     // pinned first; within each group keep the server's most-recent-first order unless sorting by name or verdict
     return [...rows].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (sort === "recent" ? 0 : key(a).localeCompare(key(b))));
   }, [notebooks, q, sort]);
-  if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" /></Card></div>;
+  if (notebooks === null) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" /><Card><Skeleton label="Opening your notebooks" onRetry={() => { void refreshNotebooks(); }} /></Card></div>;
   if (notebooksFailed && notebooks.length === 0) return (
     <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Your notebooks" />
       <ErrorState title="Your notebooks couldn't be read" action={{ label: "Try again", onClick: () => { void refreshNotebooks(); } }}>Nothing was changed. Check your connection and try again.</ErrorState></div>

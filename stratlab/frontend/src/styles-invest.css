@@ -82,8 +82,19 @@
 .tbar-year { font-size: var(--t-note); color: var(--muted); }
 .tbar-sub { line-height: 1.35; }
 .tbar-short { display: none; }
+.tbar-year { white-space: nowrap; }
 /* a bar a few pixels wide shows the figure in at most five characters, not cut with an ellipsis (R20-017) */
-@media (max-width: 560px) { .tbar-num { font-size: 11px; } .tbar-num:has(.tbar-short) .tbar-full { display: none; } .tbar-num:has(.tbar-short) .tbar-short { display: inline; } }
+@media (max-width: 560px) { .tbar-num { font-size: 11px; } .tbar-num:has(.tbar-short) .tbar-full { display: none; } .tbar-num:has(.tbar-short) .tbar-short { display: inline; }
+  /* ten bars in 300px: the years go to two digits and the figures to the compact form, every other bar names itself (R25-001), and
+     the label is never cut: it is centred on its bar and may run over the quiet neighbour; the full figure is in the bar's tooltip */
+  .tbars.dense { gap: 2px; }
+  .tbars.dense .tbar-num { overflow: visible; text-overflow: clip; font-size: 10.5px; }
+  .tbars.dense .tbar-year { font-size: 10.5px; overflow: visible; }
+  .tbars.dense .tbar-year .tbar-full { display: none; }
+  .tbars.dense .tbar-year .tbar-short { display: inline; }
+  .tbars.dense .tbar-num:not(:has(.tbar-short)) .tbar-full { display: inline; }
+  .tbars.dense .tbar.alt .tbar-num, .tbars.dense .tbar.alt .tbar-year { visibility: hidden; }
+}
 
 /* the AI read */
 .inv-summary { font-family: var(--serif); font-size: 19px; line-height: 1.45; }
