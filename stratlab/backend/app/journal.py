@@ -193,11 +193,33 @@ def _lines(rows, header: list[str], cols: dict, start: int, label: str, out: lis
 
 def _fill(t: dict) -> dict:
     out = {k: t[k] for k in ("d", "t", "side", "qty", "price", "symbol", "isin", "exchange", "seg", "tid") if t.get(k) not in (None, "")}
+    for k in ("charges", "stt"):                    # as the file listed them (charges without STT), for the tax report's rupees
+        v = t.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v <= 1e10:
+            out[k] = round(float(v), 4)
     out["t"] = _clock(t.get("t"))                   # "2024-09-10T10:00:00" or "10:00 AM": the time of day only
     if not out["t"]:
         del out["t"]
     if not out.get("symbol") and t.get("name"):
         out["name"] = str(t["name"])[:40]          # a broker that gives the company's name and ISIN, not its symbol
+    return out
+
+
+def file_charged(f: dict) -> bool:
+    """Whether a fill carries its broker's charges: some charges, or an STT column (a file with neither has no charges
+    columns, and the journal works them out at the published rates). `line_charged`: a tax P&L line for the same trade
+    gave the day's charges (reconcile), as the tax report counts them."""
+    return bool(f.get("charges")) or isinstance(f.get("stt"), (int, float)) or bool(f.get("line_charged"))
+
+
+def fill_charges(f: dict, q: float, side: str, intraday: bool) -> float:
+    """The charges the tax report takes off for `q` of a fill's shares, from the file: its charges, plus STT on an
+    intraday sale (the file's, else the intraday rate on the sale value), which business income can deduct and capital
+    gains can't (tax_lots._day)."""
+    n = float(f["qty"]) or 1.0
+    out = (f.get("charges") or 0.0) * q / n
+    if intraday and side == "sell":
+        out += tax_lots._intraday_stt([f], q / n)[0]
     return out
 
 
@@ -340,31 +362,45 @@ def from_tax(trades: list[dict]) -> dict:
     own buy (ids ending :b and :s) becomes one exit line. F&O isn't kept line by line there, so it isn't included."""
     fills, lines, pairs = [], [], {}
     for t in trades:
-        if t.get("src") == "pnl" and str(t.get("tid", "")).endswith((":b", ":s")):
-            pairs.setdefault(t["tid"][:-2], {})[t["side"]] = t
+        if t.get("src") == "pnl" and str(t.get("tid", "")).endswith((":b", ":s")) and t.get("side") in ("B", "S"):
+            # a list per id: two identical lines in a file are two sales, as the tax report counts them (tax_lots._pairs)
+            pairs.setdefault(t["tid"][:-2], {"B": [], "S": []})[t["side"]].append(t)
         elif t.get("side") in ("B", "S"):
             fills.append(_fill({**t, "symbol": t.get("sym") or t.get("symbol")}))
     for p in pairs.values():
-        b, s = p.get("B"), p.get("S")
-        if b and s:
-            lines.append({"sym": clean_symbol(b.get("sym") or b.get("symbol") or b.get("isin")), "ed": b["d"], "et": "", "xd": s["d"],
-                          "xt": "", "qty": float(s["qty"]), "bv": round(b["qty"] * b["price"], 4), "sv": round(s["qty"] * s["price"], 4),
-                          "charges": tax_line_charges(b, s), "side": None, "exchange": str(s.get("exchange") or "")})
+        for b, s in zip(p["B"], p["S"]):
+            line = {"sym": clean_symbol(b.get("sym") or b.get("symbol") or b.get("isin")), "ed": b["d"], "et": "", "xd": s["d"],
+                    "xt": "", "qty": float(s["qty"]), "bv": round(b["qty"] * b["price"], 4), "sv": round(s["qty"] * s["price"], 4),
+                    "charges": tax_line_charges(b, s), "side": None, "exchange": str(s.get("exchange") or "")}
+            stt = line_stt(b, s)
+            if stt is not None and line["charges"] is not None:
+                line["stt"] = stt              # in the charges already; kept apart so a tradebook that covers the line gets it once
+            lines.append(line)
     return {"fills": fills, "lines": lines}
+
+
+def line_stt(buy: dict, sale: dict) -> float | None:
+    """The STT the tax report deducts on a tax P&L line bought and sold the same day (intraday, business income): the
+    file's, else the intraday rate on the sale value (tax_lots._pair). None on a line held overnight."""
+    if buy["d"] != sale["d"]:
+        return None
+    q = min(float(buy["qty"]), float(sale["qty"]))
+    return round(tax_lots._intraday_stt([sale], q / float(sale["qty"]))[0], 2)
 
 
 def tax_line_charges(buy: dict, sale: dict) -> float | None:
     """The charges the tax report takes off one tax P&L line: the ones its file listed on the purchase (added to the cost)
     and on the sale (taken off the proceeds), the same figures the tax report uses, so both pages total the same sale
     lines to the same rupee (R9R-001: the journal modelled its own charges and showed +₹34 where the tax report showed
-    -₹59). None when neither side carries a charges figure at all (the journal then models them)."""
+    -₹59). A line bought and sold the same day also has the STT the tax report deducts on intraday (line_stt). None
+    when neither side carries a charges figure at all (the journal then models them)."""
     def listed(t: dict) -> bool:
         return isinstance(t.get("charges"), (int, float)) and not isinstance(t.get("charges"), bool)
 
     if not (listed(buy) or listed(sale)):
         return None
     q = min(float(buy["qty"]), float(sale["qty"]))
-    return round(sum(float(t["charges"]) * q / t["qty"] for t in (buy, sale) if listed(t) and t["qty"]), 2)
+    return round(sum(float(t["charges"]) * q / t["qty"] for t in (buy, sale) if listed(t) and t["qty"]) + (line_stt(buy, sale) or 0.0), 2)
 
 
 # ---------- stored ----------
@@ -554,7 +590,7 @@ class _Episode:
 
     def scale(self, k: float):
         """A split or bonus: the shares so far count k times as many, each at 1/k of the price (the money is the same)."""
-        def one(f: dict) -> dict:
+        def one(f: dict) -> dict:           # charges and STT are for the whole fill, so they stay as they are
             return {**f, "qty": f["qty"] * k, "price": f["price"] / k, "p0": f.get("p0", f["price"])}
         self.entries = [(one(f), round(q * k, 6)) for f, q in self.entries]
         self.exits = [(one(f), round(q * k, 6)) for f, q in self.exits]
@@ -570,11 +606,17 @@ class _Episode:
         sold = [(f, q) for f, q in (self.exits if self.sign > 0 else self.entries)]
         bv = sum(f["price"] * q for f, q in bought)
         sv = sum(f["price"] * q for f, q in sold)
-        charges = 0.0
+        charges, srcs = 0.0, set()
         for side, part in (("buy", bought), ("sell", sold)):
             for f, q in part:
-                brk = 0.0 if f.get("expired") else _brokerage(kind, s) * (q / f["qty"])
-                charges += _cost(kind, side, q, f["price"], brk)
+                if f.get("expired"):
+                    charges += _cost(kind, side, q, f["price"], 0.0)
+                elif file_charged(f):         # the file's charges: the same rupees as the tax report
+                    charges += fill_charges(f, q, side, kind == "in_eq_mis")
+                    srcs.add("file")
+                else:
+                    charges += _cost(kind, side, q, f["price"], _brokerage(kind, s) * (q / f["qty"]))
+                    srcs.add("rates")
         qty = sum(q for _, q in self.entries)
         entry = sum(f["price"] * q for f, q in self.entries) / qty
         exit_ = sum(f["price"] * q for f, q in self.exits) / max(sum(q for _, q in self.exits), EPS)
@@ -585,7 +627,8 @@ class _Episode:
                 "side": "long" if self.sign > 0 else "short", "entry_t": _at(first["d"], first.get("t") or ""),
                 "exit_t": _at(last["d"], last.get("t") or ""), "qty": round(qty, 6), "entry": entry, "exit": exit_,
                 "gross": gross, "charges": charges, "net": gross - charges, "hold_s": hold_s, "hold_days": days,
-                "fills": len(self.entries) + len(self.exits), "src": "tradebook", "expired": self.expired, "charges_from": "rates"}
+                "fills": len(self.entries) + len(self.exits), "src": "tradebook", "expired": self.expired,
+                "charges_from": "file" if srcs == {"file"} else "mixed" if len(srcs) > 1 else "rates"}
 
 
 def _fill_order(f: dict) -> tuple:
@@ -761,8 +804,9 @@ def trades(uid: str, data: dict, today: date) -> dict:
     hit = _paired.get(ck)
     if hit is None:
         s = data["settings"]
-        a, open_, unmatched = pair_fills(data["fills"], s, today, corporate_actions(data["fills"], today))
-        lines = covered(data["fills"], data["lines"])
+        acts = corporate_actions(data["fills"], today)
+        fills, lines = reconcile(data["fills"], data["lines"], acts)
+        a, open_, unmatched = pair_fills(fills, s, today, acts)
         all_ = a + line_trades(lines, s) + manual_trades(data["manual"], s) + manual_trades(data.get("practice") or [], s, "practice")
         ids: dict[str, int] = {}
         for t in all_:                         # the same id twice (identical trades): number the later ones
@@ -788,9 +832,63 @@ def trades(uid: str, data: dict, today: date) -> dict:
 
 
 def covered(fills: list[dict], lines: list[dict]) -> list[dict]:
-    """The tax P&L lines a tradebook doesn't already cover: a line for a symbol whose fills span its entry and exit
-    dates is the same trade seen twice (the tradebook and the tax P&L of one year), so the tradebook's version, with
-    its times and side, is kept. An option's span runs to its expiry, where a tradebook has no line."""
+    """The tax P&L lines a tradebook doesn't already cover (reconcile)."""
+    return reconcile(fills, lines)[1]
+
+
+def reconcile(fills: list[dict], lines: list[dict], actions: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict]]:
+    """(fills, lines) with a trade in both a tradebook and a tax P&L file counted once. Shares go by the tax report's
+    own rule (tax_lots._covered), so both pages count the same sales: a line is dropped only when the tradebook has its
+    buy and its sale on those days, and its charges go to that day's fills that have none; a line kept takes those
+    shares out of the tradebook's fills on its days. F&O, commodity and currency lines, which the tax report keeps as
+    totals, go by the dates the fills span (_spanned)."""
+    eq = [x for x in lines if classify(x["sym"], x.get("exchange", ""))["group"] == "eq"]
+    keep_other = _spanned(fills, [x for x in lines if classify(x["sym"], x.get("exchange", ""))["group"] != "eq"])
+    by: dict[str, list[int]] = {}
+    for j, x in enumerate(eq):
+        by.setdefault(x["sym"], []).append(j)
+    kept_eq: set[int] = set()
+    new_fills: dict[int, dict | None] = {}
+    for sym, js in by.items():
+        rest = [{"side": f["side"], "d": f["d"], "qty": float(f["qty"]), "price": f["price"], "src": "trades", "_i": i,
+                 **{k: f[k] for k in ("charges", "stt") if isinstance(f.get(k), (int, float))}}
+                for i, f in enumerate(fills) if clean_symbol(f.get("symbol") or f.get("name") or f.get("isin")) == sym]
+        pairs = []
+        for j in js:
+            x = eq[j]
+            q = x["qty"]
+            stt = x.get("stt") if isinstance(x.get("stt"), (int, float)) else None
+            sale = {"side": "S", "d": x["xd"], "qty": q, "price": x["sv"] / q, "src": "pnl"}
+            if isinstance(x.get("charges"), (int, float)):
+                sale["charges"] = max(0.0, x["charges"] - (stt or 0.0))
+                if stt is not None:
+                    sale["stt"] = stt
+            pairs.append(({"side": "B", "d": x["ed"], "qty": q, "price": x["bv"] / q, "src": "pnl", "_j": j}, sale))
+        keep, left = tax_lots._covered(pairs, rest, (actions or {}).get(sym) or [])
+        kept_eq |= {b["_j"] for b, _ in keep}
+        kept_j = {b["_j"] for b, _ in keep}
+        # the days of the lines dropped: their fills are charged as the line was (its charges on the sale, none on the buy)
+        claimed = {(t["side"], t["d"]) for b, s_ in pairs if b["_j"] not in kept_j and "charges" in s_ for t in (b, s_)}
+        seen = {r["_i"] for r in left}
+        for r in rest:
+            if r["_i"] not in seen:
+                new_fills[r["_i"]] = None              # all its shares are in a line kept
+        for r in left:
+            f = fills[r["_i"]]
+            upd = {k: r[k] for k in ("charges", "stt") if isinstance(r.get(k), (int, float))}
+            if (r["side"], r["d"]) in claimed:
+                upd["line_charged"] = True
+            if abs(r["qty"] - float(f["qty"])) > EPS or any(f.get(k) != v for k, v in upd.items()):
+                new_fills[r["_i"]] = {**f, "qty": r["qty"], **upd}
+    out_fills = [new_fills.get(i, f) for i, f in enumerate(fills) if new_fills.get(i, f) is not None]
+    kept_ids = {id(eq[j]) for j in kept_eq} | {id(x) for x in keep_other}
+    return out_fills, [x for x in lines if id(x) in kept_ids]
+
+
+def _spanned(fills: list[dict], lines: list[dict]) -> list[dict]:
+    """The F&O, commodity and currency lines a tradebook doesn't already cover: a line for a symbol whose fills span its
+    entry and exit dates is the same trade seen twice (the tradebook and the tax P&L of one year), so the tradebook's
+    version, with its times and side, is kept. An option's span runs to its expiry, where a tradebook has no line."""
     span: dict[str, tuple[str, str]] = {}
     for f in fills:
         k = clean_symbol(f.get("symbol") or f.get("name") or f.get("isin"))

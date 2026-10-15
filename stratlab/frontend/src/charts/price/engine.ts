@@ -7,7 +7,7 @@ import { hitDrawing, paintDrawing, toolForKey, type DrawFmt, type DrawTheme, typ
 import { attachGestures } from "./interaction";
 import { stepDecimals, TimeScale, timeLabel, timeTicks, ValueScale, type ScaleMode } from "./scales";
 import { compute, type StudyConfig, type StudyLine, type StudyOutput } from "./studies";
-import { heikinAshi, indexAtOrBefore, type Bar } from "./transforms";
+import { heikinAshi, indexAtOrBefore, lastTag, readoutAt, type Bar } from "./transforms";
 
 export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area" | "baseline";
 export const CHART_TYPES: { type: ChartType; name: string }[] = [
@@ -597,9 +597,9 @@ export class PriceChartEngine {
   }
 
   hoverAt(i: number): Hover | null {
-    const bar = this.shown[i];
-    if (!bar) return null;
-    return { index: i, bar, prev: this.shown[i - 1] ?? null, x: this.time.x(i), compare: this.compare?.values[i] ?? null };
+    const r = readoutAt(this.bars, i);
+    if (!r) return null;
+    return { index: i, bar: r.bar, prev: r.prev, x: this.time.x(i), compare: this.compare?.values[i] ?? null };
   }
 
   /** Keys on the chart: arrows pan, + and - zoom, a letter picks a drawing tool, Delete removes the selected drawing,
@@ -732,8 +732,8 @@ export class PriceChartEngine {
       const step = ticks.length > 1 ? Math.abs(p.scale.tf(ticks[1]) - p.scale.tf(ticks[0])) : 1;
       for (const v of ticks) w = Math.max(w, c.measureText(this.axisText(p.scale, v, step)).width);
     }
-    const last = this.shown[this.shown.length - 1];
-    if (last) w = Math.max(w, c.measureText(this.tagText(last.c)).width);
+    const last = lastTag(this.bars);
+    if (last) w = Math.max(w, c.measureText(this.tagText(last.close)).width);
     for (const l of this.levels) w = Math.max(w, c.measureText(this.tagText(l.price)).width);
     const want = Math.max(this.W < 480 ? 44 : 52, Math.min(120, Math.ceil(w + 14)));
     if (Math.abs(want - this.axisW) < 2) return false;
@@ -816,17 +816,16 @@ export class PriceChartEngine {
       c.fillText(t.label, x, H - AXIS_H / 2);
     }
     // the last price, on the axis
-    const last = this.shown[this.shown.length - 1];
+    const last = lastTag(this.bars);
     if (last && pp) {
-      const prev = this.shown[this.shown.length - 2];
-      const up = !prev || last.c >= prev.c;
-      const y = this.price.y(last.c);
+      const up = last.up;
+      const y = this.price.y(last.close);
       if (y >= pp.top && y <= pp.top + pp.height) {
         c.strokeStyle = up ? th.up : th.down;
         c.setLineDash([2, 3]);
         c.beginPath(); c.moveTo(0, Math.round(y) + 0.5); c.lineTo(pw, Math.round(y) + 0.5); c.stroke();
         c.setLineDash([]);
-        this.axisTag(y, this.tagText(last.c), up ? th.up : th.down, up ? th.onUp : th.onDown);
+        this.axisTag(y, this.tagText(last.close), up ? th.up : th.down, up ? th.onUp : th.onDown);
       }
     }
     for (const l of this.levels) {

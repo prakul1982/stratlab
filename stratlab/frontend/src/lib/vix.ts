@@ -6,7 +6,7 @@ export type VixQuote = { value: number; prev_close: number | null; change: numbe
   high: number | null; low: number | null; year_high: number | null; year_low: number | null; as_of: string | null; source: "exchange" | "feed" };
 export type VixPercentile = { days: number; need: number; percentile: number | null; low: number | null; high: number | null };
 export type Vix = {
-  quote: VixQuote | null; value: number | null; intraday: { t: string; v: number }[]; history: { day: string; close: number }[];
+  quote: VixQuote | null; value: number | null; value_day?: string | null; intraday: { t: string; v: number }[]; history: { day: string; close: number }[];
   percentile: VixPercentile; stored: { days: number; first: string | null; last: string | null };
   nifty_iv: { today: { iv: number; strike?: number | null; as_of: string; source: "live" | "recorded"; at_close?: boolean } | null; series: { day: string; iv: number }[] };
   note: string; today: string;
@@ -22,16 +22,21 @@ export function vixChange(q: VixQuote | null): string | null {
 }
 
 /** How fresh the panel's figures are, and the words its titles use: a quote or a line from an earlier day (in India's
- * date) is never called today's. `asOf` is "5 Oct, 12:04 IST"; `stale` is true when the quote is from before today. */
-export function vixFreshness(v: Pick<Vix, "quote" | "intraday" | "today">) {
-  const quoteDay = dayIn(v.quote?.as_of, IST);
+ * date) is never called today's. `asOf` is "5 Oct, 12:04 IST"; `stale` is true when the quote is from before today. With no
+ * quote at all, the value is a stored close (`value_day`): `stamp` names its day ("Close on Fri 9 Oct") and it is stale too.
+ * `stamp` is the line the panel's head shows, null when nothing is dated. */
+export function vixFreshness(v: Pick<Vix, "quote" | "intraday" | "today"> & { value_day?: string | null }) {
+  const closeDay = !v.quote && v.value_day ? v.value_day : null;
+  const quoteDay = closeDay ?? dayIn(v.quote?.as_of, IST);
   const lineDay = v.intraday.length ? dayIn(v.intraday[v.intraday.length - 1].t, IST) : null;
   const name = (d: string) => fmtDate(d, { weekday: true, year: false });
   const stale = !!quoteDay && quoteDay !== v.today;
   const lineStale = !!lineDay && lineDay !== v.today;
+  const at = asOf(v.quote?.as_of, { tz: IST, year: false });
   return {
     stale, lineStale, quoteDay, lineDay,
-    asOf: asOf(v.quote?.as_of, { tz: IST, year: false }),
+    asOf: at,
+    stamp: closeDay ? `Close on ${name(closeDay)}` : at ? `As of ${at}` : null,
     rangeLabel: stale && quoteDay ? `Range on ${name(quoteDay)}` : "Today's range",
     lineTitle: lineStale && lineDay ? name(lineDay) : "Today",
   };

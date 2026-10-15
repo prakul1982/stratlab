@@ -10,7 +10,7 @@ from pathlib import Path
 from .kite_service import NSE_SERIES
 from .research import ResearchError, load
 
-MAX_MEMBERS = 50
+MAX_MEMBERS = 100
 PRESETS = {
     "IN": [
         {"id": "nifty50", "name": "NIFTY 50 stocks", "symbols": [

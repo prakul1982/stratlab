@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
-from .net import NotFound, SourceError, num
+from .net import NotFound, SourceError, num, rate_wait, with_rate_wait
 from .news import GoogleNews, Wikipedia, company_headline, mentions, plain_headline
 from .screener import Screener, clean_profile, summary as scr_summary
 from .yahoo import Yahoo
@@ -26,6 +26,8 @@ INDICES = {
 # way the option chains read NIFTY's spot (R7T-003: the other source's SENSEX stayed at the 8 Oct close after 9 Oct's open)
 KITE_INDEX = {"^NSEI": "NSE:NIFTY 50", "^BSESN": "BSE:SENSEX", "^NSEBANK": "NSE:NIFTY BANK"}
 _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
+# the index levels' reads have their own: with company pages filling the pool above, an index missed LEVELS_WITHIN (R11E)
+_index_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="indices")
 
 
 def market_open(region: str, now: datetime | None = None) -> bool:
@@ -434,7 +436,16 @@ class Research:
     def _run(tasks: dict) -> tuple[dict, list[dict]]:
         """Run {name: (source_name, fn)} in parallel; returns results and a per-source status list. A failed source also
         carries `what`: what its tasks were for ("prices", "news"), so a page can say what is missing without the source's name."""
-        futures = {k: (src, _pool.submit(fn)) for k, (src, fn) in tasks.items()}
+        return Research._collect(Research._start(tasks))
+
+    @staticmethod
+    def _start(tasks: dict) -> dict:
+        """Start {name: (source_name, fn)} on the pool; _collect waits for them."""
+        wait = rate_wait()          # a request's short rate-limit wait goes with its tasks onto the pool's threads
+        return {k: (src, _pool.submit(with_rate_wait(wait, fn))) for k, (src, fn) in tasks.items()}
+
+    @staticmethod
+    def _collect(futures: dict) -> tuple[dict, list[dict]]:
         results, status, lost = {}, {}, {}
         for k, (src, f) in futures.items():
             try:
@@ -621,19 +632,26 @@ class Research:
     # ---------- market pulse ----------
     LEVELS_WITHIN = 8.0       # seconds the index levels' reads may take together (R24-001: 20 s each, one after the other)
 
-    def indices(self, region: str, now: datetime | None = None) -> list[dict]:
+    def indices(self, region: str, now: datetime | None = None, kite_wait: float | None = None) -> list[dict]:
         """The market's index levels, each with the session it is of (see index_level). India's levels and day moves are
         the broker's live ones, the way NIFTY's spot is read for the option chains; the other source gives the 52-week
         range, and the level itself when the broker is offline. Every read is bounded: LEVELS_WITHIN for all of them, and
-        an index whose range hasn't come back by then keeps the broker's level without it."""
+        an index whose range hasn't come back by then keeps the broker's level without it. `kite_wait`: the broker's
+        request turn is waited for that long at most, else KiteBusy is raised (the pulse then keeps its last levels)."""
         import time as _time
+        from ..kite_service import KiteBusy
         out = []
         deadline = _time.monotonic() + self.LEVELS_WITHIN
-        futures = [(name, sym, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
+        futures = [(name, sym, _index_pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
         live: dict = {}
         if region == "IN" and self._kite():
+            keys = [KITE_INDEX[s] for _, s in INDICES["IN"]]
             try:
-                live = self.kite.index_quotes([KITE_INDEX[s] for _, s in INDICES["IN"]])
+                live = self.kite.index_quotes(keys) if kite_wait is None else self.kite.index_quotes(keys, max_wait=kite_wait)
+            except KiteBusy:
+                if kite_wait is not None:
+                    raise
+                print("index levels: broker quotes unavailable, busy")
             except Exception as e:
                 print("index levels: broker quotes unavailable,", str(e)[:120])
         for name, sym, f in futures:
@@ -671,10 +689,24 @@ class Research:
         PULSE_FRESH seconds old. Only the first request of a process waits, up to `wait` seconds: None while that read is
         still going. Each level's live and stale marks are worked out now, not when it was read (the open passes)."""
         levels, _ = self._snaps()
-        got, at = levels.get(region, lambda: self.indices(region), wait)
+        got, at = levels.get(region, lambda: self._levels_read(region), wait)
         if got is None:
             return None, None
         return [index_level(i["name"], i, region, now) for i in got], at
+
+    PULSE_KITE_WAIT = 2.0     # seconds a refresh of levels already kept waits for the broker's turn (as a page's quote)
+
+    def _levels_read(self, region: str) -> list[dict]:
+        """A fresh read of the levels for the pulse. Once some are kept: the broker's turn is waited for PULSE_KITE_WAIT
+        seconds at most (busy: the kept levels stay, the next request tries again), and an index this read missed keeps
+        its last row (with that row's own time, so it's marked stale as it should be) instead of dropping off the page."""
+        levels, _ = self._snaps()
+        kept = levels.kept(region)
+        if not kept or not kept[1]:
+            return self.indices(region)
+        got = self.indices(region, kite_wait=self.PULSE_KITE_WAIT)
+        new, old = {i["name"]: i for i in got}, {i["name"]: i for i in kept[1]}
+        return [new.get(n) or old[n] for n, _ in INDICES.get(region, []) if n in new or n in old]
 
     def headlines_now(self, region: str, wait: float = 3.0) -> list[dict]:
         """The market's headlines from memory, read again behind the page every NEWS_FRESH seconds; none while the first
@@ -752,23 +784,30 @@ class Research:
 
     def _company_us(self, sym: str, lean: bool = False) -> dict:
         fh = self.finnhub
-        p = fh.profile(sym)
-        if not p.get("name"):
-            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         tasks = {
             "listing": ("Yahoo Finance", lambda: self.yahoo.meta(sym)),
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
             "fin": ("Finnhub", lambda: fh.financials(sym)), "ins": ("Finnhub", lambda: fh.insider(sym)),
-            "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
+            "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)),
             # the year's daily candles, for the 52-week range on the public page's rule (R13-008); the chart reads the same
             # (never a missing-data line of its own: without them the fundamentals' range stands)
             "k1y": ("Yahoo Finance", lambda: self._quiet_candles(sym)),
         }
         if lean:
-            tasks = {k: v for k, v in tasks.items() if k not in ("news", "wiki")}
-        r, sources = self._run(tasks)
+            tasks.pop("news")
+        # the profile is read here while the others run (R11E: it went first and alone); only the encyclopedia entry
+        # needs its name, so that one starts once it's in
+        started = self._start(tasks)
+        p = fh.profile(sym)
+        if not p.get("name"):
+            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+        if not lean:
+            k1y = started.pop("k1y")             # kept last, the order the tasks always had (the sources list follows it)
+            started.update(self._start({"wiki": ("Wikipedia", lambda: self.wiki.company(p["name"]))}))
+            started["k1y"] = k1y
+        r, sources = self._collect(started)
         q, M = r["q"] or {}, r["m"] or {}
         # the yearly results are in the currency the company reports in (Eni: euros), not the US listing's dollars
         trend = self._us_trend(r["fin"], (p.get("currency") or "USD").upper())
@@ -795,14 +834,16 @@ class Research:
                       "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
                       } if q.get("c") else None,
             "range52": one["range52"],
-            "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
+            # a bank's or lender's gross margin, EV/FCF, current ratio and asset turnover describe a deposit book, not the
+            # business: left out with its EV/EBITDA (R10C)
+            "margins": {"gross": None if lender else num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
                 ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _item("Fwd P/E", M.get("forwardPE")),
                                _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
-                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
+                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", None if lender else M.get("currentEv/freeCashFlowTTM")),
                                _item("PEG (fwd)", M.get("forwardPEG"))]),
-                ("Profitability", [_item("Gross margin", M.get("grossMarginTTM"), "%"),
+                ("Profitability", [_item("Gross margin", None if lender else M.get("grossMarginTTM"), "%"),
                                    _item("Operating margin", M.get("operatingMarginTTM"), "%"),
                                    _item("Net margin", M.get("netProfitMarginTTM"), "%", "Last 12 months"),
                                    _item("ROE", M.get("roeTTM"), "%", "Last 12 months"), _item("ROA", M.get("roaTTM"), "%")]),
@@ -810,10 +851,10 @@ class Research:
                             _item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±"),
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
                             _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
-                ("Financial health", [_item("Current ratio", M.get("currentRatioQuarterly")),
+                ("Financial health", [_item("Current ratio", None if lender else M.get("currentRatioQuarterly")),
                                       _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
                                       _item("Interest coverage", M.get("netInterestCoverageTTM")),
-                                      _item("Asset turnover", M.get("assetTurnoverTTM"))]),
+                                      _item("Asset turnover", None if lender else M.get("assetTurnoverTTM"))]),
                 # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
                 ("Per share and returns", [_item("EPS TTM", None if one["foreign"] else M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
                                            _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
@@ -822,8 +863,9 @@ class Research:
             ),
             "trend": trend,
             "earnings": [{"period": e.get("period"), "actual": e["actual"], "estimate": e["estimate"],
-                          "surprise_pct": e.get("surprisePercent") if e.get("surprisePercent") is not None else
-                          ((e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100 if e["estimate"] else 0)} for e in earn],
+                          # against an estimate of 0 there's no percentage to give (R10C: it read 0%)
+                          "surprise_pct": None if not e["estimate"] else e.get("surprisePercent") if e.get("surprisePercent") is not None
+                          else (e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100} for e in earn],
             "next_earnings": {"date": nxt[0]["date"], "eps_estimate": nxt[0].get("epsEstimate")} if nxt else None,
             "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
             "insider": insider_view(ins),
@@ -926,6 +968,8 @@ class Research:
         if quote is None and s.get("price"):
             quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
+        from .. import stock_pages
+        s = stock_pages.india_snap_checked(s, scr) if scr else s
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
         # one value per figure on the page: growth compounded over the reported years (as the AI read's facts and the
@@ -965,7 +1009,9 @@ class Research:
         return {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
             "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
-            "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr") else []),
+            "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
+                                                                                                    else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
+            "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
             "quote": quote, "range52": {"low": lo52, "high": hi52},
             "margins": None,

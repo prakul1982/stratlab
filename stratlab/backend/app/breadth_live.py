@@ -172,7 +172,7 @@ class Live:
 
     def _round(self, region: str, now: datetime) -> dict:
         local = now.astimezone(IST)
-        day, hhmm = local.date().isoformat(), local.strftime("%H:%M")
+        day, hhmm, slot = local.date().isoformat(), local.strftime("%H:%M"), slot_of(now)
         if not self.ready():
             _set_status(region, error="Live prices aren't available (the data login has lapsed).", failed_at=breadth._now())
             return {"ok": False, "error": "not ready"}
@@ -214,8 +214,9 @@ class Live:
             if not c["adv"] + c["dec"] + c["unch"]:
                 continue
             idx = (quotes.get(breadth.GROUPS[g]["index"]) or {}).get("price")
-            row = [hhmm, *(c[f] for f in COUNTS), round(float(idx), 2) if idx else None, c["of"], c["unread"]]
-            pts = [p for p in load(g, day)["points"] if p[0] != hhmm] + [row]
+            # a point is its quarter hour's ("10:30" for a round run at 10:31 or retried at 10:33): one point a quarter hour
+            row = [slot, *(c[f] for f in COUNTS), round(float(idx), 2) if idx else None, c["of"], c["unread"]]
+            pts = [p for p in load(g, day)["points"] if p[0] != slot] + [row]
             save(g, day, pts)
         self.last_round[region] = time.time()
         _set_status(region, at=breadth._now(), day=day, time=hhmm, quoted=got, stocks=len(symbols), error=None,
@@ -302,7 +303,8 @@ def rebuild_base(load_bars, region: str, now: datetime, gap: float = breadth.GAP
 # ---------- what the page shows ----------
 def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | None:
     """The live card for a group, or None when there is nothing to say (a market that isn't covered, or closed).
-    state "live": points from today, the newest not stale; "unavailable": the market is open but no fresh points."""
+    state "live": points from today, the newest not stale; "pending": the open's first round isn't stored yet (09:15 to
+    09:29); "unavailable": the market is open but no fresh points."""
     g = breadth.GROUPS[group]
     now = now or datetime.now(ZoneInfo("UTC"))
     if g["region"] not in LIVE_REGIONS or not is_open(g["region"], now):
@@ -315,7 +317,9 @@ def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | 
         last = datetime.fromisoformat(f"{day}T{pts[-1][0]}:00").replace(tzinfo=IST)
         fresh = (local - last) <= timedelta(seconds=STALE_AFTER)
         age = max(0, int((local - last).total_seconds() // 60))
-    out = {"state": "live" if pts and fresh and ready else "unavailable", "day": day, "fields": list(FIELDS), "points": pts,
+    # the open's first round not stored yet: it runs at the open and takes a few minutes, so that is said, not an outage
+    first = not pts and ready and slot_of(now) == OPEN_AT
+    out = {"state": "live" if pts and fresh and ready else "pending" if first else "unavailable", "day": day, "fields": list(FIELDS), "points": pts,
            "as_of": pts[-1][0] if pts else None, "latest": None, "message": None,
            "every_minutes": EVERY // 60, "age_minutes": age,
            # the newest point is over LATE_AFTER old while the market trades: the card says when it was, not "Live" (R24-002)
@@ -325,6 +329,8 @@ def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | 
         out["latest"]["pct20"] = breadth._pct(out["latest"]["a20"], out["latest"]["n20"])
         out["latest"]["pct50"] = breadth._pct(out["latest"]["a50"], out["latest"]["n50"])
         out["latest"]["pct200"] = breadth._pct(out["latest"]["a200"], out["latest"]["n200"])
+    if first:
+        out["message"] = "The first live count of the day is coming shortly. The numbers below are the last close."
     if out["state"] == "unavailable":
         out["message"] = ("Live prices aren't available right now, so there is no live breadth. The numbers below are the "
                           "last close." if not pts or not ready else

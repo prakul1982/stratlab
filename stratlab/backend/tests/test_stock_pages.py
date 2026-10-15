@@ -158,3 +158,16 @@ def test_r16_pe_gap_note_and_plans_label():
     assert stock_pages.pe_profit_gap({**f, "profit_ttm": -5}) is None
     nav = stock_pages._top()
     assert ">Plans</a>" in nav and ">Pricing</a>" not in nav
+
+
+def test_a_company_page_has_twitter_title_and_description_matching_og(w):
+    t = w["client"].get("/stocks/in/RELIANCE").text
+    for k in ("title", "description"):
+        og = re.search(rf'property="og:{k}" content="([^"]*)"', t).group(1)
+        assert re.search(rf'name="twitter:{k}" content="{re.escape(og)}"', t), k
+    assert 'media="(prefers-color-scheme: dark)"' in t
+
+
+def test_the_being_prepared_page_has_twitter_tags():
+    t = stock_pages.busy_page("IN", "TCS")
+    assert 'name="twitter:title"' in t and 'name="twitter:description"' in t

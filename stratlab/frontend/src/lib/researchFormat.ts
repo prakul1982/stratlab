@@ -61,6 +61,39 @@ export function trendShort(v: number, unit: string): string | null {
   return minus(`${v < 0 ? "-" : ""}${r}k`);
 }
 
+/** A negative amount's sign in front of its currency, as a true minus ("−$1.2", never "$-1.2"); none when it rounds to
+ * zero (never "−$0"). `body` is the amount without its sign. */
+function signFirst(v: number, body: string): string {
+  return `${v < 0 && /[1-9]/.test(body) ? "−" : ""}${body}`;
+}
+
+/** A US filing's amount (in millions of `cur`) as the deep dive writes it: "$950 million", "−$1.50 billion". */
+export function usdAmount(v: number | null | undefined, cur = "$"): string {
+  if (v == null) return "–";
+  const s = cur === "$" ? "$" : `${cur} `, a = Math.abs(v);
+  return signFirst(v, a >= 1000
+    ? `${s}${(a / 1000).toLocaleString("en-US", a >= 10000 ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`
+    : `${s}${a.toLocaleString("en-US", { maximumFractionDigits: 2 })} million`);
+}
+
+/** A screen's figure to `dp` decimals with its unit; one that rounds to zero is "0.0", never "−0.0". */
+export function screenNum(v: number | null, dp = 1, unit = ""): string {
+  if (v == null) return "–";
+  const s = v.toFixed(dp);
+  return `${+s === 0 ? (0).toFixed(dp) : minus(s)}${unit}`;
+}
+
+/** A screen's market value: Indian figures (they arrive in crore) as whole crore with Indian grouping ("₹7,35,120 cr");
+ * US ones (millions of dollars) in billions from $1 billion ("$85.8 bn"), in millions below ("$950 mn", "$12 mn"), so
+ * a micro cap never reads "$0.0 bn". */
+export function screenCap(v: number | null, region: "IN" | "US" | string): string {
+  if (v == null) return "–";
+  if (region === "IN") return `₹${Math.round(v).toLocaleString("en-IN")} cr`;
+  if (v >= 1000) return `$${(v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} bn`;
+  if (v < 0.05) return "<$0.1 mn";
+  return `$${v.toLocaleString("en-US", { maximumFractionDigits: v >= 10 ? 0 : 1 })} mn`;
+}
+
 export function metricText(m: MetricItem, currency: string): string {
   const v = m.value;
   // a percentage that isn't zero never reads as "0.0%": a tiny one keeps two decimals (a 0.01% net margin)
@@ -68,7 +101,7 @@ export function metricText(m: MetricItem, currency: string): string {
   const dp = m.dp ?? (v !== 0 && Math.abs(v) < 0.05 ? 2 : 1);
   if (m.unit === "%") return minus(`${v.toFixed(dp)}%`);
   if (m.unit === "%±") return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(dp)}%`;
-  if (m.unit === "money") return `${currencySymbol(currency)}${v.toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`;
+  if (m.unit === "money") return signFirst(v, `${currencySymbol(currency)}${Math.abs(v).toLocaleString(currency === "INR" ? "en-IN" : "en-US", { maximumFractionDigits: 2 })}`);
   if (m.unit === "cr") return inrCompact(v * CRORE);        // the figure is in crore: ₹925 cr, ₹1.51 lakh cr
   return minus(v.toFixed(Math.abs(v) >= 100 ? 0 : 2));
 }

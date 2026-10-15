@@ -188,3 +188,49 @@ def test_kinds_match_the_older_clean_list_and_the_chart(w):
     assert {"trend", "hline", "ray", "rect", "fib", "text"} <= set(DS.KINDS)            # the first chart's kinds still load
     assert json.dumps(DS.COLORS)
     assert CD.MAX_DRAWINGS <= DS.MAX_DRAWINGS
+
+
+# ---- review 11f ----
+def _old(c, sym="IN:RELIANCE"):
+    c.put("/chart/drawings", headers=PRO, json={"symbol": sym, "items": [{"id": "old", "kind": "rect", "points": [pt(), pt(1_710_000_000_000, 90)]}]})
+
+
+def _ids(c):
+    return [d["id"] for d in c.get(URL, headers=PRO).json()["drawings"]]
+
+
+def test_older_store_is_cleared_by_an_empty_save(w):
+    c = w["client"]
+    _old(c)
+    assert _ids(c) == ["old"]
+    c.put(URL, headers=PRO, json={"drawings": []})
+    assert _ids(c) == []
+
+
+def test_older_store_is_cleared_by_delete_symbol_and_delete_all(w):
+    c = w["client"]
+    _old(c)
+    c.delete(URL, headers=PRO)
+    assert _ids(c) == []
+    _old(c)
+    _old(c, "IN:TCS")
+    c.delete("/me/drawings", headers=PRO)
+    assert _ids(c) == []
+    assert c.get("/me/drawings/IN/TCS", headers=PRO).json()["drawings"] == []
+
+
+def test_data_export_includes_older_store_drawings(w):
+    from app import user_data
+    c = w["client"]
+    _old(c)
+    uid = "u-pro"
+    out = user_data._x_drawings(uid)
+    assert [d["id"] for d in out["IN:RELIANCE"]["drawings"]] == ["old"]
+
+
+def test_too_big_save_answers_413_with_its_message(w):
+    c = w["client"]
+    stroke = {"id": "s", "kind": "brush", "points": [pt(1_700_000_000_000 + i, 100 + i) for i in range(400)]}
+    r = c.put(URL, headers=PRO, json={"drawings": [{**stroke, "id": f"s{i}"} for i in range(8)]})
+    assert r.status_code == 413
+    assert r.json()["detail"]["code"] == "drawings_too_big"

@@ -273,7 +273,8 @@ def summary(p: dict) -> dict:
     hi_lo = [num(x) for x in hl.split("/")] if "/" in hl else [None, None]
     # "Latest YoY" is the latest reported year against the year before: full years only, never the trailing twelve
     # months (which overlap the last year by nine months) against the last year
-    years = [str(c).strip().upper() != "TTM" for c in (pl or {}).get("cols") or []]
+    # (nor a first, part-year report: "Mar 2025 3m" against a full year isn't a year's growth, R10C-004)
+    years = [str(c).strip().upper() != "TTM" and not re.search(r"\s\d+m$", str(c).strip()) for c in (pl or {}).get("cols") or []]
     sales_all, profit_all = _row(pl, "Sales", "Revenue"), _row(pl, "Net Profit")
     n_cols = max(len(years), len(sales_all), len(profit_all))
     year_at = [i for i in range(n_cols) if (years[i] if i < len(years) else True)]      # the full years' columns, in order
@@ -332,6 +333,7 @@ def _pick(pages: dict) -> dict:
 
 class Screener(Source):
     name = "Screener.in"
+    STALE_FOR = 0          # a page it sent can be judged a block page after the fact (_page drops it): no fallback copy
 
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://www.screener.in", per_minute=20, burst=6, transport=transport,

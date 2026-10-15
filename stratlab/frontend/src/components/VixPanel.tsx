@@ -37,9 +37,9 @@ export function VixPanel() {
     <Card id="india-vix" testId="vix-panel" label="India VIX">
       <CardHead title="India VIX" infoLabel="About India VIX"
         info="The exchange's volatility index, worked out from NIFTY option prices. NIFTY ATM IV is StratLab's own model estimate from the nearest expiry, so the two are close but not the same number."
-        actions={fresh?.asOf ? <>
+        actions={fresh?.stamp ? <>
           {fresh.stale && <span data-testid="vix-stale"><Badge tone="warn">Not updated today</Badge></span>}
-          <span className="k-note" data-testid="vix-asof">As of {fresh.asOf}</span>
+          <span className="k-note" data-testid="vix-asof">{fresh.stamp}</span>
         </> : undefined} />
       {error ? <ErrorState title="India VIX couldn't be read">{error}</ErrorState>
         : !v ? <Skeleton label="Reading India VIX" />

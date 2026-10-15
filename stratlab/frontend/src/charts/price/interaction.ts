@@ -39,6 +39,7 @@ export function attachGestures(el: HTMLElement, h: GestureHandlers): () => void 
     if (pts.size === 2) {
       const [a, b] = [...pts.values()];
       pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (mode === "own") { const first = [...pts.values()][0]; h.drop?.(first.x, first.y, e); }          // a drag in progress ends cleanly
       mode = "pinch";
       return;
     }
@@ -79,6 +80,12 @@ export function attachGestures(el: HTMLElement, h: GestureHandlers): () => void 
     const p = local(e);
     pts.delete(e.pointerId);
     if (mode === "pinch") { if (pts.size === 0) mode = "none"; return; }
+    if (e.type === "pointercancel") {          // the browser took the gesture (a scroll): not a tap, and nothing to glide
+      if (mode === "own") h.drop?.(p.x, p.y, e);
+      if (mode === "pan") h.panEnd?.();
+      mode = "none";
+      return;
+    }
     if (mode === "own") h.drop?.(p.x, p.y, e);
     else if (!moved) {
       clicks = [...clicks.slice(-1), p];

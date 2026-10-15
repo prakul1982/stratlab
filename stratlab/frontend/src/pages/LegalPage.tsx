@@ -17,7 +17,7 @@ const BUSINESS = {
 };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-const UPDATED: Record<string, string> = { "/terms": "26 September 2026", "/privacy": "8 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
+const UPDATED: Record<string, string> = { "/terms": "15 October 2026", "/privacy": "15 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
 
 const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
 const BillingMail = () => <a className="link" href={`mailto:${BUSINESS.billing}`}>{BUSINESS.billing}</a>;
@@ -37,6 +37,7 @@ function Terms() {
       </ul>
       <h2 className="h3">Plans and payment</h2>
       <ul>
+        <li>Paid plans are billed only once they are on sale; the Plans page shows whether they are.</li>
         <li>The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly at the prices on the Plans page when you subscribe: in Indian rupees, or in your own currency where the Plans page says so. When a price is shown in another currency but charged in rupees, your card provider converts it and may add its own fee. {BUSINESS.gstin && "Rupee prices include 18% GST."}</li>
         <li>Payments are processed by Razorpay. {BUSINESS.name} never sees or stores your card or bank details.</li>
         <li>A subscription renews automatically at the end of each period until you cancel it. You can cancel any time from the Account page; see <Link className="link" to="/refunds">Cancellation and refunds</Link>.</li>
@@ -93,7 +94,7 @@ function Privacy() {
       </ul>
       <p>You can clear all of this from your browser's settings; you will be signed out and the choices above reset.</p>
       <h2 className="h3">Keeping and deleting</h2>
-      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. To see what we hold, correct it, or delete your account and its data, email <PrivacyMail />; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
+      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has "Download everything" to get a copy of what we hold, and "Delete all my data" to erase it. Or email <PrivacyMail /> to see what we hold, correct it, or delete your account and its data; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
       <h2 className="h3">Security</h2>
       <p>Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires.</p>
       <h2 className="h3">Children</h2>

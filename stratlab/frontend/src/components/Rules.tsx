@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
-import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, switchStopUnit } from "../lib/rules";
+import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, NO_STOP_SIZE_NOTE, sizedWithoutStop, switchStopUnit } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/intervals";
 import { Info } from "./ui";
@@ -380,7 +380,12 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
       </Block>
 
       <Block title="Size and candles">
-        {(r.sizing ?? "risk") === "risk" ? (
+        {(r.sizing ?? "risk") === "risk" && sizedWithoutStop(r) ? (
+          <p className="sentence" data-testid="risk-line">
+            <b>Position size:</b> {NO_STOP_SIZE_NOTE}{" "}
+            <Info label="Why does risk per trade not apply?">{HELP.risk} It needs a stop loss or a trailing stop. Without one, each trade takes up to {r.maxAlloc}% of your capital ({money((r.capital * r.maxAlloc) / 100, currency)}).</Info>
+          </p>
+        ) : (r.sizing ?? "risk") === "risk" ? (
           <p className="sentence" data-testid="risk-line">
             <b>Risk per trade:</b>{" "}
             <NumTok title="Risk per trade (% of your capital)" value={r.riskPct} suffix="%" min={0.1} max={100}

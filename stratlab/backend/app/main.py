@@ -72,7 +72,7 @@ from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
-from .intel.net import TTLCache
+from .intel.net import RequestWaits, TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
 from .intel.net import SourceError
@@ -150,7 +150,9 @@ def warm_caches():
     """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
     option contracts), so the first people after a restart or the morning login don't all wait on them at once.
     Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
-    steps = [("company list", lambda: isin_list()),         # full names and ISINs, for search by name
+    steps = [("pulse", lambda: [(research_hub.indices_now(r, wait=0), research_hub.headlines_now(r, wait=0)) for r in ("IN", "US")]),
+             ("stored company pages", db.warm_mirror),     # read whole once, here rather than on someone's page view
+             ("company list", lambda: isin_list()),         # full names and ISINs, for search by name
              ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
              ("market list", lambda: markets.markets()),
@@ -294,7 +296,8 @@ _jobs_started = False
 def lead():
     """This container holds the lease: start everything that must run in one place only, once."""
     global _jobs_started
-    db.forget_mirror()           # the settings the old container wrote since this one booted
+    db.reload_mirror()           # the settings the old container wrote since this one booted (read in the background,
+                                 # the copy there is served meanwhile)
     try:                         # ...among them today's Kite token, when it logged in after this one booted
         if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
             kite.load_saved_token()
@@ -496,16 +499,34 @@ def _database_failed(e: Exception, tb) -> bool:
     return bool(network) and any(f.filename.endswith(("/app/db.py", "/app/admin.py")) or "/postgrest/" in f.filename for f in tb)
 
 
+ERRORS_SAVE_AFTER = 2.0       # seconds between two writes of the error list: the rest of a burst goes in one write
+_errors_saving = threading.Lock()
+_errors_due = [False]          # a write is waiting to go
+_errors_saved_at = [float("-inf")]     # monotonic time of the last write
+
+
 def _save_errors():
-    """Keep the error list in the database too, so a restart doesn't wipe it."""
-    snapshot = json.dumps(RECENT_ERRORS[-25:])
+    """Keep the error list in the database too, so a restart doesn't wipe it. The first error is written at once; the
+    errors after it within ERRORS_SAVE_AFTER seconds go in one later write, of the list as it is then (an error storm
+    used to be a write storm: a thread and a write per error)."""
+    with _errors_saving:
+        if _errors_due[0]:
+            return
+        _errors_due[0] = True
+        delay = max(0.0, _errors_saved_at[0] + ERRORS_SAVE_AFTER - time.monotonic())
 
     def work():
+        with _errors_saving:
+            _errors_due[0] = False
+            _errors_saved_at[0] = time.monotonic()
+            snapshot = json.dumps(RECENT_ERRORS[-25:])
         try:
             db.set_setting("recent_errors", snapshot)
         except Exception as x:
             print("could not save errors:", x)
-    threading.Thread(target=work, daemon=True).start()
+    t = threading.Timer(delay, work)
+    t.daemon = True
+    t.start()
 
 
 def _load_errors():
@@ -517,7 +538,8 @@ def _load_errors():
         print("could not load errors:", x)
 
 
-app.add_middleware(db.SettingsMemo)   # innermost: each request reads a setting from the database once
+app.add_middleware(RequestWaits)      # innermost: a request's source calls don't sleep long on the rate limit
+app.add_middleware(db.SettingsMemo)   # each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
@@ -741,6 +763,10 @@ def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
 
 @app.get("/me")
 def me(profile=Depends(current_profile)):
+    uid = profile["id"]
+    # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
+    db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
+                          push.KEYS])
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:
@@ -1188,7 +1214,7 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
     if req.group:
         payload["group"] = group_body(req.group)      # the group the notebook tests on, so an import sets it up again (R11C-013)
     name = "".join(ch if ch.isalnum() else "-" for ch in req.strategy.name).strip("-") or "strategy"
-    return Response(json.dumps(payload, indent=2), media_type="application/json",
+    return Response(json.dumps(payload, separators=(",", ":")), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 
@@ -1820,9 +1846,9 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
-            out = {"kind": "st_s2", **scan.run(markets, req.region, members)}
+            out = {"kind": "st_s2", **scan.run(markets, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(markets, req.region, members, req.scan)
+            got = scan.run_preset(markets, req.region, members, req.scan, session=scan.session_day(req.region))
             out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
                    "stored": False, **got}
         _results.set(key, out, 300)
@@ -2369,6 +2395,9 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
+        # valuation and the P/E worked out from it (R10C-001)
+        snap = stock_pages.india_snap_checked(snap, p)
     # the yield as the public page works it out (ex-dated dividends of the year to the last close): the source's own
     # figure never stays, so a missing list is n/a here as there, not the source's 0.00%
     as_of = candle_day((base.get("trend") or {}).get("t")) or datetime.now(IST).date().isoformat()
@@ -2381,7 +2410,8 @@ def deep_view(sym: str, base: dict) -> dict:
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
-            "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+                         "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),
@@ -3537,8 +3567,8 @@ def public_verdict_image(token: str):
 def public_verdict_page(token: str):
     snap = public.load(token)
     if not snap:
-        # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
-        return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
+        # a notice that the link isn't available, not the landing page in silence (R11C-015, R11D)
+        return HTMLResponse(public.gone_html(), status_code=404, headers=public.GONE_HEADERS)
     return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=0, s-maxage=30, must-revalidate"})   # a link turned off stops within a minute
 
 
@@ -3584,7 +3614,7 @@ def company_card_image(card: str):
 def company_card_page(card: str):
     c = company_cards.load(card)
     if not c:
-        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+        return HTMLResponse(public.gone_html(), status_code=404, headers=public.GONE_HEADERS)
     return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
@@ -4701,7 +4731,9 @@ def _held(req: OptGreeksReq, expiry: str | None = None):
         err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
     m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), (spot_q or {}).get("ts"))
     if not m:
-        err(409, "expired", "That expiry has passed, so there's nothing left to model.")
+        # on its last day the settlement price is fixed at the close (15:30 IST for NSE and BSE) while contracts still trade
+        # to the derivatives close (15:40): "has passed" was wrong at 15:35
+        err(409, "expired", "That expiry's settlement price is already fixed, so there's nothing left to model.")
     return c, spot, m
 
 
@@ -5114,9 +5146,34 @@ def parse_holidays(text: str) -> list[str]:
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
+OVERVIEW_FOR = 45                     # seconds Overview's counts are kept (the server's status is read each time)
+_overview = {"at": None, "client": None, "stats": None}
+_overview_lock = threading.Lock()
+
+
+def overview_stats(fresh: bool = False) -> dict:
+    """Overview's counts, kept OVERVIEW_FOR seconds: every Admin section opens with them, and each is a handful of
+    database reads. `fresh` (Refresh, or a change made from Admin) reads them again."""
+    with _overview_lock:
+        o = dict(_overview)
+    if not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and time.monotonic() - o["at"] < OVERVIEW_FOR:
+        return o["stats"]
+    st = admin.stats(month_start_iso(), extra={"plan_interest": plan_interest.count})
+    with _overview_lock:
+        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st)
+    return st
+
+
+def forget_overview() -> None:
+    with _overview_lock:
+        _overview.update(at=None, client=None, stats=None)
+
+
 @app.get("/admin/overview")
-def admin_overview(_=Depends(admin.admin_profile)):
-    return {"server": server_status(), "stats": {**admin.stats(month_start_iso()), "plan_interest": plan_interest.count()}}
+def admin_overview(fresh: bool = False, _=Depends(admin.admin_profile)):
+    counts = _usage_pool.submit(overview_stats, fresh)        # the counts' reads while the server's status is read here
+    server = server_status()
+    return {"server": server, "stats": counts.result()}
 
 
 @app.get("/admin/users")

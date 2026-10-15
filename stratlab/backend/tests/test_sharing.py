@@ -110,12 +110,13 @@ def test_bad_card_tokens_and_images(w):
     c = w["client"]
     for t in ("nope", "x" * 40, "..%2F..%2Fetc", "%3Cscript%3E", "abc def"):
         r = c.get(f"/c/{t}", follow_redirects=False)
-        assert r.status_code in (307, 404), (t, r.status_code)
+        assert r.status_code == 404, (t, r.status_code)
         assert c.get(f"/c/{t}.png").status_code == 404
     r = c.post("/cards/company/IN/RELIANCE", headers=_h("basic-token"), json={"image": "data:image/png;base64,bm90IGEgcG5n"}).json()
     assert c.get(f"/c/{r['token']}.png").status_code == 404           # not a PNG: no image kept
     db.set_setting("card:brokenone", "{not json")
-    assert c.get("/c/brokenone", follow_redirects=False).status_code == 307
+    gone = c.get("/c/brokenone", follow_redirects=False)
+    assert gone.status_code == 404 and "may have been turned off" in gone.text and "noindex" in gone.text
 
 
 def test_the_preview_escapes_what_it_shows():

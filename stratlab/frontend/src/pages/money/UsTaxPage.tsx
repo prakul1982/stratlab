@@ -49,6 +49,9 @@ export function UsTaxPage() {
   const [v, setV] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  // a reload (another year, or after deleting) that failed: its error with Try again, in place of the figures it would replace
+  const [reloadError, setReloadError] = useState<{ message: string; fy?: number; cy?: number } | null>(null);
+  useEffect(() => { setReloadError(null); }, [v]);          // fresh figures (a trade added, a file read) replace the error
   const seq = useRef(0);                  // the answer to the last request is the one shown, whatever order they come in
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
@@ -61,8 +64,11 @@ export function UsTaxPage() {
     if (fy) q.set("fy", String(fy));
     if (cy) q.set("cy", String(cy));
     const n = ++seq.current;
-    return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`).then((x) => { if (n === seq.current) setV(x); }).catch((e) => { if (n === seq.current) fail(e); });
-  }, [fail]);
+    setReloadError(null);
+    return api<View>(`/money/us-tax${q.size ? `?${q}` : ""}`)
+      .then((x) => { if (n === seq.current) setV(x); })
+      .catch((e) => { if (n === seq.current) setReloadError({ message: (e as Error).message, fy, cy }); });
+  }, []);
   const [movedFrom, setMovedFrom] = useState<number | null>(null);      // the empty year it opened past, if it did
   const asked = useAskedFy();             // a link's year ("?fy=2025") is the year it opens on
   // The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
@@ -233,7 +239,13 @@ export function UsTaxPage() {
         <EmptyState title="No US trades yet">Add your US purchases and sales above to see each sale's gain in rupees, which lots are long term, and the Schedule FA table.</EmptyState>
       )}
 
-      {v && v.trades.length > 0 && y && (
+      {reloadError && (
+        <ErrorState title="These figures couldn't be updated" action={{ label: "Try again", onClick: () => load(reloadError.fy, reloadError.cy) }}>
+          {reloadError.message} The earlier figures aren't shown, since they may no longer be right.
+        </ErrorState>
+      )}
+
+      {v && v.trades.length > 0 && y && !reloadError && (
         <>
           {!v.rates.available && <Notice tone="warn">The rupee rates couldn't be loaded just now, so the rupee figures are missing. Try again in a while.</Notice>}
           <FormGrid label="Choose the year">
@@ -291,7 +303,7 @@ export function UsTaxPage() {
               <p className="k-small k-muted">{v.fa.label}.</p>
               {!v.fa.rows.length ? <EmptyState title={`No US shares were held in ${v.fa.cy}`}>Pick another calendar year above.</EmptyState>
                 : <DataTable label="Schedule FA" columns={faCols} rows={v.fa.rows} rowKey={(r) => `${r.symbol}-${r.lot}`} />}
-              {v.fa.missing_prices.length > 0 && <p className="k-small">No daily prices for {v.fa.missing_prices.join(", ")}, so their peak and closing values are blank. Use your broker's year statement for them.</p>}
+              {v.fa.missing_prices.length > 0 && <p className="k-small">No daily prices for {v.fa.missing_prices.join(", ")}, so their peak value, and the closing value of shares still held on 31 December, are blank. Use your broker's year statement for them.</p>}
               <p className="k-note">Country: 2-UNITED STATES OF AMERICA; nature of entity: company. Fill each company's address and ZIP code from its annual report. The broker account's cash goes in Table A2, from your broker's statement.</p>
             </Card>
           )}

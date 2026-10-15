@@ -119,7 +119,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   }, [text, lookup, code]);
 
   const go = (to: string, state?: unknown) => { if (cancelled.current) return; onClose(); nav(to, state ? { state } : undefined); };
-  const testIdea = (t: string, market = lastMarket(), symbol?: string | null) => go("/new", { prefill: { market, symbol: symbol ?? undefined, text: t } });
+  const testIdea = (t: string, market = lastMarket(), symbol?: string | null, instrumentId?: string | null) => go("/new", { prefill: { market, symbol: symbol ?? undefined, instrumentId: instrumentId ?? null, text: t } });
   const getIdeas = async () => {
     if (cancelled.current) return;
     setThinking(true); setIdeasFor(text);
@@ -288,7 +288,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const tradable = [...companies.slice(0, 1), ...insts.filter((i) => !isCompany(i) && (!i.fno || asksContract(text) || !companies.length))].slice(0, 4);
     if (tradable.length) out.push({ group: "Markets", items: tradable.map((i) => {
       const mk = i.market || "IN";
-      return { key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade" as Space, run: () => testIdea("", mk, i.symbol) };
+      return { key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade" as Space, run: () => testIdea("", mk, i.symbol, i.id) };
     }) });
     const first = (group: string) => { const n = out.findIndex((g) => g.group === group); if (n > 0) out.unshift(...out.splice(n, 1)); };
     // a feature named by the words typed ("sip" → Test a SIP, "tax" → Tax report) beats a company that merely has those

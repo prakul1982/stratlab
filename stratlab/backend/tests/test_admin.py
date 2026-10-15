@@ -30,7 +30,8 @@ class FakeQuery:
         self.rows = rows
 
     def select(self, *a, **k): return self
-    def gte(self, *a): return self
+    def gte(self, col, v):                  # a time filter, on the rows that carry the column (the usage rows here don't)
+        return FakeQuery([r for r in self.rows if col not in r or datetime.fromisoformat(r[col]) >= datetime.fromisoformat(v)])
     def eq(self, col, v): return FakeQuery([r for r in self.rows if r.get(col) == v])
     def in_(self, col, vs): return FakeQuery([r for r in self.rows if r.get(col) in vs])
     def order(self, *a, **k): return self

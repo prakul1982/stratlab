@@ -129,3 +129,17 @@ export function indexAtOrBefore(bars: { t: number }[], t: number): number {
   }
   return ans;
 }
+
+/** The values the legend, tooltip, change and last-price tag read: always the real bars. Heikin-Ashi changes only how the
+ * candle bodies are drawn, so its synthetic opens and closes never reach a number (the replay fills at the real close). */
+export function readoutAt(bars: Bar[], i: number): { bar: Bar; prev: Bar | null } | null {
+  const bar = bars[i];
+  return bar ? { bar, prev: bars[i - 1] ?? null } : null;
+}
+/** The last real close and whether it is up on the one before (the tag's value and colour). */
+export function lastTag(bars: Bar[]): { close: number; up: boolean } | null {
+  const last = bars[bars.length - 1];
+  if (!last) return null;
+  const prev = bars[bars.length - 2];
+  return { close: last.c, up: !prev || last.c >= prev.c };
+}

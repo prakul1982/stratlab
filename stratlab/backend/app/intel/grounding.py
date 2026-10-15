@@ -243,6 +243,10 @@ def fact_numbers(facts) -> list[float]:
             pool.append(float(x))
         elif isinstance(x, str):
             pool.extend(v for v, _ in _numbers(x))
+            for m in _MONEY.finditer(x):          # an amount with its unit ("₹3.1 lakh cr") as the whole amount too
+                unit = _UNIT.get(re.sub(r"\s+", " ", (m.group(3) or "").lower()))
+                if unit:
+                    pool.append(float(m.group(2).replace(",", "")) * unit)
         elif isinstance(x, dict):
             for v in x.values():
                 walk(v)
@@ -1446,8 +1450,36 @@ def page_value(v, unit: str = "x", dp: int | None = None):
     if unit == "money":
         return round(float(v), 2)
     if unit == "cr":
-        return f"{round(v):,} crore"
+        return crore_text(v)
     return round(float(v), 0 if abs(v) >= 100 else 2)
+
+
+def _nf(x: float, dp: int) -> str:
+    """Indian grouping with up to `dp` decimals and no trailing zeros (format.ts nf)."""
+    text = f"{x:.{dp}f}"
+    whole, _, frac = text.partition(".")
+    frac = frac.rstrip("0")
+    return indian(int(whole)) + ("." + frac if frac else "")
+
+
+def _scaled(x: float) -> tuple[str, float]:
+    dp = 0 if x >= 100 else 1 if x >= 10 else 2
+    n = round(x, dp)
+    return _nf(n, dp), n
+
+
+def crore_text(v_cr: float) -> str:
+    """An amount in crore as the page writes it (format.ts inrCompact): "₹925 cr", "₹3,472 cr", "₹3.1 lakh cr", in
+    India's grouping (R10C: the model was handed "310,000 crore")."""
+    a, sign = abs(v_cr) * 1e7, "-" if v_cr < 0 else ""
+    cr = _scaled(a / 1e7) if a >= 1e7 else None
+    if a >= 1e12 or (cr and cr[1] >= 1e5):
+        return f"{sign}₹{_scaled(a / 1e12)[0]} lakh cr"
+    if cr:
+        return f"{sign}₹{cr[0]} cr"
+    if a >= 1e5:
+        return f"{sign}₹{_scaled(a / 1e5)[0]} lakh"
+    return f"{'' if round(a) == 0 else sign}₹{_nf(round(a), 0)}"
 
 
 def rounded(x):

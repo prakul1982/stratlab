@@ -224,7 +224,8 @@ test("service worker: a config.js or theme.js that fails, and a page the server 
   next = () => Promise.resolve(ok("<html>app</html>", "text/html; charset=utf-8"));
   assert.equal((await ask("https://stratlab.studio/alerts", "navigate")).body, "<html>app</html>");
   next = () => Promise.resolve(ok("upstream request failed", "text/plain", 502));
-  assert.equal((await ask("https://stratlab.studio/pricing", "navigate")).body, "<html>app</html>", "a 502 for a page starts the app instead of showing plain text");
+  assert.equal((await ask("https://stratlab.studio/alerts", "navigate")).body, "<html>app</html>", "a 502 for an app page starts the app instead of showing plain text");
+  assert.equal((await ask("https://stratlab.studio/pricing", "navigate")).body, "upstream request failed", "a page that isn't the app shows the server's own answer (R11D)");
   next = () => Promise.resolve(ok("nope", "text/html", 404));
   assert.equal((await ask("https://stratlab.studio/nope", "navigate")).status, 404, "a real 404 stays a 404");
   assert.match(read("public/boot.js"), /localStorage\.getItem\("stratlab-theme"\)/, "boot.js applies the saved theme itself when theme.js fails");

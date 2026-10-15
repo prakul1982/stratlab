@@ -146,10 +146,12 @@ class Desk(X.Desk):
 
     def after(self, day: str, rows: dict, prev: dict | None) -> list[dict]:
         """Each stock's funded share of shares issued on the new day, for the alerts that watch a level."""
-        sh = shares().get("shares") or {}
+        doc = shares()
+        sh = doc.get("shares") or {}
+        moved = _split_since_shares(doc, day)
         out = []
         for sym, r in rows.items():
-            n = sh.get(sym)
+            n = None if sym in moved else sh.get(sym)
             if n and r[0] is not None:
                 was = (prev or {}).get(sym)
                 out.append({"kind": "mtf", "symbol": sym, "day": day, "id": f"{day}:{sym}:mtf",
@@ -185,6 +187,20 @@ def _splits(sym: str) -> list[str]:
     return [a["ex_date"] for a in corp_actions.actions_for("IN", sym, fetch=False) if corp_actions.adjusts(a)]
 
 
+def _split_since_shares(sh: dict, day: str, sym_splits: list[str] | None = None) -> set[str] | bool:
+    """Shares issued is re-read only every SHARES_EVERY days, but the funded share count is of the shares after a split or
+    bonus from its ex-date: until the shares file is read again, a percent of shares issued would divide new shares by old.
+    With `sym_splits` (one stock's ex-dates): whether one fell after the file's date; otherwise the set of symbols it did."""
+    as_of = str(sh.get("as_of") or "")
+    if sym_splits is not None:
+        return any(as_of < d <= day for d in sym_splits)
+    try:
+        frm = date.fromisoformat(as_of) + timedelta(days=1)
+        return {a["symbol"] for a in corp_actions.between("IN", frm, date.fromisoformat(day)) if corp_actions.adjusts(a)}
+    except ValueError:
+        return set()
+
+
 def _chg(now: list, then: list | None, splits: list[str] = ()) -> dict | None:
     if not then:
         return None
@@ -203,9 +219,12 @@ def for_symbol(symbol: str, full: bool = False, rng: str = "1y") -> dict:
     r = (rec.get("rows") or {}).get(sym)
     if not r:
         return out
-    issued = (shares().get("shares") or {}).get(sym)
+    doc = shares()
+    issued = (doc.get("shares") or {}).get(sym)
     ser = DESK.store.series(sym)
     sp = _splits(sym)
+    if _split_since_shares(doc, day, sp):
+        issued = None                      # not the figure for today's shares until the file is read again
     now = [day, r[0], r[1], r[2]]
     out.update(funded=True, shares=r[0], crore=round(r[1] / 100, 2), close=r[2], issued=issued,
                pct_shares=pct_shares(r[0], issued), pct_mcap=pct_mcap(r[1], issued, r[2]),
@@ -251,8 +270,10 @@ def screen_values() -> dict[str, float]:
     got = DESK.store.latest()
     if not got:
         return {}
-    sh = shares().get("shares") or {}
-    return {s: v for s, r in (got[1].get("rows") or {}).items() if (v := pct_shares(r[0], sh.get(s))) is not None}
+    doc = shares()
+    sh = doc.get("shares") or {}
+    moved = _split_since_shares(doc, got[0])
+    return {s: v for s, r in (got[1].get("rows") or {}).items() if s not in moved and (v := pct_shares(r[0], sh.get(s))) is not None}
 
 
 # ---------- your own MTF position ----------

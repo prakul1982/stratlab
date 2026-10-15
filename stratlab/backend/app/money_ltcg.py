@@ -76,7 +76,10 @@ def tracker(c: dict, quotes: dict[str, dict], today: str, full: bool = True) -> 
     ex = y["exemption"]
     return {"fy": fy, "label": y["label"], "as_of": today,
             "exemption": {"limit": ex["limit"], "used": ex["used"], "left": ex["left"],
-                          "realised_lt_net": y["ltcg"]["net"], "realised_st_net": y["stcg"]["net"]},
+                          "realised_lt_net": y["ltcg"]["net"], "realised_st_net": y["stcg"]["net"],
+                          # US shares apart: the exemption is for Indian shares and equity funds only
+                          **({"realised_us_lt_net": y["foreign"]["lt"]["net"], "realised_us_st_net": y["foreign"]["st"]["net"]}
+                             if y.get("foreign") else {})},
             "open_lt": {"lots": len(long_rows), "gains": _r(sum(gains)), "losses": _r(sum(losses)),
                         "with_gain": len(gains)},
             "soon_counts": {str(w): sum(1 for r in soon if r["window"] <= w) for w in WINDOWS},

@@ -4,6 +4,7 @@ import contextlib
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -358,11 +359,43 @@ def stored_dividends(region: str, symbol: str) -> list[dict]:
         if region == "IN":
             return corp_actions.actions_for("IN", symbol, None, fetch=False)
         src = corp_sources() if callable(corp_sources) else None
-        got = corp_actions.company("US", symbol, src, fetch=src is not None)
+        if src is not None and corp_actions.hist_load("US", symbol)["at"]:
+            # a stored history, however old, as it is (the corporate actions job keeps them fresh): one older than a day
+            # is read again in the background, never on the page's request (R11E: 1 to 3 s on a day's first visit)
+            _refresh_history("US", symbol, src)
+            got = corp_actions.company("US", symbol, src, fetch=True, fetch_history=False)
+        else:                            # never stored: read now, as before
+            got = corp_actions.company("US", symbol, src, fetch=src is not None)
         return (got.get("past") or []) + (got.get("ahead") or [])
     except Exception as e:
         print("dividends for the page:", region, symbol, str(e)[:120])
         return []
+
+
+_hist_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="corp-history")
+_hist_reading: set = set()           # (region, symbol) with a background read under way
+_hist_lock = threading.Lock()
+
+
+def _refresh_history(region: str, symbol: str, sources: dict) -> None:
+    """Read one company's corporate-actions history again in the background when the stored one is older than a day,
+    one read per company at a time."""
+    from .. import corp_actions
+    k = (region, symbol.upper())
+    with _hist_lock:
+        if k in _hist_reading or not corp_actions._stale(corp_actions.hist_load(region, symbol)["at"]):
+            return
+        _hist_reading.add(k)
+
+    def run():
+        try:
+            corp_actions.history(region, symbol, sources, fetch=True, keep_empty=False)
+        except Exception as e:
+            print("corporate actions history (background):", region, symbol, str(e)[:120])
+        finally:
+            with _hist_lock:
+                _hist_reading.discard(k)
+    _hist_pool.submit(run)
 
 
 @router.get("/chart/{region}/{symbol}")

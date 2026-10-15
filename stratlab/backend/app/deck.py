@@ -106,7 +106,15 @@ def _cr(v) -> str:
         if rest:
             parts.insert(0, rest)
         digits = ",".join(parts + [last3])
-    return ("-" if v < 0 else "") + digits
+    return ("-" if v < 0 and digits.strip("0,") else "") + digits      # a tiny loss rounds to 0, never "-0"
+
+
+def _plain(x, k: int, dp: int) -> str:
+    """A figure divided by `k` to `dp` decimals with Western grouping; one that rounds to zero never prints as "-0"."""
+    if x is None:
+        return "–"
+    text = f"{x / k:,.{dp}f}"
+    return text.lstrip("-") if float(text.replace(",", "")) == 0 else text
 
 
 def _pc(v, signed=False) -> str:
@@ -157,7 +165,7 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         k, label, dp = scale_for(values, us, unit)
         if k == 1 and not us:
             return k, label, _cr
-        return k, label, (lambda x: "–" if x is None else f"{x / k:,.{dp}f}")
+        return k, label, (lambda x: _plain(x, k, dp))
 
     snap = v.get("snapshot") or {}
     vv = v.get("valuation") or {}
@@ -172,7 +180,7 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     lev = (("Dividend yield", _pc(snap.get("div_yield"))) if bank
            else ("Debt / equity", "–" if snap.get("debt_equity") is None else f"{snap['debt_equity']:.2f}"))
     cap = snap.get("market_cap_cr")              # the market value is in dollars whatever the filings' currency
-    tiles = [("Market cap", "–" if cap is None else money(cap, "$ million") if us else amt(cap)), val, ret, lev,
+    tiles = [("Market cap", ("Unavailable" if snap.get("cap_note") else "–") if cap is None else money(cap, "$ million") if us else amt(cap)), val, ret, lev,
              ("Sales growth, 3y", _pc(n["growth"].get("sales_cagr_3y"), True)),
              ("Profit growth, 3y", _pc(n["growth"].get("profit_cagr_3y"), True))]
     slides: list[Slide] = []

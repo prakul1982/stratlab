@@ -213,12 +213,16 @@ def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, i
     ones. Lines aren't kept, so a file can't be matched line by line: a segment's year from a file whose dates cover a
     saved one's replaces it (a full year after a quarter), one inside a saved range is already counted, and one that
     doesn't overlap is added (the next quarter). One that overlaps a saved range only in part is left out, the saved
-    one kept, and listed in `overlaps` ({name, reason}, as the import's skipped files) with the dates."""
+    one kept, and listed in `overlaps` ({name, reason}, as the import's skipped files) with the dates.
+
+    All of this only within one source (`src`: the broker, or the file when it doesn't say): a second broker's file
+    for the same year is always added. A total saved before sources were kept (no `src`) matches any."""
     out = list(old)
     added = replaced = same = 0
     overlaps = []
     for c in new:
-        hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and not (c["last"] < o["first"] or c["first"] > o["last"])]
+        hits = [o for o in out if o["seg"] == c["seg"] and o["fy"] == c["fy"] and _same_source(o, c)
+                and not (c["last"] < o["first"] or c["first"] > o["last"])]
         if any(_same(o, c) for o in hits) or (hits and any(o["first"] <= c["first"] and c["last"] <= o["last"] for o in hits)):
             same += 1                  # the same file again, or one inside a saved range (a quarter after the year)
             continue
@@ -243,6 +247,10 @@ def merge_business(old: list[dict], new: list[dict]) -> tuple[list[dict], int, i
 def _dmy(d: str) -> str:
     """2025-09-01 -> 1 Sep 2025."""
     return _date(d).strftime("%-d %b %Y")
+
+
+def _same_source(a: dict, b: dict) -> bool:
+    return not a.get("src") or not b.get("src") or a["src"] == b["src"]
 
 
 def _same(a: dict, b: dict) -> bool:
@@ -788,6 +796,15 @@ STEP_NAMES = {"st_new": "short-term gains taxed at 20% (sold from 23 Jul 2024)",
               "lt_unit": "long-term gains on ETFs and gold bonds taxed at 12.5%"}
 
 
+FOREIGN = {"st_us", "lt_us", "lt_usi"}
+
+
+def _side(rows: list[dict]) -> dict:
+    """Gains, losses, net and sale value of some sales."""
+    return {"gains": _r(sum(r["gain"] for r in rows if r["gain"] > 0)), "losses": _r(-sum(r["gain"] for r in rows if r["gain"] < 0)),
+            "net": _r(sum(r["gain"] for r in rows)), "sales": _r(sum(r["sale"] for r in rows))}
+
+
 def _bucket(r: dict) -> str | None:
     if r.get("bucket"):                     # a mutual fund sale under the non-equity rules
         return r["bucket"]
@@ -868,16 +885,19 @@ def year(fy: int, realised: list[dict], intraday: list[dict], limit: int | None 
                             "exempt": _r(exempt[b]), "taxable": _r(taxable), "tax": _r(t), **({"slab": True} if b in SLAB else {})})
     if st_left > EPS or lt_left > EPS:
         steps.append(f"Left to carry forward: {money(st_left)} short-term and {money(lt_left)} long-term loss.")
-    st_rows = [r for r in rows if r["term"] == "ST"]
-    lt_rows = [r for r in rows if r["term"] == "LT" and _bucket(r)]
+    # the short-term and long-term totals are of Indian shares (and funds); US and other foreign shares, taxed under
+    # their own rules, have theirs apart (their tax is in the buckets either way)
+    home = [r for r in rows if _bucket(r) not in FOREIGN]
+    abroad = [r for r in rows if _bucket(r) in FOREIGN]
+    st_rows = [r for r in home if r["term"] == "ST"]
+    lt_rows = [r for r in home if r["term"] == "LT" and _bucket(r)]
     intra = [i for i in intraday if i["fy"] == fy]
     rows_out = sorted(rows, key=lambda r: (r["sold"], r["key"]))
     return {
         "fy": fy, "label": fy_label(fy),
-        "stcg": {"gains": _r(sum(r["gain"] for r in st_rows if r["gain"] > 0)), "losses": _r(-sum(r["gain"] for r in st_rows if r["gain"] < 0)),
-                 "net": _r(sum(r["gain"] for r in st_rows)), "sales": _r(sum(r["sale"] for r in st_rows))},
-        "ltcg": {"gains": _r(sum(r["gain"] for r in lt_rows if r["gain"] > 0)), "losses": _r(-sum(r["gain"] for r in lt_rows if r["gain"] < 0)),
-                 "net": _r(sum(r["gain"] for r in lt_rows)), "sales": _r(sum(r["sale"] for r in lt_rows))},
+        "stcg": _side(st_rows), "ltcg": _side(lt_rows),
+        "foreign": {"st": _side([r for r in abroad if r["term"] == "ST"]), "lt": _side([r for r in abroad if r["term"] == "LT"]),
+                    "count": len(abroad)} if abroad else None,
         "exempt_old": _r(exempt_gain) if any(_bucket(r) is None for r in rows) else None,
         "exemption": {"limit": cap, "used": _r(used), "left": _r(ex_left)},
         "buckets": buckets, "steps": steps, "tax": _r(tax), "tax_with_cess": _r(tax * (1 + CESS)),

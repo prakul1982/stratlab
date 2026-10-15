@@ -18,7 +18,7 @@ from .intel.net import TTLCache
 
 DAYS = 420                 # enough daily candles for the 150-day average plus its 20-day slope
 FRESH = 5                  # a Supertrend flip up within this many candles counts as a fresh signal
-MAX = 50
+MAX = 100                  # a watchlist holds up to 100 stocks: all of them are scanned
 _cache = TTLCache(max_items=4000)
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="scan")
 
@@ -63,7 +63,7 @@ def analyse(bars: list[dict]) -> dict | None:
         "stage": stage_now, "stage_days": since + 1 if stage_now else None,
         "st_up": st_up, "st_days": flip + 1, "st_level": None if pd.isna(st.iloc[-1]) else float(st.iloc[-1]),
         "signal": "fresh" if in_s2 and flip + 1 <= FRESH else "st_s2" if in_s2 else "stage2" if stage_now == 2 else None,
-        "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
+        "st_since": str(bars[last - flip]["t"])[:10], "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
         "day_low": float(df["l"].iloc[-1]), "day_high": float(df["h"].iloc[-1]),    # the last session's range
     }
 
@@ -127,11 +127,22 @@ def _why(e: Exception) -> str:
     return "not enough daily prices yet" if not text or "history" in text.lower() or isinstance(e, (IndexError, TypeError)) else text
 
 
-def run(registry, market: str, members: list[dict], budget: float | None = None) -> dict:
+def session_day(market: str, now: datetime | None = None) -> str | None:
+    """The market's latest settled trading day (ISO), what a stock's last candle is measured against; None without a calendar."""
+    try:
+        from .stock_pages import last_close
+        return last_close(market, now)[0].isoformat()
+    except Exception:
+        return None
+
+
+def run(registry, market: str, members: list[dict], budget: float | None = None, session: str | None = None) -> dict:
     """Scan a group: members are {"symbol"} or {"id"}. Rows sorted with fresh ST S2 signals first. With `budget`
-    (seconds), the stocks not read by then are left out and listed in "late" rather than waited for."""
+    (seconds), the stocks not read by then are left out and listed in "late" rather than waited for. `session`: the market's
+    latest trading day, so a group's newest candle isn't the only yardstick (a one-stock group holding a suspended stock)."""
     t0 = time.monotonic()
     ids, missing = universes.resolve(registry, market, members[:MAX])
+    over = [str(m.get("symbol") or m.get("id") or "") for m in members[MAX:]]
     prov = registry.provider(market)
     names = {}
 
@@ -154,7 +165,7 @@ def run(registry, market: str, members: list[dict], budget: float | None = None)
         late = [_label(prov, iid) for iid, f in jobs.items() if not f.done()]
         for f in jobs.values():
             f.cancel()                # not started yet: leave the pool to others
-    newest = max((str(res["t"])[:10] for _, res, _ in done if res and res.get("t")), default=None)
+    newest = max([str(res["t"])[:10] for _, res, _ in done if res and res.get("t")] + [session or ""], default=None) or None
     for iid, res, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
@@ -165,17 +176,19 @@ def run(registry, market: str, members: list[dict], budget: float | None = None)
         inst = names.get(iid) or {}
         rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"),
                      "currency": inst.get("currency"), **res})
+    problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (RANK.get(r["signal"], 3), -(r["chg"] or 0)))
-    return {"rows": rows, "missing": missing, "problems": problems, **({"late": late} if budget is not None else {}),
+    return {"rows": rows, "missing": missing, "problems": problems, "asked": len(ids) + len(missing) + len(over), **({"late": late} if budget is not None else {}),
             "counts": {k: sum(1 for r in rows if r["signal"] == k) for k in ("fresh", "st_s2", "stage2")}}
 
 
-def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
+def run_preset(registry, market: str, members: list[dict], preset: str, session: str | None = None) -> dict:
     """One scan preset (scan_presets) over a small group, read live from the daily candles: {"rows" (the stocks that
     match, most recent match first), "checked", "as_of", "missing", "problems"}. Facts only."""
     if preset not in scan_presets.BY_ID:
         raise KeyError(preset)
     ids, missing = universes.resolve(registry, market, members[:MAX])
+    over = [str(m.get("symbol") or m.get("id") or "") for m in members[MAX:]]
     prov = registry.provider(market)
 
     def one(iid):
@@ -188,7 +201,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
 
     rows, problems, checked, days = [], [], 0, []
     done = list(_pool.map(one, ids))
-    newest = max((res["as_of"] for _, res, _, _ in done if res), default=None)
+    newest = max([res["as_of"] for _, res, _, _ in done if res] + [session or ""], default=None) or None
     for iid, res, inst, problem in done:
         if res is None:
             problems.append(problem or f"{_label(prov, iid)}: not enough daily prices yet")
@@ -198,17 +211,19 @@ def run_preset(registry, market: str, members: list[dict], preset: str) -> dict:
             continue
         checked += 1
         days.append(res["as_of"])
-        m = res["matches"].get(preset)
+        m = scan_presets.lagged(res["matches"].get(preset), res["as_of"], newest, preset)
         if m:
             rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"), "currency": inst.get("currency"),
                          "price": res["price"], "chg": res["chg"], "as_of": res["as_of"], "days_ago": m["days_ago"], "day": m["day"],
                          "detail": m["detail"]})
+    problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (r["days_ago"], r["symbol"]))
-    return {"rows": rows, "checked": checked, "asked": len(ids) + len(missing), "as_of": max(days, default=None), "missing": missing,
+    return {"rows": rows, "checked": checked, "asked": len(ids) + len(missing) + len(over), "as_of": max(days, default=None), "missing": missing,
             "problems": problems}
 
 
 # ---------- the daily watchlist alert ----------
+TOLD_KEY = "scantold:"            # app_settings: scantold:<uid>:<market> = {symbol: the Supertrend flip day already alerted}
 ALERT_KEY = "scanalert:"          # app_settings: scanalert:<uid> = {"uid", "on"}
 SEND_AT = {"IN": ("Asia/Kolkata", "16:05"), "US": ("America/New_York", "16:50")}
 
@@ -230,6 +245,18 @@ def watchlist_members(uid: str, region: str) -> list[dict]:
     except (ValueError, TypeError):
         items = []
     return [{"symbol": i["symbol"]} for i in items if i.get("region") == region and i.get("symbol")]
+
+
+def _told(uid: str, market: str) -> dict:
+    try:
+        got = json.loads(db.get_setting(f"{TOLD_KEY}{uid}:{market}") or "{}")
+    except (ValueError, TypeError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def _remember(uid: str, market: str, told: dict):
+    db.set_setting(f"{TOLD_KEY}{uid}:{market}", json.dumps(told))
 
 
 def alert_text(market: str, fresh: list[dict]) -> str:
@@ -303,9 +330,14 @@ class Alerts:
                     members = watchlist_members(sub["uid"], market)
                     if not members or not self.can_alert(profile):
                         continue
-                    fresh = [r for r in run(self.registry, market, members)["rows"] if r["signal"] == "fresh" and r["st_days"] == 1]
+                    # the page's "fresh": the first day a stock is in Stage 2 with the Supertrend up within FRESH candles of its
+                    # flip; one alert per flip, so the stocks told about already (same flip date) aren't told again
+                    told = _told(sub["uid"], market)
+                    fresh = [r for r in run(self.registry, market, members, session=session_day(market, now))["rows"]
+                             if r["signal"] == "fresh" and told.get(r["symbol"]) != r["st_since"]]
                     if fresh:
                         marks.record(sub["uid"])         # before the send: a kill in between drops one, never doubles
+                        _remember(sub["uid"], market, {**told, **{r["symbol"]: r["st_since"] for r in fresh}})
                         self.notify(profile, "StratLab: Stage 2 + Supertrend signals", alert_text(market, fresh), url="/research/scan")
                         sent += 1
                 except Exception as e:             # one user's trouble must not stop the others' alerts

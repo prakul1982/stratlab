@@ -16,7 +16,7 @@ export interface SeriesPoint { y: string; v: number }
 export interface Company {
   region: Region; symbol: string; name: string; exchange: string | null; currency: string; logo: string | null;
   website: string | null; industry: string | null; facts: { label: string; value: string }[];
-  market_cap: number | null; quote: Quote | null; range52: { low: number | null; high: number | null };
+  market_cap: number | null; cap_note?: string | null; quote: Quote | null; range52: { low: number | null; high: number | null };
   margins: { gross: number | null; operating: number | null; net: number | null } | null;
   metrics: MetricGroup[];
   trend: { unit: string; revenue: SeriesPoint[]; profit: SeriesPoint[]; revenue_label: string; profit_label: string } | null;
@@ -26,7 +26,7 @@ export interface Company {
   /** a bank, lender or insurer: no EBITDA margin or debt-to-equity, and the quarters' margin is the financing margin (R7O-001) */
   bank?: boolean;
   pros?: string[]; cons?: string[];
-  earnings: { period: string; actual: number; estimate: number; surprise_pct: number }[];
+  earnings: { period: string; actual: number; estimate: number; surprise_pct: number | null }[];
   next_earnings: { date: string; eps_estimate: number | null } | null;
   insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
@@ -296,7 +296,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, staleQuarter, trendShort, trendValue, type Scale } from "./researchFormat";
+export { focusParam, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

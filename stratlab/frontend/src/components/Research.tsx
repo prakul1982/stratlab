@@ -250,8 +250,10 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
 
 export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
   if (rows.length < 2) return null;
-  const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct)));
-  const beats = rows.filter((r) => r.surprise_pct >= 0).length;
+  // against an estimate of 0 there is no surprise percentage: no bar, and a beat is the actual at or above it
+  const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct ?? 0)));
+  const beat = (r: Company["earnings"][number]) => (r.surprise_pct != null ? r.surprise_pct >= 0 : r.actual >= r.estimate);
+  const beats = rows.filter(beat).length;
   const PLOT = 100;
   // the zero line sits at the bottom when every quarter beat, at the top when every one missed, else in the middle
   const zero = beats === rows.length ? PLOT : beats === 0 ? 0 : PLOT / 2;
@@ -259,14 +261,14 @@ export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
     <div className="k-stack">
       <div className="tbars eq">
         {rows.map((r) => {
-          const up = r.surprise_pct >= 0;
-          const h = Math.max(2, (Math.abs(r.surprise_pct) / max) * (up ? zero : PLOT - zero) * 0.95);
+          const up = beat(r);
+          const h = r.surprise_pct == null ? 0 : Math.max(2, (Math.abs(r.surprise_pct) / max) * (up ? zero : PLOT - zero) * 0.95);
           return (
             <div key={r.period} className="tbar">
-              <span className={`tbar-num${up ? " up" : " neg"}`}>{pct(r.surprise_pct)}</span>
+              <span className={`tbar-num${up ? " up" : " neg"}`}>{r.surprise_pct == null ? "–" : pct(r.surprise_pct)}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />
-                <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />
+                {r.surprise_pct != null && <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />}
               </svg>
               <span className="tbar-year">{r.period.slice(0, 7)}</span>
               <span className="k-note tbar-sub">{num(r.actual, 2)}<br />vs {num(r.estimate, 2)}</span>

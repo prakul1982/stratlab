@@ -94,6 +94,10 @@ PE_GAP = 2.0
 UNREAD_FRESH = 3600            # seconds a page built without its latest annual report (unreadable just then) is kept
 PS_MAX = 250.0                 # market value over a year's revenue, for a company with $1 billion of revenue or more
 PRE_REVENUE_MAX = 20_000.0     # $ million: a company with under $10 million of revenue isn't worth $20 billion
+# a US market value under a year's profit (a P/E under 1) is a share count far too low, not a company (R10C: AYR's 17,840
+# shares at $100 gave $1.8 million against $178 million of profit, a P/E of 0.0 and a dividend yield of 3,519%)
+PE_MIN_US = 1.0
+YIELD_MAX = 50.0               # a dividend yield above this (%) is a share count or dividend error: n/a, never ranked
 # what the price source calls something that trades but isn't a company's stock
 FUND_TYPES = {"ETF": "an exchange-traded product (an ETF or ETN)", "MUTUALFUND": "a fund", "INDEX": "an index",
               "CURRENCY": "a currency", "CRYPTOCURRENCY": "a crypto asset", "FUTURE": "a futures contract"}
@@ -703,6 +707,7 @@ def cap_problem(f: dict | None) -> str | None:
     - a US company's value against its revenue: over PS_MAX times a year's revenue of $1 billion or more, or over
       PRE_REVENUE_MAX with almost no revenue (a shell's stray trade, a share count far off);
     - a P/E above PE_MAX on a company reporting in another currency (a page built before the revenue was stored);
+    - a US value under a year's profit (PE_MIN_US): a share count far too low;
     - a foreign filer's (see foreign_filer) value against its own profit: a P/E under PE_MIN_FOREIGN on a profit, or a
       P/E and the market value over the reported profit ("profit_usd") more than PE_GAP times apart (R8V-001);
     - a foreign company's page stored before depositary shares were checked (the screens leave its value out too, so
@@ -736,6 +741,11 @@ def cap_problem(f: dict | None) -> str | None:
         if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
             return "out of line with revenue"
     if region == "US":
+        profit, pe = _num(f.get("profit_usd")), _num(f.get("pe"))
+        if profit is None and str(f.get("unit") or "$").startswith("$"):
+            profit = _num(f.get("profit_ttm"))
+        if pe is not None and 0 < pe < PE_MIN_US or profit is not None and profit > 0 and cap / profit < PE_MIN_US:
+            return "implied share count out of range"
         sales = _num(f.get("sales_usd"))
         if sales is None:
             sales = _latest_sales(f)
@@ -747,6 +757,23 @@ def cap_problem(f: dict | None) -> str | None:
         elif not str(f.get("unit") or "$").startswith("$") and (_num(f.get("pe")) or 0) > PE_MAX:
             return "out of line with profit"
     return None
+
+
+CAP_UNAVAILABLE = ("Market cap unavailable: the value worked out from the share count and the price doesn't agree with the "
+                   "company's reported figures, so it isn't shown, nor is P/E.")
+
+
+def india_snap_checked(snap: dict, p: dict) -> dict:
+    """An Indian company's fundamentals summary (after at_live_price) with the public page's market value check
+    (cap_problem) applied: the Research page, the deep dive, the deck, the valuation and the AI read show no market value,
+    and nothing worked out from it, where the public page says "Market cap unavailable". A failed value is blanked with
+    the P/E (as shown_pe does), and "cap_problem" says why."""
+    pl = p.get("pl") or {}
+    sales = next((v for k, v in (pl.get("rows") or {}).items() if str(k).lower().startswith(("sales", "revenue"))), [])
+    years = [{"year": c, "sales": s} for c, s in zip(pl.get("cols") or [], sales) if str(c).strip().upper() != "TTM"][-5:]
+    why = cap_problem({"region": "IN", "market_cap": snap.get("market_cap_cr"), "price": snap.get("price"),
+                       "unit": p.get("unit") or "₹ crore", "market_cap_unit": "₹ crore", "years": years})
+    return {**snap, "market_cap_cr": None, "pe": None, "cap_problem": why} if why else snap
 
 
 def foreign_filer(f: dict | None) -> bool:
@@ -893,11 +920,11 @@ def shown_pe(f: dict | None):
 
 
 def shown_yield(f: dict | None):
-    """The dividend yield to show: None when unknown, when the market value it's measured on fails a check, and a 0%
-    from a price history that lists no dividend while the company's own accounts show dividends paid (R6V-011)."""
+    """The dividend yield to show: None when unknown, above YIELD_MAX, when the market value it's measured on fails a
+    check, and a 0% from a price history that lists no dividend while the company's own accounts show dividends paid (R6V-011)."""
     f = f or {}
     dy = _num(f.get("div_yield"))
-    if dy is None or (f.get("region") == "US" and cap_problem(f)):
+    if dy is None or dy > YIELD_MAX or (f.get("region") == "US" and cap_problem(f)):
         return None
     if dy == 0 and f.get("divs_paid"):
         return None
@@ -1102,7 +1129,10 @@ class Pages:
             stored = _setting(key)
         except Exception:
             return None
-        return (stored or {}).get("facts") or None
+        facts = (stored or {}).get("facts") or None
+        if facts and fresh(stored, region):
+            self.mem.set(key, facts, 600)            # what _get keeps for a fresh stored page, so the next view skips the parse
+        return facts
 
     adjust = None              # (region, symbol, facts) -> facts as served: the exchange's 52-week report taken in (R10O-007)
 
@@ -1257,14 +1287,25 @@ def _index_rows(region: str) -> list[dict]:
         return []
 
 
+def _row_cap(region: str, r: dict | None):
+    """An index row's market value, None when it fails what cap_problem can check from the row (CAP_CEILING, and for
+    India the share count the value and price imply): a row stored before those checks existed never ranks on a value
+    its page wouldn't show."""
+    r = r or {}
+    cap = _num(r.get("market_cap"))
+    if cap is None or cap <= 0 or cap_problem({"region": region, "market_cap": cap, "price": r.get("price")}):
+        return None
+    return cap
+
+
 def _sized(region: str) -> list[dict]:
     """The index's companies whose market value passed its checks, largest first. A US row must come from an index
-    built after the checks existed ("cap_checked"); any row above CAP_CEILING is left out whatever its age."""
+    built after the checks existed ("cap_checked"); any row whose value fails the checks a row allows (_row_cap) is left
+    out whatever its age."""
     cos = companies(region)
     out = []
     for r in _index_rows(region):
-        cap = _num(r.get("market_cap"))
-        if r.get("symbol") not in cos or cap is None or cap <= 0 or cap > CAP_CEILING.get(region, float("inf")):
+        if r.get("symbol") not in cos or _row_cap(region, r) is None:
             continue
         if region == "US" and not r.get("cap_checked"):
             continue
@@ -1414,7 +1455,7 @@ def largest(region: str, n: int = 24) -> tuple[list[tuple[str, str]], bool]:
     except Exception:                       # only a head start: each page is read on its own then
         pass
     twins = set(nse_twins()) if region == "IN" else set()
-    index_cap = {r["symbol"]: _num(r.get("market_cap")) for r in rows}
+    index_cap = {r["symbol"]: _row_cap(region, r) for r in rows}
     sized = []
     for s, key in zip(cands, keys):
         stored = _setting(key)
@@ -1461,6 +1502,17 @@ def _fmt(v, digits: int = 1, suffix: str = "") -> str:
     if v == 0:
         v = 0.0                                   # never "-0"
     return f"{v:,.{digits}f}{suffix}"
+
+
+def _amount(f: dict, v, digits: int = 0) -> str:
+    """A reported figure as _fmt writes it, with Indian digit grouping on an Indian page (₹ crore: 2,67,021, as its
+    market cap and the app write it, never 267,021: R10C-007)."""
+    text = _fmt(v, digits)
+    if (f.get("region") or ("US" if f.get("currency") == "USD" else "IN")) != "IN" or text == "–":
+        return text
+    sign, rest = (text[0], text[1:]) if text[0] in "-−" else ("", text)
+    whole, dot, frac = rest.partition(".")
+    return sign + _inr_group(float(whole.replace(",", ""))) + dot + frac
 
 
 def _pct(v, whole: bool = False) -> str:
@@ -1662,11 +1714,11 @@ def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = 
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="{robots}">
 {link}<link rel="icon" href="{site}/favicon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#F5F1E8">
+<meta name="theme-color" content="#F5F1E8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website"><meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 {og_url}<meta property="og:image" content="{site}/og-image.png">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{site}/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{e(title)}"><meta name="twitter:description" content="{e(desc)}"><meta name="twitter:image" content="{site}/og-image.png">
 {extra}<style>{STYLE}</style></head>"""
 
 
@@ -1832,7 +1884,7 @@ def _stats(f: dict) -> list[tuple[str, str]]:
            ("1-year range (intraday)", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
            ("Market cap", cap), (pe_label(f), _fmt(pe) if pe is not None else "n/a"),
-           (f"Net profit, last 12 months ({unit})", _fmt(f.get("profit_ttm"), 0)),
+           (f"Net profit, last 12 months ({unit})", _amount(f, f.get("profit_ttm"))),
            (f"Return on equity{of_year}", year(_pct(f.get("roe"))))]
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
@@ -1903,7 +1955,7 @@ def _notes(f: dict) -> list[str]:
         pe, implied, profit = gap
         out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
                    f'company\'s shareholders. Market cap divided by the net profit for the last 12 months in the table '
-                   f'(₹{profit:,.0f} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}.</p>')
+                   f'(₹{_amount(f, profit)} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}.</p>')
     if behind(f):
         out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
                    "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
@@ -1978,9 +2030,9 @@ def _table(f: dict) -> str:
         return ""
     g = f.get("growth") or {}
     whole = f.get("region") == "IN" and _whole([y.get("opm") for y in ys])
-    rows = [("Revenue", "sales", lambda v: _fmt(v, 0)), ("Net profit", "profit", lambda v: _fmt(v, 0))]
+    rows = [("Revenue", "sales", lambda v: _amount(f, v)), ("Net profit", "profit", lambda v: _amount(f, v))]
     if not f.get("bank"):
-        rows += [("EBITDA margin", "opm", lambda v: _pct(v, whole)), ("Borrowings", "debt", lambda v: _fmt(v, 0))]
+        rows += [("EBITDA margin", "opm", lambda v: _pct(v, whole)), ("Borrowings", "debt", lambda v: _amount(f, v))]
     head = "".join(f"<th>{e(str(y.get('year') or ''))}</th>" for y in ys)
     body = "".join(f"<tr><td>{label}</td>" + "".join(f"<td>{fmt(y.get(k))}</td>" for y in ys) + "</tr>"
                    for label, k, fmt in rows if any(_num(y.get(k)) is not None for y in ys))

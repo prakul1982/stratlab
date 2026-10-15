@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { deepDiveLimitLine } from "../lib/account";
 import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { millionsOf, scaleFor } from "../lib/research";
+import { millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
 import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
@@ -49,15 +49,6 @@ export interface DeepView {
   };
 }
 
-const usd = (v: number | null | undefined) => (v == null ? "–" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
-/** An amount in $ million as people say it: "$950 million", "$215.9 billion"; or in a foreign filer's own currency
- * ("CAD 950 million") when `cur` is given. */
-const usdAmount = (v: number | null | undefined, cur = "$") => {
-  const s = cur === "$" ? "$" : `${cur} `;
-  return v == null ? "–" : Math.abs(v) >= 1000
-    ? `${s}${(v / 1000).toLocaleString("en-US", Math.abs(v) >= 10000 ? { minimumFractionDigits: 1, maximumFractionDigits: 1 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })} billion`
-    : `${s}${usd(v)} million`;
-};
 /** An amount in ₹ crore as people say it in Indian units: "₹945 cr", "₹1.25 lakh cr". */
 const inrAmount = (v: number | null | undefined) => (v == null ? "–" : inrCompact(v * CRORE));
 const pc = (v: number | null | undefined) => (v == null ? "–" : `${v.toFixed(1)}%`);

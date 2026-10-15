@@ -330,10 +330,12 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
     q = quote_now(feed) or feed_quote(options_data, today)
     since = (today - timedelta(days=YEAR_DAYS)).isoformat()
     hist = daily(since, today)
-    past = [v[3] for d, v in hist if d < today.isoformat()]
+    # with no quote, the value is the newest stored close, sent with its day; that day is then the value, not its past
+    value_day = None if q else (hist[-1][0] if hist else None)
     value = q["value"] if q else (hist[-1][1][3] if hist else None)
+    past = [v[3] for d, v in hist if d < (value_day or today.isoformat())]
     every = daily(today=today)
-    return {"quote": q, "value": value, "intraday": intraday(feed), "history": [{"day": d, "close": v[3]} for d, v in hist],
+    return {"quote": q, "value": value, "value_day": value_day, "intraday": intraday(feed), "history": [{"day": d, "close": v[3]} for d, v in hist],
             "percentile": percentile(value, past),
             "stored": {"days": len(every), "first": every[0][0] if every else None, "last": every[-1][0] if every else None},
             "nifty_iv": nifty_iv(options_data, now) if options_data is not None else {"today": None, "series": []},

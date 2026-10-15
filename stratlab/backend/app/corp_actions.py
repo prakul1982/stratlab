@@ -91,6 +91,9 @@ def parse_purpose(text: str, face_value: float | None = None, cur: str = "₹") 
             amt = _AMOUNT.search(seg)
             amount = _f(amt.group(1)) if amt else None
             pct = re.search(r"(\d+(?:\.\d+)?)\s*%", seg)
+            if amt and pct and re.search(r"(?:face\s*value|\bf\.?\s?v\.?)(?:\s+of)?\W*$", seg[:amt.start()], re.I):
+                # "50% (FV Rs 10)": the rupee figure is the face value the percentage is of, not the dividend
+                face_value, amount = amount, None
             if amount is None and pct and face_value:
                 amount = round(face_value * float(pct.group(1)) / 100, 4)
             label = "Distribution" if "distribution" in low and "dividend" not in low else f"{word.title()} dividend" if word else "Dividend"
@@ -237,6 +240,31 @@ def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict
 
 
 # ---------- storage ----------
+CAL_MEMO_FOR = 60                    # seconds the parsed calendar is kept in memory for the pages that read it
+_cal_memo: dict = {}                 # (region, id of the database client) -> (monotonic time read, the calendar as load() gives it)
+_cal_memo_lock = threading.Lock()
+
+
+def load_cached(region: str) -> dict:
+    """load(), kept CAL_MEMO_FOR seconds for the company pages (a calendar of up to MAX_ROWS rows to read and parse on
+    each); save() drops it. Read-modify-write paths use load()."""
+    key = (region, id(db._client))      # (not db.sb(): that would connect where settings are read some other way)
+    with _cal_memo_lock:
+        hit = _cal_memo.get(key)
+    if hit is not None and time.monotonic() - hit[0] < CAL_MEMO_FOR:
+        cal = hit[1]
+    else:
+        cal = load(region)
+        with _cal_memo_lock:
+            _cal_memo[key] = (time.monotonic(), cal)
+    return {**cal, "rows": list(cal["rows"])}
+
+
+def forget_cached() -> None:
+    with _cal_memo_lock:
+        _cal_memo.clear()
+
+
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
     cal = cal if isinstance(cal, dict) else {}
@@ -254,7 +282,10 @@ def save(region: str, rows: list[dict], universe: int | None = None):
     else:
         old = db.json_value(db.get_setting(KEY + region), {})
         doc.update({k: old.get(k) for k in ("universe_at", "universe") if old.get(k) is not None})
-    db.set_setting(KEY + region, json.dumps(doc))
+    try:
+        db.set_setting(KEY + region, json.dumps(doc))
+    finally:
+        forget_cached()
 
 
 def merge(old: list[dict], new: list[dict], frm: date, today: date, first: bool = False) -> list[dict]:
@@ -336,14 +367,14 @@ def actions_for(region: str, symbol: str, sources: dict | None = None, today: da
     """Everything known for one company: its history and the calendar's rows, by ex-date."""
     symbol = symbol.upper()
     rows = {r["id"]: r for r in history(region, symbol, sources, today, fetch, keep_empty)}
-    for r in (cal if cal is not None else load(region)["rows"]):
+    for r in (cal if cal is not None else load_cached(region)["rows"]):
         if r["symbol"] == symbol:
             rows[r["id"]] = r
     return sorted(rows.values(), key=lambda r: r["ex_date"])
 
 
 def between(region: str, frm: date, to: date, symbols: set[str] | None = None) -> list[dict]:
-    return [r for r in load(region)["rows"] if frm.isoformat() <= r["ex_date"] <= to.isoformat()
+    return [r for r in load_cached(region)["rows"] if frm.isoformat() <= r["ex_date"] <= to.isoformat()
             and (symbols is None or r["symbol"] in symbols)]
 
 
@@ -492,7 +523,9 @@ def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | Non
 
 def saved_day(stamp: str | None, today: date) -> str:
     """The India day a holdings file was saved on, from its stamp (UTC, as `updated_at` is kept), else today's: the day
-    the quantity is as of, so an action that went ex that day is already in it. A bare date is taken as it is."""
+    the quantity is as of. An action that went ex that day is not in it yet (the new shares are credited days after the
+    ex-date, as holdings.saved_day says), so it is still offered; `_included` counts only the ones before it. A bare date
+    is taken as it is."""
     s = str(stamp or "")
     try:
         t = datetime.fromisoformat(s) if len(s) > 10 else None
@@ -994,11 +1027,13 @@ def _home_missing(symbol: str, rows: list[dict], yahoo, today: date) -> list[dic
     return out
 
 
-def company(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True) -> dict:
+def company(region: str, symbol: str, sources: dict | None, today: date | None = None, fetch: bool = True,
+            fetch_history: bool | None = None) -> dict:
     """One company's actions: those ahead, and the past ones (newest first), with the dividends a share of the
-    last twelve months added up. A US depositary share's missing payments come from its home listing."""
+    last twelve months added up. A US depositary share's missing payments come from its home listing. `fetch_history`
+    False: the stored history as it is, however old (the rest as `fetch` says)."""
     today = today or local_today(region)
-    rows = actions_for(region, symbol, sources, today, fetch, keep_empty=False)
+    rows = actions_for(region, symbol, sources, today, fetch if fetch_history is None else fetch_history, keep_empty=False)
     if region == "US" and fetch and sources and sources.get("us") is not None:
         rows = sorted(rows + home_listing_dividends(symbol, rows, sources["us"], today), key=lambda r: r["ex_date"])
     t = today.isoformat()

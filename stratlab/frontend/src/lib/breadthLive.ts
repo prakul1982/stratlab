@@ -3,7 +3,7 @@
 /** The live card while the market is open: points through the day (time, rose, fell, unchanged, then the counts above the 20-,
  * 50- and 200-day averages with how many stocks had each average, and the index level). */
 export type LiveView = {
-  state: "live" | "unavailable"; day: string; fields: string[]; points: (string | number | null)[][]; as_of: string | null;
+  state: "live" | "pending" | "unavailable"; day: string; fields: string[]; points: (string | number | null)[][]; as_of: string | null;
   message: string | null; every_minutes: number;
   /** minutes since the newest point, and whether that is over 20 while the market trades (older servers send neither) */
   age_minutes?: number | null; late?: boolean;
@@ -23,6 +23,9 @@ export const liveTitle = (live: Pick<LiveView, "as_of"> & Partial<Pick<LiveView,
     : live.as_of ? `Today, live as of ${live.as_of}` : "Today, live";
 
 /** The card's tag: "Live" in the live colour, or "Delayed" once the newest point is late. */
+/** The live card's notice without points: plain while the open's first count is on its way ("pending"), a warning otherwise. */
+export const liveNoticeTone = (live: Pick<LiveView, "state">): "info" | "warn" => (live.state === "pending" ? "info" : "warn");
+
 export const liveTag = (live: Partial<Pick<LiveView, "late">>): { tone: "live" | "warn"; text: string } =>
   live.late ? { tone: "warn", text: "Delayed" } : { tone: "live", text: "Live" };
 

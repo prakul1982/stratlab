@@ -359,11 +359,14 @@ def test_import_pairs_skips_duplicates_and_shows_the_checks(w):
     again = upload(c, FIX / "taxpnl" / "zerodha_taxpnl_2024_2025.zip")
     assert again["added"] == 0 and again["duplicates"] == 16 and again["journal"]["count"] == 15
     tb = upload(c, FIX / "tradebooks" / "zerodha_console_tradebook.csv")
-    # the tradebook has the INFY intraday and NIFTY option trades the tax P&L has too: counted once, the tradebook's way
-    assert tb["added"] == 8 and tb["journal"]["count"] == 15 and tb["journal"]["overlap"] == 4
+    # the tradebook has the INFY intraday and NIFTY option trades the tax P&L has too: counted once, the tradebook's way.
+    # The tax P&L's second INFY line that day (10 shares) isn't in the tradebook, which has 20: it stays, as the tax
+    # report counts it (tax_lots._covered)
+    assert tb["added"] == 8 and tb["journal"]["count"] == 16 and tb["journal"]["overlap"] == 3
     assert tb["journal"]["open"][0]["symbol"] == "TCS"
     infy = [t for t in tb["journal"]["trades"] if t["symbol"] == "INFY"]
-    assert len(infy) == 1 and infy[0]["src"] == "tradebook" and infy[0]["entry_t"] == "2024-09-02T09:20:00"
+    assert sorted(t["src"] for t in infy) == ["pnl", "tradebook"] and [t["qty"] for t in infy if t["src"] == "pnl"] == [10]
+    assert next(t for t in infy if t["src"] == "tradebook")["entry_t"] == "2024-09-02T09:20:00"
     rep = upload(c, FIX / "tradebooks" / "zerodha_console_tradebook.csv", mode="replace")
     assert rep["journal"]["count"] == 3 and len(rep["journal"]["files"]) == 1
     bad = c.post("/trade/journal/import?filename=x.csv", headers={**PRO, "Content-Type": "application/octet-stream"}, content=b"a,b\n1,2\n")
