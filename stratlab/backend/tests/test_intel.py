@@ -277,3 +277,18 @@ def test_a_daily_candle_of_a_session_still_trading_is_reused_for_a_minute_only()
         t.shift(120)
         y.chart("AAPL")
         assert len(calls) == 2
+
+
+def test_the_build_locks_are_trimmed_without_dropping_one_in_progress():
+    import threading
+    from app.intel import routes
+    held = threading.Lock()
+    held.acquire()
+    routes._building.clear()
+    routes._building.update({f"k{i}": threading.Lock() for i in range(2500)})
+    routes._building["running"] = held
+    with routes._building_lock:
+        routes._drop_finished_builds()
+    assert list(routes._building) == ["running"]
+    routes._building.clear()
+    held.release()

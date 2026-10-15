@@ -376,9 +376,12 @@ class Job(news_job.Job):
         day = self.due("vix-close", now, "Asia/Kolkata", CLOSE_AT, region="IN")
         if day:
             got = fetch(day - timedelta(days=14), day, feed, self.sleep)
-            if day.isoformat() in got or local.strftime("%H:%M") >= "21:00":
+            had = day.isoformat() in got
+            if had or local.strftime("%H:%M") >= "21:00":
                 self.mark("vix-close", day)
-            self.status.update(read=local.isoformat(timespec="minutes"), last_run=now.isoformat(), last_error=None)
+            # no reading for a weekday is said (a weekend has none): the day is given up at 21:00, but not shown as fine
+            warn = None if had or day.weekday() >= 5 else f"No close for {day.isoformat()} was returned"
+            self.status.update(read=local.isoformat(timespec="minutes"), last_run=now.isoformat(), last_error=warn)
             return len(got)
         hhmm = local.strftime("%H:%M")
         st = state()

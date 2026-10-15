@@ -60,7 +60,8 @@ def run_reminders(now: datetime | None = None) -> int:
 
 class Job:
     def __init__(self):
-        self.status = {"last_run": None, "ibkr": None, "ibkr_at": None, "reminders": 0, "reminders_at": None, "last_error": None}
+        self.status = {"last_run": None, "ibkr": None, "ibkr_at": None, "reminders": 0, "reminders_at": None, "last_error": None,
+                       "ibkr_error": None, "reminders_error": None}
         self.lock = threading.Lock()
 
     @property
@@ -76,7 +77,12 @@ class Job:
         now = now or datetime.now(timezone.utc)
         stamp = now.isoformat(timespec="seconds")
         if part in ("all", "ibkr"):
-            self.status["ibkr"] = ibkr.run_daily(now)
+            try:                                      # each part keeps its own error, and one failing doesn't stop the other
+                self.status["ibkr"] = ibkr.run_daily(now)
+                self.status["ibkr_error"] = None
+            except Exception as e:
+                self.status["ibkr_error"] = mask(str(e))[:200] or type(e).__name__
+                print("connect-once job: ibkr:", mask(type(e).__name__))
             self.status["ibkr_at"] = stamp
         if part in ("all", "kite"):
             try:                                      # the owner's Zerodha holdings, on the data login's token (R5O-031)
@@ -84,9 +90,16 @@ class Job:
             except Exception as e:
                 print("connect-once job: zerodha:", mask(type(e).__name__))
         if part in ("all", "reminders"):
-            self.status["reminders"] = run_reminders(now)
+            try:
+                self.status["reminders"] = run_reminders(now)
+                self.status["reminders_error"] = None
+            except Exception as e:
+                self.status["reminders_error"] = mask(str(e))[:200] or type(e).__name__
+                print("connect-once job: reminders:", mask(type(e).__name__))
             self.status["reminders_at"] = stamp
         self.status["last_run"] = stamp
+        from .. import job_status
+        job_status.keep("connect", self)              # Admin shows this run after a restart too
 
     def run_now(self, part: str = "all") -> bool:
         """For the admin's Run now: in the background, one at a time. False when a pass is already running."""

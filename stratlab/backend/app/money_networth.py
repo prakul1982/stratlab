@@ -1000,7 +1000,7 @@ class Job:
         month = local.strftime("%Y-%m")
         if (local.day == 1 and local.hour < 16) or not (run := run_marks.claim(RUN, month)):
             return 0
-        n = 0
+        n, failed = 0, 0
         for key, _ in db.all_settings_with_prefix(KEY):
             uid = key[len(KEY):]
             if run.seen(uid):
@@ -1017,11 +1017,14 @@ class Job:
                 if v:                                       # a partial total is stored flagged (see record)
                     record(uid, v["totals"], "month", local.date())
                     n += 1
+                run.record(uid)                             # after a record, or when there is nothing to take; a kill in between records that one again
             except Exception as e:                          # one user's data never stops the others'
+                failed += 1                                 # not recorded: a later pass (the unfinished run is resumed) takes it again
                 print("net worth snapshot failed:", type(e).__name__)
-            run.record(uid)                                 # after: a kill in between records that one again, same day
-        run.done()
-        self.status.update(last_run=now.isoformat(), recorded=n, last_error=None)
+        if not failed:
+            run.done()
+        self.status.update(last_run=now.isoformat(), recorded=n,
+                           last_error=f"{failed} not taken yet, asked again" if failed else None)
         return n
 
 

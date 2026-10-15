@@ -37,6 +37,7 @@ from . import money_mf_nav
 from . import money_mf_ter
 from . import money_mf_behaviour
 from . import sip_test
+from . import run_marks
 from . import fixed_income
 from . import loan_check
 from . import money_advance_tax, money_routes
@@ -680,15 +681,16 @@ def fx_rate(code: str) -> float:
     return pricing.cross_rate(code, lambda pair: research_hub.yahoo.meta(pair).get("price"))
 
 
-def rates_pass() -> bool:
-    """One read of the exchange rates; whether it failed (any currency without an answer counts)."""
+def rates_pass() -> bool | None:
+    """One read of the exchange rates; whether it failed (any currency without an answer counts). None: another
+    container leads, so nothing was read (the loop asks again soon, it is not a finished pass)."""
     try:
-        if leader.leading():      # another container leads: it runs this pass
-            return bool(pricing.refresh_rates(fx_rate).get("errors"))
+        if not leader.leading():      # another container leads: it runs this pass
+            return None
+        return bool(pricing.refresh_rates(fx_rate).get("errors"))
     except Exception as e:
         print("exchange rate refresh failed:", e)
         return True
-    return False
 
 
 def rates_job():
@@ -3881,12 +3883,13 @@ research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 
-def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str]:
+def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
     """One read of the lists of listed companies (India, NSE and BSE-only; the US), or just those regions in `only`;
-    the regions whose read failed."""
+    the regions whose read failed. None: another container leads, nothing was read."""
     failed = []
-    lists = (("IN", india_listing), ("US", _sec_companies)) if leader.leading() else ()   # another container leads: it reads them
-    for region, fn in lists:
+    if not leader.leading():      # another container leads: it reads them
+        return None
+    for region, fn in (("IN", india_listing), ("US", _sec_companies)):
         if only is not None and region not in only:
             continue
         try:
@@ -3904,6 +3907,9 @@ def stock_list_job():
     todo, tries = None, 0
     while True:
         failed = stock_list_pass(todo)
+        if failed is None:                  # not leading: keep what is still to read, ask again soon
+            time.sleep(next_pass_in(None, 0))
+            continue
         todo, tries = (tuple(failed) if failed else None), (tries + 1 if failed else 0)
         time.sleep(next_pass_in(bool(failed), tries))
 
@@ -4993,18 +4999,26 @@ RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in 
 QUICK_RETRIES = 6                # ...up to this many times in a row (a source that stays down is asked daily again)
 
 
-def next_pass_in(failed: bool, tries: int) -> int:
-    """Seconds until a daily job's next pass: about an hour after a failed one, a day after a good one."""
+FOLLOWER_RETRY = 60               # a pass skipped because another container leads is asked again in a minute
+
+
+def next_pass_in(failed: bool | None, tries: int) -> int:
+    """Seconds until a daily job's next pass: about an hour after a failed one, a day after a good one, a minute
+    after one that was skipped (None: this container wasn't leading, so nothing was done)."""
+    if failed is None:
+        return FOLLOWER_RETRY
     return RETRY_AFTER_FAIL if failed and tries <= QUICK_RETRIES else 24 * 3600
 
 
-def holiday_pass() -> bool:
-    """One read of the exchange's holiday lists; whether either failed (the last good lists stay either way)."""
+def holiday_pass() -> bool | None:
+    """One read of the exchange's holiday lists; whether either failed (the last good lists stay either way). None:
+    another container leads, nothing was read."""
     failed = False
     try:
-        if leader.leading():      # another container leads: it runs this pass
-            for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
-                failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
+        if not leader.leading():      # another container leads: it runs this pass
+            return None
+        for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
+            failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
     except Exception as e:
         print("holiday refresh failed:", e)
         failed = True
@@ -5590,21 +5604,47 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
     return alerts.tell_admins(subject, text, label=label)
 
 
+PLATFORM_RUN = "platform-check-run"
+
+
+def platform_pass(now: datetime) -> bool | None:
+    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it.
+    None: another container leads (asked again soon); True: it failed (asked again in an hour); False: done or not due."""
+    at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
+    if now < at:
+        return False
+    if not leader.leading():
+        return None
+    day = now.date().isoformat()
+    run = run_marks.claim(PLATFORM_RUN, day)
+    if run is None:
+        return False
+    try:
+        daily_platform_check()
+    except Exception as e:
+        print("platform check job failed:", e)
+        db.delete_setting(PLATFORM_RUN)
+        return True
+    run.done()
+    return False
+
+
 def platform_job():
     """Every day at PLATFORM_AT (IST): check every feature, retry failures, and tell the admins only if something
     is still broken. Nothing to do when all is well."""
     while True:
         now = datetime.now(IST)
+        failed = platform_pass(now)
+        if failed is None:
+            time.sleep(FOLLOWER_RETRY)
+            continue
+        if failed:
+            time.sleep(RETRY_AFTER_FAIL)
+            continue
         at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
         if at <= now:
             at += timedelta(days=1)
-        time.sleep((at - now).total_seconds())
-        if not leader.leading():
-            continue
-        try:
-            daily_platform_check()
-        except Exception as e:
-            print("platform check job failed:", e)
+        time.sleep(max(1, min(3600, (at - now).total_seconds())))
 
 
 def daily_platform_check(retry_after: float = 120) -> dict:
@@ -5674,12 +5714,27 @@ def weekly_summary(now: datetime | None = None) -> tuple[str, str]:
     return weekly.summary(now, weekly_facts(now))
 
 
+WEEKLY_RUN = "weekly-summary-run"
+
+
 def send_weekly_summary(now: datetime) -> bool:
     """Send this week's summary if it's due and hasn't gone yet; the week is remembered so a restart never resends."""
-    if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == weekly.week_of(now):
+    week = weekly.week_of(now)
+    if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == week:
         return False
-    db.set_setting(weekly.WEEK_KEY, weekly.week_of(now))
-    alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
+    run = run_marks.claim(WEEKLY_RUN, week)     # a second container (or a pass while one is sending) finds it taken
+    if run is None:
+        return False
+    try:
+        reached = alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
+    except Exception:
+        db.delete_setting(WEEKLY_RUN)    # a stale "running" marker would hold the retry for ten minutes
+        raise
+    if not reached:
+        db.delete_setting(WEEKLY_RUN)   # nobody was told: the next pass asks again
+        return False
+    run.done()
+    db.set_setting(weekly.WEEK_KEY, week)
     return True
 
 

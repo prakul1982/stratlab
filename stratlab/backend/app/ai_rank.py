@@ -633,6 +633,8 @@ def rerank(name: str, transport=None) -> Status:
                     with _lock:
                         st.config_error, st.last_error, st.rank_error, st.last_error_at = True, e.detail, e.detail, time.time()
                         _open_provider(st, 30 * 60, e.detail)
+                        n = _auth_fails.get(name, (0, 0.0))[0] + 1
+                        _auth_fails[name] = (n, time.time())      # the automatic job asks again later each time (see stale)
                     return st
                 st.rank_error = f"couldn't list models, measured the defaults ({e.detail})"
         p = pinned(name)
@@ -664,6 +666,7 @@ def rerank(name: str, transport=None) -> Status:
                 elif not st.order:
                     st.order = []                           # nothing proven: the defaults stay in use
                 st.ranked_at = time.time()
+                _auth_fails.pop(name, None)
         save(name)
         return st
     finally:
@@ -695,11 +698,24 @@ def heal(name: str):
         start_rerank([name])
 
 
+AUTH_BACKOFF_BASE = 600.0          # after a rejected key the automatic re-rank waits this long, doubling each time...
+AUTH_BACKOFF_MAX = 6 * 3600.0      # ...up to this
+_auth_fails: dict[str, tuple[int, float]] = {}      # provider -> (rejections in a row, when the last was)
+
+
+def auth_wait(name: str) -> float:
+    """Seconds the automatic re-rank still holds off after the provider rejected its key (0: not holding off)."""
+    n, at = _auth_fails.get(name, (0, 0.0))
+    if not n:
+        return 0.0
+    return max(0.0, at + min(AUTH_BACKOFF_MAX, AUTH_BACKOFF_BASE * 2 ** (n - 1)) - time.time())
+
+
 def stale(name: str) -> bool:
     """Due for its automatic re-rank (every 6 hours; less often where measuring costs scarce credit; never for the
     paid provider, which is measured only when the Admin page asks)."""
     every = PROVIDERS[name].probe_every_h * 3600
-    return configured(name) and every > 0 and time.time() - status(name).ranked_at > every
+    return configured(name) and every > 0 and time.time() - status(name).ranked_at > every and not auth_wait(name)
 
 
 class RerankJob:
