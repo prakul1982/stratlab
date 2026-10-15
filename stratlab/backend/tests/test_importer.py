@@ -56,9 +56,12 @@ if ta.crossunder(close, e) and ta.vwma(close, 5) > 3
 strategy.exit("x", "L", loss=100)"""
     out = importer.pine(code)
     assert out["side"] == "long" and out["entry"][0]["op"] == "xa" and out["entry"][0]["r"] == {"t": "ema", "p": 12}
-    assert out["exit"][0] == {"l": {"t": "price"}, "op": "xb", "r": {"t": "ema", "p": 12}}
+    # the short signal (used as the exit) needs two conditions together, and only the cross translates: the exit is the
+    # cross, with a note that the vwma condition was left out of it (R4B; R3I left the whole exit out)
+    assert out["exit"] == [{"l": {"t": "price"}, "op": "xb", "r": {"t": "ema", "p": 12}}]
     notes = " ".join(out["notes"])
-    assert "also trades short" in notes and "vwma" in notes and "ticks or points" in notes
+    assert "also trades short" in notes and "ticks or points" in notes
+    assert 'Couldn\'t translate "ta.vwma(close, 5) > 3"' in notes and 'imported without "ta.vwma(close, 5) > 3"' in notes
 
 
 def test_stratlab_export_round_trip():
@@ -157,3 +160,65 @@ def test_pine_import_still_works_at_the_ai_build_limit(client, monkeypatch):
     r = client.post("/import/strategy", json={"text": PINE}).json()
     assert r["source"] == "pine" and not r["used_ai"] and len(r["entry"]) == 2
     assert client.post("/import/strategy", json={"text": "void OnTick() { OrderSend(); }"}).status_code == 429
+
+
+GUARD_HEAD = """//@version=5
+strategy("Guard")
+fast = ta.ema(close, 9)
+slow = ta.ema(close, 21)
+"""
+CROSS_UP = [{"l": {"t": "ema", "p": 9}, "op": "xa", "r": {"t": "ema", "p": 21}}]
+CROSS_DOWN = [{"l": {"t": "ema", "p": 9}, "op": "xb", "r": {"t": "ema", "p": 21}}]
+
+
+@pytest.mark.parametrize("guard", ["strategy.position_size == 0", "strategy.opentrades == 0"])
+def test_pine_if_whose_condition_reads_the_position_is_a_block_not_a_call(guard):
+    # the common EMA-cross idiom: an `if` that mentions strategy.position_size is a condition, not a one-line call, so
+    # the entry and exit under it are read (R4B: both came back empty, with no note)
+    out_guard = guard.replace("== 0", "> 0")
+    code = (GUARD_HEAD + f"if ta.crossover(fast, slow) and {guard}\n    strategy.entry(\"Long\", strategy.long)\n"
+            f"if ta.crossunder(fast, slow) and {out_guard}\n    strategy.close(\"Long\")\n")
+    out = importer.pine(code)
+    assert out["entry"] == CROSS_UP and out["exit"] == CROSS_DOWN
+    notes = " ".join(out["notes"])
+    assert f'Couldn\'t translate "{guard}"' in notes and f'imported without "{out_guard}"' in notes
+    # the one-line form is still a call with its condition
+    one = importer.pine(GUARD_HEAD + "if ta.crossover(fast, slow) strategy.entry(\"Long\", strategy.long)\n")
+    assert one["entry"] == CROSS_UP
+
+
+def test_pine_call_without_a_condition_is_named_when_left_out():
+    out = importer.pine(GUARD_HEAD + "if ta.crossover(fast, slow)\n    strategy.entry(\"Long\", strategy.long)\nstrategy.close_all()\n")
+    assert out["entry"] == CROSS_UP and out["exit"] == []
+    assert any('"strategy.close_all()" runs without a condition' in n and "left out" in n for n in out["notes"])
+
+
+def test_pine_exit_with_an_untranslatable_guard_keeps_the_part_that_translates():
+    # one exit condition that translates and one that doesn't: the exit is the one that does, with a note on the other,
+    # not left out whole as "several conditions together" (R4B)
+    code = (GUARD_HEAD + "if ta.crossover(fast, slow)\n    strategy.entry(\"Long\", strategy.long)\n"
+            "if ta.crossunder(fast, slow) and volume > ta.sma(volume, 20)\n    strategy.close(\"Long\")\n")
+    out = importer.pine(code)
+    assert out["entry"] == CROSS_UP and out["exit"] == CROSS_DOWN
+    notes = " ".join(out["notes"])
+    assert 'Couldn\'t translate "volume > ta.sma(volume, 20)"' in notes and "was imported without" in notes
+    assert "that exit was left out" not in notes
+
+
+def test_pine_same_conditions_over_several_entry_calls_are_one_entry():
+    # two entry calls under one `if` that needs two conditions: one entry statement, kept with both rules (R4B: read as
+    # two statements, so the entry was left out)
+    code = """//@version=5
+strategy("TwoEntries")
+r = ta.rsi(close, 14)
+e = ta.ema(close, 50)
+if r < 30 and close > e
+    strategy.entry("L1", strategy.long, qty=1)
+    strategy.entry("L2", strategy.long, qty=1)
+if r > 60
+    strategy.close_all()
+"""
+    out = importer.pine(code)
+    assert out["entryJoin"] == "all" and out["entry"] == [{"l": {"t": "rsi", "p": 14}, "op": "lt", "r": {"t": "num", "v": 30.0}},
+                                                          {"l": {"t": "price"}, "op": "gt", "r": {"t": "ema", "p": 50}}]
+    assert out["exit"] == [{"l": {"t": "rsi", "p": 14}, "op": "gt", "r": {"t": "num", "v": 60.0}}] and out["notes"] == []

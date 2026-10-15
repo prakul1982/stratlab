@@ -1097,10 +1097,12 @@ def send_reminders(today: date, allowed, send, profile=None) -> int:
             reached = send(p, subject[:150], reminder_text(hits, pr["days"], target))
         except Exception as e:
             print("market events reminder failed:", str(e)[:120])
+            reached = None
+        if not reached:                    # an error, or no channel to reach: the events are unsent again
             pr["sent"] = before
             save_prefs(uid, pr)
             continue
-        sent += 1 if reached else 0
+        sent += 1
     return sent
 
 
@@ -1127,7 +1129,8 @@ class Job(news_job.Job):
             run = self.begin(name, day) if day else None
             if run:                       # an unfinished run is resumed: a reminded reader isn't reminded again (prefs "sent")
                 sent = self.run(now, day, remind=name.endswith("-am"))
-                self.finish(name, day, run)
+                if not self.all_failed:       # every reader failed: not finished, so the slot is resumed once its beat is stale
+                    self.finish(name, day, run)
                 return sent
         if not load_state().get("last_run") and time.time() - self._first_try > 1800:
             self._first_try = time.time()

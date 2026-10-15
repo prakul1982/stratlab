@@ -99,6 +99,8 @@ export function ScreensPage() {
   const current: Filters = useMemo(() => ({ ...filters, ranges }), [filters, ranges]);
 
   useEffect(() => {
+    // another market's screen has other columns and other stocks: the old result goes, and a run still on its way for the old market is dropped
+    seq.current++; setOut(null); setRows([]);
     setMeta(null);
     screensApi.meta(region).then(setMeta).catch((e) => setError((e as Error).message));
   }, [region]);

@@ -1,3 +1,4 @@
+import json
 import sys
 from types import SimpleNamespace
 
@@ -13,6 +14,16 @@ def kv(monkeypatch):
     monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
     monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
     monkeypatch.setattr(db, "delete_setting", lambda k: store.pop(k, None))
+
+    def update(key, fn, tries=10):                      # db.update_setting without a database: the new text, None to leave, REMOVE
+        new = fn(store.get(key))
+        if new is db.REMOVE:
+            store.pop(key, None)
+        elif new is not None:
+            store[key] = new
+        return store.get(key)
+    monkeypatch.setattr(db, "update_setting", update)
+    monkeypatch.setattr(db, "all_settings_with_prefix", lambda p: sorted((k, v) for k, v in store.items() if k.startswith(p)))
     monkeypatch.setattr(settings, "VAPID_PUBLIC_KEY", "pub")
     monkeypatch.setattr(settings, "VAPID_PRIVATE_KEY", "priv")
     return store
@@ -83,6 +94,7 @@ def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatc
     monkeypatch.setattr(settings, "SMTP_HOST", ""); monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "t")
     prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42"}
     sent = []
+    db.set_setting(alerts.TG_VERIFY + "u1", json.dumps({"verified": "42"}))      # Telegram only reaches a chat whose code was entered
     monkeypatch.setattr(alerts, "send_telegram", lambda chat, text: sent.append(("tg", chat)))
     monkeypatch.setattr(alerts, "send_email", lambda *a: (_ for _ in ()).throw(AssertionError("email must be skipped")))
     assert alerts.notify(prof, "s", "t", background=False) == ["telegram"] and sent == [("tg", "42")]   # no SMTP: email skipped
@@ -103,3 +115,32 @@ def test_only_browser_push_services_are_accepted():
            "https://user:pw@fcm.googleapis.com/x", "https://fcm.googleapis.com:8443/x", "https://notify.windows.com.evil/x", "not a url"]
     assert all(push.valid_endpoint(u) for u in ok)
     assert not any(push.valid_endpoint(u) for u in bad)
+
+
+def test_a_push_is_given_ten_seconds_and_a_device_added_while_sending_is_kept(kv, monkeypatch):
+    push.add("u1", SUB(1)); push.add("u1", SUB(2))
+    seen = []
+
+    class Gone(Exception):
+        def __init__(self):
+            self.response = SimpleNamespace(status_code=410)
+
+    def webpush(subscription_info, **kw):
+        seen.append(kw.get("timeout"))
+        if subscription_info["endpoint"].endswith("/2"):
+            push.add("u1", SUB(3))                       # a device is added from another request while this one is sending
+            raise Gone()
+
+    monkeypatch.setitem(sys.modules, "pywebpush", SimpleNamespace(webpush=webpush, WebPushException=Gone))
+    push.send("u1", "t", "b")
+    assert seen == [10, 10]                              # pywebpush's own default is no timeout at all
+    assert [s["endpoint"][-1] for s in push.devices("u1")] == ["1", "3"]      # the gone one is dropped, the new one stays
+
+
+def test_an_endpoint_belongs_to_the_last_user_who_subscribed_it(kv):
+    push.add("u1", SUB(1)); push.add("u1", SUB(2)); push.add("u2", SUB(9))
+    push.add("u3", SUB(1))                               # the same browser, signed in as someone else
+    assert [s["endpoint"][-1] for s in push.devices("u1")] == ["2"]
+    assert [s["endpoint"][-1] for s in push.devices("u3")] == ["1"] and [s["endpoint"][-1] for s in push.devices("u2")] == ["9"]
+    push.remove("u3", SUB(1)["endpoint"]); push.remove("u1", SUB(2)["endpoint"])
+    assert "push:u1" not in kv and "push:u3" not in kv

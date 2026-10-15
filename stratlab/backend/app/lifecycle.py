@@ -2,8 +2,9 @@
 after two quiet weeks, and payment receipts.
 
 - Each email goes to a user at most once, remembered in app_settings as lifecycle:<uid> ({email key: when sent})
-  before it is sent; a send that fails is forgotten again, so the next sweep tries once more. A receipt, plan change or
-  invite reward that fails is also kept in lifecyclepending:<uid> and retried by the sweep (4 tries within a day).
+  before it is sent; a send that fails is forgotten again, so the next sweep tries once more (a tip, up to TIP_TRIES
+  attempts, counted in the same record as "tries:<email key>"). A receipt, plan change or invite reward that fails is
+  also kept in lifecyclepending:<uid> and retried by the sweep (4 tries within a day).
 - Everything but receipts and plan changes is a "tips and reminders" email: people turn those off in Account or from
   the link in each one, and get at most one a day. Receipts and plan changes are about the account and always go.
 - The welcome goes from the first visit after signing up. The rest go from an hourly sweep in India's daytime
@@ -16,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from . import alerts, db, leader
 from . import email_kit as kit
-from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
+from .plans import IST, PLANS, _dt, access_plan, effective_plan, free_basic_until, promo_active, promo_until, trial_end
 
 SENT = "lifecycle:"              # lifecycle:<uid>: {"welcome": "2026-10-03T10:00:00+00:00", "receipt:pay_1": ...}
 PREFS = "emailprefs:"            # emailprefs:<uid>: {"tips": false} once turned off
@@ -29,6 +30,8 @@ EVER = "2000-01-01T00:00:00+00:00"
 WELCOME_WINDOW = timedelta(days=2)                       # only brand-new accounts are welcomed
 DAY2_WINDOW = (timedelta(days=1), timedelta(days=7))     # the nudge goes on day 2, or soon after if the sweep missed it
 INACTIVE_DAYS = 14
+INACTIVE_UNTIL = 30                                      # quiet for longer than this and the "what's new" note is no longer sent
+TIP_TRIES = 3                                            # attempts at one tips email before it is given up
 RETRIES = 4                                              # account emails: tries before giving up, within a day
 RETRY_WINDOW = timedelta(hours=26)
 GAP = timedelta(hours=20)                                # at most one tips email a day
@@ -102,14 +105,24 @@ def sent(uid: str) -> dict:
     return db.json_value(db.get_setting(SENT + uid), {})
 
 
-def _claim(uid: str, key: str, now: datetime) -> bool:
-    """Record the email as sent, unless it already was. True when this caller should send it."""
+def _capped(record: dict, key: str) -> bool:
+    """A tips email whose attempts were all used up."""
+    t = record.get("tries:" + key)
+    try:
+        return int(t["n"]) >= TIP_TRIES
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _claim(uid: str, key: str, now: datetime, capped: bool = False) -> bool:
+    """Record the email as sent, unless it already was (or, for `capped`, its attempts are used up). True when this
+    caller should send it."""
     won = []
 
     def mark(raw):
         have = db.json_value(raw, {})
         won.clear()
-        if key in have:
+        if key in have or (capped and _capped(have, key)):
             return None
         won.append(1)
         return json.dumps({**have, key: now.isoformat()})
@@ -117,10 +130,14 @@ def _claim(uid: str, key: str, now: datetime) -> bool:
     return bool(won)
 
 
-def _release(uid: str, key: str):
+def _release(uid: str, key: str, tried: datetime | None = None):
+    """Forget the claim after a failed send; with `tried`, count the attempt (see TIP_TRIES)."""
     def drop(raw):
         have = db.json_value(raw, {})
         have.pop(key, None)
+        if tried:
+            n = have.get("tries:" + key)
+            have["tries:" + key] = {"n": (int(n["n"]) if isinstance(n, dict) and str(n.get("n")).isdigit() else 0) + 1, "at": tried.isoformat()}
         return json.dumps(have)
     db.update_setting(SENT + uid, drop)
 
@@ -160,9 +177,13 @@ def _last_day(end: datetime) -> date:
 
 
 def _end_text(end: datetime) -> str:
-    """An instant in India time, as the pages say it: Thu 22 Oct at 5:20 pm IST."""
+    """An instant in India time, as the pages say it: on Thu 22 Oct at 5:20 pm IST. Midnight is the end of the day
+    before, not 12:00 am of the next one: at the end of Thu 22 Oct (India time)."""
     t = end.astimezone(IST)
-    return f"{t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
+    if (t.hour, t.minute) == (0, 0):
+        d = _last_day(end)
+        return f"at the end of {d:%a} {d.day} {d:%b} (India time)"
+    return f"on {t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
 
 
 def _url(path: str) -> str:
@@ -222,7 +243,7 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
         when = "tomorrow" if kind == "promo_before" else "today"
         end = ctx.get("end") or datetime.now(timezone.utc)
         return _compose(f"The launch offer ends {when}", [
-            f"Every Pro feature has been free for everyone during the launch offer. It ends on {_end_text(end)}.",
+            f"Every Pro feature has been free for everyone during the launch offer. It ends {_end_text(end)}.",
             "After that, the Free plan's limits apply again unless you choose a plan. Your notebooks, backtests and "
             "watchlist stay either way."], ("See plans", "/plans"), label="Launch offer")
     if kind == "inactive":
@@ -242,8 +263,17 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             tiles=[kit.Tile("Amount paid", amount), kit.Tile("Date", kit.fmt_date(inv["date"]) if inv.get("date") else "–")])
     if kind == "plan_ended":
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
-        return _compose("Your StratLab plan has changed to Free", [
-            f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
+        now_plan = ctx.get("access") or access_plan(profile)
+        if now_plan == "free":
+            return _compose("Your StratLab plan has changed to Free", [
+                f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
+                "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
+                ("See plans", "/plans"), transactional=tx, label="Your plan")
+        end = promo_until()
+        now_has = (f"Every Pro feature is free for everyone during the launch offer, which ends {_end_text(end)}."
+                   if promo_active() and end else f"Your account is on the {PLANS[now_plan]['name']} plan now.")
+        return _compose("Your StratLab subscription has stopped", [
+            f"Your {plan} subscription has stopped.", now_has,
             "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
             ("See plans", "/plans"), transactional=tx, label="Your plan")
     if kind == "invite_reward":
@@ -331,7 +361,7 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     if kind == "receipt":
         return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":
-        return {"plan": "pro"}
+        return {"plan": "pro", "access": "free"}
     if kind == "invite_reward":
         return {"role": "referrer", "until": now + timedelta(days=30), "banked": 0}
     return {}
@@ -362,14 +392,14 @@ def send(profile: dict, kind: str, key: str | None = None, ctx: dict | None = No
         return False
     if not transactional and not tips_on(uid):
         return False
-    if not _claim(uid, key, now):
+    if not _claim(uid, key, now, capped=not transactional):
         return False
     try:
         subject, html, text = build(kind, profile, ctx)
         html, text, headers = kit.finish(html, text, uid, None if transactional else CATEGORY)
         alerts.send_email(to, subject, text, html=html, headers=headers)
     except Exception as e:
-        _release(uid, key)
+        _release(uid, key, None if transactional else now)
         if transactional:
             _pend(uid, key, kind, ctx, now)
         print(f"lifecycle email {kind} failed:", str(e)[:160])
@@ -403,6 +433,10 @@ def receipt(profile: dict, invoice: dict, plan: str, period: str) -> bool:
 
 def plan_ended(profile: dict, sub_id: str, plan: str | None) -> bool:
     """One note per subscription that stopped."""
+    try:
+        profile = db.get_profile(profile["id"])        # as it is now, after the subscription ended (the caller's copy is from before)
+    except Exception as e:
+        print("plan ended: profile not re-read,", str(e)[:120])
     return send(profile, "plan_ended", f"plan_ended:{sub_id}", {"plan": plan if plan in PLANS else "pro"})
 
 
@@ -491,9 +525,9 @@ def due(profile: dict, now: datetime, record: dict, seen_day: str | None, promo_
             quiet = (today - date.fromisoformat(seen_day)).days
         except (TypeError, ValueError):
             quiet = 0
-        if quiet >= INACTIVE_DAYS:
+        if INACTIVE_DAYS <= quiet < INACTIVE_UNTIL:
             out["inactive"] = ("inactive", "inactive", {})
-    return [out[k] for k in ORDER if k in out and out[k][1] not in record]
+    return [out[k] for k in ORDER if k in out and out[k][1] not in record and not _capped(record, out[k][1])]
 
 
 def sweep(now: datetime | None = None) -> int:

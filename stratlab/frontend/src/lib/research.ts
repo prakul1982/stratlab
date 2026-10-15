@@ -10,7 +10,7 @@ export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
   high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null }
-export interface SourceStatus { source: string; ok: boolean; error: string | null }
+export interface SourceStatus { source: string; ok: boolean; error: string | null; /** what the source was for ("prices", "news"), said without its name */ what?: string[] }
 export interface SeriesPoint { y: string; v: number }
 
 export interface Company {
@@ -31,7 +31,7 @@ export interface Company {
   insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
   about: { wiki: { title: string; description?: string; extract: string; url: string } | null; profile: string | null };
-  sources: SourceStatus[]; links: { label: string; url: string }[];
+  sources: SourceStatus[]; links: { label: string; url: string; kind?: string }[];
   testable: boolean; instrument_id: string | null;
   as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
   market_open?: boolean;                                   // false: the price is the last close (the market is shut)
@@ -210,33 +210,56 @@ export function useRegion(fallback?: Region): [Region, (r: Region) => void] {
 
 /* ---------- watchlist, shared across pages ---------- */
 let watchCache: WatchItem[] | null = null;
+let watchLoad: Promise<WatchItem[]> | null = null;
 const watchSubs = new Set<(w: WatchItem[]) => void>();
+
+/** Reads the saved list once (a second caller waits for the same read). A failed read rejects and leaves the cache empty,
+ * so nothing is ever saved over a list that was not read. */
+function loadWatch(): Promise<WatchItem[]> {
+  if (watchCache) return Promise.resolve(watchCache);
+  watchLoad ??= api<{ items: WatchItem[] }>("/research/watchlist")
+    .then((r) => { watchCache = r.items; watchSubs.forEach((f) => f(r.items)); return r.items; })
+    .finally(() => { watchLoad = null; });
+  return watchLoad;
+}
+
+/** What an add / remove / save says when the saved list could not be read first. */
+export const WATCH_UNREAD = "Your watchlist couldn't be read, so nothing was changed. Try again.";
 
 export function useWatchlist() {
   const [items, setItems] = useState<WatchItem[] | null>(watchCache);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
   useEffect(() => {
     watchSubs.add(setItems);
-    if (!watchCache) api<{ items: WatchItem[] }>("/research/watchlist").then((r) => { watchCache = r.items; watchSubs.forEach((f) => f(r.items)); }).catch(() => {});
-    return () => { watchSubs.delete(setItems); };
-  }, []);
-  const save = useCallback(async (next: WatchItem[]) => {
+    let live = true;
+    if (!watchCache) { setFailed(false); loadWatch().then(() => live && setFailed(false)).catch(() => live && setFailed(true)); }
+    return () => { live = false; watchSubs.delete(setItems); };
+  }, [tries]);
+  /** Never saves while the saved list is unread: a failed first read would otherwise turn one press of Watch into a
+   * one-company list that replaces the whole watchlist. The list is read first, or the change is refused. */
+  const save = useCallback(async (next: WatchItem[] | ((cur: WatchItem[]) => WatchItem[])) => {
+    let cur: WatchItem[];
+    try { cur = await loadWatch(); } catch { throw new Error(WATCH_UNREAD); }
+    const list = typeof next === "function" ? next(cur) : next;
     const prev = watchCache;
-    watchCache = next; watchSubs.forEach((f) => f(next));
-    try { await api("/research/watchlist", { method: "PUT", body: { items: next } }); }
+    watchCache = list; watchSubs.forEach((f) => f(list));
+    try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); }
     catch (e) { watchCache = prev; watchSubs.forEach((f) => f(prev ?? [])); throw e; }
   }, []);
   const has = (r: Region, s: string) => !!items?.some((i) => i.region === r && i.symbol === s);
-  const toggle = (item: WatchItem) => save(has(item.region, item.symbol)
-    ? (items ?? []).filter((i) => !(i.region === item.region && i.symbol === item.symbol))
-    : [...(items ?? []), item]);
-  return { items, has, toggle, save };
+  const toggle = (item: WatchItem) => save((cur) => cur.some((i) => i.region === item.region && i.symbol === item.symbol)
+    ? cur.filter((i) => !(i.region === item.region && i.symbol === item.symbol))
+    : [...cur, item]);
+  /** `failed`: the first read did not work and there is nothing to show; `retry` reads it again. */
+  return { items, has, toggle, save, failed: failed && items === null, retry: () => setTries((n) => n + 1) };
 }
 
 /* ---------- formatting ---------- */
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, metricText, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, staleQuarter, trendShort, trendValue, type Scale } from "./researchFormat";
+export { focusParam, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, staleQuarter, trendShort, trendValue, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

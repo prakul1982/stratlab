@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
+import { money } from "../../lib/format";
 import { openInvoice } from "../../components/InvoicesCard";
 import { Card, CardHead, DataTable, Field, FormActions, FormGrid, Select, Skeleton, type Column } from "../../components/kit";
 import { useAdmin } from "./AdminContext";
@@ -38,8 +39,8 @@ export function InvoiceAdminPanel() {
     { key: "d", header: "Date", cell: (r) => r.date },
     { key: "c", header: "Customer", wrap: true, cell: (r) => r.email },
     { key: "s", header: "Supply", cell: (r) => r.supply },
-    { key: "t", header: "Total", numeric: true, cell: (r) => `${r.currency} ${r.total.toFixed(2)}` },
-    { key: "g", header: "GST", numeric: true, cell: (r) => r.tax.toFixed(2) },
+    { key: "t", header: "Total", numeric: true, cell: (r) => money(r.total, r.currency, 2) },
+    { key: "g", header: "GST", numeric: true, cell: (r) => money(r.tax, r.currency, 2) },
     { key: "o", header: <span className="sr-only">Open</span>, action: true, cell: (r) => <button type="button" className="btn quiet sm" onClick={() => openInvoice(r.number).catch(fail)}>Open</button> },
   ];
   return (

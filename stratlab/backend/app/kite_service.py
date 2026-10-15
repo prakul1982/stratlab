@@ -53,6 +53,22 @@ def bse_only_rows(raw: list[dict], nse_rows: list[dict]) -> list[dict]:
     return out
 
 
+def bse_code_in(raw: list[dict], symbol: str, name: str | None = None) -> str | None:
+    """The BSE scrip code of a company in Kite's full BSE list: the same trading symbol, else the same company name
+    (BSE's equity rows, not its debt, which has codes from 600000)."""
+    sym, want = str(symbol or "").strip().upper(), norm_name(name)
+    by_name = None
+    for x in raw or []:
+        ts, code = str(x.get("tradingsymbol") or ""), str(x.get("exchange_token") or "")
+        if x.get("instrument_type") != "EQ" or x.get("segment") != "BSE" or not ts or not code.isdigit() or int(code) >= 600000:
+            continue
+        if ts.upper() == sym:
+            return code
+        if want and by_name is None and norm_name(x.get("name")) == want:
+            by_name = code
+    return by_name
+
+
 # names of what BSE lists as equity but isn't a company: exchange-traded funds ("Nifty 50 ETF", "...Momen.Quali. 100ETF",
 # "Gold Exchange Traded Fund", "...BeES"), mutual fund units, and real-estate and infrastructure trusts
 NOT_COMPANY = re.compile(r"(?<![a-z])ETFs?\b|exchange traded|\bBeES\b|\bmutual fund\b|\bMF\b|fund of funds|\bFoF\b|"
@@ -130,6 +146,7 @@ class KiteService:
         self._inst: list[dict] = []
         self._by_token: dict[int, dict] = {}
         self._inst_day: str | None = None
+        self._raw: dict[str, tuple[str, list[dict]]] = {}      # exchange -> (day, Kite's raw instrument list): instruments_of
         self._idx: dict = {}
         self._idx_of: list | None = None
         self._names_of: tuple | None = None
@@ -141,7 +158,7 @@ class KiteService:
         self.session_close: dict[int, str] = {}   # token -> "HH:MM" IST when its segment closes (commodity and currency futures)
 
     def set_session_close(self, token: int, hhmm: str | None):
-        """A futures contract whose segment closes later than the stock market (currency 17:00, commodity 23:30 IST):
+        """A futures contract whose segment closes later than the stock market (currency 17:00, commodity 23:30 or 23:55 IST):
         its daily candle is read again after its own close, not the stock market's (R9R-005: a CDS candle read before
         17:00 was kept for six hours, so the check after the close still saw the day before)."""
         if hhmm:
@@ -199,6 +216,7 @@ class KiteService:
         db.set_setting("kite_access_token", data["access_token"])
         db.set_setting("kite_token_day", day)
         self._inst_day = None
+        self._raw.clear()                    # ...and the day's raw lists of the other exchanges (instruments_of), like _inst_day
         return data
 
     def _require(self):
@@ -265,16 +283,20 @@ class KiteService:
         return self._deriv
 
     def instruments_of(self, exchange: str) -> list[dict]:
-        """Kite's raw instrument list for one exchange (MCX commodities), fetched once a day."""
-        key = ("instruments", exchange, today_ist())
-        hit = self._cache.get(key)
-        if hit:
-            return hit[1]
+        """Kite's raw instrument list for one exchange (MCX commodities, the full BSE list), fetched once a day."""
+        got = self.instruments_cached(exchange)
+        if got is not None:
+            return got
         self._require()
         self._throttle()
         rows = self.kite.instruments(exchange)
-        self._cache[key] = (time.time(), rows)
+        self._raw[exchange] = (today_ist(), rows)
         return rows
+
+    def instruments_cached(self, exchange: str) -> list[dict] | None:
+        """Today's raw list for an exchange when it has been read already (never a request to the broker), else None."""
+        hit = self._raw.get(exchange)
+        return hit[1] if hit and hit[0] == today_ist() else None
 
     def ltp_key(self, key: str) -> float | None:
         """Last price for an "EXCHANGE:SYMBOL" key."""

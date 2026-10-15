@@ -160,10 +160,24 @@ def mid(q: dict | None) -> float | None:
     return ltp if ltp and ltp > 0 else None
 
 
+def quote_time(ts) -> datetime | None:
+    """When a quote was struck, as a moment in India (a time with no zone is India's: the broker's feed sends none)."""
+    if isinstance(ts, str):
+        try:
+            ts = datetime.fromisoformat(ts)
+        except ValueError:
+            return None
+    if not isinstance(ts, datetime):
+        return None
+    return (ts if ts.tzinfo else ts.replace(tzinfo=IST)).astimezone(IST)
+
+
 def model(spot: float | None, expiry: str, atm: float | None, call: dict | None, put: dict | None, at: datetime,
-          r: float = RATE, exchange: str = "NFO") -> dict | None:
+          r: float = RATE, exchange: str = "NFO", spot_ts=None) -> dict | None:
     """The inputs every option of one expiry shares: the forward (from parity at the at-the-money strike, else the
-    spot), time to expiry, the rate and the at-the-money IV. None when there's no spot or the expiry has passed."""
+    spot), time to expiry, the rate and the at-the-money IV. None when there's no spot or the expiry has passed.
+    `as_of` is when the newest of the prices it rests on (the at-the-money pair, the spot's `spot_ts`) was struck, not
+    when it was asked for: null without a time on any of them. `fresh` is whether that is within FRESH_SECONDS of `at`."""
     if not spot or spot <= 0:
         return None
     t = years_to(expiry, at, exchange)
@@ -176,9 +190,15 @@ def model(spot: float | None, expiry: str, atm: float | None, call: dict | None,
         f, src = spot, "spot"
     ivs = [v for v in (implied_vol(c, f, atm, t, "CE", r) if c and atm else None,
                        implied_vol(p, f, atm, t, "PE", r) if p and atm else None) if v]
+    from .data import FRESH_SECONDS
+    from .engine import tick_for
+    struck = [x for x in (quote_time(spot_ts), *(quote_time(q.get("ts")) for q in (call, put) if q)) if x]
+    as_of = max(struck) if struck else None
     return {"expiry": expiry, "spot": spot, "forward": round(f, 4), "basis": f / spot, "forward_from": src, "atm": atm,
             "t": t, "days": round(t * 365, 4), "rate": r, "atm_iv": sum(ivs) / len(ivs) if ivs else None,
-            "as_of": at.astimezone(IST).isoformat(timespec="seconds")}
+            "as_of": as_of.isoformat(timespec="seconds") if as_of else None,
+            "fresh": bool(as_of) and abs((at if at.tzinfo else at.replace(tzinfo=IST)) - as_of).total_seconds() <= FRESH_SECONDS,
+            "exchange": exchange, "tick": tick_for(exchange)}
 
 
 def option(q: dict | None, k: float, kind: str, m: dict) -> dict:
@@ -248,7 +268,7 @@ def add_to_chain(chain: dict, at: datetime) -> dict:
     atm = chain.get("atm")
     row = next((r for r in rows if r["strike"] == atm), None)
     m = model(chain.get("spot"), chain["expiry"], atm, row and row.get("ce"), row and row.get("pe"), at,
-              exchange=chain.get("exchange", "NFO")) if chain.get("expiry") else None
+              exchange=chain.get("exchange", "NFO"), spot_ts=chain.get("spot_ts")) if chain.get("expiry") else None
     chain["model"] = public_model(m) if m else None
     for r in rows:
         r["ce_g"] = _round(option(r.get("ce"), r["strike"], "CE", m)) if m else None
@@ -257,12 +277,12 @@ def add_to_chain(chain: dict, at: datetime) -> dict:
 
 
 # ---------- with the live feed ----------
-def live_model(data, contracts, spot: float | None, at: datetime) -> dict | None:
-    """The model for one expiry's contracts, quoting the at-the-money pair."""
+def live_model(data, contracts, spot: float | None, at: datetime, spot_ts=None) -> dict | None:
+    """The model for one expiry's contracts, quoting the at-the-money pair (`spot_ts`: when the spot was struck)."""
     if not contracts or not spot:
         return None
     atm = contracts.atm(spot)
     keys = [contracts.key("CE", atm), contracts.key("PE", atm)]
     q = data.quotes([k for k in keys if k])
     return model(spot, contracts.expiry, atm, q.get(keys[0]) if keys[0] else None, q.get(keys[1]) if keys[1] else None, at,
-                 exchange=contracts.exchange)
+                 exchange=contracts.exchange, spot_ts=spot_ts)

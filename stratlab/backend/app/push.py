@@ -13,6 +13,7 @@ from .config import settings
 PREFIX = "push:"
 KEYS = "vapid:keys"
 MAX_DEVICES = 10
+PUSH_TIMEOUT = 10                  # seconds a push service gets to answer: one stalled endpoint must not hold the caller
 _cache: dict = {}
 # The browsers' own push services. A subscription pointing anywhere else is refused, so the server can't be
 # made to send requests to an address of the user's choosing.
@@ -82,20 +83,35 @@ def devices(uid: str) -> list[dict]:
         return []
 
 
-def _save(uid: str, subs: list[dict]):
-    if subs:
-        db.set_setting(PREFIX + uid, json.dumps(subs[-MAX_DEVICES:]))
-    else:
-        db.delete_setting(PREFIX + uid)
+def _drop(uid: str, gone: set, add: dict | None = None):
+    """Take the `gone` endpoints out of the user's list (and put `add` last), reading the list again at the moment of
+    writing (db.update_setting), so a device added meanwhile is kept."""
+    def go(cur):
+        try:
+            subs = json.loads(cur or "[]")
+        except ValueError:
+            subs = []
+        subs = [s for s in subs if isinstance(s, dict) and s.get("endpoint") not in gone]
+        if add:
+            subs.append(add)
+        return json.dumps(subs[-MAX_DEVICES:]) if subs else db.REMOVE
+    db.update_setting(PREFIX + uid, go)
 
 
 def add(uid: str, sub: dict):
-    subs = [s for s in devices(uid) if s.get("endpoint") != sub["endpoint"]]
-    _save(uid, subs + [sub])
+    _drop(uid, {sub["endpoint"]}, sub)
+    try:                  # a browser that signs in as someone else is still the same endpoint: the earlier user stops getting its pushes
+        for key, raw in db.all_settings_with_prefix(PREFIX):
+            other = key[len(PREFIX):]
+            if other != uid and sub["endpoint"] in raw and any(isinstance(s, dict) and s.get("endpoint") == sub["endpoint"]
+                                                               for s in json.loads(raw)):
+                _drop(other, {sub["endpoint"]})
+    except Exception as e:
+        print("push: other users' copies of an endpoint not cleared:", str(e)[:200])
 
 
 def remove(uid: str, endpoint: str):
-    _save(uid, [s for s in devices(uid) if s.get("endpoint") != endpoint])
+    _drop(uid, {endpoint})
 
 
 def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None) -> int:
@@ -113,7 +129,8 @@ def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None
             continue
         try:
             webpush(subscription_info=s, data=payload, vapid_private_key=k[1],
-                    vapid_claims={"sub": settings.VAPID_SUBJECT or "mailto:admin@stratlab.studio"}, ttl=3600)
+                    vapid_claims={"sub": settings.VAPID_SUBJECT or "mailto:admin@stratlab.studio"}, ttl=3600,
+                    timeout=PUSH_TIMEOUT)
             sent += 1
         except WebPushException as e:
             code = getattr(getattr(e, "response", None), "status_code", None)
@@ -124,7 +141,7 @@ def send(uid: str, title: str, body: str, url: str = "/", tag: str | None = None
         except Exception as e:           # network trouble with one push service must not stop the others
             print("push failed:", str(e)[:200])
     if gone:
-        _save(uid, [s for s in subs if s.get("endpoint") not in gone])
+        _drop(uid, set(gone))
     return sent
 
 

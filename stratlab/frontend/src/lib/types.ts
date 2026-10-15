@@ -151,7 +151,7 @@ export interface Me {
     ai_reads_plan_limit?: number | null; ai_builds_per_day?: number | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
-  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; email_off?: boolean; daily_report?: boolean };
+  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; telegram_verified?: boolean; email: string | null; email_off?: boolean; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;
@@ -212,7 +212,7 @@ export interface OptionStrategy {
   signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none" } | null;
   vix?: { min: number; max: number } | null;     // enter only while India VIX is inside this band (0 = that end open)
 }
-export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; venue: string; popular: boolean; freeze: number; index: boolean }
+export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; lots?: Record<string, number>; venue: string; popular: boolean; freeze: number; index: boolean }
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
@@ -234,6 +234,7 @@ export interface OptPreview {
   no_live?: number;                    // legs with no live quote at all (no bid, no ask, nothing traded): not priced (R13-002)
   no_live_text?: string | null;        // what the page says then
   spot_from?: "quote" | "spot" | "none";   // the underlying's own quote, or the spot rate a currency option settles at
+  spot_ts?: string | null;             // when the underlying's quote was struck
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
   model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
 }

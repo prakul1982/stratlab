@@ -96,7 +96,8 @@ export function qty(v: number, step?: number, market?: string | null): string {
     return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
   }
   if (Number.isInteger(v)) return grouped(v, 0, market);
-  return String(+v.toFixed(8));
+  const s = +v.toFixed(8);                           // fractional quantities are grouped too: 1,234.5, not 1234.5
+  return s.toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: 8 });
 }
 
 /** Instrument time zone: India in IST, everything else in UTC unless it says otherwise. */
@@ -343,13 +344,14 @@ export function inrCompact(v: number | null | undefined): string {
   if (a >= LAKH_CRORE || (cr && cr.n >= LAKH)) return `${sign}₹${scaled(a / LAKH_CRORE).text} lakh cr`;
   if (cr) return `${sign}₹${cr.text} cr`;
   if (a >= LAKH) return `${sign}₹${scaled(a / LAKH).text} lakh`;
-  return `${sign}₹${nf(Math.round(a), 0)}`;
+  return `${Math.round(a) === 0 ? "" : sign}₹${nf(Math.round(a), 0)}`;   // ₹0.4 is ₹0, with no sign
 }
 
 /** The same, with a leading + for gains: +₹296 cr, −₹18 cr. */
 export function signedInrCompact(v: number | null | undefined): string {
   if (!ok(v)) return "–";
-  return `${v > 0 ? "+" : ""}${inrCompact(v)}`;
+  const s = inrCompact(v);
+  return v > 0 && s !== "₹0" ? `+${s}` : s;     // a gain that rounds to zero is "₹0", not "+₹0"
 }
 
 /** A rupee chart axis: ₹1.45L cr, ₹3,472 cr, ₹5.2L, ₹925. Up to three decimals, so close ticks stay different. */
@@ -432,7 +434,8 @@ export function signCls(v: number | null | undefined, text?: string): "k-up" | "
  * the international way, +208,772, as a US company's figures are written (DESIGN.md "Numbers"). */
 export function signed(v: number | null | undefined, dp = 0, market?: string | null): string {
   if (!ok(v)) return "–";
-  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${grouped(Math.abs(v), dp, market)}`;
+  const s = grouped(Math.abs(v), dp, market);
+  return `${/[1-9]/.test(s) ? (v > 0 ? "+" : "−") : ""}${s}`;     // a figure that rounds to zero carries no sign
 }
 
 /** A plain count or amount without a currency sign, grouped as its market writes it: 2,08,772 in India, 208,772 in the

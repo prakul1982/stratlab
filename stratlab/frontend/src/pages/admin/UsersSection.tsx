@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, dateOnly, money } from "../../lib/format";
@@ -85,8 +85,10 @@ export function UsersSection() {
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-users", 2);      // invite counts: one click away, so the users table fits a laptop
 
+  const seq = useRef(0);       // the answer to the last search or filter is the one shown, whatever order they come in
   const loadUsers = useCallback(async (query: string, on: PlanFilter) => {
-    try { setUsers(await api<UserRow[]>(usersPath(query, on))); } catch (e) { fail(e); }
+    const n = ++seq.current;
+    try { const r = await api<UserRow[]>(usersPath(query, on)); if (n === seq.current) setUsers(r); } catch (e) { if (n === seq.current) fail(e); }
   }, [fail]);
   const loadSessions = useCallback(async () => { try { setSessions(await api<SessionRow[]>("/admin/sessions")); } catch (e) { fail(e); } }, [fail]);
   useEffect(() => {

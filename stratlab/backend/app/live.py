@@ -8,11 +8,12 @@ from zoneinfo import ZoneInfo
 from . import db
 from . import leader
 from . import alerts
+from . import email_kit as kit
 from . import risk
 from .alerts import notify
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import Ctx, Engine, chart_series, cond_text
+from .engine.core import TF_MIN, Ctx, Engine, chart_series, cond_text
 from .kite_service import IST, KiteService, TickHub
 from .models import Strategy
 from .daily_report import Reporter
@@ -392,7 +393,7 @@ class LiveSession:
             self.bars = self.bars[-500:]
         if self.corp.waiting:
             self.corp.on_bar(self.bars)
-        ctx = Ctx(self.bars, intraday=self.tf != "1d")
+        ctx = Ctx(self.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
         new = self.engine.step(self.bars, ctx, len(self.bars) - 1)
         # the account's value at the candle's close, stamped when the candle closed: the 14:00-14:05 candle's close is the
         # 14:05 price (R11C-011: the curve said 14:00 and marked the 14:05 price)
@@ -741,7 +742,8 @@ class LiveManager:
                 profile = db.get_profile(s.user_id)
                 if alerts_on(profile):
                     shown = evs[:CATCH_UP_LINES]
-                    lines = [f"{ev['side'].upper()} {ev['qty']:g} {ev.get('sym') or s.inst['symbol']} at {ev['px']:,.2f} "
+                    cur = s.inst.get("currency", "INR")
+                    lines = [f"{ev['side'].upper()} {ev['qty']:g} {ev.get('sym') or s.inst['symbol']} at {kit.money(ev['px'], cur, 2)} "
                              f"({ev.get('why') or 'order'}, candle {str(ev['t'])[:16].replace('T', ' ')})" for ev in shown]
                     if len(evs) > len(shown):
                         lines.append(f"and {len(evs) - len(shown)} more on the session page")
@@ -783,12 +785,12 @@ class LiveManager:
                         return
                     for ev in evs:
                         sym, cur = ev.get("sym") or s.inst["symbol"], s.inst.get("currency", "INR")
-                        head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {ev['px']:,.2f} {cur}"
+                        head = f"StratLab paper trade: {ev['side'].upper()} {ev['qty']:g} {sym} at {kit.money(ev['px'], cur, 2)}"
                         if ev.get("pnl") is None:      # opening a trade (a buy, a short sale or a written option)
                             text = f"{head} ({s.name})"
                         else:                          # closing one
                             why = f"{str(ev.get('why') or 'closed').lower()}, " if ev.get("why") else ""
-                            text = f"{head}, {why}P&L {ev['pnl']:,.0f} {cur} ({s.name})"
+                            text = f"{head}, {why}P&L {kit.money(ev['pnl'], cur, signed=True)} ({s.name})"
                         trade_notify(profile, f"{s.name}: {ev['side'].upper()} {sym}", text, background=False, url=f"/paper/{s.id}")
             except Exception as e:
                 print("order record failed:", e)
@@ -950,14 +952,14 @@ def structure_alert(s, evs: list[dict], net: float | None) -> tuple[str, str]:
     cur = s.inst.get("currency", "INR")
     opened, closed = [e for e in evs if e.get("pnl") is None], [e for e in evs if e.get("pnl") is not None]
     word = "re-centred" if opened and closed else "opened" if opened else "closed"
-    legs = "; ".join(f"{e['side'].upper()} {e['qty']:g} {e.get('sym') or s.inst['symbol']} at {e['px']:,.2f}" for e in evs)
-    text = f"StratLab paper trade: {s.name} {word} ({len(evs)} order{'s' if len(evs) != 1 else ''}): {legs} {cur}"
+    legs = "; ".join(f"{e['side'].upper()} {e['qty']:g} {e.get('sym') or s.inst['symbol']} at {kit.money(e['px'], cur, 2)}" for e in evs)
+    text = f"StratLab paper trade: {s.name} {word} ({len(evs)} order{'s' if len(evs) != 1 else ''}): {legs}"
     if closed:
         why = str(closed[0].get("why") or "").lower()
         if net is not None:
-            text += f". {why.capitalize() + ': ' if why else ''}net P&L {net:,.0f} {cur} after charges"
+            text += f". {why.capitalize() + ': ' if why else ''}net P&L {kit.money(net, cur, signed=True)} after charges"
         else:
-            text += f". {why.capitalize() + ': ' if why else ''}P&L of the closed legs {sum(e['pnl'] for e in closed):,.0f} {cur}"
+            text += f". {why.capitalize() + ': ' if why else ''}P&L of the closed legs {kit.money(sum(e['pnl'] for e in closed), cur, signed=True)}"
     return f"{s.name}: {word}", text
 
 

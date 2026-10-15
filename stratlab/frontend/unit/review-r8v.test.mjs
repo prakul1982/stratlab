@@ -99,7 +99,7 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
   const login = read("src/pages/Login.tsx");
   assert.match(login, /heading \? <h1 className="eyebrow">\{heading\}<\/h1>/);
   assert.match(login, /\? <p className="serif lp-h1"><em>Test<\/em> it, research it, track it\.<\/p>/);
-  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} \/>/);
+  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} \/>/);
   assert.match(read("src/styles.css"), /h1\.eyebrow \{ font-weight: 400; \}/);
 });
 
@@ -172,6 +172,8 @@ test("the public pages' code leaves out the sign-in library and the account code
   }
   const pwa = read("src/lib/pwa.ts");
   assert.match(pwa, /export function registerPwa\(\{ later = false \}/);
-  assert.match(pwa, /window\.addEventListener\("load", \(\) => \(later \? window\.setTimeout\(\(\) => idle\(register\), 4000\) : register\(\)\)\)/);
+  // it runs after the page's `load` has usually fired: registers at once then, else on load (R-shell3: it never registered)
+  assert.match(pwa, /const go = \(\) => \(later \? window\.setTimeout\(\(\) => idle\(register\), 4000\) : register\(\)\);/);
+  assert.match(pwa, /if \(document\.readyState === "complete"\) go\(\); else window\.addEventListener\("load", go, \{ once: true \}\);/);
   assert.match(read("src/entry.tsx"), /registerPwa\(\{ later: !account \}\)/);
 });

@@ -458,7 +458,7 @@ def _fill_key(f: dict) -> tuple:
     who = f.get("isin") or clean_symbol(f.get("symbol"))
     if f.get("tid"):
         return (f["d"], f["side"], who, f["tid"])
-    return (f["d"], f["side"], who, round(float(f["qty"]), 4), round(float(f["price"]), 4), f.get("t") or "")
+    return (f["d"], f["side"], who, round(float(f["qty"]), 4), round(float(f["price"]), 4), tax_lots.time_key(f.get("t")))
 
 
 def _line_key(x: dict) -> tuple:

@@ -11,7 +11,9 @@ OP_NAME = {"xa": "crosses above", "xb": "crosses below", "gt": "is above", "lt":
 
 
 class Ctx:
-    def __init__(self, bars: list[dict], intraday: bool):
+    def __init__(self, bars: list[dict], intraday: bool, base_min: float | None = None):
+        """`base_min`: the candles' length in minutes, for when the final candle closes a higher timeframe's candle
+        (read from the candles when not given)."""
         df = pd.DataFrame(bars)
         try:
             df["t"] = pd.to_datetime(df["t"])
@@ -23,12 +25,12 @@ class Ctx:
             if col not in df:
                 df[col] = 0.0
             df[col] = df[col].astype(float)
-        self.df, self.intraday, self._cache = df, intraday, {}
+        self.df, self.intraday, self.base_min, self._cache = df, intraday, base_min, {}
 
     def series(self, ref) -> np.ndarray:
         key = (ref.t, ref.p, ref.m, getattr(ref, "ago", None), getattr(ref, "k", None), getattr(ref, "tf", None))
         if key not in self._cache:
-            self._cache[key] = compute_full(ref, self.df, self.intraday).to_numpy(dtype=float)
+            self._cache[key] = compute_full(ref, self.df, self.intraday, self.base_min).to_numpy(dtype=float)
         return self._cache[key]
 
     def val(self, ref, i: int):
@@ -70,10 +72,20 @@ def _minutes(hhmm: str) -> int | None:
     return int(h) * 60 + int(m)
 
 
-def bar_clock(t: str, tf_min: int) -> tuple[str, int]:
-    """The candle's trading date and the minute of the day it closes at, in the exchange's local time."""
+def bar_clock(t: str, tf_min: int, close_min: int | None = None) -> tuple[str, int]:
+    """The candle's trading date and the minute of the day it closes at, in the exchange's local time. A candle that runs
+    past the session's close (`close_min`) closes with it: India's last hour candle, 15:15 to 15:30, closes at 15:30."""
     s = str(t)
-    return s[:10], int(s[11:13]) * 60 + int(s[14:16]) + tf_min if len(s) >= 16 else 0
+    if len(s) < 16:
+        return s[:10], 0
+    start = int(s[11:13]) * 60 + int(s[14:16])
+    end = start + tf_min
+    return s[:10], close_min if close_min is not None and start < close_min < end else end
+
+
+# the cash and F&O session's close in India (15:30), for the cost models of NSE and BSE stocks, futures and options
+INDIA_CLOSE = 15 * 60 + 30
+INDIA_SESSION = ("in_eq", "in_eq_mis", "in_fut", "in_opt", "in_bse_opt")
 
 
 class Engine:
@@ -98,6 +110,7 @@ class Engine:
         if cost_kind == "in_eq" and (product == "intraday" or (product == "auto" and self.t_sq is not None)):
             cost_kind = "in_eq_mis"
         self.kind = cost_kind
+        self.close_min = INDIA_CLOSE if cost_kind in INDIA_SESSION and self.tf_min < 1440 else None
         self.cash = self.r.capital
         self.emptied_on: str | None = None     # the day the account hit zero: nothing opens after it (R13S-001)
         self.qty, self.entry, self.sl, self.tg = 0, 0.0, 0.0, math.inf
@@ -110,6 +123,9 @@ class Engine:
         self.skipped_size = 0
         # the trading day, for session limits
         self.day, self.day_trades, self.day_pnl, self.cool, self.halted = None, 0, 0.0, 0, False
+        # the open position's mark at the day's start (the previous close) when it was opened on an earlier day: the
+        # daily loss cap counts the day's loss from there, not from the entry
+        self.day_mark = None
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
         self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
@@ -130,7 +146,7 @@ class Engine:
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
                 "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:],
-                **({"early_t": self.early_t} if self.early_t else {})}
+                **({"early_t": self.early_t} if self.early_t else {}), **({"day_mark": self.day_mark} if self.day_mark is not None else {})}
 
     def load(self, st: dict):
         self.cash, self.qty, self.entry, self.sl = st["cash"], st["qty"], st["entry"], st["sl"]
@@ -147,6 +163,7 @@ class Engine:
         self.trades, self.events = st.get("trades", []), st.get("events", [])
         self.emptied_on = st.get("emptied_on")
         self.early_t = st.get("early_t")
+        self.day_mark = st.get("day_mark")
 
     def _pay(self, side: str, qty: float, px: float) -> float:
         items = C.order_costs(self.kind, side, qty, px, self.r.brokerage)
@@ -221,6 +238,8 @@ class Engine:
         exit_cost = self._pay(close_side, self.qty, px)
         trade_costs = self.entry_cost + exit_cost
         pnl = d * self.qty * (px - self.entry) - trade_costs
+        # the day's part of it: from the previous close for a position carried in from an earlier day
+        today = pnl if self.day_mark is None else d * self.qty * (px - self.day_mark) - exit_cost
         self.cash += d * self.qty * px - exit_cost
         self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
                             "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
@@ -228,8 +247,8 @@ class Engine:
                             "at_open": at_open})
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
-        self.qty, self.pend_exit = 0, False
-        self.day_pnl += pnl
+        self.qty, self.pend_exit, self.day_mark = 0, False, None
+        self.day_pnl += today
         self.cool = self.sess.cooldown if self.sess else 0
         if self._loss_cap() and self.day_pnl <= -self._loss_cap():
             self.halted = True
@@ -252,6 +271,15 @@ class Engine:
     def _loss_cap(self) -> float:
         return self.r.capital * self.sess.dailyLossPct / 100 if self.sess and self.sess.dailyLossPct else 0.0
 
+    def day_open_pnl(self, px: float) -> float:
+        """The open position's P&L today at `px`: from the previous close when it was opened on an earlier day, else from
+        its entry, entry charges included (a loss carried in from yesterday is not today's loss)."""
+        if self.qty <= 0:
+            return 0.0
+        if self.day_mark is not None:
+            return self.dir * self.qty * (px - self.day_mark)
+        return self.dir * self.qty * (px - self.entry) - self.entry_cost
+
     def open_exit(self, b: dict) -> bool:
         """Whether the open trade certainly closes at this candle's open (the checks step() makes before the candle trades)."""
         if self.qty <= 0 or self.emptied_on:
@@ -260,16 +288,17 @@ class Engine:
             return True
         px, why = self._exit_price(b)
         if px is None:
-            return self.t_sq is not None and str(self.entry_t)[:10] != bar_clock(b["t"], self.tf_min)[0]
+            return self.t_sq is not None and str(self.entry_t)[:10] != bar_clock(b["t"], self.tf_min, self.close_min)[0]
         return px == b["o"] and why != "Time exit"
 
     def step(self, bars: list[dict], ctx: Ctx, i: int) -> list[dict]:
         b, r = bars[i], self.r
         if self.emptied_on:
             return []
-        date, closes_at = bar_clock(b["t"], self.tf_min)
+        date, closes_at = bar_clock(b["t"], self.tf_min, self.close_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
+            self.day_mark = bars[i - 1]["c"] if self.qty > 0 and i > 0 else None
         self.sq = self._squareoff(date)
         new = []
         if self.pend_entry is not None:
@@ -298,7 +327,7 @@ class Engine:
                 else:
                     px, why = b["c"], "Exit rule"
             cap = self._loss_cap()
-            if px is None and cap and self.day_pnl + d * self.qty * (b["c"] - self.entry) - self.entry_cost <= -cap:
+            if px is None and cap and self.day_pnl + self.day_open_pnl(b["c"]) <= -cap:
                 px, why = b["c"], "Daily loss cap"
             if px is None:
                 if r.trail > 0 and not early:
@@ -334,17 +363,20 @@ class Engine:
             if self.veto is not None and self.veto():
                 return []
             if self.next_open:
-                self.pend_entry = (d, i, bar_clock(bars[i]["t"], self.tf_min)[0])
+                self.pend_entry = (d, i, bar_clock(bars[i]["t"], self.tf_min)[0], closes_at)
                 return []
             ev = self._open(bars, ctx, i, d, slip, brok)
             return [ev] if ev else []
         return []
 
     def _fill_entry(self, bars: list[dict], ctx: Ctx, i: int, date: str, closes_at: int) -> dict | None:
-        """Fill the entry signalled on the last candle's close at this candle's open, if this candle may still trade."""
-        d, sig, sig_day = self.pend_entry
+        """Fill the entry signalled on the last candle's close at this candle's open, the moment that candle closed, on the
+        same day. The session's start and end are judged at the signal candle's close, as live trading enters then (a
+        signal on the candle closing at the session's end still fills; R3I: the backtest's last entry was one candle
+        early); a candle that closes at the square-off doesn't open a trade it would close at once."""
+        d, sig, sig_day, sig_close = self.pend_entry
         self.pend_entry = None
-        if self.intraday and (date != sig_day or not self._may_enter(closes_at)):
+        if self.intraday and (date != sig_day or not self._may_enter(sig_close) or (self.sq is not None and closes_at >= self.sq)):
             return None
         if self.gate is not None and not self.gate(at_open=True):
             return None
@@ -355,7 +387,7 @@ class Engine:
         price) and enter at once if they hold. Exits still wait for the candle to close, as in a backtest."""
         if self.qty > 0 or self.cool > 0:
             return []
-        date, closes_at = bar_clock(bars[i]["t"], self.tf_min)
+        date, closes_at = bar_clock(bars[i]["t"], self.tf_min, self.close_min)
         if date != self.day:
             self.day, self.day_trades, self.day_pnl, self.halted = date, 0, 0.0, False
         self.sq = self._squareoff(date)
@@ -381,7 +413,7 @@ class Engine:
         self.dir = d
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
-        self.qty, self.entry, self.entry_t, self.held, self.best = q, px, t, 0, px
+        self.qty, self.entry, self.entry_t, self.held, self.best, self.day_mark = q, px, t, 0, px, None
         self.sl = self.init_sl = 0.0
         self.tg = math.inf
         self.day_trades += 1
@@ -448,7 +480,7 @@ class Engine:
         self._slip(q, px, base)
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
-        self.qty, self.entry, self.entry_t, self.held, self.best = q, px, b["t"], 0, px
+        self.qty, self.entry, self.entry_t, self.held, self.best, self.day_mark = q, px, b["t"], 0, px, None
         self.sl = px - d * dist if dist > 0 else 0.0
         self.init_sl = self.sl
         if r.tgt > 0:
@@ -564,7 +596,7 @@ def period_key(t: pd.Timestamp, tf: str) -> str:
 def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot: float = 1,
              cost_kind: str = "flat", ctx: Ctx | None = None) -> tuple[Engine, list[float]]:
     """Trade bars start+1 .. end-1 with fresh capital. Indicators use all earlier bars, so there is no warm-up gap."""
-    ctx = ctx or Ctx(bars, intraday=strategy.tf != "1d")
+    ctx = ctx or Ctx(bars, intraday=strategy.tf != "1d", base_min=TF_MIN[strategy.tf])
     end = len(bars) if end is None else end
     eng = Engine(strategy, lot, cost_kind=cost_kind)
     equity = [strategy.risk.capital]
@@ -586,7 +618,7 @@ def simulate(bars: list[dict], strategy, start: int, end: int | None = None, lot
 
 def backtest(bars: list[dict], strategy, start: int, lot: float = 1, cost_kind: str = "flat") -> dict:
     tf = strategy.tf
-    ctx = Ctx(bars, intraday=tf != "1d")
+    ctx = Ctx(bars, intraday=tf != "1d", base_min=TF_MIN[tf])
     eng, equity = simulate(bars, strategy, start, lot=lot, cost_kind=cost_kind, ctx=ctx)
     cap = strategy.risk.capital
     view = bars[start:]

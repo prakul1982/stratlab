@@ -78,7 +78,7 @@ from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
-from .kite_service import bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
+from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
@@ -108,7 +108,7 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
@@ -300,6 +300,8 @@ def lead():
     except Exception as e:
         print("leader: could not read the saved Kite token:", e)
     if _jobs_started:            # leading again after a lapse: the jobs are running; the live loop re-attaches the sessions
+        if _failed_starts:       # ...except any whose start raised: they get another try
+            threading.Thread(target=start_failed_jobs, daemon=True, name="start-failed-jobs").start()
         return
     _jobs_started = True
     # on its own thread: resuming sessions reads history and can take a while; the lease thread must keep renewing
@@ -313,53 +315,76 @@ def follow():
     manager.drop_all()
 
 
+_failed_starts: dict[str, object] = {}      # job name -> its start function, for a job whose start raised
+
+
+def _start(name: str, fn) -> None:
+    """Start one job. One that raises is logged and left for the next lease gain; the others still start."""
+    try:
+        fn()
+        _failed_starts.pop(name, None)
+    except Exception as e:
+        _failed_starts[name] = fn
+        print(f"startup: could not start {name}:", str(e)[:200])
+        try:
+            log.exception("startup: could not start %s", name)
+        except Exception:
+            pass
+
+
+def start_failed_jobs() -> None:
+    """Start again the jobs whose start raised (the lease was gained again, or the first try hit a passing fault)."""
+    for name, fn in list(_failed_starts.items()):
+        _start(name, fn)
+
+
 def start_jobs():
     try:
         manager.resume()  # crypto sessions always; India ones once Kite is logged in
     except Exception as e:
         print("startup: could not resume sessions:", e)
-    manager.start_loop()
-    auto_login.start()
-    recorder.start()
-    scan_alerts_job.start()
-    filing_alerts_job.start()
-    deals_job.start()
-    threading.Thread(target=money_mf_nav.keep_fresh, daemon=True, name="mf-nav").start()   # the mutual fund NAV file, read ahead of the pages (R9P-008)
-    threading.Thread(target=holiday_job, daemon=True, name="holidays").start()
-    threading.Thread(target=rates_job, daemon=True, name="fx-rates").start()
-    threading.Thread(target=platform_job, daemon=True, name="platform-check").start()
-    threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start()
-    connect_job.start()                  # daily Interactive Brokers read; the statement inbox's 40-day reminder
-    newsletter_job.start()
-    results_job.start()
-    corp_job.start()
-    redflags_job.start()
-    money_calendar_job.start()
-    surv_job.start()
-    lifecycle_job.start()
-    advance_tax_job.start()
-    invite_job.start()
-    rules_watch_job.start()
-    positioning_job.start()
-    stock_desks.job.start()                     # stock futures, lending fees and margin funding: the evening files
-    fo_changes_routes.job.start()               # F&O contract changes, twice a trading day
-    market_events_routes.job.start()            # market events calendar, twice a day, and its reminders
-    networth_job.start()
-    threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start()
-    threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start()
-    threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start()
-    threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start()
-    threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start()   # pages follow each close
-    screen_job.start()
-    breadth_job.start()
-    threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start()
-    breadth_live_job.start()          # breadth every ~15 minutes while the Indian market is open
-    etf_job.start()
-    closing_auction_job.start()       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
-    vix_job.start()
-    biz_job.start()
-    holders_job.start()
-    ai_providers.job.start()          # measures the AI models every 6 hours
+    _start("live-loop", manager.start_loop)
+    _start("auto_login", auto_login.start)
+    _start("recorder", recorder.start)
+    _start("scan_alerts_job", scan_alerts_job.start)
+    _start("filing_alerts_job", filing_alerts_job.start)
+    _start("deals_job", deals_job.start)
+    _start("mf-nav", lambda: threading.Thread(target=money_mf_nav.keep_fresh, daemon=True, name="mf-nav").start())   # the mutual fund NAV file, read ahead of the pages (R9P-008)
+    _start("holidays", lambda: threading.Thread(target=holiday_job, daemon=True, name="holidays").start())
+    _start("fx-rates", lambda: threading.Thread(target=rates_job, daemon=True, name="fx-rates").start())
+    _start("platform-check", lambda: threading.Thread(target=platform_job, daemon=True, name="platform-check").start())
+    _start("weekly-summary", lambda: threading.Thread(target=weekly_job, daemon=True, name="weekly-summary").start())
+    _start("connect_job", connect_job.start)                  # daily Interactive Brokers read; the statement inbox's 40-day reminder
+    _start("newsletter_job", newsletter_job.start)
+    _start("results_job", results_job.start)
+    _start("corp_job", corp_job.start)
+    _start("redflags_job", redflags_job.start)
+    _start("money_calendar_job", money_calendar_job.start)
+    _start("surv_job", surv_job.start)
+    _start("lifecycle_job", lifecycle_job.start)
+    _start("advance_tax_job", advance_tax_job.start)
+    _start("invite_job", invite_job.start)
+    _start("rules_watch_job", rules_watch_job.start)
+    _start("positioning_job", positioning_job.start)
+    _start("stock_desks.job", stock_desks.job.start)                     # stock futures, lending fees and margin funding: the evening files
+    _start("fo_changes_routes.job", fo_changes_routes.job.start)               # F&O contract changes, twice a trading day
+    _start("market_events_routes.job", market_events_routes.job.start)            # market events calendar, twice a day, and its reminders
+    _start("networth_job", networth_job.start)
+    _start("market-audit", lambda: threading.Thread(target=market_audit.loop, daemon=True, name="market-audit").start())
+    _start("market-audit-us", lambda: threading.Thread(target=market_audit_us.loop, daemon=True, name="market-audit-us").start())
+    _start("stock-list", lambda: threading.Thread(target=stock_list_job, daemon=True, name="stock-list").start())
+    _start("screens-index", lambda: threading.Thread(target=screen_indexer.loop, daemon=True, name="screens-index").start())
+    _start("stock-prices", lambda: threading.Thread(target=stock_price_refresh_job, daemon=True, name="stock-prices").start())   # pages follow each close
+    _start("screen_job", screen_job.start)
+    _start("breadth_job", breadth_job.start)
+    _start("library-seed-once", lambda: threading.Thread(target=library_seed_once, daemon=True, name="library-seed-once").start())
+    _start("breadth_live_job", breadth_live_job.start)          # breadth every ~15 minutes while the Indian market is open
+    _start("etf_job", etf_job.start)
+    _start("closing_auction_job", closing_auction_job.start)       # the closing auction, every 30 s from 15:14 to 15:40 on trading days
+    _start("vix_job", vix_job.start)
+    _start("biz_job", biz_job.start)
+    _start("holders_job", holders_job.start)
+    _start("ai_providers.job", ai_providers.job.start)          # measures the AI models every 6 hours
 
 
 log = logging.getLogger("stratlab")
@@ -649,16 +674,25 @@ def fx_rate(code: str) -> float:
     return pricing.cross_rate(code, lambda pair: research_hub.yahoo.meta(pair).get("price"))
 
 
+def rates_pass() -> bool:
+    """One read of the exchange rates; whether it failed (any currency without an answer counts)."""
+    try:
+        if leader.leading():      # another container leads: it runs this pass
+            return bool(pricing.refresh_rates(fx_rate).get("errors"))
+    except Exception as e:
+        print("exchange rate refresh failed:", e)
+        return True
+    return False
+
+
 def rates_job():
-    """Once a day: exchange rates, so prices in other currencies follow the rupee price."""
+    """Once a day: exchange rates, so prices in other currencies follow the rupee price. A failed read is asked again in an hour."""
     time.sleep(120)
+    tries = 0
     while True:
-        try:
-            if leader.leading():      # another container leads: it runs this pass
-                pricing.refresh_rates(fx_rate)
-        except Exception as e:
-            print("exchange rate refresh failed:", e)
-        time.sleep(24 * 3600)
+        failed = rates_pass()
+        tries = tries + 1 if failed else 0
+        time.sleep(next_pass_in(failed, tries))
 
 
 def prices_view() -> dict:
@@ -739,6 +773,7 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])) if leader.leading() else db.count_running(profile["id"]),
         "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
+                   "telegram_verified": alerts.telegram_verified(profile),
                    "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
@@ -920,8 +955,22 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         need(profile, "daily_report", "Alerts and the daily report")
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
+    new_chat = (req.telegram_chat_id or "").strip()
+    chat_changed = bool(new_chat) and new_chat.lower() != (profile.get("telegram_chat_id") or "").strip().lower()
+    if chat_changed and alerts.telegram_ready():
+        throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
+    code_sent = None
+    if chat_changed or (req.telegram_chat_id is not None and not new_chat):       # a new chat, or the chat cleared
+        alerts.reset_telegram(profile["id"])       # a new chat starts unverified; nothing is sent there until its code is entered
+    if chat_changed and alerts.telegram_ready():
+        try:
+            alerts.send_telegram_code(profile["id"], new_chat)
+            code_sent = True
+        except Exception as e:
+            print("telegram code send failed:", str(e)[:200])
+            code_sent = False
     new_addr = (req.alert_email or "").strip().lower()
     # a new address, or the "turn them back on" button, turns alert emails back on after an unsubscribe; saving the
     # same address with another setting doesn't
@@ -929,7 +978,38 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         alerts.set_alert_emails(profile["id"], True)
     if req.daily_report is not None:
         change_prefs(profile["id"], lambda cur: {**cur, "daily_report": req.daily_report})
-    return {"saved": True}
+    return {"saved": True, "telegram_code_sent": code_sent}
+
+
+@app.post("/me/alerts/telegram/code")
+def telegram_code(profile=Depends(current_profile)):
+    """Send a new code to the saved Telegram chat (5 an hour)."""
+    need(profile, "daily_report", "Alerts and the daily report")
+    chat = profile.get("telegram_chat_id")
+    if not chat:
+        err(400, "no_chat", "Save a Telegram chat ID first.")
+    if not alerts.telegram_ready():
+        err(503, "telegram_off", "Telegram isn't set up on the server yet.")
+    throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
+    try:
+        alerts.send_telegram_code(profile["id"], chat)
+    except Exception as e:
+        print("telegram code send failed:", str(e)[:200])
+        err(502, "code_failed", "The code couldn't be sent to that chat.")
+    return {"sent": True}
+
+
+@app.post("/me/alerts/telegram/verify")
+def telegram_verify(req: TelegramCodeReq, profile=Depends(current_profile)):
+    """Turn on Telegram alerts for the saved chat with the code sent to it (5 wrong tries void the code)."""
+    got = alerts.confirm_telegram(profile, req.code)
+    if got == "wrong":
+        err(400, "wrong_code", "That code is wrong.")
+    if got == "locked":
+        err(400, "code_void", "Too many wrong tries. Send a new code.")
+    if got == "expired":
+        err(400, "code_expired", "There's no valid code for this chat (they last 15 minutes). Send a new code.")
+    return {"verified": True}
 
 
 @app.post("/me/alerts/test")
@@ -1025,11 +1105,21 @@ def _confirm_link_bad() -> HTMLResponse:
     return mail_page("This link doesn't work", f"It may have expired (links work for 3 days). Ask for a new one {WHERE_EMAILS}.", 400)
 
 
+def _confirm_token(t: str):
+    """(uid, address) of a confirmation link that is still for the reader's current newsletter address, else None: a link
+    sent to an address they have since changed confirms nothing."""
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return None
+    current = alerts.newsletter_email(db.get_profile(got[0]))
+    return got if current and current.strip().lower() == got[1].strip().lower() else None
+
+
 @app.get("/email/confirm", response_class=HTMLResponse)
 def confirm_email_page(t: str = ""):
     """Asks before confirming: mail scanners open every link, and shouldn't sign anyone up for newsletters."""
-    got = mail_tokens.read(t, "confirm")
-    if not got or not got[1]:
+    got = _confirm_token(t)
+    if not got:
         return _confirm_link_bad()
     return HTMLResponse(content=mail_pages.ask(f"Send StratLab newsletters to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
                                                "If you didn't ask for this, close this page.", manage=False))
@@ -1037,8 +1127,8 @@ def confirm_email_page(t: str = ""):
 
 @app.post("/email/confirm", response_class=HTMLResponse)
 def confirm_email(t: str = ""):
-    got = mail_tokens.read(t, "confirm")
-    if not got or not got[1]:
+    got = _confirm_token(t)
+    if not got:
         return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
@@ -2928,7 +3018,9 @@ def tax_inputs(profile) -> dict:
     fmv, fmv_src = {}, {}
     pre = sorted({tax_lots.lot_key(t) for t in trades if t["side"] == "B" and t["d"] <= tax_lots.GF_DATE})
     looked = 0
-    in_file = {k for k in pre if all(t.get("fmv") for t in trades if tax_lots.lot_key(t) == k and t["side"] == "B" and t["d"] <= tax_lots.GF_DATE)}
+    # a tradebook buy counted with a tax P&L line has the line's value (tax_lots._covered)
+    keys = set(pre)
+    in_file = tax_lots.fmv_in_files([t for t in trades if tax_lots.lot_key(t) in keys], acts) & keys
     for k in pre:
         if k in data["fmv"]:
             fmv[k], fmv_src[k] = data["fmv"][k], "yours"
@@ -3031,7 +3123,10 @@ def tax_import_file(profile, data: bytes, filename: str, mode: str) -> dict:
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
     trades, missed = tax_match(parsed["trades"])
-    div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
+    try:
+        div_added = money_routes.import_from_tax_file(profile, data, filename)     # a tax P&L's dividend sheet, if it has one
+    except holdings_file.FileError as e:
+        err(400, "bad_file", str(e))
     before = tax_lots.load(profile["id"])
     old = [] if mode == "replace" else before["trades"]
     merged, added, dup = tax_lots.merge(old, trades)
@@ -3688,17 +3783,31 @@ research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 
+def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str]:
+    """One read of the lists of listed companies (India, NSE and BSE-only; the US), or just those regions in `only`;
+    the regions whose read failed."""
+    failed = []
+    lists = (("IN", india_listing), ("US", _sec_companies)) if leader.leading() else ()   # another container leads: it reads them
+    for region, fn in lists:
+        if only is not None and region not in only:
+            continue
+        try:
+            stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
+        except Exception as e:
+            print(f"stock list {region} failed:", str(e)[:160])
+            failed.append(region)
+    return failed
+
+
 def stock_list_job():
-    """Once a day: the lists of listed companies (India, NSE and BSE-only; the US), for the sitemaps and pages."""
+    """Once a day: the lists of listed companies (India, NSE and BSE-only; the US), for the sitemaps and pages. A list
+    that failed is asked again in an hour."""
     time.sleep(240)                         # after startup traffic
+    todo, tries = None, 0
     while True:
-        lists = (("IN", india_listing), ("US", _sec_companies)) if leader.leading() else ()   # another container leads: it reads them
-        for region, fn in lists:
-            try:
-                stock_pages.save_list(region, [{"symbol": r["symbol"], "name": r.get("name")} for r in fn()])
-            except Exception as e:
-                print(f"stock list {region} failed:", str(e)[:160])
-        time.sleep(24 * 3600)
+        failed = stock_list_pass(todo)
+        todo, tries = (tuple(failed) if failed else None), (tries + 1 if failed else 0)
+        time.sleep(next_pass_in(bool(failed), tries))
 
 
 @app.get("/stocks", response_class=HTMLResponse)
@@ -4425,7 +4534,7 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
             "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (spot_q or {}).get("ts"),
-            **_preview_greeks(c, spot, legs, units)}
+            **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"))}
 
 
 def impossible(priced: list[dict]) -> str | None:
@@ -4438,10 +4547,10 @@ def impossible(priced: list[dict]) -> str | None:
             "pay out. Real bids and asks don't allow that, so at least one price here is out of date.")
 
 
-def _preview_greeks(c, spot: float, legs: list[dict], units: int) -> dict:
+def _preview_greeks(c, spot: float, legs: list[dict], units: int, spot_ts=None) -> dict:
     """The model's view of a priced structure, for every plan: the shared inputs, each leg's IV and Greeks, and the
     net Greeks of the whole position (empty when the expiry has passed)."""
-    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), spot_ts)
     if not m:
         return {"model": None, "greeks": None}
     have = [l for l in legs if l["strike"] is not None]
@@ -4457,10 +4566,10 @@ def _held(req: OptGreeksReq, expiry: str | None = None):
     c = options_data.contracts(req.exchange, req.underlying, expiry or req.expiry)
     if not c:
         err(404, "no_contracts", f"No {req.underlying} options are listed on {req.exchange} for that expiry.")
-    spot = options_data.spot(req.exchange, req.underlying, c.expiry)[0]
+    spot, spot_q, _ = options_data.spot(req.exchange, req.underlying, c.expiry)
     if not spot:
         err(503, "no_spot", f"Couldn't get the {req.underlying} price just now.")
-    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now())
+    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), (spot_q or {}).get("ts"))
     if not m:
         err(409, "expired", "That expiry has passed, so there's nothing left to model.")
     return c, spot, m
@@ -4778,17 +4887,37 @@ def calendar_status() -> dict:
             "markets": trading_calendar.all_coverage(today)}
 
 
+RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in an hour, not tomorrow...
+QUICK_RETRIES = 6                # ...up to this many times in a row (a source that stays down is asked daily again)
+
+
+def next_pass_in(failed: bool, tries: int) -> int:
+    """Seconds until a daily job's next pass: about an hour after a failed one, a day after a good one."""
+    return RETRY_AFTER_FAIL if failed and tries <= QUICK_RETRIES else 24 * 3600
+
+
+def holiday_pass() -> bool:
+    """One read of the exchange's holiday lists; whether either failed (the last good lists stay either way)."""
+    failed = False
+    try:
+        if leader.leading():      # another container leads: it runs this pass
+            for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
+                failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
+    except Exception as e:
+        print("holiday refresh failed:", e)
+        failed = True
+    return failed
+
+
 def holiday_job():
-    """Once a day: the exchange's holiday list, so next year's holidays arrive by themselves when it publishes them."""
+    """Once a day: the exchange's holiday list, so next year's holidays arrive by themselves when it publishes them.
+    A failed read is asked again in an hour."""
     time.sleep(90)                          # after startup traffic
+    tries = 0
     while True:
-        try:
-            if leader.leading():      # another container leads: it runs this pass
-                trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
-                trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
-        except Exception as e:
-            print("holiday refresh failed:", e)
-        time.sleep(24 * 3600)
+        failed = holiday_pass()
+        tries = tries + 1 if failed else 0
+        time.sleep(next_pass_in(failed, tries))
 
 
 @app.post("/admin/etf-gaps/refresh")
@@ -5082,16 +5211,21 @@ def bse_code(sym: str) -> str | None:
 
 def bse_twin(sym: str) -> str | None:
     """The BSE scrip code of an NSE company's other listing (same symbol, else the same company name); None when the
-    broker is offline or the company isn't on BSE."""
+    broker is offline or the company isn't on BSE. The instrument list the pages use holds only the BSE-only companies
+    (a company on both is its NSE row), so a dual listing is looked up in the day's full BSE list, when it has been read."""
     if not kite.ready():
         return None
     s = (sym or "").strip().upper()
     try:
+        nse = None
         hit = kite.by_symbol(s, "BSE")
         if not hit:
             nse = kite.equity(s)
             hit = nse and kite.equity_by_name(nse.get("name") or "")
-        return hit.get("bse_code") if hit and hit.get("exchange") == "BSE" and hit.get("type") == "EQ" else None
+        if hit and hit.get("exchange") == "BSE" and hit.get("type") == "EQ" and hit.get("bse_code"):
+            return hit["bse_code"]
+        raw = kite.instruments_cached("BSE")       # never a broker request from here: the daily BSE list read has it, or nothing
+        return bse_code_in(raw, s, (nse or kite.equity(s) or {}).get("name")) if raw else None
     except Exception:
         return None
 

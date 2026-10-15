@@ -3,7 +3,10 @@ dividends with the US tax withheld (a foreign tax credit figure), and the year's
 
 Three sources, in this order of trust: the dividend sheet of the user's broker tax P&L (read when the ZIP or workbook
 is uploaded to the tax report), a dividend CSV the user uploads, and, when neither covers a year, an estimate from
-My Holdings × the dividends the companies declared (the stored corporate actions), labelled "estimated".
+My Holdings × the dividends the companies declared (the stored corporate actions), labelled "estimated". Each stored line
+keeps its source ("statement", "csv" or "AIS" for lines the user confirmed from the AIS), and for a year that has lines from
+the broker's sheet or the user's CSV the AIS lines are set aside: the AIS names payers differently, so the same dividend
+can't be matched across sources and would be counted twice.
 
 Stored per user in app_settings (moneydiv:<uid>), seen only by that user, and deleted with the tax data. Facts and
 arithmetic on the user's own dividends; never a view on any company."""
@@ -25,6 +28,7 @@ MAX_BYTES = 5 * 1024 * 1024       # a dividend CSV is a few kilobytes
 MAX_AMOUNT = 1e10
 TDS_RATE = 0.10                   # with a PAN; 20% without one
 US_WITHHOLDING = 0.25             # India-US tax treaty, Article 10, for an individual who gave the broker a W-8BEN
+AIS = "AIS"                       # the source of a line the user confirmed from their AIS
 FIRST_TAXED_FY = 2020             # dividends became taxable in the shareholder's hands from FY 2020-21
 
 COLUMNS = {
@@ -126,19 +130,17 @@ def rows_from_table(rows: list[list[str]], src: str) -> tuple[list[dict], list[d
         cur_text = (cell(r, "currency") + " " + cell(r, "country")).upper()
         us = bool(re.search(r"\b(USD|US|USA|UNITED STATES)\b", cur_text)) or isin.startswith("US")
         tds = hf.number(cell(r, "tds"))
+        if len(out) >= MAX_ROWS:
+            raise hf.too_many(MAX_ROWS)
         out.append({"d": d, "sym": sym or isin or name.upper()[:20], "name": name, "isin": isin,
                     "qty": qty if qty and qty > 0 else None, "ps": ps if ps and ps > 0 else None, "amount": round(amount, 4),
                     "tds": round(abs(tds), 4) if tds else None, "cur": "USD" if us else "INR", "src": src})
-        if len(out) >= MAX_ROWS:
-            break
     return out, problems[:100]
 
 
 def _workbook(raw: bytes, src: str, only_dividend_sheets: bool) -> tuple[list[dict], list[dict]]:
     out, problems = [], []
-    for name, rows in hf.sheets(raw, hf.MAX_ROWS):
-        if only_dividend_sheets and not re.search(r"(?i)dividend", name):
-            continue
+    for name, rows in hf.sheets(raw, hf.MAX_ROWS, only=(lambda n: bool(re.search(r"(?i)dividend", n))) if only_dividend_sheets else None):
         got, probs = rows_from_table(rows, src)
         out += got
         problems += probs
@@ -163,7 +165,11 @@ def from_tax_file(data: bytes, filename: str = "") -> list[dict]:
                 out += _workbook(hf._unpack(zf, info, budget), "statement", True)[0]
             elif re.search(r"(?i)dividend.*\.(csv|txt)$", base):
                 out += rows_from_table(hf.table(hf._unpack(zf, info, budget), MAX_BYTES), "statement")[0]
-        return out[:MAX_ROWS]
+        if len(out) > MAX_ROWS:
+            raise hf.too_many(MAX_ROWS)
+        return out
+    except hf.TooManyLines:
+        raise
     except Exception:
         return []
 
@@ -228,18 +234,30 @@ def _dedup(r: dict) -> tuple:
 
 
 def merge(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int]:
-    """(rows, added, already there): the same file uploaded again adds nothing."""
-    have = {_dedup(r) for r in old}
+    """(rows, added, already there): the same file uploaded again adds nothing. A line already there from the AIS is
+    replaced by the same line from the broker's sheet or the user's CSV (the more trusted source)."""
     out, added, dup = list(old), 0, 0
+    have = {_dedup(r): i for i, r in enumerate(out)}
     for r in new:
         k = _dedup(r)
         if k in have:
             dup += 1
+            if out[have[k]].get("src") == AIS and r.get("src") != AIS:
+                out[have[k]] = r
             continue
-        have.add(k)
+        have[k] = len(out)
         out.append(r)
         added += 1
     return out, added, dup
+
+
+def trusted(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(rows to use, AIS lines set aside) for one year's stored lines: when the year has lines from the broker's sheet or the
+    user's CSV, the AIS lines (the same dividends under the payer's registered name) are left out; with only AIS lines
+    they are used."""
+    ais = [r for r in rows if r.get("src") == AIS]
+    rest = [r for r in rows if r.get("src") != AIS]
+    return (rest, ais) if rest and ais else (rows, [])
 
 
 def add(uid: str, rows: list[dict], filename: str, source: str) -> tuple[int, int]:
@@ -373,11 +391,14 @@ def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float 
     fys = sorted(own_years | {fy_of(r["d"]) for r in estimated} | {cur_fy, cur_fy - 1}, reverse=True)
     years = []
     for fy in fys:
-        own = [r for r in stored["rows"] if fy_of(r["d"]) == fy]
+        own, aside = trusted([r for r in stored["rows"] if fy_of(r["d"]) == fy])
         est = [r for r in estimated if fy_of(r["d"]) == fy]
         source = "files" if own else "estimated" if est else "none"
         y = year(fy, own or est, usd_inr, full)
         y["source"] = source
+        y["ais_set_aside"] = len(aside)
+        y["ais_note"] = (f"{len(aside)} AIS dividend line{'s' if len(aside) != 1 else ''} not counted: this year's dividends come from "
+                         "your broker's statement or your CSV, and the AIS lists the same payments.") if aside else None
         y["include"] = stored["include"].get(fy, source == "files") and source != "none" and y["taxed"]
         y["include_saved"] = fy in stored["include"]
         y["estimate_total"] = round(sum(_inr(r, usd_inr) or 0 for r in est), 2) if est else None
@@ -402,5 +423,5 @@ def events(v: dict, stored: dict, estimated: list[dict], usd_inr: float | None, 
     y = next((x for x in v["years"] if x["fy"] == fy), None)
     if not y or not y["include"]:
         return []
-    rows = [r for r in stored["rows"] if fy_of(r["d"]) == fy] if y["source"] == "files" else [r for r in estimated if fy_of(r["d"]) == fy]
+    rows = trusted([r for r in stored["rows"] if fy_of(r["d"]) == fy])[0] if y["source"] == "files" else [r for r in estimated if fy_of(r["d"]) == fy]
     return sorted((r["d"], _inr(r, usd_inr)) for r in rows if _inr(r, usd_inr))

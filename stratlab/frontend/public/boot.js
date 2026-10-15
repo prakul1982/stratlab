@@ -48,6 +48,11 @@
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
   try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }
 
+  // the browser's offer to install StratLab comes once, soon after the page loads, and the file that uses it (src/lib/pwa.ts)
+  // arrives later: keep the offer here so the install button can still appear
+  window.addEventListener("beforeinstallprompt", function (e) { if (e.preventDefault) e.preventDefault(); window.__stratlabInstall = e; });
+  window.addEventListener("appinstalled", function () { window.__stratlabInstall = null; });
+
   window.__stratlabRecover = recover;
   window.__stratlabShowLoadError = show;
 

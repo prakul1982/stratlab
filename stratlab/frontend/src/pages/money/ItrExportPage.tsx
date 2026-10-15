@@ -45,6 +45,7 @@ export function ItrExportPage() {
   const [v, setV] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  const [loadingFy, setLoadingFy] = useState<number | null>(null);      // the year being laid out, while the last one stays on the page (dimmed)
   const seq = useRef(0);                  // the year picked last is the one shown, whatever order the answers come in
   const picked = useRef<number | null>(null);
   const [getting, setGetting] = useState<Format | null>(null);
@@ -57,9 +58,10 @@ export function ItrExportPage() {
   const load = useCallback((fy: number) => {
     const n = ++seq.current;
     picked.current = fy;
-    setV(null); setError(null);
+    setLoadingFy(fy); setError(null);
     setMovedFrom(null);
-    one(fy).then((x) => n === seq.current && setV(x)).catch((e) => { if (n !== seq.current) return; setError((e as Error).message); fail(e); });
+    one(fy).then((x) => { if (n === seq.current) { setV(x); setLoadingFy(null); } })
+      .catch((e) => { if (n !== seq.current) return; setLoadingFy(null); setError((e as Error).message); fail(e); });
   }, [one, fail]);
   /** The Money pages' one rule (lib/fy openFy): the year a link asked for, else the year last picked, else the year being
    * filed; when that year has no schedule lines and another has, the latest year that has some, said in one line. */
@@ -104,23 +106,23 @@ export function ItrExportPage() {
 
       <FormGrid label="Choose the year" pair>
         <Field label="Financial year">{(id) => (
-          <Select id={id} value={v?.fy ?? ""} disabled={!v} onChange={(x) => { rememberFy(Number(x)); load(Number(x)); }}
+          <Select id={id} value={loadingFy ?? v?.fy ?? ""} disabled={!v} onChange={(x) => { rememberFy(Number(x)); load(Number(x)); }}
             options={(v?.years ?? []).map((y) => ({ value: y, label: `${fyLabel(y)} (AY ${y + 1}-${String(y + 2).slice(2)})` }))} />
         )}</Field>
       </FormGrid>
 
       {v && movedFrom != null && movedFrom !== v.fy && <p className="k-small k-muted" data-testid="itr-moved-year">{movedYearNote(movedFrom, v.fy, v.years[0] ?? v.fy, "figures")}</p>}
-      {!v && (error ? <ErrorState title="Your schedules couldn't be laid out" action={{ label: "Try again", onClick: () => (picked.current != null ? load(picked.current) : setTries((n) => n + 1)) }}>{error}</ErrorState>
-        : <Card><Skeleton label="Laying out your schedules" /></Card>)}
+      {error && <ErrorState title="Your schedules couldn't be laid out" action={{ label: "Try again", onClick: () => (picked.current != null ? load(picked.current) : setTries((n) => n + 1)) }}>{error}</ErrorState>}
+      {!v && !error && <Card><Skeleton label="Laying out your schedules" /></Card>}
       {v && (
-        <>
+        <div className="k-page" aria-busy={loadingFy != null} style={loadingFy != null ? { opacity: 0.5, transition: "opacity .15s" } : undefined}>
           <Card>
             <CardHead title={`Download for ${v.label} (AY ${v.ay})`} />
             {/* the same words as the lock shown while the page loads, on every plan (R6O-013) */}
             {v.locked && <PlanNote>Part of this page is on {v.plan}. {featureName("itr_export")}: on the {v.plan} plan. You're on {yours}; the rest of the page is yours, and below is what each schedule would hold.</PlanNote>}
             <div className="k-downloads">
               {FORMATS.map(([f, label, hint]) => (
-                <button key={f} type="button" className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting} onClick={() => download(f)}>
+                <button key={f} type="button" className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting || loadingFy != null} onClick={() => download(f)}>
                   <Download size={16} /><span>{getting === f ? "Making it…" : label}<small>{hint}</small></span>
                 </button>
               ))}
@@ -161,7 +163,7 @@ export function ItrExportPage() {
             <ul className="k-list muted">{v.assumptions.map((s, i) => <li key={i}>{s}</li>)}</ul>
             <p className="k-note">StratLab doesn't file returns: filing on someone's behalf needs registration as an e-return intermediary with the Income Tax Department. Upload or type these figures into the return yourself, or hand the pack to your CA.</p>
           </Card>
-        </>
+        </div>
       )}
     </div>
   );

@@ -219,6 +219,25 @@ def test_confirming_the_newsletter_address(monkeypatch):
         w["close"]()
 
 
+def test_a_confirmation_link_for_an_address_the_reader_has_since_changed_confirms_nothing(monkeypatch):
+    w = W.build(monkeypatch)
+    try:
+        c = w["client"]
+        old = mail_tokens.make("u-pro", "confirm", "pro@example.com")
+        db.update_profile("u-pro", alert_email="new@example.com")            # the address changed after the link was sent
+        for call in (c.get, c.post):
+            r = call("/email/confirm", params={"t": old})
+            assert r.status_code == 400 and "This link doesn" in r.text and "Send StratLab newsletters" not in r.text
+        assert not alerts.email_confirmed(db.get_profile("u-pro"))
+        assert db.get_setting(alerts.CONFIRMED + "u-pro") is None
+        fresh = mail_tokens.make("u-pro", "confirm", "New@Example.com")      # a link to the current address, in any case, still works
+        assert c.get("/email/confirm", params={"t": fresh}).status_code == 200
+        assert c.post("/email/confirm", params={"t": fresh}).status_code == 200
+        assert alerts.email_confirmed(db.get_profile("u-pro"))
+    finally:
+        w["close"]()
+
+
 def test_brevo_ip_block_says_where_to_turn_it_off():
     from types import SimpleNamespace
     from app import alerts
@@ -259,6 +278,7 @@ def test_the_alert_test_does_not_pass_on_telegrams_own_error(monkeypatch):
             raise RuntimeError("Telegram 400: Bad Request: chat not found (token 123:SECRET)")
         monkeypatch.setattr(alerts, "send_telegram", refuse)
         db.update_profile("u-pro", telegram_chat_id="123456789")
+        db.set_setting(alerts.TG_VERIFY + "u-pro", '{"verified": "123456789"}')     # Telegram only reaches a verified chat
         r = c.post("/me/alerts/test", headers=W.headers("pro-token"))
         assert r.status_code == 502
         assert "chat not found" not in r.text and "SECRET" not in r.text and "Telegram couldn't deliver to that chat" in r.text

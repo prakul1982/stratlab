@@ -332,6 +332,17 @@ def test_reminders_go_once_to_plans_that_have_them(w, paid):
     assert len(M.prefs("u-basic")["sent"]) == 1
 
 
+def test_a_reminder_that_reached_no_channel_is_unsent_so_the_next_run_tries_again(w, paid):
+    M.refresh(FakeWeb(), TODAY)
+    M.save_prefs("u-basic", {**M.prefs("u-basic"), "remind": True, "kinds": ["rbi"], "days": 2})
+    reached = []
+    send = lambda p, subject, text: reached                    # noqa: E731
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 0 and M.prefs("u-basic")["sent"] == []     # no channel: nothing sent
+    reached.append("push")
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 1 and len(M.prefs("u-basic")["sent"]) == 1
+    assert M.send_reminders(TODAY, R.reminders_allowed, send) == 0                                           # and then once
+
+
 def test_events_go_into_the_money_calendar_only_when_asked(w):
     c = w["client"]
     M.refresh(FakeWeb(), TODAY)
@@ -401,3 +412,18 @@ def test_the_web_client_turns_failures_into_source_errors():
     assert web.rbi_month(2026, 3, first=True) == "ok"
     method, _, _, body = hits[-1]
     assert method == "POST" and b"__VIEWSTATE=abc" in body and b"hdnYear=2026" in body and b"hdnMonth=3" in body
+
+
+def test_a_run_where_every_source_failed_is_an_error_and_not_finished(w):
+    web = FakeWeb(down={""})                                        # every request fails
+    job = M.Job(lambda: web, lambda day: 0)
+    morning = datetime(2026, 10, 5, 7, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+    job.tick(morning)
+    assert job.status["last_error"] and len(job.status["problems"]) >= 1
+    assert run_marks.status("newsjob:mktevents-am", "2026-10-05") != "done"
+    mark = run_marks.read("newsjob:mktevents-am")
+    assert mark["status"] == "running"                              # resumed once its beat is stale
+    db.set_setting("newsjob:mktevents-am", json.dumps({**mark, "beat": 0.0}))
+    web.down = set()
+    job.tick(morning)
+    assert run_marks.status("newsjob:mktevents-am", "2026-10-05") == "done" and not job.all_failed

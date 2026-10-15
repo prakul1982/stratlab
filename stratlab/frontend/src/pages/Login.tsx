@@ -200,10 +200,12 @@ function useDetailsDismiss(ref: React.RefObject<HTMLDetailsElement | null>) {
 /** `section`: scroll there first (the page was opened as /pricing, /faq…). `panel`: the address was /login or /signup, so
  * the way in is open on top of the page. `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
  * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
- * own HTML is the one the page shows (R8V-008). */
-export function Login({ section = null, panel, heading }: { section?: string | null; panel?: "login" | "signup"; heading?: string } = {}) {
+ * own HTML is the one the page shows (R8V-008). `plansOnly`: /plans, the prices on their own page under that heading, not the
+ * whole landing page scrolled down to them: a phone drew the page's top and then jumped about 8,900 px (R22-005). */
+export function Login({ section: asked = null, panel, heading, plansOnly = false }: { section?: string | null; panel?: "login" | "signup"; heading?: string; plansOnly?: boolean } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
+  const section = plansOnly ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
   useLayoutEffect(() => {
@@ -244,7 +246,8 @@ export function Login({ section = null, panel, heading }: { section?: string | n
     <div className="lp">
       <SkipLink />
       <header className="lp-nav">
-        <a href="#top" className="brand" aria-label="StratLab home"><Logo size={46} /></a>
+        <a href={plansOnly ? "/" : "#top"} className="brand" aria-label="StratLab home"><Logo size={46} /></a>
+        {!plansOnly && <>
         <nav aria-label="Sections">
           {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
         </nav>
@@ -255,6 +258,7 @@ export function Login({ section = null, panel, heading }: { section?: string | n
             {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
           </nav>
         </details>
+        </>}
         <button type="button" className="btn outline sm" onClick={go}>Sign in</button>
       </header>
 
@@ -268,6 +272,15 @@ export function Login({ section = null, panel, heading }: { section?: string | n
       )}
 
       <main id="main" tabIndex={-1}>
+      {plansOnly && (
+        <section id="top" className="lp-sec lp-sec-plans">
+          <div className="lp-wrap stack g12">
+            <h1 className="serif lp-h2">{heading ?? "Plans and prices"}</h1>
+            {error && <p className="banner" role="alert">{error}</p>}
+          </div>
+        </section>
+      )}
+      {!plansOnly && <>
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
           <div className="stack g22 lp-hero-copy">
@@ -387,8 +400,11 @@ export function Login({ section = null, panel, heading }: { section?: string | n
         </div>
       </section>
 
+      </>}
+
       <Pricing />
 
+      {!plansOnly && <>
       <section id="faq" className="lp-sec lp-alt">
         <div className="lp-wrap lp-split lp-split-top">
           <Head eyebrow="Questions" title="Good to know.">
@@ -407,6 +423,7 @@ export function Login({ section = null, panel, heading }: { section?: string | n
           {cta("Continue with Google")}
         </div>
       </section>
+      </>}
       </main>
 
       <footer className="lp-foot">

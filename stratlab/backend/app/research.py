@@ -6,13 +6,16 @@ from datetime import datetime, timedelta, timezone
 from .data.calendar import trading_bars
 from .engine import costs as C
 from .engine.core import backtest
-from .engine.verdict import evaluate
+from .engine.verdict import evaluate, with_notes
 
 MAX_POINTS = 240       # chart points kept per experiment
 MAX_TRADES = 200
 KEEP_FULL = 10         # the newest experiments in a notebook keep every trade; older ones keep their last few
 OLD_TRADES = 30
 MIN_BARS = 30
+WARMUP_MIN = 200       # candles of history before the test's first candle, at the least
+WARMUP_CAP = 2000      # ...and at the most (a 500-candle rule on hour candles over 5-minute ones would ask 6,000)
+WARMUP_DAYS_CAP = 520  # days of history for a rule on daily candles over intraday ones, at the most
 
 
 class ResearchError(Exception):
@@ -54,13 +57,14 @@ def clean_upload(raw) -> list[dict]:
 def load(registry, strategy, req) -> dict:
     """Candles and settings for one test. Raises ResearchError for anything the user can fix."""
     tf = strategy.tf
+    need, need_days = warmup_need(strategy)
     if req.bars:
         bars = clean_upload(req.bars)
         inst = upload_instrument(req.upload or _default_meta())
-        start = min(200, len(bars) // 5)
+        start = min(need, len(bars) // 5)
         days = max(1, (parse_t(bars[-1]["t"]) - parse_t(bars[start]["t"])).days)
         return {"inst": inst, "bars": bars, "start": start, "days": days, "max_days": days,
-                "lot": inst["step"], "kind": "flat"}
+                "lot": inst["step"], "kind": "flat", "warmup": need, "warmup_days": need_days}
     if not req.instrument:
         raise ResearchError(400, "no_instrument", "Pick an instrument or upload candles first.")
     prov, inst = registry.resolve(req.instrument)
@@ -73,15 +77,82 @@ def load(registry, strategy, req) -> dict:
     max_days = prov.max_days[tf]
     days = min(req.days, max_days)
     # a weekday market is only ever tested on the days it trades, whatever the feed sent
-    bars = trading_bars(inst.get("market"), prov.history(inst, tf, days + prov.warmup_days(tf)), tf)
+    # history before the test for the longest rule: candles of the test's own timeframe, or days for a daily rule on
+    # intraday candles (10 candles' margin, as the providers' default 210 for 200)
+    extra = prov.warmup_days(tf, need + 10)
+    if need_days:
+        extra = max(extra, prov.warmup_days("1d", need_days + 10))
+    bars = trading_bars(inst.get("market"), prov.history(inst, tf, days + extra), tf)
     bars = closed_only(bars, tf, inst.get("market"))
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     start = next((i for i, b in enumerate(bars) if parse_t(b["t"]) >= cutoff), len(bars))
     if len(bars) - start < 10:
         raise ResearchError(400, "not_enough_data", "Not enough price history for this period. Pick a longer period or another instrument.")
     lot = inst.get("step") or (inst["lot"] if inst.get("fno") else 1)
+    # an Indian F&O stock's stored F&O facts, when a rule reads one: every run loads its candles here (one stock, each
+    # member of a group, the walk-forward and the similar-instruments check)
+    bars = _with_fo(strategy, inst, bars)
     return {"inst": inst, "bars": bars, "start": start, "days": days, "max_days": max_days,
-            "lot": lot, "kind": C.kind_of(inst)}
+            "lot": lot, "kind": C.kind_of(inst), "warmup": need, "warmup_days": need_days}
+
+
+def _ref_len(ref) -> int:
+    """How many of its own candles a rule value needs before it has a value: its longest length (MACD's slow one and
+    its 9-candle signal, Stage's average and slope, ADX's two averages), plus its "candles ago"."""
+    from .engine.indicators import DEFAULTS, params
+    t = ref.t
+    p, m = params(ref)
+    if t.startswith("macd"):
+        n = max(p, int(m or 26)) + 9
+    elif t == "stage":
+        n = p + int(m or 20)
+    elif t == "stoch_k":
+        n = p + int(m or 3)
+    elif t == "adx":
+        n = 2 * p
+    elif DEFAULTS.get(t, (None,))[0]:
+        n = p
+    else:
+        n = 1
+    return n + int(ref.ago or 0)
+
+
+def warmup_need(strategy) -> tuple[int, int]:
+    """Candles of history the rules need before the test's first candle, from the longest length in them (a rule on a
+    higher timeframe counts that timeframe's candles: an hour is four 15-minute candles), at least that plus 20 and
+    never under WARMUP_MIN; and, on intraday candles, the days a rule on daily candles needs (0 when none does)."""
+    from .engine.core import TF_MIN
+    base = TF_MIN[strategy.tf]
+    own = days = 0
+    for c in strategy.all_conds():
+        for ref in (c.l, c.r):
+            if ref.t == "num":
+                continue
+            n = _ref_len(ref)
+            if ref.tf == "1d" and strategy.tf != "1d":
+                days = max(days, n)
+            else:
+                own = max(own, n * max(1, TF_MIN.get(ref.tf or strategy.tf, base) // base))
+    return min(max(WARMUP_MIN, own + 20), WARMUP_CAP), (min(days + 20, WARMUP_DAYS_CAP) if days else 0)
+
+
+def run_notes(strategy, data: dict) -> list[str]:
+    """Facts about how the test was run that bear on its result, each one line for the verdict."""
+    notes = []
+    bars, start, need_days = data["bars"], data["start"], data.get("warmup_days") or 0
+    if need_days and strategy.tf != "1d":
+        got = len({str(b["t"])[:10] for b in bars[:start + 1]}) - 1        # whole days before the test's first candle
+        if got < need_days:
+            notes.append(f"A rule on daily candles needs {need_days} days of history before the test starts; the "
+                         f"{TF_MINUTES_NAME.get(strategy.tf, strategy.tf)} candles available reached back {max(got, 0)} days, so that rule "
+                         f"had no value on the test's first {need_days - max(got, 0)} trading days.")
+    if data.get("kind") == "in_eq" and strategy.tf == "1d" and strategy.side in ("short", "both"):
+        notes.append("Indian shares can be sold short only within the day (intraday); this test held its shorts on daily "
+                     "candles, overnight, which the cash market does not allow.")
+    return notes
+
+
+TF_MINUTES_NAME = {"1h": "1-hour", "15m": "15-minute", "5m": "5-minute"}
 
 
 TF_MINUTES = {"1h": 60, "15m": 15, "5m": 5}
@@ -162,10 +233,12 @@ def run(strategy, data: dict) -> dict:
     bars, start = data["bars"], data["start"]
     bars = _with_fo(strategy, data.get("inst"), bars)
     out = backtest(bars, strategy, start, data["lot"], data["kind"])
-    out["verdict"] = evaluate(bars, strategy, start, out, data["lot"], data["kind"], data["days"], data["max_days"])
+    out["verdict"] = with_notes(evaluate(bars, strategy, start, out, data["lot"], data["kind"], data["days"], data["max_days"]),
+                                run_notes(strategy, data))
     for k in ("_paths", "_split"):           # the checks' working, not part of the result
         out.pop(k, None)
-    out.update({"instrument": data["inst"], "lot": data["lot"], "days": data["days"], "warmup_short": start < 200})
+    need = data.get("warmup") or warmup_need(strategy)[0]
+    out.update({"instrument": data["inst"], "lot": data["lot"], "days": data["days"], "warmup_short": start < need})
     return out
 
 
@@ -228,7 +301,15 @@ def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: 
     max_open = max(1, int(group.get("maxOpen") or len(datasets)))
     go = lambda t_from=None, t_to=None: portfolio.run(datasets, strategy, max_open, t_from, t_to)  # noqa: E731
     base = go()
-    base["verdict"] = evaluate_portfolio(go, base, strategy, days, max_days)
+    # each member's notes once: the first member's line where they differ only in their figures
+    notes: list[str] = []
+    for d in datasets:
+        notes += [n for n in run_notes(strategy, d) if n[:40] not in {x[:40] for x in notes}]
+    if base.get("crowded"):
+        n = base["crowded"]
+        notes.append(f"When more members signalled on the same candle than there were free slots, the members listed first "
+                     f"in the group took them ({n} entr{'y' if n == 1 else 'ies'} found no free slot).")
+    base["verdict"] = with_notes(evaluate_portfolio(go, base, strategy, days, max_days), notes)
     base.pop("_paths", None)
     base["days"], base["max_open"] = days, max_open
     return base
@@ -287,17 +368,48 @@ def _setup(strategy: dict | None) -> dict:
 
 def unchanged(experiments: list[dict], strategy, inst_id: str | None, days: int, now: str) -> int | None:
     """The version of the last experiment when running again would repeat it exactly: the same rules, instrument and
-    period (as asked for, not as capped to what the source holds), run today (on a later day there are newer candles, so that run is a new one). None when something differs."""
+    period (as asked for, not as capped to what the source holds), run today (on a later day there are newer candles, so that run is a new one)
+    and, on intraday candles, with no candle closed since its last one (a 15-minute test rerun an hour later has four
+    more). None when something differs."""
     if not experiments:
         return None
     last = experiments[-1]
     if str(last.get("created_at") or "")[:10] != now[:10]:
+        return None
+    if strategy.tf in TF_MINUTES and _newer_candle(last, strategy.tf, now):
         return None
     if _setup(last.get("strategy")) != _setup(strategy.model_dump()):
         return None
     if (last.get("instrument") or {}).get("id") != inst_id or last.get("req_days", last.get("days")) != days:
         return None
     return last.get("v")
+
+
+def _newer_candle(last: dict, tf: str, now: str) -> bool:
+    """Whether a candle after an intraday experiment's last one has closed by `now`: the next one starts before the
+    market's close that day, and its length (or the close) has passed."""
+    to = (last.get("range") or {}).get("to")
+    try:
+        nxt = parse_t(to) + timedelta(minutes=TF_MINUTES[tf])
+        at = parse_t(now)
+    except (TypeError, ValueError):
+        return False
+    end = nxt + timedelta(minutes=TF_MINUTES[tf])
+    try:
+        from zoneinfo import ZoneInfo
+        from .data.markets import BY_ID
+        m = BY_ID.get((last.get("instrument") or {}).get("market") or "") or {}
+        close = (m.get("hours") or {}).get("close")
+        if close:
+            local = nxt.astimezone(ZoneInfo(m["tz"]))
+            h, mi = (int(x) for x in close.split(":"))
+            at_close = local.replace(hour=h, minute=mi, second=0, microsecond=0)
+            if local >= at_close:
+                return False                     # the last run's candle was the day's last
+            end = min(end, at_close)
+    except (KeyError, ValueError, TypeError):
+        pass
+    return end <= at
 
 
 def period_name(days: int) -> str:

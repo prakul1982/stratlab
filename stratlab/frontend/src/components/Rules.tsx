@@ -34,6 +34,7 @@ function Pop({ label, cls = "", children, title, plain }: { label: ReactNode; cl
 
 const TF_ORDER: Tf[] = ["5m", "15m", "1h", "1d"];
 const HTF_NAME: Record<HigherTf, string> = { "15m": "15-minute candles", "1h": "1-hour candles", "1d": "Daily candles" };
+const HTF_ONE: Record<HigherTf, string> = { "15m": "15-minute", "1h": "1-hour", "1d": "daily" };
 
 /** A number box for the small editors: the kit's Field with its hint behind an (i). */
 function NumField({ label, value, min, max, step, hint, onValid }: { label: string; value: number | string; min?: number; max?: number; step?: number | string; hint?: ReactNode; onValid: (v: number) => void }) {
@@ -73,7 +74,7 @@ function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Re
       )}
       {value.t !== "num" && (
         <Disclosure open={!!(value.ago || value.k || value.tf)} summary="More: earlier candles, multiplier, timeframe">
-          <NumField label="Candles ago" min={0} max={100} value={value.ago ?? 0} hint="0 = this candle. 1 = the one before it."
+          <NumField label="Candles ago" min={0} max={100} value={value.ago ?? 0} hint={value.tf ? `0 = the last ${HTF_ONE[value.tf]} candle that has closed. 1 = the one before it.` : "0 = this candle. 1 = the one before it."}
             onValid={(n) => { if (Number.isInteger(n) && n >= 0 && n <= 100) onChange({ ...value, ago: n || null }); }} />
           <NumField label="Multiply by" min={0.01} max={100} step="0.1" value={value.k ?? 1} hint={'For rules like "the lower wick is more than 1.5 × the body".'}
             onValid={(k) => { if (k > 0 && k <= 100) onChange({ ...value, k: k === 1 ? null : k }); }} />

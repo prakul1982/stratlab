@@ -197,12 +197,12 @@ def _recording(expiry="2026-10-13", taken="2026-10-09T15:39:00+05:30"):
 
 
 def test_with_the_market_shut_the_pcr_table_reads_the_recordings_and_not_the_feed(monkeypatch):
-    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day: _recording())
+    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day, now=None: _recording())
     out = PO.pcr_table(_NoFeed(), _ist("2026-10-09", "19:00"), ("NIFTY", "BANKNIFTY"))
     assert [r["name"] for r in out] == ["NIFTY", "BANKNIFTY"]
     assert all(r["at_close"] and r["source"] == "recorded" and r["pcr_oi"] and r["strikes_read"] == 61 for r in out)
     # an expiry that has passed isn't a current one: that index reads the feed (here offline) instead of an expired chain
-    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day: _recording(expiry="2026-10-08"))
+    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day, now=None: _recording(expiry="2026-10-08"))
     monkeypatch.setattr(PO, "live_chains", lambda od, names, choice, quick=False: {n: None for n in names})
     out = PO.pcr_table(_NoFeed(), _ist("2026-10-10", "11:00"), ("NIFTY",))
     assert out[0]["name"] == "NIFTY" and out[0]["source"] == "recorded" and out[0].get("expiry") == "2026-10-08"
@@ -215,7 +215,7 @@ def test_in_market_hours_todays_recording_answers_while_the_live_chain_is_read_b
     PO._last_live.clear()
     monkeypatch.setattr(PO, "ist_now", lambda: _ist("2026-10-09", "11:00"))
     monkeypatch.setattr(PO, "recorded_last", lambda name, day: [rec])
-    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day: rec)
+    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day, now=None: rec)
     monkeypatch.setattr(PO, "_refresh_behind", lambda od, names, choice: asked.update(behind=list(names)))
     monkeypatch.setattr(PO, "_read_live", lambda *a, **k: pytest.fail("the page waited for a live read"))
     monkeypatch.setattr(PO.time, "time", lambda: _ist("2026-10-09", "11:00").timestamp())

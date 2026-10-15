@@ -30,6 +30,16 @@ const incomeCols: Column<IncomeLine>[] = [
   { key: "amt", header: "Amount", numeric: true, cell: (d) => inr(d.total) },
 ];
 
+/** The button that was pressed is gone once the notice is answered, which drops focus to the top of the page. Put it on the next
+ * notice's first button; else on the Undo beside the adjusted stocks; else on the dividends card; else the page heading. */
+export function focusAfterAnswer(doc: Document = document) {
+  const el = doc.querySelector<HTMLElement>(".ha-notice button:not(:disabled)") ?? doc.querySelector<HTMLElement>(".ha-undo button:not(:disabled)")
+    ?? doc.getElementById("holdings-dividends") ?? doc.querySelector<HTMLElement>("h1");
+  if (!el) return;
+  if (!el.matches("button, a[href], input, select, textarea, [tabindex]")) el.tabIndex = -1;
+  el.focus();
+}
+
 export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onHoldings: (v: V) => void; version: number; onLoaded?: () => void }) {
   const { fail, notify } = useApp();
   const [data, setData] = useState<HoldingsActions | null>(null);
@@ -49,6 +59,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
       setData(r.actions);
       onHoldings(r.holdings);
       notify(done);
+      requestAnimationFrame(() => focusAfterAnswer());
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
 
@@ -58,7 +69,7 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
   return (
     <>
       {data.notices.map((n) => (
-        <Notice key={n.id} role="status" actions={<>
+        <Notice key={n.id} role="status" className="ha-notice" actions={<>
           <button type="button" className="btn sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "apply", `${n.symbol}: quantity ${qtyText(n.to_qty)}${n.to_avg != null ? `, average price ${price(n.to_avg, "INR")}` : ""}.`)}>Apply</button>
           <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => act(n.symbol, n.id, "dismiss", `${n.symbol} kept as it is.`)}>Already in my file</button>
         </>}>
@@ -67,14 +78,14 @@ export function HoldingsActionsPanel<V>({ onHoldings, version, onLoaded }: { onH
         </Notice>
       ))}
       {data.undo.length > 0 && (
-        <p className="k-note">
+        <p className="k-note ha-undo">
           Adjusted for corporate actions: {data.undo.map((u, i) => (
             <span key={u.symbol}>{i > 0 && " · "}{u.symbol} ({u.label}) <button type="button" className="btn quiet sm" disabled={!!busy} onClick={() => act(u.symbol, u.id, "undo", `${u.symbol} is back to ${qtyText(u.qty)} shares.`)}>Undo</button></span>
           ))}
         </p>
       )}
       {(data.ahead.length > 0 || data.received.length > 0) && (
-        <Card>
+        <Card id="holdings-dividends">
           <CardHead title="Dividends" info="Amount a share as the company announced it, times the shares you'd hold on the ex-date. The last 12 months assume you held today's quantity throughout (worked back through any bonus or split), so they're an estimate; amounts are before tax. Tax tools and the ITR export add the same dividends up by financial year (April to March), each in the year of its record date, so their figures are the financial-year ones below, not the rolling twelve months."
             actions={<Link className="link k-small" to="/research/corporate-actions?region=IN">Corporate actions calendar →</Link>} />
           <StatRow>

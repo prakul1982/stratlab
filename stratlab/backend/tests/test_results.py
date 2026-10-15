@@ -386,6 +386,72 @@ def test_follow_up_resumes_after_a_kill_without_doubling(w, monkeypatch):
     assert sorted(sent) == ["u-a", "u-b"]
 
 
+def test_a_crash_in_one_hour_and_a_restart_in_the_next_doesnt_tell_the_same_person_twice(w, monkeypatch):
+    from app import run_marks
+
+    class Killed(BaseException):
+        pass
+
+    watch("u-a", ("IN", "RELIANCE")); watch("u-b", ("IN", "RELIANCE"))
+    filed = notice("Outcome of Board Meeting - Financial Results", "Revenue from operations of Rs 2,35,481 crore", "2026-10-05T16:40",
+                   url="https://nsearchives.nseindia.com/res.pdf", category="results")
+    india = FakeIndia([meeting("RELIANCE", TODAY)], {"RELIANCE": [filed]})
+    R.refresh("IN", {"in": india}, set(), TODAY)
+    sent, kills = [], [1]
+
+    def snd(p, subject, text, url):
+        if "results are out" not in subject:
+            return
+        sent.append(p["id"])
+        if kills:
+            kills.pop()
+            raise Killed()                                           # killed right after the first person's message went out
+    mk = lambda: R.Job(lambda: {"in": india, "us": FakeUS(), "sec": None}, send=snd, can_alert=lambda p: True)
+    with pytest.raises(Killed):
+        mk().tick(datetime(2026, 10, 5, 11, 40, tzinfo=timezone.utc))      # 17:10 IST
+    monkeypatch.setattr(run_marks, "STALE", 0)
+    mk().tick(datetime(2026, 10, 5, 12, 35, tzinfo=timezone.utc))          # 18:05 IST: the next hour has its own run marker
+    assert sorted(sent) == ["u-a", "u-b"]                                  # each told once
+    row = next(r for r in R.load("IN")["rows"] if r["symbol"] == "RELIANCE")
+    assert row["told"] is True and "told_to" not in row
+    mk().tick(datetime(2026, 10, 5, 13, 40, tzinfo=timezone.utc))
+    assert sorted(sent) == ["u-a", "u-b"]
+
+
+def test_a_row_filed_now_carries_told_false_and_a_refresh_keeps_it_and_who_was_told():
+    old = [{**R.row("IN", "BBB", TODAY, "Financial Results"), "out": {"url": "https://x/y.pdf"}, "told": False, "told_to": ["u-a"]}]
+    new = [R.row("IN", "BBB", TODAY, "Financial Results")]
+    (got,) = R.merge(old, new, TODAY - timedelta(days=3), TODAY)
+    assert got["told"] is False and got["told_to"] == ["u-a"] and got["out"] == {"url": "https://x/y.pdf"}
+
+
+def test_who_tracks_what_is_read_once_an_hour_and_only_when_there_is_something_to_tell(w, monkeypatch):
+    from app import run_marks
+    from app.newsletter import content as nc
+    watch("u-a", ("IN", "RELIANCE"), ("US", "AAPL")); watch("u-b", ("IN", "TCS"))
+    calls = []
+    real = nc.my_stocks
+    monkeypatch.setattr(nc, "my_stocks", lambda uid: calls.append(uid) or real(uid))
+    at = datetime(2026, 10, 5, 11, 40, tzinfo=timezone.utc)
+    both = R.trackers(now=at)
+    n = len(calls)
+    assert n >= 2 and both[("IN", "RELIANCE")] == ["u-a"] and set(R.trackers("US", now=at)) == {("US", "AAPL")}
+    assert R.trackers("IN", now=at + timedelta(minutes=15)) and len(calls) == n          # same hour, either region: not read again
+    R.trackers(now=at + timedelta(hours=1))
+    assert len(calls) == 2 * n                                                              # the next hour reads again
+
+    wanted = []
+    who = lambda: wanted.append(1) or both
+    job = R.Job(lambda: {"in": FakeIndia(), "us": FakeUS(), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    R.refresh("IN", {"in": FakeIndia([meeting("RELIANCE", TODAY + timedelta(days=3))])}, set(), TODAY)    # a calendar with nothing today
+    run = run_marks.claim("resultsjob:test", "d")
+    assert job.morning("IN", TODAY, who, run) == 0 and job.follow_up("IN", TODAY, who, run) == 0
+    assert wanted == []                                                                      # nothing to tell: nobody looked up
+    R.refresh("IN", {"in": FakeIndia([meeting("RELIANCE", TODAY)])}, set(), TODAY)
+    job.morning("IN", TODAY, who, run)
+    assert wanted == [1]
+
+
 def test_results_and_corp_actions_refresh_only_run_on_the_leader(w, monkeypatch):
     from app import admin
     c = w["client"]
@@ -416,3 +482,33 @@ def test_a_reported_loss_per_share_reads_minus_dollar_not_dollar_minus():
     got = R.reported({"epsActual": -0.35, "revenueActual": 2_500_000})
     assert got[0] == {"label": "EPS", "value": "-$0.35"}
     assert R.reported({"epsActual": -0.001})[0]["value"] == "$0.00"
+
+
+def test_a_refresh_that_read_nothing_is_an_error_and_keeps_its_slot_free(w):
+    from app import admin_jobs
+    job = R.Job(lambda: {"in": FakeIndia(down=True), "us": FakeUS(down=True), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    job.tick(IN_MORNING)                                          # 08:15 IST: the 07:15 slot; US 06:00 slot is at 22:45 UTC
+    assert job.status["last_error"] and "IN:" in job.status["last_error"]
+    assert job.status["last_run"] and job.status["problems"]
+    row = admin_jobs._row("results", "Results calendar", "", job.status["last_run"], job.status["last_error"], admin_jobs._problems(job.status))
+    assert row["state"] == "bad" and row["error"]
+    assert db.get_setting("resultsjob:refresh-IN-07:15") is None and "refresh-IN-07:15" not in job.last      # the slot is not used up
+    asked = []
+
+    class Back(FakeIndia):
+        def board_meetings(self, f, t):
+            asked.append(1)
+            return super().board_meetings(f, t)
+    job.sources = lambda: {"in": Back(), "us": FakeUS(), "sec": None}
+    job.tick(IN_MORNING + timedelta(minutes=10))
+    assert not asked                                              # it waits half an hour, not on every five-minute check
+    later = IN_MORNING + timedelta(minutes=R.RETRY_MINUTES + 1)
+    job.tick(later)
+    assert asked and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"
+    assert job.status["last_error"] is None and "IN" not in job.down
+
+
+def test_a_refresh_that_read_is_not_an_error_and_uses_its_slot(w):
+    job = R.Job(lambda: {"in": FakeIndia([meeting("RELIANCE", TODAY)]), "us": FakeUS(), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    job.tick(IN_MORNING)
+    assert job.status["last_error"] is None and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"

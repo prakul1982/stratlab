@@ -2,6 +2,7 @@
 receipts that always go, the hourly sweep, Admin's preview and test send; and the first-steps checklist on Home."""
 import json
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from html import escape
 
@@ -171,6 +172,46 @@ def test_a_failed_send_is_tried_again(w, monkeypatch):
     assert len(got) == 1
 
 
+def test_a_failing_tip_is_given_up_after_three_attempts(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    tries = []
+
+    def down(*a, **k):
+        tries.append(1)
+        raise RuntimeError("Brevo refused the email (500).")
+    monkeypatch.setattr(alerts, "send_email", down)
+    p = user()
+    for h in range(6):
+        assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=h))
+    assert len(tries) == lifecycle.TIP_TRIES == 3
+    assert "welcome" not in lifecycle.sent(p["id"])                                    # never sent, and no longer tried
+    assert lifecycle.due(p, NOW + timedelta(hours=6), lifecycle.sent(p["id"]), None, None) == []
+    assert lifecycle.sweep(NOW + timedelta(hours=7)) == 0 and len(tries) == 3
+    monkeypatch.setattr(alerts, "send_email", lambda *a, **k: tries.append("late"))
+    assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=8)) and "late" not in tries
+
+
+def test_a_tip_that_fails_once_still_goes_on_the_next_try_and_counts_no_more(w, monkeypatch):
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    calls = []
+    def flaky(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("timed out")
+    monkeypatch.setattr(alerts, "send_email", flaky)
+    p = user()
+    assert not lifecycle.send(p, "welcome", now=NOW) and lifecycle.send(p, "welcome", now=NOW + timedelta(hours=1))
+    assert not lifecycle.send(p, "welcome", now=NOW + timedelta(hours=2)) and len(calls) == 2
+
+
+def test_the_whats_new_note_has_a_window_after_14_quiet_days(w):
+    p = user(created=NOW - timedelta(days=200))
+    today = NOW.astimezone(IST).date()
+    quiet = lambda n: kinds(lifecycle.due(p, NOW, {}, (today - timedelta(days=n)).isoformat(), None))
+    assert quiet(14) == ["inactive"] and quiet(lifecycle.INACTIVE_UNTIL - 1) == ["inactive"]
+    assert quiet(lifecycle.INACTIVE_UNTIL) == [] and quiet(200) == []                  # long gone: not sent as news now
+
+
 def test_a_failed_receipt_or_plan_note_is_retried_by_the_sweep(w, monkeypatch):
     monkeypatch.setattr(alerts, "email_ready", lambda: True)
     got = []
@@ -316,6 +357,31 @@ def test_dates_in_reminders(w):
         lifecycle.build("nope", {})
 
 
+def test_a_launch_offer_ending_at_midnight_names_the_day_it_ends(w):
+    midnight = datetime(2026, 10, 22, 18, 30, tzinfo=timezone.utc)                   # 00:00 IST on Fri 23 Oct
+    for kind in ("promo_before", "promo_end"):
+        _, _, text = lifecycle.build(kind, {}, {"last_day": date(2026, 10, 22), "end": midnight})
+        assert "It ends at the end of Thu 22 Oct (India time)." in text and "12:00 am" not in text and "23 Oct" not in text
+
+
+def test_a_plan_that_ended_says_free_only_when_the_account_is_on_free(w, outbox):
+    p = {"id": "u", "email": "x@example.com"}
+    _, _, text = lifecycle.build("plan_ended", p, {"plan": "pro"})
+    assert "your account is on the Free plan now" in text
+    plans._promo.update(read_at=time.monotonic(), until=datetime(2100, 1, 1, tzinfo=timezone.utc))      # the launch offer is on
+    subject, _, text = lifecycle.build("plan_ended", p, {"plan": "pro"})
+    assert subject == "Your StratLab subscription has stopped"
+    assert "Your Pro subscription has stopped." in text and "launch offer" in text and "Free plan" not in text
+
+
+def test_the_plan_ended_note_reads_the_account_after_the_subscription_ended(w, outbox):
+    """The webhook hands over the profile as it was before the plan was set to Free: the note reads it again."""
+    p = user(plan="pro", plan_status="active")
+    db.update_profile(p["id"], plan="free", plan_status="cancelled")
+    assert lifecycle.plan_ended(p, "sub_1", "pro")
+    assert outbox[-1]["subject"] == "Your StratLab plan has changed to Free" and "Free plan now" in outbox[-1]["text"]
+
+
 # ---------- the schedule ----------
 def test_job_sweeps_hourly_in_india_daytime_only(w, outbox, monkeypatch):
     calls = []
@@ -344,7 +410,7 @@ def test_sweep_end_to_end_with_trial_and_offer(w, outbox):
     user("u-p", "p@example.com", NOW - timedelta(days=40))
     lifecycle.sweep(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc))
     assert [m["subject"] for m in outbox if m["to"] in ("p@example.com", "t@example.com")] == ["The launch offer ends tomorrow"] * 2
-    assert "ends on Tue 3 Nov at 12:00 am IST." in outbox[0]["text"]
+    assert "ends at the end of Mon 2 Nov (India time)." in outbox[0]["text"]
     lifecycle.sweep(datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc))
     assert len([m for m in outbox if m["to"] == "p@example.com"]) == 1
     lifecycle.sweep(datetime(2026, 11, 2, 5, 0, tzinfo=timezone.utc))

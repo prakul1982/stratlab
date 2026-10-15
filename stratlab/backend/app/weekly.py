@@ -37,7 +37,7 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         plan_lines = [f"- Paying: {words(st['paying'])}", f"- Given by the owner, not paying: {words(st.get('given'))}"]
     else:
         plan_lines = [f"- Paid: {words(st['paid'])}"]
-    lines = [f"StratLab, {since:%d %b} to {now:%d %b %Y}", "",
+    lines = [f"StratLab, {since.day} {since:%b} to {now.day} {now:%b %Y}", "",
              "Users",
              f"- {st['new']} new this week, {st['users']} in all",
              *plan_lines,

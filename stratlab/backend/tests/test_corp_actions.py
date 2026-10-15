@@ -334,6 +334,23 @@ def test_announcements_survive_one_bad_profile_and_resume_after_a_kill(w, monkey
     assert [uid for uid, *_ in out] == [sent[1]]
 
 
+def test_the_evening_and_announce_runs_look_up_who_tracks_only_when_they_have_something_to_tell(w):
+    from app import run_marks
+    watch("u-pro", ("IN", "TCS"))
+    C.refresh("IN", {"in": FakeIndia([nse("TCS", "Interim Dividend - Rs 11 Per Share", TODAY + timedelta(days=5))])}, set(), TODAY)
+    for r in (rows := C.load("IN")["rows"]):
+        r.pop("fresh", None)
+    C.save("IN", rows)
+    wanted = []
+    who = lambda: wanted.append(1) or {("IN", "TCS"): ["u-pro"]}
+    job, sent = job_with()
+    run = run_marks.claim("corpactjob:test", "d")
+    assert job.eve("IN", TODAY, who, run) == 0 and job.announce("IN", TODAY, who, run) == 0
+    assert wanted == [] and sent == []                                     # no ex-date tomorrow, nothing new: nobody looked up
+    C.refresh("IN", {"in": FakeIndia([nse("TCS", "Interim Dividend - Rs 11 Per Share", TODAY + timedelta(days=1))])}, set(), TODAY)
+    assert job.eve("IN", TODAY, who, run) == 1 and wanted == [1]
+
+
 def test_the_evening_before_an_ex_date_and_friday_for_monday(w):
     watch("u-pro", ("IN", "TCS"), ("IN", "RELIANCE"))
     C.refresh("IN", {"in": FakeIndia([nse("TCS", "Interim Dividend - Rs 11 Per Share", TODAY + timedelta(days=1)),
@@ -451,3 +468,19 @@ def test_a_bonus_scales_the_parts_per_account_and_undo_restores_them():
     assert done["qty"] == 30 and done["accts"] == {"NSDL": 20, "CDSL": 10}
     back = C.undo(done)
     assert back["qty"] == 15 and back["accts"] == {"NSDL": 10, "CDSL": 5}
+
+
+def test_a_refresh_that_read_nothing_is_an_error_and_not_done(w):
+    from app import run_marks
+    job, sent = job_with(FakeIndia(down=True), FakeUS())
+    job.tick(datetime(2026, 10, 5, 2, 0, tzinfo=timezone.utc))          # 07:30 IST: the morning refresh
+    assert job.status["last_error"] and "IN:" in job.status["last_error"] and job.status["last_run"]
+    mark = run_marks.read("corpactjob:refresh-IN-07:20")
+    assert mark["status"] == "running"                                  # never marked done: resumed once its beat is stale
+    assert sent == []
+    # the beat goes stale: the next pass takes the run up again, and a good read finishes it and clears the error
+    db.set_setting("corpactjob:refresh-IN-07:20", json.dumps({**mark, "beat": 0.0}))
+    job.sources = lambda: {"in": FakeIndia([nse("INFY", "Dividend - Rs 2 Per Share", TODAY + timedelta(days=9))]), "us": FakeUS()}
+    job.tick(datetime(2026, 10, 5, 2, 30, tzinfo=timezone.utc))
+    assert run_marks.read("corpactjob:refresh-IN-07:20")["status"] == "done"
+    assert job.status["last_error"] is None

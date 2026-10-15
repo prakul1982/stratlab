@@ -1167,9 +1167,9 @@ def test_ibkr_disconnect_deletes_the_token_and_keeps_what_was_read(w, flex):
 
 
 def test_ibkr_fifo_pairs_shorts_and_partial_fills():
-    fs = [{"id": "a", "sym": "X", "side": "S", "qty": 10, "price": 50.0, "d": "2026-01-01", "t": "10:00:00", "fee": 1.0},
-          {"id": "b", "sym": "X", "side": "B", "qty": 4, "price": 40.0, "d": "2026-01-02", "t": "10:00:00", "fee": 0.4},
-          {"id": "c", "sym": "X", "side": "B", "qty": 6, "price": 45.0, "d": "2026-01-03", "t": "10:00:00", "fee": 0.6}]
+    fs = [{"id": "a", "sym": "X", "side": "S", "qty": 10, "price": 50.0, "d": "2026-01-01", "t": "10:00:00", "fee": 1.0, "oc": "O"},
+          {"id": "b", "sym": "X", "side": "B", "qty": 4, "price": 40.0, "d": "2026-01-02", "t": "10:00:00", "fee": 0.4, "oc": "C"},
+          {"id": "c", "sym": "X", "side": "B", "qty": 6, "price": 45.0, "d": "2026-01-03", "t": "10:00:00", "fee": 0.6, "oc": "C"}]
     got = ibkr.closed_trades(fs)
     assert [(t["side"], t["qty"], t["entry"], t["exit"]) for t in got] == [("short", 4.0, 50.0, 40.0), ("short", 6.0, 50.0, 45.0)]
     assert sum(t["charges"] for t in got) == pytest.approx(2.0)
@@ -1185,11 +1185,57 @@ def test_ibkr_fifo_counts_a_split_between_the_buy_and_the_sale():
                          '<CorporateAction assetCategory="STK" symbol="X" type="TC" dateTime="20260110;202500" actionDescription="X MERGED"/>'
                          '</CorporateActions></FlexStatement>')
     sp = ibkr.splits(root)
-    assert sp == {"X": [("2026-02-10", 4.0)]}
+    assert sp == {"X": [("2026-02-11", 4.0)]}                         # the day it takes effect (reportDate)
     assert [(t["side"], t["qty"], t["entry"], t["exit"]) for t in ibkr.closed_trades(fs, sp)] == [("long", 40.0, 100.0, 110.0)]
     assert sum(t["charges"] for t in ibkr.closed_trades(fs, sp)) == pytest.approx(5.0)
     assert ibkr.closed_trades(fs, sp) == ibkr.closed_trades(fs, sp) and ibkr.closed_trades(fs)[0]["qty"] == 10.0     # without the data, as before
     assert ibkr.closed_trades(fs, {"X": [("2026-03-02", 4.0)]})[0]["qty"] == 10.0                  # a split after the sale changes nothing
+
+
+SPLIT_FS = [{"id": "a", "sym": "X", "side": "B", "qty": 10, "price": 400.0, "d": "2026-01-01", "t": "10:00:00", "fee": 0.0},
+            {"id": "b", "sym": "X", "side": "S", "qty": 5, "price": 400.0, "d": "2026-02-10", "t": "10:00:00", "fee": 0.0},
+            {"id": "c", "sym": "X", "side": "S", "qty": 20, "price": 110.0, "d": "2026-03-01", "t": "10:00:00", "fee": 0.0}]
+
+
+def split_action(attrs: str) -> str:
+    return (f'<CorporateActions><CorporateAction assetCategory="STK" symbol="X" type="FS" {attrs} '
+            'actionDescription="X(US0000000001) SPLIT 4 FOR 1 (X, X INC, US0000000001)"/></CorporateActions>')
+
+
+@pytest.mark.parametrize("attrs", ['dateTime="20260210;202500" reportDate="20260211"', 'dateTime="20260210;202500"',
+                                   'reportDate="20260211"'])
+def test_ibkr_a_fill_on_the_day_a_split_is_booked_is_in_the_old_shares(attrs):
+    # IBKR books the split the evening before it takes effect: that day's sale is at the old price, of the old shares
+    sp = ibkr.splits(ET.fromstring(f"<FlexStatement>{split_action(attrs)}</FlexStatement>"))
+    assert sp == {"X": [("2026-02-11", 4.0)]}
+    got = ibkr.closed_trades(SPLIT_FS, sp)
+    assert [(t["xd"], t["qty"], t["entry"], t["exit"]) for t in got] == [("2026-02-10", 5, 400.0, 400.0), ("2026-03-01", 20, 100.0, 110.0)]
+    # a fill on the day it takes effect is in the new shares
+    fs = SPLIT_FS[:1] + [{**SPLIT_FS[2], "d": "2026-02-11", "qty": 40}]
+    assert [(t["qty"], t["entry"]) for t in ibkr.closed_trades(fs, sp)] == [(40, 100.0)]
+
+
+def test_ibkr_trades_read_before_a_split_was_counted_are_replaced_not_doubled(w, flex):
+    trades = ("<Trades>" + "".join(
+        f'<Trade assetCategory="STK" symbol="X" currency="USD" buySell="{s}" quantity="{q}" tradePrice="{p}" tradeDate="{d}" '
+        f'dateTime="{d};100000" ibCommission="0" tradeID="{i}"/>'
+        for s, q, p, d, i in (("BUY", 10, 400, "20260105", "X1"), ("SELL", -40, 110, "20260301", "X2"))) + "</Trades>")
+    action = split_action('dateTime="20260210;202500" reportDate="20260211"')
+    root = ET.fromstring(f"<FlexQueryResponse><FlexStatements><FlexStatement>{trades}{action}</FlexStatement></FlexStatements></FlexQueryResponse>")
+    # what an earlier read saved without the split: 10 shares from 400 to 110; and two trades the statement doesn't cover
+    ibkr.save_trades(PRO_ID, ibkr.closed_trades(ibkr.fills(root)))
+    older = {"id": "ibolder", "sym": "X", "segment": "us", "side": "long", "ed": "2025-06-02", "xd": "2025-07-01", "qty": 3,
+             "entry": 300.0, "exit": 320.0, "charges": 0.0, "via": "ibkr"}
+    other = {**older, "id": "ibother", "sym": "Y", "ed": "2026-01-06", "xd": "2026-03-02"}
+    j = journal.load(PRO_ID)
+    j["manual"] += [older, other]
+    journal.save(PRO_ID, j)
+    got = ibkr.ingest(PRO_ID, root)
+    mine = sorted(((m["sym"], m["ed"], m["qty"], m["entry"], m["exit"]) for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"))
+    assert mine == [("X", "2025-06-02", 3, 300.0, 320.0), ("X", "2026-01-05", 40, 100.0, 110.0), ("Y", "2026-01-06", 3, 300.0, 320.0)]
+    assert got["trades_added"] == 1
+    assert ibkr.ingest(PRO_ID, root)["trades_added"] == 0                       # read again: nothing changes
+    assert len([m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]) == 3
 
 
 # ---------- EPF, NPS, AIS ----------
@@ -1405,3 +1451,103 @@ def test_an_account_whose_key_changes_is_not_counted_twice(first, second):
 def test_different_ids_of_one_depository_stay_two_accounts():
     assert not sync.same_account("NSDL:abc", "NSDL:def") and sync.same_account("CDSL", "CDSL:x")
     assert not sync.same_account("NSDL", "CDSL:x")
+
+
+# ---------- review round 3: parsers and connections ----------
+def test_a_mail_that_could_not_be_read_yet_is_read_when_sent_again(w, brevo):
+    c = w["client"]
+    brevo["tok1"] = nsdl()
+    body = brevo_body([address_of(c)], [("cas.pdf", "tok1")], mid="same")
+    post(c, body)
+    assert state.section(PRO_ID, "inbox")["last"]["status"] == "no_password"
+    assert "same" not in (state.section(PRO_ID, "inbox").get("seen") or [])                  # a retryable outcome is not "seen"
+    c.put("/connect/inbox/password", headers=PRO, json={"password": PAN})
+    post(c, body)                                                                             # the same mail, sent again
+    assert state.section(PRO_ID, "inbox")["last"]["status"] == "ok" and {i["symbol"] for i in holdings.load(PRO_ID)["items"]} == {"INFY", "ITC"}
+    assert "same" in state.section(PRO_ID, "inbox")["seen"]
+    n = len(brevo["calls"])
+    post(c, body)
+    assert len(brevo["calls"]) == n                                                           # now it is read once
+
+
+def test_a_mail_with_a_permanent_result_is_marked_seen(w, brevo):
+    c = w["client"]
+    c.put("/connect/inbox/password", headers=PRO, json={"password": PAN})
+    brevo["t"] = b"%PDF-1.4 junk"
+    post(c, brevo_body([address_of(c)], [("x.pdf", "t")], mid="junk"))
+    assert state.section(PRO_ID, "inbox")["last"]["status"] == "not_a_statement" and "junk" in state.section(PRO_ID, "inbox")["seen"]
+
+
+def ais_line(**kw):
+    return {"d": "2025-06-12", "sym": "ALPHA", "name": "Alpha Industries Ltd", "amount": 1200.0, "tds": None, "cur": "INR", "src": "AIS", "isin": "", **kw}
+
+
+def test_confirmed_ais_lines_must_be_numbers_and_always_keep_their_source(w, on):
+    c = w["client"]
+    for bad in ({"amount": "lots"}, {"tds": "abc"}, {"amount": None}, {"amount": True}, {"amount": "-5"}, {"tds": "1e999"}):
+        r = c.post("/connect/docs/confirm", headers=PRO, json={"kind": "ais", "figures": {"fy": 2025, "tds": 5}, "apply_tds": True, "lines": [ais_line(**bad)]})
+        assert r.status_code == 400, bad
+    assert divs.load(PRO_ID)["rows"] == [] and adv.load(PRO_ID)["years"].get(2025) is None          # nothing was saved
+    sent = ais_line(amount="1,200.50", tds="120", src="statement", cur="USD", isin="INE000A01010")
+    assert c.post("/connect/docs/confirm", headers=PRO, json={"kind": "ais", "figures": {"fy": 2025}, "lines": [sent]}).status_code == 200
+    got = divs.load(PRO_ID)["rows"]
+    assert [(r["amount"], r["tds"], r["src"], r["cur"], r["isin"]) for r in got] == [(1200.5, 120.0, "AIS", "INR", "")]
+
+
+def test_ais_lines_do_not_add_to_a_year_the_brokers_sheet_covers(w, on):
+    c = w["client"]
+    divs.add(PRO_ID, [{**ais_line(sym="ALPHA", src="statement")}], "tax.xlsx", "statement")
+    c.post("/connect/docs/confirm", headers=PRO, json={"kind": "ais", "figures": {"fy": 2025}, "lines": [ais_line(sym="ALPHA INDUSTRIES LTD")]})
+    assert len(divs.load(PRO_ID)["rows"]) == 2                                                    # both kept, with their sources
+    y = next(y for y in c.get("/money/dividends", headers=PRO).json()["years"] if y["fy"] == 2025)
+    assert y["total"] == 1200.0 and y["ais_set_aside"] == 1 and "AIS" in y["ais_note"]
+
+
+def test_a_zerodha_read_without_holdings_keeps_what_was_read_before(w, kite):
+    c = w["client"]
+    kite_login(c)
+    before = {i["symbol"] for i in holdings.load("u-admin")["items"]}
+    assert before >= {"INFY", "ITC", "TCS"}
+    FakeKite.holdings_rows = []                                                                    # the holdings call answered with nothing
+    FakeKite.positions_rows = [{"tradingsymbol": "TCS", "exchange": "NSE", "product": "CNC", "quantity": 4, "average_price": 3400.0}]
+    assert c.post("/connect/kite/refresh", headers=ADMIN).status_code == 200
+    assert {i["symbol"] for i in holdings.load("u-admin")["items"]} == before                       # today's position alone took nothing out
+    assert "no holdings" in state.section("u-admin", "kite")["detail"]
+
+
+def test_deleting_everything_deletes_a_waiting_zerodha_login_too(w, kite, monkeypatch):
+    monkeypatch.setattr(settings, "KITE_MULTIUSER_APPROVED", True)
+    c = w["client"]
+    kite_back(c, kite_state(c, PRO))                                                               # finished at Zerodha, not yet confirmed
+    other = kite_state(c, BASIC)
+    kite_back(c, other)
+    assert len(db.all_settings_with_prefix(kite_user.PENDING)) == 2
+    assert c.delete("/connect", headers=PRO).json() == {"deleted": True}
+    left = [db.json_value(v, {}).get("uid") for _, v in db.all_settings_with_prefix(kite_user.PENDING)]
+    assert left == [BASIC_ID]                                                                      # theirs only
+
+
+FLEX_LEVELS = """<FlexQueryResponse><FlexStatements><FlexStatement>
+<OpenPositions>
+<OpenPosition assetCategory="STK" symbol="AAPL" currency="USD" position="10" costBasisPrice="150" levelOfDetail="SUMMARY"/>
+<OpenPosition assetCategory="STK" symbol="AAPL" currency="USD" position="4" costBasisPrice="140" levelOfDetail="LOT"/>
+<OpenPosition assetCategory="STK" symbol="AAPL" currency="USD" position="6" costBasisPrice="156.6667" levelOfDetail="LOT"/>
+</OpenPositions>
+<Trades>
+<Trade assetCategory="STK" symbol="AAPL" currency="USD" buySell="BUY" quantity="10" tradePrice="150" tradeDate="20260105" dateTime="20260105;103000" tradeID="T1" levelOfDetail="EXECUTION" openCloseIndicator="O"/>
+<Trade assetCategory="STK" symbol="AAPL" currency="USD" buySell="SELL" quantity="-10" tradePrice="180" tradeDate="20260210" dateTime="20260210;143000" tradeID="T2" levelOfDetail="EXECUTION" openCloseIndicator="C"/>
+<Trade assetCategory="STK" symbol="AAPL" currency="USD" buySell="SELL" quantity="-10" tradePrice="180" tradeDate="20260210" dateTime="20260210;143000" tradeID="T2" levelOfDetail="CLOSED_LOT" openDateTime="20260105;103000"/>
+<Trade assetCategory="STK" symbol="TSLA" currency="USD" buySell="SELL" quantity="-5" tradePrice="200" tradeDate="20260120" dateTime="20260120;143000" tradeID="T4" levelOfDetail="EXECUTION" openCloseIndicator="C"/>
+<Trade assetCategory="STK" symbol="TSLA" currency="USD" buySell="BUY" quantity="5" tradePrice="180" tradeDate="20260220" dateTime="20260220;143000" tradeID="T5" levelOfDetail="EXECUTION" openCloseIndicator="O"/>
+</Trades></FlexStatement></FlexStatements></FlexQueryResponse>"""
+
+
+def test_ibkr_counts_each_position_and_trade_once_whatever_the_levels_of_detail(w, monkeypatch, on):
+    monkeypatch.setattr(ibkr, "transport", flex_transport(FLEX_LEVELS))
+    monkeypatch.setattr(ibkr, "sleep", lambda s: None)
+    monkeypatch.setattr(sync.deps, "us_find", lambda s: {"symbol": s, "name": s})
+    r = connect_ibkr(w["client"])
+    assert r.status_code == 200, r.text
+    assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]} == {"AAPL": 10}
+    trades = [m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]
+    assert [(t["sym"], t["qty"], t["side"]) for t in trades] == [("AAPL", 10.0, "long")]            # TSLA's sale before the window is no short

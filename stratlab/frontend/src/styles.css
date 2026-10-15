@@ -186,7 +186,7 @@ a.link { margin-inline: -2px; }
 .space-switch { display: grid; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 8px; background: var(--chip); }
 .space-switch button { height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font: 500 13px var(--sans); color: var(--ink-2); }
 .space-switch button:hover { color: var(--ink); }
-.space-switch button[aria-checked="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
+.space-switch button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .1); }
 .space-switch button:focus-visible { outline-offset: 0; }
 
 .side-groups { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; padding: 4px 12px 28px;
@@ -604,6 +604,7 @@ td.num, .num { font-family: var(--sans); }
 /* sections */
 /* a section scrolled to (/pricing, /faq) starts below the sticky header, about 71 px tall on a phone (R12-008) */
 .lp-sec { padding: clamp(48px, 6vw, 80px) 0; scroll-margin-top: 76px; }
+.lp-sec.lp-sec-plans { padding-bottom: 0; }
 .lp-alt { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }

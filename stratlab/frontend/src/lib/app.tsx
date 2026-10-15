@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
+import { signOutHere } from "./signout";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
@@ -127,7 +128,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
 
   useEffect(() => {
     setApiHandlers({
-      unauthorized: () => { supabase.auth.signOut(); },
+      unauthorized: () => { void signOutHere(supabase.auth); },
       offline: () => setDataOffline(true),
     });
     // a saved sign-in that can't be renewed right now (no answer) comes back as "no session" with the saved one kept: ask

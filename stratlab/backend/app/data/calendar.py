@@ -101,8 +101,9 @@ def auto_status(market: str = "IN") -> dict:
 
 
 def refresh_from_exchange(fetch, market: str = "IN") -> dict:
-    """Fetch the exchange's holiday list and keep it (added to what was fetched before, so past years stay).
-    `fetch()` returns ISO dates. A failure is recorded and the last good list kept."""
+    """Fetch the exchange's holiday list and keep it. Its days replace the days kept for the span it covers (a holiday
+    the exchange moved or withdrew drops off), and the days before and after that span stay (past years). `fetch()`
+    returns ISO dates. A failure, or an empty answer, is recorded and the last good list kept."""
     import json
     from datetime import datetime, timezone
     from .. import db
@@ -110,11 +111,14 @@ def refresh_from_exchange(fetch, market: str = "IN") -> dict:
     now = datetime.now(timezone.utc).isoformat()
     try:
         got = [d for d in fetch() if _iso(d)]
+        if not got:
+            raise ValueError("The exchange's holiday list came back empty.")
     except Exception as e:
         state = {**prev, "error": str(e)[:200], "tried_at": now}
         db.set_setting(AUTO + market, json.dumps(state))
         return state
-    days = sorted(set(prev.get("days") or []) | set(got))
+    lo, hi = min(got), max(got)
+    days = sorted({d for d in prev.get("days") or [] if not lo <= d <= hi} | set(got))
     state = {"days": days, "at": now, "tried_at": now, "error": None, "latest": max(got)}
     db.set_setting(AUTO + market, json.dumps(state))
     _extra.pop(market, None)

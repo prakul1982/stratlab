@@ -3,7 +3,9 @@
 Each member has its own engine and candles, fed by live ticks (India) or polled closed candles
 (every other market). As in the group backtest, a new trade only opens while a position slot is
 free, and the daily loss cap counts the whole group: when the day's loss reaches it, every open
-position is closed and nothing new opens until the next day."""
+position is closed and nothing new opens until the next day. As in the group backtest, the day's loss is what
+closed today plus the open positions from the previous close (from the entry if opened today): a loss carried in
+from yesterday is not today's."""
 import copy
 import threading
 import time
@@ -13,7 +15,7 @@ from datetime import datetime
 from . import risk
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import Ctx, Engine, write_off
+from .engine.core import TF_MIN, Ctx, Engine, write_off
 from .engine.portfolio import _cash
 from .kite_service import IST, KiteService
 from .live import (CandleBuilder, _closed, _ts, candle_end, close_at_auction, day_close_minutes, drop_forming, official_close,
@@ -153,7 +155,7 @@ class GroupLiveSession:
         self.day = state.get("day")
         self.halted = state.get("halted", False)
         self.emptied_on: str | None = state.get("emptied_on")      # the day the account reached zero: nothing opens after it
-        self.day_start_realised = state.get("day_start_realised", 0.0)
+        self.day_start_corp = state.get("day_start_corp", self.corp_cash)       # the pot's corporate-action cash when the day began
         self.equity_curve: list[dict] = state.get("equity_curve", [])
         self.day_equity: dict = state.get("day_equity") or {}      # each day's closing equity, beyond the curve (R8B-002)
         self.prov = mgr.markets.provider(self.market) if mgr.markets else None
@@ -246,6 +248,14 @@ class GroupLiveSession:
         """The open positions' P&L at their last prices, those kept as saved at their last saved price."""
         return sum(m.open_pnl() for m in self.members) + sum(_saved_open(st)[0] for st in self.waiting.values())
 
+    def today(self) -> float:
+        """The day's P&L, as the group backtest counts it: each member's engine says what closed today and what its open
+        position made today (from the previous close if carried in from an earlier day). A member with no candle yet
+        today, or kept as saved, has the day's part of its saved state; the cash corporate actions paid today is in too."""
+        return (self.corp_cash - self.day_start_corp
+                + sum(m.engine.day_pnl + m.engine.day_open_pnl(m.last_price) for m in self.members if m.engine.day == self.day)
+                + sum(_saved_today(st, self.day) for st in self.waiting.values()))
+
     def equity(self) -> float:
         cap = self.strategy.risk.capital
         return max(cap + self.realised() + self.open_pnl(), 0.0)
@@ -269,7 +279,7 @@ class GroupLiveSession:
         day = str(c["t"])[:10]
         if self.day is None or day > self.day:      # a member catching up late on older candles doesn't turn the day back
             self.day, self.halted = day, False
-            self.day_start_realised = self.realised()
+            self.day_start_corp = self.corp_cash
         m.corp_day(day)
         m.bars.append(c)
         if len(m.bars) > 600:
@@ -277,13 +287,12 @@ class GroupLiveSession:
         if m.corp.waiting:
             m.corp.on_bar(m.bars)
         m.last_price = c["c"]
-        ctx = Ctx(m.bars, intraday=self.tf != "1d")
+        ctx = Ctx(m.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
         new = m.engine.step(m.bars, ctx, len(m.bars) - 1)
         for ev in new:                         # the candle's own orders first, then the cap's or the emptied account's closes
             self.mgr.on_order(self, {**ev, "sym": m.sym})
         if self.loss_cap and not self.halted:
-            today = self.realised() - self.day_start_realised + self.open_pnl()
-            if today <= -self.loss_cap:
+            if self.today() <= -self.loss_cap:
                 for x in self.members:
                     if x.engine.qty > 0:
                         bar = x.bars[-1]
@@ -356,7 +365,7 @@ class GroupLiveSession:
         return {"members": {**self.waiting, **{m.inst["id"]: {**m.engine.dump(), **m.corp.dump(), "skips": m.skips, "last_price": m.last_price, "symbol": m.sym,
                                            "last_bar_t": m.bars[-1]["t"]}      # a restart catches up from here
                             for m in self.members}}, "day": self.day, "halted": self.halted, "emptied_on": self.emptied_on,
-                "day_start_realised": self.day_start_realised, "equity_curve": self.equity_curve,
+                "day_start_corp": self.day_start_corp, "equity_curve": self.equity_curve,
                 "day_equity": self._days(), "corp_cash": self.corp_cash}
 
     def final_state(self, now: datetime | None = None) -> dict:
@@ -402,7 +411,7 @@ class GroupLiveSession:
                 "bars": [], "overlays": {}, "oscillators": {},
                 "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
                             "unrealised": self.open_pnl(), "open": open_n, "max_open": self.max_open,
-                            "halted": self.halted, "emptied_on": self.emptied_on, "today": self.realised() - self.day_start_realised + self.open_pnl(),
+                            "halted": self.halted, "emptied_on": self.emptied_on, "today": self.today(),
                             "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0),
                             "skipped": {k: sum(m.skips[k] for m in self.members) for k in ("spread", "price")}},
                 "fast": self.fast,
@@ -418,6 +427,16 @@ def _saved_open(m: dict) -> tuple[float, bool]:
     if qty <= 0:
         return 0.0, False
     return d * qty * ((px or m.get("entry") or 0) - (m.get("entry") or 0)) - (m.get("entry_cost") or 0), not px
+
+
+def _saved_today(m: dict, day: str | None) -> float:
+    """A saved member's P&L for `day`: what it closed that day, and its open position from the saved previous close (the
+    entry if opened that day) at its last saved price. Nothing if it had no candle that day."""
+    if m.get("day") != day:
+        return 0.0
+    mark, qty = m.get("day_mark"), m.get("qty") or 0
+    open_pnl = _saved_open(m)[0] if mark is None else (m.get("dir") or 1) * qty * ((m.get("last_price") or mark) - mark) if qty > 0 else 0.0
+    return (m.get("day_pnl") or 0.0) + open_pnl
 
 
 def _saved_row(iid: str, m: dict, names: dict) -> dict:

@@ -408,11 +408,18 @@ class Research:
     def _kite(self) -> bool:
         return bool(self.kite and self.kite.ready())
 
+    # what a task is for, said without a provider's name: a source that fails tells the page "prices" or "news" is missing
+    WHAT = {"q": "prices", "kq": "prices", "k1y": "prices", "y": "prices", "listing": "prices",
+            "m": "financials", "fin": "financials", "earn": "financials", "scr": "financials",
+            "news": "news", "wiki": "the company profile", "peers": "similar companies", "rec": "analyst ratings",
+            "ins": "insider trades", "cal": "earnings dates"}
+
     @staticmethod
     def _run(tasks: dict) -> tuple[dict, list[dict]]:
-        """Run {name: (source_name, fn)} in parallel; returns results and a per-source status list."""
+        """Run {name: (source_name, fn)} in parallel; returns results and a per-source status list. A failed source also
+        carries `what`: what its tasks were for ("prices", "news"), so a page can say what is missing without the source's name."""
         futures = {k: (src, _pool.submit(fn)) for k, (src, fn) in tasks.items()}
-        results, status = {}, {}
+        results, status, lost = {}, {}, {}
         for k, (src, f) in futures.items():
             try:
                 results[k] = f.result(timeout=25)
@@ -420,9 +427,13 @@ class Research:
             except SourceError as e:
                 results[k] = None
                 status[src] = {"source": src, "ok": False, "error": str(e)}
+                lost.setdefault(src, []).append(k)
             except Exception as e:  # a parsing surprise in one source mustn't sink the page
                 results[k] = None
                 status[src] = {"source": src, "ok": False, "error": f"Unexpected error ({e.__class__.__name__})."}
+                lost.setdefault(src, []).append(k)
+        for src, keys in lost.items():
+            status[src]["what"] = list(dict.fromkeys(Research.WHAT[k] for k in keys if k in Research.WHAT))
         return results, list(status.values())
 
     # ---------- search ----------
@@ -767,7 +778,7 @@ class Research:
                      for n in (r.get("news") or []) if n.get("headline") and plain_headline(n["headline"])
                      and mentions(p["name"], sym, n["headline"])][:8],
             "about": {"wiki": r.get("wiki"), "profile": None},
-            "sources": sources, "links": [{"label": "Yahoo Finance", "url": f"https://finance.yahoo.com/quote/{sym}"}],
+            "sources": sources, "links": [{"label": "Yahoo Finance", "kind": "quote", "url": f"https://finance.yahoo.com/quote/{sym}"}],
             "testable": True, "instrument_id": f"US:{sym}",
         }
 
@@ -916,8 +927,8 @@ class Research:
             "news": [n for n in (r2.get("news") or []) if company_headline(clean, sym, n.get("headline"))],
             "about": {"wiki": r2.get("wiki"), "profile": clean_profile((scr or {}).get("about"))},
             "sources": sources + sources2,
-            "links": [{"label": "Screener.in", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
-                     + ([{"label": "BSE", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
+            "links": [{"label": "Screener.in", "kind": "financials", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
+                     + ([{"label": "BSE", "kind": "exchange", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
             "summary": s, "numbers_at": (scr or {}).get("fetched_at"), "bank": lender,
             "testable": bool(inst) or not kite_ok,
             "instrument_id": inst["id"] if inst else None,

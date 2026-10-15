@@ -69,6 +69,7 @@ def test_which_plan_lifts_each_limit():
 
 def test_server_refuses_what_the_plan_lacks(paid, monkeypatch):
     monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
+    monkeypatch.setattr(main.alerts, "alert_emails_on", lambda uid: True)       # (no database here: an unreadable setting now reads as off)
     try:
         c = as_plan("free")
         r = c.post("/export/strategy", json={"strategy": {"name": "x", "tf": "1d", "entry": [], "exit": []}})

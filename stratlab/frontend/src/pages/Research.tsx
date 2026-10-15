@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
+  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -263,7 +263,7 @@ export function CompanyPage() {
           <MoreMenu items={[
             { label: share.busy ? "Making the card…" : "Share", run: () => { void share.run(); } },
             ...(region === "IN" ? [{ label: "Test a SIP", run: () => nav(`/money/sip-test?symbol=${encodeURIComponent(c.symbol)}`) }] : []),
-            ...c.links.map((l) => ({ label: `${l.label} ↗`, run: () => openOut(l.url) })),
+            ...c.links.map((l) => ({ label: `${linkLabel(l)} ↗`, run: () => openOut(l.url) })),
             ...(c.website ? [{ label: "Company website ↗", run: () => openOut(c.website!) }] : []),
           ]} />
         </div>
@@ -363,12 +363,21 @@ export function ThemesPage() {
   const [r, setR] = useState<SectorAI | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const seq = useRef(0);   // a late answer for an earlier theme or market is ignored, and doesn't clear "Mapping…" for the newer one
   const run = async (theme: string, refresh = false) => {
     if (!theme.trim()) return;
+    const mine = ++seq.current;
     setBusy(true); setError(null); if (!refresh) setR(null);
-    try { setR(await researchApi.sector(region, theme, refresh)); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    try { const out = await researchApi.sector(region, theme, refresh); if (mine === seq.current) setR(out); }
+    catch (e) { if (mine === seq.current) setError((e as Error).message); }
+    finally { if (mine === seq.current) setBusy(false); }
   };
-  useEffect(() => { setText(q); if (q) run(q); else setR(null); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [q, region]);
+  useEffect(() => {
+    setText(q);
+    if (q) run(q);
+    else { seq.current++; setR(null); setError(null); setBusy(false); }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [q, region]);
   const go = (t: string) => { if (!t.trim()) return; const p = new URLSearchParams(params); p.set("q", t); p.set("region", region); setParams(p); };
   const coLink = (t: string) => (t ? `/research/${region}/${encodeURIComponent(t)}` : "");
   return (
@@ -462,14 +471,20 @@ export function PulsePage() {
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const seq = useRef(0);   // a late answer for the market you left is ignored, and doesn't clear the newer read's busy
   const loadAI = async (refresh = false) => {
+    const mine = ++seq.current;
     setBusy(true); setAiErr(null);
-    try { setAi(await researchApi.pulseAI(region, "", refresh)); } catch (e) { setAiErr((e as Error).message); } finally { setBusy(false); }
+    try { const out = await researchApi.pulseAI(region, "", refresh); if (mine === seq.current) setAi(out); }
+    catch (e) { if (mine === seq.current) setAiErr((e as Error).message); }
+    finally { if (mine === seq.current) setBusy(false); }
   };
   useEffect(() => {
+    let live = true;
     setData(null); setAi(null);
-    researchApi.pulse(region).then(setData).catch(() => setData({ indices: [], headlines: [] }));
+    researchApi.pulse(region).then((d) => live && setData(d)).catch(() => live && setData({ indices: [], headlines: [] }));
     loadAI();
+    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
   return (
@@ -635,7 +650,7 @@ export function ComparePage() {
 /* ================= Watchlist ================= */
 export function WatchlistPage() {
   const [region, setRegion] = useRegion();
-  const { items, toggle, has } = useWatchlist();
+  const { items, toggle, has, failed, retry } = useWatchlist();
   const { fail, notify, markets } = useApp();
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
@@ -663,7 +678,9 @@ export function WatchlistPage() {
         <CardHead title="Add a company" />
         <Field label="Company">{(id) => <StockPicker id={id} market={region} clearOnPick onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
       </Card>
-      {items === null ? <Card><Skeleton label="Opening your watchlist" lines={3} /></Card> : mine.length === 0 ? (
+      {items === null ? (failed
+        ? <Card><ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed. Adding or removing a company waits until it opens.</ErrorState></Card>
+        : <Card><Skeleton label="Opening your watchlist" lines={3} /></Card>) : mine.length === 0 ? (
         <Card><EmptyState title={`Nothing in your ${REGION_NAME[region]} watchlist yet`}>Add a company above, or press Watch on a company page.</EmptyState></Card>
       ) : (
         <Card>

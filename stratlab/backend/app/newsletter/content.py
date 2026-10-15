@@ -91,7 +91,8 @@ def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
     out = []
     for name, sym in INDICES.get(region, []):
         got, now = index_close(sym, day, since), live.get(name)
-        if got is None and now and not weekly:         # the day's candle isn't out yet: the live quote, same measure
+        # the day's candle isn't out yet: the live quote, same measure, only if it is today's own (not a previous session's)
+        if got is None and now and not weekly and now.get("day") == day.isoformat() and not now.get("stale"):
             got = {"price": round(now["price"], 2), "change_pct": None if now.get("change_pct") is None else round(now["change_pct"], 2)}
         if got is None:
             continue
@@ -462,7 +463,7 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     stage_moved = now["stage"] is not None and stage_before is not None and now["stage"] != stage_before
     changed = bool(stage_moved or signal or flags or trades or (surv or {}).get("changes") or (change is not None and abs(change) >= MOVE[weekly]))
     return {"symbol": sym, "region": region, "price": round(now["price"], 2), "change_pct": change, "stage": now["stage"],
-            "stage_before": stage_before, "stage_changed": stage_moved, "st_s2": signal, "filings": flags, "deals": trades, "surveillance": surv, "headlines": news,
+            "stage_before": stage_before, "stage_changed": stage_moved, "since_day": str(before_bars[-1]["t"])[:10] if before_bars else None, "st_s2": signal, "filings": flags, "deals": trades, "surveillance": surv, "headlines": news,
             "changed": changed}
 
 

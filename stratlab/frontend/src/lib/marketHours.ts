@@ -21,9 +21,10 @@ function wall(now: Date, tz: string) {
 const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
 
 export function inWords(mins: number): string {
-  if (mins < 60) return `${Math.max(1, Math.round(mins))}m`;
-  if (mins < DAY) { const h = Math.floor(mins / 60), m = Math.round(mins % 60); return m ? `${h}h ${m}m` : `${h}h`; }
-  const d = Math.floor(mins / DAY), h = Math.round((mins % DAY) / 60);
+  const total = Math.round(mins);       // whole minutes first: 1439.6 is a day, not "23h 60m"
+  if (total < 60) return `${Math.max(1, total)}m`;
+  if (total < DAY) { const h = Math.floor(total / 60), m = total % 60; return m ? `${h}h ${m}m` : `${h}h`; }
+  const hours = Math.round(total / 60), d = Math.floor(hours / 24), h = hours % 24;
   return h ? `${d}d ${h}h` : `${d}d`;
 }
 
@@ -73,8 +74,9 @@ export function marketState(m: Market, now = new Date()): MarketState {
   }
   // shut until a later day: say why, the same way for every exchange (Friday evening counts as the weekend)
   const skipped = Array.from({ length: days }, (_, n) => n).filter((n) => n > 0 || !trades(0));
-  const first = skipped[0];       // the first closed day decides: a holiday, or the weekend
-  const closedFor = open || first === undefined ? null : weekday((w.wd + first) % 7) ? "holiday" : "weekend";
+  const first = skipped[0];       // the first closed day decides: the weekend, or today's own holiday
+  // "holiday" is said only when today itself is one: a normal day that has closed, with a holiday tomorrow, is just closed
+  const closedFor = open || first === undefined ? null : !weekday((w.wd + first) % 7) ? "weekend" : first === 0 ? "holiday" : null;
   const change = at(until);
   const todayOpen = new Date(now.getTime() + (o - w.min) * 60000), todayClose = new Date(now.getTime() + (c - w.min) * 60000);
   const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString("en-GB", { weekday: "short" })}`);
@@ -98,6 +100,17 @@ export function exchangeTime(d: Date, tz: string): string {
   const day = d.toLocaleDateString("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace(/\bSept\b/, "Sep");
   // the time and the zone's name the one way every market time is written (lib/format: "09:15 IST", "09:30 ET")
   return `${day}, ${fmtTime(d, { tz, zone: true })}`;
+}
+
+/** When an option model's prices were struck, in the exchange's zone with the date ("as of Wed 14 Oct, 15:29 IST"), not the
+ * moment it was asked for; and, once they are older than two minutes (the server's `fresh`), why: the last close with the
+ * market shut, else just that they are old. Empty when no price came with a time. */
+export function modelStamp(m: { as_of?: string | null; fresh?: boolean }, market?: Market | null, now = new Date()): string {
+  const at = m.as_of ? Date.parse(m.as_of) : NaN;
+  if (!Number.isFinite(at)) return "";
+  const st = market ? marketState(market, now) : null;
+  const old = m.fresh !== false ? "" : st && !st.open && !st.always && !st.offline ? " (last close, market closed)" : " (older than 2 minutes)";
+  return `as of ${exchangeTime(new Date(at), "Asia/Kolkata")}${old}`;
 }
 
 export type FeedLine = { text: string; tone: "live" | "plain" | "warn" };

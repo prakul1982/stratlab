@@ -372,7 +372,10 @@ def parse_csv(data: bytes) -> dict:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
     except csv.Error:
         dialect = csv.excel
-    rows = list(csv.reader(io.StringIO(text), dialect))
+    try:
+        rows = list(csv.reader(io.StringIO(text), dialect))
+    except csv.Error:
+        raise FileError("That CSV file is broken (a quote or a very long cell). Export it again and upload that.") from None
     head_at, cols = None, {}
     for i, r in enumerate(rows[:10]):
         names = [c.strip().lower() for c in r]

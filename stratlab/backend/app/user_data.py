@@ -250,11 +250,16 @@ SECRET_NAMES = {"token", "tokens", "access_token", "kite_access_token", "refresh
                 "api_secret", "api_key", "apikey", "key", "keys", "auth", "p256dh", "endpoint", "address", "inbox", "sealed",
                 "hash"}
 KEEP = {"billing": {"address"}, "invoices": {"address"}}      # the person's own billing address is theirs to have
+# and any name with one of these in it (bot_token, kite_api_key, client_secret, private_key), save the few named in SAFE
+SECRET_PARTS = ("token", "password", "passwd", "secret", "api_key", "apikey", "private_key")
+SAFE = {"instrument_token"}                                    # the number of an exchange's instrument, not a credential
 
 
 def _secret(name, keep=()) -> bool:
     n = str(name).lower()
-    return n in SECRET_NAMES and n not in keep
+    if n in keep or n in SAFE:
+        return False
+    return n in SECRET_NAMES or any(p in n for p in SECRET_PARTS)
 
 
 def _clean(v, keep=()):

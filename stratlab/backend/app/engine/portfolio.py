@@ -2,15 +2,16 @@
 
 Every instrument has its own engine (its own position, stops and session limits), and they step
 through time together. A new trade only opens when a position slot is free (max positions at
-once), and the daily loss cap applies to the whole portfolio: when the day's loss across every
-position reaches it, everything is closed and nothing new opens until the next day. The capital is one account:
+once): when more members signal on the same candle than there are free slots, the members listed first in the group
+take them (the group's own order, so a rerun takes the same ones). The daily loss cap applies to the whole portfolio:
+when the day's loss across every position reaches it, everything is closed and nothing new opens until the next day. The capital is one account:
 each new trade is sized from the whole portfolio's value and can only use the cash the open positions leave free."""
 import copy
 import math
 from datetime import datetime
 
 from . import costs as C
-from .core import PER_YEAR, Ctx, Engine, clean, open_position, span_years, stats, write_off
+from .core import PER_YEAR, TF_MIN, Ctx, Engine, clean, open_position, span_years, stats, write_off
 
 
 def _key(t: str) -> datetime:
@@ -36,10 +37,10 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             if (lo and k < lo) or (hi and k >= hi):
                 continue
             idx[k] = i
-        books.append({"inst": d["inst"], "bars": bars, "ctx": Ctx(bars, intraday=strategy.tf != "1d"), "eng": eng,
+        books.append({"inst": d["inst"], "bars": bars, "ctx": Ctx(bars, intraday=strategy.tf != "1d", base_min=TF_MIN[strategy.tf]), "eng": eng,
                       "idx": idx, "last": None, "first": None})
     timeline = sorted({k for b in books for k in b["idx"]})
-    state = {"halted": False, "emptied_on": None, "free0": None, "value0": None, "k": None, "stepped": set()}
+    state = {"halted": False, "emptied_on": None, "free0": None, "value0": None, "k": None, "stepped": set(), "crowded": 0}
     lev = strategy.risk.leverage
 
     def free_slot(at_open: bool = False) -> bool:
@@ -49,6 +50,8 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             used -= len(_leaving_at_open(books, state))
             # a fill at the candle's open: a slot freed later in this candle (a stop hit) was still taken at its open
             used += sum(1 for b in books if b["eng"].qty == 0 and _closed_after_open(b, state["k"]))
+            if used >= max_open and not state["halted"] and not state["emptied_on"]:
+                state["crowded"] += 1       # an entry signalled on the last candle found every slot taken at this open
         return not state["halted"] and not state["emptied_on"] and used < max_open
 
     def funds() -> tuple[float, float]:
@@ -69,14 +72,13 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
 
     equity, hold, times = [], [], []
     episodes: list[list] = []        # stretches with any position open: [index before, last index] in [capital, *equity]
-    day, realised_at_open, most_open = None, 0.0, 0
+    day, most_open = None, 0
     for k in timeline:
         was_open = any(b["eng"].qty > 0 for b in books)
         closed_before = sum(len(b["eng"].trades) for b in books)
         date = k.date()
         if date != day:
             day, state["halted"] = date, False
-            realised_at_open = sum(t["pnl"] for b in books for t in b["eng"].trades)
         state["free0"], state["k"], state["stepped"] = _free(books, cap_total, lev), k, set()
         # entries fill at the open: the pot is valued at the last close, not at the close of instruments already stepped
         state["value0"] = cap_total + sum(_gain(b) for b in books)
@@ -91,8 +93,11 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             if b["first"] is None:
                 b["first"] = i
         if loss_cap and not state["halted"]:
-            realised = sum(t["pnl"] for b in books for t in b["eng"].trades) - realised_at_open
-            open_pnl = sum(_open_pnl(b) for b in books)
+            # the day's loss: what closed today, and the open positions from the previous close (from the entry if opened
+            # today); a member with no candle yet today has neither
+            today = [b for b in books if b["eng"].day == date.isoformat()]
+            realised = sum(b["eng"].day_pnl for b in today)
+            open_pnl = sum(b["eng"].day_open_pnl(b["bars"][b["last"]]["c"]) for b in today if b["last"] is not None)
             if realised + open_pnl <= -loss_cap:
                 for b in books:
                     if b["eng"].qty > 0:
@@ -110,9 +115,11 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
             episodes.append([j - 1, j])
         elif was_open:
             episodes[-1][1] = j
-        started = [b for b in books if b["first"] is not None]
-        hold.append(cap_total * sum(b["bars"][b["last"]]["c"] / b["bars"][b["first"]]["c"] for b in started) / len(started)
-                    if started else cap_total)
+        # buy and hold puts an equal share, capital / members, into each member when its first candle comes (one that
+        # starts late is bought then); the share of a member not yet started waits as cash
+        n_all = len(books) or 1
+        hold.append(cap_total / n_all * sum(b["bars"][b["last"]]["c"] / b["bars"][b["first"]]["c"] if b["first"] is not None else 1.0
+                                            for b in books))
         times.append(k.isoformat())
 
     trades = sorted(({**t, "symbol": b["inst"].get("symbol")} for b in books for t in b["eng"].trades), key=lambda t: t["exit_t"])
@@ -153,6 +160,8 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
         "costs": {"gross_pnl": round(net + paid, 2), "total": round(paid, 2), "items": C.breakdown(items),
                   "net_pnl": round(net, 2), "tax": tax, "kept": round(max(net - (tax["amount"] or 0.0), -cap_total), 2)},
         "most_open": most_open,
+        # entries signalled together when there were fewer free slots than signals: the members listed first took them
+        "crowded": state["crowded"],
         # day-by-day changes in account value over each stretch with a position open, for the bad-luck drawdown check
         "_paths": [[b2 - a2 for a2, b2 in zip(path[a:b], path[a + 1:b + 1])] for path in [[cap_total, *equity]] for a, b in episodes],
     }

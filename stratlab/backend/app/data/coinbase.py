@@ -16,6 +16,7 @@ GRANULARITY = {"1d": 86400, "1h": 3600, "15m": 900, "5m": 300}
 PER_DAY = {"1d": 1, "1h": 24, "15m": 96, "5m": 288}
 MAX_DAYS = {"1d": 3650, "1h": 365, "15m": 90, "5m": 30}
 QUOTES = ("USD", "USDT", "USDC", "EUR", "GBP")
+RELOAD_AFTER_ERROR = 300        # seconds before the coin list is asked for again after a failed refresh (the old one stays)
 DEFAULTS = ("BTC-USD", "ETH-USD", "SOL-USD")
 NAMES = {
     "BTC": "Bitcoin", "ETH": "Ethereum", "SOL": "Solana", "XRP": "XRP", "DOGE": "Dogecoin", "ADA": "Cardano",
@@ -65,6 +66,7 @@ class CoinbaseProvider:
         self._products: list[dict] = []
         self._by_id: dict[str, dict] = {}
         self._loaded_at = 0.0
+        self._retry_at = 0.0
         self._cache: dict = {}
 
     def ready(self) -> bool:
@@ -91,12 +93,19 @@ class CoinbaseProvider:
 
     # ---------- instruments ----------
     def _load(self):
-        if self._products and time.time() - self._loaded_at < 6 * 3600:
+        now = time.time()
+        if self._products and (now - self._loaded_at < 6 * 3600 or now < self._retry_at):
             return
         rows = []
-        listed = self._get("/products")
-        if not isinstance(listed, list):
-            raise DataError("Coinbase sent something that isn't its list of coins. Try again in a minute.")
+        try:
+            listed = self._get("/products")
+            if not isinstance(listed, list):
+                raise DataError("Coinbase sent something that isn't its list of coins. Try again in a minute.")
+        except DataError:
+            if self._products:          # keep the list we have, and ask again in a few minutes rather than on every call
+                self._retry_at = now + RELOAD_AFTER_ERROR
+                return
+            raise
         for p in listed:
             if not isinstance(p, dict) or not p.get("id") or not p.get("base_currency"):
                 continue
@@ -110,6 +119,9 @@ class CoinbaseProvider:
                 "step": float(p.get("base_increment") or 0.00000001), "lot": 1, "fno": False,
                 "expiry": None, "strike": None, "tz": "UTC",
             })
+        if not rows and self._products:     # an empty list is a broken answer: keep what we have
+            self._retry_at = now + RELOAD_AFTER_ERROR
+            return
         self._products = rows
         self._by_id = {r["token"]: r for r in rows}
         self._loaded_at = time.time()
@@ -160,7 +172,8 @@ class CoinbaseProvider:
 
     def history(self, inst: dict, tf: str, days: int) -> list[dict]:
         g = GRANULARITY[tf]
-        key = (inst["token"], tf, days)
+        # a daily series is of its UTC day: the day's candle is forming, and tomorrow's request must not get today's list
+        key = (inst["token"], tf, days, datetime.now(timezone.utc).date().isoformat() if tf == "1d" else None)
         hit = self._cache.get(key)
         if hit and time.time() - hit[0] < (3600 if tf == "1d" else 120):
             return hit[1]

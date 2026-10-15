@@ -1,6 +1,6 @@
 import { lazy, Suspense, useLayoutEffect, useRef, type ComponentType } from "react";
 import { useLocation } from "react-router-dom";
-import { visitorView } from "../lib/deepLinks";
+import { isPlansPath, visitorView } from "../lib/deepLinks";
 import { applySeo, seoFor, type SeoKind } from "../lib/seo";
 import { HOME_TITLE, landingHeading } from "../content/seo";
 import { heldStartup } from "../lib/held";
@@ -62,7 +62,7 @@ export function VisitorApp() {
   const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
     <Suspense fallback={fallback}>
-      {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} />
+      {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} plansOnly={isPlansPath(pathname)} />
         : view.kind === "legal" ? <LegalPage />
         : view.kind === "verdict" ? <PublicVerdict token={view.token} />
         : view.kind === "library" ? <PublicLibrary />

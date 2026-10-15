@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -55,9 +55,12 @@ export function ScanPage() {
   const pro = !!me?.plan_info?.features?.scans;
   const scans = sets?.scans?.length ? sets.scans : [FIRST_SCAN];
   const scan = scans.find((s) => s.id === scanId) ?? scans[0];
+  const seq = useRef(0);   // a scan that finishes after the market, set or scan was changed is dropped, and doesn't clear a newer one's "Running"
+  /** Forgets the shown result and any scan still running. */
+  const drop = () => { seq.current++; setOut(null); setBusy(false); };
 
   useEffect(() => {
-    setOut(null);
+    drop();
     api<ScanSets>(`/research/scan/sets?region=${region}`).then((s) => {
       setSets(s);
       const usable = (x: SetInfo) => (x.id !== "watchlist" && !x.stored) || !!x.count;
@@ -67,12 +70,16 @@ export function ScanPage() {
 
   const pickScan = (v: string) => {
     const p = new URLSearchParams(params); p.set("scan", v); setParams(p, { replace: true });
-    setOut(null);
+    drop();
   };
   const runScan = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    const n = ++seq.current;
     setBusy(true);
-    try { setOut(await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id } })); } catch (err) { fail(err); } finally { setBusy(false); }
+    try {
+      const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id } });
+      if (n === seq.current) setOut(r);
+    } catch (err) { if (n === seq.current) fail(err); } finally { if (n === seq.current) setBusy(false); }
   };
   const toggleAlerts = async () => {
     if (!sets) return;
@@ -122,7 +129,7 @@ export function ScanPage() {
             </div>
           )}
           <Field label="Group to scan">
-            {(id) => <Select id={id} value={setId} onChange={(v) => { setSetId(v); setOut(null); }}
+            {(id) => <Select id={id} value={setId} onChange={(v) => { setSetId(v); drop(); }}
               options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
           </Field>
           <FormActions>

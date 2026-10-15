@@ -69,6 +69,10 @@ test.describe("analytics wrapper", () => {
 });
 
 test.describe("analytics in the app", () => {
+  // the app now registers its service worker at once; a page it controls sends its requests through it, past page.route and
+  // page.on("request"), so the second page's events would go unseen (and unmocked)
+  test.use({ serviceWorkers: "block" });
+
   test("with no key nothing loads and nothing is sent", async ({ page }) => {
     test.setTimeout(120_000);      // two full pages, the deep dive the heaviest, on a busy CI runner
     const rs = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");

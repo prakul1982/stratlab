@@ -958,10 +958,10 @@ def test_a_fresh_recording_answers_while_the_live_chain_is_read(monkeypatch):
     rec = {"expiry": "2026-10-13", "expiries": ["2026-10-13"], "spot": 22200, "chain": [], "source": "recorded",
            "taken_at": (now - timedelta(minutes=2)).isoformat()}
     monkeypatch.setattr(P, "recorded_last", lambda name, day: [rec])
-    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day: rec)
+    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day, now=None: rec)
     assert P._fresh_recording("NIFTY", "current") is rec
     old = {**rec, "taken_at": (now - timedelta(minutes=30)).isoformat()}
-    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day: old)
+    monkeypatch.setattr(P, "recorded_chain", lambda name, choice, day, now=None: old)
     assert P._fresh_recording("NIFTY", "current") is None
 
 

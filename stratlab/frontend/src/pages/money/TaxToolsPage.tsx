@@ -22,7 +22,7 @@ type DivYear = {
   fy: number; label: string; total: number; india_total: number; us_total: number; count: number; companies_count: number; unpriced: number; taxed: boolean;
   tds: { threshold: number | null; rate: number; section: string; expected: number; companies_over: number; in_file: number | null };
   us: { gross_usd: number; gross: number; rate: number; withheld_usd: number; withheld: number } | null;
-  companies: Company[]; locked: boolean; source: "files" | "estimated" | "none"; include: boolean; include_saved: boolean; estimate_total: number | null;
+  companies: Company[]; locked: boolean; source: "files" | "estimated" | "none"; include: boolean; include_saved: boolean; estimate_total: number | null; ais_note?: string | null;
 };
 type Ahead = { symbol: string; ex_date: string; label: string | null; qty: number; per_share: number; currency: string; amount: number };
 type Dividends = {
@@ -199,6 +199,7 @@ function DividendsTab() {
                   : "Dividends were exempt in your hands before FY 2020-21 (the company paid dividend distribution tax)."}</p>
                 <p className="k-note">Added up by financial year, each payment in the year of its record date. <Link className="link" to="/holdings">My Holdings</Link> shows the last 12 months instead, a different slice of the same dividends.</p>
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
+                {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
                 {y.locked ? <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>
                   : y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
@@ -424,7 +425,7 @@ function LtcgTab() {
         <Card>
           <CardHead title="Open long-term lots at today's price" info="Each figure is arithmetic: if a lot were sold today at the latest price, its long-term gain would be the value less the cost for tax (with charges, and the 31 Jan 2018 price for older lots)." />
           {v.long.length === 0 ? <EmptyState title="No open long-term lots">No open lot has been held for more than 12 months{v.unpriced ? " with a price today" : ""}.</EmptyState>
-            : <DataTable label="Open long-term lots" columns={longCols} rows={v.long} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} rowAttrs={(r) => ({ title: r.text })} />}
+            : <DataTable label="Open long-term lots" columns={longCols} rows={v.long} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
         </Card>
       )}
 
@@ -433,7 +434,7 @@ function LtcgTab() {
           <CardHead title="Turning long-term" info="A sale before the date shown is short-term (20% from 23 July 2024); from that date it is long-term (12.5% above the exemption)."
             actions={<Seg label="Within" options={[30, 60, 90].map((n) => ({ value: String(n), label: `${n} days` }))} value={String(within)} onChange={(n) => setWithin(Number(n))} />} />
           {soon.length === 0 ? <EmptyState title={`Nothing turns long-term in ${within} days`}>No open lot turns long-term in the next {within} days.</EmptyState>
-            : <DataTable label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} rowAttrs={(r) => ({ title: r.text })} />}
+            : <DataTable label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
         </Card>
       )}
 
@@ -441,7 +442,7 @@ function LtcgTab() {
         <Card>
           <CardHead title="Open lots below cost" />
           {v.below_cost.rows.length === 0 ? <EmptyState title="No open lot below its cost">No open lot is below its cost at today's price.</EmptyState>
-            : <DataTable label="Open lots below cost" columns={belowCols} rows={v.below_cost.rows} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} />}
+            : <DataTable label="Open lots below cost" columns={belowCols} rows={v.below_cost.rows} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} />}
         </Card>
       )}
 

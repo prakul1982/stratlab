@@ -37,3 +37,22 @@ def test_market_list_does_not_name_the_provider():
     rows = TestClient(main.app).get("/markets").json()
     assert rows and all("provider" not in r for r in rows)
     assert not any(n in str(rows) for n in ("Kite", "Zerodha", "Yahoo", "Screener"))
+
+
+def test_failed_sources_say_what_they_were_for_without_a_name():
+    """A source that fails carries `what` ("prices", "news"), so the company page can say what is missing with no provider named."""
+    from app.intel.company import Research
+    from app.intel.net import SourceError
+
+    def down():
+        raise SourceError("Finnhub", "Finnhub is busy (our rate limit).")
+
+    r, sources = Research._run({"q": ("Finnhub", down), "news": ("Finnhub", down), "wiki": ("Wikipedia", lambda: {"extract": "x"}),
+                                "kq": ("Kite", lambda: {"price": 1})})
+    by = {s["source"]: s for s in sources}
+    assert by["Finnhub"]["ok"] is False and by["Finnhub"]["what"] == ["prices", "news"]
+    assert "what" not in by["Wikipedia"] and by["Wikipedia"]["ok"] is True
+    out = public_research({"sources": sources, "links": [{"label": "Screener.in", "kind": "financials", "url": "https://www.screener.in/company/X/"},
+                                                          {"label": "BSE", "kind": "exchange", "url": "https://www.bseindia.com/x/"}]})
+    assert [s["what"] for s in out["sources"] if not s["ok"]] == [["prices", "news"]]       # `what` passes through the relabelling
+    assert [l["kind"] for l in out["links"]] == ["exchange"]                                 # a provider's own link is still dropped

@@ -70,6 +70,17 @@ def test_average_uses_todays_price_as_the_latest_close():
     assert c["n50"] == 0 and c["n200"] == 0                         # not enough closes: left out, not counted below
 
 
+def test_a_split_or_bonus_ex_date_leaves_the_averages_out_not_below_them():
+    # stored: yesterday's close 1,000, steady at 1,000 for 200 days; a 1:10 split goes ex today, the exchange's reference price is 100
+    base = {"ABC": [1000.0, 250, 19000.0, 49000.0, 199000.0]}
+    c = breadth_live.count(base, {"ABC": {"price": 101.0, "prev_close": 100.0}}, ["ABC"])
+    assert c["adv"] == 1 and (c["n20"], c["n50"], c["n200"]) == (0, 0, 0) and (c["a20"], c["a50"], c["a200"]) == (0, 0, 0)
+    # a 1:1 bonus (prev 500 against a stored 1,000) is the same; an ordinary 5% day is still counted against its averages
+    assert breadth_live.count(base, {"ABC": {"price": 505.0, "prev_close": 500.0}}, ["ABC"])["n200"] == 0
+    c = breadth_live.count(base, {"ABC": {"price": 1050.0, "prev_close": 1000.0}}, ["ABC"])
+    assert (c["n20"], c["n50"], c["n200"], c["a200"]) == (1, 1, 1, 1)
+
+
 def test_bad_quotes_are_left_out():
     base = {"A": [10.0, 5, None, None, None]}
     c = breadth_live.count(base, {"A": {"price": None}, "B": {"price": 5.0, "prev_close": 0}, "C": {"price": "x"}}, ["A", "B", "C", "Z"])

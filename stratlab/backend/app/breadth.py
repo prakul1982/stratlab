@@ -50,6 +50,7 @@ SECTOR_KEEP = 70                      # sessions of sector counts kept (three mo
 MIN_SECTOR = 5                        # sectors with fewer stocks with data are left out of the table
 GAP = 0.25                            # seconds between stocks, on top of each source's own pacing
 GIVE_UP = 25                          # this many failures in a row: the source is down, the run stops and keeps the old
+MIN_LOADED, MAX_FAILED = 0.5, 0.25    # a run that read under half the stocks, or lost over a quarter to errors, is thin: it keeps the old
 MIN_MEMBERS = 20                      # an exchange list shorter than this is taken as a broken answer
 
 # the counts kept for each day; the stored rows hold them in this order, then the group's index close
@@ -486,7 +487,7 @@ class Runner:
             sec = self.sectors(region) or {}
         except Exception:
             sec = {}
-        tally, loaded, failed, streak, last_error = Tally(), 0, 0, 0, None
+        tally, loaded, failed, streak, last_error, unlisted = Tally(), 0, 0, 0, None, 0
         bases: dict[str, list] = {}                              # each stock's finished days, for the intraday view
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
@@ -497,6 +498,9 @@ class Runner:
                 bars = self.load(region, sym, days)
                 flags = stock_flags(bars, through)
                 streak = 0
+            except LookupError:
+                unlisted += 1               # not on the exchange's list any more: left out, not a failed read
+                continue
             except Exception as e:
                 failed, streak, last_error = failed + 1, streak + 1, f"{sym}: {str(e)[:120] or e.__class__.__name__}"
                 if streak >= GIVE_UP and not loaded:
@@ -523,6 +527,13 @@ class Runner:
                     scans.setdefault(g, {})[sym] = res
         if not loaded:
             raise RuntimeError(f"No stock's prices could be read ({last_error or 'no data'}).")
+        total = len(by_stock) - unlisted
+        if loaded < MIN_LOADED * total - 1e-9 or failed > MAX_FAILED * total + 1e-9:
+            # most of the market failed after the first stock loaded (a cancelled token, a throttled source): laying
+            # this thin universe over the stored days would rewrite months of counts, so the stored history stays
+            # and the job tries again (Admin shows why)
+            raise RuntimeError(f"Only {loaded} of {total} stocks could be read, {failed} failed ({last_error or 'no data'}); "
+                               "the stored history is kept.")
         out = {}
         for g in groups:
             if not who[g]:              # nothing to count: the stored history stays as it is
@@ -815,6 +826,7 @@ def check_alerts(groups: list[str], now: datetime, profile_fn, allowed_fn, send=
             if not profile or not allowed_fn(profile):
                 continue
             if not stock_alerts.may_send(stock_alerts._read(uid)["sent"], now):
+                stock_alerts.hold(uid, texts, now)          # over the limits: goes out with the next message (the side has moved on)
                 continue
             if stock_alerts.flush(uid, profile, texts, now, **({"send": send} if send else {})):
                 sent += 1

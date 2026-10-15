@@ -111,7 +111,7 @@ test("R11C-007: currency options at their own precision, and a banner without a 
   assert.match(O.staleQuoteLine(1, 4), /^No live bid or ask for 1 of the 4 legs: it is priced from its last traded price/);
   const page = read("src/pages/OptionsPage.tsx");
   assert.match(page, /\{p\.impossible && <Notice tone="warn" role="status" className="opt-impossible">/);
-  assert.match(page, /preview \? `\$\{expiryName\(preview\.expiry\)\} · `/);       // the expiry priced is the one named
+  assert.match(page, /preview \? expiryName\(preview\.expiry\) : exp \? expiryName\(exp\)/);       // the expiry priced is the one named (review 3e: joined with the lot, which is left out when unknown)
 });
 
 test("R11C-011: an intraday trade's time is its candle, which it filled at the close of", async () => {

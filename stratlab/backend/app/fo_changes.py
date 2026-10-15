@@ -685,7 +685,10 @@ class Job(news_job.Job):
             day = self.due(name, now, tz, at, region="IN")
             if day:
                 self.mark(name, day)
-                return self.run(now, day)
+                sent = self.run(now, day)
+                if self.all_failed:          # neither source answered: the slot isn't used up, it is asked again in half an hour
+                    self.give_back(name)
+                return sent
         if not load_state().get("lots") and time.time() - self._first_try > 1800:
             self._first_try = time.time()
             self.run(now, ist_now().date())

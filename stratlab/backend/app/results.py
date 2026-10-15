@@ -175,7 +175,7 @@ def merge(old: list[dict], new: list[dict], frm: date, today: date) -> list[dict
             continue                     # the exchange's own list is the better source for that company
         k = (r["symbol"], r["date"])
         prior = learnt.get(k)
-        out[k] = {**r, "out": prior["out"]} if prior else r
+        out[k] = {**r, "out": prior["out"], **{f: prior[f] for f in ("told", "told_to") if f in prior}} if prior else r
     return list(out.values())
 
 
@@ -217,18 +217,40 @@ def my_stocks(uid: str, region: str | None = None) -> list[str]:
     return [s for r, s in content.my_stocks(uid) if region is None or r == region]
 
 
-def trackers() -> dict[tuple[str, str], list[str]]:
-    """(region, symbol) -> the users tracking it."""
+_trackers: dict = {}               # hour -> {(region, symbol): users}: one read of every user's stocks an hour, for both jobs
+_trackers_lock = threading.Lock()
+
+
+def forget_trackers() -> None:
+    with _trackers_lock:
+        _trackers.clear()
+
+
+def trackers(region: str | None = None, now: datetime | None = None) -> dict[tuple[str, str], list[str]]:
+    """(region, symbol) -> the users tracking it, for one region or both. Built from every user's stocks, so it is
+    kept for the hour (by region too: both regions' jobs, and this job and the corporate actions job, share it)."""
     from .newsletter import content
-    out: dict[tuple[str, str], list[str]] = {}
-    for uid in sorted(users()):
-        try:
-            stocks = content.my_stocks(uid)
-        except Exception:
-            continue
-        for k in stocks:
-            out.setdefault(k, []).append(uid)
-    return out
+    hour = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H")
+    with _trackers_lock:
+        have = _trackers.get(hour)
+    if have is None:
+        have = {}
+        for uid in sorted(users()):
+            try:
+                stocks = content.my_stocks(uid)
+            except Exception:
+                continue
+            for k in stocks:
+                have.setdefault(k, []).append(uid)
+        with _trackers_lock:
+            _trackers.clear()
+            _trackers[hour] = have
+    return have if region is None else {k: v for k, v in have.items() if k[0] == region}
+
+
+def _get(who):
+    """The trackers map, from the map itself or from the function that builds it when first needed."""
+    return who() if callable(who) else who
 
 
 def alerts_on(uid: str) -> bool:
@@ -419,6 +441,7 @@ def send(profile: dict, subject: str, text: str, url: str):
 REFRESH_AT = {"IN": ("07:15", "18:30"), "US": ("06:00",)}
 MORNING_AT = {"IN": "08:00", "US": "07:30"}
 CHECK_FROM = {"IN": "10:00", "US": "07:00"}          # hourly from then until midnight, local time
+RETRY_MINUTES = 30                                   # a refresh that read nothing is asked again after this long
 
 
 class Job:
@@ -430,6 +453,8 @@ class Job:
         self.sources, self.send, self.can_alert = sources, send, can_alert
         self.last: dict[str, str] = {}
         self.status = {"last_run": None, "sent": 0, "last_error": None, "problems": []}
+        self.down: dict[str, str] = {}               # region -> why its last refresh read nothing (shown until one does)
+        self.retry: dict[str, datetime] = {}         # refresh slot -> not asked again before this time
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="results-calendar").start()
@@ -471,42 +496,65 @@ class Job:
         return (local.date(), run) if run else (None, None)
 
     def tick(self, now: datetime) -> int:
-        sent, ran, who = 0, False, None
+        sent, ran = 0, False
+        who = lambda: trackers(now=now)           # read when a run needs it, and then once an hour
         for region in REGIONS:
             for at in REFRESH_AT[region]:
-                day = self.due(f"refresh-{region}-{at}", now, region, at)
+                name = f"refresh-{region}-{at}"
+                if now < self.retry.get(name, now):
+                    continue
+                day = self.due(name, now, region, at)
                 if day:
-                    who = who if who is not None else trackers()
-                    self.refresh(region, who, day)
+                    try:
+                        out = self.refresh(region, who(), day)
+                    except Exception:
+                        self.unmark(name)
+                        raise
+                    if out["rows"] is None:      # every feed failed: the slot isn't used up, it is asked again in half an hour
+                        self.unmark(name)
+                        self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
                     ran = True
             day, run = self.claim(f"morning-{region}", now, region, MORNING_AT[region])
             if day:
-                who = who if who is not None else trackers()
                 sent, ran = sent + self.morning(region, day, who, run), True
                 run.done()
             day, run = self.claim(f"check-{region}", now, region, CHECK_FROM[region], stamp="%Y-%m-%dT%H")
             if day:
-                who = who if who is not None else trackers()
                 sent, ran = sent + self.follow_up(region, day, who, run), True
                 run.done()
         if ran:
-            self.status.update(last_run=now.isoformat(), sent=sent, last_error=None)
+            self.status.update(last_run=now.isoformat(), sent=sent, last_error=next(iter(self.down.values()), None))
             from . import job_status
             job_status.keep("results", self)       # Admin shows this run after a restart too
         return sent
+
+    def unmark(self, name: str) -> None:
+        """Take a slot's day mark back (a read that got nothing must not use the slot up)."""
+        self.last.pop(name, None)
+        db.delete_setting(f"resultsjob:{name}")
 
     def refresh(self, region: str, who: dict | None = None, day: date | None = None) -> dict:
         who = who if who is not None else trackers()
         out = refresh(region, self.sources(), {s for (r, s) in who if r == region}, day)
         self.status["problems"] = out["problems"][:10]
+        if out["rows"] is None:                      # no feed answered: Admin says so, not "OK"
+            self.down[region] = f"{region}: {(out['problems'] or ['no feed answered'])[0]}"[:200]
+        else:
+            self.down.pop(region, None)
+        self.status["last_error"] = next(iter(self.down.values()), None)
         return out
 
-    def morning(self, region: str, day: date, who: dict, run) -> int:
-        """One message per person listing their stocks with results today."""
+    def morning(self, region: str, day: date, who, run) -> int:
+        """One message per person listing their stocks with results today. `who`: the trackers map, or a function that
+        gives it (read only when there is something to tell)."""
         if not load(region)["at"]:
-            self.refresh(region, who, day)
+            self.refresh(region, _get(who), day)
+        today = between(region, day, day)
+        if not today:
+            return 0
+        who = _get(who)
         per_user: dict[str, list[dict]] = {}
-        for r in between(region, day, day):
+        for r in today:
             for uid in who.get((region, r["symbol"]), []):
                 per_user.setdefault(uid, []).append(r)
         sent = 0
@@ -525,18 +573,22 @@ class Job:
                 print("results message failed:", uid, str(e)[:160])
         return sent
 
-    def follow_up(self, region: str, day: date, who: dict, run) -> int:
-        """Look for the filings of results days just gone, and tell the people tracking each company."""
+    def follow_up(self, region: str, day: date, who, run) -> int:
+        """Look for the filings of results days just gone, and tell the people tracking each company. Each person told
+        is written on the row (told_to), so a run cut short and resumed in a later hour doesn't tell them again."""
+        frm = (day - timedelta(days=OUT_DAYS)).isoformat()
+        if not any(frm <= r["date"] <= day.isoformat() and (not r.get("out") or r.get("told") is False) for r in load(region)["rows"]):
+            return 0                       # no results day in the window is waiting for a filing or for its people: nobody to look up
+        who = _get(who)
         symbols = {s for (r, s) in who if r == region}
         sent = 0
         check_out(region, self.sources(), symbols, day)
-        frm = (day - timedelta(days=OUT_DAYS)).isoformat()
         told = [r for r in load(region)["rows"] if frm <= r["date"] <= day.isoformat() and r.get("out")
                 and r.get("told") is False and r["symbol"] in symbols]  # filed but not (fully) told: a cut-short run resumes
         # (a row filed before "told" was kept has no flag: it was told then)
         for r in told:
             for uid in who.get((region, r["symbol"]), []):
-                if run.seen(f"{uid}:{r['symbol']}"):
+                if run.seen(f"{uid}:{r['symbol']}") or uid in (r.get("told_to") or []):
                     continue
                 run.beat()
                 try:
@@ -544,6 +596,7 @@ class Job:
                     if not self.can_alert(profile):
                         continue
                     run.record(f"{uid}:{r['symbol']}")       # before the send: a kill in between drops one, never doubles
+                    self._told(region, r, uid)
                     self.send(profile, f"StratLab: {r['symbol']} results are out", out_text(r), f"/research/{region}/{r['symbol']}")
                     sent += 1
                 except Exception as e:         # one person's failure doesn't stop the rest
@@ -555,8 +608,19 @@ class Job:
                 for r in rows:
                     if (r["symbol"], r["date"]) in done:
                         r["told"] = True
+                        r.pop("told_to", None)          # everyone is told: the flag is enough
                 save(region, rows)
         return sent
+
+    def _told(self, region: str, row: dict, uid: str):
+        """Write on the calendar row that this person is being told (before the send, like the run marker)."""
+        with _lock:
+            rows = load(region)["rows"]
+            for r in rows:
+                if (r["symbol"], r["date"]) == (row["symbol"], row["date"]) and uid not in (r.get("told_to") or []):
+                    r["told_to"] = (r.get("told_to") or []) + [uid]
+            save(region, rows)
+        row["told_to"] = (row.get("told_to") or []) + [uid]
 
 
 # ---------- the page ----------

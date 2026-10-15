@@ -9,7 +9,7 @@ import hashlib
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -106,11 +106,17 @@ def _clock(v: str) -> str | None:
 
 
 def positions(root: ET.Element) -> tuple[list[dict], int]:
-    """(US stock rows for My Holdings, positions left out: other kinds or currencies)."""
+    """(US stock rows for My Holdings, positions left out: other kinds or currencies). A query that lists each lot as well
+    as the position (levelOfDetail LOT beside SUMMARY) is counted once: by its SUMMARY rows, or by its LOT rows when it has
+    no SUMMARY rows."""
     rows, left = [], 0
     by = {}
+    levels = {(p.get("levelOfDetail") or "").upper() for p in root.iter("OpenPosition")}
+    use = ("", "SUMMARY") if levels & {"", "SUMMARY"} else ("LOT",)
     for p in root.iter("OpenPosition"):
         a = p.attrib
+        if (a.get("levelOfDetail") or "").upper() not in use:
+            continue
         qty = _num(a.get("position"))
         sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
         if a.get("assetCategory") != "STK" or a.get("currency") != "USD" or not qty or qty <= 0 or not sym:
@@ -126,10 +132,14 @@ def positions(root: ET.Element) -> tuple[list[dict], int]:
 
 
 def fills(root: ET.Element) -> list[dict]:
-    """Stock trades in dollars, oldest first: {id, sym, side "B"/"S", qty, price, d, t, fee}."""
+    """Stock trades in dollars, oldest first: {id, sym, side "B"/"S", qty, price, d, t, fee, oc}. `oc` is IBKR's
+    openCloseIndicator ("O" opens a position, "C" closes one). Only the executions: a query that lists the order or the
+    closed lots beside them (other levels of detail) would count each trade again."""
     out = []
     for t in root.iter("Trade"):
         a = t.attrib
+        if (a.get("levelOfDetail") or "").upper() not in ("", "EXECUTION"):
+            continue
         qty, price = _num(a.get("quantity")), _num(a.get("tradePrice"))
         d = _day(a.get("tradeDate") or a.get("dateTime") or "")
         sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
@@ -138,18 +148,26 @@ def fills(root: ET.Element) -> list[dict]:
         side = "B" if (a.get("buySell") or "").upper().startswith("B") else "S"
         out.append({"id": a.get("tradeID") or hashlib.sha1(repr(sorted(a.items())).encode()).hexdigest()[:12], "sym": sym, "side": side,
                     "qty": abs(qty), "price": price, "d": d, "t": _clock(a.get("dateTime") or "") or "",
-                    "fee": abs(_num(a.get("ibCommission")) or 0.0)})
+                    "fee": abs(_num(a.get("ibCommission")) or 0.0), "oc": (a.get("openCloseIndicator") or "").strip().upper()})
     return sorted(out, key=lambda f: (f["d"], f["t"], f["id"]))
 
 
 def splits(root: ET.Element) -> dict[str, list[tuple[str, float]]]:
-    """{symbol: [(day, shares after per share before)]} from the statement's Corporate Actions section, when the query has
-    one: a forward or reverse split described as "SPLIT 4 FOR 1"."""
+    """{symbol: [(the first day it counts, shares after per share before)]} from the statement's Corporate Actions
+    section, when the query has one: a forward or reverse split described as "SPLIT 4 FOR 1". IBKR books a split the
+    evening before (dateTime "20260210;202500") and reports it the day it takes effect (reportDate "20260211"): the
+    report date when there is one, else the day after the booking, so the booking day's own fills keep the old shares."""
     out: dict[str, list[tuple[str, float]]] = {}
     for c in root.iter("CorporateAction"):
         a = c.attrib
         m = re.search(r"\bSPLIT\s+(\d+(?:\.\d+)?)\s+FOR\s+(\d+(?:\.\d+)?)", a.get("actionDescription") or "", re.I)
-        d = _day(a.get("dateTime") or a.get("reportDate") or "")
+        d = _day(a.get("reportDate") or "")
+        booked = _day(a.get("dateTime") or "")
+        if not d and booked:
+            try:
+                d = (date.fromisoformat(booked) + timedelta(days=1)).isoformat()
+            except ValueError:
+                d = None
         sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
         if a.get("assetCategory") not in (None, "STK") or not m or not d or not sym or float(m.group(2)) <= 0 or float(m.group(1)) <= 0:
             continue
@@ -159,8 +177,11 @@ def splits(root: ET.Element) -> dict[str, list[tuple[str, float]]]:
 
 def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | None = None) -> list[dict]:
     """Round trips by first in, first out per stock, as the journal's added-by-hand trades (segment "us"). A sale with no
-    purchase before it in the data (bought before the query's period) is left out, never guessed. `split` (splits): the
-    shares bought before a split count as the shares after it, at the price of each after it."""
+    purchase before it in the data (bought before the query's period) is left out, never guessed: a sale opens a short
+    position only when IBKR marks it as opening one (openCloseIndicator "O"), and a purchase marked as closing one ("C")
+    opens nothing. `split` (splits): the
+    shares bought before a split count as the shares after it, at the price of each after it, from the split's first
+    day on."""
     out = []
     book: dict[str, list[list]] = {}                  # symbol -> open lots [side, qty left, fill, fee left]
     ahead = {k: list(v) for k, v in (split or {}).items()}
@@ -190,7 +211,9 @@ def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | No
             fee -= fee_part
             if lot[1] <= 1e-9:
                 lots.pop(0)
-        if q > 1e-9:
+        oc = (f.get("oc") or "").split(";")
+        opens = "O" in oc if f["side"] == "S" else oc == [""] or "O" in oc
+        if q > 1e-9 and opens:
             lots.append([f["side"], q, f, fee])
     return [t for t in out if t["xd"] >= t["ed"]]
 
@@ -199,9 +222,27 @@ def _sig(m: dict) -> tuple:
     return (m["sym"], m["ed"], m["xd"], round(float(m["qty"]), 4), round(float(m["entry"]), 4), round(float(m["exit"]), 4))
 
 
-def save_trades(uid: str, trades: list[dict]) -> int:
-    """New closed trades into the journal (those already there, by id or by the same trade, are skipped): how many added."""
+def _redo(fs: list[dict], split: dict[str, list[tuple[str, float]]]) -> dict[str, str]:
+    """{symbol: its first fill in the statement} for each stock with a split in the statement. A trade read from IBKR
+    before, from these same fills, may have counted the split differently: a different quantity, so a different id."""
+    first: dict[str, str] = {}
+    for f in fs:
+        if f["sym"] in split and f["d"] < first.get(f["sym"], "9999-99-99"):
+            first[f["sym"]] = f["d"]
+    return first
+
+
+def save_trades(uid: str, trades: list[dict], redo: dict[str, str] | None = None) -> int:
+    """New closed trades into the journal (those already there, by id or by the same trade, are skipped): how many added.
+    `redo` (_redo): trades read from IBKR before in those stocks, bought from that day on and not among `trades`, are
+    taken out first, so a statement read again after a split has each trade once, as it is read now."""
     j = journal.load(uid)
+    before = len(j["manual"])
+    if redo:
+        now = {t["id"] for t in trades}
+        j["manual"] = [m for m in j["manual"] if not (m.get("via") == "ibkr" and m.get("sym") in redo and m.get("id") not in now
+                                                       and str(m.get("ed") or "") >= redo[m["sym"]])]
+    dropped = len(j["manual"]) != before
     have_ids = {m["id"] for m in j["manual"]}
     have_sig = {_sig(m) for m in j["manual"]}
     added = 0
@@ -212,7 +253,7 @@ def save_trades(uid: str, trades: list[dict]) -> int:
         have_ids.add(t["id"])
         have_sig.add(_sig(t))
         added += 1
-    if added:
+    if added or dropped:
         journal.save(uid, j)
     return added
 
@@ -230,7 +271,8 @@ def ingest(uid: str, root: ET.Element) -> dict:
     profile = sync.profile_for(uid)
     rows, left = positions(root)
     got = sync.sync_holdings(profile, rows, "ibkr", "Interactive Brokers") if rows or _had_ibkr(uid) else {"count": 0, "unmatched_count": 0}
-    n = save_trades(uid, closed_trades(fills(root), splits(root)))
+    fs, sp = fills(root), splits(root)
+    n = save_trades(uid, closed_trades(fs, sp), _redo(fs, sp))
     why = sync.note(got, "Interactive Brokers")      # an empty statement or an unmatched line keeps the US holdings read before
     state.update(uid, "ibkr", synced_at=state.now(), status="partial" if why else "ok", detail=why, positions=got["count"], trades=n)
     return {"positions": got["count"], "unmatched": got["unmatched_count"], "left_out": left, "trades_added": n}

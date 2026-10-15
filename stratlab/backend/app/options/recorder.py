@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from .. import leader
+from .. import db, leader
 from ..data import sessions
 from ..data.calendar import is_trading_day
 
@@ -67,7 +67,23 @@ class Recorder:
         self.status = Status("option-chains", {"enabled": bool(targets), "targets": [f"{e}:{n}" for e, n in targets],
                                                "every_minutes": self.every // 60, "today": 0, "day": None, "last_at": None,
                                                "last_error": None, "keep_days": keep_days})
+        self._close_loaded = False
         self._next = 0.0
+
+    def _closed_day(self) -> str | None:
+        """The day of the last closing read: this run's, else (read once, when a closing read is first in question) the
+        one in the status kept in the database, so a deploy inside the closing window doesn't take a second closing
+        snapshot of the day."""
+        if not self._close_loaded:
+            self._close_loaded = True
+            if not self.status.get("close_day"):
+                try:
+                    kept = db.json_value(db.get_setting("jobstatus:option-chains"), {}).get("close_day")
+                except Exception:
+                    kept = None
+                if kept:
+                    self.status["close_day"] = kept
+        return self.status.get("close_day")
 
     def prune_old(self, now: datetime):
         """Once a day, delete recordings older than keep_days so the database doesn't fill up."""
@@ -91,7 +107,7 @@ class Recorder:
             return 0
         if self.status["day"] != day:
             self.status.update(day=day, today=0)
-        saved = 0
+        saved, failed = 0, 0
         for ex, name in self.targets:
             for choice in ("current", "next"):
                 try:
@@ -107,18 +123,22 @@ class Recorder:
                     msg = str(e)
                     if "option_snapshots" in msg:     # the table isn't there yet
                         msg = "The option_snapshots table is missing: run supabase/schema.sql again in the Supabase SQL editor."
+                    failed += 1
                     self.status["last_error"] = f"{ex}:{name} {choice}: {msg[:200]}"
                     print("option snapshot failed:", self.status["last_error"])
         if saved:
             self.status["today"] += saved
-            self.status["last_at"] = now.isoformat()
-            if closing:
-                self.status["close_day"] = day           # one closing read a day
+            # one write, with the closing day in it, so the stored status has both (a deploy then doesn't read again);
+            # a pass that saved and failed nowhere clears the last error
+            more = {"close_day": day} if closing else {}      # one closing read a day
+            if not failed:
+                more["last_error"] = None
+            self.status.update(last_at=now.isoformat(), **more)
         return saved
 
     def close_due(self, now: datetime) -> bool:
         """The day's closing read is due and hasn't been taken."""
-        return close_window(now) and self.status.get("close_day") != now.astimezone(IST).date().isoformat()
+        return close_window(now) and self._closed_day() != now.astimezone(IST).date().isoformat()
 
     def start(self):
         if not self.targets:

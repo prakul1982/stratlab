@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
@@ -138,11 +138,13 @@ export function MoneyCalendarPage() {
     return [addDays(t, -7), addDays(t, 90)];
   }, [mode, cursor]);
 
+  const seq = useRef(0);     // the answer for the last window asked is the one shown: stepping months quickly can't show an earlier month
   const load = useCallback(() => {
     const [s, e] = range();
+    const n = ++seq.current;
     setError(null);
-    return api<View>(`/money/calendar?start=${s}&end=${e}`).then((v) => { setView(v); setRem((r) => r ?? v.reminders); })
-      .catch((err) => { setError(err instanceof Error ? err.message : "The calendar couldn't be read."); fail(err); });
+    return api<View>(`/money/calendar?start=${s}&end=${e}`).then((v) => { if (n === seq.current) { setView(v); setRem((r) => r ?? v.reminders); } })
+      .catch((err) => { if (n !== seq.current) return; setError(err instanceof Error ? err.message : "The calendar couldn't be read."); fail(err); });
   }, [range, fail]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { try { localStorage.setItem("stratlab.moneycal.mode", mode); } catch { /* storage off */ } }, [mode]);

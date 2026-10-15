@@ -36,7 +36,8 @@ def rsi(c: pd.Series, n: int) -> pd.Series:
     up = d.clip(lower=0).ewm(alpha=1 / n, adjust=False, min_periods=n).mean()
     dn = (-d.clip(upper=0)).ewm(alpha=1 / n, adjust=False, min_periods=n).mean()
     out = 100 - 100 / (1 + up / dn.replace(0, np.nan))
-    return out.where(~((dn == 0) & up.notna()), 100.0)
+    out = out.where(~((dn == 0) & up.notna()), 100.0)
+    return out.where(~((dn == 0) & (up == 0)), 50.0)       # no move either way (a flat series): neither strong nor weak
 
 
 def supertrend(df: pd.DataFrame, n: int, mult: float) -> pd.Series:
@@ -120,8 +121,10 @@ def adx(df: pd.DataFrame, n: int) -> pd.Series:
     tr = _wilder(true_range(df), n)
     pdi = 100 * _wilder(plus, n) / tr.replace(0, np.nan)
     mdi = 100 * _wilder(minus, n) / tr.replace(0, np.nan)
-    dx = (100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan)).fillna(0.0)
-    return _wilder(dx, n).where(tr.notna())
+    # no directional move (or no range) is no trend, 0; before the first n candles DX is blank, and so is ADX until n
+    # values of DX have been averaged (a 0 there was read as "no trend" on the first candles)
+    dx = (100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan)).fillna(0.0).where(tr.notna())
+    return _wilder(dx, n)
 
 
 def stoch_k(df: pd.DataFrame, n: int, smooth: int) -> pd.Series:
@@ -179,11 +182,41 @@ def market_values(df: pd.DataFrame, t: str, intraday: bool, closes: dict | None 
     return pd.Series(np.where(idx >= 0, vals[np.clip(idx, 0, None)], np.nan), index=df.index)
 
 
-def higher_tf(df: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, np.ndarray]:
+def base_minutes(df: pd.DataFrame) -> float | None:
+    """The candles' own length in minutes: the shortest step from one candle to the next (None with fewer than two)."""
+    if len(df) < 2:
+        return None
+    steps = df.t.diff().dropna()
+    steps = steps[steps > pd.Timedelta(0)]
+    return steps.min().total_seconds() / 60 if len(steps) else None
+
+
+def _final_closes_bucket(df: pd.DataFrame, bucket_end: pd.Timestamp, base_min: float | None) -> bool:
+    """Whether the final candle closes its higher-timeframe bucket: its close time reaches the bucket's end, or the day's
+    session is over (it closes when the earlier days' last candles usually closed). Live trading sees the final candle
+    as the newest closed one, so a backtest's candle at the same time reads the same value (the 10:00-10:15 candle
+    closes the 09:15-10:15 hour in both)."""
+    if not base_min:
+        return False
+    end = df.t.iloc[-1] + pd.Timedelta(minutes=base_min)
+    if end >= bucket_end:
+        return True
+    day = df.t.dt.normalize()
+    before = day < day.iloc[-1]
+    if not before.any():
+        return False
+    last = df.t[before].groupby(day[before]).max()          # each earlier day's last candle
+    usual = (last - last.index).median()
+    return df.t.iloc[-1] - day.iloc[-1] >= usual
+
+
+def higher_tf(df: pd.DataFrame, tf: str, base_min: float | None = None) -> tuple[pd.DataFrame, np.ndarray]:
     """Candles of a higher timeframe built from these ones, and for each original candle the index of the
-    last higher-timeframe candle that had closed by then (-1 if none), so nothing peeks at the future."""
+    last higher-timeframe candle that had closed by then (-1 if none), so nothing peeks at the future.
+    `base_min` is the candles' own length in minutes (read from the candles when not given)."""
     if tf == "1d":
         key = df.t.dt.normalize()
+        step = pd.Timedelta(days=1)
     else:
         step = pd.Timedelta(minutes={"15m": 15, "1h": 60}[tf])
         day = df.t.dt.normalize()
@@ -193,22 +226,29 @@ def higher_tf(df: pd.DataFrame, tf: str) -> tuple[pd.DataFrame, np.ndarray]:
     g = df.groupby(codes, sort=True)
     hdf = pd.DataFrame({"t": g.t.first(), "o": g.o.first(), "h": g.h.max(), "l": g.l.min(),
                         "c": g.c.last(), "v": g.v.sum()}).reset_index(drop=True)
-    last_of_bucket = np.append(codes[1:] != codes[:-1], False)   # the final candle's bucket may still be open
+    last_of_bucket = np.append(codes[1:] != codes[:-1], False)
+    # the final candle's bucket may still be open: it is closed once that candle's close reaches the bucket's end
+    if len(df) and _final_closes_bucket(df, key.iloc[-1] + step, base_min or base_minutes(df)):
+        last_of_bucket[-1] = True
     return hdf, np.where(last_of_bucket, codes, codes - 1)
 
 
-def compute_full(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
-    """compute(), plus the higher timeframe, "candles ago" and multiplier options a rule can add."""
+def compute_full(ref, df: pd.DataFrame, intraday: bool, base_min: float | None = None) -> pd.Series:
+    """compute(), plus the higher timeframe, "candles ago" and multiplier options a rule can add. On a higher timeframe,
+    "candles ago" counts that timeframe's completed candles: 0 is the last one that has closed, 1 the one before it. On
+    15-minute candles a daily value with 0 candles ago is yesterday's close until today's last candle closes the day,
+    and with 1 it is the day before yesterday's."""
     tf = getattr(ref, "tf", None)
+    ago = int(getattr(ref, "ago", None) or 0)
     if tf and len(df):
-        hdf, idx = higher_tf(df, tf)
+        hdf, idx = higher_tf(df, tf, base_min)
         base = ref.model_copy(update={"tf": None, "ago": None, "k": None})
-        vals = compute(base, hdf, intraday=tf != "1d").to_numpy(dtype=float)
+        vals = compute(base, hdf, intraday=tf != "1d").shift(ago).to_numpy(dtype=float)
         out = pd.Series(np.where(idx >= 0, vals[np.clip(idx, 0, None)], np.nan), index=df.index)
     else:
         out = compute(ref, df, intraday)
-    if getattr(ref, "ago", None):
-        out = out.shift(int(ref.ago))
+        if ago:
+            out = out.shift(ago)
     if getattr(ref, "k", None) and ref.t != "num":
         out = out * float(ref.k)
     return out
