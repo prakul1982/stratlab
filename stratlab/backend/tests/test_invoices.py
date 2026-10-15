@@ -407,10 +407,10 @@ def test_a_read_that_fails_while_invoicing_is_retried_by_the_webhook(monkeypatch
     def flaky(key):
         if key == "billing:u-x" and blips:
             blips.pop()
-            raise RuntimeError("read timed out")
+            raise TimeoutError("read timed out")
         return real(key)
     monkeypatch.setattr(db, "get_setting", flaky)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TimeoutError):
         billing.handle_webhook(body, "sig", "evt_8")
     assert real("rzp-event:evt_8") is None
     billing.handle_webhook(body, "sig", "evt_8")
@@ -430,3 +430,35 @@ def test_the_checkout_still_switches_the_plan_on_while_the_invoice_is_busy(monke
     p = db.get_profile("u-x")
     assert (p["plan"], p["plan_status"], p["razorpay_subscription_id"]) == ("pro", "active", "sub_5")
     assert seen["paid"] == ["pay_5"]
+
+
+def _alerts(monkeypatch) -> list:
+    told = []
+    monkeypatch.setattr("app.alerts.tell_admins", lambda subject, text, *a, **k: told.append((subject, text)) or 1)
+    return told
+
+
+def test_a_permanent_invoice_error_is_alerted_at_once_and_the_event_marked_handled(monkeypatch):
+    """A failure a retry would only repeat must not fail the webhook again and again (Razorpay disables it)."""
+    db, seen, body, _ = _charge_world(monkeypatch)
+    told = _alerts(monkeypatch)
+    monkeypatch.setattr(invoices, "tax_lines", lambda *a: (_ for _ in ()).throw(KeyError("state")))     # a bug
+    billing.handle_webhook(body, "sig", "evt_7")                       # not raised
+    assert db.get_setting("rzp-event:evt_7") and not db.get_setting("invoices:u-x")
+    assert len(told) == 1 and told[0][0] == "StratLab: no invoice for payment pay_9" and "u-x" in told[0][1]
+    assert seen["paid"] == ["pay_9"] and db.get_profile("u-x")["plan"] == "pro"      # the rest of the event still ran
+
+
+def test_a_transient_invoice_error_is_raised_five_times_then_given_up_and_alerted(monkeypatch):
+    db, seen, body, _ = _charge_world(monkeypatch)
+    told = _alerts(monkeypatch)
+    real = db.get_setting
+    monkeypatch.setattr(db, "get_setting", lambda key: (_ for _ in ()).throw(ConnectionError("db down"))
+                        if key == "billing:u-x" else real(key))
+    for _ in range(billing.INVOICE_TRIES):
+        with pytest.raises(ConnectionError):
+            billing.handle_webhook(body, "sig", "evt_6")
+        assert real("rzp-event:evt_6") is None and told == []
+    billing.handle_webhook(body, "sig", "evt_6")                       # the 6th try: no longer raised
+    assert real("rzp-event:evt_6") and len(told) == 1 and "failed 6 times" in told[0][1]
+    assert seen["paid"] == ["pay_9"]

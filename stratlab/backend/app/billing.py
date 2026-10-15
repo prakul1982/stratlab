@@ -181,11 +181,60 @@ def _stale(profile: dict, sub: dict) -> bool:
 PAYMENT_SUB = "payment-sub:"
 
 
+INVOICE_FAILS = "invoice-fails:"
+INVOICE_TRIES = 5          # transient failures for one payment that are raised (and so retried) before giving up
+
+
+def _transient(e: BaseException) -> bool:
+    """A failure that a retry can get past: another server holds the payment's claim, or the database (or the
+    network to it) failed to answer a read or a write. Anything else (bad data, a bug) fails the same way every time."""
+    import httpx
+    kinds: tuple = (invoices.InvoiceBusy, db.SettingConflict, httpx.TransportError, ConnectionError, TimeoutError)
+    try:
+        from postgrest.exceptions import APIError
+        kinds += (APIError,)
+    except ImportError:
+        pass
+    try:
+        from psycopg import OperationalError
+        kinds += (OperationalError,)
+    except ImportError:
+        pass
+    return isinstance(e, kinds)
+
+
+def _invoice_failed(payment: dict, profile: dict, e: Exception, why: str) -> None:
+    """Tell the site owner a payment was left without an invoice (it has to be issued by hand)."""
+    pid = payment.get("id")
+    print(f"invoice given up for payment {pid}: {why}:", str(e)[:160])
+    try:
+        from . import alerts
+        alerts.tell_admins(f"StratLab: no invoice for payment {pid}",
+                           f"The invoice for payment {pid} (user {profile.get('id')}, {profile.get('email') or 'no email'}) "
+                           f"couldn't be made: {why}. The error: {type(e).__name__}: {str(e)[:300]}. The payment went "
+                           "through and the plan is set; the invoice needs to be issued by hand.")
+    except Exception as x:
+        print("invoice alert failed:", str(x)[:160])
+
+
+def _failures(pid: str) -> int | None:
+    """This payment's transient invoice failures so far, this one included; None when they can't be counted."""
+    try:
+        got = db.update_setting(INVOICE_FAILS + pid[:80], lambda raw: json.dumps(int(db.json_value(raw, 0) or 0) + 1))
+        return int(json.loads(got))
+    except Exception as x:
+        print("invoice failure count failed:", str(x)[:160])
+        return None
+
+
 def invoice_for(profile: dict, sub: dict, payment: dict | None):
-    """The payment's invoice. A failure to make it (another server holds the payment's claim, or a read failed) is
-    raised: the webhook then isn't marked handled, and Razorpay's retry issues it. The rest of the event is safe to run
-    again (the plan change sets the same values, the receipt, analytics and invite reward go once per payment). The
-    checkout callback catches it, so the plan still switches on there and the webhook issues the invoice."""
+    """The payment's invoice. A transient failure to make it (another server holds the payment's claim, or the database
+    failed) is raised: the webhook then isn't marked handled, and Razorpay's retry issues it. The rest of the event is
+    safe to run again (the plan change sets the same values, the receipt, analytics and invite reward go once per
+    payment). After INVOICE_TRIES of them for one payment, or at once for any other failure (one a retry would only
+    repeat), it is logged and the site owner alerted instead, and None returned: a failure that never clears must not
+    fail the webhook over and over, or Razorpay disables it and every plan update stops. The checkout callback catches
+    what is raised, so the plan still switches on there and the webhook issues the invoice."""
     if not payment or not payment.get("id") or payment.get("status") not in (None, "captured", "authorized"):
         return None
     notes = sub.get("notes") or {}
@@ -194,6 +243,13 @@ def invoice_for(profile: dict, sub: dict, payment: dict | None):
         inv = invoices.make(payment, profile, plan, period)
     except Exception as e:
         print("invoice failed:", str(e)[:160])
+        if not _transient(e):
+            _invoice_failed(payment, profile, e, "an error a retry would repeat")
+            return None
+        n = _failures(payment["id"])
+        if n is not None and n > INVOICE_TRIES:
+            _invoice_failed(payment, profile, e, f"it failed {n} times")
+            return None
         raise
     try:   # which subscription and user a payment belongs to, for a later refund or chargeback
         db.set_setting(PAYMENT_SUB + payment["id"], json.dumps({"sub": sub.get("id"), "user": profile.get("id")}))
