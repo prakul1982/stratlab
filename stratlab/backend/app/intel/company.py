@@ -26,6 +26,8 @@ INDICES = {
 # way the option chains read NIFTY's spot (R7T-003: the other source's SENSEX stayed at the 8 Oct close after 9 Oct's open)
 KITE_INDEX = {"^NSEI": "NSE:NIFTY 50", "^BSESN": "BSE:SENSEX", "^NSEBANK": "NSE:NIFTY BANK"}
 _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
+# the index levels' reads have their own: with company pages filling the pool above, an index missed LEVELS_WITHIN (R11E)
+_index_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="indices")
 
 
 def market_open(region: str, now: datetime | None = None) -> bool:
@@ -630,19 +632,26 @@ class Research:
     # ---------- market pulse ----------
     LEVELS_WITHIN = 8.0       # seconds the index levels' reads may take together (R24-001: 20 s each, one after the other)
 
-    def indices(self, region: str, now: datetime | None = None) -> list[dict]:
+    def indices(self, region: str, now: datetime | None = None, kite_wait: float | None = None) -> list[dict]:
         """The market's index levels, each with the session it is of (see index_level). India's levels and day moves are
         the broker's live ones, the way NIFTY's spot is read for the option chains; the other source gives the 52-week
         range, and the level itself when the broker is offline. Every read is bounded: LEVELS_WITHIN for all of them, and
-        an index whose range hasn't come back by then keeps the broker's level without it."""
+        an index whose range hasn't come back by then keeps the broker's level without it. `kite_wait`: the broker's
+        request turn is waited for that long at most, else KiteBusy is raised (the pulse then keeps its last levels)."""
         import time as _time
+        from ..kite_service import KiteBusy
         out = []
         deadline = _time.monotonic() + self.LEVELS_WITHIN
-        futures = [(name, sym, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
+        futures = [(name, sym, _index_pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
         live: dict = {}
         if region == "IN" and self._kite():
+            keys = [KITE_INDEX[s] for _, s in INDICES["IN"]]
             try:
-                live = self.kite.index_quotes([KITE_INDEX[s] for _, s in INDICES["IN"]])
+                live = self.kite.index_quotes(keys) if kite_wait is None else self.kite.index_quotes(keys, max_wait=kite_wait)
+            except KiteBusy:
+                if kite_wait is not None:
+                    raise
+                print("index levels: broker quotes unavailable, busy")
             except Exception as e:
                 print("index levels: broker quotes unavailable,", str(e)[:120])
         for name, sym, f in futures:
@@ -680,10 +689,24 @@ class Research:
         PULSE_FRESH seconds old. Only the first request of a process waits, up to `wait` seconds: None while that read is
         still going. Each level's live and stale marks are worked out now, not when it was read (the open passes)."""
         levels, _ = self._snaps()
-        got, at = levels.get(region, lambda: self.indices(region), wait)
+        got, at = levels.get(region, lambda: self._levels_read(region), wait)
         if got is None:
             return None, None
         return [index_level(i["name"], i, region, now) for i in got], at
+
+    PULSE_KITE_WAIT = 2.0     # seconds a refresh of levels already kept waits for the broker's turn (as a page's quote)
+
+    def _levels_read(self, region: str) -> list[dict]:
+        """A fresh read of the levels for the pulse. Once some are kept: the broker's turn is waited for PULSE_KITE_WAIT
+        seconds at most (busy: the kept levels stay, the next request tries again), and an index this read missed keeps
+        its last row (with that row's own time, so it's marked stale as it should be) instead of dropping off the page."""
+        levels, _ = self._snaps()
+        kept = levels.kept(region)
+        if not kept or not kept[1]:
+            return self.indices(region)
+        got = self.indices(region, kite_wait=self.PULSE_KITE_WAIT)
+        new, old = {i["name"]: i for i in got}, {i["name"]: i for i in kept[1]}
+        return [new.get(n) or old[n] for n, _ in INDICES.get(region, []) if n in new or n in old]
 
     def headlines_now(self, region: str, wait: float = 3.0) -> list[dict]:
         """The market's headlines from memory, read again behind the page every NEWS_FRESH seconds; none while the first

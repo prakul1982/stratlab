@@ -515,12 +515,13 @@ class KiteService:
                 out[other] = row
         return out
 
-    def index_quotes(self, keys: list[str]) -> dict[str, dict]:
+    def index_quotes(self, keys: list[str], max_wait: float | None = None) -> dict[str, dict]:
         """Indices' live levels by their quote keys ("NSE:NIFTY 50", "BSE:SENSEX"): the level, the day's range, the previous
         close and the change against it, and the time of the reading. BSE's indices aren't in the day's instrument list
-        (only BSE-only companies are kept), so each answer's instrument token is kept for its candles (index_token)."""
+        (only BSE-only companies are kept), so each answer's instrument token is kept for its candles (index_token).
+        `max_wait`: KiteBusy when the next request turn is further off than that (see _slot)."""
         self._require()
-        self._throttle()
+        self._slot(max_wait)
         data = self.kite.quote(list(keys))
         tokens = self.__dict__.setdefault("_index_tokens", {})
         out = {}

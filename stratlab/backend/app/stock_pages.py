@@ -1129,7 +1129,10 @@ class Pages:
             stored = _setting(key)
         except Exception:
             return None
-        return (stored or {}).get("facts") or None
+        facts = (stored or {}).get("facts") or None
+        if facts and fresh(stored, region):
+            self.mem.set(key, facts, 600)            # what _get keeps for a fresh stored page, so the next view skips the parse
+        return facts
 
     adjust = None              # (region, symbol, facts) -> facts as served: the exchange's 52-week report taken in (R10O-007)
 

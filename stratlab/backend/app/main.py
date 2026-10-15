@@ -150,7 +150,8 @@ def warm_caches():
     """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
     option contracts), so the first people after a restart or the morning login don't all wait on them at once.
     Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
-    steps = [("stored company pages", db.warm_mirror),     # read whole once, here rather than on someone's page view
+    steps = [("pulse", lambda: [(research_hub.indices_now(r, wait=0), research_hub.headlines_now(r, wait=0)) for r in ("IN", "US")]),
+             ("stored company pages", db.warm_mirror),     # read whole once, here rather than on someone's page view
              ("company list", lambda: isin_list()),         # full names and ISINs, for search by name
              ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
@@ -498,16 +499,34 @@ def _database_failed(e: Exception, tb) -> bool:
     return bool(network) and any(f.filename.endswith(("/app/db.py", "/app/admin.py")) or "/postgrest/" in f.filename for f in tb)
 
 
+ERRORS_SAVE_AFTER = 2.0       # seconds between two writes of the error list: the rest of a burst goes in one write
+_errors_saving = threading.Lock()
+_errors_due = [False]          # a write is waiting to go
+_errors_saved_at = [float("-inf")]     # monotonic time of the last write
+
+
 def _save_errors():
-    """Keep the error list in the database too, so a restart doesn't wipe it."""
-    snapshot = json.dumps(RECENT_ERRORS[-25:])
+    """Keep the error list in the database too, so a restart doesn't wipe it. The first error is written at once; the
+    errors after it within ERRORS_SAVE_AFTER seconds go in one later write, of the list as it is then (an error storm
+    used to be a write storm: a thread and a write per error)."""
+    with _errors_saving:
+        if _errors_due[0]:
+            return
+        _errors_due[0] = True
+        delay = max(0.0, _errors_saved_at[0] + ERRORS_SAVE_AFTER - time.monotonic())
 
     def work():
+        with _errors_saving:
+            _errors_due[0] = False
+            _errors_saved_at[0] = time.monotonic()
+            snapshot = json.dumps(RECENT_ERRORS[-25:])
         try:
             db.set_setting("recent_errors", snapshot)
         except Exception as x:
             print("could not save errors:", x)
-    threading.Thread(target=work, daemon=True).start()
+    t = threading.Timer(delay, work)
+    t.daemon = True
+    t.start()
 
 
 def _load_errors():
@@ -744,6 +763,10 @@ def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
 
 @app.get("/me")
 def me(profile=Depends(current_profile)):
+    uid = profile["id"]
+    # the person's settings read below one by one, in one database call (R11E: 11 to 18 round trips on a cold /me)
+    db.prefetch_settings([alerts.ALERT_OFF + uid, daily_report.PREFS + uid, holdings.KEY + uid, user_data.WATCHLIST + uid,
+                          push.KEYS])
     try:
         lifecycle.seen(profile)       # remembers the visit; welcomes a brand-new account
     except Exception as e:
@@ -5121,9 +5144,34 @@ def parse_holidays(text: str) -> list[str]:
 
 
 # ---------- admin page (signed in with an ADMIN_EMAILS account) ----------
+OVERVIEW_FOR = 45                     # seconds Overview's counts are kept (the server's status is read each time)
+_overview = {"at": None, "client": None, "stats": None}
+_overview_lock = threading.Lock()
+
+
+def overview_stats(fresh: bool = False) -> dict:
+    """Overview's counts, kept OVERVIEW_FOR seconds: every Admin section opens with them, and each is a handful of
+    database reads. `fresh` (Refresh, or a change made from Admin) reads them again."""
+    with _overview_lock:
+        o = dict(_overview)
+    if not fresh and o["stats"] is not None and o["client"] == id(db.sb()) and time.monotonic() - o["at"] < OVERVIEW_FOR:
+        return o["stats"]
+    st = admin.stats(month_start_iso(), extra={"plan_interest": plan_interest.count})
+    with _overview_lock:
+        _overview.update(at=time.monotonic(), client=id(db.sb()), stats=st)
+    return st
+
+
+def forget_overview() -> None:
+    with _overview_lock:
+        _overview.update(at=None, client=None, stats=None)
+
+
 @app.get("/admin/overview")
-def admin_overview(_=Depends(admin.admin_profile)):
-    return {"server": server_status(), "stats": {**admin.stats(month_start_iso()), "plan_interest": plan_interest.count()}}
+def admin_overview(fresh: bool = False, _=Depends(admin.admin_profile)):
+    counts = _usage_pool.submit(overview_stats, fresh)        # the counts' reads while the server's status is read here
+    server = server_status()
+    return {"server": server, "stats": counts.result()}
 
 
 @app.get("/admin/users")

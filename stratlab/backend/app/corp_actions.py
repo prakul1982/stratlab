@@ -238,14 +238,14 @@ def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict
 
 # ---------- storage ----------
 CAL_MEMO_FOR = 60                    # seconds the parsed calendar is kept in memory for the pages that read it
-_cal_memo: dict = {}                 # (region, database client id) -> (monotonic time read, the calendar as load() gives it)
+_cal_memo: dict = {}                 # (region, id of the database client) -> (monotonic time read, the calendar as load() gives it)
 _cal_memo_lock = threading.Lock()
 
 
 def load_cached(region: str) -> dict:
     """load(), kept CAL_MEMO_FOR seconds for the company pages (a calendar of up to MAX_ROWS rows to read and parse on
     each); save() drops it. Read-modify-write paths use load()."""
-    key = (region, id(db.sb()))
+    key = (region, id(db._client))      # (not db.sb(): that would connect where settings are read some other way)
     with _cal_memo_lock:
         hit = _cal_memo.get(key)
     if hit is not None and time.monotonic() - hit[0] < CAL_MEMO_FOR:

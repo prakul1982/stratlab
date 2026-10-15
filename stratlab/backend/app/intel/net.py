@@ -258,27 +258,27 @@ class Source:
         hit = self.cache.get(key, max_age=ttl)
         if hit is not None:
             return (hit, self.cache.stored_at(key) or time.time()) if with_time else hit
+        arrived = time.monotonic()
         with self._flights.hold(key) as shared:      # callers asking for the same thing at once: one upstream call
-            if "error" in shared:
-                raise shared["error"]
-            if "value" in shared:
+            if shared.get("done", -1.0) >= arrived:  # the call that was under way when this one arrived: its outcome
+                if "error" in shared:
+                    raise shared["error"]
                 value, at = shared["value"]
                 return (value, at) if with_time else value
             hit = self.cache.get(key, max_age=ttl)
             if hit is not None:
                 return (hit, self.cache.stored_at(key) or time.time()) if with_time else hit
+            shared.pop("error", None)
             try:
                 value = self._get(key, path, params, ttl, kind)
+                at = time.time()
             except SourceError as e:
                 old = self._stale(key, e)
                 if old is None:
-                    shared["error"] = e
+                    shared.update(error=e, done=time.monotonic())
                     raise
-                shared["value"] = old
                 value, at = old
-                return (value, at) if with_time else value
-            at = time.time()
-            shared["value"] = (value, at)
+            shared.update(value=(value, at), done=time.monotonic())
             return (value, at) if with_time else value
 
     def _stale(self, key, e: SourceError) -> tuple | None:

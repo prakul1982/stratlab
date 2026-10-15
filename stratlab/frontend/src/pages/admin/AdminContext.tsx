@@ -66,14 +66,16 @@ export function AdminData({ children }: { children: ReactNode }) {
   const reloadJobs = useCallback(async () => {
     try { setJobs((await api<{ jobs: JobRow[] }>("/admin/jobs")).jobs); } catch (e) { fail(e); }
   }, [fail]);
-  const reload = useCallback(async () => {
+  const load = useCallback(async (fresh: boolean) => {
     setLoading(true);
-    // the three reads at once, each shown as it arrives: one after another made a cold Admin 7 s (R8O-007)
-    const ovDone = api<Overview>("/admin/overview").then(setOvState).catch(fail);
+    // the three reads at once, each shown as it arrives: one after another made a cold Admin 7 s (R8O-007). The server
+    // keeps Overview's counts 45 s; Refresh and a change made from a section read them again (fresh)
+    const ovDone = api<Overview>(fresh ? "/admin/overview?fresh=1" : "/admin/overview").then(setOvState).catch(fail);
     const libDone = api<Reported>("/admin/library").then(setReported).catch(fail);
     try { await Promise.all([ovDone, libDone, reloadJobs()]); } finally { setLoading(false); }
   }, [fail, reloadJobs]);
-  useEffect(() => { reload(); }, [reload]);
+  const reload = useCallback(() => load(true), [load]);
+  useEffect(() => { load(false); }, [load]);
   const value = useMemo<Ctx>(() => ({ ov, setOv: (f) => setOvState((o) => f(o)), jobs, reported, loading, reload, reloadJobs }), [ov, jobs, reported, loading, reload, reloadJobs]);
   return <AdminCtx.Provider value={value}>{children}</AdminCtx.Provider>;
 }
