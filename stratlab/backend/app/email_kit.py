@@ -604,7 +604,7 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
     ("- Revenue: ₹64,259 crore" puts the figure on the right), a line ending in ":" heads the rows after it, a web
     address becomes a link, the rest are paragraphs, and a closing "facts, not advice" sentence becomes the small
     print. The deep link is the one button."""
-    title = subject_line(subject).removeprefix("StratLab ").strip() or subject
+    title = subject_line(subject) or subject          # the subject's own words (a title reading "Weekly: ..." under a "StratLab weekly: ..." subject)
     title = title[:1].upper() + title[1:]
     blocks: list[Block] = []
     rows: list[Row] = []

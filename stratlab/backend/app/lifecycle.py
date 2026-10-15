@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from . import alerts, db, leader
 from . import email_kit as kit
-from .plans import IST, PLANS, _dt, effective_plan, free_basic_until, promo_until, trial_end
+from .plans import IST, PLANS, _dt, access_plan, effective_plan, free_basic_until, promo_active, promo_until, trial_end
 
 SENT = "lifecycle:"              # lifecycle:<uid>: {"welcome": "2026-10-03T10:00:00+00:00", "receipt:pay_1": ...}
 PREFS = "emailprefs:"            # emailprefs:<uid>: {"tips": false} once turned off
@@ -177,9 +177,13 @@ def _last_day(end: datetime) -> date:
 
 
 def _end_text(end: datetime) -> str:
-    """An instant in India time, as the pages say it: Thu 22 Oct at 5:20 pm IST."""
+    """An instant in India time, as the pages say it: on Thu 22 Oct at 5:20 pm IST. Midnight is the end of the day
+    before, not 12:00 am of the next one: at the end of Thu 22 Oct (India time)."""
     t = end.astimezone(IST)
-    return f"{t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
+    if (t.hour, t.minute) == (0, 0):
+        d = _last_day(end)
+        return f"at the end of {d:%a} {d.day} {d:%b} (India time)"
+    return f"on {t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
 
 
 def _url(path: str) -> str:
@@ -239,7 +243,7 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
         when = "tomorrow" if kind == "promo_before" else "today"
         end = ctx.get("end") or datetime.now(timezone.utc)
         return _compose(f"The launch offer ends {when}", [
-            f"Every Pro feature has been free for everyone during the launch offer. It ends on {_end_text(end)}.",
+            f"Every Pro feature has been free for everyone during the launch offer. It ends {_end_text(end)}.",
             "After that, the Free plan's limits apply again unless you choose a plan. Your notebooks, backtests and "
             "watchlist stay either way."], ("See plans", "/plans"), label="Launch offer")
     if kind == "inactive":
@@ -259,8 +263,17 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             tiles=[kit.Tile("Amount paid", amount), kit.Tile("Date", kit.fmt_date(inv["date"]) if inv.get("date") else "–")])
     if kind == "plan_ended":
         plan = PLANS.get(ctx.get("plan") or "pro", PLANS["pro"])["name"]
-        return _compose("Your StratLab plan has changed to Free", [
-            f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
+        now_plan = ctx.get("access") or access_plan(profile)
+        if now_plan == "free":
+            return _compose("Your StratLab plan has changed to Free", [
+                f"Your {plan} subscription has stopped, so your account is on the Free plan now.",
+                "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
+                ("See plans", "/plans"), transactional=tx, label="Your plan")
+        end = promo_until()
+        now_has = (f"Every Pro feature is free for everyone during the launch offer, which ends {_end_text(end)}."
+                   if promo_active() and end else f"Your account is on the {PLANS[now_plan]['name']} plan now.")
+        return _compose("Your StratLab subscription has stopped", [
+            f"Your {plan} subscription has stopped.", now_has,
             "Your notebooks, backtests and watchlist stay. You can choose a plan again any time."],
             ("See plans", "/plans"), transactional=tx, label="Your plan")
     if kind == "invite_reward":
@@ -348,7 +361,7 @@ def sample(kind: str, now: datetime | None = None) -> dict:
     if kind == "receipt":
         return {"plan": "pro", "period": "month", "invoice": sample_invoice(now)}
     if kind == "plan_ended":
-        return {"plan": "pro"}
+        return {"plan": "pro", "access": "free"}
     if kind == "invite_reward":
         return {"role": "referrer", "until": now + timedelta(days=30), "banked": 0}
     return {}
@@ -420,6 +433,10 @@ def receipt(profile: dict, invoice: dict, plan: str, period: str) -> bool:
 
 def plan_ended(profile: dict, sub_id: str, plan: str | None) -> bool:
     """One note per subscription that stopped."""
+    try:
+        profile = db.get_profile(profile["id"])        # as it is now, after the subscription ended (the caller's copy is from before)
+    except Exception as e:
+        print("plan ended: profile not re-read,", str(e)[:120])
     return send(profile, "plan_ended", f"plan_ended:{sub_id}", {"plan": plan if plan in PLANS else "pro"})
 
 

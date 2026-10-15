@@ -408,3 +408,27 @@ def test_a_follower_shows_running_sessions_from_their_saved_state_and_passes_a_s
         assert [r["status"] for r in rows if r["id"] == sid] == ["stopped"]          # the leader's next reconcile detaches it
     finally:
         built["close"]()
+
+
+def test_a_paper_trade_alert_writes_money_the_way_the_emails_do(monkeypatch):
+    """Price and P&L with the email kit's money(): the rupee sign, Indian digit grouping, a real minus, no currency code."""
+    mgr, reg = make_manager()
+    calls = offline_world(monkeypatch, mgr, [bar5(i) for i in range(40)])
+    row = {"id": "s1", "user_id": "u", "name": "Always in", "strategy": STOP1, "instrument": {**reg.resolve("CRYPTO:BTC-USD")[1], "currency": "INR"},
+           "started_at": "2026-10-12T09:00:00+00:00"}
+    s = live.LiveSession(mgr, row)
+    sell = {"side": "sell", "qty": 10, "px": 1234567.5, "t": "2026-10-12T10:00:00+00:00", "why": "Stop loss", "pnl": -123456.4}
+    buy = {"side": "buy", "qty": 10, "px": 1234567.5, "t": "2026-10-12T10:00:00+00:00", "pnl": None}
+    mgr.on_orders(s, [buy])
+    mgr.on_orders(s, [sell])
+    texts = [c[2] for c in calls if c[0] == "alert"]
+    assert texts[0].endswith(" at ₹12,34,567.50 (Always in)")
+    assert "at ₹12,34,567.50, stop loss, P&L −₹1,23,456 (Always in)" in texts[1]
+    assert not any("INR" in t or "-123" in t for t in texts)
+    # an options structure's alert says it the same way
+    subject, text = live.structure_alert(s, [buy, sell], -2500.0)
+    assert "at ₹12,34,567.50" in text and "net P&L −₹2,500 after charges" in text and "INR" not in text
+    # and so does the one alert for candles that closed while the server was down
+    del calls[:]
+    mgr.replay(s, lambda: mgr.on_orders(s, [buy, sell]))
+    assert "BUY 10 BTC/USD at ₹12,34,567.50 (order, candle" in calls[-1][2] and "INR" not in calls[-1][2]

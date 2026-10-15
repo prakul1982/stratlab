@@ -91,7 +91,7 @@ def market_sections(f: dict) -> list[dict]:
 def stock_lines(r: dict, since: str) -> list[dict]:
     lines = []
     if r.get("change_pct") is not None:
-        lines.append({"text": f"Price {_num(r['price'])}, {_pct(r['change_pct'])} since {_day(since)}", "url": None})
+        lines.append({"text": f"Price {_num(r['price'])}, {_pct(r['change_pct'])} since {_day(r.get('since_day') or since)}", "url": None})
     if r.get("stage_changed"):
         lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}, was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
     elif r.get("stage"):
@@ -135,7 +135,7 @@ def stock_sections(f: dict) -> list[dict]:
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
-                  change_pct=r.get("change_pct"), since=f"since {_day(f['since'])}" if r.get("change_pct") is not None else None)
+                  change_pct=r.get("change_pct"), since=f"since {_day(r.get('since_day') or f['since'])}" if r.get("change_pct") is not None else None)
             for r in f["stocks"]]})
     if f.get("results"):
         out.append({"title": "Results this week", "items": [result_item(r) for r in f["results"]]})
@@ -386,7 +386,7 @@ def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
     out = []
     for i in indices[:3]:
         sub = "over the week" if weekly and i.get("change_pct") is not None else (
-            f"{kit.pct_plain(i['from_high_pct'], 1)} below its 52-week high" if i.get("from_high_pct") else None)
+            f"{kit.pct_plain(i['from_high_pct'], 1)} below its 52-week high" if (i.get("from_high_pct") or 0) < 0 else None)
         out.append(kit.Tile(i["name"], kit.num(i["price"]), i.get("change_pct"), sub=sub, tone=_tone(i["name"])))
     return out
 
