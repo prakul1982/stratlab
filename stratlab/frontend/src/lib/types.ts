@@ -209,7 +209,9 @@ export interface OptionStrategy {
   sizing: { mode: "lots" | "margin"; lots: number; capital: number; safety: number };
   costs: { brokerage: number; slippageTicks: number; freeze: number };
   notes: string;
-  signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none" } | null;
+  signal?: { rules: Strategy; notebook?: string | null; name: string; short: "mirror" | "none";
+    /** when these rules were read from the notebook (an instant): the page says "as of" it */
+    asOf?: string } | null;
   vix?: { min: number; max: number } | null;     // enter only while India VIX is inside this band (0 = that end open)
 }
 export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; lots?: Record<string, number>; venue: string; popular: boolean; freeze: number; index: boolean }
@@ -274,7 +276,9 @@ export interface OptionSnapshot {
   events: { t: string; side: "buy" | "sell"; qty: number; px: number; why: string; sym: string; pnl?: number; slices?: number;
     strike?: number; opt?: "CE" | "PE"; pick?: string; kind?: "skip"; vix?: number }[];
   trades: OptTrade[]; equity_curve: { t: string; eq: number }[];
-  account: { capital: number; equity: number; cash: number; realised: number; today: number; halted: boolean; entries_today: number;
+  account: { capital: number; equity: number; cash: number; realised: number;
+    /** null when the saved day isn't today (a stopped or paused session, R5B) */
+    today: number | null; halted: boolean; entries_today: number;
     trades: number; wins: number; unrealised: number;
     /** after a trade closed: when the gap the rules keep between trades ends (an instant), and that time ("13:41") when it
      * falls before the day's last entry (R7T-013) */

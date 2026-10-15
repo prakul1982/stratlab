@@ -36,7 +36,10 @@ const ACCEPT = ".json,.pine,.txt,.py,.afl,.mq4,.mq5,.md";
 const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do. Option structures (straddles, strangles, condors and the like) open in the Options tab instead.";
 
 /** Import a strategy from a file or pasted text, then hand it over like an idea the AI built. */
-export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Promise<void> | void; market?: string }) {
+export function ImportStrategy({ onBuilt, market }: {
+  /** false when the notebook wasn't made: the pasted script stays, to try again */
+  onBuilt: (b: Built) => Promise<boolean | void> | boolean | void; market?: string;
+}) {
   const { refreshMe, fail, notify } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
@@ -86,12 +89,12 @@ export function ImportStrategy({ onBuilt, market }: { onBuilt: (b: Built) => Pro
       const group = out.group ?? (out.universe ? await groupFor(out.universe, out.market || market || "IN") : null);
       if (group) instrument = null;
       const fallback = !out.strategy && !out.used_ai ? "The AI translator was busy, so StratLab's built-in Pine Script reader was used. It covers moving averages, RSI, crossovers and percent stops." : "";
-      await onBuilt({
+      const made = await onBuilt({
         strategy, instrument, group,
         question: `Does the imported "${strategy.name}" strategy hold up?`,
         gaps: { mentioned: out.mentioned || ["exit", "sl", "tgt", "tf", "instrument"], notes: out.notes || [], instName: out.instrument ?? null, usedAI: out.used_ai, fallback },
       });
-      setText(""); setFile("");
+      if (made !== false) { setText(""); setFile(""); }
     } catch (e) {
       const err = e as ApiError;
       if (["nothing_imported", "bad_import", "ai_busy", "ai_failed", "ai_limit", "ai_daily_limit"].includes(err.code || "")) setNote(err.message);

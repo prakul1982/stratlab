@@ -175,6 +175,7 @@ class NotebookReq(BaseModel):
     notes: Optional[str] = Field(None, max_length=4000)
     strategy: Optional[Strategy] = None
     instrument: Optional[str] = Field(None, max_length=60)
+    currency: Optional[str] = Field(None, pattern=r"^[A-Za-z]{0,8}$")    # an uploaded CSV's currency, as picked for it
     pinned: Optional[bool] = None
     group: Optional[GroupReq] = None
     clearGroup: bool = False
