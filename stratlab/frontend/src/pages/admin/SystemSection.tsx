@@ -24,7 +24,7 @@ const ERRORS: Column<ServerError>[] = [
 /** Admin → System: server errors, the other services, AI providers, the feature check, and real prices for the tests. */
 export function SystemSection() {
   const { notify, fail, me } = useApp();
-  const { ov } = useAdmin();
+  const { ov, reload } = useAdmin();
   const chans = me?.alerts.channels;      // which ways of sending an alert the server has (the user's Settings shows only those)
   const [busy, setBusy] = useState<string | null>(null);
   const [filing, setFiling] = useState<FilingCheck | null>(null);
@@ -63,7 +63,7 @@ export function SystemSection() {
         {/* until the status has arrived there is nothing to count: a "0 errors, nothing has crashed" then would be false comfort (R7M-007) */}
         <CardHead title={sv ? `Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})` : "Server errors"}
           info="Crashes newest first: those since the server last started, and the last ones from before it, which are kept across a restart. Users see the ref code in the error message." />
-        {!sv ? <Skeleton label="Loading the server errors" lines={2} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
+        {!sv ? <Skeleton label="Loading the server errors" lines={2} onRetry={() => { void reload(); }} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
           : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.ref} columns={ERRORS} />}
       </Card>
 

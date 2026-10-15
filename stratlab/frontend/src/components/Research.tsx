@@ -1,3 +1,4 @@
+import { DENSE_BARS, compactValue, labelledBar, shortYear } from "../lib/phoneFit";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
@@ -225,19 +226,20 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
         {growth != null ? <span className="k-small k-muted"><Signed value={growth}>{pct(growth)}</Signed> a year</span>
           : lossYears ? <span className="k-small k-muted">loss years in between, so no yearly rate</span> : null}
       </div>
-      <div className="tbars">
+      <div className={`tbars${points.length >= DENSE_BARS ? " dense" : ""}`}>
         {points.map((p, i) => {
+          const compact = points.length >= DENSE_BARS ? compactValue(p.v, unit) : null;
           const h = Math.max(2, (Math.abs(p.v) / span) * PLOT);
           const neg = p.v < 0;
           const cls = `tbar-bar${neg ? " neg" : i === points.length - 1 ? ` last ${tone}` : ""}`;
           return (
-            <div key={p.y} className="tbar" title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
-              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{trendShort(p.v, unit) && <span className="tbar-short">{trendShort(p.v, unit)}</span>}</span>
+            <div key={p.y} className={`tbar${labelledBar(i, points.length) ? "" : " alt"}`} title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
+              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{(compact ?? trendShort(p.v, unit)) && <span className="tbar-short">{compact ?? trendShort(p.v, unit)}</span>}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 {down > 0 && <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />}
                 <rect className={cls} data-v={p.v} x="1.5" width="7" y={neg ? zero : zero - h} height={h} />
               </svg>
-              <span className="tbar-year">{p.y}</span>
+              <span className="tbar-year"><span className="tbar-full">{p.y}</span><span className="tbar-short">{shortYear(p.y)}</span></span>
             </div>
           );
         })}
@@ -370,7 +372,7 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)
   return (
-    <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
+    <DataTable scrollEnd label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
       columns={[{ key: "m", header: "₹ cr", rowHeader: true, cell: (r) => r.name },
         ...q.cols.map((c, i) => ({ key: c, header: c, numeric: true, cell: (r: (typeof rows)[number]) => r.cells[i] }))]} />
   );
