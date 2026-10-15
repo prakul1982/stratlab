@@ -44,7 +44,7 @@ STRATEGIES: dict[str, dict] = {
                 "leaves when the price crosses back below the Supertrend.",
         "tf": "1d", "groups": [("IN", "nifty50"), ("US", "us_mega")],
         "body": {"entry": [_c({"t": "stage", "p": 150, "m": 20}, "eq", _num(2)), _c(PRICE, "gt", {"t": "supertrend", "p": 10, "m": 3})],
-                 "exit": [_c(PRICE, "xb", {"t": "supertrend", "p": 10, "m": 3})], "risk": {"sl": 12}}},
+                 "exit": [_c(PRICE, "xb", {"t": "supertrend", "p": 10, "m": 3})], "risk": {"sl": 12, "maxAlloc": 20}}},       # maxAlloc 20 as in the scan template (scan.ST_S2)
     "ema-20-50": {
         "name": "20/50 EMA cross",
         "text": "Enters when the 20-day exponential average crosses above the 50-day one; leaves when it crosses back below.",

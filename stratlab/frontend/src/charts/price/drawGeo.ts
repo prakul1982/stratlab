@@ -256,11 +256,18 @@ export function cleanDrawings(v: unknown): Drawing[] {
   return out;
 }
 
+/** A replay's id as a saved symbol. The server upper-cases symbols, so lower-case ids (the app's own are hex) keep the
+ *  plain upper-case form, and each capital letter is spelled "_" plus itself: "abc" and "ABC" stay two rows. A real
+ *  "_" in an id is doubled. */
+export function replaySymbol(id: string): string {
+  return id.replace(/[_A-Z]/g, (c) => `_${c}`).replace(/[^A-Za-z0-9_-]/g, "-").toUpperCase().slice(0, 40);
+}
+
 /** The market code and symbol the server keeps drawings under, from a chart's storage key ("IN:RELIANCE",
  *  "CRYPTO:BTC-USD", "REPLAY-abc"). A key with no colon goes under "OTHER", or "REPLAY" for a replay's. */
 export function splitKey(key: string): { region: string; symbol: string } {
   const i = key.indexOf(":");
   if (i > 0 && /^[A-Za-z][A-Za-z0-9]{1,11}$/.test(key.slice(0, i)) && key.slice(i + 1)) return { region: key.slice(0, i).toUpperCase(), symbol: key.slice(i + 1).toUpperCase() };
-  if (key.startsWith("REPLAY-") && key.length > 7) return { region: "REPLAY", symbol: key.slice(7).toUpperCase() };
+  if (key.startsWith("REPLAY-") && key.length > 7) return { region: "REPLAY", symbol: replaySymbol(key.slice(7)) };
   return { region: "OTHER", symbol: key.toUpperCase().replace(/[^A-Z0-9:^&._=-]/g, "_").slice(0, 40) || "X" };
 }

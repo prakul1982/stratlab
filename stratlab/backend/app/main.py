@@ -1188,7 +1188,7 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
     if req.group:
         payload["group"] = group_body(req.group)      # the group the notebook tests on, so an import sets it up again (R11C-013)
     name = "".join(ch if ch.isalnum() else "-" for ch in req.strategy.name).strip("-") or "strategy"
-    return Response(json.dumps(payload, indent=2), media_type="application/json",
+    return Response(json.dumps(payload, separators=(",", ":")), media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 

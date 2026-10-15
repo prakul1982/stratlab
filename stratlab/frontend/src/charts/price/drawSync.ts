@@ -5,8 +5,8 @@ import { api } from "../../lib/api";
 import { cleanDrawings, splitKey, type Drawing } from "./drawGeo";
 
 export interface SavedStudy { id: string; type: string; params: number[]; slot: number }
-export interface Layout { tf?: string; range?: string; type?: string; volume?: boolean; hide_drawings?: boolean; studies?: SavedStudy[] }
-export interface Saved { drawings: Drawing[]; layout: Layout | null; at: number; dirty: boolean }
+export type { Layout, Saved } from "./drawChoose";
+import type { Layout, Saved } from "./drawChoose";
 
 const LS = "stratlab.pc.dr.";
 const TFS = ["5m", "15m", "1h", "1d", "1w", "1mo"];
@@ -18,9 +18,10 @@ export function readLocal(key: string): Saved | null {
     const raw = localStorage.getItem(LS + key);
     if (!raw) return null;
     const v = JSON.parse(raw);
-    if (Array.isArray(v)) return { drawings: cleanDrawings(v), layout: null, at: 0, dirty: false };          // the first chart's format
+    if (Array.isArray(v)) return { drawings: cleanDrawings(v), layout: null, at: 0, dirty: false, synced: false };          // the first chart's format
     if (!v || typeof v !== "object") return null;
-    return { drawings: cleanDrawings(v.drawings), layout: cleanLayout(v.layout), at: Number(v.at) || 0, dirty: v.dirty === true };
+    return { drawings: cleanDrawings(v.drawings), layout: cleanLayout(v.layout), at: Number(v.at) || 0, dirty: v.dirty === true,
+      synced: v.synced === true || (v.synced === undefined && v.dirty !== true && Number(v.at) > 0) };          // a copy saved before this flag: sent when not dirty
   } catch { return null; }
 }
 
@@ -56,20 +57,16 @@ export async function fetchRemote(key: string): Promise<{ drawings: Drawing[]; l
   } catch { return null; }
 }
 
-export async function pushRemote(key: string, drawings: Drawing[], layout: Layout | null): Promise<boolean> {
+/** Sends the copy. `refused` is the server's own message when it turned the copy down for good (too big), else null. */
+export async function pushRemote(key: string, drawings: Drawing[], layout: Layout | null): Promise<{ ok: boolean; refused: string | null }> {
   const { region, symbol } = splitKey(key);
   try {
     await api(`/me/drawings/${encodeURIComponent(region)}/${encodeURIComponent(symbol)}`, { method: "PUT", body: { drawings, layout } });
-    return true;
-  } catch { return false; }
+    return { ok: true, refused: null };
+  } catch (e) {
+    const x = e as { status?: number; code?: string; message?: string };
+    return { ok: false, refused: x.status === 413 || x.code === "drawings_too_big" ? (x.message || "There are too many drawings on this chart to save.") : null };
+  }
 }
 
-/** Which copy to show: an unsent local one newer than the account's wins (and is sent); otherwise the account's. */
-export function choose(local: Saved | null, remote: { drawings: Drawing[]; layout: Layout | null; at: number } | null):
-  { use: { drawings: Drawing[]; layout: Layout | null }; send: boolean } {
-  const has = (s: { drawings: Drawing[]; layout: Layout | null } | null) => !!s && (s.drawings.length > 0 || !!s.layout);
-  if (!remote) return { use: local ?? { drawings: [], layout: null }, send: false };
-  if (local && has(local) && (local.dirty ? local.at >= remote.at : !has(remote))) return { use: local, send: true };
-  if (local?.dirty && !has(local) && local.at >= remote.at) return { use: local, send: true };          // everything was deleted offline
-  return { use: remote, send: false };
-}
+export { choose } from "./drawChoose";

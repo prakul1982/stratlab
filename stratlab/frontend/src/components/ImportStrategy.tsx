@@ -32,6 +32,8 @@ async function groupFor(u: NonNullable<ImportOut["universe"]>, market: string): 
   return { id: u.preset ?? "custom", name, market, members: members.slice(0, 50), maxOpen: Math.max(1, Math.min(u.maxOpen ?? 10, members.length, 50)) };
 }
 
+/** The most a pasted or chosen strategy can hold. A StratLab export of a large notebook is 20-30 KB. */
+export const MAX_IMPORT = 60000;
 const ACCEPT = ".json,.pine,.txt,.py,.afl,.mq4,.mq5,.md";
 const HELP_TEXT = "Bring in a strategy you already have. A StratLab export loads exactly as it was. TradingView Pine Script, Python (Backtrader, backtesting.py and the like), MetaTrader, AmiBroker or a written description are translated into StratLab rules by the AI; Pine Script also works without it. Anything that can't be translated is listed on the notebook so you can decide what to do. Option structures (straddles, strangles, condors and the like) open in the Options tab instead.";
 
@@ -43,7 +45,7 @@ export function ImportStrategy({ onBuilt, market }: {
   const { refreshMe, fail, notify } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
-  const [text, setText] = useState(() => ((loc.state as { importText?: string } | null)?.importText ?? "").slice(0, 20000));
+  const [text, setText] = useState(() => ((loc.state as { importText?: string } | null)?.importText ?? "").slice(0, MAX_IMPORT));
   const [file, setFile] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -52,7 +54,9 @@ export function ImportStrategy({ onBuilt, market }: {
   const readFile = async (f: File | undefined) => {
     if (!f) return;
     if (f.size > 200_000) { setNote("That file is too big to be a strategy. Pick the strategy file itself (under 200 KB)."); return; }
-    setText((await f.text()).slice(0, 20000));
+    const t = await f.text();
+    if (t.length > MAX_IMPORT) { setNote(`That file is too long to import (${t.length.toLocaleString()} characters; the limit is ${MAX_IMPORT.toLocaleString()}). Pick a shorter file.`); return; }
+    setText(t);
     setFile(f.name);
     setNote(null);
   };
@@ -113,7 +117,7 @@ export function ImportStrategy({ onBuilt, market }: {
         <input ref={input} type="file" accept={ACCEPT} hidden onChange={(e) => readFile(e.target.files?.[0])} />
       </div>
       <label className="sr-only" htmlFor="import-text">Or paste the strategy</label>
-      <textarea id="import-text" className="k-textarea k-mono" value={text} maxLength={20000} spellCheck={false}
+      <textarea id="import-text" className="k-textarea k-mono" value={text} maxLength={MAX_IMPORT} spellCheck={false}
         placeholder="…or paste it here: a StratLab export, Pine Script, Python, MetaTrader, AmiBroker or plain words"
         onChange={(e) => { setText(e.target.value); if (!e.target.value) setFile(""); }} />
       <div className="k-row">

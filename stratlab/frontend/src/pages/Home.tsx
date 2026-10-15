@@ -2,6 +2,7 @@ import { Explore } from "../components/Explore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { findPrefill, type Prefill } from "../lib/prefill";
 import { useApp } from "../lib/app";
 import { ago } from "../lib/format";
 import { blankStrategy, parseStrategyText, riskForCurrency, STARTERS } from "../lib/rules";
@@ -114,11 +115,10 @@ function Starters({ where }: { where?: Where | null }) {
 
 const LAST_MARKET = "stratlab.lastMarket";
 
-type Prefill = { market: string; symbol?: string; instrumentId?: string | null; text?: string };
 
 /** When Research hands over a company (and maybe an idea), pick its market and instrument up front. A public company
  * page links here as /new?market=IN&symbol=RELIANCE. */
-function usePrefill(setWhere: (w: Where) => void): Prefill | null {
+function usePrefill(setWhere: (w: Where) => void, setMissing: (s: string) => void): Prefill | null {
   const loc = useLocation();
   const q = new URLSearchParams(loc.search);
   const market = (q.get("market") || "").toUpperCase(), symbol = q.get("symbol") || "";
@@ -128,16 +128,12 @@ function usePrefill(setWhere: (w: Where) => void): Prefill | null {
     if (!prefill) return;
     let live = true;
     setWhere({ market: prefill.market, instrument: null });
+    setMissing("");
     (async () => {
-      let inst: Instrument | null = null;
-      try {
-        if (prefill.instrumentId) inst = await api<Instrument>(`/instruments/${encodeURIComponent(prefill.instrumentId)}`);
-        else if (prefill.symbol) {
-          const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(prefill.symbol)}&market=${prefill.market}`);
-          inst = rows.find((r) => r.symbol.toUpperCase() === prefill.symbol!.toUpperCase() && !r.fno) ?? null;
-        }
-      } catch { inst = null; }
-      if (live && inst) setWhere({ market: prefill.market, instrument: inst });
+      const inst = await findPrefill(prefill, api);
+      if (!live) return;
+      if (inst) setWhere({ market: prefill.market, instrument: inst });
+      else if (prefill.symbol) setMissing(`Couldn't find ${prefill.symbol} in ${prefill.market}. Pick the instrument below.`);
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,7 +145,8 @@ function usePrefill(setWhere: (w: Where) => void): Prefill | null {
 export function NewNotebook({ hide = [] }: { hide?: string[] }) {
   const { markets } = useApp();
   const [where, setWhere] = useState<Where>({ market: "", instrument: null });
-  const prefill = usePrefill(setWhere);
+  const [missing, setMissing] = useState("");
+  const prefill = usePrefill(setWhere, setMissing);
   const loc = useLocation();
   const [importing, setImporting] = useState(new URLSearchParams(loc.search).has("import"));
   const importRef = useRef<HTMLElement>(null);
@@ -174,6 +171,7 @@ export function NewNotebook({ hide = [] }: { hide?: string[] }) {
       {new URLSearchParams(loc.search).get("then") === "group" && !prefill?.symbol && (
         <Notice>Testing on a group: describe the rules here (or name the group, like "on NIFTY 50 stocks"). Next you'll pick the stocks or coins.</Notice>
       )}
+      {missing && <Notice tone="warn">{missing}</Notice>}
       {prefill?.symbol ? (
         <Notice>From Research: testing {prefill.text ? "an idea" : "a strategy"} on {prefill.symbol}. Check the rules below, then build.</Notice>
       ) : (
