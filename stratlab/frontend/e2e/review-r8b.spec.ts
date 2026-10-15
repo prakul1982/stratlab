@@ -65,7 +65,7 @@ test("the PCR table has a Strikes read column, not an All strikes read one that 
     strikes_read: 31, near_strikes: 15, spot: 22520.45, source: "live", at_close: true, as_of: "2026-10-09T15:41:00+05:30" }];
   const errors = await open(page, "/trade/positioning", [[/\/trade\/positioning\/pcr$/, { pcr }]]);
   const table = page.locator("#pos-pcr");
-  await expect(table.getByRole("columnheader", { name: "Strikes read" })).toBeVisible({ timeout: 30_000 });
+  await expect(table.getByRole("columnheader", { name: "Strikes in the PCR" })).toBeVisible({ timeout: 30_000 });     // R24-004: renamed
   await expect(table.getByRole("columnheader", { name: "All strikes read" })).toHaveCount(0);
   await expect(table.locator("tbody tr").first()).toContainText("31");
   expect(errors).toEqual([]);

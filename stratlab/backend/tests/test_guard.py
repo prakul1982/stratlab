@@ -84,7 +84,8 @@ def test_alert_contacts_are_checked():
 
 def test_public_health_has_no_provider_details():
     body = TestClient(main.app).get("/health").json()
-    assert set(body) == {"ok", "data_online", "feed_connected", "feed", "ai_configured"}
+    # R24-009: and the build's short commit, which names no provider
+    assert set(body) == {"ok", "data_online", "feed_connected", "feed", "ai_configured", "version"}
     assert body["feed"] in ("idle", "connected", "disconnected")
 
 

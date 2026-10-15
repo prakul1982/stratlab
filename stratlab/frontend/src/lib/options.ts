@@ -230,3 +230,13 @@ export function signalFrom(nb: { id: string; name: string; strategy: OptSignal["
 export function signalLine(sig: Pick<OptSignal, "name" | "asOf">): string {
   return `Rules from ${sig.name}${sig.asOf ? `, as of ${fmtDateTime(sig.asOf, { tz: IST, year: false, zone: true })}` : ", as of when they were picked"}`;
 }
+
+/** The open trade's costs line, counting the orders the list under it shows (R24-007: "Costs so far ₹1,860 over 8 orders"
+ * above "Orders in this trade (4)": the 8 were the exchange orders after each was split at the freeze limit). `orders` are
+ * the trade's orders as listed; a split order says how many exchange orders it was sent as. */
+export function costsLine(costs: string, orders: { slices?: number }[]): string {
+  const sent = orders.filter((o) => (o.slices ?? 1) > 0);
+  const n = sent.length, slices = sent.reduce((a, o) => a + (o.slices ?? 1), 0);
+  return `Costs so far ${costs} over the ${n} order${n === 1 ? "" : "s"} in this trade`
+    + (slices > n ? ` (sent as ${slices} exchange orders, split at the exchange's limit per order)` : "") + ".";
+}

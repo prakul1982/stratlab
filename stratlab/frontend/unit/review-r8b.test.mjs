@@ -22,7 +22,7 @@ test("R8B-002: the paper overview gives the deepest fall in money and its day, n
 test("R8B-005: the PCR table says how many strikes were read, never an 'All strikes read' column that repeats the PCR", async () => {
   const page = read("src/pages/PositioningPage.tsx");
   assert.doesNotMatch(page, /header: "All strikes read"/);
-  assert.match(page, /header: "Strikes read"/);
+  assert.match(page, /header: "Strikes in the PCR"/);              // R24-004: renamed, one basis on every row
   const { strikesRead, ratio } = await import("../src/lib/positioning.ts");
   assert.equal(strikesRead(31, 15, 1.09, ratio), "31 strikes read");                       // the live read: the near window only
   assert.equal(strikesRead(81, 15, 0.6, ratio), "all strikes read 0.60 (81 strikes)");      // a wider read: its own PCR

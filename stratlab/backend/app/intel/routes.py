@@ -386,14 +386,36 @@ def quotes(region: str = "IN", symbols: str = "", profile=Depends(current_profil
 
 @router.get("/pulse")
 def pulse(region: str = "IN", focus: str = "", profile=Depends(current_profile)):
+    """The index levels and headlines from memory, read again behind the page (R24-001: the request read them itself and
+    took 13 to 40 s at India's open). `pending`: the first read since the server started isn't back yet; ask again."""
     r = region_of(region)
-    indices = source_call(lambda: hub.indices(r))
-    try:
-        news = hub.headlines(r, focus[:60])
-    except SourceError:
-        news = []
+    if not focus.strip() and hasattr(hub, "headlines_now"):
+        hub.headlines_now(r, wait=0)             # the headlines' read starts now, beside the levels', not after them
+    indices, at = source_call(lambda: _levels_now(r, 6.0))
+    news = _news_now(r, 1.0) if not focus.strip() else _focused_news(r, focus[:60])
+    if indices is None:
+        return ok({"indices": [], "headlines": news, "missing": [], "pending": True})
     got = {i["name"] for i in indices}
-    return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got]})
+    return ok({"indices": indices, "headlines": news, "missing": [n for n, _ in INDICES.get(r, []) if n not in got],
+               "read_at": datetime.fromtimestamp(at, timezone.utc).isoformat(timespec="seconds") if at else None})
+
+
+def _levels_now(r: str, wait: float):
+    """The hub's levels from memory (Research.indices_now); a hub without that reads them now."""
+    now = getattr(hub, "indices_now", None)
+    return now(r, wait=wait) if now else (hub.indices(r), None)
+
+
+def _news_now(r: str, wait: float) -> list[dict]:
+    now = getattr(hub, "headlines_now", None)
+    return now(r, wait=wait) if now else _focused_news(r, "")
+
+
+def _focused_news(r: str, focus: str) -> list[dict]:
+    try:
+        return hub.headlines(r, focus)
+    except SourceError:
+        return []
 
 
 # ---------- AI reads ----------
@@ -508,7 +530,9 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     r, f = region_of(region), focus.strip()
     if f:                          # the page sends none; free text would make a new uncached read for every wording
         err(400, "bad_focus", "The market read has no focus option.")
-    indices = source_call(lambda: hub.indices(r))
+    indices, _ = source_call(lambda: _levels_now(r, 12.0))          # the pulse page's own levels, from memory (R24-001)
+    if indices is None:
+        return ok({"unavailable": True, "code": "ai_busy", "message": "The index levels are still being read. Ask again in a moment."})
     stale = [i["name"] for i in indices if i.get("stale")]
     if stale:
         return ok({"unavailable": True, "code": "stale", "message": stale_words(stale)})
@@ -520,10 +544,7 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     cash_day = cash.get("as_of") if cash and cash.get("status") == "ok" else None
 
     def build():
-        try:
-            news = hub.headlines(r, f)
-        except SourceError:
-            news = []
+        news = _news_now(r, 8.0)
         try:
             sectors = hub.sector_moves(r)
         except Exception:

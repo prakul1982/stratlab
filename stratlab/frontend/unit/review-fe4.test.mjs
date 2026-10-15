@@ -84,7 +84,8 @@ test("Pulse and Themes ignore a late answer for the market or theme that was lef
   assert.match(src, /if \(mine === seq\.current\) setR\(out\)/);
   assert.match(src, /finally \{ if \(mine === seq\.current\) setBusy\(false\); \}/);
   assert.match(src, /try \{ const out = await researchApi\.pulseAI\(region, "", refresh\); if \(mine === seq\.current\) setAi\(out\); \}/);
-  assert.match(src, /researchApi\.pulse\(region\)\.then\(\(d\) => live && setData\(d\)\)/);
+  // R24-001: the levels load through usePulse, which still drops an answer for a market that was left
+  assert.match(src, /researchApi\.pulse\(region\)\.then\(\(d\) => \{\s*if \(!live\) return;/);
 });
 
 test("the closing auction keeps its data on a failed poll, says so, and keeps polling", () => {

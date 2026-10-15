@@ -215,4 +215,5 @@ def test_pulse_names_an_index_that_could_not_load(api, monkeypatch):
     p = api.get("/research/pulse?region=IN").json()
     assert [i["name"] for i in p["indices"]] == ["NIFTY 50"] and p["missing"] == ["SENSEX", "NIFTY BANK"]
     monkeypatch.setattr(routes.hub, "indices", lambda region, now=None: got)
+    routes.hub.forget_snapshots()            # the levels are served from memory for a few seconds (R24-001): read again
     assert api.get("/research/pulse?region=IN").json()["missing"] == []
