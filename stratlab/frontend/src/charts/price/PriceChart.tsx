@@ -624,7 +624,7 @@ const [saveNote, setSaveNote] = useState("");
                 <span className="pc-hide-phone"><span className="k">O</span>{fmt(h.bar.o)}</span><span className="pc-hide-phone"><span className="k">H</span>{fmt(h.bar.h)}</span><span className="pc-hide-phone"><span className="k">L</span>{fmt(h.bar.l)}</span>
               </>}
               <span><span className="k">C</span>{fmt(h.bar.c)}</span>
-              {chg != null && <span className={signCls(chg, signedPct(chgPct))}><span className="k">{tf} candle:</span> {chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
+              {chg != null && <span className={signCls(chg, signedPct(chgPct))}><span className="k" title="Close compared with the previous candle's close">{TF_LABEL[tf]} change:</span> {chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
           {h && showVolume && h.bar.v > 0 && <div><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}

@@ -484,3 +484,9 @@ def test_a_refresh_that_read_nothing_is_an_error_and_not_done(w):
     job.tick(datetime(2026, 10, 5, 2, 30, tzinfo=timezone.utc))
     assert run_marks.read("corpactjob:refresh-IN-07:20")["status"] == "done"
     assert job.status["last_error"] is None
+
+
+def test_unadjusted_note_on_an_index_is_empty_not_an_error(w):
+    c, h = w["client"], headers("pro-token")
+    r = c.get("/research/corp-actions/IN/NIFTY%2050/unadjusted?start=2025-01-01&end=2026-01-01", headers=h)
+    assert r.status_code == 200 and r.json()["rows"] == []

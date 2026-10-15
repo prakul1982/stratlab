@@ -9,6 +9,7 @@ import {
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
+import { surpriseShown } from "../lib/surprise";
 import { Star } from "./Icons";
 import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
@@ -253,8 +254,10 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
   );
 }
 
-export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
-  if (rows.length < 2) return null;
+export function EarningsBars({ rows: raw }: { rows: Company["earnings"] }) {
+  if (raw.length < 2) return null;
+  // the percentage comes from the figures as printed, so they agree with it (R31-014)
+  const rows = raw.map((r) => ({ ...r, surprise_pct: r.surprise_pct == null ? null : surpriseShown(r.actual, r.estimate) }));
   // against an estimate of 0 there is no surprise percentage: no bar, and a beat is the actual at or above it
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct ?? 0)));
   const beat = (r: Company["earnings"][number]) => (r.surprise_pct != null ? r.surprise_pct >= 0 : r.actual >= r.estimate);

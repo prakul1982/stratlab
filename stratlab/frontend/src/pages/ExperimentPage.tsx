@@ -240,7 +240,7 @@ function UnadjustedNote({ e }: { e: Experiment }) {
   const from = e.series.t[0]?.slice(0, 10), to = e.series.t[e.series.t.length - 1]?.slice(0, 10);
   const sym = e.instrument.symbol;
   useEffect(() => {
-    if (e.instrument.market !== "IN" || e.instrument.fno || !from || !to || !sym) return;
+    if (e.instrument.market !== "IN" || e.instrument.fno || e.instrument.type === "INDEX" || !from || !to || !sym) return;
     let live = true;
     api<{ rows: Unadjusted[] }>(`/research/corp-actions/IN/${encodeURIComponent(sym)}/unadjusted?start=${from}&end=${to}`)
       .then((x) => live && setRows(x.rows)).catch(() => undefined);           // a note, never a failure on the page

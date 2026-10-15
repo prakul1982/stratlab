@@ -90,6 +90,15 @@ def norm(name: str) -> str:
     return " ".join(toks)[:160]
 
 
+def holder_key(name: str) -> str:
+    """The key that matches a holder across quarters: norm() with a trailing description cut off, so a holder filed as
+    "Reliance Services and Holdings Limited a company controlled by Petroleum Trust" one quarter and
+    "Reliance Services and Holdings Limited" the next is one holder (R31-011)."""
+    cut = re.split(r"\s+(?:A|AN|THE)\s+(?:COMPANY|TRUST|FUND|BODY|SUBSIDIARY|ENTITY|FIRM|PARTNERSHIP)\b|\s+(?:CONTROLLED|HELD|OWNED|MANAGED|PROMOTED|SPONSORED)\s+BY\b|\s+\(\s*(?:A|AN)\s",
+                   str(name or "").upper(), maxsplit=1)[0]
+    return norm(cut) or norm(name)
+
+
 def tidy_name(name: str) -> str:
     """The name as filed, with the line breaks and doubled spaces of the XBRL text taken out."""
     return " ".join(str(name or "").split())[:160]
@@ -348,7 +357,7 @@ def _rows(qrow: dict | None) -> list[dict]:
     for r in (qrow or {}).get("rows") or []:
         try:
             name, kind, group, shares, pct = r
-            out.append({"name": str(name), "key": norm(name), "kind": str(kind), "group": str(group), "shares": int(shares), "pct": float(pct)})
+            out.append({"name": str(name), "key": norm(name), "mkey": holder_key(name), "kind": str(kind), "group": str(group), "shares": int(shares), "pct": float(pct)})
         except (TypeError, ValueError):
             continue
     return out
@@ -372,10 +381,10 @@ def company_view(symbol: str) -> dict | None:
         return None
     latest, prev = co["q"][qs[-1]], (co["q"][qs[-2]] if len(qs) > 1 else None)
     now_rows, before_rows = _rows(latest), _rows(prev)
-    before = {(r["key"], r["group"]): r for r in before_rows}
+    before = {(r["mkey"], r["group"]): r for r in before_rows}
     holders = []
     for r in now_rows:
-        b = before.pop((r["key"], r["group"]), None)
+        b = before.pop((r["mkey"], r["group"]), None)
         holders.append({**{k: r[k] for k in ("name", "kind", "group", "shares", "pct")}, "prev_pct": b["pct"] if b else None,
                         "prev_shares": b["shares"] if b else None, "change": _change(r, b, prev is not None),
                         "pct_change": round(r["pct"] - b["pct"], 2) if b else None})
