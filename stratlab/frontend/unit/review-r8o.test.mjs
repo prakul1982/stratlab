@@ -95,7 +95,7 @@ test("R8O-006: a euro or pound price charged in rupees says that charge in its c
   assert.equal(aboutMoney(eur, 6.44, "EUR"), "€6.44");
   assert.equal(aboutMoney(eur, 6.4, "EUR"), "€6.40");
   assert.equal(aboutMoney({ ...eur, symbol: "¥" }, 1234.4, "JPY"), "¥1,234");
-  assert.equal(chargedLine("₹699", true, "month", "€6.44"), "Charged as ₹699 incl. GST (about €6.44 today) / month");
+  assert.equal(chargedLine("₹699", true, "month", "€6.44"), "Charged as ₹699 / month incl. GST (about €6.44 today)");
   assert.equal(chargedLine("₹699", false, "month", null), "Charged as ₹699 / month");
   const note = rupeesNote("EUR", { basic: "€6.44", pro: "€18.43" });
   assert.match(note, /about €6\.44 for Basic and €18\.43 for Pro at today's rate, not the EUR prices shown/);

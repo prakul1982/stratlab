@@ -202,7 +202,7 @@ export function paidUsers(st: Overview["stats"]): { label: string; value: number
 /** A job's line on Overview: its problem, or when it last ran; "Running" first while it runs, as Data and jobs says it
  * (R7O-006: "Running" on one page and "OK" on the other for the same breadth run). */
 const jobDetail = (j: JobRow): string => {
-  const base = j.error ? j.error : j.last_run ? `Last run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
+  const base = j.error ? plainError(j.error).text : j.last_run ? `Last run ${ago(j.last_run)}` : j.schedule === "Off" ? "Off" : "Not run yet";
   return j.running ? `Running · ${base}` : base;
 };
 

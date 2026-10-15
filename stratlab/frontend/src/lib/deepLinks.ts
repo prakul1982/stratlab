@@ -34,6 +34,10 @@ export function isAppPath(path: string): boolean {
   return PATTERNS.some((re) => re.test(p));
 }
 
+/** /plans, the signed-in Plans page's address: a visitor gets the prices on their own page, not the landing page scrolled to
+ * them (R22-005: on a phone the page's top showed for 1.4 s and then jumped about 8,900 px). */
+export const isPlansPath = (path: string): boolean => clean(path).replace(/(.)\/$/, "$1") === "/plans";
+
 /** A landing-page address for a visitor: "/", "/pricing", "/help"… (the section to scroll to, or null for the top). */
 export function landingSection(path: string): string | null | undefined {
   const p = clean(path).replace(/(.)\/$/, "$1");
