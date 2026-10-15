@@ -7,6 +7,7 @@ import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, closeLabel, sessionClosed, useRegion, type Region } from "../lib/research";
 import { marketState } from "../lib/marketHours";
 import { RegionSwitch } from "../components/Research";
+import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
 import { Info } from "../components/ui";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
@@ -47,8 +48,14 @@ export function ScanPage() {
   const { fail, notify, refreshNotebooks, me, markets } = useApp();
   const nav = useNavigate();
   const [sets, setSets] = useState<ScanSets | null>(null);
-  const [setId, setSetId] = useState(() => new URLSearchParams(window.location.search).get("set") || "watchlist");
+  const [setId, setSetId] = useState(() => params.get("set") || "watchlist");
   const scanId = params.get("scan") || "st_s2";
+  // the group the reader chooses is kept in the address (replaced, not pushed), so Back from a stock opens the same group
+  // (review 5c); the page's own default leaves the address as it was opened
+  const chooseSet = (v: string) => {
+    setSetId(v); drop();
+    const p = new URLSearchParams(window.location.search); p.set("set", v); setParams(p, { replace: true });
+  };
   const [out, setOut] = useState<ScanOut | PresetOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState(false);
@@ -129,7 +136,7 @@ export function ScanPage() {
             </div>
           )}
           <Field label="Group to scan">
-            {(id) => <Select id={id} value={setId} onChange={(v) => { setSetId(v); drop(); }}
+            {(id) => <Select id={id} value={setId} onChange={chooseSet}
               options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
           </Field>
           <FormActions>
@@ -222,12 +229,16 @@ const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑"
 export function RotationPage() {
   const [region, setRegion] = useRegion();
   const { fail } = useApp();
+  // the group (or the sector drilled into), the candle size and the trail are kept in the address (replaced, not
+  // pushed), so Back from a stock returns to the same chart (review 5c)
+  const [params, setParams] = useSearchParams();
+  const [start] = useState(() => rotationFromQuery(params));
   const [sets, setSets] = useState<ScanSets | null>(null);
-  const [setId, setSetId] = useState("sectors");
-  const [backTo, setBackTo] = useState<string | null>(null);        // the set a sector's stocks were opened from
-  const [interval, setIv] = useState<"weekly" | "daily">("weekly");
-  const [tail, setTail] = useState(4);
-  const [askTail, setAskTail] = useState(4);
+  const [setId, setSetId] = useState(start.set);
+  const [backTo, setBackTo] = useState<string | null>(start.from);  // the set a sector's stocks were opened from
+  const [interval, setIv] = useState<"weekly" | "daily">(start.interval);
+  const [tail, setTail] = useState(start.tail);
+  const [askTail, setAskTail] = useState(start.tail);
   const [picked, setPicked] = useState<Set<string> | null>(null);   // null = the default set (main sectors)
   const [focus, setFocus] = useState<string | null>(null);          // the slider settles before it asks the server
   const [out, setOut] = useState<RotationOut | null>(null);
@@ -255,6 +266,10 @@ export function RotationPage() {
   }, [region, setId, interval, askTail, tries]);
 
   useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
+  useEffect(() => {
+    const next = withParams(params, rotationQuery({ set: setId, from: backTo, interval, tail: askTail }));
+    if (next !== params) setParams(next, { replace: true });
+  }, [setId, backTo, interval, askTail, params, setParams]);
 
   const groups = (sets?.sets ?? []).filter((s) => s.count >= 2);
   const indexSets = sets?.rotation_sets ?? [{ id: "sectors", name: region === "IN" ? "NSE sector indices" : "S&P 500 sectors" }];

@@ -66,7 +66,10 @@ test("R9R-008: the Invest home's United States tab shows the S&P 500 and US card
   await expect(card).toContainText("S&P 500", { timeout: 30_000 });
   await expect(page.getByTestId("breadth-card-when")).toHaveText("Latest close 8 Oct · today's count comes after 5:45 PM ET");
   await expect(page.getByText("US results today")).toBeVisible();
-  await expect(page.getByTestId("invest-us-redflags")).toContainText("none to show for US companies");
+  // US red flags are the SEC Form 8-K items on the filings page's US tab (review 5c: not "on a US company's own page")
+  await expect(page.getByTestId("invest-us-redflags")).toContainText("Form 8-K items S&P 500 companies file with the SEC");
+  await expect(page.getByTestId("invest-us-redflags")).not.toContainText("own page");
+  await expect(page.getByTestId("invest-us-redflags").getByRole("link")).toHaveAttribute("href", "/research/filings?region=US");
   await expect(page.getByText("Red flags in your holdings and watchlist")).toHaveCount(0);
   // the breadth card asked for a US group, and the results for the US only
   expect(asked.some((p) => /\/invest\/breadth\?group=sp500/.test(p))).toBe(true);

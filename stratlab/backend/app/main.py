@@ -2475,9 +2475,10 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
     need(profile, "investor_home", "Watchlist at a glance")
     region = "US" if region.upper() == "US" else "IN"
     us = region == "US"
-    syms = filings.watchlist_symbols(profile["id"], region)[:investor.MAX]
+    listed = filings.watchlist_symbols(profile["id"], region)
+    syms = listed[:investor.MAX]
     if not syms:
-        return ok({"rows": [], "as_of": None, "region": region})
+        return ok({"rows": [], "as_of": None, "region": region, "total": 0})
     try:
         rot = rotation.run(markets, region, "sectors", None, "weekly", 4)
         quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
@@ -2509,7 +2510,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
                             quotes.get(sym))
 
     rows = list(_investor_pool.map(one, syms))
-    return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
+    # `total`: every watchlist company in this market; the page checks the first MAX and says "Showing 20 of N"
+    return ok({"rows": rows, "region": region, "total": len(listed), "as_of": datetime.now(IST).isoformat(timespec="minutes")})
 
 
 # ---------- My Holdings: the user's own stocks, from their broker's export (everyone; paid plans keep more) ----------

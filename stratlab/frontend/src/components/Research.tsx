@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
-import { ago, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
+import { ago, fmtDate, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -58,17 +58,24 @@ export function Panel({ title, info, children, right, id }: { title: ReactNode; 
 /** The day's price and its change as one block: the price in the page's sans font and a pill for the change, green or red
  * with the sign (and ▲/▼) printed. The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
  * is that session's ("on the day"), never "today" for a day that hasn't traded. */
-export function Change({ q, currency, closed: shut = false, preOpen = false, settling = false }: { q: Quote | null; currency: string; closed?: boolean; preOpen?: boolean; settling?: boolean }) {
+export function Change({ q, currency, closed: shut = false, preOpen = false, settling = false, quoteDay, today }: {
+  q: Quote | null; currency: string; closed?: boolean; preOpen?: boolean; settling?: boolean;
+  /** the price's trading day (null: its time is unknown) and the market's today: "today" is said only of today's price */
+  quoteDay?: string | null; today?: string;
+}) {
   if (!q || q.price == null) return null;
   // before India's 09:15 open the price is the pre-open auction's: indicative, never a close (R7T-004); between the US
   // close and its settle point it is the day's last prints, not yet the close (R13-005)
   const closed = shut && !preOpen && !settling;
-  const { since } = priceLabel({ market_open: !shut, phase: preOpen ? "pre_open" : settling ? "settling" : null });
+  const { label, since } = priceLabel({ market_open: !shut, phase: preOpen ? "pre_open" : settling ? "settling" : null, quote_day: quoteDay },
+    today, (d) => fmtDate(d, { year: false }));
   return (
     <div className="k-stat inv-quote" data-testid="company-price" data-phase={preOpen ? "pre_open" : settling ? "settling" : undefined}>
       {preOpen && <span className="k-stat-k">Pre-open (indicative)</span>}
       {settling && <span className="k-stat-k">{SETTLING}</span>}
       {closed && <span className="k-stat-k">Last close</span>}
+      {/* while the market trades: an earlier session's price says so, and one with no time says that (review 5c) */}
+      {!closed && !preOpen && !settling && label && <span className="k-stat-k" data-testid="price-when">{label}</span>}
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">

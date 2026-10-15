@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
@@ -9,6 +9,7 @@ import {
   type ScreenMeta, type ScreenResult, type ScreenRow,
 } from "../lib/screens";
 import { RegionSwitch } from "../components/Research";
+import { screenFromQuery, screenQuery, withParams } from "../lib/investUi";
 import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
@@ -72,16 +73,28 @@ function Group({ title, help, children }: { title: string; help?: string; childr
   );
 }
 
+/** How many rows were on the page for a screen (its address), so Back loads as many again (review 5c). */
+const LOADED_KEY = "stratlab.screens.loaded";
+function loadedFor(key: string): number {
+  try { const v = JSON.parse(sessionStorage.getItem(LOADED_KEY) || "{}"); return v.key === key && Number(v.n) > 0 ? Number(v.n) : 0; } catch { return 0; }
+}
+function rememberLoaded(key: string, n: number) {
+  try { sessionStorage.setItem(LOADED_KEY, JSON.stringify({ key, n })); } catch { /* storage off: Back shows the first rows */ }
+}
+
 /** Companies filtered by plain facts, in a table. No ranking, scores or picks: the user's own conditions, sorted
  * by market value (the largest first) or by the column they choose. */
 export function ScreensPage() {
   const { fail, notify } = useApp();
   const [region, setRegion] = useRegion();
+  const [params, setParams] = useSearchParams();
+  // the conditions and the sort are kept in the address (replaced, not pushed), so Back from a company returns to this screen
+  const [start] = useState(() => screenFromQuery(params, NO_FILTERS));
   const [meta, setMeta] = useState<ScreenMeta | null>(null);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [draft, setDraft] = useState<Draft>({});
-  const [sort, setSort] = useState("market_cap");             // the largest companies first (R5O-012)
-  const [desc, setDesc] = useState(true);
+  const [filters, setFilters] = useState<Filters>(start.filters);
+  const [draft, setDraft] = useState<Draft>(() => toDraft(start.filters));
+  const [sort, setSort] = useState(start.sort);               // the largest companies first (R5O-012)
+  const [desc, setDesc] = useState(start.desc);
   const [out, setOut] = useState<ScreenResult | null>(null);
   const [rows, setRows] = useState<ScreenRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +110,14 @@ export function ScreensPage() {
 
   const { ranges, bad } = useMemo(() => fromDraft(draft), [draft]);
   const current: Filters = useMemo(() => ({ ...filters, ranges }), [filters, ranges]);
+  const query = useMemo(() => screenQuery({ filters: current, sort, desc }, NO_FILTERS), [current, sort, desc]);
+  useEffect(() => {
+    const next = withParams(params, query);
+    if (next !== params) setParams(next, { replace: true });
+  }, [query, params, setParams]);
+  // the rows a Back should load again: as many as were shown for this same screen (read once, on opening)
+  const screenKey = `${region}?${new URLSearchParams(Object.entries(query).filter(([, v]) => v != null) as [string, string][])}`;
+  const restore = useRef(loadedFor(screenKey));
 
   useEffect(() => {
     // another market's screen has other columns and other stocks: the old result goes, and a run still on its way for the old market is dropped
@@ -110,10 +131,20 @@ export function ScreensPage() {
     const n = ++seq.current;
     setLoading(true);
     screensApi.run(region, current, sort, desc, offset)
-      .then((r) => { if (n !== seq.current) return; setOut(r); setRows((old) => (offset ? [...old, ...r.rows] : r.rows)); setError(null); })
-      .catch((e) => { if (n === seq.current) setError((e as Error).message); })
+      .then((r) => {
+        if (n !== seq.current) return;
+        setOut(r); setRows((old) => (offset ? [...old, ...r.rows] : r.rows)); setError(null);
+        const shown = offset + r.rows.length;
+        // back on a screen that had more rows showing: the next page is asked for until they are all there again
+        if (restore.current > shown && shown < r.total && r.rows.length) { runRef.current(shown); return; }
+        restore.current = 0;
+        rememberLoaded(screenKey, shown);
+      })
+      .catch((e) => { if (n === seq.current) { restore.current = 0; setError((e as Error).message); } })
       .finally(() => { if (n === seq.current) setLoading(false); });
-  }, [region, current, sort, desc]);
+  }, [region, current, sort, desc, screenKey]);
+  const runRef = useRef(run);
+  runRef.current = run;
   // a short pause after each change, so typing a number runs the screen once
   useEffect(() => { const t = setTimeout(() => run(0), 350); return () => clearTimeout(t); }, [run]);
 

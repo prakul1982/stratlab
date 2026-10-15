@@ -48,7 +48,8 @@ test("R9R-008: the Invest home's US tab drives every panel and says why a card h
   assert.match(src, /<BreadthCard region=\{region\} \/>/);
   assert.match(src, /<RedFlags region=\{region\} \/>/);
   assert.match(src, /data-testid="invest-us-redflags"/);
-  assert.match(src, /Red-flag filings are read from India's exchange, so there are none to show for US companies/);
+  // review 5c: the US card names where US red flags are (the filings page's US tab), never "a US company's own page"
+  assert.match(src, /US red flags are read from the Form 8-K items S&P 500 companies file with the SEC/);
   const card = read("src/components/BreadthCard.tsx");
   assert.match(card, /BreadthCard\(\{ region: picked \}/);
   assert.match(card, /const region = picked \?\? homeRegion\(\)/);
