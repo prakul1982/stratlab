@@ -109,6 +109,12 @@ def _money(x: float, cur: str) -> str:
     return money(x, cur or "INR", signed=True)
 
 
+def _pct(x: float) -> str:
+    """+2.5%, −5.5% with the same real minus as the amount beside it (R28-008); a move that rounds to zero has no sign."""
+    from .email_kit import pct
+    return pct(x, 1)
+
+
 def text(market_name: str, day: str, rows: list[dict]) -> str:
     from .email_kit import fmt_date
     d = fmt_date(day, year=False, weekday=True)
@@ -119,7 +125,7 @@ def text(market_name: str, day: str, rows: list[dict]) -> str:
         today = (f"{r['closed']} trade{'s' if r['closed'] != 1 else ''} closed ({r['wins']} won), {_money(r['pnl'], r['currency'])}"
                  if r["closed"] else "No trades closed")
         still = f"; {r['open']} open, {_money(r['unrealised'], r['currency'])} on paper" if r["open"] else ""
-        lines.append(f"{r['name']}\n  Today: {today}{still}\n  Since start: {_money(total, r['currency'])} ({pct:+.1f}%)")
+        lines.append(f"{r['name']}\n  Today: {today}{still}\n  Since start: {_money(total, r['currency'])} ({_pct(pct)})")
         sig = r.get("signals")
         if sig and sig["received"]:
             extra = [f"{sig['late']} late" if sig["late"] else "", f"{sig['refused']} refused" if sig["refused"] else ""]

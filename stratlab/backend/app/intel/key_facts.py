@@ -137,14 +137,17 @@ def debt_and_cash(c: dict, reported: dict | None, nums: dict | None, s: dict) ->
     business, so for banks these lines don't apply."""
     if (nums or {}).get("bank"):
         return None
-    de = _first(s.get("debt_equity"), _metric(c, "Returns and quality", "Debt / equity"),
-                _metric(c, "Financial health", "LT debt / equity"))
+    # one definition per figure, and the line says which (R29B-013: 1.34 total here, 0.66 long-term on the page)
+    total = _first(s.get("debt_equity"), _metric(c, "Returns and quality", "Total debt / equity"), _metric(c, "Returns and quality", "Debt / equity"))
+    de, what = (total, "Total debt / equity") if total is not None else (_metric(c, "Financial health", "Long-term debt / equity"), "Long-term debt / equity")
+    if de is None:
+        de = _metric(c, "Financial health", "LT debt / equity")
     cover = _interest_cover((reported or {}).get("pl"))
     if cover is None:
         ic = _metric(c, "Financial health", "Interest coverage")
         cover = f"{ic:.1f}x" if ic is not None else None
     return _row("debt", "Debt and cash",
-                _item("Debt to equity", f"{de:.2f}" if de is not None else None),
+                _item(what, f"{de:.2f}" if de is not None else None),
                 _item("Interest cover", cover), _item("Cash from operations", _cash_vs_profit(nums)))
 
 

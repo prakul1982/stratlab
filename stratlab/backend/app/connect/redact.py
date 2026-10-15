@@ -14,6 +14,26 @@ PATTERNS = [
 ]
 
 
+# account identifiers in a provider's error text: shown to nobody on Admin (R29B-022)
+ID_PATTERNS = [
+    (re.compile(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"), "[id]"),
+    (re.compile(r"\b(?:acct|cus|org|usr|user|sk|pk|key|client|merchant)[_-][A-Za-z0-9]{6,}\b"), "[id]"),
+    (re.compile(r"(?i)\b(account|acct|customer|organi[sz]ation|org|user|client|merchant|sender|member)(\s*(?:id|number|no\.?)?\s*[:=#]?\s*)(?=[\"']?[A-Za-z0-9_-]{6,})(?=[\"']?[A-Za-z0-9_-]*\d)[\"']?[A-Za-z0-9_-]{6,}[\"']?"), r"\1\2[id]"),
+    (re.compile(r"\b\d{9,}\b"), "[id]"),
+]
+
+
+def redact_ids(text):
+    """Error text with account identifiers hidden (UUIDs, prefixed ids like acct_..., "account 12ab34cd", long numbers), after
+    the secrets mask. Non-strings pass through."""
+    if not isinstance(text, str):
+        return text
+    s = mask(text)
+    for rx, sub in ID_PATTERNS:
+        s = rx.sub(sub, s)
+    return s
+
+
 def mask(text) -> str:
     s = str(text)
     for rx, sub in PATTERNS:

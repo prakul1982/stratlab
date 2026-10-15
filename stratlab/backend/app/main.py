@@ -220,7 +220,7 @@ def _filing_alert_ok(profile: dict) -> bool:
 filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
-kite.on_invalid = lambda msg: auto_login._alert("StratLab: " + msg)
+kite.on_invalid = lambda msg: auto_login.alert_once("kite-token-cancelled:" + (kite.token_day or ""), "StratLab: " + msg)
 newsletter_job = news.Job("newsletters")      # its status is kept for Admin → Data and jobs
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
@@ -4264,7 +4264,7 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         err(400, "bad_range", "Pick a time range from the list.")
     out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
-    live = breadth_live.view(group, ready=kite.ready())
+    live = breadth_live.settled(breadth_live.view(group, ready=kite.ready()), (out.get("today") or {}).get("day"))
     if brief and live:
         # the Invest home's card: the newest live point only (R7T-010: the card showed the 8 Oct close after the open
         # while the breadth page was live)
@@ -5047,7 +5047,7 @@ def server_status() -> dict:
             "auto_login_configured": auto_login_configured(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
-            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)), "server_started_at": SERVER_STARTED_AT,
+            "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
@@ -5686,7 +5686,7 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
         out["checks"] = [{**again[r["name"]], "retried": True} if r["name"] in again else r for r in out["checks"]]
         out["counts"] = {k: sum(1 for r in out["checks"] if r["state"] == k) for k in ("pass", "warn", "fail")}
     for r in out["checks"]:
-        r["detail"] = public_text(r["detail"])
+        r["detail"] = connect_redact.redact_ids(public_text(r["detail"]))
     out["auto"] = auto
     out["build"] = build_info.info()["short"]           # which build ran it, so an old result isn't read as today's code's (R24-010)
     try:
@@ -6001,7 +6001,8 @@ def admin_alert_test(profile=Depends(admin.admin_profile)):
     try:
         from . import email_previews as previews
         _, html, text = previews.test_email()
-        alerts.send_email(to, "StratLab test email", text, html=html)
+        alerts.send_email(to, "StratLab test email", text, html=html,
+                          headers=alerts.list_unsubscribe_headers(profile["id"], alerts.ALERT_EMAILS))     # a real one-click link, like the alerts (R29B-007)
     except Exception as e:
         why = str(e)[:200]
         if "unreachable" in why.lower() or "timed out" in why.lower():
@@ -6086,7 +6087,10 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "a
 
 
 def news_view(issue: dict) -> dict:
+    issue = news.write.regional_links(issue)          # rotation links open the brief's own market (R28-006)
     out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
+    if out.get("ai_summary"):          # index levels as the tiles print them: two decimals (R28-009)
+        out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out

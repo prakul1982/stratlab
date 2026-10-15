@@ -3,7 +3,7 @@
 /** The live card while the market is open: points through the day (time, rose, fell, unchanged, then the counts above the 20-,
  * 50- and 200-day averages with how many stocks had each average, and the index level). */
 export type LiveView = {
-  state: "live" | "pending" | "unavailable"; day: string; fields: string[]; points: (string | number | null)[][]; as_of: string | null;
+  state: "live" | "pending" | "unavailable" | "final"; day: string; fields: string[]; points: (string | number | null)[][]; as_of: string | null;
   message: string | null; every_minutes: number;
   /** minutes since the newest point, and whether that is over 20 while the market trades (older servers send neither) */
   age_minutes?: number | null; late?: boolean;
@@ -18,16 +18,17 @@ const minutes = (n: number) => `${n} minute${n === 1 ? "" : "s"}`;
 
 /** "Today, live as of 10:30": the live card's title. When the newest point is over 20 minutes old while the market trades it
  * says so instead: "Last updated 09:15, 25 minutes ago" (R24-002: "Live as of 09:15" stood for 27 minutes). */
-export const liveTitle = (live: Pick<LiveView, "as_of"> & Partial<Pick<LiveView, "late" | "age_minutes">>) =>
-  live.late && live.as_of ? `Last updated ${live.as_of}${live.age_minutes != null ? `, ${minutes(live.age_minutes)} ago` : ""}`
+export const liveTitle = (live: Pick<LiveView, "as_of"> & Partial<Pick<LiveView, "late" | "age_minutes" | "state">>) =>
+  live.state === "final" && live.as_of ? `Today, final at ${live.as_of}`          // after the close, until the evening's figures land (R28-012)
+    : live.late && live.as_of ? `Last updated ${live.as_of}${live.age_minutes != null ? `, ${minutes(live.age_minutes)} ago` : ""}`
     : live.as_of ? `Today, live as of ${live.as_of}` : "Today, live";
 
 /** The card's tag: "Live" in the live colour, or "Delayed" once the newest point is late. */
 /** The live card's notice without points: plain while the open's first count is on its way ("pending"), a warning otherwise. */
 export const liveNoticeTone = (live: Pick<LiveView, "state">): "info" | "warn" => (live.state === "pending" ? "info" : "warn");
 
-export const liveTag = (live: Partial<Pick<LiveView, "late">>): { tone: "live" | "warn"; text: string } =>
-  live.late ? { tone: "warn", text: "Delayed" } : { tone: "live", text: "Live" };
+export const liveTag = (live: Partial<Pick<LiveView, "late" | "state">>): { tone: "live" | "warn" | "plain"; text: string } =>
+  live.state === "final" ? { tone: "plain", text: "Final" } : live.late ? { tone: "warn", text: "Delayed" } : { tone: "live", text: "Live" };
 
 const n = (v: number) => v.toLocaleString("en-IN");
 
@@ -56,3 +57,8 @@ export function liveSeries(live: Pick<LiveView, "fields" | "points">): LiveSerie
     pct20: share("a20", "n20"), pct50: share("a50", "n50"), pct200: share("a200", "n200"), idx: col("idx") };
 }
 
+
+/** A sector table column's header: "Today" names its day ("Today · 14 Oct"), because before the evening's count it is the last
+ * counted session's (R28-012). The other columns say how long ago and keep their label. `short` writes a day ("14 Oct"). */
+export const sectorColumnLabel = (c: { label: string; day: string }, short: (iso: string) => string) =>
+  (c.label === "Today" ? `Today · ${short(c.day)}` : c.label);

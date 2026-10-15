@@ -35,7 +35,8 @@ def _when(at, now: datetime) -> str:
         return ""
     if t.tzinfo and now.tzinfo:
         t = t.astimezone(now.tzinfo)
-    return f" ({t:%a} {t.day} {t:%b}, {t:%H:%M})"
+    zone = "IST" if t.utcoffset() == timedelta(hours=5, minutes=30) else (t.tzname() or "UTC")      # a time says its zone (R29B-005)
+    return f" ({t:%a} {t.day} {t:%b}, {t:%H:%M} {zone})"
 
 
 def summary(now: datetime, facts: dict) -> tuple[str, str]:

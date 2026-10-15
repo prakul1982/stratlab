@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -145,7 +145,7 @@ const LIVE_INFO = "Worked out every 15 minutes while the market is open, from li
 /** While the market is open: the counts so far today, with a line through the day. When live prices can't be read it says so
  * in words and the last close below stands. */
 function LiveCard({ live, group }: { live: LiveView; group: Group }) {
-  if (live.state !== "live" || !live.latest) {
+  if ((live.state !== "live" && live.state !== "final") || !live.latest) {
     return (
       <Card label="Breadth today" testId="breadth-live-off">
         <CardHead title="Today, live" info={LIVE_INFO} infoLabel="About the live numbers" />
@@ -171,7 +171,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
           {l.idx != null && <Stat label={group.index_name} value={l.idx.toLocaleString("en-IN", { maximumFractionDigits: 2 })} note="latest level" />}
         </StatRow>
         {read && <p className="k-note" data-testid="breadth-live-read">{read}.</p>}
-        {!several && <p className="k-note">A point is added every {live.every_minutes} minutes while the market is open, so the line through the day starts after the second.</p>}
+        {!several && live.state !== "final" && <p className="k-note">A point is added every {live.every_minutes} minutes while the market is open, so the line through the day starts after the second.</p>}
       </Card>
       {several && (
         <div className="k-cols">
@@ -373,7 +373,7 @@ function SectorHeat({ t }: { t: SectorTable }) {
     <div className="k-stack">
       <DataTable label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
         columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => r.sector }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
-          ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{c.label}</span>, numeric: true,
+          ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{sectorColumnLabel(c, shortDay)}</span>, numeric: true,
             cell: (r: SectorTable["rows"][number]) => {
               const v = r.values[i];
               return <span className={`inv-heat-cell heat${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;

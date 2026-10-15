@@ -9,7 +9,7 @@ import { Info, STATUS_NAME } from "../../components/ui";
 import { DrawdownBand, XYChart } from "../../components/Charts";
 import { Pencil, Plus, Trash } from "../../components/Icons";
 import { journalEmpty } from "../../lib/journalEmpty";
-import { JOURNAL_LEDE, journalVsTax } from "../../lib/journalTax";
+import { JOURNAL_LEDE, journalSavedNote, journalVsTax } from "../../lib/journalTax";
 import { Badge, Card, CardHead, ChipBar, ChipSet, ConfirmDialog, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, TimeInput, UploadButton, type Column } from "../../components/kit";
 import { Modal } from "../../components/ui";
 import type { CheckStatus, VerdictKind } from "../../lib/types";
@@ -275,7 +275,7 @@ export function JournalPage() {
         {has && (j.open.length > 0 || j.unmatched.length > 0) && <OpenList j={j} />}
 
         <section className="k-stack k-tight" aria-label="About these numbers">
-          {has && <p className="k-note">Worked out as of {day(j.as_of)}{j.updated_at ? ` · trades saved as of ${day(j.updated_at)}` : ""}.</p>}
+          {has && <p className="k-note">{journalSavedNote(j.as_of, j.updated_at, day)}</p>}
           <Disclosure summary="How this works" testId="j-how">
             <div className="k-stack k-tight">
               <p className="k-small">Upload the tradebook (every purchase and sale) from Zerodha Console, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities, or the tax P&amp;L ZIP or its "Tradewise Exits" files (equity, F&amp;O, commodity and currency, intraday and delivery). Any CSV works with the columns Date, Symbol, Type (B or S), Quantity and Price. Trades already in the journal are skipped. US stocks and crypto are added by hand.</p>

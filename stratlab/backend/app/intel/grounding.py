@@ -337,6 +337,22 @@ def direction_ok(s: str, indices: list[dict]) -> bool:
     return True
 
 
+def magnitude_ok(s: str, indices: list[dict]) -> bool:
+    """A size claim agrees with the moves given: "double-digit percentage gains" needs a move of 10% or more
+    (R28-004: said of indices up 1.7 to 2.1%)."""
+    if not re.search(r"\bdouble[- ]digit\b", s, re.I):
+        return True
+    moves = [abs(i["change_pct"]) for i in indices if i.get("change_pct") is not None]
+    return any(m >= 10 for m in moves)
+
+
+def session_headlines(headlines: list[dict], day) -> list[dict]:
+    """The headlines dated on `day` or later; an older story is not today's news (R28-004: a 14 Oct line in the 15 Oct
+    read). A headline with no date is kept."""
+    iso = day.isoformat() if hasattr(day, "isoformat") else str(day)
+    return [h for h in headlines if not str(h.get("at") or "")[:10] or str(h.get("at"))[:10] >= iso]
+
+
 def market_facts(indices: list[dict]) -> list[dict]:
     """The index numbers the market read may use, with where each sits in its 52-week range spelt out."""
     out = []
@@ -516,7 +532,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
     titles = [str(h.get("headline") or "") for h in headlines]
 
     def claim(s):
-        return (range_claims_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
+        return (range_claims_ok(s, facts) and magnitude_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
                 and flow_claim_ok(s, nets) and cause_backed(s, titles))
     res = dict(out)
     res["tone"] = keep_sentences(out.get("tone"), pool, claim) or template_tone(indices)

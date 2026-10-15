@@ -136,7 +136,7 @@ def test_r23_003_failed_runs_listed_once_each_and_errors_counted_once():
     subject, text = weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)
     line = next(x for x in text.splitlines() if x.startswith("- 9 runs, 5 with failures: "))
     assert len(line.split(": ", 1)[1].split("; ")) == 5                                   # five failed runs, five entries
-    assert "Prices: IN, Prices: US (Wed 7 Oct, 09:30)" in line
+    assert "Prices: IN, Prices: US (Wed 7 Oct, 09:30 IST)" in line
     assert "- Counted: every run of the daily checks in these 7 days, automatic and Run now." in text
     assert "- 4 server errors this week (0 since the last restart, 4 before it)" in text and "23" not in text
     assert subject == "StratLab weekly: 4 new users, 5 runs with failures, 4 server errors"

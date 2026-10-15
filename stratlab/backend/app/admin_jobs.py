@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from . import admin, job_status, leader
+from .connect.redact import redact_ids
 
 router = APIRouter(tags=["admin"])
 
@@ -50,8 +51,9 @@ def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | N
         error = f"Partial: {parts - failed} of {parts} sources read. Not read: {plain_error(problems[0])}" + (f" And {failed - 1} more (see the log)." if failed > 1 else "")
     else:
         error = plain_error(error)
-    return {"id": id, "name": name, "schedule": schedule, "last_run": last_run, "error": error, "state": state,
-            "running": bool(running), "log": [str(x)[:240] for x in (log or []) if x][:8], "run": run or [], "note": note}
+    # a provider's own error text can carry an account identifier: Admin shows it hidden (R29B-022)
+    return {"id": id, "name": name, "schedule": schedule, "last_run": last_run, "error": redact_ids(error), "state": state,
+            "running": bool(running), "log": [redact_ids(str(x)[:240]) for x in (log or []) if x][:8], "run": run or [], "note": note}
 
 
 def _plain(job, key: str | None = None) -> dict:

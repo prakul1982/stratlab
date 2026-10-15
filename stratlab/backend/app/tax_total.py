@@ -503,6 +503,13 @@ def _crore(v: float) -> str:
     return f"₹{v / CRORE:,.1f} crore".replace(".0 crore", " crore")
 
 
+def audit_applies(fy: int, turnover: float, has_business: bool) -> bool:
+    """Whether a tax audit certainly applies: business income and turnover above section 44AB's higher limit (the same test
+    audit_fact words as "a tax audit applies"). Between ₹1 crore and the limit it depends on cash receipts, so it isn't assumed."""
+    high = 10 * CRORE if fy >= 2020 else 5 * CRORE if fy == 2019 else CRORE
+    return bool(has_business and turnover and turnover > high)
+
+
 def audit_fact(fy: int, turnover: float, has_business: bool) -> str | None:
     """Where the year's turnover stands against section 44AB's limits, as a fact (the owner's FY 2025-26: Rs39.7 crore
     of F&O turnover, past the Rs10 crore limit, while no page said so). None below Rs1 crore or with no business income."""

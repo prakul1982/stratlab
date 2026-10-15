@@ -7,6 +7,7 @@ import { hitDrawing, paintDrawing, toolForKey, type DrawFmt, type DrawTheme, typ
 import { attachGestures } from "./interaction";
 import { stepDecimals, TimeScale, timeLabel, timeTicks, ValueScale, type ScaleMode } from "./scales";
 import { compute, type StudyConfig, type StudyLine, type StudyOutput } from "./studies";
+import { labelClear, lineSpans, type Box } from "./lastPrice";
 import { heikinAshi, indexAtOrBefore, lastTag, readoutAt, type Bar } from "./transforms";
 
 export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area" | "baseline";
@@ -241,6 +242,14 @@ export class PriceChartEngine {
     if (on) { this.select(null); if (this.tool) this.setTool(null); }
     this.on.ui?.(); this.invalidate(false);
   }
+  /** The legend's size over the plot's top-left: the last price's line leaves it clear (R29B-017). */
+  private legend: Box | null = null;
+  setLegendBox(box: Box | null): void {
+    if (box?.w === this.legend?.w && box?.h === this.legend?.h) return;
+    this.legend = box;
+    this.invalidate(false);
+  }
+
   setClipFuture(on: boolean): void { this.clipFuture = on; this.invalidate(false); }
 
   get canUndo(): boolean { return this.history.canUndo; }
@@ -799,12 +808,16 @@ export class PriceChartEngine {
     c.fillRect(0, H - AXIS_H + 1, W, AXIS_H - 1);
     c.fillStyle = th.muted;
     c.textBaseline = "middle"; c.textAlign = "left";
+    // an axis label under a price tag is left out (R29B-017: "350" sat behind the last price's tag)
+    const lastForTag = lastTag(this.bars);
+    const tagYs = [...(lastForTag && pp ? [this.price.y(lastForTag.close)] : []), ...this.levels.map((l) => this.price.y(l.price))];
     for (const p of this.panes) {
       const ticks = p.scale.ticks(p.kind === "price" ? 48 : 30);
       const step = ticks.length > 1 ? Math.abs(p.scale.tf(ticks[1]) - p.scale.tf(ticks[0])) : 1;
       for (const v of ticks) {
         const y = p.scale.y(v);
         if (y < p.top + 6 || y > p.top + p.height - 6) continue;
+        if (p === pp && !labelClear(y, tagYs)) continue;
         c.fillText(this.axisText(p.scale, v, step), pw + 6, y);
       }
     }
@@ -823,7 +836,9 @@ export class PriceChartEngine {
       if (y >= pp.top && y <= pp.top + pp.height) {
         c.strokeStyle = up ? th.up : th.down;
         c.setLineDash([2, 3]);
-        c.beginPath(); c.moveTo(0, Math.round(y) + 0.5); c.lineTo(pw, Math.round(y) + 0.5); c.stroke();
+        c.beginPath();
+        for (const [x0, x1] of lineSpans(y - pp.top, pw, this.legend)) { c.moveTo(x0, Math.round(y) + 0.5); c.lineTo(x1, Math.round(y) + 0.5); }
+        c.stroke();
         c.setLineDash([]);
         this.axisTag(y, this.tagText(last.close), up ? th.up : th.down, up ? th.onUp : th.onDown);
       }

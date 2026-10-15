@@ -27,3 +27,8 @@ export function journalVsTax(fno: boolean): string[] {
         + "They are in this journal only when they come from a tradebook or the tax P&L's trade-by-trade files.",
   ];
 }
+
+/** The journal's date line. Its date is when the journal last changed (an import, a note, a hidden or added trade); the tax
+ * report's "updated" date is when its own files last changed, so the two can differ for the same import (R28-013). */
+export const journalSavedNote = (asOf: string, updatedAt: string | null, fmt: (iso: string) => string): string =>
+  `Worked out as of ${fmt(asOf)}${updatedAt ? ` · journal last changed ${fmt(updatedAt)} (the tax report has its own date, from its last file)` : ""}.`;

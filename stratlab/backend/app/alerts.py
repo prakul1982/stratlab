@@ -213,6 +213,11 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     if not any(k.lower() == "list-unsubscribe" for k in headers):
         # an email with no unsubscribe of its own still names one: ours, never the mail service's (R23-001)
         headers.update(manage_unsubscribe_headers())
+    # One-Click means a POST to the address turns something off: only a tokenised /unsubscribe link can do that, never a
+    # page like Settings (R29B-007)
+    own = next((v for k, v in headers.items() if k.lower() == "list-unsubscribe"), "")
+    if "/unsubscribe?t=" not in own:
+        headers = {k: v for k, v in headers.items() if k.lower() != "list-unsubscribe-post"}
     if settings.BREVO_API_KEY:
         _send_brevo(to, subject, body, html, headers)
         return

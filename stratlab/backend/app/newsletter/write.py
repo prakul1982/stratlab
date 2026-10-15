@@ -43,6 +43,22 @@ def stock_url(region: str, symbol: str) -> str:
     return f"{origin()}/research/{region}/{symbol}"
 
 
+def rotation_url(region: str) -> str:
+    """The rotation page in the brief's own market: without it the link opens the saved (US) view (R28-006)."""
+    return f"{origin()}/research/rotation?region={region}"
+
+
+def regional_links(issue: dict) -> dict:
+    """The issue with each rotation link pointing at the issue's own market, whenever it was stored."""
+    region = issue.get("region")
+    if region not in ("IN", "US"):
+        return issue
+    bare = f"{origin()}/research/rotation"
+    secs = [{**sec, "items": [{**i, "url": rotation_url(region)} if i.get("url") == bare else i for i in sec.get("items") or []]}
+            if sec.get("title") == "Sector rotation" else sec for sec in issue.get("sections") or []]
+    return {**issue, "sections": secs}
+
+
 def _pct(x) -> str:
     return "" if x is None else kit.pct(x)          # +0.62%, −0.34% (a real minus, as in the tiles)
 
@@ -81,7 +97,7 @@ def market_sections(f: dict) -> list[dict]:
             for i in f["indices"]]})
     if f.get("rotation"):
         out.append({"title": "Sector rotation", "items": [
-            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart (weekly)", f"{origin()}/research/rotation")
+            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart (weekly)", rotation_url(region))
             for r in f["rotation"]]})
     scan = f.get("scan") or {}
     # the whole rule and Stage 2 alone are two lists, so the lead's count is the first list's (R13-003)
@@ -146,6 +162,7 @@ def stock_sections(f: dict) -> list[dict]:
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
+                  region=r.get("region"),
                   currency=CURRENCY.get(r.get("region") or ""),
                   change_pct=r.get("change_pct"), since=f"since {_day(r.get('since_day') or f['since'])}" if r.get("change_pct") is not None else None)
             for r in f["stocks"]]})
@@ -469,6 +486,7 @@ def house_numbers(text: str | None, indices: list[dict] | None) -> str | None:
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
     for the sender."""
+    issue = regional_links(issue)
     view = kit.news_url(issue["id"]) if issue.get("id") else None
     kind = issue.get("kind") or ("my_stocks" if str(issue.get("id", "")).startswith("my_stocks") else "market")
     weekly = bool(issue.get("weekly"))

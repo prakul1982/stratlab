@@ -301,17 +301,32 @@ def rebuild_base(load_bars, region: str, now: datetime, gap: float = breadth.GAP
 
 
 # ---------- what the page shows ----------
+def settled(live: dict | None, eod_day: str | None) -> dict | None:
+    """The live card without a "final" count once the evening's figures for that day are in (`eod_day`: the newest day they cover)."""
+    return None if live and live.get("state") == "final" and live.get("day") == eod_day else live
+
+
+
 def view(group: str, now: datetime | None = None, ready: bool = True) -> dict | None:
     """The live card for a group, or None when there is nothing to say (a market that isn't covered, or closed).
     state "live": points from today, the newest not stale; "pending": the open's first round isn't stored yet (09:15 to
-    09:29); "unavailable": the market is open but no fresh points."""
+    09:29); "unavailable": the market is open but no fresh points; "final": the market has closed and today's points are
+    the day's last, kept until the evening's counts land (see `settled`, R28-012)."""
     g = breadth.GROUPS[group]
     now = now or datetime.now(ZoneInfo("UTC"))
-    if g["region"] not in LIVE_REGIONS or not is_open(g["region"], now):
+    if g["region"] not in LIVE_REGIONS:
         return None
     local = now.astimezone(IST)
     day = local.date().isoformat()
     pts = load(group, day)["points"]
+    if not is_open(g["region"], now):
+        if not pts or local.strftime("%H:%M") < "15:30":
+            return None
+        out = {"state": "final", "day": day, "fields": list(FIELDS), "points": pts, "as_of": pts[-1][0], "latest": dict(zip(FIELDS, pts[-1][1:])),
+               "message": None, "every_minutes": EVERY // 60, "age_minutes": None, "late": False}
+        for k, n in (("pct20", ("a20", "n20")), ("pct50", ("a50", "n50")), ("pct200", ("a200", "n200"))):
+            out["latest"][k] = breadth._pct(out["latest"][n[0]], out["latest"][n[1]])
+        return out
     fresh, age = False, None
     if pts:
         last = datetime.fromisoformat(f"{day}T{pts[-1][0]}:00").replace(tzinfo=IST)

@@ -39,6 +39,8 @@
 .boot-btn { align-self: flex-start; min-height: 44px; padding: 0 24px; border: 0; border-radius: 10px; background: #1d1b17; color: #fff; font: 600 15px system-ui, sans-serif; cursor: pointer; }
 .boot-wait { opacity: 0; animation: boot-in .2s ease .6s forwards; }
 @keyframes boot-in { to { opacity: 1; } }
+html[data-saved] [data-boot] > * { display: none; }
+html[data-saved] [data-boot]::before { content: "Opening StratLab…"; font: 600 18px/1.3 Georgia, serif; }
 @media (prefers-color-scheme: dark) { .boot { color: #eee; } .boot-btn { background: #eee; color: #1d1b17; } }
 </style>
 <noscript><style>.boot-wait { opacity: 1; animation: none; }</style></noscript>

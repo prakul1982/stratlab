@@ -11,7 +11,7 @@ export interface IssueRow {
 
 export interface IssueLine { text: string; url?: string | null }
 export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null; lines?: IssueLine[];
-  /** My stocks: the price, its move since the previous session and the "since …" label the email shows */ price?: number | null; change_pct?: number | null; since?: string | null }
+  /** My stocks: the price, its move since the previous session and the "since …" label the email shows */ price?: number | null; currency?: string | null; change_pct?: number | null; since?: string | null }
 
 export interface Issue {
   id: string; kind: NewsKind; region: Region | null; day: string; weekly: boolean; subject: string;

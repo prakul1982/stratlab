@@ -129,8 +129,11 @@ def parse_quote(data) -> dict | None:
             break
         except (TypeError, ValueError):
             continue
+    opened = _num(row.get("open"))
+    if opened is not None and prev is not None and opened == prev:
+        opened = None          # the list carries yesterday's close where no open was read: not shown as the day's open (R28-011)
     return {"value": v, "prev_close": prev, "change": round(v - prev, 2) if prev else None,
-            "change_pct": round((v / prev - 1) * 100, 2) if prev else None, "open": _num(row.get("open")),
+            "change_pct": round((v / prev - 1) * 100, 2) if prev else None, "open": opened,
             "high": _num(row.get("high")), "low": _num(row.get("low")), "year_high": _num(row.get("yearHigh")),
             "year_low": _num(row.get("yearLow")), "as_of": as_of, "source": "exchange"}
 
@@ -272,6 +275,17 @@ def intraday(feed=None) -> list[dict]:
     return pts
 
 
+def last_quote_row(day: date, feed=None) -> dict[str, list] | None:
+    """The day's row from the last quote of the index list when it is stamped after the 15:30 close: the stand-in until
+    the exchange's history carries the day (R28-011). The open is left empty when the list gave no real one."""
+    _cache.set("quote", None, 0)
+    q = quote_now(feed)
+    if not q or q.get("source") != "exchange" or not str(q.get("as_of") or "").startswith(day.isoformat()) \
+            or str(q["as_of"])[11:16] < "15:30":
+        return None
+    return {day.isoformat(): [q.get("open"), q.get("high"), q.get("low"), q["value"]]}
+
+
 def feed_quote(options_data, today: date) -> dict | None:
     """India VIX from the live feed, with the change worked out from the stored previous close: the stand-in when the
     exchange's index list can't be read."""
@@ -379,10 +393,16 @@ class Job(news_job.Job):
         if day:
             got = fetch(day - timedelta(days=14), day, feed, self.sleep)
             had = day.isoformat() in got
+            stood_in = False
+            if not had and day == today:          # the history has no row yet: the day's last quote after the close stands in
+                row = last_quote_row(day, feed)
+                if row:                           # until the history's own row replaces it, on a later run
+                    store(row)
+                    got, stood_in = {**got, **row}, True
             if had or local.strftime("%H:%M") >= "21:00":
                 self.mark("vix-close", day)
             # no reading for a weekday is said (a weekend has none): the day is given up at 21:00, but not shown as fine
-            warn = None if had or day.weekday() >= 5 else f"No close for {day.isoformat()} was returned"
+            warn = None if had or stood_in or day.weekday() >= 5 else f"No close for {day.isoformat()} was returned"
             self.status.update(read=local.isoformat(timespec="minutes"), last_run=now.isoformat(), last_error=warn)
             return len(got)
         hhmm = local.strftime("%H:%M")
