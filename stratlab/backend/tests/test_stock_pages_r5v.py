@@ -204,7 +204,8 @@ def test_the_page_wears_the_sites_header_and_footer(w):
 
 
 def test_a_company_card_uses_the_same_words(w):
-    c = company_cards.card(_facts(industry=["Energy", "Energy", "Refineries"], pe=None, roe=None, growth={}), "IN", "ACME")
+    c = company_cards.card(_facts(industry=["Energy", "Energy", "Refineries"], pe=None, roe=None, growth={},
+                                       price=1000.0), "IN", "ACME")      # R26-001: a ₹7.7 lakh crore value at ₹100 a share would be 77 billion shares
     labels = dict(c["facts"])
     assert labels["Market cap"] == "₹7.70 lakh crore" and labels["EBITDA margin"] == "28%" and "Operating margin" not in labels
     assert c["sector"] == "Energy · Refineries"
@@ -249,3 +250,75 @@ def test_stocks_is_a_page_with_search_not_raw_json(w):
 def test_health_says_the_feed_is_idle_without_a_live_session(w):
     h = w["client"].get("/health").json()
     assert h["feed"] == "idle" and h["feed_connected"] is False and "data_online" in h
+
+
+# ---------- R26-001: a share-count or unit error never shows as a market cap or tops the India list ----------
+def _dml(**kw) -> dict:
+    """Diggi Multitrade's shape: a ₹11.50 share with a ₹11.13 lakh crore market cap (about 968 billion shares)."""
+    base = dict(symbol="DML", market_cap_unit="₹ crore", name="Diggi Multitrade Ltd", price=11.5, market_cap=1_113_000.0, pe=None,
+                years=[{"year": "Mar 2026", "sales": 4.0, "profit": -0.1, "opm": 1.0, "debt": 0.0}])
+    return _facts(**{**base, **kw})
+
+
+def test_an_implausible_indian_market_cap_is_not_shown_or_ranked():
+    f = _dml()
+    assert stock_pages.cap_problem(f) and stock_pages.shown_cap(f) is None
+    assert screens.row("IN", "DML", f)["market_cap"] is None
+    page = stock_pages.render(f, "IN", "DML", "Diggi Multitrade Ltd")
+    assert "11.13 lakh crore" not in page and "Market cap unavailable" in page
+    # share count alone (revenue unknown) is enough
+    assert stock_pages.cap_problem(_dml(years=[]))
+    # a market value many times its revenue, on a plausible share count
+    assert stock_pages.cap_problem(_facts(price=2000.0, market_cap=50_000.0, market_cap_unit="₹ crore", years=[{"year": "Mar 2026", "sales": 100.0}]))
+
+
+def test_a_normal_indian_company_keeps_its_market_cap():
+    f = _facts(price=2500.0, market_cap=1_700_000.0, market_cap_unit="₹ crore", years=[{"year": "Mar 2026", "sales": 900_000.0, "profit": 70_000.0}])
+    assert stock_pages.cap_problem(f) is None and stock_pages.shown_cap(f) == 1_700_000.0
+    assert screens.row("IN", "ACME", f)["market_cap"] == 1_700_000.0
+
+
+def test_an_unlisted_exchange_operator_is_not_a_company(monkeypatch):
+    assert stock_pages.UNLISTED_NAMES.match("National Stock Exchange Of India Ltd (NSE)")
+    assert not stock_pages.UNLISTED_NAMES.match("Reliance Industries Ltd")
+    monkeypatch.setattr(stock_pages, "_seeds", lambda region: set())
+    monkeypatch.setattr(stock_pages, "_setting", lambda key: {"rows": {"NSEX": {"name": "National Stock Exchange Of India Ltd (NSE)"},
+                                                                       "ACME": {"name": "Acme Ltd"}}} if key == "stocks:list:IN" else None)
+    stock_pages._companies.clear()
+    got = stock_pages.companies("IN")
+    stock_pages._companies.clear()
+    assert "ACME" in got and "NSEX" not in got
+
+
+# ---------- R26-009: a filing the exchange lists twice is shown once ----------
+def test_a_filing_listed_twice_is_shown_once():
+    twice = {"at": "2026-10-14", "title": "Other update: General Updates"}
+    f = _facts(filings=[twice, dict(twice), {"at": "2026-10-13", "title": "Other update: General Updates"}])
+    page = stock_pages.render(f, "IN", "ACME", "Acme Ltd")
+    assert page.count("Other update: General Updates") == 2           # 14 Oct once, 13 Oct once
+    built = stock_pages.facts("IN", "ACME", {"name": "Acme"}, {"years": []}, {}, None, None, [twice, dict(twice)], "NSE")
+    assert len(built["filings"]) == 1
+    from app.intel import filings as fl
+    a = {"id": "1", "at": "2026-10-14T10:00", "category": "other", "subject": "General Updates", "text": "", "url": None}
+    b = {**a, "id": "2"}
+    c = {**a, "id": "3", "url": "https://x.example/f.pdf"}
+    assert [i["id"] for i in fl.without_repeats([a, b, c])] == ["1", "3"]
+
+
+# ---------- R26-002, R26-005: phone inputs are 16px, and the header has a Menu ----------
+def _css(page: str) -> str:
+    return re.search(r"<style>(.*?)</style>", page, re.S).group(1)
+
+
+def test_public_company_pages_have_a_phone_menu_and_16px_inputs():
+    page = stock_pages.render(_facts(), "IN", "ACME", "Acme Ltd")
+    head = re.search(r'<header class="nav">.*?</header>', page, re.S).group(0)
+    assert '<details class="menu"><summary>Menu</summary>' in head
+    menu = re.search(r"<details.*?</details>", head, re.S).group(0)
+    for label in ("Trade", "Invest", "Money", "Plans", "Companies"):
+        assert f">{label}</a>" in menu, label
+    css = _css(page)
+    assert "details.menu{display:block}" in css and ".nav>nav{display:none}" in css
+    last = re.findall(r"@media \(max-width:640px\)\{([^@]*)\}", css)[-1]
+    assert "input,select,textarea" in last and "font-size:16px" in last
+    assert css.rindex("@media (max-width:640px){input,select,textarea") > css.index("form.find input,form.find select{min-height")

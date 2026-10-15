@@ -1,5 +1,5 @@
 """The site's own public pages (the landing page and the policies), for the sitemap: each address and the day its words
-last changed. The same list is in the web app's frontend/src/content/seo.ts (the pages marked index: true);
+last changed. The same list is in the web app's frontend/src/content/seo.ts (the pages marked index: true whose canonical address is their own: /pricing names / and is left out);
 frontend/unit/seo.test.mjs fails when the two differ, so a page can't be added to one and forgotten in the other.
 Change a date when the page's words change."""
 from . import library, library_seed
@@ -7,7 +7,6 @@ from . import library, library_seed
 # (address, day the page's words last changed)
 PAGES = [
     ("/", "2026-10-08"),
-    ("/pricing", "2026-10-08"),
     ("/faq", "2026-10-08"),
     ("/library", "2026-10-08"),
     ("/terms", "2026-09-26"),

@@ -1430,9 +1430,21 @@ class IndiaFilings:
         return getattr(self.nse, name)
 
 
+def without_repeats(items: list[dict]) -> list[dict]:
+    """The rows with an exact repeat dropped: the same day, rule and words and the same link (or none), as the exchange lists
+    a general update twice (R26-009). A row with its own link or detail stays."""
+    seen, out = set(), []
+    for i in items:
+        k = (_same_filing_key(i), i.get("url"))
+        if k not in seen:
+            seen.add(k)
+            out.append(i)
+    return out
+
+
 def report(feed, symbol: str) -> dict:
     """Timeline plus the 3-month summary for one company (NSE symbol, or a BSE-only one)."""
-    items = feed.announcements(symbol)
+    items = without_repeats(feed.announcements(symbol))
     return {"symbol": symbol, "items": items[:200], "summary": summarise(items), "window_days": WINDOW_DAYS,
             "lookback_days": LOOKBACK_DAYS}
 

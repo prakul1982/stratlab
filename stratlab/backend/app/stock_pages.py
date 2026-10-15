@@ -81,6 +81,10 @@ US_INDICES = {"SPX", "GSPC", "^GSPC", "NDX", "IXIC", "^IXIC", "DJI", "^DJI", "DJ
 IN_INDEX = re.compile(r"^(NIFTY|SENSEX|BANKNIFTY|FINNIFTY|MIDCPNIFTY|BANKEX|INDIAVIX|CNX)[A-Z0-9 &-]*$")
 # a market value above this (in the page's unit: $ million, ₹ crore) is a data error: no company is worth $8 trillion
 CAP_CEILING = {"US": 8_000_000.0, "IN": 10_000_000.0}
+IN_SHARES_MAX = 30e9        # an Indian company's implied share count (market value ÷ price) above this is a unit or share-count error (R26-001)
+IN_PS_MAX = 50              # an Indian market value over this many times its latest year's revenue is out of line (R26-001)
+# an exchange operator that is not itself a listed company, which an instrument list can carry under its own code (R26-001)
+UNLISTED_NAMES = re.compile(r"^\s*national stock exchange of india\b", re.I)
 PE_MAX = 1000.0                # a P/E above this says the market value or the profit is off, not the company: n/a
 # a foreign filer's (20-F, depositary shares) market value against its own reported profit (R8V-001: Mizuho at a P/E of
 # 1.8, its depositary ratio read ten times too high): a P/E under PE_MIN_FOREIGN on a profit, or a P/E and the market
@@ -154,7 +158,7 @@ def companies(region: str) -> dict[str, dict]:
                 out[page] = {"name": name, "sym": code, "bse": code}
             else:
                 out[sym.upper()] = {"name": name, "sym": sym.upper(), "bse": None}
-    out = {k: v for k, v in out.items() if k and len(k) <= 20 and "/" not in k}
+    out = {k: v for k, v in out.items() if k and len(k) <= 20 and "/" not in k and not UNLISTED_NAMES.match(str(v.get("name") or ""))}
     with _companies_lock:
         _companies[region] = (time.time(), out)
     return out
@@ -725,6 +729,12 @@ def cap_problem(f: dict | None) -> str | None:
             by_profit = cap / profit
             if by_profit < PE_MIN_FOREIGN or pe is not None and pe > 0 and not 1 / PE_GAP <= pe / by_profit <= PE_GAP:
                 return "out of line with profit"
+    if region == "IN":
+        price, sales = _num(f.get("price")), _latest_sales(f)
+        if price and price > 0 and cap * 1e7 / price > IN_SHARES_MAX:
+            return "implied share count out of range"
+        if sales is not None and sales > 0 and cap / sales > IN_PS_MAX:
+            return "out of line with revenue"
     if region == "US":
         sales = _num(f.get("sales_usd"))
         if sales is None:
@@ -961,9 +971,21 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
-        "filings": [{"at": str(f.get("at") or "")[:10], "title": public_text(str(f.get("title") or ""))[:200]} for f in filings[:6]],
+        "filings": unique_filings([{"at": str(f.get("at") or "")[:10], "title": public_text(str(f.get("title") or ""))[:200]} for f in filings])[:6],
         "red_flags": red_flags, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
+
+
+def unique_filings(rows: list[dict]) -> list[dict]:
+    """Filing rows with an exact repeat (the same date and title) dropped, as the exchange lists a general update twice
+    (R26-009: RELIANCE's "14 Oct 2026 Other update: General Updates" in a row twice)."""
+    seen, out = set(), []
+    for x in rows or []:
+        k = (str(x.get("at") or "")[:10], re.sub(r"\s+", " ", str(x.get("title") or "")).strip().lower())
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
 
 
 def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
@@ -1598,7 +1620,12 @@ details.how summary{cursor:pointer;min-height:40px;display:flex;align-items:cent
 table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);box-sizing:border-box;min-width:124px}
 .scroll-cue{display:none;font-size:13px;color:var(--muted);margin:0 0 6px}
-@media (max-width:640px){.nav nav{display:none}.nav{justify-content:space-between}.scroll-cue{display:block}}
+.nav details.menu{display:none;position:relative;margin-left:auto}
+.nav details.menu summary{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid var(--line-2);border-radius:10px;font-weight:600;color:var(--ink);cursor:pointer;list-style:none}
+.nav details.menu summary::-webkit-details-marker{display:none}
+.nav details.menu nav{display:flex;flex-direction:column;gap:0;position:absolute;right:0;top:calc(100% + 8px);z-index:30;min-width:190px;padding:6px;background:var(--card);border:1px solid var(--line-2);border-radius:12px}
+.nav details.menu nav a{display:flex;align-items:center;min-height:44px;padding:0 12px}
+@media (max-width:640px){.nav>nav{display:none}.nav details.menu{display:block}.nav{justify-content:space-between}.scroll-cue{display:block}}
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
@@ -1606,6 +1633,7 @@ form.find{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}form.find input,form
 form.find input{flex:1;min-width:200px}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
 footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
+@media (max-width:640px){input,select,textarea,form.find input,form.find select{font-size:16px}}
 """
 
 # the StratLab mark (frontend/src/lib/brand.ts), drawn inline so the header needs no extra request
@@ -1658,9 +1686,11 @@ def _top(sign_in: str | None = None) -> str:
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
     links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money")))
+    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="/stocks">Companies</a>'
     return (f'<a class="skip" href="#main">Skip to the page</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
-            f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{links}<a href="{site}/pricing">Plans</a>'
-            f'<a href="/stocks">Companies</a></nav><a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
+            f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
+            f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
+            f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
 
 
 def _foot() -> str:
@@ -1760,7 +1790,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     parts.append(_table(f))
     if f.get("filings"):
         parts.append("<h2>Recent filings</h2><div class=\"card\"><ul class=\"plain\">" + "".join(
-            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(x["title"])}</li>' for x in f["filings"]) + "</ul></div>")
+            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(x["title"])}</li>' for x in unique_filings(f["filings"])) + "</ul></div>")
     parts.append(_cta(symbol, test, deep))
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
@@ -1842,7 +1872,11 @@ def _notes(f: dict) -> list[str]:
         out.append(f'<p class="note" data-currency-note>The share price and market cap are in US dollars. Reported results are in '
                    f"{e(unit)}, as the company files them; P/E and the dividend yield set them against the dollar price at the "
                    f"exchange rate when the page was built, while the table and the margins stay in {e(cur)}.</p>")
-    if cap_problem(f):
+    if cap_problem(f) and f.get("region") == "IN":
+        out.append('<p class="note warn" data-cap-check>Market cap unavailable: the value worked out from the share count and '
+                   "the price doesn't agree with the company's reported figures, so it isn't shown, nor is P/E, and the "
+                   "company is left out of lists ranked by size.</p>")
+    elif cap_problem(f):
         out.append('<p class="note warn" data-cap-check>The market value worked out from the share count and the price '
                    "doesn't agree with the company's own reported figures (it may count ordinary shares against a "
                    "depositary share's price), so it isn't shown, nor is P/E, and the company is left out of lists "

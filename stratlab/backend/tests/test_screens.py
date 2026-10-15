@@ -31,6 +31,7 @@ def facts(sym, name, **kw):
 ROWS = [
     facts("RELIANCE", "Reliance Industries"),
     facts("TCS", "Tata Consultancy", sector="Information Technology", pe=30.0, debt_equity=0.0, stage=3, market_cap=1200000,
+          price=3000.0, high52=3750.0, low52=2400.0,      # R26-001: ₹12 lakh crore at ₹100 would be 120 billion shares; same distance from its high as before
           growth={"sales_cagr_3y": 8.0}, red_flags=2),
     facts("SMALLCO", "Small Co", sector="Information Technology", market_cap=900, pe=None, roe=-4.0, stage=4, price=50, high52=100,
           growth={"sales_cagr_3y": None}),
@@ -473,3 +474,13 @@ def test_as_of_on_company_deep_dive_holdings_and_newsletters(w):
     assert "Prices and numbers as of 2 Oct 2026, 16:15 IST" in text and "as of 2 Oct 2026, 16:15 IST" in html
     for body in (json.dumps({k: co[k] for k in ("as_of", "numbers_at")}), text):
         assert not PROVIDERS.search(body)
+
+
+def test_a_market_cap_that_implies_too_many_shares_is_left_out_of_the_index(w):
+    """R26-001: DML's ₹11.13 lakh crore at ₹11.50 (about 968 billion shares) is not ranked; a normal company is."""
+    dml = facts("DML", "Diggi Multitrade", price=11.5, high52=17.2, low52=8.16, market_cap=1113000, pe=None)
+    dml["market_cap_unit"] = dml["unit"] = "₹ crore"
+    ok = facts("OKCO", "Ok Co", price=2500.0, high52=3000.0, low52=2000.0, market_cap=300000)
+    ok["market_cap_unit"] = ok["unit"] = "₹ crore"
+    assert screens.row("IN", "DML", dml)["market_cap"] is None
+    assert screens.row("IN", "OKCO", ok)["market_cap"] == 300000
