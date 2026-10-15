@@ -1711,11 +1711,11 @@ def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = 
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="{robots}">
 {link}<link rel="icon" href="{site}/favicon.svg" type="image/svg+xml">
-<meta name="theme-color" content="#F5F1E8">
+<meta name="theme-color" content="#F5F1E8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
 <meta property="og:type" content="website"><meta property="og:site_name" content="StratLab">
 <meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
 {og_url}<meta property="og:image" content="{site}/og-image.png">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{site}/og-image.png">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{e(title)}"><meta name="twitter:description" content="{e(desc)}"><meta name="twitter:image" content="{site}/og-image.png">
 {extra}<style>{STYLE}</style></head>"""
 
 

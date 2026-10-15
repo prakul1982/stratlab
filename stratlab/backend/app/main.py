@@ -3541,8 +3541,8 @@ def public_verdict_image(token: str):
 def public_verdict_page(token: str):
     snap = public.load(token)
     if not snap:
-        # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
-        return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
+        # a notice that the link isn't available, not the landing page in silence (R11C-015, R11D)
+        return HTMLResponse(public.gone_html(), status_code=404, headers=public.GONE_HEADERS)
     return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=0, s-maxage=30, must-revalidate"})   # a link turned off stops within a minute
 
 
@@ -3588,7 +3588,7 @@ def company_card_image(card: str):
 def company_card_page(card: str):
     c = company_cards.load(card)
     if not c:
-        return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
+        return HTMLResponse(public.gone_html(), status_code=404, headers=public.GONE_HEADERS)
     return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": SHARED_LINK_CACHE})
 
 

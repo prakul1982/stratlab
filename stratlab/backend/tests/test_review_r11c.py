@@ -275,7 +275,7 @@ def test_a_dead_share_link_opens_the_page_that_says_so(monkeypatch):
     from fastapi.testclient import TestClient
     monkeypatch.setattr(public.db, "get_setting", lambda k: None)
     r = TestClient(main.app).get("/v/NlpCFMRAhSA", follow_redirects=False)
-    assert r.status_code in (302, 307) and r.headers["location"].endswith("/verdict/NlpCFMRAhSA")
+    assert r.status_code == 404 and "may have been turned off" in r.text and 'content="noindex' in r.text
 
 
 def test_a_shared_page_keeps_the_rules_out_of_its_question():

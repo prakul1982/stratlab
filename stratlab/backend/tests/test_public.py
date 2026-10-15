@@ -46,7 +46,8 @@ def test_share_link_life_cycle(api, store):
     # turning it off
     api.delete(f"/notebooks/{nb['id']}/experiments/1/share")
     assert api.get(f"/public/v/{token}").status_code == 404
-    assert api.get(f"/v/{token}", follow_redirects=False).status_code in (302, 307)
+    gone = api.get(f"/v/{token}", follow_redirects=False)
+    assert gone.status_code == 404 and "may have been turned off" in gone.text and "noindex" in gone.text
 
 
 def test_verdict_preview_is_kept_out_of_search_and_checks_its_image_without_decoding(api, store, monkeypatch):

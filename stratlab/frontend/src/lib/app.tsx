@@ -68,6 +68,15 @@ type Prefs = { level?: Level; focus?: Focus; space?: SpaceView };
 const Ctx = createContext<AppState | null>(null);
 export const useApp = () => useContext(Ctx)!;
 
+/** The browser's bar colour follows the app's own paper colour: an explicit choice sets both variants, "system" puts back the
+ *  light/dark pair that index.html carries for the OS scheme. */
+export const THEME_COLOR = { light: "#F5F1E8", dark: "#141311" } as const;
+export function applyThemeColor(t: "light" | "dark" | "system") {
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+    const dark = m.media.includes("dark");
+    m.content = t === "system" ? (dark ? THEME_COLOR.dark : THEME_COLOR.light) : THEME_COLOR[t];
+  });
+}
 export function AppProvider({ children, goToPlans }: { children: ReactNode; goToPlans: () => void }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
@@ -179,6 +188,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
       if (t === "system") { localStorage.removeItem("stratlab-theme"); delete document.documentElement.dataset.theme; }
       else { localStorage.setItem("stratlab-theme", t); document.documentElement.dataset.theme = t; }
     } catch { /* private mode */ }
+    applyThemeColor(t);
   }, []);
 
   /** Save some of the preferences in one request (two at once could each overwrite the other's change). */

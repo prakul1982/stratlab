@@ -68,10 +68,11 @@ self.addEventListener("fetch", (e) => {
       }
       return res;
     }
-    // a server error with no copy of the app kept: the offline page with its Reload, not the host's bare error page
-    if (res.status >= 500) return shellOr(() => offline(url.pathname + url.search));
+    // a server error on an app address: the app shell (it starts the app at that address). Any other page is the server's own, and
+    // its error page (the self-refreshing "being prepared" 503) is shown as it is; the offline page is only for a failed fetch
+    if (res.status >= 500 && isAppPath(url.pathname)) return shellOr(() => offline(url.pathname + url.search));
     return res;
-  }).catch(() => shellOr(() => offline(url.pathname + url.search))));
+  }).catch(() => (isAppPath(url.pathname) ? shellOr(() => offline(url.pathname + url.search)) : offline(url.pathname + url.search))));
 });
 
 self.addEventListener("push", (e) => {

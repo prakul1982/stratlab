@@ -150,6 +150,21 @@ def url(token: str) -> str:
     return f"{settings.PUBLIC_SITE_URL}/v/{token}"
 
 
+def gone_html() -> str:
+    """What an unknown or turned-off shared link (a verdict or a company card) opens: a notice and the way home, kept out of search."""
+    site = html.escape(settings.PUBLIC_SITE_URL)
+    return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            "<meta name=\"color-scheme\" content=\"light dark\"><meta name=\"robots\" content=\"noindex,nofollow\">"
+            "<title>Link not available · StratLab</title></head>"
+            "<body style=\"font-family:system-ui,sans-serif;margin:0;padding:48px 16px;text-align:center\"><main>"
+            "<h1 style=\"font-size:22px\">This shared link isn't available</h1>"
+            "<p>This shared link isn't available. It may have been turned off.</p>"
+            f"<p><a href=\"{site}/\">Go to StratLab</a></p></main></body></html>")
+
+
+GONE_HEADERS = {"Cache-Control": "no-cache", "X-Robots-Tag": "noindex"}
+
+
 def preview_html(token: str, snap: dict, has_image: bool) -> str:
     """A tiny page for link previews (WhatsApp, X, LinkedIn read these tags); people are sent on to the app."""
     e = html.escape
