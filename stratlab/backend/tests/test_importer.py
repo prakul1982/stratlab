@@ -56,9 +56,11 @@ if ta.crossunder(close, e) and ta.vwma(close, 5) > 3
 strategy.exit("x", "L", loss=100)"""
     out = importer.pine(code)
     assert out["side"] == "long" and out["entry"][0]["op"] == "xa" and out["entry"][0]["r"] == {"t": "ema", "p": 12}
-    assert out["exit"][0] == {"l": {"t": "price"}, "op": "xb", "r": {"t": "ema", "p": 12}}
+    # the short signal (used as the exit) needs two conditions together; an exit closes on any one rule, so it is left
+    # out whole with a note rather than split into "cross under OR ..." (R3I)
+    assert out["exit"] == []
     notes = " ".join(out["notes"])
-    assert "also trades short" in notes and "vwma" in notes and "ticks or points" in notes
+    assert "also trades short" in notes and "vwma" in notes and "that exit was left out" in notes and "ticks or points" in notes
 
 
 def test_stratlab_export_round_trip():

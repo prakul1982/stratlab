@@ -27,7 +27,8 @@ export const STUDIES: StudyDef[] = [
     params: [{ label: "ATR length", min: 1, max: 100, step: 1, def: 10 }, { label: "Multiplier", min: 0.5, max: 10, step: 0.1, def: 3 }] },
   { type: "stage", name: "Stage (30-week average)", pane: "price", about: "Weinstein's stage 1 to 4 from the 150-day average and its slope; the legend shows the stage.",
     params: [{ label: "Average length", min: 10, max: 400, step: 1, def: 150 }, { label: "Slope look-back", min: 1, max: 100, step: 1, def: 20 }] },
-  { type: "hl52", name: "52-week high and low", pane: "price", about: "The highest high and lowest low of the year before each candle.",
+  { type: "hl52", name: "52-week high and low", pane: "price",
+    about: "On daily candles, the highest high and lowest low of the 252 candles before each one, the candle itself left out, as in the rules. On other candles, of the year up to and including each one.",
     params: [] },
   { type: "rsi", name: "RSI", pane: "own", about: "Relative strength index, 0 to 100, with 30 and 70 lines.",
     params: [{ label: "Length", min: 2, max: 100, step: 1, def: 14 }] },
@@ -103,7 +104,9 @@ export function compute(bars: Bar[], c: StudyConfig, intraday: boolean): StudyOu
       return { ...base, stage: I.stage(close, a, b), lines: [{ name: "Average", values: I.sma(close, a), color: c.slot, width: 1.6 }] };
     }
     case "hl52": {
-      const { high, low } = I.rangeHighLow(bars, bars.map((x) => x.t), 365 * 86_400_000);
+      // daily candles: the rules' own 52-week high and low (the previous 252 candles); other timeframes: a calendar year
+      const times = bars.map((x) => x.t);
+      const { high, low } = !intraday && I.dailySpacing(times) ? I.priorHighLow(bars, 252) : I.rangeHighLow(bars, times, 365 * 86_400_000);
       return { ...base, lines: [{ name: "High", values: high, color: "muted", dash: true, width: 1, step: true }, { name: "Low", values: low, color: "muted", dash: true, width: 1, step: true }] };
     }
     case "rsi": return { ...base, range: [0, 100], guides: [30, 50, 70], lines: [{ name: "RSI", values: I.rsi(close, a), color: c.slot }] };

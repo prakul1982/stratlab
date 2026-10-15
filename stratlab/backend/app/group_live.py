@@ -13,7 +13,7 @@ from datetime import datetime
 from . import risk
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import Ctx, Engine, write_off
+from .engine.core import TF_MIN, Ctx, Engine, write_off
 from .engine.portfolio import _cash
 from .kite_service import IST, KiteService
 from .live import (CandleBuilder, _closed, _ts, candle_end, close_at_auction, day_close_minutes, drop_forming, official_close,
@@ -277,7 +277,7 @@ class GroupLiveSession:
         if m.corp.waiting:
             m.corp.on_bar(m.bars)
         m.last_price = c["c"]
-        ctx = Ctx(m.bars, intraday=self.tf != "1d")
+        ctx = Ctx(m.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
         new = m.engine.step(m.bars, ctx, len(m.bars) - 1)
         for ev in new:                         # the candle's own orders first, then the cap's or the emptied account's closes
             self.mgr.on_order(self, {**ev, "sym": m.sym})

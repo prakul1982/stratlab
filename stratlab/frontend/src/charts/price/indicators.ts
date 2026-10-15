@@ -56,6 +56,7 @@ export function rsi(c: number[], n: number): number[] {
   const u = wilder(up, n), w = wilder(dn, n);
   return u.map((a, i) => {
     const b = w[i];
+    if (a === 0 && b === 0) return 50;            // no move either way (a flat series), as the engine
     if (b === 0 && Number.isFinite(a)) return 100;
     if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return NaN;
     return 100 - 100 / (1 + a / b);
@@ -154,7 +155,31 @@ export function stage(c: number[], n = 150, look = 20): number[] {
   return out;
 }
 
-/** The highest high and lowest low over the trailing window ending at each candle (52 weeks on daily candles). */
+/** The highest high and lowest low of the `n` candles before each one, the candle itself left out: the engine's 52-week
+ *  high and low rule (Donchian high and low 252, previous 252 daily candles). Blank until there are `n` candles before it. */
+export function priorHighLow(bars: OHLCV[], n: number): { high: number[]; low: number[] } {
+  const high: number[] = [], low: number[] = [];
+  const qh: number[] = [], ql: number[] = [];
+  for (let i = 0; i < bars.length; i++) {
+    while (qh.length && qh[0] < i - n) qh.shift();
+    while (ql.length && ql[0] < i - n) ql.shift();
+    high.push(i >= n ? bars[qh[0]].h : NaN); low.push(i >= n ? bars[ql[0]].l : NaN);
+    while (qh.length && bars[qh[qh.length - 1]].h <= bars[i].h) qh.pop();
+    while (ql.length && bars[ql[ql.length - 1]].l >= bars[i].l) ql.pop();
+    qh.push(i); ql.push(i);
+  }
+  return { high, low };
+}
+
+/** Whether candles are daily: the usual step from one to the next is about a day (not a week or a month). */
+export function dailySpacing(times: number[]): boolean {
+  const steps = times.slice(1).map((t, i) => t - times[i]).filter((d) => d > 0).sort((a, b) => a - b);
+  if (!steps.length) return false;
+  const mid = steps[Math.floor(steps.length / 2)];
+  return mid >= 20 * 3_600_000 && mid <= 4 * 86_400_000;
+}
+
+/** The highest high and lowest low over the trailing window ending at each candle (a year by the calendar). */
 export function rangeHighLow(bars: OHLCV[], times: number[], spanMs: number): { high: number[]; low: number[] } {
   const high: number[] = [], low: number[] = [];
   // monotonic queues keep this linear however long the window is

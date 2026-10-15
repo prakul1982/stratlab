@@ -181,7 +181,7 @@ def test_detects_option_structures_only():
     straddle_cfg = '{"structure": {"type": "short_straddle_with_wings", "short_legs": ["ATM CE (SELL)"], "hedge_legs": []}}'
     momentum_cfg = '{"entry": {"signal": "day change"}, "token": {"$comment": "waits for the straddle bot"}}'
     assert oi.is_options(straddle_cfg, "json") and not oi.is_options(momentum_cfg, "json")
-    assert oi.is_options("sell a short straddle at 9:20 with a 30% stop", "words")
+    assert oi.is_options("sell a short straddle at 9:20 with a 30% stop", "text")
 
 
 def test_parse_ai_answer_keeps_what_validates():

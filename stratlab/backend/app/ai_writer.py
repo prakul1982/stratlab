@@ -1,6 +1,7 @@
 """AI strategy builder (all plans, monthly limits in plans.py).
 Plain English -> validated rules, plus what the user did and didn't specify,
 so the app can ask follow-up questions for the missing parts."""
+import json
 import re
 
 from pydantic import ValidationError
@@ -150,26 +151,34 @@ def write_strategy(text: str, pro: bool) -> dict:
     out = {"notes": [n for n in (str(x).strip() for x in raw_notes) if n and user_note(n)][:8]}
     allowed = None if pro else {"price", "num", "sma", "ema", "rsi"}
 
-    def conds(items):
+    def conds(items, what: str):
         res = []
         for c in items if isinstance(items, list) else []:
             try:
                 cond = Cond(**c)
             except (ValidationError, TypeError):
+                out["notes"].append(f"One {what} rule couldn't be read ({json.dumps(c, default=str)[:80]}), so it was left out.")
                 continue
             if allowed and (cond.l.t not in allowed or cond.r.t not in allowed):
                 out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) need the Basic plan or above, so that part was left out.")
                 continue
             res.append(cond.model_dump(exclude_none=True))
+        if len(res) > 10:
+            out["notes"].append(f"Only the first 10 of the {len(res)} {what} rules were kept.")
         return res[:10]
 
-    out["entry"] = conds(data.get("entry"))
-    out["exit"] = conds(data.get("exit"))
+    out["entry"] = conds(data.get("entry"), "entry")
+    out["exit"] = conds(data.get("exit"), "exit")
     out["entryJoin"] = data.get("entryJoin") if data.get("entryJoin") in ("all", "any", "score") else "all"
     out["side"] = data.get("side") if data.get("side") in ("short", "both") else "long"
-    out["shortEntry"] = conds(data.get("shortEntry")) if out["side"] == "both" else []
-    out["shortExit"] = conds(data.get("shortExit")) if out["side"] == "both" else []
+    out["shortEntry"] = conds(data.get("shortEntry"), "short entry") if out["side"] == "both" else []
+    out["shortExit"] = conds(data.get("shortExit"), "short exit") if out["side"] == "both" else []
+    if out["side"] != "both" and (data.get("shortEntry") or data.get("shortExit")):
+        out["notes"].append("The short rules were left out: the strategy came back as one direction only "
+                            f"({'short' if out['side'] == 'short' else 'long'}), which uses the entry and exit rules.")
     if out["side"] == "both" and not out["shortEntry"]:
+        if out["shortExit"]:
+            out["notes"].append("The short exit rules were left out: there was no short entry rule, so it trades long only.")
         out["side"] = "long"
     if out["side"] == "both" and not out["entry"]:          # short-only after all
         out.update(side="short", entry=out["shortEntry"], exit=out["shortExit"], shortEntry=[], shortExit=[])

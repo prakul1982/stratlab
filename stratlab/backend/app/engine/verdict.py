@@ -552,6 +552,16 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
             "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days)}
 
 
+def with_notes(v: dict, notes: list[str]) -> dict:
+    """A verdict with facts about how its test ran that bear on the result (a rule short of history, which members of a
+    group took the free slots): kept in `notes`, and each added to the summary the pages show, one line each."""
+    notes = [n for n in notes if n]
+    if notes:
+        v["notes"] = [*(v.get("notes") or []), *notes]
+        v["summary"] = " ".join([v["summary"], *notes])
+    return v
+
+
 def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> dict:
     """The checks for a group of instruments. `run(t_from, t_to)` re-runs the portfolio on part of the period (kept for
     callers; the unseen check reads the full run's own trades, as for one instrument)."""

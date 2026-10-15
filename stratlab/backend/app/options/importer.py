@@ -14,7 +14,7 @@ STRONG = re.compile(r"short[_ -]straddle|long[_ -]straddle|short[_ -]strangle|lo
 
 def is_options(text: str, fmt: str) -> bool:
     hits = {m.group(0).lower().replace("_", " ").replace("-", " ") for m in STRONG.finditer(text[:60000])}
-    return len(hits) >= 2 or (len(hits) >= 1 and fmt == "words")
+    return len(hits) >= 2 or (len(hits) >= 1 and fmt == "text")      # plain words, as importer.detect names them
 
 
 SYSTEM = """You translate an options trading strategy (a config file, code or a description) into JSON for a paper-trading engine that trades option structures on live NSE, BSE and MCX quotes. Reply with ONLY the JSON object, no prose.

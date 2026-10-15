@@ -24,22 +24,33 @@ FORMATS = {
 MAX_CHARS = 20000
 
 
+EXTENSIONS = {".pine": "pine", ".mq4": "mql", ".mq5": "mql", ".afl": "afl", ".py": "python"}
+
+
 def detect(text: str, filename: str = "") -> str:
     name = (filename or "").lower()
     t = text.strip()
+    # the file's own extension first: a Python file that names a function strategy() or uses the ta library is Python
+    ext = next((f for e, f in EXTENSIONS.items() if name.endswith(e)), None)
+    if ext:
+        return ext
     if t.startswith("{"):
         try:
             obj = json.loads(t)
         except ValueError:
             return "text"
-        return "stratlab" if isinstance(obj, dict) and (obj.get("format", "").startswith("stratlab") or "strategy" in obj) else "json"
-    if name.endswith(".pine") or re.search(r"//@version|\bstrategy\s*\(|\bta\.\w+\(|\bindicator\s*\(|\bstudy\s*\(", t):
+        if not isinstance(obj, dict):
+            return "json"
+        fmt = obj.get("format")
+        own = (isinstance(fmt, str) and fmt.startswith("stratlab")) or isinstance(obj.get("strategy"), dict)
+        return "stratlab" if own else "json"
+    if re.search(r"//@version|(?<!def )\bstrategy\s*\(|\bta\.\w+\(|\bindicator\s*\(|\bstudy\s*\(", t):
         return "pine"
-    if name.endswith((".mq4", ".mq5")) or re.search(r"\bOnTick\s*\(|\biMA\s*\(|\bOrderSend\s*\(", t):
+    if re.search(r"\bOnTick\s*\(|\biMA\s*\(|\bOrderSend\s*\(", t):
         return "mql"
-    if name.endswith(".afl") or re.search(r"^\s*(Buy|Sell|Short|Cover)\s*=", t, re.M):
+    if re.search(r"^\s*(Buy|Sell|Short|Cover)\s*=", t, re.M):
         return "afl"
-    if name.endswith(".py") or re.search(r"^\s*(import|from)\s+\w+|^\s*def\s+\w+\(|^\s*class\s+\w+\(", t, re.M):
+    if re.search(r"^\s*(import|from)\s+\w+|^\s*def\s+\w+\(|^\s*class\s+\w+\(", t, re.M):
         return "python"
     return "text"
 
@@ -117,72 +128,143 @@ def pine(code: str) -> dict:
         m = re.fullmatch(_TA, tok)
         return _ta_ref(m.group(1), m.group(2), m.group(3), consts) if m else None
 
-    def conds(expr: str, depth: int = 0) -> tuple[list[dict], str]:
+    def tree(expr: str, depth: int = 0):
+        """An expression as an atom (a string) or (op, [parts]), parts joined by the same op merged into it."""
         expr = _unwrap(expr)
         if expr in cond_vars and depth < 4:
-            return conds(cond_vars[expr], depth + 1)
-        join = "any" if re.search(r"\bor\b", expr) else "all"
-        out = []
-        for atom in re.split(r"\band\b|\bor\b", expr):
-            atom = _unwrap(atom)
-            if not atom:
-                continue
-            if atom in cond_vars and depth < 4:
-                out += conds(atom, depth + 1)[0]
-                continue
-            m = re.fullmatch(r"(?:ta\.)?cross(over|under)\(\s*(.+?)\s*,\s*(.+)\s*\)", atom)
-            if m:
-                l, r, op = operand(m.group(2)), operand(m.group(3)), "xa" if m.group(1) == "over" else "xb"
-            else:
-                m = re.fullmatch(r"(.+?)\s*(>=|<=|>|<)\s*(.+)", atom)
-                l, r, op = (operand(m.group(1)), operand(m.group(3)), "gt" if m.group(2).startswith(">") else "lt") if m else (None, None, None)
-            if l and r and op:
-                try:
-                    out.append(Cond(l=l, op=op, r=r).model_dump(exclude_none=True))
-                    continue
-                except ValidationError:
-                    pass
-            notes.append(f"Couldn't translate \"{atom[:80]}\", so it was left out.")
-        return out, join
+            return tree(cond_vars[expr], depth + 1)
+        for op in ("or", "and"):                 # "or" binds loosest
+            parts = _split_top(expr, rf"\b{op}\b")
+            if len(parts) > 1:
+                kids = []
+                for k in (tree(x, depth + 1) for x in parts):
+                    kids += k[1] if isinstance(k, tuple) and k[0] == op else [k]
+                return op, kids
+        return expr
 
-    entries = {"long": [], "short": []}
-    exits = {"long": [], "short": []}
-    lines = code.splitlines()
-    for i, line in enumerate(lines):
-        call = re.search(r"strategy\.(entry|close|close_all)\s*\((.*)\)", line)
+    def flat(exprs: list[str]) -> tuple[str, list[str]] | None:
+        """Conditions that must all hold (an `if` and the ones it sits in) as ("all" | "any", atoms), or None when and
+        and or are mixed (StratLab's rules hold all of them, or any of them, not both)."""
+        t = tree(" and ".join(f"({e})" for e in exprs))
+        if isinstance(t, str):
+            return "all", [t]
+        op, kids = t
+        if any(not isinstance(k, str) for k in kids):
+            return None
+        return ("any" if op == "or" else "all"), kids
+
+    def cond(atom: str) -> dict | None:
+        atom = _unwrap(atom)
+        m = re.fullmatch(r"(?:ta\.)?cross(over|under)\((.*)\)", atom)
+        args = _split_top(m.group(2), ",") if m else []
+        if m and len(args) == 2:
+            l, r, op = operand(args[0]), operand(args[1]), "xa" if m.group(1) == "over" else "xb"
+        else:
+            m = None if args else re.fullmatch(r"(.+?)\s*(>=|<=|>|<)\s*(.+)", atom)
+            l, r, op = (operand(m.group(1)), operand(m.group(3)), "gt" if m.group(2).startswith(">") else "lt") if m else (None, None, None)
+            if m and m.group(2) in (">=", "<="):
+                word = "is above" if m.group(2) == ">=" else "is below"
+                notes.append(f"\"{atom[:80]}\" was read as \"{word}\": StratLab's rules have no \"at or {word[3:]}\", so the two "
+                             "differ only on a candle where both sides are exactly equal.")
+        if l and r and op:
+            try:
+                return Cond(l=l, op=op, r=r).model_dump(exclude_none=True)
+            except ValidationError:
+                pass
+        notes.append(f"Couldn't translate \"{atom[:80]}\", so it was left out.")
+        return None
+
+    def rules(atoms: list[str]) -> list[dict]:
+        out = []
+        for a in atoms:
+            c = cond(a)
+            if c and c not in out:
+                out.append(c)
+        return out
+
+    # each strategy.entry / close call with the conditions it runs under: its when=, and every `if` it sits in (by
+    # indentation: an `if` inside an `if` needs both); a call under an `else` can't be read (it runs when a condition is false)
+    calls = []
+    stack: list[tuple[int, str | None]] = []          # (indent, condition) of the open `if` blocks; None for an else
+    for line in code.splitlines():
+        if not line.strip():
+            continue
+        indent = len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip())
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        head = re.match(r"\s*if\s+(.+?)\s*$", line)
+        if re.match(r"\s*else\b", line):
+            stack.append((indent, None))
+            continue
+        if head and "strategy." not in head.group(1):
+            stack.append((indent, head.group(1)))
+            continue
+        call = re.search(r"strategy\.(entry|close_all|close)\s*\((.*)\)", line)
         if not call:
             continue
         args = call.group(2)
         when = re.search(r"when\s*=\s*(.+?)\s*(?:,\s*\w+\s*=|$)", args)
-        cond = when.group(1) if when else None
-        if cond is None:
-            same = re.match(r"\s*if\s+(.+?)\s+strategy\.", line)
-            prev = next((lines[j] for j in range(i - 1, -1, -1) if lines[j].strip()), "")
-            m = same or re.match(r"\s*if\s+(.+?)\s*$", prev)
-            cond = m.group(1) if m else None
-        if not cond:
+        same = re.match(r"\s*if\s+(.+?)\s+strategy\.", line)
+        own = [c for _, c in stack] + [x.group(1) for x in (same, when) if x]
+        cid = re.match(r"\s*[\"']([^\"']*)[\"']", args)
+        side = "short" if re.search(r"strategy\.short|direction\s*=\s*strategy\.direction\.short", args) else "long"
+        calls.append({"kind": call.group(1), "id": cid.group(1) if cid else None, "side": side, "conds": own,
+                      "text": line.strip()[:80]})
+    sides_of = {c["id"]: c["side"] for c in calls if c["kind"] == "entry" and c["id"] is not None}
+    entries: dict[str, list] = {"long": [], "short": []}
+    exits: dict[str, list] = {"long": [], "short": []}
+    for c in calls:
+        if not c["conds"]:
+            continue                       # no condition: a close at the end of the script, an entry on every candle
+        if any(x is None for x in c["conds"]):
+            notes.append(f"\"{c['text']}\" sits under an else, which StratLab's rules can't express, so it was left out.")
             continue
-        if call.group(1) == "entry":
-            side = "short" if re.search(r"strategy\.short|direction\s*=\s*strategy\.direction\.short", args) else "long"
-            entries[side].append(cond)
+        if c["kind"] == "entry":
+            entries[c["side"]].append(c)
         else:
-            exits["long"].append(cond)
-            exits["short"].append(cond)
+            for sd in ([sides_of[c["id"]]] if c["kind"] == "close" and c["id"] in sides_of else ["long", "short"]):
+                exits[sd].append(c)
 
     side = "long" if entries["long"] or not entries["short"] else "short"
     other = "short" if side == "long" else "long"
+    # entries: each entry statement opens a trade on its own, so several are any-of; one statement keeps its own and/or
     entry, join = [], "all"
-    for c in entries[side]:
-        got, join = conds(c)
-        entry += got
+    read = [flat(c["conds"]) for c in entries[side]]
+    if any(r is None for r in read):
+        notes.append("The entry conditions mix and with or in a way StratLab's rules can't hold (all of the rules, or any "
+                     "of them), so the entry rules were left out. Add them by hand.")
+    elif len(read) == 1:
+        join, atoms = read[0]
+        entry = rules(atoms)
+    elif read:
+        if any(j == "all" and len(a) > 1 for j, a in read):
+            notes.append(f"The script has {len(read)} entry statements (any one of them opens a trade) and at least one needs "
+                         "several conditions together; StratLab's rules can't hold both, so the entry rules were left out. "
+                         "Add them by hand.")
+        else:
+            join, entry = "any", rules([x for _, a in read for x in a])
+    # exits close on any one rule: an exit that needs several conditions together can't be one, so it is left out whole
     exit_ = []
-    for c in exits[side]:
-        exit_ += conds(c)[0]
-    if entries[other]:
+    flips = entries[other]
+    for c in [*exits[side], *flips]:
+        r = flat(c["conds"])
+        if r is None or (r[0] == "all" and len(r[1]) > 1):
+            notes.append(f"An exit needs several conditions together (\"{' and '.join(c['conds'])[:80]}\"); StratLab's exit "
+                         "rules close on any one of them, so that exit was left out. Add it by hand.")
+            continue
+        exit_ += [x for x in rules(r[1]) if x not in exit_]
+    if flips:
         # a long-and-short script flips on the opposite signal: here that signal closes the trade
-        for c in entries[other]:
-            exit_ += conds(c)[0]
         notes.append(f"The script also trades {other}. StratLab tests one direction at a time, so the {other} signal is used as the exit.")
+    head = re.search(r"strategy\s*\((.*)\)", code)
+    settings_ = head.group(1) if head else ""
+    pyr = re.search(r"\bpyramiding\s*=\s*(\w+)", settings_)
+    if pyr and pyr.group(1) not in ("0", "1"):
+        notes.append(f"pyramiding = {pyr.group(1)} was not imported: StratLab holds one position at a time.")
+    if re.search(r"\bprocess_orders_on_close\s*=\s*true", settings_):
+        notes.append("process_orders_on_close was not imported: StratLab fills a rule's signal at the next candle's open.")
+    if re.search(r"\bcommission_(?:value|type)\s*=", settings_):
+        notes.append("The script's commission was not imported: the test uses StratLab's own brokerage and charges, set in the risk settings.")
 
     risk = {}
     for key, pat in (("sl", r"stop\s*=\s*[^,)]*?\(\s*1\s*-\s*([\w.]+)\s*(/\s*100)?\s*\)"),
@@ -214,6 +296,27 @@ def _unwrap(s: str) -> str:
                 return s
         s = s[1:-1].strip()
     return s
+
+
+def _split_top(s: str, sep: str) -> list[str]:
+    """`s` split where `sep` (a pattern) matches outside brackets: "f(a, b), c" on "," is ["f(a, b)", "c"]."""
+    out, depth, last, i = [], 0, 0, 0
+    while i < len(s):
+        ch = s[i]
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif depth == 0:
+            m = re.match(sep, s[i:])
+            if m and m.end() > 0 and (i == 0 or not (sep[0:2] == r"\b" and (s[i - 1].isalnum() or s[i - 1] == "_"))):
+                out.append(s[last:i].strip())
+                i += m.end()
+                last = i
+                continue
+        i += 1
+    out.append(s[last:].strip())
+    return out
 
 
 def _num(s: str):
