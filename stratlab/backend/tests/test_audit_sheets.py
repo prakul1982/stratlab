@@ -274,7 +274,7 @@ def test_checks_a_short_history_explains_are_a_fact():
             "checklist": {"checks": checks, "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
     got = audit.check_view(view)
     assert [i["level"] for i in got] == ["fact"] and "need more history" in got[0]["detail"]
-    view["checklist"]["checks"] = [{"label": x, "state": "na"} for x in ("Return on capital employed", "Debt to equity",
+    view["checklist"]["checks"] = [{"label": x, "state": "na"} for x in ("Return on capital employed", "Total debt / equity",
                                                                          "Operating margin holding up", "Insider buying and selling, 6 months")]
     view["numbers"]["years"] = years * 3
     got = audit.check_view(view)

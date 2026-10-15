@@ -6,7 +6,7 @@ whether to buy. Reads are stored in the database and shared, so a company costs 
 import json
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
@@ -430,7 +430,47 @@ FUTURE = re.compile(r"\b(?:will|expect|expects|expected to|target|targets|plan|p
                     r"next|anticipate|should|would|intend|by fy|by 20)", re.I)
 
 
-def clean_plans(d: dict, labels: dict, texts: dict | None = None) -> dict:
+_MONTHS = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september",
+                                       "october", "november", "december"), 1)}
+_MONTH_RX = re.compile(r"\b(?:in|during|by|until|before|end of|through)\s+(" + "|".join(_MONTHS) + r")(?:\s*,?\s+(20\d\d))?\b", re.I)
+_FY_RX = re.compile(r"\b(FY|fiscal(?: year)?)\s*'?(20\d\d|\d\d)(?:\s*[-–/]\s*(\d\d))?\b", re.I)
+_YEAR_RX = re.compile(r"\b(?:by|in|during|until|through|for|before)\s+(?:the end of\s+|calendar\s+|year\s+)?(20\d\d)\b", re.I)
+
+
+def _month_end(y: int, m: int) -> date:
+    return date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)
+
+
+def period_passed(text: str, said_on: date | None, today: date) -> bool:
+    """True when every period a statement names has clearly ended before today: "in October" said in October 2023, "FY24"
+    after March 2024, "by 2025" in 2026. A period that can't be placed (a month with no year and no date said on) is not
+    passed: the statement is kept, with its date."""
+    ends: list[date | None] = []
+    for m in _MONTH_RX.finditer(text):
+        month = _MONTHS[m.group(1).lower()]
+        year = int(m.group(2)) if m.group(2) else (said_on.year + (month < said_on.month) if said_on else None)
+        ends.append(_month_end(year, month) if year else None)
+    for m in _FY_RX.finditer(text):
+        y = m.group(2)
+        if m.group(3):                                   # FY 2023-24: ends 31 March 2024
+            y = 2000 + int(m.group(3))
+        else:
+            y = int(y) if len(y) == 4 else 2000 + int(y)
+        # an Indian "FY" ends 31 March of its year; any other fiscal year ends by 31 December of it
+        ends.append(date(y, 3, 31) if m.group(1).upper() == "FY" else date(y, 12, 31))
+    for m in _YEAR_RX.finditer(text):
+        ends.append(date(int(m.group(1)), 12, 31))
+    return bool(ends) and all(e is not None and e < today for e in ends)
+
+
+def _said_on(label) -> date | None:
+    try:
+        return date.fromisoformat(str((label or {}).get("at") or "")[:10])
+    except ValueError:
+        return None
+
+
+def clean_plans(d: dict, labels: dict, texts: dict | None = None, today: date | None = None) -> dict:
     def src(v):
         return labels.get(str(v or "").strip().upper())
     capex = []
@@ -446,6 +486,8 @@ def clean_plans(d: dict, labels: dict, texts: dict | None = None) -> dict:
         said = f"{o.get('statement') or ''} {o.get('quote') or ''}" if isinstance(o, dict) else ""
         if PAST.search(said) and not FUTURE.search(said):
             continue                       # a result already reported, not an outlook
+        if isinstance(o, dict) and period_passed(said, _said_on(src(o.get("source"))), today or ist_now().date()):
+            continue                       # its stated period has ended: not an outlook any more (R29C-005)
         if isinstance(o, dict) and str(o.get("statement") or "").strip() and _real(o, texts):
             outlook.append({"statement": str(o["statement"])[:240], "quote": str(o.get("quote") or "")[:300], "source": src(o.get("source"))})
     return {"capex": capex, "outlook": outlook}

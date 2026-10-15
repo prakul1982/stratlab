@@ -5693,7 +5693,9 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
         db.set_setting(PLATFORM_LAST, json.dumps(out))
         hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")[-13:]
         hist.append({"at": out["at"], "auto": auto, **out["counts"],
-                     "failed": [r["name"] for r in out["checks"] if r["state"] == "fail"]})
+                     "failed": [r["name"] for r in out["checks"] if r["state"] == "fail"],
+                     # what each failed check said, so a failure can be diagnosed days later (R29C-004)
+                     "failed_detail": [{"name": r["name"], "detail": str(r.get("detail") or "")[:300]} for r in out["checks"] if r["state"] == "fail"]})
         db.set_setting(PLATFORM_HISTORY, json.dumps(hist))
     except Exception as e:
         print("couldn't keep the platform check:", e)

@@ -19,7 +19,7 @@ def test_negative_net_worth_has_no_debt_to_equity_or_pb():
     p["ratios"] = {"Current Price": "100", "Book Value": "-80"}
     s = summary(p)
     assert s["debt_equity"] is None and s["pb"] is None and s["net_worth_negative"]
-    row = {c["label"]: c for c in checklist.evaluate(p, deepdive.numbers(p))["checks"]}["Debt to equity"]
+    row = {c["label"]: c for c in checklist.evaluate(p, deepdive.numbers(p))["checks"]}["Total debt / equity"]
     assert row["state"] == "watch" and "net worth is negative" in row["value"]
 
 

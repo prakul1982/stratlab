@@ -199,7 +199,7 @@ def test_banks_get_no_capex_or_operating_margin_checks():
     assert n["bank"] and all(y["capex"] is None and y["fcf"] is None for y in n["years"])
     labels = {c["label"]: c for c in checklist.evaluate(p, n)["checks"]}
     assert labels["Return on equity"]["state"] == "pass" and "Return on capital employed" not in labels
-    assert not {"Operating margin holding up", "Debt to equity", "Free cash flow, 3 years", "Profit turning into cash"} & labels.keys()
+    assert not {"Operating margin holding up", "Total debt / equity", "Free cash flow, 3 years", "Profit turning into cash"} & labels.keys()
     from app import report_card as rc
     assert rc.check({"metric": "margin", "low": 4.0, "high": None, "period": "FY25"}, n)["result"] == "unchecked"
 

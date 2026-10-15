@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, plainDates } from "../../lib/format";
+import { ago, fmtDateTime, IST, plainDates } from "../../lib/format";
 import { Card, CardHead, StatusList, StatusRow, type HealthState } from "../../components/kit";
 
 type Check = { name: string; area: string; state: "pass" | "warn" | "fail"; detail: string; seconds: number | null };
 /** `build`: the short commit of the server that ran it (older results have none), so an old run isn't read as today's code's */
 type Result = { at: string; counts: Record<"pass" | "warn" | "fail", number>; checks: Check[]; auto?: boolean; build?: string | null };
-type Day = { at: string; auto: boolean; pass: number; warn: number; fail: number; failed: string[] };
+type Day = { at: string; auto: boolean; pass: number; warn: number; fail: number; failed: string[]; failed_detail?: { name: string; detail: string }[] };
 const LIGHT: Record<Check["state"], HealthState> = { pass: "ok", warn: "warn", fail: "bad" };
 const WORD: Record<Check["state"], string> = { pass: "Pass", warn: "Check", fail: "Fail" };
 
@@ -32,6 +32,13 @@ export function PlatformPanel() {
         actions={<button type="button" className="btn sm" disabled={busy} onClick={go}>{busy ? "Checking… (about a minute)" : "Run checks"}</button>} />
       {history.length > 1 && <p className="k-note k-muted">Last {history.length} runs: {history.map((h) => (h.fail ? "✗" : "✓")).join(" ")}
         {history.some((h) => h.fail) ? ` · last failure ${ago(history.filter((h) => h.fail).slice(-1)[0].at)}` : " · no failures"}</p>}
+      {history.some((h) => h.fail && h.failed_detail?.length) && (
+        <ul className="k-note k-muted" aria-label="Failed runs">
+          {history.filter((h) => h.fail && h.failed_detail?.length).slice(-5).reverse().map((h) => (
+            <li key={h.at}>{fmtDateTime(h.at, { weekday: true, tz: IST, zone: true })}: {h.failed_detail!.map((d) => `${d.name}: ${plainDates(d.detail)}`).join("; ")}</li>
+          ))}
+        </ul>
+      )}
       {r && (
         <>
           <p className="k-small">{r.auto ? "Automatic check, " : ""}{ago(r.at)}{r.build ? ` on build ${r.build}` : ""} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>

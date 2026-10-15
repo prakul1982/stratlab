@@ -262,7 +262,7 @@ def test_a_bdc_is_classified_from_its_filings_and_valued_on_book():
     cl = checklist.evaluate(p, nums)
     assert cl["industry"]["group"] == "bdc" and cl["industry"]["path"]
     assert any(c["label"] == "Return on equity" for c in cl["checks"])
-    assert not [c for c in cl["checks"] if c["label"] in ("Operating margin holding up", "Free cash flow, 3 years", "Debt to equity")]
+    assert not [c for c in cl["checks"] if c["label"] in ("Operating margin holding up", "Free cash flow, 3 years", "Total debt / equity")]
     v = industry.valuation(p, {"pb": 0.95}, "bdc", "general")
     assert v["short"] == "P/B" and v["value"] == 0.95 and "net asset value" in v["why"]
     view = {"checklist": cl, "valuation": v, "numbers": nums}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
-import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, NO_STOP_SIZE_NOTE, sizedWithoutStop, switchStopUnit } from "../lib/rules";
+import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, selfMultipleNote, NO_STOP_SIZE_NOTE, sizedWithoutStop, switchStopUnit } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/intervals";
 import { Info } from "./ui";
@@ -337,7 +337,10 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
         </div>
       )}
       <p className="k-small k-muted">Tap any highlighted word to change it: the indicator, its length, the condition or a number.</p>
-      {meaningful([...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])]).dropped.map((d) => (
+      {[...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])].map(selfMultipleNote).filter((n): n is string => !!n).map((n) => (
+        <Notice key={n} tone="warn" role="status">{n} A run is refused while it is in the notebook.</Notice>
+      ))}
+      {meaningful([...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])].filter((c) => !selfMultipleNote(c))).dropped.map((d) => (
         <Notice key={d} tone="warn" role="status">"{d}" can't mean anything as a rule. A run is refused while a rule that can never be true is in the notebook.</Notice>
       ))}
 
