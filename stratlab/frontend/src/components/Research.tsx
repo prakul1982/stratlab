@@ -162,6 +162,8 @@ const TERMS: Record<string, string> = {
   "EBITDA margin": "Operating profit before depreciation, interest and tax (EBITDA) as a share of sales: what is left after running costs.",
   "Net margin": "Profit after everything, as a share of sales.",
   "Debt / equity": "Borrowings divided by the shareholders' money in the business.",
+  "Total debt / equity": "All borrowings, short and long term, divided by the shareholders' money in the business.",
+  "Long-term debt / equity": "Borrowings due after more than a year, divided by the shareholders' money in the business.",
   "Latest YoY": "The latest year against the year before.",
   "3Y CAGR": "Compound annual growth rate: the steady yearly growth that gets from the start to the end of the period.",
 };

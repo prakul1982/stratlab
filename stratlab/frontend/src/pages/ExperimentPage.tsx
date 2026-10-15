@@ -1,3 +1,4 @@
+import { isLegacyEmptied, emptiedDay } from "../lib/legacyRun";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
@@ -306,6 +307,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const unseen = v.checks.find((c) => c.id === "unseen")?.data;
   const cap = e.strategy.risk.capital;
   const st = e.stats;
+  const legacy = isLegacyEmptied(e);
   const allTrades = [...e.trades].reverse();
   const open = e.trades.filter((t) => !t.exit_t).length;
   const closed = e.trades.length - open;
@@ -347,13 +349,21 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <PageHeader eyebrow="Trade · Build and test" title={nb.name}
         lede={<><Link to={`/n/${nb.id}`} className="link">← Back to the notebook</Link> · {/^Experiment v\d+$/.test(e.label) ? e.label : `v${e.v}: ${e.label}`} · {e.instrument.symbol} · {TF_NAME[e.tf]} · {yearSpan(e.range.from.slice(0, 4), e.range.to.slice(0, 4))} · {withOpen(st.n, open)}</>}
         actions={<ShareMenu nb={nb} e={e} />} />
-      {st.emptied_on && (
+      {legacy && (
+        <Notice tone="warn">
+          <b>This run was saved by an older version and needs a re-run.</b> It was saved before an emptied account stopped trading
+          (it says the account emptied on {fmtDate(emptiedDay(e)!)} and then lists trades after that day), so its figures contradict each other and are not shown.
+          Run the experiment again for figures that hold together.
+        </Notice>
+      )}
+      {!legacy && st.emptied_on && (
         <Notice tone="warn">
           <b>Account emptied on {fmtDate(st.emptied_on)}.</b> The account's value reached zero, so every position was closed and nothing was traded after that day.
           The loss stops at −100%{e.group ? ": each position is sized on the whole capital, so a group can hold more than the account has." : "."}
           {st.shown_ret != null && <> This run was saved showing {pct(st.shown_ret)}, from before accounts stopped at zero; the figures here hold the account to what it had.</>}
         </Notice>
       )}
+      {legacy ? <p className="k-note"><Link to={`/n/${nb.id}`} className="link">Back to the notebook</Link> to run it again.</p> : <>
       {(st.skipped_size ?? 0) > 0 && (
         <Notice tone="warn">
           {st.skipped_size} entry signal{st.skipped_size === 1 ? " was" : "s were"} skipped because one {e.instrument.market === "MCX" || e.instrument.market === "CDS" || e.instrument.fno ? "lot" : "unit"} cost more than the capital allowed for a trade
@@ -435,6 +445,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <BasketCheck key={e.v} nb={nb} e={e} />
 
+      </>}
       <p className="k-note">Paper trading and research only. Past results don't predict future returns, and nothing here is investment advice.</p>
       {removing && (
         <ConfirmDialog title={`Delete experiment v${e.v}?`} confirmLabel="Delete experiment" onConfirm={remove} onClose={() => setRemoving(false)}>

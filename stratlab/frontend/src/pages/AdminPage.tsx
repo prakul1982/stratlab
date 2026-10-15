@@ -1,13 +1,14 @@
 import { lazy, Suspense } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Card, PageHeader, Skeleton } from "../components/kit";
+import { Card, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { AdminData, SECTIONS, useAdmin } from "./admin/AdminContext";
 import { attention } from "./admin/attention";
 import { OverviewSection } from "./admin/OverviewSection";
 import "./admin/admin.css";
 import { importWithRetry } from "../lib/lazyRetry";
+import { Opening } from "../components/LoadGuard";
 
 const UsersSection = lazy(() => importWithRetry(() => import("./admin/UsersSection")).then((m) => ({ default: m.UsersSection })));
 const MoneySection = lazy(() => importWithRetry(() => import("./admin/MoneySection")).then((m) => ({ default: m.MoneySection })));
@@ -49,7 +50,7 @@ function Frame() {
       <div className="adm-main k-page">
         <PageHeader eyebrow={`Admin · ${here.label}`} title={here.title} lede={here.lede}
           actions={<button type="button" className="btn outline sm" disabled={loading} onClick={() => { reload(); }}>{loading ? "Refreshing…" : "Refresh"}</button>} />
-        <Suspense fallback={<Card label="Loading"><Skeleton label={`Loading ${here.label}`} /></Card>}>
+        <Suspense fallback={<Card label="Loading"><Opening label={`Loading ${here.label}`} /></Card>}>
           <Routes>
             <Route index element={<OldTab />} />
             <Route path="users" element={<UsersSection />} />

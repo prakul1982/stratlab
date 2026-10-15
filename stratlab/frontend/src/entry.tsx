@@ -59,7 +59,7 @@ async function start() {
   if (!(await readConfig()) && !isPublicForAll(path)) { window.__stratlabShowLoadError?.(); return; }
   const account = !isPublicForAll(path) && wantsAccount({ supabaseUrl: window.STRATLAB_CONFIG?.SUPABASE_URL, search: location.search, hash: location.hash, storage: localStorage });
   const [{ captureRef }, { startErrorReports }] = await Promise.all([import("./lib/share"), import("./lib/sentry")]);
-  holdStartup(root);                  // the page's own words, drawn again until its code is here (R10V-006)
+  if (!account) holdStartup(root);    // the page's own words, drawn again until its code is here (R10V-006); not for a saved sign-in (R29B-019)
   captureRef();                       // a friend's invite link: kept until sign-in
   startErrorReports({ lazy: !account });   // a visitor's page downloads the error reporter only if something breaks
   if (account) {

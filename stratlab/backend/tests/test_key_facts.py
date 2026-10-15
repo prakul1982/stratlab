@@ -30,7 +30,7 @@ def test_rows_from_reported_numbers_and_prices():
     assert got["growth"]["Sales, 3 years"] == "13.3% a year" and got["growth"]["Net profit, 3 years"] == "14.5% a year"
     assert got["price"]["Price vs 50-day average"].endswith("above") and got["price"]["Price vs 200-day average"].endswith("above")
     assert got["price"]["1-year price change"].startswith("+") and got["price"]["Stage (150-day average)"] == "Stage 2 (advancing)"
-    assert got["debt"]["Debt to equity"] == "0.40" and got["debt"]["Interest cover"] == "5.0x"
+    assert got["debt"]["Total debt / equity"] == "0.40" and got["debt"]["Interest cover"] == "5.0x"
     assert got["debt"]["Cash from operations"] == "106% of net profit over 5 years"
     assert got["margins"]["EBITDA margin, 5 years"] == "18% → 19% → 21% → 20% → 22% (Mar 2021 to Mar 2025)"
     assert got["margins"]["ROCE"] == "19.5%" and got["margins"]["ROE"] == "16.2%"

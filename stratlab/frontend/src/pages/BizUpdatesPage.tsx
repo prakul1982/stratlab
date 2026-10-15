@@ -1,3 +1,4 @@
+import { waitingLine } from "../lib/bizUpdates";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -80,7 +81,7 @@ export function BizUpdatesPage() {
             <Card label="My stocks" testId="biz-mine">
               <CardHead title="My stocks" info="Your holdings first, then your watchlist: the Indian stocks that have business updates read into numbers. A stock with none read yet is named below the table." infoLabel="About my stocks" />
               {mine.rows.length === 0
-                ? <EmptyState title="None of your stocks has a business update read yet">{mine.without.length ? `${mine.without.length} of your stocks are waiting to be read: they are read each evening after they're filed.` : "Add holdings or star companies in Research and their updates appear here."}</EmptyState>
+                ? <EmptyState title="None of your stocks has a business update read yet">{mine.without.length ? waitingLine(mine.without.length) : "Add holdings or star companies in Research and their updates appear here."}</EmptyState>
                 : <DataTable label="My stocks' latest business updates" rows={mine.rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-company": r.symbol })}
                     columns={figureColumns({ key: "k", header: "From", cell: (r) => <Badge tone="plain" dot={false}>{kindName((r as MineRow).kind)}</Badge> })} />}
               {mine.rows.length > 0 && mine.without.length > 0 && <p className="k-note">Not read yet: {mine.without.map((x) => x.name).join(", ")}.</p>}

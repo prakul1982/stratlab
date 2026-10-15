@@ -129,12 +129,12 @@ function IssueView({ id }: { id: string }) {
             <h3 className="k-sub">{s.title}</h3>
             <ul className="news-items">
               {s.items.map((it, j) => {
-                const region = it.region ?? issue.region ?? "IN";
+                const region = it.region ?? issue.region ?? null;
                 return (
                   <li key={j}>
                     <ItemText text={it.text} url={it.url} />
-                    {it.price != null && <span className="k-note"> {price(it.price, itemCurrency(region), 2)}{it.change_pct != null && <>, {pct(it.change_pct, 2)} {it.since}</>}</span>}
-                    {it.symbol && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(it.symbol)}`}>{it.symbol}</Link></>}
+                    {it.price != null && <span className="k-note"> {price(it.price, itemCurrency(it.region ?? issue.region, it.currency), 2)}{it.change_pct != null && <>, {pct(it.change_pct, 2)} {it.since}</>}</span>}
+                    {it.symbol && region && <> <Link className="link" to={`/research/${region}/${encodeURIComponent(it.symbol)}`}>{it.symbol}</Link></>}
                     {!!it.lines?.length && <ul className="news-lines">{it.lines.map((l, k) => <li key={k}><ItemText text={l.text} url={l.url} /></li>)}</ul>}
                   </li>
                 );

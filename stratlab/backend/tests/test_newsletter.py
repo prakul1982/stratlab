@@ -85,7 +85,8 @@ def test_stock_facts_cover_watchlist_notebooks_and_cache_per_symbol(w, monkeypat
     monkeypatch.setattr(db, "list_notebook_rows", lambda uid: [{"instrument": {"symbol": "TCS", "market": "IN", "type": "EQ"}},
                                                                {"instrument": {"symbol": "NIFTY 50", "market": "IN", "type": "INDEX"}},
                                                                {"instrument": {"symbol": "BTC/USD", "market": "CRYPTO"}}])
-    assert content.my_stocks("u-pro") == [("IN", "RELIANCE"), ("US", "AAPL"), ("IN", "TCS")]
+    # R29B-012: only the watchlist and holdings, not notebook or paper instruments
+    assert content.my_stocks("u-pro") == [("IN", "RELIANCE"), ("US", "AAPL")]
     f = content.stock_facts("u-pro", date.today())
     assert f["kind"] == "my_stocks" and set(f["unchanged"]) | {r["symbol"] for r in f["stocks"]} <= {"RELIANCE", "AAPL", "TCS"}
     calls = []
@@ -194,7 +195,9 @@ def test_my_stocks_issue_when_something_changed(w, monkeypatch, outbox):
     qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
            "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
     monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
-    assert job.Job().tick(AFTER_IN_CLOSE) == 1
+    j = job.Job()
+    j.mark("market-IN", date(2026, 10, 1))              # My stocks follows the India brief (R29B-020)
+    assert j.tick(AFTER_IN_CLOSE) == 1
     issue = job.load(job.ids("my_stocks", "u-pro")[0])
     assert issue["uid"] == "u-pro" and "QIP" in issue["text"] and issue["subject"].startswith("My Stocks, Thu 1 Oct")
 
@@ -230,6 +233,7 @@ def test_my_stocks_weekly_is_free_and_daily_is_basic(w, monkeypatch, outbox, pai
     monkeypatch.setattr(content, "stock_row", lambda region, sym, day, weekly, since: {
         "symbol": sym, "region": region, "price": 100.0, "change_pct": 4.2, "stage": 2, "stage_before": 1, "stage_changed": True,
         "st_s2": False, "filings": [], "headlines": [], "changed": True})
+    monkeypatch.setattr(job, "STOCKS_WAIT", timedelta(0))     # these tests are about plans, not the wait for the brief (R29B-020)
     assert job.allowed({"plan": "free"}, "my_stocks", "weekly") and not job.allowed({"plan": "free"}, "my_stocks", "daily")
     assert job.allowed({"plan": "basic", "plan_status": "active"}, "my_stocks", "daily")
     reader("u-free", "free@example.com", plan="free", my_stocks="daily")
@@ -389,6 +393,7 @@ def test_a_my_stocks_run_killed_mid_way_resumes_with_the_readers_left(w, monkeyp
     from app import run_marks
     clock = [time.time()]
     monkeypatch.setattr(run_marks, "time", SimpleNamespace(time=lambda: clock[0]))
+    monkeypatch.setattr(job, "STOCKS_WAIT", timedelta(0))
     monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
     qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
            "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
@@ -810,3 +815,49 @@ def test_no_late_alert_once_the_brief_went(w, monkeypatch, outbox):
     late = datetime(2026, 10, 1, 11, 30, tzinfo=timezone.utc)
     assert job.Job("newsletters").check_late(late) == [] and told == []                # a restarted job reads the mark
     assert job.Job("newsletters").check_late(datetime(2026, 10, 2, 11, 30, tzinfo=timezone.utc)) == []   # holiday
+
+
+# ---------- R29B-020: My stocks follows the India brief ----------
+def test_my_stocks_waits_for_the_india_brief_then_goes_without_it(w, monkeypatch, outbox):
+    monkeypatch.setattr(content, "market_facts", lambda *a, **k: {"kind": "market"})
+    reader("u-pro", "pro@example.com", my_stocks="daily")
+    db.set_setting("watchlist:u-pro", json.dumps({"items": [{"symbol": "RELIANCE", "region": "IN"}]}))
+    qip = {"id": "9", "at": "2026-10-01T18:00", "category": "qip", "label": "QIP (fund raise)", "severity": "red",
+           "subject": "Qualified Institutions Placement", "text": "", "url": "https://example.com/q.pdf"}
+    monkeypatch.setattr(main.filings_feed, "announcements", lambda sym, days=365: [qip], raising=False)
+    j = job.Job()
+    assert j.tick(AFTER_IN_CLOSE) == 0                                          # 16:30 IST, no brief yet: held
+    assert j.tick(AFTER_IN_CLOSE + timedelta(minutes=50)) == 1                  # 17:20: the hour's wait is over
+    j2 = job.Job()
+    j2.mark("market-IN", date(2026, 10, 1))
+    assert j2.brief_started("market-IN", date(2026, 10, 1), AFTER_IN_CLOSE)
+
+
+# ---------- R29B-012: only the watchlist and holdings ----------
+def test_my_stocks_uses_only_watchlist_and_holdings(w, monkeypatch):
+    db.set_setting("watchlist:u-x", json.dumps({"items": [{"symbol": "TCS", "region": "IN"}, {"symbol": "NVDA", "region": "US"}]}))
+    monkeypatch.setattr(db, "list_notebook_rows", lambda uid: [{"instrument": {"symbol": "RELIANCE", "market": "IN", "type": "EQ"}}])
+    assert content.my_stocks("u-x") == [("IN", "TCS"), ("US", "NVDA")]
+
+
+# ---------- R29B-002: the item carries its market's currency ----------
+def test_my_stocks_items_carry_region_and_currency():
+    f = {"stocks": [{"symbol": "NVDA", "region": "US", "price": 221.3, "change_pct": 1.0, "since_day": "2026-10-14"},
+                    {"symbol": "TCS", "region": "IN", "price": 3000.0, "change_pct": None}], "since": "2026-10-14"}
+    items = write.stock_sections(f)[0]["items"]
+    assert [(i["region"], i["currency"]) for i in items] == [("US", "USD"), ("IN", "INR")]
+
+
+# ---------- R29B-007: One-Click only with a tokenised link ----------
+def test_one_click_header_only_goes_with_a_tokenised_unsubscribe_link(monkeypatch):
+    from app import alerts as A
+    sent = []
+    monkeypatch.setattr(A.settings, "BREVO_API_KEY", "k", raising=False)
+    monkeypatch.setattr(A, "_send_brevo", lambda to, subject, body, html=None, headers=None: sent.append(headers))
+    post = {"List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+    A.send_email("a@example.com", "s", "b", headers={"List-Unsubscribe": "<https://x.example/settings#newsletters>", **post})
+    assert "List-Unsubscribe-Post" not in sent[-1] and "settings#newsletters" in sent[-1]["List-Unsubscribe"]
+    A.send_email("a@example.com", "s", "b", headers=A.list_unsubscribe_headers("u1", A.ALERT_EMAILS))
+    assert sent[-1]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click" and "/unsubscribe?t=" in sent[-1]["List-Unsubscribe"]
+    A.send_email("a@example.com", "s", "b", headers=post)             # none of its own: Manage emails, no One-Click
+    assert "List-Unsubscribe-Post" not in sent[-1]

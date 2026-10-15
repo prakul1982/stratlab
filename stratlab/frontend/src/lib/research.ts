@@ -310,7 +310,7 @@ const BANDS: Record<string, Band> = {
   "Revenue YoY": [-25, 0, 10, 45, true], "EPS YoY": [-40, 0, 12, 70, true], "Revenue 3Y": [-15, 0, 8, 35, true],
   "Revenue 5Y": [-15, 0, 8, 35, true], "EPS 5Y": [-25, 0, 10, 45, true], "Latest YoY": [-25, 0, 10, 45, true],
   "3Y CAGR": [-15, 0, 10, 35, true], "5Y CAGR": [-15, 0, 10, 35, true], "10Y CAGR": [-10, 0, 10, 30, true],
-  "Current ratio": [0, 1, 2, 4, true], "LT debt / equity": [0, 0.5, 1.5, 3, false], "Debt / equity": [0, 0.5, 1.5, 3, false],
+  "Current ratio": [0, 1, 2, 4, true], "LT debt / equity": [0, 0.5, 1.5, 3, false], "Long-term debt / equity": [0, 0.5, 1.5, 3, false], "Debt / equity": [0, 0.5, 1.5, 3, false], "Total debt / equity": [0, 0.5, 1.5, 3, false],
   "Interest coverage": [0, 3, 10, 30, true], "Asset turnover": [0, 0.4, 1, 2.5, true], "Beta": [0, 0.8, 1.4, 2.5, false],
   "1Y return": [-50, 0, 15, 90, true], "Div yield": [0, 0.5, 2.5, 7, true], "Payout ratio": [0, 20, 70, 120, false],
 };
@@ -318,7 +318,7 @@ const SCALE: Record<string, Record<string, number>> = {
   software: { "P/S": 2.2, "P/B": 2, "P/E": 1.4 }, technology: { "P/S": 1.8, "P/B": 1.8, "P/E": 1.3 },
   semiconductors: { "P/S": 2, "P/B": 1.8, "P/E": 1.3 }, biotechnology: { "P/S": 3, "P/E": 2 },
   bank: { "P/B": 0.4, "P/S": 0.5, "Gross margin": 0.6 }, insurance: { "P/B": 0.5, "P/S": 0.4 },
-  "real estate": { "P/B": 0.6, "LT debt / equity": 2 }, utilities: { "LT debt / equity": 2, "Revenue YoY": 0.5 },
+  "real estate": { "P/B": 0.6, "LT debt / equity": 2, "Long-term debt / equity": 2 }, utilities: { "LT debt / equity": 2, "Long-term debt / equity": 2, "Revenue YoY": 0.5 },
   retail: { "Gross margin": 0.6, "Net margin": 0.5, "P/S": 0.4 }, energy: { "Revenue YoY": 1.6, "P/E": 0.7 },
   automobiles: { "Gross margin": 0.5, "Net margin": 0.5, "P/S": 0.5 },
 };

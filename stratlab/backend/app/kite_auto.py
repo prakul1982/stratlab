@@ -196,6 +196,28 @@ class AutoLogin:
         except Exception as e:
             print("could not load the auto-login result:", e)
 
+    ALERT_DEDUPE_S = 600
+
+    def alert_once(self, event: str, text: str, now: float | None = None) -> bool:
+        """`_alert` once per event within ALERT_DEDUPE_S, across containers (the last time is kept in app_settings): the token
+        cancelled by Zerodha is seen by every container and every thread that calls Kite (R29B-006: two emails in the same
+        second). False when the event was told a moment ago."""
+        from . import db
+        now = time.time() if now is None else now
+        key = f"admin-alert-at:{event}"
+        try:
+            last = float(db.get_setting(key) or 0)
+        except Exception:
+            last = 0.0
+        if 0 <= now - last < self.ALERT_DEDUPE_S:
+            return False
+        try:
+            db.set_setting(key, str(now))
+        except Exception as e:
+            print("could not keep the alert time:", e)
+        self._alert(text)
+        return True
+
     def _alert(self, text: str):
         from .alerts import tell_admins
         from .errors import note

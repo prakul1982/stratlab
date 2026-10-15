@@ -162,6 +162,7 @@ def stock_sections(f: dict) -> list[dict]:
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
+                  region=r.get("region"),
                   currency=CURRENCY.get(r.get("region") or ""),
                   change_pct=r.get("change_pct"), since=f"since {_day(r.get('since_day') or f['since'])}" if r.get("change_pct") is not None else None)
             for r in f["stocks"]]})

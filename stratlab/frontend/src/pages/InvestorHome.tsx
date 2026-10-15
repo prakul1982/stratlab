@@ -1,3 +1,4 @@
+import { trendBadge } from "../lib/glance";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -17,7 +18,6 @@ type Row = {
 };
 
 const QUAD: Record<string, string> = { leading: "Leading", improving: "Improving", weakening: "Weakening", lagging: "Lagging" };   // one neutral style: a quadrant is a fact, not good or bad
-const SIGNAL: Record<string, string> = { fresh: "Fresh Stage 2 + Supertrend", st_s2: "Stage 2 + Supertrend", stage2: "Stage 2" };
 const attention = (r: Row) => (r.red ?? 0) * 3 + (r.checks?.fail ?? 0) + (r.fund_raise ? 1 : 0) + (r.card && r.card.score < 40 ? 1 : 0);
 
 function Cell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -95,7 +95,7 @@ export function InvestorHomePage() {
               <span className="k-note">{r.symbol}</span>
               {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
               <div className="inv-stat-cells">
-                <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{r.signal && <> · <Badge tone="plain" dot={false}>{SIGNAL[r.signal]}</Badge></>}</>}</Cell>
+                <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{trendBadge(r.stage, r.signal) && <> · <Badge tone="plain" dot={false}>{trendBadge(r.stage, r.signal)}</Badge></>}</>}</Cell>
                 <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>
                 {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
                 <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
