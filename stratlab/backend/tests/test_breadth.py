@@ -566,3 +566,17 @@ def test_a_few_failed_stocks_dont_hold_the_day_back(mem):
     """Suspended or missing stocks on an ordinary day (2 of 10 here) are left out; the day is still stored."""
     wide_runner(10, fail={"DOWN", "FLAT"}).run("IN", IST_OPEN)
     assert any(k.startswith(breadth.HIST_KEY) for k in mem)
+
+
+def test_stocks_no_longer_listed_are_left_out_not_counted_as_failures(mem):
+    """A list with many names the exchange no longer lists (the demo world, or old index lists) still stores its day."""
+    r = wide_runner(10)
+    real = r.load
+
+    def load(region, sym, days):
+        if sym.startswith("S") and sym != "S0":
+            raise LookupError("not listed")
+        return real(region, sym, days)
+    r.load = load
+    r.run("IN", IST_OPEN)
+    assert any(k.startswith(breadth.HIST_KEY) for k in mem)
