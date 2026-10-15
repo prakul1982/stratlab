@@ -19,6 +19,8 @@ class RetryReads(httpx.BaseTransport):
     """A read that fails because the connection broke is sent once more, on a new connection. A write is sent again
     only when it never left (the connection couldn't be opened), so nothing is ever saved twice."""
 
+    retry_timeouts = True     # False: a timeout is final (a request waiting on it shouldn't wait twice: app/db.py)
+
     def __init__(self, inner: httpx.BaseTransport):
         self.inner = inner
 
@@ -26,9 +28,11 @@ class RetryReads(httpx.BaseTransport):
         try:
             return self._send(request)
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+            if isinstance(e, httpx.TimeoutException) and not self.retry_timeouts:
+                raise
             print("http: connect failed, trying again:", type(e).__name__)
         except (httpx.RemoteProtocolError, httpx.ReadError, httpx.WriteError, httpx.ReadTimeout, httpx.PoolTimeout) as e:
-            if request.method not in READ_METHODS:
+            if request.method not in READ_METHODS or (isinstance(e, httpx.TimeoutException) and not self.retry_timeouts):
                 raise
             print("http: connection dropped during a read, trying again:", type(e).__name__)
             self._drop_idle()

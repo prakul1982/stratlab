@@ -599,9 +599,11 @@ def test_the_database_client_uses_a_pool_of_http1_connections(monkeypatch):
     c = db.sb()
     try:
         session = c.postgrest.session
-        assert isinstance(session._transport, db.RetryReads)
-        pool = session._transport.inner._pool
-        assert pool._http2 is False and pool._http1 is True
+        assert isinstance(session._transport, db.Lanes)          # a pool per lane (15 Oct), each retrying a dropped read
+        for transport, _ in (session._transport.request, session._transport.signin, session._transport.job):
+            assert isinstance(transport, db.RetryReads)
+            pool = transport.inner._pool
+            assert pool._http2 is False and pool._http1 is True
     finally:
         monkeypatch.setattr(db, "_client", None)
 
