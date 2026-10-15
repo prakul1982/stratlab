@@ -138,3 +138,35 @@ export function pulseClosedDay(indices: { live?: boolean; day?: string | null }[
   if (!indices?.length || indices.some((i) => i.live || !i.day)) return null;
   return indices.map((i) => i.day as string).sort().slice(-1)[0];
 }
+
+/* ---------- what a company page says is missing, and its outside links, with no data provider's name (DESIGN.md) ---------- */
+type SourceLike = { source: string; ok: boolean; what?: string[] };
+
+// the server's plain labels for a source, when a row doesn't say what it was for
+const WHAT_BY_LABEL: Record<string, string> = {
+  "Live prices": "prices", "Market data": "prices", "Fundamentals": "financials", "Company data": "company data",
+  "News": "news", "Company profile": "the company profile",
+};
+
+/** What the failed sources were for ("prices", "news", "the company profile", "financials"), each once, in order. */
+export function missingWhat(sources: SourceLike[]): string[] {
+  const out: string[] = [];
+  for (const s of sources) {
+    if (s.ok) continue;
+    for (const w of s.what?.length ? s.what : [WHAT_BY_LABEL[s.source] ?? "some data"]) if (!out.includes(w)) out.push(w);
+  }
+  return out;
+}
+
+/** "Some data is missing: prices and news." Never a provider's name or its error text. */
+export function missingLine(sources: SourceLike[]): string {
+  const w = missingWhat(sources);
+  return `Some data is missing: ${w.length > 1 ? `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}` : w[0] ?? "some data"}.`;
+}
+
+const LINK_BY_KIND: Record<string, string> = { quote: "Quote page", profile: "Profile", financials: "Financials" };
+
+/** The label of an outside link on a company page, from the kind of page it opens; an exchange's own page keeps its label. */
+export function linkLabel(l: { label: string; kind?: string }): string {
+  return (l.kind && LINK_BY_KIND[l.kind]) || l.label;
+}

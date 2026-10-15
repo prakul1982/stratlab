@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
 import { money } from "../../lib/format";
-import { Badge, Card, CardHead, EmptyState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
+import { Badge, Card, CardHead, EmptyState, ErrorState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
 import { attention, errorCounts, lights, paidUsers } from "./attention";
@@ -16,13 +16,14 @@ const istDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolk
 /** Admin → Overview: what needs you, a light for every service and data feed, and today's numbers. */
 export function OverviewSection() {
   const { fail } = useApp();
-  const { ov, jobs, reported, loading } = useAdmin();
+  const { ov, jobs, reported, loading, reload } = useAdmin();
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
   useEffect(() => {
     api<{ invoices: InvoiceRow[] }>("/admin/invoices").then((x) => setInvoices(x.invoices)).catch(fail);
   }, [fail, loading]);
 
-  if (!ov) return <Card label="Loading status"><Skeleton label="Loading the server's status" /></Card>;
+  if (!ov) return <Card label="Loading status">{loading ? <Skeleton label="Loading the server's status" />
+    : <ErrorState title="The server's status couldn't be read" action={{ label: "Try again", onClick: () => void reload() }} />}</Card>;
   const sv = ov.server, st = ov.stats;
   const todo = attention(ov, reported, jobs);
   const { services, feeds } = lights(ov, jobs);

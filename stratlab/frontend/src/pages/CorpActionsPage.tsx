@@ -39,6 +39,9 @@ export function CorpActionsPage() {
   const [data, setData] = useState<CalendarView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
+  const [shownFor, setShownFor] = useState(`${region}|${scope}`);
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); }
 
   const setParam = (k: string, v: string) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); };
   const setRegion = (r: Region) => { setRegionState(r); saveRegion(r); setParam("region", r); };
@@ -84,7 +87,7 @@ export function CorpActionsPage() {
               options={[{ value: "", label: "Every kind" }, ...(Object.keys(KIND_NAME) as ActionKind[]).map((k) => ({ value: k, label: KIND_NAME[k] }))]} />}
           </Field>
           {scope === "all" && (
-            <Field label="Find a company">
+            <Field key={region} label="Find a company">
               {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder="Find a company, like TCS or Infosys" />}
             </Field>
           )}

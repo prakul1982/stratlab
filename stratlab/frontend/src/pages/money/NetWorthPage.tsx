@@ -4,7 +4,7 @@ import { api, type ApiError } from "../../lib/api";
 import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { LoanCheck } from "./LoanCheck";
-import { asOf, axisInr, dateOnly, inr, pctPlain, signedInrCompact } from "../../lib/format";
+import { asOf, axisInr, dateOnly, inr, istToday, pctPlain, signedInrCompact } from "../../lib/format";
 import { netWorthDelta } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
@@ -43,7 +43,7 @@ type Prepay = {
 type Ask = { title: string; body: string; label: string; run: () => Promise<void> };
 
 const day = (iso: string | null | undefined) => asOf(iso) ?? "–";
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => istToday();      // India's day, not UTC's: between 00:00 and 05:30 IST UTC is still yesterday
 
 type Ftype = "money" | "rate" | "date" | "int" | "num" | "text" | "select";
 type F = {
@@ -333,7 +333,7 @@ export function NetWorthPage() {
     try {
       const r = await api<Response>("/money/net-worth/export", { raw: true });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-net-worth-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      a.href = URL.createObjectURL(await r.blob()); a.download = `stratlab-net-worth-${istToday()}.csv`; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     } catch (e) { fail(e); }
   };

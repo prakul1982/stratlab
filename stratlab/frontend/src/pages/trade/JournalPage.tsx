@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ET, IST, money, fmtDate, tzLabel } from "../../lib/format";
+import { ET, IST, dayIn, istToday, marketTz, money, fmtDate, tzLabel } from "../../lib/format";
 import { track } from "../../lib/analytics";
 import { CHECKS, checksLine, upDown } from "../../lib/tradeUi";
 import { Info, STATUS_NAME } from "../../components/ui";
@@ -66,7 +66,7 @@ function useMoney() {
   const cur = useContext(CurrencyCtx);
   return useMemo(() => {
     const m = (v: number | null | undefined, dp = 0) => money(v, cur, dp);
-    return { cur, m, signed: (v: number | null | undefined) => (v == null ? "–" : `${v > 0 ? "+" : ""}${m(v)}`), compact: (v: number) => moneyCompact(v, cur) };
+    return { cur, m, signed: (v: number | null | undefined) => { if (v == null) return "–"; const s = m(v); return v > 0 && /[1-9]/.test(s) ? `+${s}` : s; }, compact: (v: number) => moneyCompact(v, cur) };
   }, [cur]);
 }
 const tone = (v: number | null | undefined): "up" | "down" | undefined => (v == null || v === 0 ? undefined : v > 0 ? "up" : "down");
@@ -126,16 +126,19 @@ export function JournalPage() {
     });
     if (!list.length) { reset(); return; }
     setBusy(true);
+    let last: Imported | null = null, added = 0, dup = 0;
     try {
-      let last: Imported | null = null, added = 0, dup = 0;
       for (const [i, f] of list.entries()) {
         const q = new URLSearchParams({ filename: f.name.slice(0, 200), mode: i === 0 ? mode : "add" });
         last = await api<Imported>(`/trade/journal/import?${q}`, { method: "POST", file: f });
         added += last.added; dup += last.duplicates;
         track("journal file imported", { rows: last.added, zip: /\.zip$/i.test(f.name) });
       }
+    } catch (e) { fail(e); } finally {
+      // a later file that failed doesn't hide the files before it: those are stored, so the page shows them, then the error stands
       if (last) { setResult({ ...last, added, duplicates: dup }); adopt(last.journal); setMode("add"); }
-    } catch (e) { fail(e); } finally { setBusy(false); reset(); }
+      setBusy(false); reset();
+    }
   };
 
   const fromTax = async () => {
@@ -255,7 +258,7 @@ export function JournalPage() {
               <Curve s={s} />
               <p className="k-note">Each point is a trade's exit, adding up from {money(0, j.currency)}. {s.first && s.last ? `${day(s.first)} to ${day(s.last)}.` : ""}</p>
             </Card>
-            {j.breakdowns ? <Breakdowns b={j.breakdowns} r={j.r} /> : <Locked plan={j.plan_name} what="Breakdowns by day, time of day, setup, instrument and holding time, and R-multiples" />}
+            {j.breakdowns ? <Breakdowns b={j.breakdowns} r={j.r} market={j.market} /> : <Locked plan={j.plan_name} what="Breakdowns by day, time of day, setup, instrument and holding time, and R-multiples" />}
             {j.full && <PaperVsReal j={j} />}
             <Trades j={j} onEdit={setEditing} />
           </>
@@ -426,7 +429,7 @@ function BreakdownTable({ rows, label }: { rows: Row[]; label: string }) {
     rowAttrs={(r) => ({ title: `${r.label ?? r.key}: ${r.n} trades, ${signed(r.net)} after ${m(r.charges)} of charges` })} />;
 }
 
-function Breakdowns({ b, r }: { b: Record<string, Row[]>; r: Journal["r"] }) {
+function Breakdowns({ b, r, market }: { b: Record<string, Row[]>; r: Journal["r"]; market: string }) {
   const [view, setView] = useState("weekday");
   const label = VIEWS.find(([k]) => k === view)?.[1] ?? "";
   return (
@@ -434,7 +437,7 @@ function Breakdowns({ b, r }: { b: Record<string, Row[]>; r: Journal["r"] }) {
       <CardHead title="Where the P&L came from"
         actions={<Select label="Break the P&L down by" value={view} onChange={setView} options={VIEWS.map(([k, l]) => ({ value: k, label: `By ${l.toLowerCase()}` }))} />} />
       <BreakdownTable rows={b[view] ?? []} label={label} />
-      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered (IST).</p>}
+      {view === "hour" && <p className="k-note">Same-day trades with times in the file, by the hour they were entered ({tzLabel(marketTz(market.toUpperCase()))}).</p>}
       {r && <RChart r={r} />}
     </Card>
   );
@@ -655,9 +658,17 @@ function NoteEditor({ j, t, onClose, onSaved }: { j: Journal; t: Trade; onClose:
 const ADD_SEGMENTS = [{ value: "eq", label: "Equity" }, { value: "fut", label: "Futures" }, { value: "opt", label: "Options" }, { value: "com", label: "Commodity" },
   { value: "cur", label: "Currency" }, { value: "us", label: "US stocks (dollars)" }, { value: "crypto", label: "Crypto (dollars)" }];
 
+/** The day a new trade defaults to, by the market it is in: India's, New York's, or UTC's for crypto. */
+const dayFor = (segment: string) => dayIn(new Date(), segment === "us" ? ET : segment === "crypto" ? "UTC" : IST) ?? "";
+/** A segment change keeps the form, and moves a date that is still the old market's "today" to the new market's. */
+function moveSegment<T extends { segment: string; entry_date: string; exit_date: string }>(f: T, segment: string): T {
+  const was = dayFor(f.segment), now = dayFor(segment);
+  return { ...f, segment, entry_date: f.entry_date === was ? now : f.entry_date, exit_date: f.exit_date === was ? now : f.exit_date };
+}
+
 function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Journal) => void }) {
   const { fail, notify } = useApp();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istToday();     // the Indian segments come first; picking US stocks or crypto moves a still-default date to that market's day
   const [f, setF] = useState({ symbol: "", segment: "eq", side: "long", entry_date: today, entry_time: "", exit_date: today, exit_time: "", qty: "", entry_price: "", exit_price: "", charges: "" });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -685,7 +696,7 @@ function AddTrade({ onClose, onSaved }: { onClose: () => void; onSaved: (x: Jour
       <div className="k-stack">
         <FormGrid>
           <Field label="Symbol" error={bad.symbol} value={f.symbol} maxLength={40} placeholder={abroad ? (f.segment === "us" ? "AAPL" : "BTCUSD") : "INFY or NIFTY26OCT25000CE"} onChange={set("symbol")} />
-          <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF({ ...f, segment: v })} options={ADD_SEGMENTS} />}</Field>
+          <Field label="Segment">{(id) => <Select id={id} value={f.segment} onChange={(v) => setF(moveSegment(f, v))} options={ADD_SEGMENTS} />}</Field>
           <Field label="Long or short">{(id) => <Select id={id} value={f.side} onChange={(v) => setF({ ...f, side: v })} options={[{ value: "long", label: "Long (bought first)" }, { value: "short", label: "Short (sold first)" }]} />}</Field>
           <Field label="Quantity" error={bad.qty} inputMode="decimal" value={f.qty} onChange={set("qty")} />
           <DateField label="Entry date" value={f.entry_date} onChange={(d) => set("entry_date")({ target: { value: d } })} />

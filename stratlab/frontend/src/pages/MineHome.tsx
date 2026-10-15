@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, dayIn, firstName, inr, inrCompact, pct, signedInrCompact } from "../lib/format";
+import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, usTodayNote } from "../lib/marketHours";
@@ -14,7 +14,7 @@ import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
 import { greetingAt, greetingZone, hourIn } from "../lib/greeting";
 import type { LiveRow } from "../lib/types";
-import { Badge, Card, CardHead, Delta, EmptyState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
+import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, Signed, Skeleton, Spark, Stat } from "../components/kit";
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInline } from "../components/PlanInterest";
@@ -282,7 +282,7 @@ function ComingCard({ rows }: { rows: Up[] | null }) {
 type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
 
 function WatchCard() {
-  const { items } = useWatchlist();
+  const { items, failed, retry } = useWatchlist();
   const [movers, setMovers] = useState<Mover[] | null>(null);
   useEffect(() => {
     if (items === null) return;
@@ -301,7 +301,8 @@ function WatchCard() {
   return (
     <Card testId="mine-watch">
       <CardHead title="Your watchlist today" actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
-      {movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
+      {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
+        : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (
           items && items.length
             ? <EmptyState title="No prices yet" action={{ label: "Open the watchlist", to: "/research/watchlist" }}>Today's prices for your watchlist are not available right now.</EmptyState>
@@ -311,7 +312,7 @@ function WatchCard() {
             {movers.map((m) => (
               <li key={`${m.region}-${m.symbol}`}>
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
-                <span className="px">{m.region === "US" ? "$" : "₹"}{(m.q.price ?? 0).toLocaleString(m.region === "US" ? "en-US" : "en-IN", { maximumFractionDigits: 2 })}</span>
+                <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
               </li>
             ))}

@@ -219,7 +219,7 @@ export function MarginFundingPage() {
                 columns={[
                   { key: "stock", header: "Stock", rowHeader: true, cell: (r) => (
                     <>
-                      <a className="link" href={`?s=${r.symbol}`} onClick={(e) => { e.preventDefault(); open(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></a>
+                      <a className="link" href={`?s=${encodeURIComponent(r.symbol)}`} onClick={(e) => { e.preventDefault(); open(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></a>
                       <div className="k-small k-muted">{r.held ? "You hold it" : "Watchlist"}</div>
                     </>) },
                   { key: "funded", header: "Funded", numeric: true, cell: (r) => cr(r.crore) },

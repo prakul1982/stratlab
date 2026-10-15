@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { ago, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
-  SETTLING, bandPosition, metricText, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist,
+  SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -455,5 +455,5 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
 export function SourcesNote({ sources }: { sources: Company["sources"] }) {
   const bad = sources.filter((s) => !s.ok);
   if (!bad.length) return null;
-  return <Notice tone="warn" role="status">Some data is missing: {bad.map((s) => `${s.source} (${s.error})`).join(" · ")}</Notice>;
+  return <Notice tone="warn" role="status">{missingLine(sources)}</Notice>;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money } from "../lib/format";
+import { fmtDate, money } from "../lib/format";
 import { Card, CardHead, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Select, Skeleton } from "./kit";
 
 type Inv = { number: string; date: string; total: number; currency: string; supply: string };
@@ -48,7 +48,7 @@ export function InvoicesCard() {
         ? <EmptyState title="No payments yet">An invoice appears here for every payment.</EmptyState> : (
         <div>{rows.map((r) => (
           <div key={r.number} className="k-line-row">
-            <span className="k-line-text"><b className="k-mono">{r.number}</b><span className="k-sub-line">{r.date} · {r.supply}</span></span>
+            <span className="k-line-text"><b className="k-mono">{r.number}</b><span className="k-sub-line">{fmtDate(r.date)} · {r.supply}</span></span>
             <span className="k-row"><b>{money(r.total, r.currency, 2)}</b>
               <button type="button" className="btn quiet sm" onClick={() => openInvoice(r.number).catch(fail)}>Open</button></span>
           </div>))}</div>

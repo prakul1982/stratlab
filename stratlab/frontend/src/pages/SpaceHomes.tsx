@@ -217,12 +217,14 @@ function NextEvents({ limit = 3, testId = "invest-events" }: { limit?: number; t
 
 /** The watchlist's prices for the market picked at the top (R9R-008: the US tab left India's panels in place). */
 function WatchPanel({ region }: { region: Region }) {
-  const { items } = useWatchlist();
+  const { items, failed, retry } = useWatchlist();
   const by = (r: Region) => (items ?? []).filter((w) => w.region === r);
   const regions = ([region] as Region[]).filter((r) => by(r).length);
   return (
     <Panel title="Your watchlist" right={<Link to="/research/investor" className="link">At a glance →</Link>}>
-      {items === null ? <PanelSkel label="Opening your watchlist" />
+      {items === null ? (failed
+        ? <p className="small muted" role="alert">Your watchlist couldn't be opened. <button type="button" className="btn quiet sm" onClick={retry}>Try again</button></p>
+        : <PanelSkel label="Opening your watchlist" />)
         : !regions.length ? <p className="small muted">{(items ?? []).length ? `None of your watchlist is in ${REGION_NAME[region]}. Press Watch on a ${REGION_NAME[region]} company to keep it here, with live prices.` : "Press Watch on any company to keep it here, with live prices."}</p>
         : regions.map((r) => (
           <div key={r} className="k-stack snug">

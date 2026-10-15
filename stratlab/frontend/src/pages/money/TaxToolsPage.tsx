@@ -424,7 +424,7 @@ function LtcgTab() {
         <Card>
           <CardHead title="Open long-term lots at today's price" info="Each figure is arithmetic: if a lot were sold today at the latest price, its long-term gain would be the value less the cost for tax (with charges, and the 31 Jan 2018 price for older lots)." />
           {v.long.length === 0 ? <EmptyState title="No open long-term lots">No open lot has been held for more than 12 months{v.unpriced ? " with a price today" : ""}.</EmptyState>
-            : <DataTable label="Open long-term lots" columns={longCols} rows={v.long} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} rowAttrs={(r) => ({ title: r.text })} />}
+            : <DataTable label="Open long-term lots" columns={longCols} rows={v.long} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
         </Card>
       )}
 
@@ -433,7 +433,7 @@ function LtcgTab() {
           <CardHead title="Turning long-term" info="A sale before the date shown is short-term (20% from 23 July 2024); from that date it is long-term (12.5% above the exemption)."
             actions={<Seg label="Within" options={[30, 60, 90].map((n) => ({ value: String(n), label: `${n} days` }))} value={String(within)} onChange={(n) => setWithin(Number(n))} />} />
           {soon.length === 0 ? <EmptyState title={`Nothing turns long-term in ${within} days`}>No open lot turns long-term in the next {within} days.</EmptyState>
-            : <DataTable label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} rowAttrs={(r) => ({ title: r.text })} />}
+            : <DataTable label="Lots turning long-term" columns={soonCols} rows={soon} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} rowAttrs={(r) => ({ title: r.text })} />}
         </Card>
       )}
 
@@ -441,7 +441,7 @@ function LtcgTab() {
         <Card>
           <CardHead title="Open lots below cost" />
           {v.below_cost.rows.length === 0 ? <EmptyState title="No open lot below its cost">No open lot is below its cost at today's price.</EmptyState>
-            : <DataTable label="Open lots below cost" columns={belowCols} rows={v.below_cost.rows} rowKey={(r) => `${r.key}${r.bought}${r.qty}`} />}
+            : <DataTable label="Open lots below cost" columns={belowCols} rows={v.below_cost.rows} rowKey={(r, i) => `${r.key}${r.bought}${r.qty}-${i}`} />}
         </Card>
       )}
 
