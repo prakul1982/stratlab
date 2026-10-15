@@ -12,6 +12,7 @@ each was found, and the file is dropped. The user checks or types them, and conf
 Passbook and statement layouts change; whatever isn't found is left for the user to type, never guessed."""
 import io
 import json
+import math
 import re
 import secrets
 
@@ -31,9 +32,10 @@ class DocError(Exception):
 
 def _money(s: str | None) -> float | None:
     try:
-        return float(str(s).replace(",", ""))
+        x = float(str(s).replace(",", ""))
     except (TypeError, ValueError):
         return None
+    return x if math.isfinite(x) else None
 
 
 def pdf_text(data: bytes, password: str = "") -> str:
@@ -102,35 +104,84 @@ def _first(d: dict, keys) -> object:
     return None
 
 
-def _walk(node):
-    if isinstance(node, dict):
-        yield node
-        for v in node.values():
-            yield from _walk(v)
-    elif isinstance(node, list):
-        for v in node:
-            yield from _walk(v)
+def _nodes(doc) -> list[list]:
+    """Every object in the document, parents before their children, in file order: [object, index of the object it sits
+    in (-1 for the top)]. A loop, not a recursion, so a deeply nested file can't run out of stack."""
+    out, stack = [], [(doc, -1)]
+    while stack:
+        n, parent = stack.pop()
+        if isinstance(n, dict):
+            out.append([n, parent])
+            parent = len(out) - 1
+            kids = list(n.values())
+        elif isinstance(n, list):
+            kids = n
+        else:
+            continue
+        stack.extend((v, parent) for v in reversed(kids) if isinstance(v, (dict, list)))
+    return out
+
+
+def _year_of(v, assessment: bool) -> int | None:
+    """The financial year's first year from a value like "2025-26" or "2025-2026" (the year of a pair of consecutive years,
+    which an ISO date like 2025-03-15 never is), or from an assessment year, which starts a year after its financial year."""
+    m = re.fullmatch(r"\s*(20\d\d)\s*[-–/]\s*(?:20)?(\d\d)\s*", str(v)) if isinstance(v, str) else None
+    if not m or int(m.group(2)) != (int(m.group(1)) + 1) % 100:
+        return None
+    return int(m.group(1)) - (1 if assessment else 0)
+
+
+def _year_in(text: str) -> int | None:
+    """The first pair of consecutive years like "2025-26" in some text (an ISO date like 2025-03-15 isn't one)."""
+    for m in re.finditer(r"\b(20\d\d)\s*[-–]\s*(\d\d)\b(?![-–/]?\d)", text):
+        if int(m.group(2)) == (int(m.group(1)) + 1) % 100:
+            return int(m.group(1))
+    return None
+
+
+def _filing_year(objects) -> int | None:
+    """The year from the keys that name it (financialYear, assessmentYear, FY, AY and the like), never from a date."""
+    for n in objects:
+        for k, v in n.items():
+            name = re.sub(r"[^a-z]", "", str(k).lower())
+            if name in ("fy", "ay") or "financialyear" in name or "assessmentyear" in name or "finyear" in name or "fiscalyear" in name:
+                got = _year_of(v, assessment=name == "ay" or "assessment" in name)
+                if got:
+                    return got
+    return None
 
 
 def read_ais_json(data: bytes) -> dict:
-    """Entries that say dividend, interest or TDS (any nesting) added up, and dividend lines that carry a date. The year from
-    the first "2025-26" in the file."""
+    """Entries that say dividend, interest or TDS (any nesting) added up, and dividend lines that carry a date. Only the
+    entries at the bottom are added: one that holds others (a section with its total) is not, or the figures would count
+    twice; an entry with no description of its own takes its section's. The year from the financial or assessment year the
+    file names."""
     try:
         doc = json.loads(data.decode("utf-8-sig"))
-    except (ValueError, UnicodeDecodeError):
+    except (ValueError, RecursionError):                # a broken file, or one nested too deep (UnicodeDecodeError is a ValueError)
         raise DocError("unreadable", "This file isn't an AIS JSON file.") from None
-    text = data.decode("utf-8", "ignore")
-    m = re.search(r"\b(20\d\d)\s*[-–]\s*(\d\d)\b", text)
-    fy = int(m.group(1)) if m else None
+    found = _nodes(doc)
+    fy = _filing_year(n for n, _ in found) or _year_in(data.decode("utf-8", "ignore"))
+    labels, held_amt, held_tds = [], [False] * len(found), [False] * len(found)
+    for i, (n, parent) in enumerate(found):
+        own = " ".join(str(n.get(k)) for k in INFO_KEYS if isinstance(n.get(k), (str, int))).lower()
+        labels.append(own or (labels[parent] if parent >= 0 else ""))
+    amounts = [(_money(_first(n, AMOUNT_KEYS)) or 0) > 0 for n, _ in found]
+    tdses = [bool(_money(_first(n, TDS_KEYS))) for n, _ in found]
+    for i in range(len(found) - 1, -1, -1):             # children come after their parents: an entry is "held" if anything below it has a figure
+        parent = found[i][1]
+        if parent >= 0:
+            held_amt[parent] |= amounts[i] or held_amt[i]
+            held_tds[parent] |= tdses[i] or held_tds[i]
     div = intr = tds = 0.0
     lines, seen = [], set()
-    for n in _walk(doc):
-        label = " ".join(str(n.get(k)) for k in INFO_KEYS if isinstance(n.get(k), (str, int))).lower()
+    for i, (n, _) in enumerate(found):
+        label = labels[i]
         amt = _money(_first(n, AMOUNT_KEYS))
         t = _money(_first(n, TDS_KEYS))
-        if t and ("tds" in label or "dividend" in label or "interest" in label):
+        if t and not held_tds[i] and ("tds" in label or "dividend" in label or "interest" in label):
             tds += t
-        if not amt or amt <= 0:
+        if not amt or amt <= 0 or held_amt[i]:
             continue
         if "dividend" in label:
             key = (str(_first(n, DATE_KEYS)), str(_first(n, NAME_KEYS)), amt)
@@ -175,7 +226,7 @@ def read_doc(kind: str, data: bytes, filename: str = "", password: str = "") -> 
         elif kind == "nps":
             got = read_nps(text)
         else:
-            got = {"fy": (int(m.group(1)) if (m := re.search(r"\b(20\d\d)\s*[-–]\s*\d\d\b", text)) else None), "dividend": None,
+            got = {"fy": _year_in(text), "dividend": None,
                    "interest": None, "tds": None}      # an AIS PDF's layout isn't read: the figures are typed
     figures = [{"key": k, "label": label, "unit": unit, "value": got.get(k), "found": got.get(k) is not None} for k, label, unit in LABELS[kind]]
     return {"kind": kind, "figures": figures, "lines": lines, "found": sum(f["found"] for f in figures)}
@@ -189,6 +240,24 @@ def _day(v) -> str | None:
 def _num(v, lo=0.0, hi=1e12) -> float | None:
     x = _money(v) if not isinstance(v, (int, float)) else float(v)
     return x if x is not None and lo <= x <= hi else None
+
+
+def _dividend_lines(lines) -> list[dict]:
+    """The AIS dividend lines the page sends back, rebuilt from their checked fields: a date, an amount above zero and
+    a TDS (if any) that are numbers, always INR and always marked as AIS lines. Raises DocError for a figure that isn't a number."""
+    out = []
+    for r in lines[:divs.MAX_ROWS] if isinstance(lines, list) else []:
+        if not isinstance(r, dict) or _day(r.get("d")) is None:
+            continue
+        amount, tds = r.get("amount"), r.get("tds")
+        amount = None if isinstance(amount, bool) else _num(amount, hi=divs.MAX_AMOUNT)
+        has_tds = tds not in (None, "")
+        tds = None if isinstance(tds, bool) or not has_tds else _num(tds, hi=divs.MAX_AMOUNT)
+        if not amount or (has_tds and tds is None):
+            raise DocError("bad_figure", f"The dividend on {r['d']} has an amount or TDS that isn't a number.")
+        out.append({"d": r["d"], "sym": str(r.get("sym") or "AIS")[:20].upper(), "name": str(r.get("name") or "")[:60], "isin": "",
+                    "amount": round(amount, 2), "tds": round(tds, 2) if tds else None, "cur": "INR", "src": divs.AIS})
+    return out
 
 
 def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, lines: list[dict] | None = None) -> dict:
@@ -220,6 +289,7 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
         if fy is None:
             raise DocError("bad_figure", "Enter the financial year as the year it starts, like 2025.")
         vals = {k: _num(figures.get(k)) for k in ("dividend", "interest", "tds")}
+        rows = _dividend_lines(lines) if lines else []         # checked before anything is saved
         notes = []
         ais = dict(docs.get("ais") or {})
         ais[str(fy)] = {**{k: v for k, v in vals.items() if v is not None}, "confirmed_at": now}
@@ -228,11 +298,9 @@ def confirm(profile: dict, kind: str, figures: dict, apply_tds: bool = False, li
             saved = adv.load(uid)["years"].get(fy) or adv.clean_year({})
             adv.save_year(uid, fy, {"tds": vals["tds"], "paid": saved["paid"]})
             notes.append("TDS set in Tax tools.")
-        if lines:
-            rows = [r for r in lines if isinstance(r, dict) and divs._row_ok(r)]
-            if rows:
-                added, _ = divs.add(uid, rows, "AIS", "statement")
-                notes.append(f"{added} dividend lines added.")
+        if rows:
+            added, _ = divs.add(uid, rows, "AIS", "statement")
+            notes.append(f"{added} dividend lines added.")
         out = {"detail": " ".join(notes) or "Figures saved."}
     state.update(uid, "docs", **docs)
     return out

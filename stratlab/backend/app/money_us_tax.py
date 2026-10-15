@@ -41,12 +41,14 @@ EPS = 1e-9
 
 COLUMNS = {
     "date": hf.TRADE_COLUMNS["date"] | {"settlementdate", "tradedateutc", "activitydate", "runtime"},
-    "side": hf.TRADE_COLUMNS["side"] | {"activity", "activitytype", "buysellflag"},
+    "side": hf.TRADE_COLUMNS["side"] | {"activity", "activitytype", "buysellflag", "transcode", "transactioncode", "trancode",
+                                        "orderside", "tradeside", "tradeaction", "buysellcode"},     # Robinhood: "Trans Code"
     "symbol": {"symbol", "ticker", "stocksymbol", "stock", "instrument", "security", "securitysymbol", "scrip"},
     "name": {"name", "companyname", "securityname", "description", "stockname"},
     "qty": hf.TRADE_COLUMNS["qty"] | {"shares", "units", "noofshares", "numberofshares"},
     "price": hf.TRADE_COLUMNS["price"] | {"priceusd", "tradepriceusd", "fillprice", "avgfillprice", "costpershare"},
-    "fees": {"fees", "fee", "commission", "commissions", "charges", "brokerage", "commfee", "ibcommission", "totalfees", "feesusd"},
+    "fees": {"fees", "fee", "commission", "commissions", "charges", "brokerage", "commfee", "ibcommission", "totalfees", "feesusd",
+             "feescomm", "feesandcomm", "feescommissions", "feesandcommissions", "commissionsfees", "commissionandfees"},    # Schwab: "Fees & Comm"
     "value": hf.TRADE_COLUMNS["value"] | {"amountusd", "proceeds", "netamount"},
 }
 ASSUMPTIONS = [
@@ -119,10 +121,9 @@ def _dates(values: list[str]) -> str:
 def _day(v: str, order: str) -> str | None:
     m = re.match(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})", v or "")
     if m and order == "mdy":
-        mo, d, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        y = y + 2000 if y < 100 else y
+        mo, d = int(m.group(1)), int(m.group(2))
         try:
-            return date(y, mo, d).isoformat()
+            return date(hf._year(m.group(3)), mo, d).isoformat()
         except ValueError:
             return None
     return hf.day(v)
@@ -150,6 +151,9 @@ def _rows(rows: list[list[str]], c: dict[str, int], first_line: int) -> dict:
         i = c.get(f)
         return r[i].strip() if i is not None and i < len(r) else ""
     order = _dates([cell(r, "date") for r in rows])
+    if "side" not in c and not any((_money(cell(r, "qty")) or 0) < 0 for r in rows):
+        raise hf.FileError("That file doesn't say which lines are purchases and which are sales: it has no column for it "
+                           "(Action, Type, Side or Trans Code, say) and no negative quantities. Add one and upload it again.")
     out, problems = [], []
     for n, r in enumerate(rows, first_line):
         if not any(x.strip() for x in r):
@@ -172,10 +176,10 @@ def _rows(rows: list[list[str]], c: dict[str, int], first_line: int) -> dict:
         if why:
             problems.append({"line": n, "text": text, "reason": why})
             continue
+        if len(out) >= MAX_TRADES:
+            raise hf.too_many(MAX_TRADES)
         out.append({"d": d, "side": side, "sym": sym, "qty": round(qty, 6), "price": round(price, 6), "fees": round(min(fees, MAX_PRICE), 4),
                     "name": cell(r, "name")[:60], "src": "file"})
-        if len(out) >= MAX_TRADES:
-            break
     if not out:
         raise hf.FileError("No US trades could be read from that file: " + (problems[0]["reason"].lower() if problems else "it has no lines") + ".")
     return {"rows": out, "problems": problems[:100], "month_first": order == "mdy"}

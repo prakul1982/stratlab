@@ -66,12 +66,16 @@ def key(header) -> str:
 
 
 def number(v) -> float | None:
-    """A quantity or price as the broker wrote it: commas, ₹, Rs and brackets for negatives are fine."""
-    s = str(v or "").strip()
+    """A quantity or price as the broker wrote it: commas, ₹, Rs, brackets for negatives and the Unicode minus are fine. A
+    comma that isn't followed by exactly three digits ("1 234,5": a decimal comma) isn't read, since it would give 12345."""
+    s = str(v or "").strip().replace("\u2212", "-")
     if not s:
         return None
     neg = s.startswith("(") and s.endswith(")")
-    s = re.sub(r"(?i)rs\.?|inr|₹|[,\s()]", "", s)
+    s = re.sub(r"(?i)rs\.?|inr|₹|[\s()]", "", s)
+    if "," in s and not re.match(r"\d{3}(\.\d*)?$", s.rsplit(",", 1)[1]):
+        return None
+    s = s.replace(",", "")
     if s in ("", "-", "--", "NA", "na"):
         return None
     try:
@@ -102,6 +106,15 @@ class _Stop(Exception):
 
 def _too_large():
     return FileError("That spreadsheet is too large to read.")
+
+
+class TooManyLines(FileError):
+    """A file with more lines than we read."""
+
+
+def too_many(limit: int) -> FileError:
+    """The error for a file with more lines than we read: never read in part, which would drop the rest without a word."""
+    return TooManyLines(f"This file has more than {limit:,} lines; split it by year or quarter and upload the parts.")
 
 
 def _stream(zf: zipfile.ZipFile, name: str, start=None, end=None, text=None, nodes: int = MAX_NODES):
@@ -224,8 +237,10 @@ def _sheet_list(zf: zipfile.ZipFile) -> list[tuple[str, str]]:
     return out
 
 
-def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None) -> list[list[str]]:
-    """The rows of the workbook's first sheet, or of the sheet at `sheet` (its path inside the file)."""
+def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None, whole: bool = True) -> list[list[str]]:
+    """The rows of the workbook's first sheet, or of the sheet at `sheet` (its path inside the file): at most `limit`
+    lines of data after the column names (and the lines above them, HEADER_SCAN), and more is an error (when `whole`; if
+    not, the rest is left unread)."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -266,10 +281,14 @@ def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None) -> list[
             st["cells"][c["col"]] = value
         elif tag == "row" and st["cells"] is not None:
             cells = st["cells"]
-            rows.append([cells.get(i, "") for i in range(max(cells) + 1)] if cells else [])
             st["cells"] = None
-            if len(rows) >= limit:
-                raise _Stop
+            if len(rows) >= limit + HEADER_SCAN:
+                if not whole:
+                    raise _Stop
+                if any(v.strip() for v in cells.values()):
+                    raise too_many(limit)
+                return                      # blank lines at the end of the sheet
+            rows.append([cells.get(i, "") for i in range(max(cells) + 1)] if cells else [])
 
     def text(data):
         if st["in"] and st["cell"] is not None:
@@ -278,13 +297,14 @@ def _xlsx(data: bytes, limit: int = MAX_ROWS, sheet: str | None = None) -> list[
     return rows
 
 
-def sheets(data: bytes, limit: int = MAX_ROWS) -> list[tuple[str, list[list[str]]]]:
-    """(name, rows) for every sheet in a workbook, each read with the same caps as one sheet."""
+def sheets(data: bytes, limit: int = MAX_ROWS, whole: bool = True, only=None) -> list[tuple[str, list[list[str]]]]:
+    """(name, rows) for every sheet in a workbook (those `only` accepts by name, when given), each read with the same caps
+    as one sheet (`whole` False: a longer sheet is cut at the cap, for a caller that only looks at the top)."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
         raise FileError("That file looks like Excel but couldn't be opened. Save it again as .xlsx or CSV.") from None
-    return [(name, _xlsx(data, limit, path)) for name, path in _sheet_list(zf)]
+    return [(name, _xlsx(data, limit, path, whole)) for name, path in _sheet_list(zf) if only is None or only(name)]
 
 
 class _Tables(HTMLParser):
@@ -298,7 +318,7 @@ class _Tables(HTMLParser):
         self.cell: list[str] | None = None
 
     def handle_starttag(self, tag, attrs):
-        if tag == "tr" and len(self.rows) < self.limit:
+        if tag == "tr":
             self.row = []
         elif tag in ("td", "th") and self.row is not None:
             self.cell = []
@@ -309,7 +329,11 @@ class _Tables(HTMLParser):
                 self.row.append(" ".join("".join(self.cell).split()))
             self.cell = None
         elif tag == "tr" and self.row is not None:
-            self.rows.append(self.row)
+            if len(self.rows) >= self.limit + HEADER_SCAN:
+                if any(self.row):
+                    raise too_many(self.limit)
+            else:
+                self.rows.append(self.row)
             self.row = None
 
     def handle_data(self, data):
@@ -334,9 +358,12 @@ def _csv(text: str, limit: int = MAX_ROWS) -> list[list[str]]:
     rows = []
     try:
         for r in csv.reader(io.StringIO(text), delimiter=delim):
-            rows.append([c.strip() for c in r[:MAX_COLS]])
-            if len(rows) >= limit:
-                break
+            row = [c.strip() for c in r[:MAX_COLS]]
+            if len(rows) >= limit + HEADER_SCAN:
+                if any(row):
+                    raise too_many(limit)
+                continue                    # blank lines at the end
+            rows.append(row)
     except csv.Error:
         raise FileError("That CSV file is broken (a quote or a very long cell). Export it again from your broker.") from None
     return rows
@@ -344,7 +371,8 @@ def _csv(text: str, limit: int = MAX_ROWS) -> list[list[str]]:
 
 def table(data: bytes, max_bytes: int = MAX_BYTES, limit: int = MAX_ROWS,
           too_big: str = "A holdings export is much smaller; check it's the right file.") -> list[list[str]]:
-    """The rows of the file's first table, as text: at most `limit` rows from a file of at most `max_bytes`."""
+    """The rows of the file's first table, as text: from a file of at most `max_bytes`, with at most `limit` lines of data
+    (the column names and the lines above them don't count, up to HEADER_SCAN). A file with more is refused."""
     if not data:
         raise FileError("That file is empty.")
     if len(data) > max_bytes:
@@ -421,6 +449,9 @@ def parse(data: bytes, filename: str = "") -> dict:
     found = _header(rows)
     if found:
         at, cols = found
+        if {"date", "side"} <= _trade_columns(rows[at]).keys():
+            raise FileError("That looks like a tradebook (it has a trade date and buy or sell on each line), not a holdings "
+                            "file. Upload it to the tax report or the trade journal instead.")
         name = broker(rows[at], rows[:at], filename)
         extra = [i for i, c in enumerate(rows[at]) if key(c) in EXTRA_QTY]
         body = rows[at + 1:]
@@ -447,11 +478,11 @@ def parse(data: bytes, filename: str = "") -> dict:
         if qty <= 0:
             continue                        # sold, or only listed for its history
         avg = number(_cell(row, cols.get("avg")))
+        if len(out) >= MAX_ROWS:
+            raise too_many(MAX_ROWS)
         out.append({"line": n, "symbol": sym.upper(), "isin": isin if ISIN.match(isin) else "", "name": nm,
                     "exchange": _cell(row, cols.get("exchange")).upper()[:6], "qty": qty,
                     "avg": avg if avg and avg > 0 else None, "text": text})
-        if len(out) >= MAX_ROWS:
-            break
     if not out and not problems:
         raise FileError("That file has the right columns but no holdings in it.")
     return {"broker": name, "rows": out, "problems": problems}
@@ -504,6 +535,18 @@ MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", 
 MAX_TRADES = 20000
 
 
+def _year(text: str) -> int:
+    """A year as written, two or four digits: two digits are 20yy unless that's after next year (then 19yy); three digits
+    are not a year."""
+    from datetime import date as _date
+    if len(text) == 3:
+        raise ValueError("a three-digit year")
+    y = int(text)
+    if len(text) == 2:
+        y += 2000 if 2000 + y <= _date.today().year + 1 else 1900
+    return y
+
+
 def day(v) -> str | None:
     """A trade date as the broker wrote it, as YYYY-MM-DD: 2024-07-22, 22-07-2024, 22/07/24, 22-Jul-2024,
     Jul 22, 2024, with or without a time after it, or an Excel date number. Day first when it's ambiguous."""
@@ -523,11 +566,10 @@ def day(v) -> str | None:
             d, mo, y = map(int, m.groups())
             if mo > 12 and d <= 12:
                 d, mo = mo, d
-            return _date(y + 2000 if y < 100 else y, mo, d).isoformat()
+            return _date(_year(m.group(3)), mo, d).isoformat()
         m = re.match(r"(\d{1,2})[-/ ]?([A-Za-z]{3})[A-Za-z]*[-/ ,]*(\d{2,4})(?!\d)", s)
         if m and m.group(2).lower() in MONTHS:
-            y = int(m.group(3))
-            return _date(y + 2000 if y < 100 else y, MONTHS[m.group(2).lower()], int(m.group(1))).isoformat()
+            return _date(_year(m.group(3)), MONTHS[m.group(2).lower()], int(m.group(1))).isoformat()
         m = re.match(r"([A-Za-z]{3})[A-Za-z]*[-/ ]+(\d{1,2}),?[-/ ]+(\d{4})(?!\d)", s)
         if m and m.group(1).lower() in MONTHS:
             return _date(int(m.group(3)), MONTHS[m.group(1).lower()], int(m.group(2))).isoformat()
@@ -649,6 +691,8 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
             if any(number(c) is not None for c in row):
                 problems.append({"line": n, "text": text, "reason": "No quantity on this line."})
             continue
+        if len(out) >= MAX_TRADES:
+            raise too_many(MAX_TRADES // 2 if kind == "pnl" else MAX_TRADES)
         base = {"isin": isin if ISIN.match(isin) else "", "symbol": sym.upper()[:40], "name": nm[:80],
                 "exchange": _cell(row, cols.get("exchange")).upper()[:6], "text": text, "line": n}
         charges = round(_charges(row, header), 2)
@@ -695,8 +739,6 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
             fmv = _fmv(number(_cell(row, cols.get("fmv"))), qty, price) if sd_ == "B" and d <= "2018-01-31" else None
             out.append({**base, "d": d, "t": tm[:20], "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges, "stt": stt,
                         "tid": _cell(row, cols.get("trade_id"))[:40], "fmv": fmv, "src": "trades", **({"seg": seg[:20]} if derivatives else {})})
-        if len(out) >= MAX_TRADES:
-            break
     if not out:
         if problems:
             raise FileError(f"No equity trades could be read from that file. Line {problems[0]['line']}: {problems[0]['reason']}")
@@ -922,7 +964,7 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
                 continue
             totals = summary(rows) if not section else {}
             if not section and _is_xlsx(raw) and raw[:4] == b"PK\x03\x04":
-                for name, srows in sheets(raw):      # the workbook's F&O, commodity and currency sheets
+                for name, srows in sheets(raw, whole=False):      # the workbook's F&O, commodity and currency sheets
                     s_seg = business_kind(name)
                     if s_seg and (got_ := business_summary(srows)) and s_seg not in biz_sheet:
                         biz_sheet[s_seg] = got_
@@ -945,8 +987,8 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
                 sums[section[1]] = (was[0] + got["gross"], was[1] + got["taxable"])
             trades += got["trades"]
             problems += [{**p, "text": f"{label} · {p['text']}"[:120]} for p in got["problems"]]
-            if len(trades) >= MAX_TRADES:
-                break
+            if len(trades) > MAX_TRADES:
+                raise FileError(f"That ZIP has more than {MAX_TRADES:,} trades; upload its files one year or quarter at a time.")
     except FileError:
         raise
     except Exception:                        # a damaged entry of any kind: one plain answer
@@ -967,7 +1009,7 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
     zerodha = any(re.match(r"(?i)(tradewise exits|taxpnl)", _base(i.filename)) for i in infos)
     broker = "Zerodha" if zerodha else next((b for b in brokers if b != "CSV"), "CSV")
     kind = "business" if not trades else "pnl" if all(t["src"] == "pnl" for t in trades) else "trades"
-    return {"broker": broker, "kind": kind, "trades": trades[:MAX_TRADES], "problems": problems[:500], "skipped": skipped[:50],
+    return {"broker": broker, "kind": kind, "trades": trades, "problems": problems[:500], "skipped": skipped[:50],
             "check": check, "files": read, "business": business}
 
 
@@ -1226,7 +1268,7 @@ def business_rows(data: bytes):
             or re.match(rb"\s*<", data[:200])):
         return iter(table(data, FNO_MAX_BYTES, FNO_MAX_ROWS))
     if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return iter(_csv(_text(data), FNO_MAX_ROWS + HEADER_SCAN))
+        return iter(_csv(_text(data), FNO_MAX_ROWS))
     return _csv_stream(io.BytesIO(data))
 
 

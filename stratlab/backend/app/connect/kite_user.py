@@ -97,6 +97,13 @@ def _prune_pending() -> None:
             db.delete_setting(key)
 
 
+def drop_pending(uid: str) -> None:
+    """Delete the user's finished Zerodha logins that wait to be confirmed (each holds a sealed session token)."""
+    for key, raw in db.all_settings_with_prefix(PENDING):
+        if db.json_value(raw, {}).get("uid") == uid:
+            db.delete_setting(key)
+
+
 def stage(request_token: str, st: str) -> str:
     """Zerodha's return, which anyone's browser can make (the state is in a link, so it can be passed to someone else):
     swap the request token and keep the session aside under the state, not on the account. Returns the claim, a secret
@@ -205,8 +212,13 @@ def refresh(uid: str) -> dict:
             raise KiteConnectError("Today's Zerodha login has ended. Log in again.", expired=True) from None
         state.update(uid, "kite", status="error", detail="Zerodha didn't answer. Try again in a few minutes.")
         raise KiteConnectError("Zerodha didn't answer. Try again in a few minutes.") from None
-    got = sync.sync_holdings(profile, rows_from(holdings, positions), "kite", "Zerodha Kite")
-    state.update(uid, "kite", refreshed_at=state.now(), status="ok", detail=sync.note(got, "Zerodha"), count=got["count"])
+    rows = rows_from(holdings, positions)
+    # a read is whole only when the holdings call itself returned rows: today's positions alone must not take out the
+    # holdings read before
+    got = sync.sync_holdings(profile, rows, "kite", "Zerodha Kite", replace=bool(holdings))
+    why = sync.note(got, "Zerodha") or (None if holdings or not rows else
+                                         "Zerodha returned no holdings, so the holdings read from it before are kept as they were.")
+    state.update(uid, "kite", refreshed_at=state.now(), status="ok", detail=why, count=got["count"])
     return {"count": got["count"], "unmatched": got["unmatched_count"], "added": got["added"], "changed": got["changed"]}
 
 

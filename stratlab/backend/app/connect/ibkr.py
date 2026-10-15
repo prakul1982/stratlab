@@ -106,11 +106,17 @@ def _clock(v: str) -> str | None:
 
 
 def positions(root: ET.Element) -> tuple[list[dict], int]:
-    """(US stock rows for My Holdings, positions left out: other kinds or currencies)."""
+    """(US stock rows for My Holdings, positions left out: other kinds or currencies). A query that lists each lot as well
+    as the position (levelOfDetail LOT beside SUMMARY) is counted once: by its SUMMARY rows, or by its LOT rows when it has
+    no SUMMARY rows."""
     rows, left = [], 0
     by = {}
+    levels = {(p.get("levelOfDetail") or "").upper() for p in root.iter("OpenPosition")}
+    use = ("", "SUMMARY") if levels & {"", "SUMMARY"} else ("LOT",)
     for p in root.iter("OpenPosition"):
         a = p.attrib
+        if (a.get("levelOfDetail") or "").upper() not in use:
+            continue
         qty = _num(a.get("position"))
         sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
         if a.get("assetCategory") != "STK" or a.get("currency") != "USD" or not qty or qty <= 0 or not sym:
@@ -126,10 +132,14 @@ def positions(root: ET.Element) -> tuple[list[dict], int]:
 
 
 def fills(root: ET.Element) -> list[dict]:
-    """Stock trades in dollars, oldest first: {id, sym, side "B"/"S", qty, price, d, t, fee}."""
+    """Stock trades in dollars, oldest first: {id, sym, side "B"/"S", qty, price, d, t, fee, oc}. `oc` is IBKR's
+    openCloseIndicator ("O" opens a position, "C" closes one). Only the executions: a query that lists the order or the
+    closed lots beside them (other levels of detail) would count each trade again."""
     out = []
     for t in root.iter("Trade"):
         a = t.attrib
+        if (a.get("levelOfDetail") or "").upper() not in ("", "EXECUTION"):
+            continue
         qty, price = _num(a.get("quantity")), _num(a.get("tradePrice"))
         d = _day(a.get("tradeDate") or a.get("dateTime") or "")
         sym = (a.get("symbol") or "").strip().upper().replace(" ", "-")
@@ -138,7 +148,7 @@ def fills(root: ET.Element) -> list[dict]:
         side = "B" if (a.get("buySell") or "").upper().startswith("B") else "S"
         out.append({"id": a.get("tradeID") or hashlib.sha1(repr(sorted(a.items())).encode()).hexdigest()[:12], "sym": sym, "side": side,
                     "qty": abs(qty), "price": price, "d": d, "t": _clock(a.get("dateTime") or "") or "",
-                    "fee": abs(_num(a.get("ibCommission")) or 0.0)})
+                    "fee": abs(_num(a.get("ibCommission")) or 0.0), "oc": (a.get("openCloseIndicator") or "").strip().upper()})
     return sorted(out, key=lambda f: (f["d"], f["t"], f["id"]))
 
 
@@ -159,7 +169,9 @@ def splits(root: ET.Element) -> dict[str, list[tuple[str, float]]]:
 
 def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | None = None) -> list[dict]:
     """Round trips by first in, first out per stock, as the journal's added-by-hand trades (segment "us"). A sale with no
-    purchase before it in the data (bought before the query's period) is left out, never guessed. `split` (splits): the
+    purchase before it in the data (bought before the query's period) is left out, never guessed: a sale opens a short
+    position only when IBKR marks it as opening one (openCloseIndicator "O"), and a purchase marked as closing one ("C")
+    opens nothing. `split` (splits): the
     shares bought before a split count as the shares after it, at the price of each after it."""
     out = []
     book: dict[str, list[list]] = {}                  # symbol -> open lots [side, qty left, fill, fee left]
@@ -190,7 +202,9 @@ def closed_trades(fs: list[dict], split: dict[str, list[tuple[str, float]]] | No
             fee -= fee_part
             if lot[1] <= 1e-9:
                 lots.pop(0)
-        if q > 1e-9:
+        oc = (f.get("oc") or "").split(";")
+        opens = "O" in oc if f["side"] == "S" else oc == [""] or "O" in oc
+        if q > 1e-9 and opens:
             lots.append([f["side"], q, f, fee])
     return [t for t in out if t["xd"] >= t["ed"]]
 
