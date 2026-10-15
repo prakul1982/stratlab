@@ -575,10 +575,14 @@ class Checker:
             if uid not in profiles or not (uid in fired or uid in waiting):
                 continue                    # no profile (its texts stay waiting), or nothing fired and nothing waiting
             changes = fired.get(uid, {})
-            texts = apply(uid, changes, now)
-            n_fired += sum(1 for t, *_ in changes.values() if t)
-            if texts and flush(uid, profiles[uid], texts, now, self.send):
-                n_sent += 1
+            try:                            # one user's failed write mustn't skip the users after them
+                texts = apply(uid, changes, now)
+                n_fired += sum(1 for t, *_ in changes.values() if t)
+                if texts and flush(uid, profiles[uid], texts, now, self.send):
+                    n_sent += 1
+            except Exception as e:
+                self.status["last_error"] = f"{uid}: {str(e)[:150]}"
+                print("stock alerts: one user failed:", type(e).__name__, str(e)[:120])
         self.status.update(last_run=now.isoformat(), checked=checked, fired=n_fired, sent=n_sent)
 
     def _apply(self, uid: str, changes: dict, now: datetime) -> list[str]:
@@ -622,9 +626,10 @@ def _fresh(pending: list, now: datetime) -> list[list]:
 
 
 def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver) -> bool:
-    """Send the texts waiting for one user in one message, and count it against their limits. They leave the waiting
-    list only once a channel got the message. When none did, they stay waiting (tried again after RETRY_AFTER, so a user
-    with no channel isn't retried every check) and nothing is counted."""
+    """Send the texts apply handed out for one user in one message, and count it against their limits. apply took them
+    off the waiting list as it handed them out (at most once, as results and filings: a kill between the send and this
+    write drops a message, never doubles one). When no channel got the message, they go back on the waiting list (tried
+    again after RETRY_AFTER, so a user with no channel isn't retried every check) and nothing is counted."""
     subject, body = message(texts)
     try:
         reached = bool(send(profile, subject, body))
@@ -632,20 +637,25 @@ def flush(uid: str, profile: dict, texts: list[str], now: datetime, send=deliver
         print("stock alert failed:", uid, str(e)[:120])
         reached = False
     def done(row):
-        left, missing = list(row["pending"]), []
-        for t in texts:                 # the texts apply handed out are still on the list; one that came from elsewhere isn't
-            at = next((i for i, p in enumerate(left) if (_entry(p, now) or [None])[0] == t), None)
-            if at is None:
-                missing.append([t, now.isoformat()])
-            else:
-                left.pop(at)
+        flying = row.pop("sending", None)
         row.pop("claim", None)
+        if not isinstance(flying, list):    # handed out before texts left the list on hand-out: they are still on it
+            left = list(row["pending"])
+            for t in texts:
+                at = next((i for i, p in enumerate(left) if (_entry(p, now) or [None])[0] == t), None)
+                if at is not None:
+                    left.pop(at)
+            row["pending"], flying = left, []
+        pool = [e for e in (_entry(p, now) for p in flying) if e]
+        back = []
+        for t in texts:                 # each with the time it fired; one that came from elsewhere is dated now
+            at = next((i for i, e in enumerate(pool) if e[0] == t), None)
+            back.append(pool.pop(at) if at is not None else [t, now.isoformat()])
         if reached:
             row["sent"] = [t for t in row["sent"] if _recent([t], now, timedelta(days=1))] + [now.isoformat()]
-            row["pending"] = left
             row.pop("retry_at", None)
         else:
-            row["pending"] = (missing + row["pending"])[-MAX_PENDING:]
+            row["pending"] = (back + row["pending"])[-MAX_PENDING:]
             row["retry_at"] = (now + RETRY_AFTER).isoformat()
         return True, None
     _change(uid, done)
@@ -670,10 +680,15 @@ def _claimed(row: dict, now: datetime) -> bool:
 
 def apply(uid: str, changes: dict, now: datetime) -> list[str]:
     """Save each alert's new state, mark the fired ones triggered (or keep repeating ones on), and return the texts
-    to send now: everything waiting, when the user is under the message limits. The texts stay on the waiting list
-    until flush reports them sent."""
+    to send now: everything waiting, when the user is under the message limits. The texts leave the waiting list as they
+    are handed out, recorded as being sent, so a send whose write after it failed (or a process that stopped in between)
+    is never sent again; a hand-out older than CLAIM_FOR that flush never reported on is dropped."""
     def go(row):
         dirty = False
+        if "sending" in row and not _claimed(row, now):     # handed out and never reported on: dropped, not sent again
+            row.pop("sending", None)
+            row.pop("claim", None)
+            dirty = True
         kept = _fresh(row["pending"], now)
         if kept != row["pending"]:
             row["pending"], dirty = kept, True
@@ -694,6 +709,7 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
         texts = []
         if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now) and not _claimed(row, now):
             texts, row["claim"] = [t for t, _ in row["pending"]], now.isoformat()
+            row["sending"], row["pending"] = row["pending"], []
             dirty = True
         return dirty, texts
     return _change(uid, go)

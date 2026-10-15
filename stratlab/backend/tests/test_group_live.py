@@ -418,3 +418,68 @@ def test_a_split_moves_the_days_mark_with_the_entry(monkeypatch):
     assert (a.engine.qty, a.engine.entry, a.engine.day_mark) == (2 * qty, 500.0, 500.0) and a.engine.day_open_pnl(500.0) == 0
     s._on_candle(a, sbar(6, 0, 500.0, lo=496.0))            # the day's first candle: nothing counted as a loss
     assert a.engine.day_mark == 500.0 and s.today() == 0 and not s.halted
+
+
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_the_days_dividend_paid_from_the_timer_counts_in_the_days_pnl(monkeypatch, side):
+    """The timer pays the day's dividend after midnight, before the day's first candle. That candle started the day with
+    the pot's corporate cash, the dividend already in it, as the day's starting point: on the ex-date the price drop
+    counted (-1,995 on 997.5 units at 2 a unit) and the dividend that makes up for it didn't. A short's is the mirror."""
+    mgr, _ = make_manager()
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    s = group_live.GroupLiveSession(mgr, {**row(), "strategy": {**STRAT, "side": side}})
+    a = s.members[0]
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    s._on_candle(a, candle("2999-01-01T23:55:00+00:00", 100.0))
+    q, d = a.engine.qty, a.engine.dir
+    assert q > 0 and d == (1 if side == "long" else -1)
+    D, seen = 2.0, set()
+
+    def new_day(day):                      # as PaperActions.new_day: the day's actions once, the first time it is seen
+        if day in seen:
+            return None
+        seen.add(day)
+        return [{"id": "div"}] if day == "2999-01-02" else None
+    monkeypatch.setattr(a.corp, "new_day", new_day)
+    monkeypatch.setattr(a.corp, "bars", lambda bars, acts: None)
+    monkeypatch.setattr(a.corp, "apply", lambda e, acts, day, todo=False: (e.dir * e.qty * D, 1.0))
+    a.corp_day("2999-01-02", timer=True)                          # what on_timer does after midnight
+    assert s.corp_cash == pytest.approx(d * q * D) and s.day == "2999-01-02"
+    s._on_candle(a, candle("2999-01-02T09:00:00+00:00", 100.0 - D))        # opens ex-dividend, D lower
+    assert s.today() == pytest.approx(0.0, abs=0.01)
+    st = s.state()
+    assert st["day"] == "2999-01-02" and st["day_start_corp"] == pytest.approx(0.0)
+
+
+def test_a_transient_history_failure_resuming_a_group_is_retried_not_stopped(monkeypatch):
+    """A 503 loading the members' history made every member fail to load; that read as 'fewer than two instruments have
+    enough history', a ValueError, and the group was stopped for good at the first try."""
+    from app import leader, live
+    from app.data.coinbase import DataError
+    mgr, _ = make_manager()
+    monkeypatch.setattr(leader, "leading", lambda: True)
+    writes = []
+    monkeypatch.setattr(live.db, "update_session", lambda sid, **f: writes.append((sid, f)))
+    prov = mgr.markets.provider("CRYPTO")
+    good = prov.history
+
+    def boom(*a, **k):
+        raise DataError("503")
+    monkeypatch.setattr(prov, "history", boom)
+    for _ in range(live.RESUME_TRIES - 1):
+        mgr.resume([row()])
+    assert writes == [] and "g1" not in mgr.sessions                  # still running: the next reconcile tries again
+    monkeypatch.setattr(prov, "history", good)
+    mgr.resume([row()])
+    assert writes == [] and "g1" in mgr.sessions
+    # too little history, with nothing failing, still stops it at once
+    mgr2, _ = make_manager()
+    monkeypatch.setattr(mgr2.markets.provider("CRYPTO"), "history", lambda *a, **k: [])
+    mgr2.resume([row()])
+    assert len(writes) == 1 and "Fewer than two" in writes[0][1]["stop_reason"]
+    # and ten failures in a row stop it, with no data source's name in the reason
+    mgr3, _ = make_manager()
+    monkeypatch.setattr(mgr3.markets.provider("CRYPTO"), "history", boom)
+    for _ in range(live.RESUME_TRIES):
+        mgr3.resume([row()])
+    assert len(writes) == 2 and "10 tries" in writes[1][1]["stop_reason"] and "503" not in writes[1][1]["stop_reason"]

@@ -44,6 +44,8 @@ class Member:
         lot = inst.get("step") or (inst.get("lot", 1) if inst.get("fno") else 1)
         self.engine = Engine(sess.each, lot, state=state or None, cost_kind=C.kind_of(inst))
         n = len(self.engine.events)
+        if todo:
+            sess.new_day(today)       # what they pay is today's, not the saved day's
         sess.corp_cash += self.corp.apply(self.engine, todo, today, todo=True)[0]
         sess.dirty = sess.dirty or len(self.engine.events) > n
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
@@ -116,6 +118,9 @@ class Member:
         acts = self.corp.new_day(day)
         if acts:
             n = len(self.engine.events)
+            # from the timer, after midnight: the day starts here, so its first candle doesn't take the cash paid now
+            # (a dividend) as the day's starting point and the daily loss cap counts it with the ex-dividend price drop
+            self.s.new_day(day)
             self.corp.bars(self.bars, acts)
             cash, f = self.corp.apply(self.engine, acts, day)
             self.s.corp_cash += cash
@@ -162,6 +167,7 @@ class GroupLiveSession:
         if self.polled and self.prov is None:
             raise ValueError("That market isn't connected.")
         saved = state.get("members") or {}
+        self.load_failed = False      # a member's history raised (a timeout, a 503), not just too short or unknown
         loaded = list(_pool.map(self._load, self.inst.get("members") or []))
         self.members: list[Member] = [Member(self, inst, bars, saved.get(inst["id"]), forming)
                                       for inst, bars, forming in loaded if inst and bars]
@@ -171,6 +177,8 @@ class GroupLiveSession:
                                          if not (inst and bars) and iid in saved}
         self.next_retry = time.time() + RETRY_SECONDS
         if len(self.members) < 2:
+            if self.load_failed:      # may pass: a resume tries again rather than stopping the group for good
+                raise RuntimeError("The price history of the group's instruments couldn't be loaded.")
             raise ValueError("Fewer than two of the group's instruments have enough live price history to start.")
         self.lids: list[str] = []
         self.replaying: list[dict] | None = None    # the orders of candles being caught up on, alerted as one
@@ -222,6 +230,7 @@ class GroupLiveSession:
             return (inst, bars, forming) if len(bars) >= 30 else (inst, None, None)
         except Exception as e:
             print("group member failed to load:", iid, e)
+            self.load_failed = True
             return None, None, None
 
     # ---------- the shared book ----------
@@ -275,11 +284,16 @@ class GroupLiveSession:
             write_off([t for t, _ in pairs], -left, [e for _, e in pairs])
         return evs
 
-    def _on_candle(self, m: Member, c: dict):
-        day = str(c["t"])[:10]
-        if self.day is None or day > self.day:      # a member catching up late on older candles doesn't turn the day back
+    def new_day(self, day: str):
+        """Start the group's trading day `day` when it is a new one. A member catching up late on older candles doesn't
+        turn the day back."""
+        if self.day is None or day > self.day:
             self.day, self.halted = day, False
             self.day_start_corp = self.corp_cash
+
+    def _on_candle(self, m: Member, c: dict):
+        day = str(c["t"])[:10]
+        self.new_day(day)
         m.corp_day(day)
         m.bars.append(c)
         if len(m.bars) > 600:

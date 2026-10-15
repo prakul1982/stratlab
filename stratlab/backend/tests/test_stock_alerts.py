@@ -391,7 +391,8 @@ def test_a_failed_delivery_keeps_the_text_and_does_not_use_the_quota(store):
     sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
     a = sa.items("u1")[0]
     texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a.get("rev"))}, IN_OPEN)
-    assert texts and [t for t, _ in sa._read("u1")["pending"]] == texts      # they leave the list only once sent
+    row = sa._read("u1")                                                    # handed out: off the list, being sent
+    assert texts and row["pending"] == [] and [t for t, _ in row["sending"]] == texts
     assert sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda *x: []) is False       # no channel reached
     row = sa._read("u1")
     assert [t for t, _ in row["pending"]] == texts and row["sent"] == []
@@ -437,18 +438,20 @@ def test_channels_do_not_list_email_after_unsubscribing(monkeypatch):
     assert sa.channels(p) == ["push"]
 
 
-def test_texts_stay_waiting_until_a_send_succeeds_so_a_crash_loses_none(store):
+def test_texts_handed_out_are_sent_at_most_once_so_a_crash_never_doubles_one(store):
+    """At most once, as results and filings: the texts used to stay waiting until flush recorded the send, so a process
+    that died between the send and that write (or a failed write) sent them again once the claim ran out."""
     sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
     a = sa.items("u1")[0]
     texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a["rev"], sa._seen(a))}, IN_OPEN)
     assert len(texts) == 1                                                  # …and the process dies here, before flush
-    assert [t for t, _ in sa._read("u1")["pending"]] == texts
-    assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=1)) == []         # a send is in flight: not handed out twice
-    later = sa.apply("u1", {}, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1))
-    assert later == texts                                                   # the restart finds them
-    assert sa.flush("u1", {"id": "u1"}, later, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1), send=lambda *x: ["push"])
     row = sa._read("u1")
-    assert row["pending"] == [] and "claim" not in row and len(row["sent"]) == 1
+    assert row["pending"] == [] and [t for t, _ in row["sending"]] == texts
+    assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=1)) == []         # a send is in flight: nothing handed out
+    later = sa.apply("u1", {}, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1))
+    assert later == []                                                      # the restart doesn't send it again
+    row = sa._read("u1")
+    assert row["pending"] == [] and "sending" not in row and "claim" not in row
 
 
 def test_waiting_texts_carry_their_time_and_old_ones_are_dropped(store):
@@ -458,7 +461,9 @@ def test_waiting_texts_carry_their_time_and_old_ones_are_dropped(store):
     texts = sa.apply("u1", {}, IN_OPEN)
     assert texts == ["recent", "plain string"]                              # a stored plain string is kept, dated from now
     row = sa._read("u1")
-    assert row["pending"] == [["recent", fresh], ["plain string", IN_OPEN.isoformat()]]
+    assert row["sending"] == [["recent", fresh], ["plain string", IN_OPEN.isoformat()]] and row["pending"] == []
+    assert sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda *x: []) is False      # not sent: back, with their times
+    assert sa._read("u1")["pending"] == [["recent", fresh], ["plain string", IN_OPEN.isoformat()]]
 
 
 def test_the_tick_reads_profiles_and_rows_only_for_users_with_something_to_do(store):
@@ -499,3 +504,41 @@ def test_a_disclosure_filed_before_the_alert_was_set_is_judged_on_the_india_date
             {"id": "new", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-02", "text": "b"}]
     text, st = sa.evaluate_event(a, rows)
     assert st["seen"] == ["new"] and text
+
+
+
+def test_a_failed_write_after_the_send_does_not_send_the_texts_again(store, monkeypatch):
+    sa.create("u1", {"region": "IN", "symbol": "RELIANCE", "kind": "price", "op": "above", "value": 3000}, 3, {"price": 2990})
+    a = sa.items("u1")[0]
+    sent = []
+    texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a["rev"], sa._seen(a))}, IN_OPEN)
+    real = db.update_setting
+
+    def down(*a, **k):
+        raise RuntimeError("database timeout")
+    monkeypatch.setattr(db, "update_setting", down)
+    with pytest.raises(RuntimeError):
+        sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda p, subj, body: sent.append(subj) or ["telegram"])
+    monkeypatch.setattr(db, "update_setting", real)
+    later = IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1)
+    again = sa.apply("u1", {}, later)
+    if again:
+        sa.flush("u1", {"id": "u1"}, again, later, send=lambda p, subj, body: sent.append(subj) or ["telegram"])
+    assert again == [] and len(sent) == 1
+
+
+def test_one_users_failed_send_bookkeeping_does_not_skip_the_others(store, monkeypatch):
+    for uid in ("u1", "u2"):
+        store["stockalerts:" + uid] = json.dumps({"items": [], "sent": [], "pending": [[f"{uid} crossed", IN_OPEN.isoformat()]]})
+    sent = []
+    real = sa.flush
+
+    def flaky(uid, *a, **k):
+        if uid == "u1":
+            raise RuntimeError("database timeout")
+        return real(uid, *a, **k)
+    monkeypatch.setattr(sa, "flush", flaky)
+    job = sa.Checker(Market().quotes, lambda r, s: [], lambda p: 5, send=lambda p, subj, text: sent.append(p["id"]) or ["push"],
+                     profile=lambda uid: {"id": uid})
+    job.tick(IN_OPEN)
+    assert sent == ["u2"] and job.status["sent"] == 1 and "u1" in job.status["last_error"]
