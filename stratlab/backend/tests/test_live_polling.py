@@ -83,7 +83,8 @@ def test_a_transient_error_resuming_leaves_the_session_running_and_a_permanent_o
     assert writes == []
     mgr.resume(rows)                            # the tenth failure in a row stops it, with the reason
     assert len(writes) == 1 and writes[0][0] == "a" and writes[0][1]["status"] == "stopped"
-    assert "10 tries" in writes[0][1]["stop_reason"] and "timeout" in writes[0][1]["stop_reason"]
+    # the error's own text stays in the log: a data source's error can name it, and the reason is shown to the user
+    assert "10 tries" in writes[0][1]["stop_reason"] and "timeout" not in writes[0][1]["stop_reason"]
     # what the builders raise for good stops it at once
     writes.clear()
     fail[:] = [ValueError("That market isn't connected.")]

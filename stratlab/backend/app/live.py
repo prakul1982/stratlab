@@ -623,7 +623,8 @@ class LiveManager:
                 if n >= RESUME_TRIES:
                     self._attach_fails.pop(row["id"], None)
                     db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(),
-                                      stop_reason=f"Could not resume after restart ({RESUME_TRIES} tries in a row): {e}")
+                                      stop_reason=f"Could not resume after restart ({RESUME_TRIES} tries in a row): the market's prices "
+                                                  "couldn't be read.")   # the error itself goes to the log: it can name the data source
 
     def _attach(self, row: dict):
         s = self._build(row)
