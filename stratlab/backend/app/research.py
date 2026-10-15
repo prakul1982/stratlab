@@ -305,6 +305,8 @@ def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: 
     notes: list[str] = []
     for d in datasets:
         notes += [n for n in run_notes(strategy, d) if n[:40] not in {x[:40] for x in notes}]
+    from .universes import members_note
+    notes.append(members_note(group))
     if base.get("crowded"):
         n = base["crowded"]
         notes.append(f"When more members signalled on the same candle than there were free slots, the members listed first "

@@ -84,6 +84,19 @@ def us_universe() -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def members_note(group: dict) -> str | None:
+    """A run note for a ready-made group of stocks: its members are today's list, so a test over earlier years trades
+    companies that joined it later and leaves out those that left it. None for any other group."""
+    market = (group.get("market") or "IN").upper()
+    if market not in ("IN", "US"):
+        return None
+    p = next((p for p in PRESETS[market] if p["id"] == group.get("id")), None)
+    if p is None:
+        return None
+    return (f"{p['name']} are today's members (as of 2025): earlier years include companies that joined the list later "
+            "and leave out those that left it.")
+
+
 def presets(market: str) -> list[dict]:
     return [{**p, "market": market, "count": len(p["symbols"])} for p in PRESETS.get(market, [])]
 

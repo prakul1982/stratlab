@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from . import signals as SG
 from .corp_actions import PaperActions, paper_apply, paper_due, paper_event
 from .engine import costs as C
+from .engine.core import saved_totals
 from .kite_service import IST
 
 MARK_EVERY = 60          # seconds between price checks for the account's value (polled markets)
@@ -87,6 +88,9 @@ class SignalSession:
         self.entry_t = st.get("entry_t")
         self.entry_cost = float(st.get("entry_cost", 0.0))
         self.trades: list[dict] = list(st.get("trades") or [])
+        # running totals over every closed trade: the list keeps only the last 1,000
+        self.realised_total, self.trade_count, self.win_count = saved_totals(st)
+        self.corp_cash = float(st.get("corp_cash", 0.0))      # dividends and cash for fractional shares, in the cash too
         self.events: list[dict] = list(st.get("events") or [])
         self.signals: list[dict] = list(st.get("signals") or [])
         self.seen: list[str] = list(st.get("seen") or [])
@@ -168,6 +172,7 @@ class SignalSession:
             d = 1 if self.pos > 0 else -1
             q, f, cash, text = paper_apply(abs(self.pos), d, self.avg, a, self.corp.region)
             self.pos, self.avg, self.cash = d * q, self.avg / f, self.cash + cash
+            self.corp_cash += cash
             self.last_price = self.last_price / f if self.last_price else self.last_price
             self.events = (self.events + [{**paper_event(a, self.corp.region, text, cash), "sym": self.inst.get("symbol")}])[-1000:]
             self.corp.applied.append(a["id"])
@@ -216,6 +221,9 @@ class SignalSession:
                                 "costs": ec + xc, "side": "long" if d > 0 else "short",
                                 "ret": d * (px / self.avg - 1) * 100 if self.avg else 0.0, "why": why})
             self.trades = self.trades[-1000:]
+            self.realised_total += p
+            self.trade_count += 1
+            self.win_count += p > 0
             self.entry_cost -= ec
             self.pos += sign * c
             pnl += p
@@ -331,7 +339,8 @@ class SignalSession:
         return {"cash": self.cash, "pos": self.pos, "avg": self.avg, "entry_t": self.entry_t, "entry_cost": self.entry_cost,
                 "trades": self.trades[-1000:], "events": self.events[-1000:], "signals": self.signals[-KEEP_SIGNALS:],
                 "seen": self.seen[-KEEP_IDS:], "equity_curve": self.equity_curve[-500:], "cost_items": self.cost_items,
-                "last_price": self.last_price, **self.corp.dump()}
+                "last_price": self.last_price, "corp_cash": self.corp_cash,
+                "totals": {"realised": self.realised_total, "count": self.trade_count, "wins": self.win_count}, **self.corp.dump()}
 
     def signal_counts(self, day: str) -> dict:
         """How many signals arrived on `day`, counted in the report's zone (the market's own; see daily_report.zone_of)."""
@@ -360,8 +369,8 @@ class SignalSession:
                     "account": {"capital": self.capital, "equity": eq, "cash": self.cash, "qty": abs(self.pos),
                                 "entry": self.avg if self.pos else None, "side": "short" if self.pos < 0 else "long",
                                 "unrealised": self.pos * ((px or self.avg) - self.avg) - self.entry_cost if self.pos else 0.0,    # net of the entry's costs, as equity is
-                                "realised": sum(t["pnl"] for t in self.trades), "trades": len(self.trades),
-                                "wins": sum(1 for t in self.trades if t["pnl"] > 0)}}
+                                "realised": self.realised_total + self.corp_cash, "corp_cash": self.corp_cash,
+                                "trades": self.trade_count, "wins": self.win_count}}
 
 
 def stopped_snapshot(row: dict) -> dict:
@@ -374,6 +383,8 @@ def stopped_snapshot(row: dict) -> dict:
     cash = float(st.get("cash", cap))
     pos, avg = float(st.get("pos", 0.0)), float(st.get("avg", 0.0))
     last = st.get("last_price") or avg
+    realised, n_trades, wins = saved_totals(st)
+    corp_cash = float(st.get("corp_cash", 0.0))
     return {"id": row["id"], "name": row["name"], "kind": KIND, "status": row.get("status"), "stop_reason": row.get("stop_reason"),
             "instrument": inst, "settings": settings, "started_at": row.get("started_at"), "stopped_at": row.get("stopped_at"),
             "last_price": st.get("last_price"), "last_tick_at": None, "feed_connected": False, "market_open": False,
@@ -382,5 +393,4 @@ def stopped_snapshot(row: dict) -> dict:
             "account": {"capital": cap, "equity": cash + pos * last, "cash": cash, "qty": abs(pos), "entry": avg if pos else None,
                         "side": "short" if pos < 0 else "long",
                         "unrealised": pos * (last - avg) - float(st.get("entry_cost") or 0.0) if pos else 0.0,
-                        "realised": sum(t.get("pnl", 0) for t in trades), "trades": len(trades),
-                        "wins": sum(1 for t in trades if t.get("pnl", 0) > 0)}}
+                        "realised": realised + corp_cash, "corp_cash": corp_cash, "trades": n_trades, "wins": wins}}
