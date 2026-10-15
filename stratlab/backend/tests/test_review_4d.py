@@ -147,6 +147,8 @@ def test_book_value_per_share_is_left_out_when_a_split_blocks_repricing(monkeypa
     s = {"price": 1000.0, "pe": 25.0, "book_value": 400.0, "face_value": 10.0, "market_cap_cr": 100000.0, "div_yield": 1.0}
     out = at_live_price(s, 505.0, "X", "2026-10-09T05:00+00:00")
     assert out["price"] == 505.0 and out["pb"] is None and out["book_value"] is None
+    assert out["face_value"] is None                                         # per share on the old count too (owner, 15 Oct)
     assert at_live_price(s, 200.0)["book_value"] is None                    # a move too large for a day's
     ok = at_live_price(s, 1010.0, "X", "2026-10-11T05:00+00:00")            # no split since: re-priced, book value as read
     assert ok["book_value"] == 400.0 and ok["pb"] == pytest.approx(1010.0 / 400.0)
+    assert ok["face_value"] == 10.0
