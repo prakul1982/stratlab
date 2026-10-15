@@ -5,6 +5,7 @@ import { applySeo, seoFor, type SeoKind } from "../lib/seo";
 import { HOME_TITLE, landingHeading } from "../content/seo";
 import { heldStartup } from "../lib/held";
 import { NOT_FOUND_TITLE, signedOutTitle } from "../lib/title";
+import { Skeleton } from "../components/kit/States";
 import { Opening } from "../components/LoadGuard";
 import { importWithRetry } from "../lib/lazyRetry";
 
@@ -59,7 +60,9 @@ export function VisitorApp() {
   // ...and when the page came with its own words (a cold /library, /pricing or /faq), those words stay on screen while its
   // code downloads, instead of a splash that replaces them for a second (R10V-006); with none, the splash
   const words = heldStartup();
-  const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
+  // (the library list is the exception: plain words with no list read as a broken page, so it shows a loading skeleton, R31-004)
+  const fallback = view.kind === "library" ? <main id="main" tabIndex={-1} className="pub-main k-page"><h1 className="sr-only">StratLab's own strategies</h1><Skeleton label="Opening the library" /></main>
+    : words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
     <Suspense fallback={fallback}>
       {view.kind === "landing" ? <Login section={view.section} panel={view.panel} heading={landingHeading(pathname)} plansOnly={isPlansPath(pathname)} />

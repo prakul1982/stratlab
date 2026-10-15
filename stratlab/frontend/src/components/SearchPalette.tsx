@@ -12,7 +12,7 @@ import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
 import { useDialogFocus } from "./kit/Dialog";
-import { asksContract, compareTo, namesFeature, offerIdeas, pickCompany } from "../lib/paletteRank";
+import { asksContract, compareTo, firstForQuestion, namesFeature, offerIdeas, pickCompany } from "../lib/paletteRank";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
@@ -297,7 +297,10 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
     // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
     if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");
-    if (helps.length && asks(text)) first("Help");               // a question with an explanation already written gets it first
+    // a question gets an explanation already written first only when it clearly matches; else the AI's answer is first (R31-001)
+    const lead = code ? null : firstForQuestion(asks(text) || /\?\s*$/.test(text), matchHelp(text, 1, true).length);
+    if (lead === "help") first("Help");
+    else if (lead === "ai") { first("Do"); const d = out[0].items.findIndex((r) => r.key === "do"); if (d > 0) out[0].items.unshift(...out[0].items.splice(d, 1)); }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, q, code, words, ideas, ideasFor, thinking, insts, notebooks, loc.pathname, steps, intent, focus]);

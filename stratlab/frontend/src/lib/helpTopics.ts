@@ -64,8 +64,10 @@ export function searchWords(q: string): string[] {
   return kept.length ? kept : words;
 }
 
-/** Explanations for a search, best first: every word it names should be in the topic's title or words. */
-export function matchHelp(q: string, limit = 3): HelpTopic[] {
+/** Explanations for a search, best first: every word it names should be in the topic's title or words. With `clear`, only
+ * topics that match most of the words (more than half) count: "what is a Stage 2 stock" is not "Does it work on similar stocks?"
+ * for sharing the one word "stock" (R31-001). */
+export function matchHelp(q: string, limit = 3, clear = false): HelpTopic[] {
   const words = searchWords(q);
   if (!words.length) return [];
   const phrase = words.join(" ");
@@ -75,6 +77,6 @@ export function matchHelp(q: string, limit = 3): HelpTopic[] {
     const hits = words.filter((w) => hay.includes(` ${w}`));
     let s = hits.reduce((n, w) => n + (title.includes(w) ? 3 : 1), 0);
     if (words.length > 1 && hay.includes(phrase)) s += 4;
-    return [hits.length / words.length >= 0.5 ? s : 0, t] as const;
+    return [(clear ? hits.length / words.length > 0.5 : hits.length / words.length >= 0.5) ? s : 0, t] as const;
   }).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, t]) => t);
 }

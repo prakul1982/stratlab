@@ -35,3 +35,8 @@ export function compareTo(a: { symbol: string; market: string } | null, b: { sym
   if (b && b.market === mk) p.set("b", b.symbol);
   return `/research/compare?${p}`;
 }
+
+/** Whether a help article is the answer to put first for a question: only when it clearly matches (most of the words). Otherwise a
+ * question-like line puts the AI's "Do it" first (R31-001). Returns what Enter should do first. */
+export const firstForQuestion = (asksInWords: boolean, clearHelps: number): "help" | "ai" | null =>
+  !asksInWords ? null : clearHelps > 0 ? "help" : "ai";

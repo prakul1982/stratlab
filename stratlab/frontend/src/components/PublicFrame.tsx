@@ -1,9 +1,9 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "./LegalLinks";
 import { Logo } from "./Logo";
 import { SkipLink } from "./SkipLink";
-import { signedInHere, signIn } from "../lib/signin";
+import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 
 /** The landing page's sections and Plans, for the phone Menu (the company pages carry the same links). */
@@ -17,6 +17,7 @@ export const OpenApp = ({ className = "btn outline sm" }: { className?: string }
 export function PublicFrame({ children, className = "", action }: { children: ReactNode; className?: string; action?: ReactNode }) {
   const menu = useRef<HTMLDetailsElement>(null);
   useDetailsDismiss(menu);
+  useEffect(() => { if (!signedInHere()) warmSignIn(); }, []);
   return (
     <div className="pub">
       <SkipLink />
@@ -31,7 +32,7 @@ export function PublicFrame({ children, className = "", action }: { children: Re
             {PUBLIC_MENU.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {action ?? (signedInHere() ? <OpenApp /> : <button type="button" className="btn outline sm" onClick={() => void signIn()}>Sign in</button>)}
+        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
       </header>
       <main id="main" tabIndex={-1} className={`pub-main k-page ${className}`.trim()}>{children}</main>
       <footer className={`pub-main ${className}`.trim()}><LegalLinks /></footer>

@@ -109,14 +109,18 @@ export function PublicLibrary() {
 export function PublicLibraryEntry({ id }: { id: string }) {
   const [e, setE] = useState<LibEntry | null>(null);
   const [gone, setGone] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [again, setAgain] = useState(0);
   useEffect(() => {
     let live = true;
-    setE(null); setGone(null);
+    setE(null); setGone(null); setFailed(false);
     publicGet<LibEntry>(`/public/library/${encodeURIComponent(id)}`)
       .then((r) => { if (live) setE(r); })
-      .catch((x: ApiError) => { if (live) { setGone(x.status === 404 ? "That strategy isn't in StratLab's library." : x.message); document.title = "Strategy not found · StratLab"; } });
+      .catch((x: ApiError) => { if (!live) return;
+        // only a 404 is "not in the library"; a failed fetch is a connection problem, said so with a Retry
+        if (x.status === 404) { setGone("That strategy isn't in StratLab's library."); document.title = "Strategy not found · StratLab"; } else setFailed(true); });
     return () => { live = false; };
-  }, [id]);
+  }, [id, again]);
   useEffect(() => {
     if (!e) return;
     // the result first, as the page's headline leads with it, and the universe once (R7V-006)
@@ -129,8 +133,9 @@ export function PublicLibraryEntry({ id }: { id: string }) {
   const sh = e ? shownStats(e) : null;
   return (
     <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
-      {!e && !gone && <><h1 className="sr-only">Opening the strategy</h1><Card><Skeleton label="Opening the strategy" /></Card></>}
+      {!e && !gone && !failed && <><h1 className="sr-only">Opening the strategy</h1><Card><Skeleton label="Opening the strategy" /></Card></>}
       {/* the page's one heading, also when the strategy is gone (R7O-010, axe page-has-heading-one) */}
+      {failed && <><h1 className="k-h1">StratLab couldn't load this page</h1><ErrorState title="The strategy couldn't be opened" action={{ label: "Retry", onClick: () => setAgain((x) => x + 1) }}>Check your connection and try again.</ErrorState></>}
       {gone && <><h1 className="k-h1">This strategy isn't available</h1><ErrorState title="Not in the library" action={{ label: "See StratLab's strategies", to: "/library" }}>{gone}</ErrorState></>}
       {e && sh && (
         <>

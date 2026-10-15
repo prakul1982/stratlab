@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { aboutMoney, approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
-import { signIn } from "../lib/signin";
+import { signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
@@ -195,6 +195,7 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
   const section = plansOnly ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
   const [way, setWay] = useState(panel ?? null);
   useEffect(() => setWay(panel ?? null), [panel]);
+  useEffect(() => { warmSignIn(); }, []);
   useLayoutEffect(() => {
     if (!section) return;
     const go = () => document.getElementById(section)?.scrollIntoView({ behavior: "instant" });
