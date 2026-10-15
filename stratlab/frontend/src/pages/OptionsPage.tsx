@@ -491,7 +491,7 @@ export function OptionsPage() {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Practise" title="Options builder" info={HELP.options} infoLabel="About options"
         lede="Paper trade option structures on live NSE, BSE, MCX and NSE currency (USDINR) prices. Fills use the real bid and ask; a contract with none is priced from its last trade, and the page says so."
-        actions={<><Badge tone="plain" dot={false}>Backtesting coming soon</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
+        actions={<><Badge tone="plain" dot={false}>Live paper trading only</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
 
       {offline && <Notice tone="warn">{offline}</Notice>}
       {notes.length > 0 && (

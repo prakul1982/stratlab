@@ -185,7 +185,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                     <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
-                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
                         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
                         <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
                         <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
@@ -199,6 +199,9 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
           </div>
         ))}
       </div>
+      {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
+        <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
+      )}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
           <dl className="inv-terms">{used.map(([k, v]) => <div key={k}><dt>{k === "3Y CAGR" ? "CAGR" : k}</dt><dd>{v}</dd></div>)}</dl>

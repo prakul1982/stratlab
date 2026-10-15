@@ -165,7 +165,7 @@ function PromoBanner({ until }: { until: string }) {
   const day = endsAt(until);
   return (
     <div className="banner promo-banner">
-      <span><b>Launch offer:</b> every Pro feature is free for everyone until {day}. After that, your plan's limits apply again.</span>
+      <span className="promo-text"><b>Launch offer:</b> every Pro feature is free for everyone until {day}.<span className="promo-more"> After that, your plan's limits apply again.</span></span>
       <button className="btn sm quiet" onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); }}>Got it</button>
     </div>
   );

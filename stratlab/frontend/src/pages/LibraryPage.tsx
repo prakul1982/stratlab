@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, type LibEntry } from "../components/LibraryBits";
+import { BehindHold, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, type LibEntry } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
@@ -89,7 +89,7 @@ export function LibraryPage() {
   const signedPct = (n: number | null) => (n == null ? "–" : <span className={n > 0 ? "k-up" : n < 0 ? "k-down" : undefined}>{pct(n)}</span>);
   const tableCols: Column<LibEntry>[] = [
     { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{plainTerms(e.name)}</b><span className="k-sub-line">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
-    { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-sub-line">{checksOf(e)}</span>{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
+    { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-sub-line">{checksOf(e)}</span><BehindHold e={e} />{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
     { key: "ret", header: "After costs", numeric: true, cell: (e) => signedPct(shownStats(e).ret) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
     { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
@@ -152,7 +152,7 @@ export function LibraryPage() {
                           <CardHead title={plainTerms(e.name)} />
                           <span className="k-note k-row">{e.official && <Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge>}<span>by {e.author}{e.copies ? ` · copied ${e.copies} time${e.copies === 1 ? "" : "s"}` : ""}</span></span>
                         </div>
-                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                        <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span><BehindHold e={e} />{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         <HoldLine e={e} />
                         {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}

@@ -453,9 +453,9 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           <NumField label={`Brokerage per order (${currency || "flat"})`} min={0} step={1} value={r.brokerage} onValid={(v) => { if (v >= 0) setRisk({ brokerage: v }); }} />
           <NumField label="Slippage (%)" min={0} max={5} step={0.01} value={r.slippage} onValid={(v) => { if (v >= 0 && v <= 5) setRisk({ slippage: v }); }} />
           {currency === "INR" && (
-            <Field label="Indian stock costs">{(id) => (
+            <Field label="Indian stock costs" hint="Automatic uses intraday (MIS) costs when the strategy squares off the same day, and delivery (CNC) costs otherwise.">{(id) => (
               <Select id={id} value={s.product ?? "auto"} onChange={(v) => set({ product: v as Strategy["product"] })}
-                options={[{ value: "auto", label: "Automatic (intraday when squaring off)" }, { value: "delivery", label: "Delivery (CNC)" }, { value: "intraday", label: "Intraday (MIS)" }]} />
+                options={[{ value: "auto", label: "Automatic" }, { value: "delivery", label: "Delivery (CNC)" }, { value: "intraday", label: "Intraday (MIS)" }]} />
             )}</Field>
           )}
         </FormGrid>

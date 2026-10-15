@@ -114,11 +114,10 @@ def _bars(registry, iid: str) -> list[dict]:
 
 
 def company_name(market: str, inst: dict | None, iid: str) -> str | None:
-    """A stock's name: the instrument master's, or when that has none (the broker's list leaves some blank: WIPRO, ITC) the
-    stored company lists' and the stored page facts' (R29D-001)."""
-    name = (inst or {}).get("name")
-    if name and str(name).strip():
-        return name
+    """A stock's name as its company page shows it: the stored company lists' and the stored page facts' name first, then
+    the instrument master's short exchange name ("ADANI PORT & SEZ") only as the fallback (R29D-001, R31-020)."""
+    master = (inst or {}).get("name")
+    master = master if master and str(master).strip() else None
     sym = str((inst or {}).get("symbol") or iid.split(":", 1)[-1]).upper()
     try:
         from . import stock_pages
@@ -126,9 +125,11 @@ def company_name(market: str, inst: dict | None, iid: str) -> str | None:
         got = (stock_pages.companies(region).get(sym) or {}).get("name")
         if not got:
             got = ((stock_pages._setting(f"stocks:page:{region}:{sym}") or {}).get("facts") or {}).get("name")
-        return got or None
+        if got and str(got).strip():
+            return got
     except Exception:
-        return None
+        pass
+    return master
 
 
 def _label(prov, iid: str) -> str:
