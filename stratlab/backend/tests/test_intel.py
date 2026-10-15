@@ -312,10 +312,12 @@ def test_judge_catches_ranking_comparatives_only():
     from app.intel.grounding import JUDGE
     for s in ("Beta is a stronger business than Alpha.", "Alpha has weaker margins.", "Alpha's balance sheet is better."):
         assert JUDGE.search(s), s
-    assert not JUDGE.search("Revenue grew faster than peers.")
+    for s in ("Revenue grew faster than peers.", "Revenue was better than estimates.", "Results were better than estimates.",
+              "Margins were worse than last year.", "Revenue is better than last year."):
+        assert not JUDGE.search(s), s
 
 
-def test_compare_drops_picks_and_rankings():
+def test_compare_drops_picks_and_rankings(monkeypatch):
     import json
     from app.intel import ai as A
     a = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "pe": 20.0}
@@ -323,11 +325,12 @@ def test_compare_drops_picks_and_rankings():
     sents = ["Alpha is the better pick of the two.", "Beta is a stronger business than Alpha.", "Alpha looks like a buy over Beta.",
              "An investor should prefer Alpha.", "Alpha and Beta both trade on the NSE."]
     fake = lambda *x, **k: json.dumps({"verdict": " ".join(sents), "differences": [sents[0], sents[-1]]})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
     r = A.compare(a, b, (fake, fake))
     assert r["verdict"] == sents[-1] and r["differences"] == [sents[-1]]
 
 
-def test_a_company_read_drops_holding_and_pick_language():
+def test_a_company_read_drops_holding_and_pick_language(monkeypatch):
     import json
     from app.intel import ai as A
     c = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "pe": 20.0, "sector": "Tech"}
@@ -335,23 +338,25 @@ def test_a_company_read_drops_holding_and_pick_language():
              "Alpha deserves a place in a portfolio."]
     fake = lambda *x, **k: json.dumps({"summary": "Alpha Ltd is a Tech company.", "valuation_note": "", "bull": sents, "bear": [],
                                        "position": " ".join(sents), "watch": [], "ideas": []})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
     r = A.company(c, (fake, fake), False, [])
     assert r["bull"] == [] and not r["position"]
 
 
-def test_the_market_read_drops_advice_phrasings():
+def test_the_market_read_drops_advice_phrasings(monkeypatch):
     import json
     from app.intel import ai as A
     ix = [{"name": "Nifty 50", "price": 22000.0, "change_pct": 0.5, "day": "2026-10-14"}]
     tone = "Nifty 50 rose 0.5% to 22,000. A good moment to add equities and dips are buying chances."
     fake = lambda *x, **k: json.dumps({"tone": tone, "hot": [{"name": "Alpha", "ticker": "AAA", "why": "Alpha is a top pick for investors."}],
                                        "flows": [], "themes": []})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
     r = A.pulse("IN", "", ix, [], (fake, fake))
     assert "add equities" not in r["tone"] and "buying chances" not in r["tone"]
     assert all("top pick" not in h["why"] for h in r["hot"])
 
 
-def test_a_theme_read_is_filtered_and_marks_unsourced_figures():
+def test_a_theme_read_is_filtered_and_marks_unsourced_figures(monkeypatch):
     import json
     from app.intel import ai as A
     resp = {"sector": "India defence", "summary": "Defence orders grew. The sector will double by 2030. Orders are worth Rs 9,99,999 crore.",
@@ -360,6 +365,7 @@ def test_a_theme_read_is_filtered_and_marks_unsourced_figures():
             "value_chain": [{"layer": "x", "description": "Strong buy signal for primes.", "companies": []}],
             "tailwinds": ["Strong buy signal as exports grow 300% a year.", "Exports are rising."], "risks": ["Delays."]}
     fake = lambda *x, **k: json.dumps(resp)      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
     out = A.sector("India defence", "IN", (fake, fake))
     assert out["summary"] == "Defence orders grew. Orders are worth Rs 9,99,999 crore (AI estimate)."
     assert out["sub_themes"][0]["detail"] == "" and out["core"] == "" and out["screen"][0]["one_line"] == ""

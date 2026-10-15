@@ -656,7 +656,9 @@ _RESULTS = re.compile(r"\b(results?|earnings|report(s|ed|ing)?|release)\b", re.I
 # a label on the business or its figures, which the read must leave to the reader ("strong earnings momentum", "a
 # forward P/E of 9.45 indicating low valuation", "indicating leverage exposure")
 JUDGE = re.compile(r"\b(strong|weak|healthy|poor|excellent|robust|solid|impressive|stellar|sluggish)\b"
-                   r"|\b(stronger|weaker|better|worse|healthier|safer|superior|inferior|more (attractive|robust|resilient|solid))\b"
+                   r"|\b(stronger|weaker|healthier|safer|superior|inferior|more (attractive|robust|resilient|solid))\b"
+                   # "X is better" / "is the better" with nothing factual after it ranks; "better than estimates" does not
+                   r"|\bis (the )?better\b(?!\s+than\s+(estimates|expectations|forecasts|consensus|last|the (prior|previous|same)|a year|peers|analysts|\d))"
                    r"|\b(low|high|rich|stretched|modest|lofty|full|undemanding|demanding|reasonable) valuation\b"
                    r"|\b(indicating|suggesting|signalling|signaling)\b", re.I)
 _WATCH_PAST = re.compile(r"\b(actual|reported|beat|beats|missed|came in)\b", re.I)
