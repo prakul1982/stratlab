@@ -2,8 +2,13 @@
 
 A channel the server isn't set up for (no Telegram bot token, no email settings) is skipped rather than failing
 the others, and the Account page doesn't offer it."""
+import hashlib
+import hmac
+import json
+import secrets
 import smtplib
 import threading
+import time
 from email.message import EmailMessage
 import httpx
 from .config import settings
@@ -92,6 +97,77 @@ def _send_brevo(to: str, subject: str, body: str, html: str | None = None, heade
 def ready_channels() -> dict:
     from . import push
     return {"push": push.enabled(), "telegram": telegram_ready(), "email": email_ready()}
+
+
+TG_VERIFY = "tgverify:"        # per user: {"verified": chat, "pending": {chat, code_hash, expires, tries}}
+TG_CODE_MINUTES = 15
+TG_CODE_TRIES = 5
+
+
+def _chat_key(chat) -> str:
+    return (chat or "").strip().lower()
+
+
+def _tg_state(uid: str) -> dict:
+    from . import db
+    try:
+        st = json.loads(db.get_setting(TG_VERIFY + uid) or "{}")
+        return st if isinstance(st, dict) else {}
+    except Exception:
+        return {}
+
+
+def telegram_verified(profile: dict) -> bool:
+    """The saved chat is the one whose code the user entered. A chat id saved before codes existed isn't verified."""
+    chat = _chat_key(profile.get("telegram_chat_id"))
+    return bool(chat and profile.get("id") and _chat_key(_tg_state(profile["id"]).get("verified")) == chat)
+
+
+def _code_hash(uid: str, chat: str, code: str) -> str:
+    return hashlib.sha256(f"{uid}:{_chat_key(chat)}:{code}".encode()).hexdigest()
+
+
+def reset_telegram(uid: str) -> None:
+    """Forget the verification and any code waiting (the chat id changed or was removed)."""
+    from . import db
+    db.update_setting(TG_VERIFY + uid, lambda raw: None if raw is None else json.dumps({}))
+
+
+def send_telegram_code(uid: str, chat: str) -> None:
+    """Send a new 6-digit code to the chat and remember its hash. Raises RuntimeError when it couldn't be sent."""
+    from . import db
+    code = f"{secrets.randbelow(10 ** 6):06d}"
+    send_telegram(chat, f"Your StratLab code: {code}. Enter it on the Alerts settings page to turn on Telegram alerts. "
+                        "If you didn't ask for this, ignore it.")
+    pending = {"chat": _chat_key(chat), "code_hash": _code_hash(uid, chat, code),
+               "expires": time.time() + TG_CODE_MINUTES * 60, "tries": 0}
+    def go(raw):
+        st = db.json_value(raw, {})
+        return json.dumps({**st, "pending": pending})
+    db.update_setting(TG_VERIFY + uid, go)
+
+
+def confirm_telegram(profile: dict, code: str) -> str:
+    """"ok", "wrong", "expired" (or no code waiting: ask for a new one), or "locked" after 5 wrong tries."""
+    from . import db
+    uid, result = profile["id"], ["expired"]
+    def go(raw):
+        st = db.json_value(raw, {})
+        p = st.get("pending")
+        if not isinstance(p, dict) or p.get("chat") != _chat_key(profile.get("telegram_chat_id")) or time.time() > p.get("expires", 0):
+            result[0] = "expired"
+            return None
+        if p.get("tries", 0) >= TG_CODE_TRIES:
+            result[0] = "locked"
+            return None
+        if hmac.compare_digest(p.get("code_hash", ""), _code_hash(uid, p["chat"], (code or "").strip())):
+            result[0] = "ok"
+            return json.dumps({"verified": p["chat"]})
+        p["tries"] = p.get("tries", 0) + 1
+        result[0] = "locked" if p["tries"] >= TG_CODE_TRIES else "wrong"
+        return json.dumps({**st, "pending": p})
+    db.update_setting(TG_VERIFY + uid, go)
+    return result[0]
 
 
 def send_telegram(chat_id: str, text: str) -> None:
@@ -286,7 +362,7 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: s
     jobs = []
     if profile.get("id") and push.enabled() and push.devices(profile["id"]):
         jobs.append(("push", lambda: push.send(profile["id"], subject, text, url)))
-    if profile.get("telegram_chat_id") and telegram_ready():
+    if profile.get("telegram_chat_id") and telegram_ready() and telegram_verified(profile):
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
     if to and email_ready() and email_confirmed(profile) and (force_email or alert_emails_on(profile.get("id"))):   # only an address its owner confirmed from a link

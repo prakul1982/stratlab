@@ -263,6 +263,10 @@ class AlertsReq(BaseModel):
     alert_emails: Optional[bool] = None      # True: turn alert emails back on after an unsubscribe
 
 
+class TelegramCodeReq(BaseModel):
+    code: str = Field(..., pattern=r"^\s*[0-9]{6}\s*$")
+
+
 class LibraryReq(BaseModel):
     description: str = Field("", max_length=600)
     author: str = Field("", max_length=40)       # a display name; empty means "A StratLab user"

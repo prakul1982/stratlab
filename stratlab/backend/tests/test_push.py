@@ -1,3 +1,4 @@
+import json
 import sys
 from types import SimpleNamespace
 
@@ -93,6 +94,7 @@ def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatc
     monkeypatch.setattr(settings, "SMTP_HOST", ""); monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "t")
     prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42"}
     sent = []
+    db.set_setting(alerts.TG_VERIFY + "u1", json.dumps({"verified": "42"}))      # Telegram only reaches a chat whose code was entered
     monkeypatch.setattr(alerts, "send_telegram", lambda chat, text: sent.append(("tg", chat)))
     monkeypatch.setattr(alerts, "send_email", lambda *a: (_ for _ in ()).throw(AssertionError("email must be skipped")))
     assert alerts.notify(prof, "s", "t", background=False) == ["telegram"] and sent == [("tg", "42")]   # no SMTP: email skipped
