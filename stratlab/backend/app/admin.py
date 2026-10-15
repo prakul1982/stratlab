@@ -5,6 +5,7 @@ import json
 import threading
 import time
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
@@ -212,23 +213,48 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
 _COUNT_COLS = "id,plan,plan_status,current_period_end,created_at,razorpay_subscription_id"
 
 
-def stats(month_start: str) -> dict:
-    rows = _profiles(_COUNT_COLS)
+_stats_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="admin-stats")
+
+
+def _count_profiles(since_iso: str | None = None) -> int:
+    q = db.sb().table("profiles").select("id", count="exact")
+    if since_iso:
+        q = q.gte("created_at", since_iso)
+    return q.limit(1).execute().count or 0
+
+
+def _paid_profiles() -> list[dict]:
+    """The profiles with a paid plan set (only these can count as Basic or Pro, see effective_plan)."""
+    def build():
+        return db.sb().table("profiles").select(_COUNT_COLS).in_("plan", ["basic", "pro"])
+    return _paged(build)
+
+
+def stats(month_start: str, extra: dict | None = None) -> dict:
+    """Overview's counts. Everyone is counted in the database, not read: only the profiles with a paid plan set are read,
+    for the plan they have now; Free is everyone else. The reads go at once (one after another was 10 to 13 round
+    trips, R11E), with `extra` {name: fn} beside them, added to the result."""
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     today = now.astimezone(IST).replace(hour=0, minute=0, second=0, microsecond=0)     # the India day
+    jobs = {"users": (_count_profiles, ()), "new_7d": (_count_profiles, (week_ago.isoformat(),)),
+            "signups_today": (_count_profiles, (today.isoformat(),)), "paid": (_paid_profiles, ()), "given": (granted, ()),
+            "experiments_month": (_count_since, ("backtest", month_start)), "ai_month": (_count_since, ("ai", month_start)),
+            "ai_reads_month": (_count_since, ("research_ai", month_start)),
+            **{k: (fn, ()) for k, fn in (extra or {}).items()}}
+    futures = {k: _stats_pool.submit(fn, *args) for k, (fn, args) in jobs.items()}
+    got = {k: f.result() for k, f in futures.items()}
+    rows, given = got["paid"], got["given"]
     plans = Counter(effective_plan(r) for r in rows)
+    plans["free"] = got["users"] - plans.get("basic", 0) - plans.get("pro", 0)
     # on a paid plan by paying (a subscription), or given by the owner by hand: Overview tells them apart
-    given = granted()
     paying = Counter(effective_plan(r) for r in rows if _paying(r, given))
-    made = [t for t in (_at(r.get("created_at")) for r in rows) if t]
-    new = sum(1 for t in made if t >= week_ago)
-    return {"users": len(rows), "plans": {p: plans.get(p, 0) for p in PLANS}, "new_7d": new,
-            "signups_today": sum(1 for t in made if t >= today),
+    return {"users": got["users"], "plans": {p: plans.get(p, 0) for p in PLANS}, "new_7d": got["new_7d"],
+            "signups_today": got["signups_today"],
             "paying": {p: paying.get(p, 0) for p in ("basic", "pro")},
             "given": {p: plans.get(p, 0) - paying.get(p, 0) for p in ("basic", "pro")},
-            "experiments_month": _count_since("backtest", month_start), "ai_month": _count_since("ai", month_start),
-            "ai_reads_month": _count_since("research_ai", month_start)}
+            "experiments_month": got["experiments_month"], "ai_month": got["ai_month"],
+            "ai_reads_month": got["ai_reads_month"], **{k: got[k] for k in extra or {}}}
 
 
 def week_stats(since: datetime) -> dict:

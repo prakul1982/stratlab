@@ -70,12 +70,22 @@ def market_clock_follows_the_day(monkeypatch):
 @pytest.fixture(autouse=True)
 def fresh_settings_mirror():
     """The in-memory copy of the stored company pages (app/db.py) doesn't carry over from one test to the next."""
-    from app import admin, db
+    from app import admin, corp_actions, db
     db.forget_mirror()
     admin.forget_owners()               # the owner ids read from settings too
+    corp_actions.forget_cached()        # and the parsed corporate-actions calendar
+    _forget_overview()
     yield
     db.forget_mirror()
     admin.forget_owners()
+    corp_actions.forget_cached()
+
+
+def _forget_overview():
+    m = sys.modules.get("app.main")
+    if m is not None:
+        m.forget_overview()
+        m._errors_due[0], m._errors_saved_at[0] = False, float("-inf")     # an earlier test's crash doesn't delay this one's save
 
 
 def _forget_company_lists():

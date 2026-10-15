@@ -105,7 +105,7 @@ def test_overview_tells_paying_users_from_plans_the_owner_gave(w):
     assert st["paying"] == {"basic": 0, "pro": 0}                        # the fake world's paid plans are all given by hand
     assert st["given"] == {"basic": st["plans"]["basic"], "pro": st["plans"]["pro"]}
     db.update_profile("u-basic", razorpay_subscription_id="sub_1")
-    st = c.get("/admin/overview", headers=ADMIN).json()["stats"]
+    st = c.get("/admin/overview?fresh=1", headers=ADMIN).json()["stats"]      # the counts are kept 45 s; Refresh reads them again
     assert st["paying"]["basic"] == 1 and st["given"]["basic"] == st["plans"]["basic"] - 1
 
 

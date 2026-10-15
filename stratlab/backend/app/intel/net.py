@@ -2,12 +2,14 @@
 
 Every source is called from the server, so users never need their own keys and the
 browser never hits a third-party site directly."""
+import contextvars
 import threading
 import time
 from collections import OrderedDict
 
 import httpx
 
+from ..flight import Flights
 from ..http_retry import real_transport
 
 UA = "Mozilla/5.0 (compatible; StratLab/1.0; +https://stratlab.studio)"
@@ -191,9 +193,50 @@ class RateLimit:
             time.sleep(min(wait, 0.5))
 
 
+# How long a call may wait for the rate limit's next turn. A job can wait its turn (8 s); someone's request answers
+# from the last copy, or says the source is busy, after a short wait instead (R11E: two cold pages emptied the bucket
+# and every page after them slept up to 8 s on the shared pool's threads).
+JOB_WAIT, REQUEST_WAIT = 8.0, 1.0
+_rate_wait: contextvars.ContextVar = contextvars.ContextVar("rate_wait", default=JOB_WAIT)
+
+
+def rate_wait() -> float:
+    return _rate_wait.get()
+
+
+def with_rate_wait(wait: float, fn):
+    """fn, to run on another thread (a pool's) with the rate-limit wait of the thread that handed it over."""
+    def run():
+        token = _rate_wait.set(wait)
+        try:
+            return fn()
+        finally:
+            _rate_wait.reset(token)
+    return run
+
+
+class RequestWaits:
+    """ASGI middleware: within a request, the sources' rate limit waits REQUEST_WAIT at most (see JOB_WAIT)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        token = _rate_wait.set(REQUEST_WAIT)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _rate_wait.reset(token)
+
+
 class Source:
     """An HTTP source with its own cache, rate limit and friendly errors."""
     name = "source"
+    # The last good answer is kept STALE_FOR times its ttl, and served only when the source can't be asked right now
+    # (our rate limit, an outage, a busy reply), with the time it was sent; 0: never. Normal answers are as fresh as before.
+    STALE_FOR = 10
 
     def __init__(self, base: str, per_minute: float = 120, burst: int = 20, headers: dict | None = None,
                  transport: httpx.BaseTransport | None = None, timeout: float = 15):
@@ -201,6 +244,8 @@ class Source:
                                  headers={"User-Agent": UA, **(headers or {})})
         self.limit = RateLimit(per_minute, burst)
         self.cache = TTLCache()
+        self.stale = TTLCache()              # the last good answer per key, for when the source can't be asked
+        self._flights = Flights()            # one upstream call per key at a time; the others wait and share it
         self._fails, self._down_until = 0, 0.0
         self._lock = threading.Lock()
 
@@ -213,9 +258,42 @@ class Source:
         hit = self.cache.get(key, max_age=ttl)
         if hit is not None:
             return (hit, self.cache.stored_at(key) or time.time()) if with_time else hit
+        arrived = time.monotonic()
+        with self._flights.hold(key) as shared:      # callers asking for the same thing at once: one upstream call
+            if shared.get("done", -1.0) >= arrived:  # the call that was under way when this one arrived: its outcome
+                if "error" in shared:
+                    raise shared["error"]
+                value, at = shared["value"]
+                return (value, at) if with_time else value
+            hit = self.cache.get(key, max_age=ttl)
+            if hit is not None:
+                return (hit, self.cache.stored_at(key) or time.time()) if with_time else hit
+            shared.pop("error", None)
+            try:
+                value = self._get(key, path, params, ttl, kind)
+                at = time.time()
+            except SourceError as e:
+                old = self._stale(key, e)
+                if old is None:
+                    shared.update(error=e, done=time.monotonic())
+                    raise
+                value, at = old
+            shared.update(value=(value, at), done=time.monotonic())
+            return (value, at) if with_time else value
+
+    def _stale(self, key, e: SourceError) -> tuple | None:
+        """The last good answer and when it was sent, for a call that failed because the source can't be asked right
+        now; None for a real answer such as "no such thing", or when there's no copy."""
+        if not self.STALE_FOR or not e.busy:
+            return None
+        hit = self.stale.get(key)
+        return (hit, self.stale.stored_at(key) or time.time()) if hit is not None else None
+
+    def _get(self, key, path: str, params: dict | None, ttl: float, kind: str):
+        """One upstream call, into the cache."""
         if time.time() < self._down_until:   # down a moment ago: answer now instead of queueing behind the outage
             raise SourceError(self.name, f"{self.name} isn't answering right now. Try again in a minute.", busy=True)
-        if not self.limit.take():
+        if not self.limit.take(max_wait=rate_wait()):
             raise SourceError(self.name, f"{self.name} is busy (our rate limit). Try again in a minute.", busy=True)
         try:
             try:
@@ -235,8 +313,11 @@ class Source:
             raise
         self._failed(False, ok=True)
         # parsed JSON takes several times its text size in memory
-        self.cache.set(key, value, ttl, size=len(r.content) * (4 if kind == "json" else 1) + 200)
-        return (value, time.time()) if with_time else value
+        size = len(r.content) * (4 if kind == "json" else 1) + 200
+        self.cache.set(key, value, ttl, size=size)
+        if self.STALE_FOR:
+            self.stale.set(key, value, ttl * self.STALE_FOR, size=size)
+        return value
 
     def _failed(self, outage: bool, ok: bool = False):
         """Count outages (unreachable, 5xx, 429, a page instead of data); a normal answer, even a 404, resets it."""

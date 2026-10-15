@@ -268,7 +268,7 @@ def test_a_daily_candle_of_a_session_still_trading_is_reused_for_a_minute_only()
         q = {"open": [1.0], "high": [2.0], "low": [1.0], "close": [1.5], "volume": [10]}
         return httpx.Response(200, json={"chart": {"result": [{"meta": meta, "timestamp": [ts], "indicators": {"quote": [q]}}]}})
     y = Yahoo(transport=httpx.MockTransport(handler))
-    y.limit.take = lambda: True
+    y.limit.take = lambda max_wait=8.0: True
     with time_machine.travel(start, tick=False) as t:
         y.chart("AAPL")
         t.shift(30)

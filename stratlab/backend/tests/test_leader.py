@@ -127,7 +127,7 @@ def test_lifespan_starts_jobs_only_once_leading_and_releases_at_shutdown(monkeyp
     calls = []
     monkeypatch.setattr(main, "start_jobs", lambda: calls.append("jobs"))
     monkeypatch.setattr(main, "_jobs_started", False)
-    monkeypatch.setattr(db, "forget_mirror", lambda: calls.append("mirror"))
+    monkeypatch.setattr(db, "reload_mirror", lambda: calls.append("mirror"))
     monkeypatch.setattr(main.manager, "persist", lambda *a, **k: calls.append("persist"))
     monkeypatch.setattr(main.manager, "resume", lambda *a, **k: calls.append("resume"))
     monkeypatch.setattr(main, "warm_caches", lambda: None)
@@ -402,7 +402,7 @@ def test_leading_again_after_a_lapse_restarts_only_the_jobs_that_failed(monkeypa
     calls = []
     monkeypatch.setattr(main, "_jobs_started", True)
     monkeypatch.setattr(main, "_failed_starts", {"x": lambda: calls.append("x")})
-    monkeypatch.setattr(db, "forget_mirror", lambda: None)
+    monkeypatch.setattr(db, "reload_mirror", lambda: None)
     monkeypatch.setattr(main.kite, "token_day", main.kite_today())
     monkeypatch.setattr(main, "start_jobs", lambda: calls.append("all"))
     main.lead()
