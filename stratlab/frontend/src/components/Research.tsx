@@ -9,6 +9,7 @@ import {
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
+import { surpriseShown } from "../lib/surprise";
 import { Star } from "./Icons";
 import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
@@ -185,7 +186,7 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
                     <span className="k-small k-muted">{m.label}{m.note && <span className="k-sub-line">{m.note}</span>}</span>
                     <span className={`inv-metric-v ${m.unit === "%±" ? signCls(m.value) : ""}`}>{metricText(m, currency)}</span>
                     {b ? (
-                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                      <svg className="inv-krail" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><title>Where this figure sits on a typical range</title>
                         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
                         <rect className="tick" x={b.weak} y="1" width="0.8" height="8" />
                         <rect className="tick" x={b.strong} y="1" width="0.8" height="8" />
@@ -199,6 +200,9 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
           </div>
         ))}
       </div>
+      {groups.some((g) => g.items.some((m) => bandPosition(m.label, m.value, industry))) && (
+        <p className="k-note" data-testid="krail-legend">The small bar beside a figure shows where it sits on a typical range for that measure; the two ticks are the range's cut-off points.</p>
+      )}
       {used.length > 0 && (
         <Disclosure summary="What these terms mean">
           <dl className="inv-terms">{used.map(([k, v]) => <div key={k}><dt>{k === "3Y CAGR" ? "CAGR" : k}</dt><dd>{v}</dd></div>)}</dl>
@@ -250,8 +254,10 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
   );
 }
 
-export function EarningsBars({ rows }: { rows: Company["earnings"] }) {
-  if (rows.length < 2) return null;
+export function EarningsBars({ rows: raw }: { rows: Company["earnings"] }) {
+  if (raw.length < 2) return null;
+  // the percentage comes from the figures as printed, so they agree with it (R31-014)
+  const rows = raw.map((r) => ({ ...r, surprise_pct: r.surprise_pct == null ? null : surpriseShown(r.actual, r.estimate) }));
   // against an estimate of 0 there is no surprise percentage: no bar, and a beat is the actual at or above it
   const max = Math.max(4, ...rows.map((r) => Math.abs(r.surprise_pct ?? 0)));
   const beat = (r: Company["earnings"][number]) => (r.surprise_pct != null ? r.surprise_pct >= 0 : r.actual >= r.estimate);

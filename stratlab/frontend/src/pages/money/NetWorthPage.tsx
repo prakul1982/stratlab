@@ -416,7 +416,7 @@ export function NetWorthPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={view?.computed_at} asOfLabel="Worked out as of"
+      <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={view?.as_of} asOfLabel="Prices as of"
         lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out" />
 

@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timezone
 
 import pytest
+import time_machine
 
 from app import breadth, breadth_live, db
 from tests.fake_db import headers
@@ -181,8 +182,13 @@ def test_wording_is_facts_and_no_provider():
     assert not PROVIDERS.search(msgs.replace("data login", "")) and not ADVICE.search(msgs)
 
 
-def test_page_carries_the_live_card(w, monkeypatch):
+def test_page_carries_the_live_card(w, monkeypatch, request):
     paid(monkeypatch)
+    # the clock at 10:30 IST, well past the open: run between midnight and 09:30 IST, the real clock sat in the open's slot,
+    # where an empty day reads "pending" (its first round not stored yet) and not "unavailable"
+    clock = time_machine.travel(IST_OPEN)
+    clock.start()
+    request.addfinalizer(clock.stop)
     from app import main
     monkeypatch.setattr(breadth_live, "is_open", lambda region, now: region == "IN")
     c, h = w["client"], headers("pro-token")

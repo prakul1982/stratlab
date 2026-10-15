@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { LegalLinks } from "./LegalLinks";
 import { Logo } from "./Logo";
 import { SkipLink } from "./SkipLink";
-import { signedInHere, signIn } from "../lib/signin";
+import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 
 /** The landing page's sections and Plans, for the phone Menu (the company pages carry the same links). */
@@ -31,7 +31,7 @@ export function PublicFrame({ children, className = "", action }: { children: Re
             {PUBLIC_MENU.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {action ?? (signedInHere() ? <OpenApp /> : <button type="button" className="btn outline sm" onClick={() => void signIn()}>Sign in</button>)}
+        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onPointerEnter={warmSignIn} onFocus={warmSignIn} onTouchStart={warmSignIn} onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
       </header>
       <main id="main" tabIndex={-1} className={`pub-main k-page ${className}`.trim()}>{children}</main>
       <footer className={`pub-main ${className}`.trim()}><LegalLinks /></footer>

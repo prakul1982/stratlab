@@ -105,7 +105,7 @@ test("net worth: add assets, a loan and a policy, prepay arithmetic, CSV and del
   await expect(page.getByText("Premiums a year:")).toBeVisible();
 
   await expect(page.getByRole("list", { name: "Assets by class" }).getByText("FDs and RDs")).toBeVisible();
-  await expect(page.getByText(/Worked out as of/)).toBeVisible();
+  await expect(page.getByText(/Prices as of/)).toBeVisible();
   if (info.project.name === "phone") await touchable(page);
 
   await loans.getByRole("button", { name: /^Prepay/ }).click();

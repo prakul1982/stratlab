@@ -3,6 +3,9 @@
  * download the sign-in library just to ask a public question. */
 import { CFG } from "./config";
 
+/** What anyone sees when the server address (config.js) is missing: plain words, the developer detail goes to the console. */
+export const NO_BACKEND_MESSAGE = "Check your connection and try again.";
+
 export class ApiError extends Error {
   status = 0;
   code?: string;
@@ -35,7 +38,8 @@ export async function publicGet<T = any>(path: string, signal?: AbortSignal): Pr
 
 async function readPublic<T = any>(path: string, signal?: AbortSignal): Promise<T> {
   if (!CFG.API_BASE) {
-    const e = new ApiError("The StratLab server isn't connected yet (API_BASE in config.js).");
+    const e = new ApiError(NO_BACKEND_MESSAGE);
+    console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");
     e.code = "no_backend";
     throw e;
   }

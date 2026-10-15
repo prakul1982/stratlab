@@ -4,6 +4,7 @@ import { CHECK_NAMES, checksLine, LOST_CHECKS, lostMoney } from "../lib/tradeUi"
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { VERDICT_FACT } from "./ui";
 import { Signed } from "./kit/Signed";
+import { Badge } from "./kit/Badge";
 
 /* The pieces of a library strategy that its page behind sign-in and its read-only public page both draw: what an entry
  * looks like, which of its figures exist, and its rules in words. Kept apart from pages/LibraryPage.tsx so the public
@@ -44,6 +45,13 @@ export const checksOf = (e: LibEntry) => lostMoney(e.verdict.verdict, e.stats.re
   (e.verdict.checks ?? []).filter((c) => c.status === "skip").map((c) => CHECK_NAMES[c.id] ?? c.id));
 
 /** The return beside buy and hold, as the notebook's verdict says it (R5O-014). */
+/** A plain badge beside the checks badge when the strategy trails buy and hold, so "Passed" never reads as "beat the market". */
+export function BehindHold({ e }: { e: LibEntry }) {
+  const h = e.vs_hold;
+  if (!h || h.gap > -0.05) return null;
+  return <Badge tone="plain" dot={false}>Behind buy and hold by {num(Math.abs(h.gap), 1)} points</Badge>;
+}
+
 export function HoldLine({ e }: { e: LibEntry }) {
   const h = e.vs_hold;
   if (!h) return null;

@@ -141,7 +141,13 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             peak = max(peak, e)
             pct = e / peak - 1 if peak else 0.0
             if pct < 0 and (fall is None or pct < fall["pct"]):
-                fall = {"pct": pct, "pnl": round(e - peak, 2), "date": t[:10]}
+                fall = {"pct": pct, "pnl": round(e - peak, 2), "date": t[:10], "t": t, "level": round(e - cap, 2)}
+        # the chart draws the low too: one reached between two day closes (a stop loss that the close recovered) is a point
+        # on the line, so the summary's figure and date are what the line shows (R31-010)
+        line = [(d, v) for d, v in combined]
+        if fall and not fall["t"].endswith(END):
+            # a day's close is the end of its day, so the low sits before the close of the day it was reached
+            line = sorted(line + [(fall["t"], fall["level"])], key=lambda p: p[0] if "T" in p[0] else p[0] + END)
         worst = min(moves, key=lambda m: m[1]) if moves else None
         best = max(moves, key=lambda m: m[1]) if moves else None
         rows = [r for r, *_ in items]
@@ -153,7 +159,7 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "best_day": {"date": best[0], "pnl": best[1]} if best and best[1] > 0 else None,
             "max_drawdown_pct": round(fall["pct"] * 100, 2) if fall else 0.0,
             "deepest_fall": {"pnl": fall["pnl"], "pct": round(fall["pct"] * 100, 2), "date": fall["date"]} if fall else None,
-            "curve": [{"t": d, "pnl": round(v, 2)} for d, v in combined][-180:],
+            "curve": [{"t": d, "pnl": round(v, 2)} for d, v in line][-180:],
         })
     currencies.sort(key=lambda c: -c["capital"])
     return {"currencies": currencies, "sessions": sorted(sessions, key=lambda r: -r["open_value"])}

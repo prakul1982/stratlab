@@ -65,7 +65,8 @@ export function AccountPage() {
   const usage: [string, string][] = [
     ...(me.promo ? [["Launch offer", `Every Pro feature free until ${endsAt(me.promo.until)}`] as [string, string]] : []),
     ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`] as [string, string]] : []),
-    ...(row ? [row] : []),
+    // a plan given by the owner under the launch offer: one statement, so "ends 22 Oct" never sits beside "No end date"
+    ...(row ? [me.promo && row[0] === "Given by the owner" ? ["After the launch offer", `${planName}, given by the owner. ${row[1]}`] as [string, string] : row] : []),
     ["Backtests this month", monthlyUse(u.backtests_used, u.backtests_limit)],
     ["AI builds this month", aiBuildsUse(u.ai_used, u.ai_limit, u.ai_builds_per_day, !!me.is_admin)],
     // the plan's own limits are the Plans page's; when early access or the launch offer lifts them, it says so

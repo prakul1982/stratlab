@@ -1,7 +1,7 @@
 import { AuthClient } from "@supabase/auth-js";
 import { fieldWords, invalidField, invalidText, serverProblems } from "./validate";
 import { CFG, sessionKey } from "./config";
-import { ApiError } from "./http";
+import { ApiError, NO_BACKEND_MESSAGE } from "./http";
 import { viewAsHeaders } from "./viewAs";
 import { hasSavedSession } from "./entry";
 
@@ -36,7 +36,8 @@ export function setApiHandlers(h: { unauthorized: () => void; offline: () => voi
 
 export async function api<T = any>(path: string, { method = "GET", body, raw = false, file }: Opts = {}): Promise<T> {
   if (!CFG.API_BASE) {
-    const e = new ApiError("The StratLab server isn't connected yet (API_BASE in config.js).");
+    const e = new ApiError(NO_BACKEND_MESSAGE);
+    console.warn("StratLab: API_BASE is missing from config.js, so no request can be sent.");
     e.code = "no_backend";
     throw e;
   }

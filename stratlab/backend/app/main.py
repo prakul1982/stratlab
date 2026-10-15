@@ -2174,7 +2174,10 @@ def corp_actions_page(region: str = "IN", scope: str = "mine", q: str = "", kind
 def corp_actions_unadjusted(region: str, symbol: str, start: str, end: str, profile=Depends(current_profile)):
     """The company's actions in a test window that its prices aren't adjusted for (a demerger), for the backtest page's
     note (R6O-010). Facts as the exchange lists them."""
-    r, s = research_routes.region_of(region), research_routes.symbol_of(symbol)
+    r = research_routes.region_of(region)
+    if " " in symbol.strip():             # an index ("NIFTY 50") has no corporate actions, and no ticker has a space (R31-021)
+        return research_routes.ok({"rows": []})
+    s = research_routes.symbol_of(symbol)
     if not (re.fullmatch(r"\d{4}-\d{2}-\d{2}", start or "") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end or "")):
         err(400, "bad_dates", "Give the start and end as YYYY-MM-DD.")
     return research_routes.ok({"rows": corp_actions.unadjusted(r, s, start, end, corp_job.sources())})
