@@ -287,7 +287,7 @@ def run(registry, market: str, set_id: str, members: list[dict] | None, interval
             if not members or not iid:
                 raise LookupError("That sector's stocks aren't available.")
             bench, parent = (iid, sym), {"symbol": sym, "name": _label(market, sym, None)}
-        ids, missing = universes.resolve(registry, market, (members or [])[:universes.MAX_MEMBERS])
+        ids, missing = universes.resolve(registry, market, (members or [])[:50])
         items = [(i, i.split(":", 1)[1]) for i in ids]
     out = compute(registry, market, items, interval, tail, load_daily(registry), bench)
     if set_id not in sets:              # stocks: show the trading symbol, not the index-style label

@@ -103,7 +103,7 @@ function Expiry({ v }: { v: CasView }) {
 
 function Indices({ v }: { v: CasView }) {
   if (!v.indices.length) return null;
-  const done = v.phase === "closed" || !!v.from_stored;
+  const done = v.phase === "closed" || !!v.from_stored || !v.fresh;
   const cols: Column<CasView["indices"][number]>[] = [
     { key: "name", header: "Index", rowHeader: true, cell: (i) => <b>{i.name}</b> },
     { key: "value", header: done ? "Close" : "Value", numeric: true, cell: (i) => (i.value == null ? "–" : price(i.value)) },
@@ -128,7 +128,7 @@ function Stocks({ v }: { v: CasView }) {
     return t ? v.stocks.filter((r) => r.symbol.includes(t)) : v.stocks;
   }, [v.stocks, q]);
   const shown = rows.slice(0, 40), rest = rows.slice(40);
-  const final = v.phase === "closed" || !!v.from_stored || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
+  const final = v.phase === "closed" || !!v.from_stored || !v.fresh || (v.stocks.length > 0 && v.stocks.every((r) => r.final_out));      // "final" only once the auction is over
   // the final price and its gap right after the stock, so a phone shows them without scrolling sideways; the reference
   // and its band come after (R8B-010: at 400 px only "Stock" and "Reference (band)" fitted on a list sorted by the gap)
   const cols: Column<CasStock>[] = [

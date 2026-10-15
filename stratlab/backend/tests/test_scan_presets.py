@@ -227,6 +227,7 @@ def client(monkeypatch):
     kv = {}
     monkeypatch.setattr(db, "set_setting", lambda k, v: kv.__setitem__(k, v))
     monkeypatch.setattr(db, "get_setting", lambda k: kv.get(k))
+    monkeypatch.setattr("app.scan.session_day", lambda market, now=None: None)     # these candles are made up, dated before today
     flat = list(100 + noise(280, 3, 0.4))
     top = max(flat[-252:])
     series = {"AAPL": bars(flat + [top + 5])}
