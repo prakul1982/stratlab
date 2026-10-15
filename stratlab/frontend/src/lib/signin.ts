@@ -6,8 +6,9 @@ import { rememberNext, returnPathFor } from "./returnTo";
  * it asks this before offering "Sign in" or "Continue with Google" to someone who is signed in. */
 export const signedInHere = (): boolean => { try { return hasSavedSession(CFG.SUPABASE_URL, localStorage); } catch { return false; } };
 
-/** Starts downloading the sign-in library ahead of a click, so "Sign in" answers at once (R31-009: it did nothing for ~3 s while that
- * download ran). A failed head start is ignored; signIn() asks again. */
+/** Starts downloading the sign-in library when someone reaches for "Sign in" (pointer over it, focus, touch), so the click answers
+ * at once (R31-009: it did nothing for ~3 s while that download ran). Never on page load: a visitor who doesn't sign in never
+ * downloads it (R5V-020, R8V-013). A failed head start is ignored; signIn() asks again. */
 export const warmSignIn = (): void => { void import("./api").catch(() => undefined); };
 
 /** Sign in with Google, then open `next` (left out: the page the visitor is on now, unless that's the landing page).

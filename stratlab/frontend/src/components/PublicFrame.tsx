@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "./LegalLinks";
 import { Logo } from "./Logo";
@@ -17,7 +17,6 @@ export const OpenApp = ({ className = "btn outline sm" }: { className?: string }
 export function PublicFrame({ children, className = "", action }: { children: ReactNode; className?: string; action?: ReactNode }) {
   const menu = useRef<HTMLDetailsElement>(null);
   useDetailsDismiss(menu);
-  useEffect(() => { if (!signedInHere()) warmSignIn(); }, []);
   return (
     <div className="pub">
       <SkipLink />
@@ -32,7 +31,7 @@ export function PublicFrame({ children, className = "", action }: { children: Re
             {PUBLIC_MENU.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
+        {action ?? (signedInHere() ? <OpenApp /> : <a className="btn outline sm" href="/" onPointerEnter={warmSignIn} onFocus={warmSignIn} onTouchStart={warmSignIn} onClick={(e) => { e.preventDefault(); void signIn(); }}>Sign in</a>)}
       </header>
       <main id="main" tabIndex={-1} className={`pub-main k-page ${className}`.trim()}>{children}</main>
       <footer className={`pub-main ${className}`.trim()}><LegalLinks /></footer>

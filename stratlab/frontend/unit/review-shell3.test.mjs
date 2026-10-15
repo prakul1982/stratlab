@@ -182,7 +182,7 @@ test("a signed-in visitor of a shared library page sees 'Open StratLab', not a s
   mem.set("sb-abc-auth-token", "{}");
   assert.equal(signedInHere(), true);
   const frame = read("src/components/PublicFrame.tsx");
-  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
+  assert.match(frame, /\{action \?\? \(signedInHere\(\) \? <OpenApp \/> : <a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick=\{\(e\) => \{ e\.preventDefault\(\); void signIn\(\); \}\}>Sign in<\/a>\)\}/);
   assert.match(frame, /<a className=\{className\} href="\/">Open StratLab<\/a>/);            // a whole page load: the app starts, not the visitor's landing page
   const lib = read("src/pages/PublicLibrary.tsx");
   assert.match(lib, /signedInHere\(\) \? <OpenApp className="btn" \/> : <button type="button" className="btn" onClick=\{\(\) => void signIn\("\/library"\)\}>/);

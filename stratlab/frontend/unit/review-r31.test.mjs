@@ -1,4 +1,4 @@
-// Round 31 (blind live review): the Ctrl K ranking of a question, the phone experiments table, the library's loading state.
+// Round 31 (blind live review): the Ctrl K ranking of a question, the phone experiments table, the library's first paint and the header Sign in.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,16 +24,20 @@ test("R31-001: a clear match still leads; a plain name does not reorder", () => 
   assert.equal(firstForQuestion(true, 0), "ai");
 });
 
-test("R31-004: the library shows a loading skeleton while its code downloads", () => {
-  assert.match(read("src/visitor/VisitorApp.tsx"), /view\.kind === "library" \? <main[^>]*><h1 className="sr-only">[^<]*<\/h1><Skeleton/);
+test("R31-004: a cold /library keeps its own words while its code downloads, never a splash (R10V-006 decides)", () => {
+  const src = read("src/visitor/VisitorApp.tsx");
+  assert.match(src, /words \? <div style=\{\{ display: "contents" \}\} data-held/);
+  assert.doesNotMatch(src, /Skeleton label="Opening the library"/);
 });
 
 test("R31-003: no developer wording on user pages", () => {
   for (const f of ["src/lib/api.ts", "src/lib/http.ts"]) assert.doesNotMatch(read(f), /new ApiError\("[^"]*config\.js/);
 });
 
-test("R31-009: the header Sign in is a real link", () => {
-  assert.match(read("src/components/PublicFrame.tsx"), /<a className="btn outline sm" href="\/" onClick[^\n]*>Sign in<\/a>/);
+test("R31-009: the header Sign in is a real link that starts the sign-in download when reached for, never on page load", () => {
+  const frame = read("src/components/PublicFrame.tsx");
+  assert.match(frame, /<a className="btn outline sm" href="\/" onPointerEnter=\{warmSignIn\} onFocus=\{warmSignIn\} onTouchStart=\{warmSignIn\} onClick[^\n]*>Sign in<\/a>/);
+  for (const f of ["src/components/PublicFrame.tsx", "src/pages/Login.tsx"]) assert.doesNotMatch(read(f), /useEffect\(\(\) => \{[^}]*warmSignIn\(\)/);
 });
 
 test("R31-007: the notebook experiments table puts Overall right after Run, so a phone sees it without scrolling", () => {
