@@ -35,3 +35,13 @@ def test_deepest_fall_before_the_open_is_dated_the_last_session():
     s = snap("a", "INR", 100000, 94000, [{"t": "2026-10-13T15:00", "eq": 100000}, {"t": "2026-10-14T15:00", "eq": 94000}])
     out = risk.summary([s], today="2026-10-15")
     assert out["currencies"][0]["deepest_fall"]["date"] == "2026-10-14"
+
+
+def test_deepest_fall_between_closes_is_a_point_on_the_chart_line():
+    # R31-010: a −3.55L low on the 15th that the close recovered: the line must reach it, on the date the summary names
+    trades = [["2026-10-14T11:00:00+05:30", -300000.0], ["2026-10-15T10:00:00+05:30", -55330.0], ["2026-10-15T14:00:00+05:30", 60000.0]]
+    s = snap("a", "INR", 5000000, 5000000 - 295330, [{"t": "2026-10-14T15:00", "eq": 4700000}], closed=trades, acct={"realised": -295330.0})
+    c = risk.summary([s], today="2026-10-15")["currencies"][0]
+    assert c["deepest_fall"]["date"] == "2026-10-15" and c["deepest_fall"]["pnl"] == -355330.0
+    assert min(p["pnl"] for p in c["curve"]) == c["deepest_fall"]["pnl"]
+    assert [p["t"][:10] for p in c["curve"] if p["pnl"] == -355330.0] == ["2026-10-15"]

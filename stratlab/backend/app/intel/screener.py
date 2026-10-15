@@ -20,6 +20,11 @@ _BREAKDOWN = re.compile(r"\s*(?:\[\d{1,3}\]\s*)?\b(?:Revenue|Business|Segment(?:
                         r"(?:Breakup|Break-up|Mix|Split|Share|Wise|Highlights?)\b.*$", re.I | re.S)
 
 
+# a section heading pasted into the running text ("... retail Architecture Reliance Industries Limited holds ..."): the
+# heading word sits between a sentence that never ended and the capitalised start of the next (R31-015)
+_HEADING = re.compile(r"(?<=[a-z0-9\)])(?<![Tt]he)(?<![Oo]ur)\s+(?:Architecture|Overview|Background|Operations|Strategy|Segments|Highlights)\s+(?=[A-Z][a-z])")
+
+
 def clean_profile(text: str | None) -> str | None:
     """A company profile as people read it: no "[1]" footnote marks and no breakdown lists pasted after the
     description (R5O-027). Nothing left: None."""
@@ -27,6 +32,7 @@ def clean_profile(text: str | None) -> str | None:
         return text
     t = _BREAKDOWN.sub("", str(text))
     t = _CITE.sub("", t)
+    t = _HEADING.sub(". ", t)
     t = re.sub(r"\s+", " ", t).strip(" :;,-")
     return t or None
 

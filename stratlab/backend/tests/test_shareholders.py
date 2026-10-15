@@ -279,3 +279,15 @@ def test_search_routes_and_plan_gate(w, paid):
     assert c.delete(f"/invest/holders/follow/{fid}", headers=headers("basic-token")).status_code == 404
     text = json.dumps(body)
     assert not ADVICE.search(text) and not PROVIDERS.search(text)
+
+
+def test_renamed_holder_is_one_holder_across_quarters(monkeypatch):
+    # R31-011: filed with a trailing description one quarter, without it the next
+    old = "Reliance Services and Holdings Limited a company controlled by Petroleum Trust"
+    assert S.holder_key(old) == S.holder_key("RELIANCE SERVICES & HOLDINGS LTD.") == S.norm("Reliance Services and Holdings Limited")
+    assert S.holder_key("Life Insurance Corporation of India") == S.norm("Life Insurance Corporation of India")
+    co = {"name": "Reliance", "q": {"2026-03-31": {"rows": [[old, "Body Corporate", "public", 1000, 2.59]]},
+                                    "2026-06-30": {"rows": [["Reliance Services and Holdings Limited", "Body Corporate", "public", 990, 2.58]]}}}
+    monkeypatch.setattr(S, "company", lambda sym: co)
+    v = S.company_view("RELIANCE")
+    assert v["holders"][0]["change"] == "down" and v["holders"][0]["prev_pct"] == 2.59 and v["dropped"] == []

@@ -1074,3 +1074,10 @@ def test_dividend_yield_restates_for_a_later_bonus():
     divs = [{"kind": "dividend", "amount": 10, "ex_date": "2026-05-01"}, {"kind": "bonus", "factor": 2.0, "ex_date": "2026-08-01"}]
     item = with_dividend_yield(c, divs, "2026-10-08")["metrics"][0]["items"][0]
     assert item["value"] == 5.0 and item["note"] == "₹5 a share in the last 12 months"
+
+
+def test_company_profile_loses_a_stray_heading_word():
+    from app.intel.screener import clean_profile
+    raw = "It runs oil, retail and digital services across India Architecture Reliance Industries Limited holds key business stakes."
+    assert clean_profile(raw) == "It runs oil, retail and digital services across India. Reliance Industries Limited holds key business stakes."
+    assert clean_profile("The Overview Channel is a TV network.") == "The Overview Channel is a TV network."   # a real name stays
