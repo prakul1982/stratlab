@@ -1733,7 +1733,8 @@ test("positioning: participants, cash flows, PCR, the chain by strike and the hi
   await facts.getByRole("radio", { name: "Change", exact: true }).click();
   await expect(facts.locator(".strike-chart svg path").first()).toBeVisible();
   await main.getByRole("group", { name: "Index", exact: true }).getByRole("button", { name: "BANKNIFTY" }).click();
-  await expect(main.getByTestId("chain-facts")).toContainText("spot 55,000", { timeout: 30_000 });
+  // the live chain's spot (55,000), or, with the market shut, the newest recording's close near it: which one depends on the hour
+  await expect(main.getByTestId("chain-facts")).toContainText(/spot 5[45],\d{3}/, { timeout: 30_000 });
   await main.getByText("Show the strikes as a table").click();
   await expect(main.getByRole("columnheader", { name: "Call OI" })).toBeVisible();
   // the history (the owner is on Pro): each participant's positions and each index's PCR and IV by day
