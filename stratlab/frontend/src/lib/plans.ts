@@ -45,6 +45,12 @@ const L = LIMITS;
 // at most 9 lines a card, Trade then Invest then Money, built from the limits above so a card never says a different
 // number; tests/test_plan_copy.py checks that each paid feature is named on the card of the plan that adds it. The
 // full grid is on Plans.
+/** The daily safety cap on Pro's unlimited AI builds (the server's AI_BUILDS_PER_DAY). */
+export const AI_BUILDS_PER_DAY = 200;
+
+/** The comparison table's cell for a limit that has none: Pro's AI builds still have a daily safety cap. */
+export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k === "ai_builds_per_month" ? `Unlimited (up to ${AI_BUILDS_PER_DAY} a day)` : "Unlimited");
+
 export const FEATURES: Record<PlanId, string[]> = {
   free: [`${L.free.backtests_per_month} backtests a month, each with a full verdict, and ${L.free.ai_builds_per_month} AI strategy builds`,
     "A free paper-trading trial of 5 market days from your first start (after that, paper trading needs Basic or Pro), and the options builder with Greeks and breakevens after charges",
@@ -62,7 +68,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Scans and watchlist: every trend scan (the Stage 2 scan, 52-week high breakout, golden cross and five more), watchlist red flags and Watchlist at a glance, with alerts. Also market breadth charts and margin funding history, and SIP dip rules with every start month",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax and a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
-  pro: ["Everything in Basic, plus:", "Unlimited backtests, deep dives and decks; up to 200 AI builds a day", `Paper trade ${L.pro.live_limit} strategies at a time`,
+  pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`, `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Export rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",

@@ -81,3 +81,16 @@ export function planRow(me: Pick<Me, "plan" | "paid_plan" | "billing" | "view_as
   if (!end) return null;
   return [run === "cancelled" ? "Ends on" : "Renews on", dateOnly(end)];
 }
+
+/** Free after its 5-market-day trial: the server stops a Free person's paper sessions within a minute, and a new one
+ * is refused. Only the owner's "View as Free" can still show one running, because the server keeps the real plan's
+ * sessions; the pages say that instead of "running" beside "trial ended" (R33-003). */
+export function viewedFreeKeepsSessions(me: Pick<Me, "plan" | "view_as" | "trial" | "live_running">): boolean {
+  return me.view_as === "free" && !!me.trial?.started && !me.trial.active && me.live_running > 0;
+}
+
+/** Account's "Paper sessions running" value. */
+export function sessionsRunning(me: Pick<Me, "plan" | "view_as" | "trial" | "live_running" | "live_limit">): string {
+  const n = `${me.live_running} of ${me.live_limit}`;
+  return viewedFreeKeepsSessions(me) ? `${n} (kept running: you're viewing as Free; a real Free plan stops them when the trial ends)` : n;
+}

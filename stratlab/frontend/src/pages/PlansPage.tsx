@@ -10,7 +10,7 @@ import { aboutMoney, approx, chargedLine, money, rupeesNote, usePricing } from "
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
+import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, unlimitedLabel, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 
@@ -19,7 +19,7 @@ function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
-    return v == null ? "Unlimited" : p === "free" && k === "live_limit" ? `${v}, for 5 market days` : v.toLocaleString("en-IN");
+    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v}, for 5 market days` : v.toLocaleString("en-IN");
   };
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
