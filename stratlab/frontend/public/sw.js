@@ -1,5 +1,5 @@
 /* StratLab service worker: phone notifications, and the app shell when offline. Your data is never cached. */
-const SHELL = "stratlab-shell-v3";
+const SHELL = "stratlab-shell-v4";          // v4: a v3 shell may be a public page that was kept as the app (v3 kept every HTML page)
 // the small files every page needs before it can start: the last good copy is kept, so one that fails to download (an error page
 // where the script should be) is replaced by it instead of leaving the app without its settings
 const STATIC = ["/config.js", "/theme.js", "/boot.js"];
@@ -31,6 +31,12 @@ function offline(path) {
   try { return new Response(offlinePage(path), { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }); }
   catch { return Response.error(); }
 }
+// The addresses that are the app itself (vercel.json sends them all to index.html): only a page load at one of these is kept as the
+// app shell. Everything else that answers with HTML is its own page and must never stand in for the app when offline: the server's
+// pages (/stocks, /c, /v, /unsubscribe, /email, /news-link), the pages built ahead of time (the policies, /pricing, /faq, /about,
+// /help, /login, /signup, /plans, /library and each /library/<id>) and a shared /verdict.
+const APP_PATH = /^\/(?:mine|all|features|trade|invest|money|notebooks|new|n|import|options|paper|upgrade|account|settings|assistant|app|invite|admin|news|holdings|tax-report|alerts|research|scans|watchlist|dev)(?:\/|$)/;
+const isAppPath = (path) => path === "/" || APP_PATH.test(path);
 const shellOr = (fallback) => caches.match("/").then((hit) => hit || fallback()).catch(() => fallback());
 
 self.addEventListener("activate", (e) => {
@@ -56,8 +62,10 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.startsWith("/v/")) return;          // shared-verdict previews come from the server, not the app
   e.respondWith(fetch(req).then((res) => {
     if (good(res, "text/html")) {
-      const copy = res.clone();
-      caches.open(SHELL).then((c) => c.put("/", copy)).catch(() => undefined);
+      if (isAppPath(url.pathname)) {
+        const copy = res.clone();
+        caches.open(SHELL).then((c) => c.put("/", copy)).catch(() => undefined);
+      }
       return res;
     }
     // a server error with no copy of the app kept: the offline page with its Reload, not the host's bare error page

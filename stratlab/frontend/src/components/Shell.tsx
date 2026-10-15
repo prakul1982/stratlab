@@ -271,14 +271,15 @@ function useScrollFade(ref: { current: HTMLElement | null }): "top" | "bottom" |
 }
 
 /** Mine · Trade · Invest · Money at the top of the menu: which space's menu shows. A click goes to that space's home (the
- * active one too). Every page stays reachable from any of them (search, links, the breadcrumb). */
+ * active one too), so these are buttons (the current one pressed), not a radio group: a radio group moves with the arrow
+ * keys, and an arrow key must not open a page. Every page stays reachable from any of them (search, links, the breadcrumb). */
 function SpaceSwitch({ space, onPick }: { space: SpaceView; onPick: (s: SpaceView) => void }) {
   const views: [SpaceView, string, string][] = [["mine", MINE_NAME, "Your own space: your money, the markets and what is coming up"],
     ...SPACE_IDS.map((s) => [s, SPACES[s].label, SPACES[s].what] as [SpaceView, string, string])];
   return (
-    <div className="space-switch" role="radiogroup" aria-label="Space">
+    <div className="space-switch" role="group" aria-label="Space">
       {views.map(([v, label, what]) => (
-        <button key={v} role="radio" aria-checked={space === v} title={what} data-space={v} onClick={() => onPick(v)}>{label}</button>
+        <button key={v} type="button" aria-pressed={space === v} title={what} data-space={v} onClick={() => onPick(v)}>{label}</button>
       ))}
     </div>
   );

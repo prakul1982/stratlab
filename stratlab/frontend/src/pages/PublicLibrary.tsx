@@ -5,9 +5,9 @@ import { applySeo, seoFor } from "../lib/seo";
 import { absolute } from "../content/seo";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { signIn } from "../lib/signin";
+import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
-import { PublicFrame } from "../components/PublicFrame";
+import { OpenApp, PublicFrame } from "../components/PublicFrame";
 import { CHECK_RESULT, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
@@ -37,8 +37,9 @@ const NOTE = "Tested by StratLab on past prices, for research and paper trading.
 const where = (e: LibEntry) => e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market;
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? "up" as const : "down" as const);
 
+/** Signed in already (a saved sign-in in this browser): "Open StratLab" instead of a sign-in that is not needed. */
 const GoogleCopy = ({ label = "Continue with Google to copy and re-test" }: { label?: string }) => (
-  <button type="button" className="btn" onClick={() => void signIn("/library")}>{label}</button>
+  signedInHere() ? <OpenApp className="btn" /> : <button type="button" className="btn" onClick={() => void signIn("/library")}>{label}</button>
 );
 
 /** /library, signed out: StratLab's own strategies with their verdicts. */

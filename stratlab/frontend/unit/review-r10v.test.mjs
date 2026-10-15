@@ -115,7 +115,7 @@ test("a page kept out of search results names no canonical address, in its HTML 
   // and the page table both keep it out of search results, so it stays out of them (R10V-005 checked), with no canonical
   assert.match(files["about/index.html"], /<meta name="robots" content="noindex, follow">/);
   assert.match(read("vercel.json"), /\|about\|/);
-  assert.match(read("src/main.tsx"), /<Route path="\/about" element=\{<Navigate to="\/features" replace \/>\} \/>/);
+  assert.match(read("src/main.tsx"), /<Route path="\/about" element=\{<Redirect to="\/features" \/>\} \/>/);
   assert.equal(seoFor("/about").canonical, null);
   assert.equal(seoFor("/about").index, false);
   assert.equal(seoFor("/nope", "notfound").canonical, null);

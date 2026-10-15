@@ -178,6 +178,12 @@ function AdminOnly({ what, children }: { what: string; children: ReactNode }) {
   return me.is_admin ? <>{children}</> : <NoAccess what={what} email={me.email} />;
 }
 
+/** A moved address: its query and hash go along (/pricing?plan=pro#faq keeps both). */
+function Redirect({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: to, search, hash }} replace />;
+}
+
 function Routed() {
   const { session, ready, dataOffline, meError, me } = useApp();
   const loc = useLocation();
@@ -216,12 +222,12 @@ function Routed() {
       <Routes>
         <Route path="/" element={<SpaceHome />} />
         <Route path="/mine" element={<MineHome />} />
-        <Route path="/all" element={<Navigate to="/mine" replace />} />
+        <Route path="/all" element={<Redirect to="/mine" />} />
         <Route path="/features" element={<FeaturesPage />} />
         {/* the landing page's own addresses, signed in: nothing to sign in to, so home; "about" is what the features page tells */}
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/signup" element={<Navigate to="/" replace />} />
-        <Route path="/about" element={<Navigate to="/features" replace />} />
+        <Route path="/login" element={<Redirect to="/" />} />
+        <Route path="/signup" element={<Redirect to="/" />} />
+        <Route path="/about" element={<Redirect to="/features" />} />
         <Route path="/trade/g/:group" element={<GroupPage />} />
         <Route path="/invest/g/:group" element={<GroupPage />} />
         <Route path="/money/g/:group" element={<GroupPage />} />
@@ -251,10 +257,10 @@ function Routed() {
         <Route path="/trade/events" element={<EventsPage />} />
         <Route path="/plans" element={<PlansPage />} />
         {/* the landing page's addresses, signed in: Plans is the pricing page inside the app, Help has its own page */}
-        <Route path="/pricing" element={<Navigate to="/plans" replace />} />
-        <Route path="/upgrade" element={<Navigate to="/plans" replace />} />
+        <Route path="/pricing" element={<Redirect to="/plans" />} />
+        <Route path="/upgrade" element={<Redirect to="/plans" />} />
         <Route path="/help" element={<HelpPage />} />
-        <Route path="/faq" element={<Navigate to="/help" replace />} />
+        <Route path="/faq" element={<Redirect to="/help" />} />
         <Route path="/account" element={<AccountPage />} />
         {/* Account and Settings step 3a: new routes */}
         <Route path="/settings" element={<SettingsPage />} />
@@ -281,9 +287,9 @@ function Routed() {
         <Route path="/research/watchlist" element={<WatchlistPage />} />
         <Route path="/research/scan" element={<ScanPage />} />
         {/* "Scans" was a row of tabs: its pages are now Find stocks and Market view, so the old address opens the first scan */}
-        <Route path="/research/scans" element={<Navigate to="/research/scan" replace />} />
-        <Route path="/scans" element={<Navigate to="/research/scan" replace />} />
-        <Route path="/watchlist" element={<Navigate to="/research/watchlist" replace />} />
+        <Route path="/research/scans" element={<Redirect to="/research/scan" />} />
+        <Route path="/scans" element={<Redirect to="/research/scan" />} />
+        <Route path="/watchlist" element={<Redirect to="/research/watchlist" />} />
         <Route path="/research/screens" element={<ScreensPage />} />
         <Route path="/research/rotation" element={<RotationPage />} />
         <Route path="/invest/breadth" element={<BreadthPage />} />

@@ -57,10 +57,14 @@ test("/config.js and the boot files have a sane cache header, and the app's own 
   const header = (path, key) => vercel.headers.filter((h) => sourceRe(h.source).test(path)).flatMap((h) => h.headers).filter((h) => h.key === key).map((h) => h.value);
   const cfg = header("/config.js", "Cache-Control");
   assert.equal(cfg.length, 1);
-  assert.match(cfg[0], /max-age=300/);
-  assert.match(cfg[0], /stale-while-revalidate/);
-  assert.doesNotMatch(cfg[0], /immutable|no-store/);
-  assert.equal(header("/boot.js", "Cache-Control").length, 1);
+  assert.match(cfg[0], /max-age=60, must-revalidate/);
+  assert.doesNotMatch(cfg[0], /stale-while-revalidate|immutable|no-store/);          // a stale config.js would point a new page at old settings
+  for (const f of ["/boot.js", "/theme.js"]) {
+    const h = header(f, "Cache-Control");
+    assert.equal(h.length, 1, f);
+    assert.match(h[0], /max-age=300, must-revalidate/, f);
+    assert.doesNotMatch(h[0], /stale-while-revalidate/, f);
+  }
   for (const p of ["/holdings", "/research/IN/TCS", "/n/abc/e/2", "/login", "/verdict/abc", "/account"]) assert.deepEqual(header(p, "X-Robots-Tag"), ["noindex, follow"], p);
   for (const p of ["/", "/pricing", "/faq", "/library", "/library/seed-x", "/terms", "/privacy", "/contact", "/stocks/in/TCS", "/config.js"]) assert.deepEqual(header(p, "X-Robots-Tag"), [], p);
 });

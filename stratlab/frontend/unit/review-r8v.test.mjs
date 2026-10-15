@@ -172,6 +172,8 @@ test("the public pages' code leaves out the sign-in library and the account code
   }
   const pwa = read("src/lib/pwa.ts");
   assert.match(pwa, /export function registerPwa\(\{ later = false \}/);
-  assert.match(pwa, /window\.addEventListener\("load", \(\) => \(later \? window\.setTimeout\(\(\) => idle\(register\), 4000\) : register\(\)\)\)/);
+  // it runs after the page's `load` has usually fired: registers at once then, else on load (R-shell3: it never registered)
+  assert.match(pwa, /const go = \(\) => \(later \? window\.setTimeout\(\(\) => idle\(register\), 4000\) : register\(\)\);/);
+  assert.match(pwa, /if \(document\.readyState === "complete"\) go\(\); else window\.addEventListener\("load", go, \{ once: true \}\);/);
   assert.match(read("src/entry.tsx"), /registerPwa\(\{ later: !account \}\)/);
 });

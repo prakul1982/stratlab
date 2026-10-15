@@ -3,22 +3,30 @@ const api = <T = any>(path: string, o?: Parameters<typeof import("./api").api>[1
 
 /** Installing StratLab on a phone or computer, and turning on its notifications. */
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
-let deferred: InstallEvent | null = null;
+declare global { interface Window { __stratlabInstall?: InstallEvent | null } }
+/** public/boot.js listens from the first moment and keeps the browser's install offer here: this file arrives long after
+ * the page's load, by which time the browser has usually already sent it. */
+const early = (): InstallEvent | null => (typeof window !== "undefined" ? window.__stratlabInstall ?? null : null);
+let deferred: InstallEvent | null = early();
 const listeners = new Set<() => void>();
 
 /** `later`: a visitor's page (the policies, the library, the landing page): the service worker, and the few files it
  * keeps for offline use, wait until the page has loaded and the browser is idle, so they aren't fetched while the page
- * itself is (R8V-013: a text page made 28 requests). */
+ * itself is (R8V-013: a text page made 28 requests). This runs after the page's start-up, which is after `load` has
+ * usually fired, so a page that has already loaded registers at once instead of waiting for an event that won't come. */
 export function registerPwa({ later = false }: { later?: boolean } = {}) {
   if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e as InstallEvent; listeners.forEach((f) => f()); });
-  window.addEventListener("appinstalled", () => { deferred = null; listeners.forEach((f) => f()); });
+  const kept = early();
+  if (kept && !deferred) { deferred = kept; listeners.forEach((f) => f()); }          // the offer came before this file did
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = window.__stratlabInstall = e as InstallEvent; listeners.forEach((f) => f()); });
+  window.addEventListener("appinstalled", () => { deferred = window.__stratlabInstall = null; listeners.forEach((f) => f()); });
   const register = () => { navigator.serviceWorker.register("/sw.js").catch(() => undefined); };
   const idle = (f: () => void) => {
     if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(f, { timeout: 10_000 });
     else setTimeout(f, 3000);                     // Safari has no idle callback
   };
-  window.addEventListener("load", () => (later ? window.setTimeout(() => idle(register), 4000) : register()));
+  const go = () => (later ? window.setTimeout(() => idle(register), 4000) : register());
+  if (document.readyState === "complete") go(); else window.addEventListener("load", go, { once: true });
 }
 
 export const onInstallChange = (f: () => void) => { listeners.add(f); return () => { listeners.delete(f); }; };
@@ -31,7 +39,7 @@ export async function install(): Promise<boolean> {
   if (!deferred) return false;
   await deferred.prompt();
   const { outcome } = await deferred.userChoice;
-  deferred = null;
+  deferred = window.__stratlabInstall = null;
   listeners.forEach((f) => f());
   return outcome === "accepted";
 }
@@ -51,6 +59,24 @@ export async function pushOnHere(): Promise<boolean> {
   try { return !!(await current()); } catch { return false; }
 }
 
+/** The service worker's registration once it is active. A page that has not registered it yet (the visitor's page waits
+ * until it is idle) is registered here, and the wait has an end: `navigator.serviceWorker.ready` alone never settles when
+ * there is no registration, which would leave the "Turn on" button spinning for ever. Throws with a sentence to show. */
+export async function serviceWorkerReady(waitMs = 15_000): Promise<ServiceWorkerRegistration> {
+  const sw = navigator.serviceWorker;
+  const slow = new Error("StratLab's background service didn't start in time. Reload the page and try again.");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, no) => { timer = setTimeout(() => no(slow), waitMs); });
+  try {
+    return await Promise.race([(async () => {
+      if (!(await sw.getRegistration())) await sw.register("/sw.js");
+      return sw.ready;
+    })(), late]);
+  } catch (e) {
+    throw e === slow ? e : new Error("StratLab's background service couldn't start in this browser. Reload the page and try again.");
+  } finally { clearTimeout(timer); }
+}
+
 /** Ask permission, subscribe this device and tell the server. Returns a sentence when it can't. */
 export async function enablePush(): Promise<string | null> {
   if (!pushSupported()) return isIos() && !installed()
@@ -60,7 +86,8 @@ export async function enablePush(): Promise<string | null> {
   if (!k.enabled || !k.key) return "Phone notifications aren't set up on the server yet.";
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "Notifications are blocked for StratLab. Allow them in your browser or phone settings, then try again.";
-  const reg = await navigator.serviceWorker.ready;
+  let reg: ServiceWorkerRegistration;
+  try { reg = await serviceWorkerReady(); } catch (e) { return (e as Error).message; }
   let sub: PushSubscription;
   try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(k.key) }); }
   catch { return "This browser couldn't reach its notification service. Try again, or use Chrome, Edge or Firefox (on an iPhone, the installed app)."; }

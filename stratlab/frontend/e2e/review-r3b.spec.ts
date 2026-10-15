@@ -66,7 +66,7 @@ test("My space has one name, and Look up a company differs from the Invest home 
   const errors = await open(page, "/mine");
   if (phone) await page.getByRole("button", { name: /menu/i }).first().click();
   const side = page.locator("aside.sidebar");
-  await expect(side.getByRole("radio", { name: "My space" })).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+  await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
   await expect(side.getByRole("radio", { name: "Mine", exact: true })).toHaveCount(0);
   await expect(side.getByRole("link", { name: "My space", exact: true })).toBeVisible();
   const labels = await side.getByRole("radio").allInnerTexts();

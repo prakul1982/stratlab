@@ -63,6 +63,8 @@ export function PageFailed({ inPage = false }: { inPage?: boolean }) {
 export class LoadGuard extends Component<{ children: ReactNode }, { failed: "load" | "crash" | null }> {
   state: { failed: "load" | "crash" | null } = { failed: null };
   static getDerivedStateFromError(error: unknown) { return { failed: isLoadError(error) ? "load" : "crash" }; }
+  // the page drew: a download that failed before this (public/boot.js sets the flag) was made good, so a later crash is the page's own
+  componentDidMount() { if (!this.state.failed && typeof window !== "undefined") window.__stratlabLoadFailed = false; }
   componentDidCatch(error: unknown) {
     if (isLoadError(error)) window.__stratlabRecover?.();
   }

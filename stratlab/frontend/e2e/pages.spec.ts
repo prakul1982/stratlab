@@ -709,9 +709,9 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await page.reload();
   let side = await menu(page, phone);
   const main = side.getByRole("navigation", { name: "Main" });
-  const space = side.getByRole("radiogroup", { name: "Space" });
-  await expect(space.getByRole("radio")).toHaveText(["My space", "Trade", "Invest", "Money"]);
-  await expect(space.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
+  const space = side.getByRole("group", { name: "Space" });
+  await expect(space.getByRole("button")).toHaveText(["My space", "Trade", "Invest", "Money"]);
+  await expect(space.getByRole("button", { name: "Invest" })).toHaveAttribute("aria-pressed", "true");
   // Invest: its home, then its five groups; the other spaces' groups wait behind the switcher
   await expect(main.locator(".side-group .side-title")).toHaveText(NAV.invest.groups.map((g) => g.label));
   for (const g of ["Practise", "Build and test", "Tax", "Plan"]) await expect(main.getByRole("link", { name: g, exact: true })).toHaveCount(0);
@@ -762,6 +762,8 @@ test("the menu: a space's groups, the one you are in is open, group titles open 
   await expect(page).toHaveURL(/\/research\/watchlist$/);
   await page.goto("/all");
   await expect(page).toHaveURL(/\/mine$/);
+  await page.goto("/scans?q=banks#top");                                       // a moved address keeps its query and hash
+  await expect(page).toHaveURL(/\/research\/scan\?q=banks#top$/);
 
   // Watchlist: the list and "at a glance" are two views of one page, a switch inside it
   await page.goto("/research/watchlist");

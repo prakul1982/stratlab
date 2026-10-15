@@ -77,7 +77,7 @@ test("/login, /signup and /about are real addresses, not dead routes (R4-017)", 
   for (const p of ["/login", "/signup", "/about"]) assert.ok(isAppPath(p), `${p} has no route`);
   assert.match(read("pages/Login.tsx"), /<div id="about" className="lp-wrap/, "the landing page has the place /about scrolls to (not a section[id]: the landing test lists those)");
   const main = read("main.tsx");
-  for (const [from, to] of [["/login", "/"], ["/signup", "/"], ["/about", "/features"]]) assert.match(main, new RegExp(`path="${from}" element=\\{<Navigate to="${to}" replace />\\}`), `${from} signed in`);
+  for (const [from, to] of [["/login", "/"], ["/signup", "/"], ["/about", "/features"]]) assert.match(main, new RegExp(`path="${from}" element=\\{<Redirect to="${to}" />\\}`), `${from} signed in`);
 });
 
 test("the menu locks only a page that is locked whole; a part-paid page is described, not locked (R4-006)", () => {
