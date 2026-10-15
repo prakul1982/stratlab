@@ -27,7 +27,7 @@ type Policy = {
 };
 type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[] };
 type View = {
-  as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null };
+  as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null; partial_lasting?: boolean; notes?: string[] | null };
   allocation: { class: string; label: string; value: number; pct: number | null }[]; assets: Row[]; liabilities: Row[];
   insurance: { policies: Policy[]; yearly_premium: number; cover: Record<string, number>; next: string | null };
   gold_price: { per_g: number; as_of: string } | null; rates: { epf: number; epf_note: string; ppf: number; ppf_note: string; sgb: number };
@@ -367,9 +367,10 @@ export function NetWorthPage() {
   }, [span]);
   const range = rangeChoices.some((c) => c.value === pick) ? pick! : "all";
   const keepDays = RANGE_DAYS.find(([v]) => v === range)?.[2];
-  // the chart leaves out partial snapshots: they read as falls
-  const whole = useMemo(() => hist.filter((h) => !h.partial?.length), [hist]);
+  // every snapshot is drawn; a partial one (something wasn't counted) is marked, so a dip it shows isn't read as a fall
+  const whole = hist;
   const shown = whole.filter((h) => keepDays == null || (Date.parse(whole[whole.length - 1].d) - Date.parse(h.d)) / 86_400_000 <= keepDays);
+  const marked = shown.flatMap((h, i) => (h.partial?.length ? [{ i, kind: "dot" as const, color: "var(--orange)" }] : []));
   const last = hist[hist.length - 1], move = t ? netWorthDelta(t.net, t.partial, hist) : null;
 
   const assetCols: Column<Row>[] = [
@@ -432,8 +433,9 @@ export function NetWorthPage() {
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
-            {/* a source that couldn't be read or valued: named, and no snapshot is taken from this total */}
-            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. Only the monthly snapshot is kept meanwhile, marked partial.</Notice>}
+            {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
+            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
+            {t.notes && t.notes.length > 0 && <p className="k-note" data-testid="nw-notes">{t.notes.join("; ")}.</p>}
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
             {/* the history has a card once there is a chart to draw; until then, one line here says when it starts */}
@@ -466,12 +468,12 @@ export function NetWorthPage() {
 
           {view.history_allowed && whole.length >= 2 && (
             <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
-              footer={<p className="k-note">Last snapshot {day(last.d)}.</p>}
+              footer={<p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
-                columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => inr(h.net) },
+                columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
               <XYChart series={[{ values: shown.map((h) => h.net), color: "var(--series-1)", label: "Net worth", area: { color: "var(--series-1)", base: Math.min(0, ...shown.map((h) => h.net)) } }]}
-                times={shown.map((h) => h.d)} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
+                times={shown.map((h) => h.d)} points={marked} format={(v) => inr(v)} axisFormat={(v) => axisInr(v)} ariaLabel="Net worth over time" height={220} testId="networth-chart" ranges={false} table={false} />
             </ChartFrame>
           )}
 

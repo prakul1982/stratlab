@@ -190,6 +190,20 @@ def test_schedule_fa_closing_value_and_a_split_in_the_year():
     assert fa["rows"][0]["peak"] is None and fa["rows"][0]["closing"] is None and fa["missing_prices"] == ["NVDA"]
 
 
+def test_a_us_dividend_with_nothing_withheld_is_not_taken_as_25_percent():
+    """Item b: a dividend line that says 0 was withheld (a retirement account, or a treaty rate of nil) has no US tax;
+    only a line that doesn't say is taken as 25%."""
+    rows = [{"d": "2025-05-15", "sym": "AAPL", "amount": 26.0, "tds": 0.0}, {"d": "2025-08-14", "sym": "AAPL", "amount": 26.0, "tds": None}]
+    s = us.dividends(rows, hist(), 2025, 0.2)["stocks"][0]
+    assert [ln["tax_usd"] for ln in s["lines"]] == [0.0, 6.5]
+
+
+def test_a_us_brokers_dates_are_month_first_even_when_every_day_is_small():
+    """B7: 03/05/2025 on a US broker's file is 5 March, though no date in the file has a day above 12."""
+    got = us.parse_upload(b"Date,Action,Symbol,Quantity,Price\n03/05/2025,Buy,AAPL,1,200\n04/06/2025,Sell,AAPL,1,210\n", "x.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-03-05", "2025-04-06"] and got["month_first"]
+
+
 # ---------- reading a US broker's file ----------
 def test_a_us_brokers_csv():
     csv = ("Trade Date,Action,Symbol,Description,Quantity,Price,Commission\n"

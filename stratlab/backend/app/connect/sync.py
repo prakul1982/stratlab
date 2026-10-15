@@ -64,10 +64,12 @@ def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = 
                accounts: set[str] | None = None) -> tuple[list[dict], dict]:
     """(holdings, counts). `found` are matched holdings from one source (`via`). `accounts`: the demat accounts a statement
     covers; a holding's parts from other accounts ("accts") stay and add up with this read's. One without "accts" (saved
-    before statements kept them, or edited by hand) belongs to whatever account the read covers."""
+    before statements kept them, or edited by hand) belongs to whatever account the read covers. A part added from a file
+    or typed in on top of this source's (holdings.ADDED) is never the read's: it stays, and stays alone (a plain holding)
+    once the source no longer names the stock."""
     mine = PRIORITY.get(via, 1)
     market = {holdings.market_of(f) for f in found}
-    accounts = accounts or set()
+    accounts = (accounts or set()) | {via}        # the source's own part ("kite": its quantity under its name) is the read's
     kept = {}
     prev = {_key(i): i for i in before if i.get("via") == via}
     for i in before:
@@ -86,9 +88,15 @@ def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = 
             skipped += 1
             continue
         new = {**f, "via": via}
-        if cur and cur.get("via") == via and f.get("accts"):
-            new["accts"] = {**_parts(cur, accounts), **f["accts"]}
+        rest = _parts(cur, accounts) if cur and cur.get("via") == via else {}
+        if f.get("accts") or rest:
+            new["accts"] = {**rest, **(f.get("accts") or {via: f["qty"]})}
             new["qty"] = round(sum(new["accts"].values()), 4)
+        if rest.get(holdings.ADDED):              # shares added from a file stay, with their cost in the average
+            cost = cur.get("added_cost")
+            new["added_cost"] = cost
+            new["avg"] = ((f["avg"] * (new["qty"] - rest[holdings.ADDED]) + cost) / new["qty"]
+                          if f.get("avg") and cost is not None and new["qty"] else None)
         old = prev.get(k) or cur
         if old:
             same = abs(float(old["qty"]) - float(new["qty"])) < 1e-9
@@ -101,6 +109,13 @@ def merge_sync(before: list[dict], found: list[dict], via: str, replace: bool = 
         else:
             added += 1
         kept[k] = new
+    named = {_key(f) for f in found}
+    for k, i in list(kept.items()):
+        # the source no longer names a stock that had shares added from a file: those shares stay, as a plain holding
+        if i.get("via") == via and k not in named and set(i.get("accts") or {}) == {holdings.ADDED} and replace:
+            cost = i.get("added_cost")
+            kept[k] = {**{x: v for x, v in i.items() if x not in ("via", "accts", "added_cost")},
+                       "avg": cost / i["qty"] if cost and i["qty"] else None}
     return list(kept.values()), {"added": added, "changed": int(changed), "skipped": skipped}
 
 

@@ -491,3 +491,74 @@ def test_merge_drops_parts_that_no_longer_add_up_to_the_quantity():
     added = holdings.merge([have, {"symbol": "INFY", "exchange": "NSE", "qty": 5.0, "avg": None}])
     assert added[0]["qty"] == 15 and "accts" not in added[0]
     assert holdings.merge([have])[0]["accts"] == {"NSDL": 10.0}
+
+
+# ---------- review rev5a: a hand edit is a change list; a file's shares added to a broker's stay ----------
+INFY_KITE = {"symbol": "INFY", "isin": "INE009A01021", "name": "INFY", "qty": 10.0, "avg": 1400.0}
+
+
+def kite_sync(rows):
+    from app.connect import sync
+    return sync.sync_holdings(sync.profile_for("u-pro"), rows, "kite", "Zerodha Kite")
+
+
+def stored() -> dict:
+    return {i["symbol"]: i for i in holdings.load("u-pro")["items"]}
+
+
+def test_an_edit_keeps_a_stock_a_sync_saved_while_the_page_was_open(w):
+    """B1: the page sends only what changed, applied to the holdings as saved now: a stock a broker sync added after the
+    page was read stays. The whole list read before that sync is refused, not saved over it."""
+    c = w["client"]
+    assert upload(c, "x.csv", b"Symbol,Quantity,Average Price\nTCS,5,3000\n").status_code == 200
+    page = c.get("/holdings", headers=PRO).json()                                 # the page is open: TCS only
+    kite_sync([INFY_KITE])
+    r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "TCS", "market": "IN", "avg": 3100}]})
+    assert r.status_code == 200, r.text
+    rows = stored()
+    assert set(rows) == {"TCS", "INFY"} and (rows["TCS"]["qty"], rows["TCS"]["avg"]) == (5, 3100)
+    assert (rows["INFY"]["qty"], rows["INFY"]["avg"], rows["INFY"]["via"]) == (10, 1400, "kite")
+    stale = [{"symbol": x["symbol"], "qty": x["qty"], "avg": 3200, "market": "IN"} for x in page["rows"]]
+    r = c.put("/holdings", headers=PRO, json={"items": stale, "updated_at": page["updated_at"]})
+    assert r.status_code == 409 and set(stored()) == {"TCS", "INFY"} and stored()["TCS"]["avg"] == 3100
+    # remove one, add shares to another, add a new one: each applied on its own
+    r = c.put("/holdings", headers=PRO, json={"changes": [{"op": "remove", "symbol": "TCS"}, {"op": "add", "symbol": "INFY", "qty": 2, "avg": 1500},
+                                                          {"op": "set", "symbol": "reliance", "qty": 1, "avg": 2400}]})
+    assert r.status_code == 200 and r.json()["unmatched"] == []
+    rows = stored()
+    assert set(rows) == {"INFY", "RELIANCE"} and rows["INFY"]["qty"] == 12 and rows["RELIANCE"]["qty"] == 1
+    assert c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "ZZZQQ", "market": "IN"}]}).status_code == 422
+    assert c.put("/holdings", headers=PRO, json={}).status_code == 400                # an empty body never deletes everything
+
+
+def test_an_edit_keeps_the_other_holdings_averages_unrounded(w):
+    """B1: an average saved with more decimals than the page shows (0.004 shows as 0.00) isn't saved again rounded, by the
+    change list or by the whole list sent back as shown."""
+    c = w["client"]
+    kite_sync([{**INFY_KITE, "avg": 0.004}, {"symbol": "TCS", "isin": None, "name": "TCS", "qty": 1.0, "avg": 3000.0}])
+    rows = c.get("/holdings", headers=PRO).json()["rows"]
+    assert c.put("/holdings", headers=PRO, json={"changes": [{"op": "set", "symbol": "TCS", "qty": 2}]}).status_code == 200
+    assert stored()["INFY"]["avg"] == 0.004 and stored()["TCS"]["avg"] == 3000 and stored()["TCS"]["qty"] == 2
+    items = [{"symbol": x["symbol"], "qty": 3 if x["symbol"] == "TCS" else x["qty"], "avg": x["avg"], "market": "IN"} for x in rows]
+    assert c.put("/holdings", headers=PRO, json={"items": items}).status_code == 200
+    assert stored()["INFY"]["avg"] == 0.004 and stored()["TCS"]["qty"] == 3
+
+
+def test_a_file_added_to_a_brokers_holdings_keeps_its_shares_through_the_next_sync(w):
+    """B6: a file uploaded with "Add to them" adds its shares to a stock the broker sync keeps as their own part; the next
+    sync sets only the broker's part, and a stock the broker no longer has keeps the file's shares as a plain holding."""
+    c = w["client"]
+    kite_sync([INFY_KITE])
+    assert upload(c, "x.csv", b"Symbol,Quantity,Average Price\nINFY,4,1500\nTCS,2,3000\n", mode="add").status_code == 200
+    assert stored()["INFY"]["qty"] == 14 and stored()["TCS"]["qty"] == 2
+    kite_sync([INFY_KITE])
+    rows = stored()
+    assert rows["INFY"]["qty"] == 14 and rows["TCS"]["qty"] == 2
+    assert rows["INFY"]["avg"] == pytest.approx((10 * 1400 + 4 * 1500) / 14)
+    kite_sync([{**INFY_KITE, "qty": 12, "avg": 1450.0}])                         # bought 2 more at the broker
+    assert stored()["INFY"]["qty"] == 16 and stored()["INFY"]["avg"] == pytest.approx((12 * 1450 + 4 * 1500) / 16)
+    kite_sync([{"symbol": "TCS", "isin": None, "name": "TCS", "qty": 1.0, "avg": 3100.0}])   # INFY sold at the broker
+    rows = stored()
+    assert rows["INFY"]["qty"] == 4 and rows["INFY"]["avg"] == pytest.approx(1500) and not rows["INFY"].get("via")
+    kite_sync([{"symbol": "TCS", "isin": None, "name": "TCS", "qty": 1.0, "avg": 3100.0}])
+    assert stored()["INFY"]["qty"] == 4

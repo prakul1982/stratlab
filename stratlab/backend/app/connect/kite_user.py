@@ -153,23 +153,37 @@ def confirm(uid: str, st: str, claim: str) -> dict:
 
 
 def rows_from(holdings: list[dict], positions: list[dict]) -> list[dict]:
-    """Kite's holdings and today's equity positions as rows for My Holdings."""
-    rows, have = [], set()
+    """Kite's holdings with today's delivery (CNC) trades as rows for My Holdings. A held stock's quantity has the day's
+    net delivery position added (it is negative after a sale, and shares bought today aren't in the holdings until the
+    day after); a stock whose total comes to 0 or less is left out. Intraday (MIS) and F&O (NRML) positions aren't
+    holdings. Shares bought today add to the average price; shares sold leave it as it was."""
+    rows: dict[str, dict] = {}
     for h in holdings or []:
         qty = float(h.get("quantity") or 0) + float(h.get("t1_quantity") or 0) + float(h.get("collateral_quantity") or 0)
         sym = str(h.get("tradingsymbol") or "")
         if qty <= 0 or not sym:
             continue
-        have.add(sym)
-        rows.append({"symbol": sym, "isin": h.get("isin") or None, "name": sym, "qty": qty, "avg": float(h.get("average_price") or 0) or None})
+        avg = float(h.get("average_price") or 0) or None
+        cur = rows.get(sym)
+        if cur:                              # the same stock on NSE and BSE
+            cur["avg"] = (cur["avg"] * cur["qty"] + avg * qty) / (cur["qty"] + qty) if cur["avg"] and avg else None
+            cur["qty"] += qty
+        else:
+            rows[sym] = {"symbol": sym, "isin": h.get("isin") or None, "name": sym, "qty": qty, "avg": avg}
     for p in positions or []:
         sym = str(p.get("tradingsymbol") or "")
-        if (p.get("product") == "CNC" and p.get("exchange") in ("NSE", "BSE") and float(p.get("quantity") or 0) > 0
-                and sym and sym not in have):
-            have.add(sym)
-            rows.append({"symbol": sym, "isin": None, "name": sym, "qty": float(p["quantity"]),
-                         "avg": float(p.get("average_price") or 0) or None})
-    return rows
+        q = float(p.get("quantity") or 0)
+        if p.get("product") != "CNC" or p.get("exchange") not in ("NSE", "BSE") or not sym or not q:
+            continue
+        avg = float(p.get("average_price") or 0) or None
+        cur = rows.get(sym)
+        if not cur:
+            rows[sym] = {"symbol": sym, "isin": None, "name": sym, "qty": q, "avg": avg}
+            continue
+        if q > 0:                            # bought today: the average takes the new shares in
+            cur["avg"] = (cur["avg"] * cur["qty"] + avg * q) / (cur["qty"] + q) if cur["avg"] and avg and cur["qty"] > 0 else None
+        cur["qty"] += q
+    return [{**r, "qty": round(r["qty"], 4)} for r in rows.values() if r["qty"] > 1e-9]
 
 
 def shared_token(box: dict) -> str | None:

@@ -1,9 +1,11 @@
-/** The headline change: the live total less the latest complete snapshot from before today (a change to an entry
- * snapshots today, which would always read as no change). None while the live total is partial or there's no such snapshot. */
+/** The headline change: the live total less the latest snapshot from before today that counts the same things (a change
+ * to an entry snapshots today, which would always read as no change). A complete total reads against the latest complete
+ * snapshot; a partial one (a stock with nothing to value it by) only against a snapshot that left out exactly the same,
+ * so the change is like for like. None when there's no such snapshot. */
 export function netWorthDelta(net: number, livePartial: string[] | null | undefined, hist: { d: string; net: number; partial?: string[] }[],
   today: string = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })) {
-  if (livePartial?.length) return null;
-  for (let i = hist.length - 1; i >= 0; i--) if (hist[i].d < today && !hist[i].partial?.length) return { change: net - hist[i].net, since: hist[i].d };
+  const left = (p: string[] | null | undefined) => (p ?? []).join("\n");
+  for (let i = hist.length - 1; i >= 0; i--) if (hist[i].d < today && left(hist[i].partial) === left(livePartial)) return { change: net - hist[i].net, since: hist[i].d };
   return null;
 }
 

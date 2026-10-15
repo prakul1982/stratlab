@@ -899,7 +899,8 @@ def test_zerodha_login_reads_holdings_and_keeps_the_token_sealed(w, kite):
     assert ("session", "good-request-token", "appsecret-value") in FakeKite.log
     admin_id = "u-admin"
     items = {i["symbol"]: i for i in holdings.load(admin_id)["items"]}
-    assert items["INFY"]["qty"] == 10 and items["INFY"]["avg"] == 1400.0                     # settled and T+1
+    # settled and T+1, plus today's delivery buy of 2 (B9: a day's trade in a stock already held counts)
+    assert items["INFY"]["qty"] == 12 and items["INFY"]["avg"] == pytest.approx((1400.0 * 10 + 1.0 * 2) / 12)
     assert items["ITC"]["qty"] == 30                                                         # pledged shares still count
     assert items["TCS"]["qty"] == 4 and "ZERO" not in items and "NIFTY26OCTFUT" not in items  # today's buy; no futures
     assert all(i["via"] == "kite" for i in items.values()) and holdings.load(admin_id)["source"] == "Zerodha Kite"
@@ -1551,3 +1552,33 @@ def test_ibkr_counts_each_position_and_trade_once_whatever_the_levels_of_detail(
     assert {i["symbol"]: i["qty"] for i in holdings.load(PRO_ID)["items"]} == {"AAPL": 10}
     trades = [m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]
     assert [(t["sym"], t["qty"], t["side"]) for t in trades] == [("AAPL", 10.0, "long")]            # TSLA's sale before the window is no short
+
+
+# ---------- review rev5a ----------
+def test_a_days_delivery_trades_in_a_held_stock_count():
+    """B9: today's net delivery (CNC) position is added to a held stock's quantity (a sale makes it negative), a stock
+    whose total comes to 0 or less is left out, and intraday and F&O positions are never holdings."""
+    held = [{"tradingsymbol": "INFY", "exchange": "NSE", "isin": "INE009A01021", "quantity": 10, "t1_quantity": 0, "average_price": 1400.0},
+            {"tradingsymbol": "TCS", "exchange": "NSE", "isin": "INE467B01029", "quantity": 5, "t1_quantity": 0, "average_price": 3000.0},
+            {"tradingsymbol": "ITC", "exchange": "NSE", "isin": "INE154A01025", "quantity": 20, "t1_quantity": 0, "average_price": 400.0}]
+    pos = [{"tradingsymbol": "INFY", "exchange": "NSE", "product": "CNC", "quantity": 5, "average_price": 1500.0},     # bought more
+           {"tradingsymbol": "TCS", "exchange": "NSE", "product": "CNC", "quantity": -5, "average_price": 3100.0},     # sold all
+           {"tradingsymbol": "ITC", "exchange": "NSE", "product": "CNC", "quantity": -4, "average_price": 410.0},      # sold some
+           {"tradingsymbol": "ITC", "exchange": "NSE", "product": "MIS", "quantity": 100, "average_price": 405.0},     # intraday
+           {"tradingsymbol": "SBIN", "exchange": "NSE", "product": "NRML", "quantity": 50, "average_price": 800.0},
+           {"tradingsymbol": "LT", "exchange": "NSE", "product": "CNC", "quantity": 2, "average_price": 3500.0}]       # new today
+    rows = {r["symbol"]: r for r in kite_user.rows_from(held, pos)}
+    assert set(rows) == {"INFY", "ITC", "LT"}
+    assert rows["INFY"]["qty"] == 15 and rows["INFY"]["avg"] == pytest.approx((10 * 1400 + 5 * 1500) / 15)
+    assert (rows["ITC"]["qty"], rows["ITC"]["avg"]) == (16, 400.0) and (rows["LT"]["qty"], rows["LT"]["avg"]) == (2, 3500.0)
+
+
+def test_an_epf_passbook_of_two_years_is_its_latest_balance():
+    """Item c: a passbook with a closing line for each of two years is the later one's balance, not their sum; two member
+    ids still add up, each at its latest."""
+    two_years = "\n".join(["Member Id: XXXX0000000001", "Closing Balance as on 31/03/2025 1,00,000 80,000 30,000",
+                           "Closing Balance as on 31/03/2026 1,50,000 1,20,000 40,000"])
+    assert docs.read_epf(two_years) == {"balance": 270000.0, "as_of": "2026-03-31", "passbooks": 1}
+    got = docs.read_epf(two_years + "\nMember Id: XXXX0000000002\nClosing Balance as on 31/03/2024 20,000.50 20,000 0")
+    assert got["balance"] == 310000.5 and got["as_of"] == "2026-03-31"
+    assert docs.read_epf("Closing Balance as on 31/03/2025 10 20 0\nClosing Balance as on 31/03/2026 30 40 0")["balance"] == 70
