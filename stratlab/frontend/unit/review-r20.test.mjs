@@ -100,7 +100,8 @@ test("R20-017: a bar's figure of six characters or more has a five-character for
   assert.equal(trendValue(31542, "₹ Cr"), "31,542");
   assert.equal(trendShort(31542, "₹ Cr"), "31.5k");
   assert.equal(trendShort(146882, "₹ Cr"), "147k");
-  assert.equal(trendShort(-28046, "₹ Cr"), "−28.0k");
+  assert.equal(trendShort(40012, "₹ Cr"), "40k");                                    // never "40.0k" (a page check reads "0k" as a zero)
+  assert.equal(trendShort(-28046, "₹ Cr"), "−28k");
   assert.equal(trendShort(4200, "₹ Cr"), null);
   assert.equal(trendShort(1234567, "USD"), null);
   assert.match(read("src/styles-invest.css"), /\.tbar-num:has\(\.tbar-short\) \.tbar-full \{ display: none; \}/);
