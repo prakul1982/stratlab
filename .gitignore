@@ -8,3 +8,17 @@ venv/
 .vscode/
 .idea/
 .pytest_cache/
+node_modules/
+dist/
+*.log
+*.bak
+*~
+*.pem
+*.key
+*.dump
+*.sql.gz
+*.tar.gpg
+.env.*
+!.env.example
+.claude/worktrees/
+.claude/settings.local.json
