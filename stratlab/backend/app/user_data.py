@@ -289,11 +289,15 @@ def _settings_of(*prefixes: str) -> Callable[[str], dict]:
 
 
 def _x_drawings(uid: str) -> dict:
-    from . import drawings_store
+    from . import chart_data, drawings_store
     out = {}
     for name in drawings_store._index(uid):
         r, _, s = name.partition(":")
         out[name] = drawings_store.load(uid, r, s)
+    for name in chart_data._all(uid):          # drawings only the older chart saved
+        if name not in out:
+            r, _, s = name.partition(":")
+            out[name] = drawings_store.load(uid, r, s)
     return out
 
 

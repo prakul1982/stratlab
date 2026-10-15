@@ -38,7 +38,7 @@ def detect(text: str, filename: str = "") -> str:
         try:
             obj = json.loads(t)
         except ValueError:
-            return "text"
+            return "stratlab" if re.search(r'"format"\s*:\s*"stratlab', t[:400]) else "text"          # a cut or damaged export
         if not isinstance(obj, dict):
             return "json"
         fmt = obj.get("format")
@@ -68,6 +68,7 @@ def from_json(text: str) -> dict:
     if not s.entry:
         raise ValueError("That strategy has no entry rules.")
     inst = obj.get("instrument") if isinstance(obj.get("instrument"), dict) else None
+    inst_id = (inst or {}).get("id") if isinstance((inst or {}).get("id"), str) and (inst or {}).get("id") else None
     group, notes = None, []
     if isinstance(obj.get("group"), dict):
         try:
@@ -78,8 +79,8 @@ def from_json(text: str) -> dict:
             notes.append("The group in the file couldn't be read, so pick what to test it on.")
     # an export holds every setting: the timeframe, the sell rule, the stop, the target and the risk per trade are all
     # given, so none of them is asked again (R11C-013: the import asked the risk per trade the file holds)
-    given = ["tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital"] + (["instrument"] if inst or group else [])
-    return {"strategy": s.model_dump(), "instrument_id": None if group else (inst or {}).get("id"), "group": group,
+    given = ["tf", "exit", "sl", "tgt", "trail", "maxBars", "riskPct", "capital"] + (["instrument"] if inst_id or group else [])
+    return {"strategy": s.model_dump(), "instrument_id": None if group else inst_id, "group": group,
             "mentioned": given, "notes": notes}
 
 

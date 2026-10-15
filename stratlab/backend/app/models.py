@@ -182,7 +182,7 @@ class NotebookReq(BaseModel):
 
 
 class ImportReq(BaseModel):
-    text: str = Field(..., min_length=5, max_length=20000)
+    text: str = Field(..., min_length=5, max_length=60000)      # a StratLab export of a large notebook is 20-30 KB
     filename: str = Field("", max_length=120)
 
 

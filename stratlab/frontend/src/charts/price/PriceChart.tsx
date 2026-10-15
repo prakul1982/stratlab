@@ -181,6 +181,7 @@ export default function PriceChart(props: PriceChartProps) {
   const [hover, setHover] = useState<Hover | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
   const [error, setError] = useState("");
+const [saveNote, setSaveNote] = useState("");
   const setMore = (v: boolean) => { if (rootRef.current) rootRef.current.dataset.more = String(v); };
   const [fetchingMore, setFetchingMore] = useState(false);
   const [table, setTable] = useState(false);
@@ -286,7 +287,9 @@ export default function PriceChart(props: PriceChartProps) {
     window.clearTimeout(timer.current);
     const send = async () => {
       pending.current = null;
-      if (await pushRemote(key, drawings, layout)) { const cur = readLocal(key); if (cur && cur.at === at) writeLocal(key, { ...cur, dirty: false }); }
+      const r = await pushRemote(key, drawings, layout);
+      if (r.ok) { const cur = readLocal(key); if (cur && cur.at === at) writeLocal(key, { ...cur, dirty: false, synced: true }); setSaveNote(""); }
+      else if (r.refused) setSaveNote((n) => n || r.refused!);          // the server's message, shown once until a save goes through
     };
     pending.current = () => { window.clearTimeout(timer.current); void send(); };
     timer.current = window.setTimeout(send, 700);
@@ -324,7 +327,7 @@ export default function PriceChart(props: PriceChartProps) {
         layoutRef.current = c.use.layout;
         e.setDrawings(c.use.drawings); setList(e.drawings);
         applyLayout(c.use.layout);
-        writeLocal(storageKey, { drawings: c.use.drawings, layout: c.use.layout, at: r?.at || Date.now(), dirty: false });
+        writeLocal(storageKey, { drawings: c.use.drawings, layout: c.use.layout, at: r?.at || Date.now(), dirty: false, synced: !!r });
       }
       if (c.send) scheduleRef.current();
       syncData();
@@ -680,6 +683,7 @@ export default function PriceChart(props: PriceChartProps) {
           <button type="button" className="pc-btn" aria-pressed={table} onClick={() => { setTable(!table); setTick((x) => x + 1); }} title="The candles as a table">Table</button>
         </div>
       </div>
+      {saveNote && <p className="pc-note" role="alert">{saveNote}</p>}
       {error && status === "ready" && <p className="pc-note" role="status">{error}</p>}
       {props.note && <p className="pc-note">{props.note}</p>}
       {tool && <p className="pc-note" role="status">{TOOL[tool].name}: {phone ? TOOL_HINT[tool].replace(/Click/g, "Tap").replace("Press and drag", "Drag").replace(" Esc cancels.", "") : TOOL_HINT[tool]}{ui.step > 0 ? ` (${ui.step} placed)` : ""}</p>}

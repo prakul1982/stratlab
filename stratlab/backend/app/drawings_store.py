@@ -148,6 +148,7 @@ def save(uid: str, region: str, symbol: str, payload: Payload) -> dict:
     name = f"{region}:{symbol}"
     if not body["drawings"] and not layout:
         db.delete_setting(_row(uid, region, symbol))
+        chart_data.save(uid, name, [])          # the older chart's copy would otherwise load again
         idx.pop(name, None)
         _write_index(uid, idx)
         return {"drawings": [], "layout": None, "updated_at": None}
@@ -175,6 +176,7 @@ def forget_symbol(uid: str, region: str, symbol: str) -> None:
     idx = _index(uid)
     idx.pop(f"{region}:{symbol}", None)
     db.delete_setting(_row(uid, region, symbol))
+    chart_data.save(uid, f"{region}:{symbol}", [])          # and the older chart's copy
     _write_index(uid, idx)
 
 
@@ -185,4 +187,6 @@ def forget(uid: str) -> int:
         r, _, s = name.partition(":")
         db.delete_setting(_row(uid, r, s))
     db.delete_setting(INDEX + uid)
-    return len(idx)
+    older = len(chart_data._all(uid))
+    chart_data.forget(uid)                    # the older chart's drawings too
+    return max(len(idx), older)
