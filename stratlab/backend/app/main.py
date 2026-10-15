@@ -4278,6 +4278,8 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
     # a group with no live view (the US) says so while its session trades too, and when its count comes (R9R-007)
     out["pending"] = stock_pages.day_due(region, (out.get("today") or {}).get("day") or out.get("as_of"),
                                          due=breadth.due_label(region), during=region not in breadth_live.LIVE_REGIONS)
+    if out["pending"] and breadth.update_failed(region, out["pending"]):
+        out["pending"] = {**out["pending"], "failed": True}
     return ok(out)
 
 

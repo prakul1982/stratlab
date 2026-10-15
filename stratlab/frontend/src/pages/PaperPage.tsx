@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
+import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format"
+import { viewedFreeKeepsSessions } from "../lib/account";
 import { sessionPath, upDown } from "../lib/tradeUi";
 import type { LiveRow, LiveSnapshot } from "../lib/types";
 import { ChartEmpty, LineChart } from "../components/Charts";
@@ -267,7 +268,8 @@ export function PaperPage() {
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
       : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false, zone: true })}`
-        : "Free trial ended · upgrade to keep paper trading";
+        : viewedFreeKeepsSessions(me) ? "Free trial ended · viewing as Free keeps your sessions running; a real Free plan stops them"
+          : "Free trial ended · sessions are stopped; upgrade to keep paper trading";
   }
 
   return (

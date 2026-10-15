@@ -89,6 +89,15 @@ def due_label(region: str) -> str | None:
     h, m = divmod(t, 60)
     return f"{h % 12 or 12}:{m:02d} {'PM' if h >= 12 else 'AM'} ET"
 
+def update_failed(region: str, pending: dict | None, stat: dict | None = None) -> bool:
+    """The newest run for a market failed and its prices are older than the day the page says is due: the page then says
+    the update didn't finish instead of "due about 5:55 PM ET" long after that time."""
+    if not pending or pending.get("during"):
+        return False
+    st = (stat if stat is not None else status()).get(region) or {}
+    return bool(st.get("last_error") and str(st.get("as_of") or "")[:10] < str(pending.get("day") or ""))
+
+
 # what each number means, in plain words: the page's (i) next to each figure and chart
 HELP = {
     "ad": "Advances are stocks that closed higher than the day before; declines closed lower. The ratio is advances "

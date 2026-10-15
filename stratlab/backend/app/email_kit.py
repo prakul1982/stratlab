@@ -555,7 +555,7 @@ def link_line(label: str, url) -> Block:
 # ---------- a message from plain lines: alerts, reminders, admin notes ----------
 BUTTONS = {"/alerts": "Open your alerts", "/trade/events": "See every event", "/trade/fo-changes": "See every change",
            "/paper": "Open paper trading", "/admin": "Open Admin", "/money/calendar": "Open your money calendar",
-           "/account": "Open your account", "/research/screens": "Open your screens", "/research/filings": "Open filings",
+           "/account": "Open your account", "/research/scan": "Open the scan", "/research/screens": "Open your screens", "/research/filings": "Open filings",
            "/money/tax-tools?tab=advance": "Open your advance tax figures", "/invite": "See your invites"}
 _ADVICE_TAIL = ("not advice", "not investment advice", "not tax advice", "facts, not")
 _URL = re.compile(r"https?://[^\s<>\"']+", re.I)
@@ -641,9 +641,10 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
     if first_para:
         # "TCS results are out: Q2 results (5 Oct)." under the title "TCS results are out" says it once
         low = first_para.lower()
-        if low.startswith(title.lower()) and first_para[len(title):len(title) + 1] in (":", "."):
+        if low.startswith(title.lower()) and first_para[len(title):len(title) + 1] in ("", ":", "."):
             rest = first_para[len(title) + 1:].strip()
-            first_para = (rest[:1].upper() + rest[1:]) if rest else first_para
+            # the whole sentence is the title again (an admin alert's body opening with its own title): left out
+            first_para = (rest[:1].upper() + rest[1:]) if rest else (None if summary is None and blocks else first_para)
     f = footer or Footer(why=why, unsubscribe=unsubscribe, legal=legal or "Facts, not advice.")
     if legal and not f.legal:
         f.legal = legal

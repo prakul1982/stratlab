@@ -171,7 +171,7 @@ def rows() -> list[dict]:
         log = [f"{r}: {v.get('loaded', 0)} stocks read, prices to {v.get('as_of')}" + (f", {v['failed']} failed" if v.get("failed") else "") for r, v in ok.items()]
         log += [f"{r}: trend scans of {v['scan_stocks']} stocks took {v['scan_seconds']} s" for r, v in ok.items() if v.get("scan_stocks")]
         err = "; ".join(f"{r}: {v.get('last_error')}" for r, v in failed if v.get("last_error")) or None
-        return _row("breadth", "Market breadth", "India about 6:30 PM IST, US about 5:45 PM New York time, on trading days",
+        return _row("breadth", "Market breadth", f"India about 6:30 PM IST, US about {m.breadth.due_label('US').replace(' ET', '')} New York time, on trading days",
                     max((v["ran_at"] for v in ok.values()), default=None), err, log,
                     [{"label": "Run India", "path": "/admin/breadth/run?region=IN&full=true"}, {"label": "Run US", "path": "/admin/breadth/run?region=US&full=true"}],
                     running=m.breadth_runner.running,
