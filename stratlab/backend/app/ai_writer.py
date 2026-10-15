@@ -77,7 +77,8 @@ Cond = {"l": Ref, "op": "xa" | "xb" | "gt" | "lt" | "eq", "r": Ref, "w": weight 
   Use "gt"/"lt" when the user says "above"/"below", and "xa"/"xb" only when they say cross/break/move above.
 Ref = {"t": type, "p": period, "m": second parameter, "v": number,
        "ago": the value this many candles ago, "k": multiply the value by this, "tf": "15m" | "1h" | "1d" to
-       compute it on a higher timeframe than the strategy's candles}
+       compute it on a higher timeframe than the strategy's candles; with "tf", "ago" counts that timeframe's
+       closed candles: ago 0 = the last closed one (yesterday's close for "1d"), ago 1 = the one before}
 Allowed types for this user: %TYPES%
   "price" = close price, "num" = a constant in "v", sma/ema/rsi use "p" as the length,
   macd types: p = fast (12), m = slow (26); bb types: p = length, m = std-devs; vwap: p = length;
