@@ -327,3 +327,94 @@ def test_a_candles_new_orders_go_out_before_the_loss_caps_closes(monkeypatch):
     s._on_candle(b, candle("2999-01-01T10:05:00+00:00", 100.0))   # b enters on this candle, then the cap closes both
     assert [o[1] for o in orders if o[0] == b.sym] == ["buy", "sell"]
     assert orders[0][:2] == (b.sym, "buy") and {o[2] for o in orders[1:]} == {"Daily loss cap"}
+
+
+CAP = {**STRAT, "session": {"dailyLossPct": 2.5},
+       "risk": {**STRAT["risk"], "perTrade": 1000000, "sl": 50, "slippage": 0, "brokerage": 0}}
+
+
+def cap_session(monkeypatch, state=None):
+    mgr, _ = make_manager()
+    orders = []
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: orders.append(ev))
+    return mgr, orders, group_live.GroupLiveSession(mgr, {**row(state), "strategy": CAP})
+
+
+def test_a_loss_carried_overnight_is_not_the_days_loss(monkeypatch):
+    """1.8% lost on day 1 and 0.9% more on day 2 is 0.9% today: under the 2.5% cap, though 2.7% from the entry."""
+    mgr, orders, s = cap_session(monkeypatch)
+    a = s.members[0]
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    e = a.engine
+    assert e.qty > 0 and e.entry == 100.0
+    s._on_candle(a, candle("2999-01-01T10:05:00+00:00", 98.2))                # -1.8% of the pot
+    assert not s.halted and e.qty > 0 and -0.8 < s.today() / s.loss_cap < -0.7        # 1.8% of the pot, the entry charges in
+    s._on_candle(a, candle("2999-01-02T10:00:00+00:00", 98.2))                # next day, flat
+    assert e.day_mark == 98.2 and s.today() == 0
+    s._on_candle(a, candle("2999-01-02T10:05:00+00:00", 97.3))                # a further -0.9%
+    assert not s.halted and e.qty > 0 and not any(o.get("why") == "Daily loss cap" for o in orders)
+    assert -0.4 < s.today() / s.loss_cap < -0.3 and s.snapshot()["account"]["today"] == s.today()
+    assert s.realised() + s.open_pnl() < -0.025 * 1000000                       # from the entry it would have tripped it
+
+
+def test_a_loss_within_the_day_trips_the_cap(monkeypatch):
+    mgr, orders, s = cap_session(monkeypatch)
+    a = s.members[0]
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    s._on_candle(a, candle("2999-01-01T10:05:00+00:00", 97.4))                # -2.6% in the day
+    assert s.halted and a.engine.qty == 0 and any(o.get("why") == "Daily loss cap" for o in orders)
+    # the same 2.6% carried over midnight: the day's part of it is 0.8%, so a position closed then doesn't trip it
+    mgr, orders, s = cap_session(monkeypatch)
+    a = s.members[0]
+    s._on_candle(a, candle("2999-01-01T10:00:00+00:00", 100.0))
+    s._on_candle(a, candle("2999-01-01T10:05:00+00:00", 98.2))
+    s._on_candle(a, candle("2999-01-02T10:00:00+00:00", 98.2))
+    s._on_candle(a, candle("2999-01-02T10:05:00+00:00", 97.4))                # -0.8% today
+    assert not s.halted and a.engine.qty > 0
+    s._on_candle(a, candle("2999-01-02T10:10:00+00:00", 95.5))                # -2.7% today
+    assert s.halted and a.engine.qty == 0
+    assert a.engine.trades[-1]["pnl"] < -0.04 * 1000000 and s.today() <= -s.loss_cap
+
+
+def test_the_days_loss_survives_a_restart_in_the_middle_of_the_day(monkeypatch):
+    mgr, orders, s = cap_session(monkeypatch)
+    a = s.members[0]
+    for t, px in (("2999-01-01T10:00:00+00:00", 100.0), ("2999-01-01T10:05:00+00:00", 98.2),
+                  ("2999-01-02T10:00:00+00:00", 98.2), ("2999-01-02T10:05:00+00:00", 97.3)):
+        s._on_candle(a, candle(t, px))
+    s.corp_cash, today = 12.0, s.today()
+    st = s.state()
+    assert st["day_start_corp"] == 0.0 and st["members"][a.inst["id"]]["day_mark"] == 98.2
+    mgr, orders, s2 = cap_session(monkeypatch, st)
+    a2 = s2.members[0]
+    assert (s2.day, a2.engine.day, a2.engine.day_mark, s2.day_start_corp) == ("2999-01-02", "2999-01-02", 98.2, 0.0)
+    a2.last_price = 97.3                                                       # the next tick or poll
+    assert s2.today() == pytest.approx(today + 12.0) and a2.engine.qty == a.engine.qty
+    # -2.0% from the saved mark (-3.8% from the entry): under the cap, as before the restart
+    s2._on_candle(a2, candle("2999-01-02T10:10:00+00:00", 96.2))
+    assert not s2.halted and a2.engine.qty > 0
+    # a stop mid-day keeps the same measure for a member waiting on its history
+    waiting = {a2.inst["id"]: {**a2.engine.dump(), "last_price": 96.2, "symbol": a2.sym}}
+    assert group_live._saved_today(waiting[a2.inst["id"]], "2999-01-02") == pytest.approx(a2.engine.day_open_pnl(96.2))
+    assert group_live._saved_today(waiting[a2.inst["id"]], "2999-01-03") == 0.0
+    s2._on_candle(a2, candle("2999-01-02T10:15:00+00:00", 95.4))              # -2.9% from the mark
+    assert s2.halted and a2.engine.qty == 0
+
+
+def test_a_split_moves_the_days_mark_with_the_entry(monkeypatch):
+    from tests.test_live_polling import SPLIT, sbar, stock_world
+    mgr, srow = stock_world(monkeypatch, [sbar(5, i, 1000.0) for i in range(40)], [SPLIT])
+    prov = mgr.markets.provider("US")
+    monkeypatch.setattr(mgr.markets, "resolve", lambda iid: (prov, {**srow["instrument"], "id": iid, "symbol": iid.split(":")[1]}))
+    monkeypatch.setattr(mgr, "on_order", lambda s, ev: None)
+    grow = {**row(), "instrument": {"id": "GROUP:custom", "type": "GROUP", "market": "US", "maxOpen": 2,
+                                    "members": ["US:ACME", "US:BETA"], "names": {}},
+            "strategy": {**STRAT, "session": {"dailyLossPct": 2.5}, "risk": {**STRAT["risk"], "sl": 1, "slippage": 0, "brokerage": 0}}}
+    s = group_live.GroupLiveSession(mgr, grow)
+    a = s.members[0]
+    s._on_candle(a, sbar(5, 40, 1000.0))
+    qty, a.engine.day_mark = a.engine.qty, 1000.0           # carried in, marked at the 1,000 it closed at
+    a.corp.apply(a.engine, [SPLIT], "2026-01-06")           # 1:2, applied while the day's mark is held
+    assert (a.engine.qty, a.engine.entry, a.engine.day_mark) == (2 * qty, 500.0, 500.0) and a.engine.day_open_pnl(500.0) == 0
+    s._on_candle(a, sbar(6, 0, 500.0, lo=496.0))            # the day's first candle: nothing counted as a loss
+    assert a.engine.day_mark == 500.0 and s.today() == 0 and not s.halted

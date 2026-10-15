@@ -1160,6 +1160,7 @@ class PaperActions:
             q, f, c, text = paper_apply(e.qty, e.dir, e.entry, a, self.region)
             e.qty = int(round(q)) if _whole(q) else q
             e.entry, e.sl, e.tg, e.best, e.init_sl = e.entry / f, e.sl / f, e.tg / f, e.best / f, e.init_sl / f
+            e.day_mark = e.day_mark / f if e.day_mark is not None else None       # the day's loss is counted from it
             e.events.append(paper_event(a, self.region, text, c))
             if not todo:
                 self.applied.append(a["id"])
