@@ -138,20 +138,26 @@ def _long_term(a: str, b: str) -> bool:
 
 
 def tax_estimate(kind: str, trades: list[dict]) -> dict:
-    """A rough capital-gains estimate on the net profit. Only India equity is estimated."""
+    """A rough capital-gains estimate on the net profit, STT added back (capital-gains rules don't allow it as a
+    deduction). Only India equity is estimated."""
     if kind != "in_eq":
         note = ("F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
                 if kind in ("in_fut", "in_opt", "in_bse_opt", "in_mcx_fut", "in_mcx_opt")
+                else "Currency F&O profit is taxed as business income at your slab rate, so it isn't estimated here."
+                if kind.startswith("in_cds_")
                 else "Intraday equity profit is taxed as speculative business income at your slab rate, so it isn't estimated here."
                 if kind == "in_eq_mis" else "Tax depends on where you live, so it isn't estimated for this market.")
         return {"amount": None, "note": note}
-    short = sum(t["pnl"] for t in trades if not _long_term(t.get("entry_t"), t.get("exit_t")))
-    long_ = sum(t["pnl"] for t in trades if _long_term(t.get("entry_t"), t.get("exit_t")))
+    # the gain before STT: the trade's P&L is after it, and capital-gains rules don't deduct it (rev10a)
+    gain = lambda t: t["pnl"] + IN_EQUITY["stt"] * (t.get("qty") or 0) * ((t.get("entry") or 0) + (t.get("exit") or 0))  # noqa: E731
+    short = sum(gain(t) for t in trades if not _long_term(t.get("entry_t"), t.get("exit_t")))
+    long_ = sum(gain(t) for t in trades if _long_term(t.get("entry_t"), t.get("exit_t")))
     if short < 0:   # a short-term loss also sets off long-term gains; a long-term loss only long-term ones
         long_, short = long_ + short, 0.0
     amount = max(0.0, short) * IN_STCG + max(0.0, long_ - IN_LTCG_EXEMPT) * IN_LTCG
     return {"amount": round(amount, 2),
-            "note": "Estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh. Losses and your other income can change it."}
+            "note": ("Rough estimate: 20% on short-term gains, 12.5% on long-term gains above ₹1.25 lakh, on gains before STT "
+                     "(STT isn't deductible from capital gains). Losses and your other income can change it.")}
 
 
 def floor_to(q: float, step: float) -> float:

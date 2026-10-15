@@ -118,6 +118,8 @@ class Engine:
         self.entry_t = None
         self.entry_cost = 0.0
         self.trades: list[dict] = []
+        # running totals over every closed trade: the saved list keeps only the last 500
+        self.realised_total, self.trade_count, self.win_count = 0.0, 0, 0
         self.events: list[dict] = []
         self.cost_items: dict[str, float] = {}
         self.skipped_size = 0
@@ -146,6 +148,7 @@ class Engine:
                 "init_sl": self.init_sl, "best": self.best, "held": self.held, "dir": self.dir,
                 "day": self.day, "day_trades": self.day_trades, "day_pnl": self.day_pnl, "cool": self.cool,
                 "halted": self.halted, "emptied_on": self.emptied_on, "trades": self.trades[-500:], "events": self.events[-1000:],
+                "totals": {"realised": self.realised_total, "count": self.trade_count, "wins": self.win_count},
                 **({"early_t": self.early_t} if self.early_t else {}), **({"day_mark": self.day_mark} if self.day_mark is not None else {})}
 
     def load(self, st: dict):
@@ -161,6 +164,7 @@ class Engine:
         self.day, self.day_trades = st.get("day"), st.get("day_trades", 0)
         self.day_pnl, self.cool, self.halted = st.get("day_pnl", 0.0), st.get("cool", 0), st.get("halted", False)
         self.trades, self.events = st.get("trades", []), st.get("events", [])
+        self.realised_total, self.trade_count, self.win_count = saved_totals(st)
         self.emptied_on = st.get("emptied_on")
         self.early_t = st.get("early_t")
         self.day_mark = st.get("day_mark")
@@ -245,6 +249,9 @@ class Engine:
                             "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
                             "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why,
                             "at_open": at_open})
+        self.realised_total += pnl
+        self.trade_count += 1
+        self.win_count += pnl > 0
         ev = {"t": b["t"], "side": close_side, "px": px, "qty": self.qty, "why": why, "pnl": pnl}
         self.events.append(ev)
         self.qty, self.pend_exit, self.day_mark = 0, False, None
@@ -265,7 +272,9 @@ class Engine:
         if self.qty == 0 and self.cash <= 0:
             self.emptied_on = str(b["t"])[:10]
             if self.cash < 0:
-                self.cash += write_off(self.trades, -self.cash)
+                back = write_off(self.trades, -self.cash)
+                self.cash += back
+                self.realised_total += back
             self.cash = max(self.cash, 0.0)
 
     def _loss_cap(self) -> float:
@@ -506,11 +515,20 @@ class Engine:
         return ev
 
 
+def saved_totals(st: dict) -> tuple[float, int, int]:
+    """A saved engine's realised P&L, closed-trade count and wins over every trade it closed. A state saved before these
+    totals were kept has only its trade list (the last 500): what that list holds is the best figure there is."""
+    trades = st.get("trades") or []
+    tot = st.get("totals") or {}
+    return (tot.get("realised", sum(t.get("pnl") or 0.0 for t in trades)), tot.get("count", len(trades)),
+            tot.get("wins", sum(1 for t in trades if (t.get("pnl") or 0.0) > 0)))
+
+
 def write_off(trades: list[dict], shortfall: float, owners: list | None = None) -> float:
     """The loss past an emptied account is nobody's to pay: take `shortfall` back off the losses of the newest trades
     (newest first), so the trades still add up to the account's change, which is then exactly -100%. Each trade
-    touched notes how much (`capped_loss`). `owners[k]` is the engine of trades[k]: its cash is raised by the same
-    amount, so its own books still add up. Returns what was taken back."""
+    touched notes how much (`capped_loss`). `owners[k]` is the engine of trades[k]: its cash and realised total are raised
+    by the same amount, so its own books still add up. Returns what was taken back."""
     left = shortfall
     for k in range(len(trades) - 1, -1, -1):
         if left <= 1e-9:
@@ -525,6 +543,7 @@ def write_off(trades: list[dict], shortfall: float, owners: list | None = None) 
             t["ret"] = t["pnl"] / (t["qty"] * t["entry"]) * 100
         if owners is not None:
             owners[k].cash += back
+            owners[k].realised_total += back
         left -= back
     return shortfall - left
 

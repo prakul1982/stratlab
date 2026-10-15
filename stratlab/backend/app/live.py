@@ -13,7 +13,7 @@ from . import risk
 from .alerts import notify
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import TF_MIN, Ctx, Engine, chart_series, cond_text
+from .engine.core import TF_MIN, Ctx, Engine, chart_series, cond_text, saved_totals
 from .kite_service import IST, KiteService, TickHub
 from .models import Strategy
 from .daily_report import Reporter
@@ -303,7 +303,12 @@ class LiveSession:
         lot = self.inst.get("step") or (self.inst.get("lot", 1) if self.inst.get("fno") else 1)
         self.engine = Engine(self.strategy, lot, state=state or None, cost_kind=C.kind_of(self.inst))
         n = len(self.engine.events)
-        self.engine.cash += self.corp.apply(self.engine, todo, today, todo=True)[0]
+        # dividends and cash for fractional shares, paid in or out: in the cash, and counted with the realised P&L as a
+        # group's are. A state saved before it was kept has it in its cash only
+        self.corp_cash = state.get("corp_cash", 0.0)
+        cash = self.corp.apply(self.engine, todo, today, todo=True)[0]
+        self.engine.cash += cash
+        self.corp_cash += cash
         self.engine.next_open = False        # live fills at the latest price, once the candle has closed
         self.engine.day_close = day_close_minutes(self.market)
         self.next_poll = 0.0
@@ -382,6 +387,7 @@ class LiveSession:
             self.corp.bars(self.bars, acts)
             cash, f = self.corp.apply(self.engine, acts, day)
             self.engine.cash += cash
+            self.corp_cash += cash
             if timer:
                 self.last_price /= f
             self.dirty = self.dirty or len(self.engine.events) > n
@@ -489,6 +495,7 @@ class LiveSession:
         d["last_price"], d["last_tick_at"] = self.last_price, self.last_tick_at
         d["last_bar_t"] = self.bars[-1]["t"]       # the last candle run: a restart catches up on the ones after it
         d.update(self.corp.dump())
+        d["corp_cash"] = self.corp_cash
         return d
 
     def final_state(self, now: datetime | None = None) -> dict:
@@ -508,7 +515,7 @@ class LiveSession:
         with self.lock:
             e = self.engine
             n = min(150, len(self.bars))
-            ctx = Ctx(self.bars, intraday=self.tf != "1d")
+            ctx = Ctx(self.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
             overlays, osc = chart_series(self.strategy, ctx, len(self.bars) - n)
             view = self.bars[-n:]
             forming = self.builder.cur
@@ -531,8 +538,10 @@ class LiveSession:
                     "side": "short" if e.dir == -1 else "long",
                     "target": e.tg if e.qty and e.tg != float("inf") else None,
                     "unrealised": e.dir * e.qty * (px - e.entry) - e.entry_cost if e.qty else 0.0,   # net of entry costs, as equity is
-                    "realised": sum(t["pnl"] for t in e.trades),
-                    "trades": len(e.trades), "wins": sum(1 for t in e.trades if t["pnl"] > 0),
+                    # the running totals (the trade list keeps only the newest after a restart), with the cash
+                    # corporate actions paid, as a group counts them
+                    "realised": e.realised_total + self.corp_cash, "corp_cash": self.corp_cash,
+                    "trades": e.trade_count, "wins": e.win_count,
                     "emptied_on": e.emptied_on,
                 },
             }
@@ -546,7 +555,8 @@ def stopped_snapshot(row: dict) -> dict:
     st = row.get("state") or {}
     strategy = row.get("strategy") or {}
     cap = (strategy.get("risk") or {}).get("capital") or 0
-    trades = st.get("trades", [])
+    realised, n_trades, wins = saved_totals(st)
+    corp_cash = st.get("corp_cash", 0.0)
     cash = st.get("cash", cap)
     qty = st.get("qty") or 0
     d = st.get("dir") or 1
@@ -560,7 +570,7 @@ def stopped_snapshot(row: dict) -> dict:
     overlays, osc = {}, {}
     if bars:
         try:
-            ctx = Ctx(bars, intraday=strategy.get("tf") != "1d")
+            ctx = Ctx(bars, intraday=strategy.get("tf") != "1d", base_min=TF_MIN.get(strategy.get("tf") or "1d"))
             overlays, osc = chart_series(Strategy(**strategy), ctx, 0)
         except Exception as e:                       # the candles without their lines rather than none
             print("stopped session lines:", row.get("id"), str(e)[:120])
@@ -577,8 +587,8 @@ def stopped_snapshot(row: dict) -> dict:
                         "side": "short" if d == -1 else "long",
                         "unrealised": d * qty * (px - entry) - (st.get("entry_cost") or 0.0) if held else 0.0,
                         "valued_at": px if held else None,
-                        "realised": sum(t["pnl"] for t in trades), "trades": len(trades),
-                        "wins": sum(1 for t in trades if t["pnl"] > 0), "emptied_on": st.get("emptied_on")}}
+                        "realised": realised + corp_cash, "corp_cash": corp_cash, "trades": n_trades,
+                        "wins": wins, "emptied_on": st.get("emptied_on")}}
 
 
 class LimitError(Exception):
