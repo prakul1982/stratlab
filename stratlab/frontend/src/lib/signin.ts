@@ -1,4 +1,10 @@
+import { CFG } from "./config";
+import { hasSavedSession } from "./entry";
 import { rememberNext, returnPathFor } from "./returnTo";
+
+/** This browser already has a saved sign-in. A shared page (a library strategy, a verdict) is a visitor's page even then, so
+ * it asks this before offering "Sign in" or "Continue with Google" to someone who is signed in. */
+export const signedInHere = (): boolean => { try { return hasSavedSession(CFG.SUPABASE_URL, localStorage); } catch { return false; } };
 
 /** Sign in with Google, then open `next` (left out: the page the visitor is on now, unless that's the landing page).
  * Google comes back to the site's root, which is on Supabase's list of allowed return addresses; the page itself is

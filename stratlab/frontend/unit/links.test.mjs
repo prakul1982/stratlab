@@ -42,6 +42,6 @@ test("every literal in-app link, redirect and navigate call has a route", () => 
 
 test("the old addresses still open the page that replaced them", () => {
   for (const [from, to] of [["/all", "/mine"], ["/scans", "/research/scan"], ["/research/scans", "/research/scan"], ["/watchlist", "/research/watchlist"]]) {
-    assert.ok(new RegExp(`<Route path="${from}" element=\\{<Navigate to="${to}" replace />\\} />`).test(main), `${from} should redirect to ${to}`);
+    assert.ok(new RegExp(`<Route path="${from}" element=\\{<Redirect to="${to}" />\\} />`).test(main), `${from} should redirect to ${to}`);
   }
 });

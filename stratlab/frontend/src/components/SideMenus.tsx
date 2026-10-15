@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/api";
 import { useApp } from "../lib/app";
-import { leavePush } from "../lib/pwa";
+import { signOutHere } from "../lib/signout";
 import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import type { Market, Me } from "../lib/types";
@@ -144,7 +144,7 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
           <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
           <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Help</button>
           <hr />
-          <button role="menuitem" onClick={done(() => { void leavePush().then(() => supabase.auth.signOut()); })}><LogOut size={16} />Sign out</button>
+          <button role="menuitem" onClick={done(() => { void signOutHere(supabase.auth); })}><LogOut size={16} />Sign out</button>
         </div>
       </>}
     </div>

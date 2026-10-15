@@ -83,7 +83,12 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const list = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   // the kit's dialog behaviour: focus starts in the box, Tab stays inside, Esc closes, focus goes back to what opened it
-  useDialogFocus(box, true, { onEscape: onClose, initial: () => input.current });
+  // set when the palette is closed (Esc, a click outside, or leaving the page): the work it started stops at its next step
+  // instead of saving a notebook, spending a backtest or navigating the person away from where they went
+  const cancelled = useRef(false);
+  useEffect(() => { cancelled.current = false; return () => { cancelled.current = true; }; }, []);
+  const close = () => { cancelled.current = true; onClose(); };
+  useDialogFocus(box, true, { onEscape: close, initial: () => input.current });
   const text = q.trim();
   const words = text.split(/\s+/).filter(Boolean).length;
   const code = looksLikeCode(q);
@@ -100,27 +105,32 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     return () => window.clearTimeout(t);
   }, [text, lookup, code]);
 
-  const go = (to: string, state?: unknown) => { onClose(); nav(to, state ? { state } : undefined); };
+  const go = (to: string, state?: unknown) => { if (cancelled.current) return; onClose(); nav(to, state ? { state } : undefined); };
   const testIdea = (t: string, market = lastMarket(), symbol?: string | null) => go("/new", { prefill: { market, symbol: symbol ?? undefined, text: t } });
   const getIdeas = async () => {
+    if (cancelled.current) return;
     setThinking(true); setIdeasFor(text);
     try { setIdeas((await api<{ ideas: Idea[] }>("/search/ideas", { method: "POST", body: { q: text } })).ideas); setSel(0); }
     catch (e) { fail(e); } finally { setThinking(false); }
   };
 
-  const step = (s: string) => setSteps((x) => [...(x ?? []), s]);
+  const step = (s: string) => { if (!cancelled.current) setSteps((x) => [...(x ?? []), s]); };
 
   /** Build the rules, save them as a notebook, then test them (or start paper trading), and open the result. */
   const buildAndRun = async (a: Ask, paper: boolean) => {
+    if (cancelled.current) return;
     step("Turning your words into exact rules…");
     const r = await buildIdea(a.text || text, a.market ?? lastMarket());
-    if (r.usedAI) refreshMe();
+    if (r.usedAI) refreshMe();                       // the AI was used, closed or not
+    if (cancelled.current) return;
     if (!r.built) throw new Error(r.note);
     const b = r.built;
     const inst = b.instrument ?? (a.symbol ? await findInstrument(a.symbol, a.market) : null);
+    if (cancelled.current) return;
     step(`Saving it as a notebook${inst ? ` on ${inst.symbol}` : ""}…`);
     const nb = await api<Notebook>("/notebooks", { method: "POST", body: { name: b.strategy.name, question: b.question, strategy: b.strategy, instrument: inst?.id ?? null } });
-    await refreshNotebooks();
+    await refreshNotebooks();                        // the notebook now exists, so the list is refreshed even if the palette was closed
+    if (cancelled.current) return;
     if (!inst) {           // nothing named to trade: the notebook asks what to test it on
       go(`/n/${nb.id}`, { gaps: b.gaps });
       return;
@@ -129,12 +139,13 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       step("Starting paper trading with fake money…");
       const snap = await api<{ id: string }>("/live/sessions", { method: "POST", body: { strategy: b.strategy, instrument: inst.id } });
       track("paper trading started", { kind: "single", source: "search" });
-      refreshMe();
+      refreshMe();                                   // the session exists, closed or not
       go(`/paper/${snap.id}`);
       return;
     }
     const tf = b.strategy.tf, market = markets.find((m) => m.id === inst.market);
     const want = HISTORY[tf] ?? 60, days = Math.min(want, market?.max_days?.[tf as keyof typeof market.max_days] ?? want);
+    if (cancelled.current) return;
     step(`Testing it on ${days >= 365 ? `${Math.round(days / 365)} years` : `${days} days`} of real ${inst.symbol} prices…`);
     const out = await api<{ experiment: Experiment }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body: { days, label: "From search" } });
     trackBacktest("search");
@@ -144,28 +155,32 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
 
   const runIntent = async (it: Intent) => {
     if (it.to) return go(it.to);
+    if (cancelled.current) return;
     setSteps([it.deep ? `Finding ${it.deep}…` : "Finding both companies…"]);
     try {
       if (it.deep) {
         const inst = await findInstrument(it.deep, "IN");
+        if (cancelled.current) return;
         setSteps(null);
         return go(inst && !inst.fno ? `/research/IN/${encodeURIComponent(inst.symbol)}/deep` : `/research?q=${encodeURIComponent(it.deep)}`);
       }
       const [a, b] = await Promise.all(it.compare!.map((n) => findInstrument(n, "IN")));
+      if (cancelled.current) return;
       setSteps(null);
       const qs = [a && `a=${encodeURIComponent(a.symbol)}`, b && `b=${encodeURIComponent(b.symbol)}`].filter(Boolean).join("&");
       return go(`/research/compare?region=IN${qs ? "&" + qs : ""}`);   // a name that wasn't found is left for the user to pick
-    } catch (e) { setSteps(null); fail(e); }
+    } catch (e) { if (cancelled.current) return; setSteps(null); fail(e); }
   };
 
   /** Work out what the line means, then do it. */
   const doIt = async () => {
-    if (steps || !text) return;
+    if (steps || !text || cancelled.current) return;
     if (intent) return runIntent(intent);
     setAnswer(null);
     setSteps(["Working out what you mean…"]);
     try {
       const a = await api<Ask>("/ask", { method: "POST", body: { q: text } });
+      if (cancelled.current) return;
       if (a.action === "test" || a.action === "paper") return await buildAndRun(a, a.action === "paper");
       setSteps(null);
       if (a.action === "import") return go("/import", { importText: q });
@@ -176,6 +191,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       if (a.action === "ideas") return getIdeas();
       if (a.action === "research" && a.symbol) {
         const inst = await findInstrument(a.symbol, a.market === "US" ? "US" : "IN");
+        if (cancelled.current) return;
         const mk = inst?.market === "US" ? "US" : "IN";
         return go(inst && !inst.fno ? `/research/${mk}/${encodeURIComponent(inst.symbol)}` : "/research");
       }
@@ -184,6 +200,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       if (a.action === "open") return go(PAGES[a.page ?? ""] ?? "/");
       getIdeas();
     } catch (e) {
+      if (cancelled.current) return;
       setSteps(null);
       setAnswer({ q: text, text: `Couldn't finish that: ${(e as Error).message}`, problem: true });
     }
@@ -278,7 +295,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
 
   let i = -1;
   return (
-    <div className="modal-back palette-back" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-back palette-back" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div ref={box} className="palette" role="dialog" aria-modal="true" aria-label="Ask or do anything">
         <div className="palette-in">
           <Sparkle size={20} />

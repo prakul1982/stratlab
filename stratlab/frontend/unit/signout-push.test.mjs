@@ -33,11 +33,17 @@ test("leaving push drops this browser's subscription and never throws or waits l
 });
 
 test("every sign-out calls leavePush before supabase.auth.signOut", () => {
-  const where = { "src/components/SideMenus.tsx": 1, "src/pages/AccountPage.tsx": 2, "src/lib/app.tsx": 1 };
-  for (const [file, n] of Object.entries(where)) {
+  // "Sign out" (the menu, the Account page, the server's 401) goes through signOutHere, which calls leavePush first and signs
+  // out this device only; the one direct call left is "Sign out everywhere" (global), which calls leavePush itself
+  const here = { "src/components/SideMenus.tsx": 0, "src/pages/AccountPage.tsx": 1, "src/lib/app.tsx": 0 };
+  for (const [file, n] of Object.entries(here)) {
     const src = read(file);
     const calls = [...src.matchAll(/supabase\.auth\.signOut\(/g)];
     assert.equal(calls.length, n, file);
-    for (const m of calls) assert.match(src.slice(Math.max(0, m.index - 80), m.index), /leavePush\(\)/, file);
+    for (const m of calls) {
+      assert.match(src.slice(Math.max(0, m.index - 80), m.index), /leavePush\(\)/, file);
+      assert.match(src.slice(m.index, m.index + 60), /signOut\(\{ scope: "global" \}\)/, file);
+    }
   }
+  assert.match(read("src/lib/signout.ts"), /await leavePush\(\);[\s\S]*auth\.signOut\(\{ scope: "local" \}\)/);
 });
