@@ -4,6 +4,7 @@ import { aboutMoney, approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn } from "../lib/signin";
+import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 import { signInProblem } from "../lib/signinError";
 import { FAQ } from "../content/faq";
 import { Google } from "../components/Icons";
@@ -183,20 +184,6 @@ const moneyCard = ([t, b, tag]: [string, string, string]) => (
   <div key={t} className="lp-card lp-beyond-card"><b>{t}</b><p className="small muted">{b}</p><span className="lp-tag">{tag}</span></div>
 );
 
-/** Close a `<details>` menu with Esc or a tap outside it, the way every other pop-up on the site closes. */
-function useDetailsDismiss(ref: React.RefObject<HTMLDetailsElement | null>) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const close = (back: boolean) => { if (el.open) { el.open = false; if (back) el.querySelector("summary")?.focus(); } };
-    const key = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") close(true); };
-    const down = (e: Event) => { if (!el.contains(e.target as Node)) close(false); };
-    document.addEventListener("keydown", key);
-    document.addEventListener("pointerdown", down);
-    return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", down); };
-  }, [ref]);
-}
-
 /** `section`: scroll there first (the page was opened as /pricing, /faq…). `panel`: the address was /login or /signup, so
  * the way in is open on top of the page. `heading`: the address's own heading (content/seo.ts: "Plans and prices" at
  * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
@@ -261,15 +248,6 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
         </>}
         <button type="button" className="btn outline sm" onClick={go}>Sign in</button>
       </header>
-
-      {way && (
-        <Dialog title={way === "signup" ? "Create your free account" : "Sign in to StratLab"} onClose={() => setWay(null)}>
-          <div className="k-stack">
-            <p className="k-small">{way === "signup" ? "StratLab accounts are made with Google: there's no password to set up and no card to add." : "StratLab signs in with your Google account."} Signing in only reads your name and email from Google.</p>
-            <div className="k-row">{cta()}</div>
-          </div>
-        </Dialog>
-      )}
 
       <main id="main" tabIndex={-1}>
       {plansOnly && (
@@ -425,6 +403,16 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       </section>
       </>}
       </main>
+
+      {/* after the page's h1 in the DOM (it sits over the page by position): the dialog's h2 never comes first (R26-004) */}
+      {way && (
+        <Dialog title={way === "signup" ? "Create your free account" : "Sign in to StratLab"} onClose={() => setWay(null)}>
+          <div className="k-stack">
+            <p className="k-small">{way === "signup" ? "StratLab accounts are made with Google: there's no password to set up and no card to add." : "StratLab signs in with your Google account."} Signing in only reads your name and email from Google.</p>
+            <div className="k-row">{cta()}</div>
+          </div>
+        </Dialog>
+      )}
 
       <footer className="lp-foot">
         <div className="lp-wrap spread wrap g16">

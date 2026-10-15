@@ -33,7 +33,7 @@ export const PAGES: PageMeta[] = [
   // track it" over a drawn "Test it, research it, track it.")
   { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-08", heading: TAGLINE },
   { path: "/pricing", title: "Plans · StratLab",
-    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, updated: "2026-10-08",
+    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/", updated: "2026-10-08",     // the landing page with its prices: one address for both (R26-006)
     heading: "Plans and prices",
     summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on experiments, AI builds and paper sessions.",
       "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
@@ -279,5 +279,5 @@ export const pageMeta = (path: string): PageMeta | undefined => PAGES.find((p) =
 /** The full web address for a path on the site. */
 export const absolute = (path: string) => SITE + (path === "/" ? "/" : path);
 
-/** The pages a sitemap lists: indexable, and the page itself rather than an alias. */
-export const sitemapPages = () => PAGES.filter((p) => p.index);
+/** The pages a sitemap lists: indexable, and the page itself rather than an alias or a page whose canonical address is another's. */
+export const sitemapPages = () => PAGES.filter((p) => p.index && (p.canonical ?? p.path) === p.path);
