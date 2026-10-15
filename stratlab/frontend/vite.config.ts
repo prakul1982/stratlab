@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { publicFonts } from "./scripts/publicFonts.mjs";
 import { rewriteProxy } from "./scripts/rewriteProxy.mjs";
 import { seoPages } from "./scripts/seoPages.mjs";
+import { buildStamp } from "./scripts/buildStamp.mjs";
 
 // Production forwards /stocks, /sitemap.xml, /sitemaps, /v and /c to the API (vercel.json); `vite` and `vite preview` do the
 // same, to the API the app is pointed at (scripts/rewriteProxy.mjs). Those API pages use the site's fonts at /fonts
@@ -11,6 +12,8 @@ const forwarded = rewriteProxy();
 
 export default defineConfig({
   plugins: [react(), publicFonts(), seoPages()],
+  // which build this bundle is (Admin → System shows it beside the server's: R24-009)
+  define: { __APP_BUILD__: JSON.stringify(buildStamp()) },
   server: { proxy: forwarded },
   preview: { proxy: forwarded },
   build: {

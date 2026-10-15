@@ -117,6 +117,26 @@ def _dates(values: list[str]) -> str:
     return "mdy"
 
 
+def date_order(values: list[str], broker: str | None = None) -> tuple[str, str | None]:
+    """(order, note) for a column of US dates. Month first unless a date can only be read day first (_dates). When every
+    such date reads either way (03/05/2025), an Indian broker's export (`broker`, from its columns or its name: it writes
+    the Indian way, US lines too) is read day first; any other file month first. The note says which was taken."""
+    order = _dates(values)
+    split = [m for m in (re.match(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})", v or "") for v in values) if m]
+    if order == "dmy" or not split or any(int(m.group(2)) > 12 for m in split):
+        return order, None
+    if broker:
+        return "dmy", f"Dates like 03/05/2025 were read day first (3 May), as {broker} writes them."
+    return order, "Dates like 03/05/2025 were read as month/day (5 March)."
+
+
+def indian_export(rows: list[list[str]], head: int, filename: str = "") -> str | None:
+    """The Indian broker whose export this is (by its column names, or its name above the table or in the file name),
+    or None."""
+    name = hf.trade_broker(rows[head], rows[:head], filename)
+    return None if name == "CSV" else name
+
+
 def _day(v: str, order: str) -> str | None:
     m = re.match(r"^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})", v or "")
     if m and order == "mdy":
@@ -155,7 +175,7 @@ def _head(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
 
 def parse_upload(data: bytes, filename: str = "") -> dict:
     """US trades from a CSV or Excel file: the date, purchase or sale, the ticker, the quantity and the price in dollars
-    (and optionally fees). {"rows", "problems", "month_first"}. Raises FileError when nothing can be read."""
+    (and optionally fees). {"rows", "problems", "month_first", "date_note"}. Raises FileError when nothing can be read."""
     if not data:
         raise hf.FileError("That file is empty.")
     if len(data) > MAX_BYTES:
@@ -168,16 +188,16 @@ def parse_upload(data: bytes, filename: str = "") -> dict:
         got = _head(rows)
         if got:
             i, c = got
-            return _rows(rows[i + 1:], c, i + 2)
+            return _rows(rows[i + 1:], c, i + 2, indian_export(rows, i, filename))
     raise hf.FileError("No US trades were found in that file. It needs columns for the date, the trade (purchase or sale), "
                        "the ticker, the quantity and the price in dollars.")
 
 
-def _rows(rows: list[list[str]], c: dict[str, int], first_line: int) -> dict:
+def _rows(rows: list[list[str]], c: dict[str, int], first_line: int, broker: str | None = None) -> dict:
     def cell(r, f):
         i = c.get(f)
         return r[i].strip() if i is not None and i < len(r) else ""
-    order = _dates([cell(r, "date") for r in rows])
+    order, note = date_order([cell(r, "date") for r in rows], broker)
     if "side" not in c and not any((_money(cell(r, "qty")) or 0) < 0 for r in rows):
         raise hf.FileError("That file doesn't say which lines are purchases and which are sales: it has no column for it "
                            "(Action, Type, Side or Trans Code, say) and no negative quantities. Add one and upload it again.")
@@ -209,7 +229,7 @@ def _rows(rows: list[list[str]], c: dict[str, int], first_line: int) -> dict:
                     "name": cell(r, "name")[:60], "src": "file"})
     if not out:
         raise hf.FileError("No US trades could be read from that file: " + (problems[0]["reason"].lower() if problems else "it has no lines") + ".")
-    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy"}
+    return {"rows": out, "problems": problems[:100], "month_first": order == "mdy", "date_note": note}
 
 
 # ---------- stored ----------

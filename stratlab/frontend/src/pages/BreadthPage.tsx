@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, count, delta, liveSeries, liveTitle, revisionLines, savePick, savedPick, share, shortDay,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -33,8 +33,10 @@ const PERIOD_UNITS = [
 
 export function BreadthPage() {
   const { fail } = useApp();
-  // the reader's market opens on its own group (R6O-007: an India reader landed on the S&P 500)
-  const [first] = useState(() => { const region = homeRegion(); return { ...savedPick(region), region }; });
+  // the group or market the address names (the Invest home's card, review 5c), else the reader's market opens on its
+  // own group (R6O-007: an India reader landed on the S&P 500)
+  const [params, setParams] = useSearchParams();
+  const [first] = useState(() => breadthStart(params, homeRegion()));
   const [group, setGroup] = useState<GroupId>(first.group);
   const [period, setPeriod] = useState<string>(first.range);
   const [data, setData] = useState<BreadthView | null>(null);
@@ -73,12 +75,16 @@ export function BreadthPage() {
   const days = periodDays(chosen);
   const coversAll = !!all && days != null && days >= span;
   const pick = (p: string) => { setPeriod(p); savePick(group, p); };
-  const pickGroup = (g: GroupId) => { setGroup(g); savePick(g, period); };
+  const pickGroup = (g: GroupId) => {
+    setGroup(g); savePick(g, period);
+    // the group picked stays in the address, so Back to this page opens it again
+    setParams((p) => { const n = new URLSearchParams(p); n.set("group", g); n.delete("region"); return n; }, { replace: true });
+  };
 
   const help = data?.help ?? {};
   return (
     <div className="k-page breadth">
-      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel="Prices as of" asOfTz={marketTz(data?.group.region)}
+      <PageHeader eyebrow={eyebrowOf("/invest/breadth")} title="Market breadth" asOf={data?.today ? data.as_of : undefined} asOfLabel={breadthChipLabel(data?.live)} asOfTz={marketTz(data?.group.region)}
         info={help.members} infoLabel="Which stocks are counted"
         lede="How many stocks in a group rose or fell, sit above their averages, or made new highs and lows, day by day, from daily closes. Every stock counts once: facts about what happened, not a forecast." />
 
@@ -149,12 +155,14 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   }
   const s = liveSeries(live);
   const l = live.latest;
+  const tag = liveTag(live), read = liveReadLine(l);
   const several = s.times.length > 1;
   const at = (i: number) => `${group.name}, ${s.times[i]}`;
   return (
     <div className="k-page" data-testid="breadth-live">
       <Card label="Breadth today, live">
-        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<Badge tone="live">Live</Badge>} />
+        <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
+        {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         <StatRow>
           <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against yesterday's close`} />
           <Stat label="Above 20-day average" value={share(l.pct20)} />
@@ -162,6 +170,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
           <Stat label="Above 200-day average" value={share(l.pct200)} />
           {l.idx != null && <Stat label={group.index_name} value={l.idx.toLocaleString("en-IN", { maximumFractionDigits: 2 })} note="latest level" />}
         </StatRow>
+        {read && <p className="k-note" data-testid="breadth-live-read">{read}.</p>}
         {!several && <p className="k-note">A point is added every {live.every_minutes} minutes while the market is open, so the line through the day starts after the second.</p>}
       </Card>
       {several && (

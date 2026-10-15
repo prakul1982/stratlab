@@ -6,16 +6,16 @@ import type { Plan } from "./AdminContext";
 
 export interface UserRow {
   id: string; email: string | null; created_at: string | null; plan: Plan; plan_set: string; plan_status: string | null;
-  plan_until: string | null; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
+  plan_until: string | null; cancel_at_period_end?: boolean; paying: boolean; experiments: number; ai_builds: number; referrals?: number; free_months?: number;
 }
 
 export const PLAN_NAME: Record<Plan, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
-/** How a paid plan came and how long it runs: "Razorpay", "Razorpay · renews 5 Nov 2026", "Given · until 6 Nov 2026",
+/** How a paid plan came and how long it runs: "Razorpay", "Razorpay · renews 5 Nov 2026", "Razorpay · ends 5 Nov 2026" (cancelled), "Given · until 6 Nov 2026",
  * "Given · no end date". Empty for Free. */
-export function planNote(u: Pick<UserRow, "plan" | "plan_until" | "paying">): string {
+export function planNote(u: Pick<UserRow, "plan" | "plan_until" | "paying" | "cancel_at_period_end">): string {
   if (u.plan === "free") return "";
-  if (u.paying) return u.plan_until ? `Razorpay · renews ${dateOnly(u.plan_until)}` : "Razorpay";
+  if (u.paying) return u.plan_until ? `Razorpay · ${u.cancel_at_period_end ? "ends" : "renews"} ${dateOnly(u.plan_until)}` : "Razorpay";
   return u.plan_until ? `Given · until ${dateOnly(u.plan_until)}` : "Given · no end date";
 }
 

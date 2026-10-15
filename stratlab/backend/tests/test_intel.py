@@ -277,3 +277,123 @@ def test_a_daily_candle_of_a_session_still_trading_is_reused_for_a_minute_only()
         t.shift(120)
         y.chart("AAPL")
         assert len(calls) == 2
+
+
+# ---------- rev7b: advice, forecasts and rankings never reach a read ----------
+ADVICE_FAMILIES = {
+    "buy/sell/hold in any form": ["Dips are buying chances.", "A good moment to add equities.", "Investors may want to accumulate on dips.",
+                                  "Alpha looks like a buy over Beta.", "Alpha is a good long-term holding.", "It is a strong buy.",
+                                  "Consider adding to your portfolio."],
+    "picks and judgements": ["Alpha is a top pick in its sector.", "Alpha is the better pick of the two.", "Beta is the winner.",
+                             "Alpha is the safer choice.", "Alpha is a better investment.", "Alpha is more attractive than Beta.",
+                             "An investor should prefer Alpha.", "Alpha is worth owning.", "Alpha deserves a place in a portfolio.",
+                             "Reliance looks like a bargain.", "Go long on Apple now."],
+    "price forecasts": ["Nifty will hit 25000 by December.", "The sector will double by 2030.", "Alpha could reach 500."],
+}
+FACTS_KEPT = ["Revenue grew faster than peers.", "The stock rose 3%.", "Promoters' holding was 50.1%.", "FIIs were net buyers of 500 crore.",
+              "The stock rose to hit a 52-week high.", "The company announced a share buyback.", "Selling expenses rose 4%.",
+              "Preferred shares pay a fixed dividend."]
+
+
+@pytest.mark.parametrize("family", list(ADVICE_FAMILIES))
+def test_the_advice_check_catches_each_phrase_family(family):
+    from app.intel.grounding import ADVICE
+    for s in ADVICE_FAMILIES[family]:
+        assert ADVICE.search(s), s
+
+
+def test_the_advice_check_leaves_factual_sentences_alone():
+    from app.intel.grounding import ADVICE, JUDGE
+    for s in FACTS_KEPT:
+        assert not ADVICE.search(s) and not JUDGE.search(s), s
+
+
+def test_judge_catches_ranking_comparatives_only():
+    from app.intel.grounding import JUDGE
+    for s in ("Beta is a stronger business than Alpha.", "Alpha has weaker margins.", "Alpha's balance sheet is better."):
+        assert JUDGE.search(s), s
+    for s in ("Revenue grew faster than peers.", "Revenue was better than estimates.", "Results were better than estimates.",
+              "Margins were worse than last year.", "Revenue is better than last year."):
+        assert not JUDGE.search(s), s
+
+
+def test_compare_drops_picks_and_rankings(monkeypatch):
+    import json
+    from app.intel import ai as A
+    a = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "pe": 20.0}
+    b = {"symbol": "BBB", "name": "Beta Ltd", "region": "IN", "pe": 30.0}
+    sents = ["Alpha is the better pick of the two.", "Beta is a stronger business than Alpha.", "Alpha looks like a buy over Beta.",
+             "An investor should prefer Alpha.", "Alpha and Beta both trade on the NSE."]
+    fake = lambda *x, **k: json.dumps({"verdict": " ".join(sents), "differences": [sents[0], sents[-1]]})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
+    r = A.compare(a, b, (fake, fake))
+    assert r["verdict"] == sents[-1] and r["differences"] == [sents[-1]]
+
+
+def test_a_company_read_drops_holding_and_pick_language(monkeypatch):
+    import json
+    from app.intel import ai as A
+    c = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "pe": 20.0, "sector": "Tech"}
+    sents = ["Alpha is a good long-term holding.", "Investors may want to accumulate on dips.", "Alpha is a top pick in its sector.",
+             "Alpha deserves a place in a portfolio."]
+    fake = lambda *x, **k: json.dumps({"summary": "Alpha Ltd is a Tech company.", "valuation_note": "", "bull": sents, "bear": [],
+                                       "position": " ".join(sents), "watch": [], "ideas": []})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
+    r = A.company(c, (fake, fake), False, [])
+    assert r["bull"] == [] and not r["position"]
+
+
+def test_the_market_read_drops_advice_phrasings(monkeypatch):
+    import json
+    from app.intel import ai as A
+    ix = [{"name": "Nifty 50", "price": 22000.0, "change_pct": 0.5, "day": "2026-10-14"}]
+    tone = "Nifty 50 rose 0.5% to 22,000. A good moment to add equities and dips are buying chances."
+    fake = lambda *x, **k: json.dumps({"tone": tone, "hot": [{"name": "Alpha", "ticker": "AAA", "why": "Alpha is a top pick for investors."}],
+                                       "flows": [], "themes": []})      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
+    r = A.pulse("IN", "", ix, [], (fake, fake))
+    assert "add equities" not in r["tone"] and "buying chances" not in r["tone"]
+    assert all("top pick" not in h["why"] for h in r["hot"])
+
+
+def test_a_theme_read_is_filtered_and_marks_unsourced_figures(monkeypatch):
+    import json
+    from app.intel import ai as A
+    resp = {"sector": "India defence", "summary": "Defence orders grew. The sector will double by 2030. Orders are worth Rs 9,99,999 crore.",
+            "sub_themes": [{"name": "Missiles", "detail": "HAL is undervalued and offers 40% upside."}], "core": "Buy the leaders",
+            "clusters": [], "screen": [{"name": "HAL", "ticker": "HAL", "layer": "x", "one_line": "Top pick with a target price of Rs 6,000."}],
+            "value_chain": [{"layer": "x", "description": "Strong buy signal for primes.", "companies": []}],
+            "tailwinds": ["Strong buy signal as exports grow 300% a year.", "Exports are rising."], "risks": ["Delays."]}
+    fake = lambda *x, **k: json.dumps(resp)      # noqa: E731
+    monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
+    out = A.sector("India defence", "IN", (fake, fake))
+    assert out["summary"] == "Defence orders grew. Orders are worth Rs 9,99,999 crore (AI estimate)."
+    assert out["sub_themes"][0]["detail"] == "" and out["core"] == "" and out["screen"][0]["one_line"] == ""
+    assert out["value_chain"][0]["description"] == "" and out["tailwinds"] == ["Exports are rising."] and out["risks"] == ["Delays."]
+
+
+def test_deep_dive_text_drops_the_same_advice():
+    from app import deepdive
+    assert deepdive._plain("Revenue rose 4%. Alpha is a top pick. Dips are buying chances.", 300) == "Revenue rose 4%."
+
+
+def test_a_company_read_is_not_given_the_live_price(research):
+    from app.intel import ai as A
+    c = {"symbol": "AAA", "name": "Alpha Ltd", "region": "IN", "quote": {"price": 150.0, "change_pct": -5.0}}
+    f = A.company_facts(c)
+    assert "price" not in f and "day_change_pct" not in f      # kept up to 12 hours: it would sit beside a different live quote
+
+
+def test_the_build_locks_are_trimmed_without_dropping_one_in_progress():
+    import threading
+    from app.intel import routes
+    held = threading.Lock()
+    held.acquire()
+    routes._building.clear()
+    routes._building.update({f"k{i}": threading.Lock() for i in range(2500)})
+    routes._building["running"] = held
+    with routes._building_lock:
+        routes._drop_finished_builds()
+    assert list(routes._building) == ["running"]
+    routes._building.clear()
+    held.release()

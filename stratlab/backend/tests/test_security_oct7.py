@@ -117,16 +117,25 @@ def test_a_signed_payment_event_replayed_without_its_id_header_does_nothing(monk
     mem = {}
     monkeypatch.setattr(billing.db, "get_setting", lambda k: mem.get(k))
     monkeypatch.setattr(billing.db, "set_setting", lambda k, v: mem.__setitem__(k, v))
+
+    def update(k, fn):
+        new = fn(mem.get(k))
+        if new is billing.db.REMOVE:
+            mem.pop(k, None)
+        elif new is not None:
+            mem[k] = new
+        return mem.get(k)
+    monkeypatch.setattr(billing.db, "update_setting", update)
     monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "w")
     monkeypatch.setattr(billing, "_client", SimpleNamespace(utility=SimpleNamespace(verify_webhook_signature=lambda *a: True)))
     acted = []
     monkeypatch.setattr(billing, "_act", lambda event: acted.append(event["event"]))
     body = json.dumps({"event": "subscription.charged", "payload": {}}).encode()
     billing.handle_webhook(body, "sig", "evt_1")
-    billing.handle_webhook(body, "sig")                            # the header dropped: a different key, handled once more
-    billing.handle_webhook(body, "sig")                            # and now the body itself is known
+    billing.handle_webhook(body, "sig")                            # the header dropped: the body itself is known
+    billing.handle_webhook(body, "sig", "evt_2")                   # a new id on the same signed body: still known
     billing.handle_webhook(body, "sig", "evt_1")                   # the id is known too
-    assert acted == ["subscription.charged", "subscription.charged"]
+    assert acted == ["subscription.charged"]
 
 
 # ---------- the admin's list of crashes ----------

@@ -428,7 +428,7 @@ def test_an_mtf_level_fires_on_crossing_only():
     text, st = stock_alerts.evaluate_event({**a, "state": st}, ev("2026-09-29", 1.2))     # the same day again: nothing
     assert text is None
     text, st = stock_alerts.evaluate_event({**a, "state": st}, ev("2026-09-30", 1.2))
-    assert text.startswith("X: margin-funded shares were 1.20% of shares issued on 2026-09-30") and "above your 1% level" in text
+    assert text.startswith("X: margin-funded shares were 1.20% of shares issued on 30 Sep") and "above your 1% level" in text
     assert not ADVICE.search(text) and not PROVIDERS.search(text)
     text, st = stock_alerts.evaluate_event({**a, "state": st}, ev("2026-10-01", 1.3))     # still above: once
     assert text is None

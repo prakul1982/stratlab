@@ -111,7 +111,39 @@ def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
 
 
-KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
+KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains", "connect")
+
+
+def breadth_live_row(st: dict, job: dict | None = None, now: datetime | None = None) -> dict:
+    """The quarter-hour breadth rounds while India's market is open (R24-002: Admin had no row for them, and two rounds
+    were missed unseen): the last round's time, how many stocks it read, and whether the latest is late or failed."""
+    from . import breadth_live as BL
+    now = now or datetime.now(timezone.utc)
+    s = (st or {}).get("IN") or {}
+    log = []
+    if s.get("time"):
+        log.append(f"Last round {s.get('day')} {s['time']} IST: {s.get('quoted', 0):,} of {s.get('stocks', 0):,} stocks read"
+                   + (f" in {s['seconds']:g} s" if isinstance(s.get("seconds"), (int, float)) else ""))
+    error = None
+    if s.get("failed_at") and (not s.get("at") or s["failed_at"] > s["at"]):
+        error = s.get("error") or "The last round failed."
+    row = _row("breadth-live", "Intraday breadth rounds", "Every quarter hour (09:15 to 15:30 IST) while the Indian market is open",
+               s.get("at"), error, log + ([f"Scheduler: {(job or {})['last_error']}"] if (job or {}).get("last_error") else []),
+               note="Each round reads the live prices of every stock in the India breadth groups, a few requests in all.")
+    if not error and BL.is_open("IN", now):
+        day, slot = now.astimezone(BL.IST).date().isoformat(), BL.slot_of(now)
+        if s.get("day") == day and s.get("time"):
+            last = datetime.fromisoformat(f"{day}T{s['time']}:00").replace(tzinfo=BL.IST)
+            age = int((now - last).total_seconds() // 60)
+            if age * 60 > BL.LATE_AFTER:
+                row["state"], row["error"] = "warn", f"Late: the last round was at {s['time']} IST, {age} minutes ago (the {slot} round is due)."
+    return row
+
+
+def _connect_status(m) -> dict:
+    """The connect jobs' status: this server's once it has run, else the one kept before the restart."""
+    from . import job_status
+    return job_status.kept("connect", dict(m.connect_job.status or {}))
 
 
 def rows() -> list[dict]:
@@ -143,6 +175,7 @@ def rows() -> list[dict]:
                     running=m.breadth_runner.running,
                     note="The first run reads two years of prices: a few minutes for the US, 20 to 25 minutes for India (it needs the day's broker login).")
     add("Market breadth", breadth)
+    add("Intraday breadth rounds", lambda: breadth_live_row(m.breadth_live.status(), m.breadth_live_job.status))
 
     def redflags():
         st = {r: m.redflags.state(r) for r in m.redflags.REGIONS}
@@ -309,10 +342,10 @@ def rows() -> list[dict]:
     add("Option chain recording", recorder)
 
     def ibkr_daily():
-        st = dict(m.connect_job.status or {})
+        st = _connect_status(m)
         r = st.get("ibkr") or {}
         row = _row("ibkr-daily", "IBKR daily pull", "Every 30 minutes from 7 AM IST until each connected account has its day's read",
-                   st.get("ibkr_at"), st.get("last_error"),
+                   st.get("ibkr_at"), st.get("ibkr_error") or st.get("last_error"),
                    [f"{r['users']} accounts due, {r['ok']} read, {r['failed']} failed" if r else ""],
                    [{"label": "Run now", "path": "/admin/connect/run?part=ibkr"}], running=m.connect_job.running)
         if row["state"] == "ok" and r.get("failed"):      # a run that read some accounts and not others is a Check, not "OK"
@@ -321,9 +354,9 @@ def rows() -> list[dict]:
     add("IBKR daily pull", ibkr_daily)
 
     def inbox_reminder():
-        st = dict(m.connect_job.status or {})
+        st = _connect_status(m)
         return _row("statement-reminder", "Statement inbox reminder", "Checked every 30 minutes; one reminder when no statement has come in 40 days",
-                    st.get("reminders_at"), st.get("last_error"),
+                    st.get("reminders_at"), st.get("reminders_error") or st.get("last_error"),
                     [f"{st['reminders']} reminders sent in the last check" if st.get("reminders_at") else ""],
                     [{"label": "Run now", "path": "/admin/connect/run?part=reminders"}], running=m.connect_job.running)
     add("Statement inbox reminder", inbox_reminder)

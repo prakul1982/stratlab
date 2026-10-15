@@ -147,7 +147,7 @@ def _import(profile, data: bytes, filename: str):
     src = "statement" if any(r["src"] == "statement" for r in got["rows"]) else "csv"
     added, dup = divs.add(profile["id"], got["rows"], filename, src)
     return M.ok({"read": len(got["rows"]), "added": added, "duplicates": dup, "problems": got["problems"][:50],
-                 "dividends": dividend_view(profile, fetch=False)})
+                 "date_note": got.get("date_note"), "dividends": dividend_view(profile, fetch=False)})
 
 
 @router.put("/dividends/include")

@@ -60,7 +60,7 @@ def test_verdict_preview_is_kept_out_of_search_and_checks_its_image_without_deco
     assert public.has_image(token) is True and public.has_image("nope") is False
     page = api.get(f"/v/{token}")
     assert page.status_code == 200 and '<meta name="robots" content="noindex,follow">' in page.text
-    assert f"/v/{token}.png" in page.text and page.headers["cache-control"] == "public, max-age=300"
+    assert f"/v/{token}.png" in page.text and page.headers["cache-control"] == "public, max-age=0, s-maxage=30, must-revalidate"
 
 
 def test_bad_images_and_tokens_are_refused(api, store):

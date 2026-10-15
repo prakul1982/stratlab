@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { SLOW_LOAD_MS, SLOW_LOAD_NOTE } from "../../lib/phoneFit";
 import { Link } from "react-router-dom";
 
 export type StateAction = { label: string; onClick?: () => void; to?: string };
@@ -30,13 +31,23 @@ export function ErrorState({ title, children, action }: { title: string; childre
   );
 }
 
-/** A card's placeholder while it loads: a few shimmering lines and a caption saying what is loading. */
-export function Skeleton({ label, lines = 4 }: { label: string; lines?: number }) {
-  const widths = [40, 100, 85, 60, 92, 70];
+/** A card's placeholder while it loads: a few shimmering lines and a caption saying what is loading. With `onRetry`, a load that
+ * takes more than SLOW_LOAD_MS says so and offers a Retry (R25-005: a first visit of the day waited 10 s with nothing to do). */
+export function Skeleton({ label, lines = 4, onRetry, slowAfter = SLOW_LOAD_MS }: { label: string; lines?: number; onRetry?: () => void; slowAfter?: number }) {
+  const [slow, setSlow] = useState(false);
+  const canRetry = !!onRetry;                // not the function itself: a new one each render would restart the clock
+  useEffect(() => {
+    if (!canRetry) return;
+    setSlow(false);
+    const t = window.setTimeout(() => setSlow(true), slowAfter);
+    return () => window.clearTimeout(t);
+  }, [canRetry, slowAfter, label]);
+const widths = [40, 100, 85, 60, 92, 70];
   return (
     <div className="k-skel-box" role="status" aria-busy="true" aria-label={label}>
       {Array.from({ length: lines }, (_, i) => <span key={i} className="k-skel" style={{ width: `${widths[i % widths.length]}%` }} />)}
       <span className="k-stat-d">{label}…</span>
+      {slow && onRetry && <span className="k-row" data-testid="skel-slow"><span className="k-stat-d">{SLOW_LOAD_NOTE}</span><button type="button" className="btn sm" onClick={() => { setSlow(false); onRetry(); }}>Retry</button></span>}
     </div>
   );
 }

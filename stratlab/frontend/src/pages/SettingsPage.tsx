@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { ago, sourceWords } from "../lib/format";
 import { aiCountText, aiMissingRow, serverRow } from "../lib/connection";
 import { HELP } from "../lib/help";
+import { planLabel } from "../lib/account";
 import { viewForFocus } from "../lib/spaces";
 import type { Focus, Level } from "../lib/types";
 import { FOCUSES, LEVELS } from "../components/LevelPrompt";
@@ -173,7 +174,7 @@ function ConnectionCheck() {
           add({ t: "AI strategy builder", s: "warn", d: `Couldn't run the AI test: ${(e as Error).message}` });
         }
       }
-      add({ t: "Your account", s: "pass", d: `${me.plan_info.name} plan, ${u.backtests_used} experiments this month` });
+      add({ t: "Your account", s: "pass", d: `${planLabel(me)} plan, ${u.backtests_used} Backtests this month` });
     } catch (e) { fail(e); } finally { setChecking(false); }
   };
 

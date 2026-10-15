@@ -50,14 +50,14 @@ export function InvoicesCard() {
           <div key={r.number} className="k-line-row">
             <span className="k-line-text"><b className="k-mono">{r.number}</b><span className="k-sub-line">{fmtDate(r.date)} · {r.supply}</span></span>
             <span className="k-row"><b>{money(r.total, r.currency, 2)}</b>
-              <button type="button" className="btn quiet sm" onClick={() => openInvoice(r.number).catch(fail)}>Open</button></span>
+              <button type="button" className="btn quiet sm" aria-label={`Open invoice ${r.number}`} onClick={() => openInvoice(r.number).catch(fail)}>Open</button></span>
           </div>))}</div>
       )}
       <Disclosure summary={`Details on your invoices${b.gstin ? ` (GSTIN ${b.gstin})` : ""}`}>
         <FormGrid label="Details on your invoices" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           <Field label="Name or business name" value={b.name ?? ""} maxLength={200} onChange={(e) => setB({ ...b, name: e.target.value })} />
           <Field label="Address" value={b.address ?? ""} maxLength={300} onChange={(e) => setB({ ...b, address: e.target.value })} />
-          <Field label="Country">{(id) => <Select id={id} value={b.country || "IN"} onChange={(v) => setB({ ...b, country: v })} options={COUNTRIES} />}</Field>
+          <Field label="Country">{(id) => <Select id={id} value={b.country || "IN"} onChange={(v) => setB(v === "IN" ? { ...b, country: v } : { ...b, country: v, state: "", gstin: "" })} options={COUNTRIES} />}</Field>
           {india && <Field label="State">{(id) => <Select id={id} value={b.state ?? ""} onChange={(v) => setB({ ...b, state: v })}
             options={[{ value: "", label: "Choose…" }, ...Object.entries(states).map(([c, n]) => ({ value: c, label: n }))]} />}</Field>}
           {india && <Field label="GSTIN" optional info="For businesses, to claim input tax credit." value={b.gstin ?? ""} maxLength={15} onChange={(e) => setB({ ...b, gstin: e.target.value.toUpperCase() })} />}

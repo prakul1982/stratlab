@@ -35,6 +35,10 @@ export interface Company {
   testable: boolean; instrument_id: string | null;
   as_of?: string | null; numbers_at?: string | null;     // when the prices were read; when the reported numbers were
   market_open?: boolean;                                   // false: the price is the last close (the market is shut)
+  /** the trading day of the price (its last trade's, in the market's zone); null when the price has no time (review 5c) */
+  quote_day?: string | null;
+  /** the news request failed (not "no headlines"): the card says the news couldn't be loaded */
+  news_failed?: boolean;
   /** "pre_open": India's pre-open price, read between 09:00 and 09:15 IST: indicative, not a close (R7T-004) */
   phase?: "pre_open" | "settling" | null;
   /** what a lean company answer left out (news, about, peers): fetched with `companyMore` (R10O-009) */
@@ -78,6 +82,7 @@ export interface SectorAI {
 }
 /** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */
+export type PulseData = { indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[]; pending?: boolean; read_at?: string | null };
 export interface IndexLevel {
   name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null;
   at?: string | null; day?: string | null; live?: boolean; stale?: boolean; settling?: boolean;
@@ -130,11 +135,15 @@ export const plausibleRange = (px: number, low: number, high: number) => low > 0
 
 /** What a company's price is called and what its change is against: "Pre-open (indicative)" before India's 09:15 open (a
  * price from the pre-open auction, never a close, R7T-004), "Last close" while the market is shut, else the live price. */
-export function priceLabel(c: Pick<Company, "market_open" | "phase">): { label: string | null; since: string } {
+export function priceLabel(c: Pick<Company, "market_open" | "phase" | "quote_day">, today?: string, dayText: (iso: string) => string = (d) => d): { label: string | null; since: string } {
   if (c.phase === "pre_open") return { label: "Pre-open (indicative)", since: "against the last close" };
   // between the US close and its settle point the price is the day's last prints, not yet its close (R13-005)
   if (c.phase === "settling") return { label: SETTLING, since: "on the day" };
   if (c.market_open === false) return { label: "Last close", since: "on the day" };
+  // while the market trades, "today" only of today's price (review 5c): a price with no time says so, and an earlier
+  // session's price says its day
+  if (c.quote_day === null) return { label: "Time of this price unknown", since: "" };
+  if (c.quote_day && today && c.quote_day !== today) return { label: "Not updated today yet", since: `on ${dayText(c.quote_day)}` };
   return { label: null, since: "today" };
 }
 
@@ -183,7 +192,8 @@ export const researchApi = {
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),
-  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] }>(`/research/pulse?region=${r}${focusParam(focus)}`),
+  /** `pending`: the server's first read of the levels since it started isn't back yet (ask again in a moment, R24-001) */
+  pulse: (r: Region, focus = "") => api<PulseData>(`/research/pulse?region=${r}${focusParam(focus)}`),
   /** The market read, or an Error saying why there is none (like companyAI: "unavailable" is a 200 on the wire). */
   pulseAI: async (r: Region, focus = "", refresh = false): Promise<PulseAI> => {
     const got = await api<PulseAI | { unavailable: true; message: string }>(`/research/pulse/ai?region=${r}${focusParam(focus)}${refresh ? "&refresh=true" : ""}`);

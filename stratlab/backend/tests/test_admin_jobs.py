@@ -68,3 +68,16 @@ def test_run_now_for_connect_once_runs_and_records_the_last_run(w, monkeypatch):
     row = {j["id"]: j for j in c.get("/admin/jobs", headers=headers("admin-token")).json()["jobs"]}["ibkr-daily"]
     assert row["last_run"] and row["state"] == "warn" and "2 accounts due, 1 read, 1 failed" in row["log"][0]
     assert "1 account could not be read" in row["note"]      # was "ok": a run with failed accounts is a Check (R3G)
+
+
+def test_connect_job_rows_have_their_own_errors_and_survive_a_restart(w, monkeypatch):
+    c = w["client"]
+    st = {"last_run": "2026-10-05T05:00:00+00:00", "ibkr": None, "ibkr_at": "2026-10-05T05:00:00+00:00", "ibkr_error": "flex down",
+          "reminders": 1, "reminders_at": "2026-10-05T05:00:00+00:00", "reminders_error": None, "last_error": None}
+    monkeypatch.setattr(main.connect_job, "status", st)
+    rows = {j["id"]: j for j in c.get("/admin/jobs", headers=headers("admin-token")).json()["jobs"]}
+    assert rows["ibkr-daily"]["state"] == "bad" and "flex down" in rows["ibkr-daily"]["error"]
+    assert rows["statement-reminder"]["state"] == "ok"
+    monkeypatch.setattr(main.connect_job, "status", {"last_run": None, "ibkr_at": None, "reminders_at": None, "last_error": None})
+    rows = {j["id"]: j for j in c.get("/admin/jobs", headers=headers("admin-token")).json()["jobs"]}
+    assert rows["ibkr-daily"]["last_run"] and rows["statement-reminder"]["last_run"]         # the kept ones, not "Not yet"

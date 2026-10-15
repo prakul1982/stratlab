@@ -151,6 +151,7 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   await sane(page, errors, phone);
   await shot(page, "connected-zerodha", phone, !phone);
   await z.getByRole("button", { name: "Disconnect" }).click();
+  await page.getByRole("dialog", { name: "Disconnect Zerodha?" }).getByRole("button", { name: "Disconnect" }).click();   // asked first
   await expect(z.getByRole("button", { name: "Connect Zerodha" })).toBeVisible();
 
   // EPF: the figures found are shown to be checked, nothing is saved until then

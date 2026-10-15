@@ -1,8 +1,9 @@
+import { DENSE_BARS, compactValue, labelledBar, shortYear } from "../lib/phoneFit";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
-import { ago, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
+import { ago, fmtDate, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -58,17 +59,24 @@ export function Panel({ title, info, children, right, id }: { title: ReactNode; 
 /** The day's price and its change as one block: the price in the page's sans font and a pill for the change, green or red
  * with the sign (and ▲/▼) printed. The price and its move. `closed`: the market is shut, so the price stands at the last close and says so, and the move
  * is that session's ("on the day"), never "today" for a day that hasn't traded. */
-export function Change({ q, currency, closed: shut = false, preOpen = false, settling = false }: { q: Quote | null; currency: string; closed?: boolean; preOpen?: boolean; settling?: boolean }) {
+export function Change({ q, currency, closed: shut = false, preOpen = false, settling = false, quoteDay, today }: {
+  q: Quote | null; currency: string; closed?: boolean; preOpen?: boolean; settling?: boolean;
+  /** the price's trading day (null: its time is unknown) and the market's today: "today" is said only of today's price */
+  quoteDay?: string | null; today?: string;
+}) {
   if (!q || q.price == null) return null;
   // before India's 09:15 open the price is the pre-open auction's: indicative, never a close (R7T-004); between the US
   // close and its settle point it is the day's last prints, not yet the close (R13-005)
   const closed = shut && !preOpen && !settling;
-  const { since } = priceLabel({ market_open: !shut, phase: preOpen ? "pre_open" : settling ? "settling" : null });
+  const { label, since } = priceLabel({ market_open: !shut, phase: preOpen ? "pre_open" : settling ? "settling" : null, quote_day: quoteDay },
+    today, (d) => fmtDate(d, { year: false }));
   return (
     <div className="k-stat inv-quote" data-testid="company-price" data-phase={preOpen ? "pre_open" : settling ? "settling" : undefined}>
       {preOpen && <span className="k-stat-k">Pre-open (indicative)</span>}
       {settling && <span className="k-stat-k">{SETTLING}</span>}
       {closed && <span className="k-stat-k">Last close</span>}
+      {/* while the market trades: an earlier session's price says so, and one with no time says that (review 5c) */}
+      {!closed && !preOpen && !settling && label && <span className="k-stat-k" data-testid="price-when">{label}</span>}
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
@@ -218,19 +226,20 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
         {growth != null ? <span className="k-small k-muted"><Signed value={growth}>{pct(growth)}</Signed> a year</span>
           : lossYears ? <span className="k-small k-muted">loss years in between, so no yearly rate</span> : null}
       </div>
-      <div className="tbars">
+      <div className={`tbars${points.length >= DENSE_BARS ? " dense" : ""}`}>
         {points.map((p, i) => {
+          const compact = points.length >= DENSE_BARS ? compactValue(p.v, unit) : null;
           const h = Math.max(2, (Math.abs(p.v) / span) * PLOT);
           const neg = p.v < 0;
           const cls = `tbar-bar${neg ? " neg" : i === points.length - 1 ? ` last ${tone}` : ""}`;
           return (
-            <div key={p.y} className="tbar" title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
-              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{trendShort(p.v, unit) && <span className="tbar-short">{trendShort(p.v, unit)}</span>}</span>
+            <div key={p.y} className={`tbar${labelledBar(i, points.length) ? "" : " alt"}`} title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
+              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{(compact ?? trendShort(p.v, unit)) && <span className="tbar-short">{compact ?? trendShort(p.v, unit)}</span>}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 {down > 0 && <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />}
                 <rect className={cls} data-v={p.v} x="1.5" width="7" y={neg ? zero : zero - h} height={h} />
               </svg>
-              <span className="tbar-year">{p.y}</span>
+              <span className="tbar-year"><span className="tbar-full">{p.y}</span><span className="tbar-short">{shortYear(p.y)}</span></span>
             </div>
           );
         })}
@@ -363,7 +372,7 @@ export function QuarterTable({ q, bank = false }: { q: NonNullable<Company["quar
     { name: bank ? "Financing margin" : "EBITDA margin", cells: q.opm.map((v) => (v == null ? "–" : `${v}%`)) },
   ].filter((r) => !(r.name === "Financing margin" && r.cells.every((c) => c === "–")));   // a bank's margin the source gets wrong is left out, not shown as dashes (R10O-011)
   return (
-    <DataTable label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
+    <DataTable scrollEnd label="The last quarters, in ₹ cr" rows={rows} rowKey={(r) => r.name}
       columns={[{ key: "m", header: "₹ cr", rowHeader: true, cell: (r) => r.name },
         ...q.cols.map((c, i) => ({ key: c, header: c, numeric: true, cell: (r: (typeof rows)[number]) => r.cells[i] }))]} />
   );

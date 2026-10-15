@@ -66,7 +66,7 @@ def test_a_purely_transactional_email_sends_no_unsubscribe_header(brevo):
 def test_the_weekly_summary_and_the_test_alert_go_out_with_the_header(brevo, monkeypatch):
     monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
     monkeypatch.setattr(alerts, "alert_emails_on", lambda uid: True)            # (no database here: an unreadable setting now reads as off)
-    profile = {"id": "u-owner", "alert_email": "owner@example.com"}
+    profile = {"id": "u-owner", "alert_email": "owner@example.com", "_plan": "basic"}
     sent, failed = alerts.test(profile)                                            # "Settings → Notifications → Send a test"
     assert sent == ["email"] and not failed
     assert brevo[0]["headers"]["List-Unsubscribe"].startswith("<https://stratlab.studio/unsubscribe?t=")
@@ -99,10 +99,10 @@ def test_unsubscribing_from_alert_emails_stops_them_and_saving_an_address_turns_
         assert r.status_code == 200 and not alerts.alert_emails_on("u-pro")
         monkeypatch.setattr(alerts, "email_ready", lambda: True)
         monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
-        profile = {"id": "u-pro", "alert_email": "pro@example.com"}
+        profile = {"id": "u-pro", "alert_email": "pro@example.com", "_plan": "basic"}
         assert [ch for ch, _ in alerts.jobs_for(profile, "S", "T")] == []        # no email any more
         assert [ch for ch, _ in alerts.jobs_for(profile, "S", "T", force_email=True)] == ["email"]   # a test they ask for still goes
-        assert [ch for ch, _ in alerts.jobs_for({"id": "u-other", "alert_email": "o@example.com"}, "S", "T")] == ["email"]
+        assert [ch for ch, _ in alerts.jobs_for({"id": "u-other", "alert_email": "o@example.com", "_plan": "basic"}, "S", "T")] == ["email"]
         me = c.get("/me", headers=headers("pro-token")).json()
         assert me["alerts"]["email_off"] is True
         c.put("/me/alerts", headers=headers("pro-token"), json={"alerts_enabled": False, "alert_email": "pro@example.com"})

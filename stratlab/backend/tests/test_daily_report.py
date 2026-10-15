@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -150,3 +151,20 @@ def test_a_non_indian_session_without_a_currency_reports_in_dollars():
     assert R.summarise(s, "2026-09-24")["currency"] == "USD"
     s.market = "IN"
     assert R.summarise(s, "2026-09-24")["currency"] == "INR"
+
+
+def test_a_report_isnt_sent_twice_after_the_lease_moves_between_containers(monkeypatch):
+    db = FakeDB({"u1": {"id": "u1"}, "u2": {"id": "u2"}})
+    sent = []
+    kw = dict(can_alert=lambda p: True, send=lambda p, s, b: sent.append(p["id"]), market_name=lambda m: m)
+    monkeypatch.setattr(R, "wants_report", lambda d, u: True)
+    monkeypatch.setattr(R, "summarise", lambda s, day: {})
+    monkeypatch.setattr(R, "text", lambda *a: "x")
+    now = utc(2026, 10, 15, 20, 15)                                   # 16:15 New York
+    sess = lambda uid: SimpleNamespace(user_id=uid, name=uid, market="US", last_tick_at=utc(2026, 10, 15, 20, 5).isoformat())
+    a, b = R.Reporter(db), R.Reporter(db)
+    a.run([sess("u1")], now, **kw)
+    b.run([sess("u2")], now, **kw)
+    a.run([sess("u1"), sess("u2")], now, **kw)                        # the lease is back with A
+    assert sorted(sent) == ["u1", "u2"]
+    assert set(json.loads(db.settings[R.SETTING])) == {"u1:US", "u2:US"}

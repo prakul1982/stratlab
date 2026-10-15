@@ -525,7 +525,7 @@ def test_a_crossing_while_the_user_is_over_the_message_limit_waits_for_the_next_
     share_day("nifty500", "2026-09-30", 7)
     assert breadth.check_alerts(["nifty500"], now, prof, lambda p: True, send) == 0 and sent == []
     assert breadth.alerts_of("u1")[0]["side"] == "above"        # the side moved on, so the crossing is not seen again…
-    assert [t for t, _ in stock_alerts._read("u1")["pending"]] == [breadth.alert_text(breadth.alerts_of("u1")[0], "2026-09-30", 70.0)]   # …but its text waits
+    assert [e[0] for e in stock_alerts._read("u1")["pending"]] == [breadth.alert_text(breadth.alerts_of("u1")[0], "2026-09-30", 70.0)]   # …but its text waits
     later = now + timedelta(hours=1, minutes=1)
     texts = stock_alerts.apply("u1", {}, later)                  # the stock-alert check, an hour on
     assert len(texts) == 1 and "crossing above 60%" in texts[0]

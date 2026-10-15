@@ -169,3 +169,40 @@ def test_r23_003_send_now_is_labelled_weekly_summary(monkeypatch):
         assert labels == ["Weekly summary"]
     finally:
         w["close"]()
+
+
+def test_a_failed_build_or_an_unreached_owner_doesnt_use_the_week_up(monkeypatch):
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        real = main.weekly_facts
+        monkeypatch.setattr(main, "weekly_facts", lambda now: (_ for _ in ()).throw(RuntimeError("db blip")))
+        try:
+            main.send_weekly_summary(MONDAY)
+            raise AssertionError("the failure should surface")
+        except RuntimeError:
+            pass
+        assert main.db.get_setting(weekly.WEEK_KEY) is None
+        monkeypatch.setattr(main, "weekly_facts", real)
+        monkeypatch.setattr(alerts, "tell_admins", lambda *a, **k: 0)                  # the mail service is down
+        assert main.send_weekly_summary(MONDAY.replace(hour=10)) is False
+        assert main.db.get_setting(weekly.WEEK_KEY) is None
+        calls = []
+        monkeypatch.setattr(alerts, "tell_admins", lambda *a, **k: calls.append(a) or 1)
+        assert main.send_weekly_summary(MONDAY.replace(hour=11)) is True and len(calls) == 1
+        assert main.send_weekly_summary(MONDAY.replace(hour=12)) is False and len(calls) == 1
+    finally:
+        w["close"]()
+
+
+def test_a_second_container_cant_send_the_week_while_one_is_sending(monkeypatch):
+    from app import run_marks
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        run_marks.claim(main.WEEKLY_RUN, weekly.week_of(MONDAY))                        # the other container is mid-send
+        calls = []
+        monkeypatch.setattr(alerts, "tell_admins", lambda *a, **k: calls.append(a) or 1)
+        assert main.send_weekly_summary(MONDAY) is False and calls == []
+    finally:
+        w["close"]()

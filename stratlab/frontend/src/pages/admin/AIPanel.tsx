@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, fmtDate } from "../../lib/format";
+import { ago, safeHref, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
 import { blockedLine } from "./aiBlocks";
 import { shortLinks } from "./attention";
@@ -212,7 +212,7 @@ function MissingProvider({ p }: { p: Provider }) {
         <span className="k-small k-muted">{p.free}{p.note ? ` ${p.note}` : ""}</span>
         <span className="k-small k-muted">Set <span className="adm-mono">{p.missing.join(" and ")}</span>.</span>
       </div>
-      <a className="btn quiet sm" href={p.key_url} target="_blank" rel="noopener noreferrer" aria-label={`Get a key: ${p.label}`}>Get a key</a>
+      <a className="btn quiet sm" href={safeHref(p.key_url)} target="_blank" rel="noopener noreferrer" aria-label={`Get a key: ${p.label}`}>Get a key</a>
     </div>
   );
 }

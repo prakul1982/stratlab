@@ -226,6 +226,7 @@ export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: Mod
 export interface OptPreview {
   spot: number; atm: number; step: number; expiry: string; lot: number; freeze: number; units: number;
   margin_one: number | null; margin: number | null; strikes: number[]; expiries?: string[];
+  sizing_note?: string | null;   // margin sizing without a margin figure: 1 unit, and why
   legs: { side: "sell" | "buy"; opt: "CE" | "PE"; lots: number; strike: number | null; sym: string | null; quote: OptQuote | null; fill: number | null;
     rule?: string; pick?: string | null;     // the leg's rule in words, and why a strike rule picked its strike (or why none)
     from_last?: boolean;                     // priced from the last trade: no bid or ask on the side it fills on (R11C-007)

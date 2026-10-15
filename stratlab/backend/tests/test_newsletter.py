@@ -4,6 +4,8 @@ import json
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+
+from app.ai_providers import AIBusy
 import time_machine
 
 from app import alerts, db, main, newsletter_prefs
@@ -679,6 +681,7 @@ def test_r23_004_a_sent_briefs_link_numbers_survive_a_later_headline_filter(w, m
     db.set_setting(f"news:market:US:2026-10-01", json.dumps(issue))
     c = w["client"]
     r = c.get(f"/news-link/{iid}/2", follow_redirects=False)
+    assert r.headers["cache-control"] == "public, max-age=60"
     assert r.status_code == 302 and r.headers["location"] == heads[2]["url"]  # the story the email named, not a 404
     gone = c.get(f"/news-link/{iid}/9", follow_redirects=False)
     assert gone.status_code == 302 and gone.headers["location"].endswith(f"/news?tab=US&issue={iid}")
@@ -710,3 +713,24 @@ def test_r23_007_the_india_summary_numbers_match_the_tiles():
     assert "NIFTY BANK at 55,316.00 (−0.30%)" in text and "below 22,650." in text and "October 14" in text
     assert "22,622.7 " not in text and "(-0" not in text
     assert "22,622.70 ▼ 0.44%" in text                                        # the tile it now agrees with
+
+
+def test_a_failed_ai_summary_is_retried_after_a_few_minutes_not_a_day(monkeypatch):
+    import time as real
+    from types import SimpleNamespace
+    from app.intel import net
+    f = market()
+    replies = [AIBusy("busy"), json.dumps({"summary": "NIFTY 50 closed 0.42% higher; Nifty IT moved to Leading."})]
+
+    def fake(*a, **k):
+        r = replies.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+    write._cache.clear()
+    monkeypatch.setattr(write, "complete", fake)
+    assert write.summary(f)["ai"] is False and len(replies) == 1
+    assert write.summary(f)["ai"] is False and len(replies) == 1            # within the minutes: not asked again
+    monkeypatch.setattr(net, "time", SimpleNamespace(time=lambda: real.time() + 11 * 60))
+    assert write.summary(f)["ai"] is True                                  # after them the AI is asked again
+    write._cache.clear()

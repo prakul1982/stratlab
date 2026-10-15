@@ -15,7 +15,7 @@ import re
 import numpy as np
 
 from ..models import Ref
-from .core import SPLIT, Ctx, simulate, write_off
+from .core import SPLIT, TF_MIN, Ctx, simulate, write_off
 from .indicators import MARKET, params, ref_name
 
 SHUFFLES = 1000
@@ -78,12 +78,16 @@ def unseen_check(trades: list[dict], open_trades: list[dict], capital: float, bu
             "open_built": open_in.count("built"), "open_unseen": open_in.count("unseen"), "spanning": sum(spans),
             "built_from": labels[0], "built_to": labels[1], "unseen_from": labels[2], "unseen_to": labels[3],
             "split_index": split_index}
+    # the minimum counts closed trades, as `unseen_trades` does: a trade still open isn't a result yet (rev10a)
+    n, held = data["unseen_trades"], data["open_unseen"]
     if not u_tr:
         status, detail = "warn", "No trades happened in the unseen part, so it couldn't be tested there."
-    elif len(u_tr) < MIN_UNSEEN_TRADES:
-        n = len(u_tr)
-        status, detail = "warn", (f"Only {n} trade{'s' if n != 1 else ''} happened in the unseen part ({'+' if r2 >= 0 else '−'}{abs(r2):.1f}%): "
-                                  f"too few to tell, as one or two trades decide the result. It needs at least {MIN_UNSEEN_TRADES}.")
+    elif n < MIN_UNSEEN_TRADES:
+        still = f" ({held} still open)" if held else ""
+        head = (f"No trades closed in the unseen part{still}" if n == 0 else
+                f"Only {n} trade{'s' if n != 1 else ''} {'closed' if held else 'happened'} in the unseen part{still}")
+        status, detail = "warn", (f"{head}, {'+' if r2 >= 0 else '−'}{abs(r2):.1f}% in all: "
+                                  f"too few to tell, as one or two trades decide the result. It needs at least {MIN_UNSEEN_TRADES} closed.")
     elif r2 > 0:
         status, detail = "pass", ("It kept making money on data it wasn't tuned on." if who == "It"
                                   else f"{who} kept making money on the part of the period it wasn't tuned on.")
@@ -346,7 +350,7 @@ def suggestions(verdict: str, strategy, days: int, max_days: int) -> list[dict]:
 def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1, cost_kind: str = "flat",
              days: int = 365, max_days: int = 3650) -> dict:
     """Run the four checks on a finished backtest (`base`, from core.backtest)."""
-    ctx = Ctx(bars, intraday=strategy.tf != "1d")
+    ctx = Ctx(bars, intraday=strategy.tf != "1d", base_min=TF_MIN[strategy.tf])
     trades = base["trades"]
     checks = [
         check_unseen(bars, base, start, strategy.risk.capital),
@@ -354,7 +358,8 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
         check_shuffle(trades, strategy.risk.capital, paths=base.get("_paths")),
         check_sample(len(trades)),
     ]
-    return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"))
+    return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"),
+                  open_n=1 if base.get("open_trade") else 0)
 
 
 def _pc(v: float) -> str:
@@ -378,12 +383,14 @@ def versus_hold(ret: float, hold: float | None) -> str:
     return f" The strategy returned {_pc(ret)} after costs, {rel} buying and holding over the same period ({_pc(hold)})."
 
 
-def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False) -> str:
+def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False, open_n: int = 0) -> str:
     """The verdict as a fact about the checks, in the library card's words (library.label): no claim about the strategy,
     no instruction."""
     run = [c for c in checks if c.get("status") != "skip"]
     passed = sum(1 for c in run if c.get("status") == "pass")
     if verdict == "not_enough":
+        if n == 0 and open_n and not none:
+            return f"No closed trades yet ({open_n} still open)"
         return "No trades in this period" if none or n == 0 else f"Only {n} trade{'s' if n != 1 else ''}: too few to judge"
     if verdict == "no_edge":
         return "Lost money after costs"
@@ -400,11 +407,12 @@ def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False) -> 
     return f"Passed all {len(run)} checks run" if passed == len(run) else f"Passed {passed} of the {len(run)} checks run"
 
 
-def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: float | None, none: bool = False) -> str:
+def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: float | None, none: bool = False,
+                  open_n: int = 0) -> str:
     """The headline of a verdict as facts (R11C-009: "Likely a real edge." over +55.8% against +173.6% for buy and hold):
     how the return after costs compares with buying and holding, then what the checks found, as the library card says it
     ("117.1 points behind buy and hold after costs; passed all 3 checks run.")."""
-    lab = fact_label(verdict, checks, n, none)
+    lab = fact_label(verdict, checks, n, none, open_n)
     if hold is None or none:
         return lab + "."
     gap = ret - hold
@@ -511,9 +519,10 @@ def restate_empty(e: dict) -> dict:
             "verdict": restate_verdict(e.get("verdict"), st["ret"], ret, float(hold) if num(hold) else None, int(st.get("n") or 0))}
 
 
-def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None) -> dict:
-    """The verdict from the checks, the trade count and the return after costs. `hold` is buy and hold's return over
-    the same period: the summary always states how the two compare."""
+def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None,
+           open_n: int = 0) -> dict:
+    """The verdict from the checks, the closed-trade count and the return after costs. `hold` is buy and hold's return
+    over the same period: the summary always states how the two compare. `open_n`: trades still open at the end."""
     by = {c["id"]: c["status"] for c in checks}
     none = n == 0 and abs(ret) < 1e-9          # not one trade, not even one still open: nothing happened to judge
     if none:
@@ -522,6 +531,11 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         summary = "No trades happened in this period: the rules' conditions never held together, so the account stayed at its starting capital."
         if hold is not None:
             summary += f" Buying and holding returned {_pc(hold)} over the same period."
+    elif n == 0:
+        verdict = "not_enough"
+        # a trade still open isn't "0 trades" (rev10a: "Only 0 trades" beside the open trade in the list)
+        summary = (f"No closed trades yet ({open_n} still open): the return is the open trade's value at the last close."
+                   if open_n else "No closed trades in this period.")
     elif n < 15:
         verdict = "not_enough"
         summary = (f"Only {n} trade{'s' if n != 1 else ''} in this period. That's too few to tell a real edge "
@@ -552,7 +566,7 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         summary = "It made money after costs, but some checks pass and some don't."
     if not none:
         summary += versus_hold(ret, hold)
-    return {"verdict": verdict, "headline": fact_headline(verdict, checks, n, ret, hold, none), "summary": summary,
+    return {"verdict": verdict, "headline": fact_headline(verdict, checks, n, ret, hold, none, open_n), "summary": summary,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"),
             "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days)}
@@ -592,7 +606,8 @@ def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> d
     # to 15 digits). The group's own account is reshuffled instead, day by day.
     checks.append(check_shuffle(base["trades"], cap, steps=day_steps(times, base.get("equity") or [], cap)))
     checks.append(check_sample(len(base["trades"])))
-    return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"))
+    return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"),
+                  open_n=len(base.get("open_trades") or []))
 
 
 def day_steps(times: list[str], equity: list, capital: float) -> list[float]:

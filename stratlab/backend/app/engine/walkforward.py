@@ -11,7 +11,7 @@ data it hasn't seen?" A strategy whose best settings only ever work in hindsight
 """
 from datetime import datetime
 
-from .core import Ctx, simulate
+from .core import TF_MIN, Ctx, simulate
 from .indicators import MARKET, ref_name
 from .verdict import _param_keys, _ret, _values, _with
 from ..models import Ref
@@ -56,7 +56,7 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
                 "detail": "Walk-forward needs at least about 100 candles in the test period. Pick a longer period and run the experiment again.",
                 "windows": []}
 
-    ctx = Ctx(bars, intraday=strategy.tf != "1d")
+    ctx = Ctx(bars, intraday=strategy.tf != "1d", base_min=TF_MIN[strategy.tf])
     cap = strategy.risk.capital
     # the same nudged values as the nearby-settings check (an India VIX level or change % keeps its own steps)
     grid = [{keys[0]: a} for a in _values(keys[0])]
@@ -117,7 +117,13 @@ def run(bars: list[dict], strategy, start: int, lot: float = 1, kind: str = "fla
     trades = sum(w["trades"] for w in windows)
 
     # facts about what happened, never a prediction or an instruction (R11C-009: "Treat the backtest return as optimistic.")
-    if wf_ret <= 0:
+    if trades == 0:
+        # nothing traded, so nothing was lost or made: a costs-only drift of 0.0% isn't a result (rev10a)
+        status = "skip"
+        headline = "No trades in the unseen periods."
+        detail = ("Tuned on the past and traded on the next stretch, it made no trades in any of the "
+                  f"{n} unseen periods, so there is no walk-forward result to compare.")
+    elif wf_ret <= 0:
         status = "fail"
         headline = f"Lost {abs(wf_ret):.1f}% when re-tuned as it went."
         detail = (f"Tuned on the past and traded on the next stretch, it lost {abs(wf_ret):.1f}% over the unseen periods: "

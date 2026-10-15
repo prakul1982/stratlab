@@ -313,7 +313,9 @@ def nifty_iv(options_data, now: datetime) -> dict:
         # (R7T-005: 14.40% here against 13.3% in the chain panel for the same 8 Oct close)
         got, _, stats = positioning.chain_now(options_data, "NIFTY", "current", now)
         if got and stats and stats.get("atm_iv") is not None:
-            today = {"iv": stats["atm_iv"], "as_of": got["taken_at"], "source": got["source"], "at_close": bool(got.get("at_close"))}
+            # the strike it is at, so the VIX card and the chain panel name the same figure the same way (R24-005)
+            today = {"iv": stats["atm_iv"], "strike": stats.get("atm"), "as_of": got["taken_at"], "source": got["source"],
+                     "at_close": bool(got.get("at_close"))}
     except Exception as e:
         print("india vix: nifty iv", str(e)[:120])
     since = (now.date() - timedelta(days=YEAR_DAYS)).isoformat()
@@ -374,9 +376,12 @@ class Job(news_job.Job):
         day = self.due("vix-close", now, "Asia/Kolkata", CLOSE_AT, region="IN")
         if day:
             got = fetch(day - timedelta(days=14), day, feed, self.sleep)
-            if day.isoformat() in got or local.strftime("%H:%M") >= "21:00":
+            had = day.isoformat() in got
+            if had or local.strftime("%H:%M") >= "21:00":
                 self.mark("vix-close", day)
-            self.status.update(read=local.isoformat(timespec="minutes"), last_run=now.isoformat(), last_error=None)
+            # no reading for a weekday is said (a weekend has none): the day is given up at 21:00, but not shown as fine
+            warn = None if had or day.weekday() >= 5 else f"No close for {day.isoformat()} was returned"
+            self.status.update(read=local.isoformat(timespec="minutes"), last_run=now.isoformat(), last_error=warn)
             return len(got)
         hhmm = local.strftime("%H:%M")
         st = state()

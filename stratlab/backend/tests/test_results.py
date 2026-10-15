@@ -512,3 +512,28 @@ def test_a_refresh_that_read_is_not_an_error_and_uses_its_slot(w):
     job = R.Job(lambda: {"in": FakeIndia([meeting("RELIANCE", TODAY)]), "us": FakeUS(), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
     job.tick(IN_MORNING)
     assert job.status["last_error"] is None and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"
+
+
+class BoomIndia(FakeIndia):
+    def board_meetings(self, frm, to):
+        raise RuntimeError("parser broke")
+
+
+def test_one_regions_refresh_exception_stops_neither_the_other_region_nor_the_next_pass(w):
+    job, _ = job_with(india=BoomIndia(), us=FakeUS([{"symbol": "AAPL", "date": (TODAY + timedelta(days=2)).isoformat()}]))
+    t = datetime(2026, 10, 5, 3, 0, tzinfo=timezone.utc)                  # 08:30 IST, 23:00 the evening before in New York
+    job.tick(t)                                                           # does not raise
+    assert "IN" in job.down and "parser broke" in job.down["IN"] and job.status["last_error"]
+    assert db.get_setting("resultsjob:refresh-IN-07:15") is None          # not used up
+    assert job.retry["refresh-IN-07:15"] > t
+    assert R.load("US")["at"]                                             # the other region was read
+
+
+def test_a_refresh_cut_short_by_a_kill_doesnt_use_its_slot_up(w):
+    class Kill(BaseException):
+        pass
+    job, _ = job_with()
+    job.refresh = lambda *a, **k: (_ for _ in ()).throw(Kill())
+    with pytest.raises(Kill):
+        job.tick(datetime(2026, 10, 5, 3, 0, tzinfo=timezone.utc))
+    assert db.get_setting("resultsjob:refresh-IN-07:15") is None

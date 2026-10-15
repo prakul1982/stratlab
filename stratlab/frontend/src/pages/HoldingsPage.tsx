@@ -15,7 +15,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
-import { dollarRate, editChange, type Change, type Mkt } from "../lib/holdingsEdit";
+import { dollarRate, editChange, syncedNote, type Change, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -26,6 +26,7 @@ type Row = {
   value: number | null; invested: number | null; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null;
   weight: number | null; market?: "IN" | "US"; currency?: string; session?: string | null;
   kind?: "stock" | "etf" | "reit" | "invit" | "sgb"; kind_label?: string | null;   // ETFs, REITs, InvITs and gold bonds get a badge
+  via?: string | null;   // the broker or statement that syncs it (kite, ibkr, cas)
 };
 type UsTotals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; in_total: boolean };
 type View = {
@@ -127,8 +128,9 @@ export function HoldingsPage() {
   const save = async (changes: Change[], done?: string, onMissing?: (msg: string) => void) => {
     setBusy(true);
     try {
-      const r = await api<{ unmatched: Unmatched[]; holdings: View }>("/holdings", { method: "PUT", body: { changes } });
+      const r = await api<{ unmatched: Unmatched[]; notes?: string[]; holdings: View }>("/holdings", { method: "PUT", body: { changes } });
       show(r.holdings);
+      if (r.notes?.length) done = [done, ...r.notes].filter(Boolean).join(" ");
       const missing = r.unmatched.length
         ? `${r.unmatched.map((u) => u.text).join(", ")}: ${r.unmatched[0].reason.startsWith("No US") ? "no US-listed company has that ticker" : "no listed company on NSE or BSE has that symbol"}. Pick one from the suggestions.` : null;
       if (missing) (onMissing ?? notify)(missing);
@@ -399,6 +401,7 @@ function EditHolding({ row, busy, onClose, onSave, onRemove, fallback }: {
       <FormGrid onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(qn, an); }}>
         <Field label="Quantity" inputMode="decimal" value={q} error={qErr} onChange={(e) => setQ(e.target.value)} />
         <Field label="Average price" optional unit={row.market === "US" ? "$" : "₹"} inputMode="decimal" value={a} error={aErr} onChange={(e) => setA(e.target.value.replace(/,/g, ""))} />
+        {row.via && <p className="k-note" data-testid="synced-note">{syncedNote(row.via)}</p>}
         <FormActions>
           <button type="submit" className="btn" disabled={busy || !ok}>Save</button>
           <button type="button" className="btn danger" disabled={busy} onClick={onRemove}><Trash size={16} />Remove from holdings</button>

@@ -111,6 +111,10 @@ class KiteNotReady(Exception):
     pass
 
 
+class KiteBusy(Exception):
+    """The broker's request turns are booked further ahead than a caller can wait (a page's quote, not a job's read)."""
+
+
 class _Guarded:
     """KiteConnect, noticing when Zerodha has cancelled the access token mid-day."""
 
@@ -225,13 +229,27 @@ class KiteService:
         if not self.ready():
             raise KiteNotReady("Market data is offline. The admin needs to complete today's data login.")
 
+    GAP = 0.36                # seconds between requests: Kite allows about 3 a second on most endpoints
+
     def _throttle(self):
-        # Kite allows about 3 requests per second on most endpoints
+        self._slot(None)
+
+    def _slot(self, max_wait: float | None):
+        """Wait for this caller's turn to send a request. Each caller books the next free turn under the lock and sleeps
+        for it outside the lock, so callers go in the order they asked and the lock is held for microseconds. It used to
+        sleep while holding the lock: every job's reads (the breadth round's quote batches, the option chains, candle reads)
+        queued on it in no particular order, and a page's quote could wait behind all of them (R24-001: the India pulse
+        took 12.6 s at 09:46 IST, the RELIANCE page's quote over 25 s). `max_wait`: a caller whose turn is further off than
+        this gives up at once (KiteBusy) without booking one."""
         with self._lock:
-            wait = 0.36 - (time.time() - self._last_call)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_call = time.time()
+            now = time.time()
+            turn = max(now, self._last_call + self.GAP)
+            if max_wait is not None and turn - now > max_wait:
+                raise KiteBusy(f"The broker's feed is busy: the next request slot is {turn - now:.0f} s away.")
+            self._last_call = turn
+        wait = turn - time.time()
+        if wait > 0:
+            time.sleep(wait)
 
     # ---------- instruments ----------
     def _load_instruments(self):
@@ -453,21 +471,30 @@ class KiteService:
             self._idx, self._idx_of = {"sym": sym, "bse": bse, "name": name}, inst
         return self._idx
 
-    def quote(self, symbols: list[str]) -> dict[str, dict]:
+    def quote(self, symbols: list[str], max_wait: float | None = None) -> dict[str, dict]:
         """Last price, day range and previous close for stocks (NSE symbols, or BSE-only symbols or codes), in one
-        call (Kite allows 500). Answers are keyed by the symbol asked for."""
+        call (Kite allows 500). Answers are keyed by the symbol asked for. `max_wait`: a page's read gives up (KiteBusy)
+        rather than wait longer than this for its turn behind the jobs' reads."""
         self._require()
         self._load_instruments()
         keys: dict[str, str] = {}
+        also: dict[str, list[str]] = {}          # a second name asked for the same listing (SLOWCO and SLOWCO-BE)
         for s in symbols[:500]:
             s = s.strip().upper()
             if not s:
                 continue
             hit = self.equity(s)
-            keys[f"{hit['exchange']}:{hit['symbol']}" if hit and hit["exchange"] == "BSE" else f"NSE:{s}"] = s
+            # the listing as the broker names it: a BSE-only company, and an NSE stock in a restricted series (SYMBOL-BE,
+            # -BZ, -SM…), asked for as NSE:SYMBOL got no answer (R24-003: All NSE counts the exchange's EQ and BE series, and
+            # its BE stocks had no live price; 219 of its 2,563 were unread at 09:50 IST)
+            key = f"{hit['exchange']}:{hit['symbol']}" if hit else f"NSE:{s}"
+            if key in keys and keys[key] != s:
+                also.setdefault(key, []).append(s)
+            else:
+                keys[key] = s
         if not keys:
             return {}
-        self._throttle()
+        self._throttle() if max_wait is None else self._slot(max_wait)
         data = self.kite.quote(list(keys))
         out = {}
         for k, v in data.items():
@@ -477,12 +504,15 @@ class KiteService:
             traded = v.get("last_trade_time")
             if hasattr(traded, "tzinfo") and traded.tzinfo is None:
                 traded = traded.replace(tzinfo=IST)          # the broker's clock is India's: say so, so no reader's zone moves it
-            out[keys.get(k, k.split(":", 1)[1])] = {
+            row = {
                 "price": last, "prev_close": prev, "open": ohlc.get("open"), "high": ohlc.get("high"),
                 "low": ohlc.get("low"), "volume": v.get("volume"), "at": traded.isoformat() if hasattr(traded, "isoformat") else None,
                 "change": (last - prev) if last is not None and prev else None,
                 "change_pct": ((last / prev - 1) * 100) if last is not None and prev else None,
             }
+            out[keys.get(k, k.split(":", 1)[1])] = row
+            for other in also.get(k, []):
+                out[other] = row
         return out
 
     def index_quotes(self, keys: list[str]) -> dict[str, dict]:

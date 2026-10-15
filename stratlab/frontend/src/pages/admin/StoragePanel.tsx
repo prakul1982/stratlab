@@ -22,7 +22,8 @@ export function StoragePanel() {
   const [s, setS] = useState<Storage | null>(null);
   const [copied, setCopied] = useState(false);
   const [asking, setAsking] = useState(false);
-  const load = useCallback(async () => { try { setS(await api<Storage>("/admin/storage")); } catch (e) { fail(e); } }, [fail]);
+  const [failed, setFailed] = useState(false);
+  const load = useCallback(async () => { try { setS(await api<Storage>("/admin/storage")); setFailed(false); } catch (e) { setFailed(true); fail(e); } }, [fail]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!s?.move?.running) return;
@@ -42,7 +43,7 @@ export function StoragePanel() {
   return (
     <Card label="Storage">
       <CardHead title="Storage" />
-      {!s ? <Skeleton label="Loading storage" lines={2} /> : s.error ? (
+      {!s ? (failed ? <ErrorState title="The storage size couldn't be read" action={{ label: "Try again", onClick: () => void load() }} /> : <Skeleton label="Loading storage" lines={2} />) : s.error ? (
         <ErrorState title="Couldn't read the database's size">{s.error}</ErrorState>
       ) : s.missing ? (
         <div className="k-stack">

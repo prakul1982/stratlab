@@ -652,8 +652,17 @@ class Job:
         slot = self.due(now)
         if not slot:
             return 0
+        before, was = self.last, db.get_setting(MARK)
         self.last = slot
         db.set_setting(MARK, slot)
-        sent_now = sweep(now)
+        try:
+            sent_now = sweep(now)
+        except Exception:
+            self.last = before                       # the hour isn't used up: the next pass sweeps again
+            if was is None:
+                db.delete_setting(MARK)
+            else:
+                db.set_setting(MARK, was)
+            raise
         self.status.update(last_run=now.isoformat(), sent=sent_now, last_error=None)
         return sent_now

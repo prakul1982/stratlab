@@ -239,11 +239,22 @@ def create(uid: str, req: dict, limit: int, seed: dict | None = None) -> dict:
     def add(row):
         if sum(1 for x in row["items"] if x.get("status") == "active") >= limit:
             raise LimitReached(limit)
+        _no_twin(row, a)
         a.update(id=secrets.token_hex(6), status="active", created_at=_now(), triggered_at=None, fired=0,
                  last_text=None, rev=1, state=_seed(a, seed))
         row["items"].append(a)
         return True, a
     return _change(uid, add)
+
+
+def _same(a: dict, b: dict) -> bool:
+    return all(a.get(k) == b.get(k) for k in ("region", "symbol", "kind", "op", "value", "period", "repeat"))
+
+
+def _no_twin(row: dict, a: dict, aid: str | None = None) -> None:
+    """One trigger, one alert: refuse an alert the same as one the user already has set (note aside)."""
+    if any(x["id"] != aid and x.get("status") == "active" and _same(a, x) for x in row["items"]):
+        raise AlertError("You already have this alert. Change its level or settings, or edit the one you have.")
 
 
 def update(uid: str, aid: str, req: dict, limit: int, seed: dict | None = None) -> dict | None:
@@ -256,7 +267,16 @@ def update(uid: str, aid: str, req: dict, limit: int, seed: dict | None = None) 
         others = sum(1 for x in row["items"] if x.get("status") == "active" and x["id"] != aid)
         if others >= limit:
             raise LimitReached(limit)
-        old.update(a, status="active", triggered_at=None, rev=int(old.get("rev") or 0) + 1, state=_seed(a, seed))
+        _no_twin(row, a, aid)
+        # a disclosure alert keeps what it already sent when only its settings changed, so the last days' deals the
+        # evening feed still holds aren't sent again; any other change starts from now
+        same = old.get("kind") == a["kind"] and old.get("symbol") == a["symbol"] and old.get("region") == a["region"]
+        state = _seed(a, seed)
+        if same and a["kind"] in EVENTS:
+            state = {k: v for k, v in (old.get("state") or {}).items() if k in ("seen", "day", "side")}
+        old.update(a, status="active", triggered_at=None, rev=int(old.get("rev") or 0) + 1, state=state)
+        if not same:
+            old["created_at"] = _now()
         return True, old
     return _change(uid, edit)
 
@@ -461,9 +481,8 @@ def deliver(profile: dict, subject: str, text: str) -> list[str]:
         if channel == "email":
             continue
         try:
-            if job() == 0 and channel == "push":        # push.send's count of devices reached
-                continue
-            sent.append(channel)
+            if alerts.reached(channel, job()):
+                sent.append(channel)
         except Exception as e:
             print("stock alert failed:", channel, str(e)[:120])
     to = alerts.newsletter_email(profile)
@@ -604,8 +623,8 @@ def _entry(p, now: datetime) -> list | None:
     """A waiting text as [text, when it fired]: a plain string stored before the time was kept is taken as fired now."""
     if isinstance(p, str):
         return [p, now.isoformat()]
-    if isinstance(p, (list, tuple)) and len(p) == 2 and isinstance(p[0], str):
-        return [p[0], p[1]]
+    if isinstance(p, (list, tuple)) and len(p) in (2, 3) and isinstance(p[0], str):
+        return [p[0], p[1], *p[2:]]       # a third item, when there is one, is the id of the alert that fired it
     return None
 
 
@@ -689,7 +708,8 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
             row.pop("sending", None)
             row.pop("claim", None)
             dirty = True
-        kept = _fresh(row["pending"], now)
+        ids = {a["id"] for a in row["items"]}
+        kept = [e for e in _fresh(row["pending"], now) if len(e) < 3 or e[2] in ids]     # a deleted alert's text isn't sent
         if kept != row["pending"]:
             row["pending"], dirty = kept, True
         for a in row["items"]:
@@ -705,10 +725,10 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
                 a.update(last_text=text, triggered_at=now.isoformat(), fired=int(a.get("fired") or 0) + 1)
                 if not a.get("repeat"):
                     a["status"] = "triggered"
-                row["pending"] = (row["pending"] + [[text, now.isoformat()]])[-MAX_PENDING:]
+                row["pending"] = (row["pending"] + [[text, now.isoformat(), a["id"]]])[-MAX_PENDING:]
         texts = []
         if row["pending"] and may_send(row["sent"], now) and not _waiting(row, now) and not _claimed(row, now):
-            texts, row["claim"] = [t for t, _ in row["pending"]], now.isoformat()
+            texts, row["claim"] = [e[0] for e in row["pending"]], now.isoformat()
             row["sending"], row["pending"] = row["pending"], []
             dirty = True
         return dirty, texts
@@ -716,6 +736,29 @@ def apply(uid: str, changes: dict, now: datetime) -> list[str]:
 
 
 # ---------- alerts on exchange disclosures (insider trades, bulk and block deals) ----------
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def _after(d: dict, created) -> bool:
+    """Whether a disclosure was filed after the alert was set. With a time, it is compared with the moment the alert
+    was created; with only a date, a day before the alert's creation day is out and the creation day itself is too (the
+    time isn't known), so only later days count."""
+    when = str(d.get("filed") or d.get("at") or d.get("date") or d.get("day") or "").strip()
+    try:
+        made = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return when[:10] >= str(created or "")[:10]       # no readable creation time: the old date comparison
+    if made.tzinfo is None:
+        made = made.replace(tzinfo=timezone.utc)
+    if len(when) > 10:
+        try:
+            t = datetime.fromisoformat(when.replace("Z", "+00:00").replace(" ", "T"))
+        except ValueError:
+            return when[:10] > made.astimezone(IST).date().isoformat()
+        return (t if t.tzinfo else t.replace(tzinfo=IST)) > made           # filing times are India's
+    return when > made.astimezone(IST).date().isoformat()
+
+
 def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     """An alert on disclosures: the deals of its kind on its stock that it hasn't sent yet, filed since it was set.
     Returns the message (else None) and the alert's new state."""
@@ -723,9 +766,8 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     if a["kind"] == "mtf":
         return _evaluate_mtf(a, rows, st)
     seen = [x for x in st.get("seen") or [] if isinstance(x, str)]
-    since = _day(a.get("created_at"), "Asia/Kolkata") or str(a.get("created_at") or "")[:10]     # filing dates are India's
     new = [d for d in rows if isinstance(d, dict) and d.get("kind") in EVENTS.get(a["kind"], ()) and d.get("symbol") == a["symbol"]
-           and d.get("id") not in seen and str(d.get("filed") or d.get("date") or d.get("day") or "") >= since]
+           and d.get("id") not in seen and _after(d, a.get("created_at"))]
     if not new:
         return None, st
     st["seen"] = (seen + [d["id"] for d in new])[-MAX_SEEN:]
@@ -741,6 +783,15 @@ def evaluate_event(a: dict, rows: list[dict]) -> tuple[str | None, dict]:
     from .deals import describe as say
     more = f"; and {len(new) - 1} more" if len(new) > 1 else ""
     return f"{a['symbol']}: {say(new[0])}{more}. From exchange disclosures", st
+
+
+def _short(day) -> str:
+    """"14 Oct": the date as the other alert texts write it."""
+    try:
+        d = datetime.fromisoformat(str(day)[:10])
+        return f"{d.day} {d:%b}"
+    except ValueError:
+        return str(day)
 
 
 def _evaluate_mtf(a: dict, rows: list[dict], st: dict) -> tuple[str | None, dict]:
@@ -760,7 +811,7 @@ def _evaluate_mtf(a: dict, rows: list[dict], st: dict) -> tuple[str | None, dict
     st.update(side=side, day=d.get("day"))
     if was is None or was == side or side != a["op"]:
         return None, st
-    return (f"{a['symbol']}: margin-funded shares were {d['pct']:.2f}% of shares issued on {d.get('day')} "
+    return (f"{a['symbol']}: margin-funded shares were {d['pct']:.2f}% of shares issued on {_short(d.get('day'))} "
             f"({money(float(d.get('crore') or 0), 'IN')} crore funded), {side} your {a['value']:g}% level. "
             "From the exchange's margin trading disclosure"), st
 

@@ -128,7 +128,7 @@ export function CorpActionsPage() {
           )}
         </>
       )}
-      {data && data.more > 0 && <p className="k-note">And {data.more} more. Find a company by name to narrow the list.</p>}
+      {data && data.more > 0 && <p className="k-note">And {data.more} more.{scope === "all" ? " Find a company by name to narrow the list." : ""}</p>}
       {data && <p className="k-note inv-text">The ex-date is the first day the shares trade without the entitlement; in India it's also the record date. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );

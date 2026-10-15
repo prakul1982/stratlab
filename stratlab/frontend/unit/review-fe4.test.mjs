@@ -84,7 +84,8 @@ test("Pulse and Themes ignore a late answer for the market or theme that was lef
   assert.match(src, /if \(mine === seq\.current\) setR\(out\)/);
   assert.match(src, /finally \{ if \(mine === seq\.current\) setBusy\(false\); \}/);
   assert.match(src, /try \{ const out = await researchApi\.pulseAI\(region, "", refresh\); if \(mine === seq\.current\) setAi\(out\); \}/);
-  assert.match(src, /researchApi\.pulse\(region\)\.then\(\(d\) => live && setData\(d\)\)/);
+  // R24-001: the levels load through usePulse, which still drops an answer for a market that was left
+  assert.match(src, /researchApi\.pulse\(region\)\.then\(\(d\) => \{\s*if \(!live\) return;/);
 });
 
 test("the closing auction keeps its data on a failed poll, says so, and keeps polling", () => {
@@ -150,11 +151,11 @@ test("the ITR year select stays enabled while a year loads; the old view is dimm
 
 test("Admin: users search drops a late answer; first-load failures offer Try again; prices take commas; invoices use money()", () => {
   const A = "src/pages/admin/";
-  assert.match(read(A + "UsersSection.tsx"), /if \(n === seq\.current\) setUsers\(r\)/);
+  assert.match(read(A + "UsersSection.tsx"), /if \(n === seq\.current\) \{ setUsers\(r\)/);
   assert.match(read(A + "RulesPanel.tsx"), /ErrorState title="The rates and rules couldn't be read" action=\{\{ label: "Try again"/);
   assert.match(read(A + "OverviewSection.tsx"), /ErrorState title="The server's status couldn't be read" action=\{\{ label: "Try again"/);
   assert.match(read(A + "PricesPanel.tsx"), /ErrorState title="The prices couldn't be read" action=\{\{ label: "Try again"/);
-  assert.match(read(A + "PricesPanel.tsx"), /Number\(v\.replace\(\/,\/g, ""\)\)/);
+  assert.match(read(A + "PricesPanel.tsx"), /parsePrice\(v\)/);   // commas are taken by parsePrice (review-5d)
   const inv = read(A + "InvoiceAdminPanel.tsx");
   assert.match(inv, /money\(r\.total, r\.currency, 2\)/);
   assert.match(inv, /money\(r\.tax, r\.currency, 2\)/);

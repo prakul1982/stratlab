@@ -118,7 +118,7 @@ test("an options session: the rule's reason under each order, and the entries th
   await expect(page.getByText("NIFTY 0.2 delta strangle").first()).toBeVisible();
   await expect(page.locator(".rules-strip")).toContainText("Sell Δ 0.20 CE, Sell Δ 0.20 PE");
   await expect(page.getByTestId("rule-vix")).toHaveText("Enter only while India VIX is between 11 and 18");
-  await page.getByText("Orders in this trade").click();
+  await page.locator(".earlier-label", { hasText: "Orders in this trade" }).click();   // the costs line names it too
   await expect(page.getByTestId("order-pick").first()).toHaveText("CE 25,400 picked: model delta 0.21, nearest to 0.20");
   await expect(page.getByTestId("order-pick")).toHaveCount(2);
   await page.getByText("Entries the India VIX filter held back").click();

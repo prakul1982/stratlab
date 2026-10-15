@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { searchAiNotice } from "../lib/aiReason";
 import { useApp } from "../lib/app";
 import { match, resolve } from "../lib/features";
 import { matchHelp } from "../lib/helpTopics";
@@ -11,12 +12,12 @@ import { track, trackBacktest } from "../lib/analytics";
 import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
 import { useDialogFocus } from "./kit/Dialog";
-import { asksContract, namesFeature, offerIdeas } from "../lib/paletteRank";
+import { asksContract, compareTo, namesFeature, offerIdeas, pickCompany } from "../lib/paletteRank";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
 interface Row { key: string; icon: ReactNode; title: string; sub?: string; space?: Space | null; run: () => void }
-interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean }
+interface Ask { action: string; text?: string; market?: string | null; symbol?: string | null; page?: string | null; answer?: string; title?: string | null; fallback?: boolean; limit?: boolean; message?: string }
 
 const PAGES: Record<string, string> = { paper: "/paper", options: "/options", library: "/library", research: "/research", import: "/import",
   notebooks: "/notebooks", new: "/new", trade: "/trade", invest: "/invest", money: "/money", account: "/account", settings: "/settings", plans: "/plans", themes: "/research/themes", pulse: "/research/pulse", watchlist: "/research/watchlist" };
@@ -50,6 +51,13 @@ function intentFor(q: string): Intent | null {
   if (/investor home|my watchlist|watchlist overview/i.test(t))
     return { title: "Investor home", sub: "Every watchlist company: trend, sector, red flags, checklist", to: "/research/investor" };
   return null;
+}
+
+/** A listed company (a stock or ETF with a company page) for a name, in any market: the exact symbol first, else the best
+ * match the search gives. Null when nothing like it is listed. */
+async function findCompany(name: string): Promise<(Instrument & { market: "IN" | "US" }) | null> {
+  const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(name.trim().slice(0, 40))}`).catch(() => [] as Instrument[]);
+  return pickCompany(rows, name) as (Instrument & { market: "IN" | "US" }) | null;
 }
 
 /** What to look up as a company: the line without a leading "research", "open", "show me"… ("research HDFC Bank"). */
@@ -96,11 +104,16 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { if (!steps) input.current?.focus(); }, [steps]);   // back to typing once the work is done
   const lookup = companyPart(text);
+  // each lookup is numbered: an answer for what was typed before never replaces the newer one's (review 5c)
+  const asked = useRef(0);
   useEffect(() => {
+    const n = ++asked.current;
     setInsts([]);
     if (code || lookup.length < 2 || lookup.split(/\s+/).length > 5 || asks(text)) return;
     const t = window.setTimeout(() => {
-      api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(lookup.slice(0, 40))}`).then((r) => setInsts(r.slice(0, 8))).catch(() => setInsts([]));
+      api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(lookup.slice(0, 40))}`)
+        .then((r) => { if (n === asked.current) setInsts(r.slice(0, 8)); })
+        .catch(() => { if (n === asked.current) setInsts([]); });
     }, 220);
     return () => window.clearTimeout(t);
   }, [text, lookup, code]);
@@ -110,7 +123,11 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const getIdeas = async () => {
     if (cancelled.current) return;
     setThinking(true); setIdeasFor(text);
-    try { setIdeas((await api<{ ideas: Idea[] }>("/search/ideas", { method: "POST", body: { q: text } })).ideas); setSel(0); }
+    try {
+      const r = await api<{ ideas: Idea[]; limit?: boolean; message?: string }>("/search/ideas", { method: "POST", body: { q: text } });
+      setIdeas(r.ideas); setSel(0);
+      if (r.limit && r.message) setAnswer({ q: text, text: r.message, problem: true });
+    }
     catch (e) { fail(e); } finally { setThinking(false); }
   };
 
@@ -158,17 +175,17 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (cancelled.current) return;
     setSteps([it.deep ? `Finding ${it.deep}…` : "Finding both companies…"]);
     try {
+      // searched in every market: the company's own market makes the address (review 5c: "deep dive apple" only looked in India)
       if (it.deep) {
-        const inst = await findInstrument(it.deep, "IN");
+        const inst = await findCompany(it.deep);
         if (cancelled.current) return;
         setSteps(null);
-        return go(inst && !inst.fno ? `/research/IN/${encodeURIComponent(inst.symbol)}/deep` : `/research?q=${encodeURIComponent(it.deep)}`);
+        return go(inst ? `/research/${inst.market}/${encodeURIComponent(inst.symbol)}/deep` : `/research?q=${encodeURIComponent(it.deep)}`);
       }
-      const [a, b] = await Promise.all(it.compare!.map((n) => findInstrument(n, "IN")));
+      const [a, b] = await Promise.all(it.compare!.map((n) => findCompany(n)));
       if (cancelled.current) return;
       setSteps(null);
-      const qs = [a && `a=${encodeURIComponent(a.symbol)}`, b && `b=${encodeURIComponent(b.symbol)}`].filter(Boolean).join("&");
-      return go(`/research/compare?region=IN${qs ? "&" + qs : ""}`);   // a name that wasn't found is left for the user to pick
+      return go(compareTo(a, b, lastMarket()));          // a name that wasn't found (or is in the other market) is left for the user to pick
     } catch (e) { if (cancelled.current) return; setSteps(null); fail(e); }
   };
 
@@ -185,7 +202,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       setSteps(null);
       if (a.action === "import") return go("/import", { importText: q });
       if (a.action === "answer") {
-        setAnswer({ q: text, text: a.answer || "The AI isn't available to answer right now. The matches below may help, or try again in a minute." });
+        // at the day's limit the words say so (and when the count starts again), not that the AI is unavailable
+        setAnswer(a.limit && a.message ? { q: text, text: a.message, problem: true } : { q: text, text: a.answer || searchAiNotice(a) });
         return;
       }
       if (a.action === "ideas") return getIdeas();

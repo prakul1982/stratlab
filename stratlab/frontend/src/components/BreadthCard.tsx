@@ -22,10 +22,12 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
       .then(setD).catch(() => setD("error"));
   }, [region]);
   const f = d && d !== "error" ? cardFigures(d) : null;
+  // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market
+  const page = d && d !== "error" ? `/invest/breadth?group=${encodeURIComponent(d.group.id)}` : `/invest/breadth?region=${region}`;
   return (
-    <Panel title="Market breadth" right={<Link to="/invest/breadth" className="link">Charts →</Link>}>
+    <Panel title="Market breadth" right={<Link to={page} className="link">Charts →</Link>}>
       {d === null ? <PanelSkel figs label="Counting the market" />
-        : d === "error" ? <p className="small muted">Breadth couldn't be opened just now. <Link className="link" to="/invest/breadth">Try the page</Link>.</p>
+        : d === "error" ? <p className="small muted">Breadth couldn't be opened just now. <Link className="link" to={page}>Try the page</Link>.</p>
         : !f ? <p className="small muted">The first counts for {d.group.name} come after the next close.</p>
         : (
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>

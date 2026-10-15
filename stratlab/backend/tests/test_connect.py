@@ -1640,3 +1640,32 @@ def test_an_epf_passbook_of_two_years_is_its_latest_balance():
     got = docs.read_epf(two_years + "\nMember Id: XXXX0000000002\nClosing Balance as on 31/03/2024 20,000.50 20,000 0")
     assert got["balance"] == 310000.5 and got["as_of"] == "2026-03-31"
     assert docs.read_epf("Closing Balance as on 31/03/2025 10 20 0\nClosing Balance as on 31/03/2026 30 40 0")["balance"] == 70
+
+
+def test_an_epf_passbook_with_no_member_id_adds_up_the_latest_years_lines():
+    """rev6a: with no member id read, closing lines of one financial year are separate members' and add up; lines of
+    different years take the latest year's, added up."""
+    same = "Closing Balance as on 31/03/2026 1,000 2,000 500\nClosing Balance as on 31/03/2026 1,500 2,500 600\n"
+    assert docs.read_epf(same) == {"balance": 7000.0, "as_of": "2026-03-31", "passbooks": 2}
+    years = ("Closing Balance as on 31/03/2025 1,000 2,000 500\nClosing Balance as on 31/03/2026 1,500 2,500 600\n"
+             "Closing Balance as on 31/03/2026 100 200 0\n")
+    assert docs.read_epf(years) == {"balance": 4300.0, "as_of": "2026-03-31", "passbooks": 2}
+
+
+def test_an_epf_member_id_label_at_a_line_end_takes_nothing_from_the_next_line():
+    """rev6a: "Member ID" then a newline is no id ("Establishment" on the next line isn't one), so the two members'
+    lines aren't taken as one member's two years."""
+    text = ("Member ID\nEstablishment Name ABC\nClosing Balance as on 31/03/2026 1,000 2,000 500\n"
+            "Member ID\nEstablishment Name XYZ\nClosing Balance as on 31/03/2026 1,500 2,500 600\n")
+    assert docs.read_epf(text) == {"balance": 7000.0, "as_of": "2026-03-31", "passbooks": 2}
+    assert docs.read_epf("Member ID: MH1 \nClosing Balance as on 31/03/2026 1,500 2,500 600\n"
+                         "Member Id :\tMH2\nClosing Balance as on 31/03/2026 1,000 2,000 0\n")["balance"] == 7000
+
+
+def test_the_connect_jobs_keep_their_own_errors_and_their_status(w, monkeypatch):
+    monkeypatch.setattr(ibkr, "run_daily", lambda now=None: (_ for _ in ()).throw(RuntimeError("flex down")))
+    monkeypatch.setattr(jobs, "run_reminders", lambda now=None: 2)
+    job = jobs.Job()
+    job.tick(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc), part="all")
+    assert "flex down" in job.status["ibkr_error"] and job.status["reminders_error"] is None and job.status["reminders"] == 2
+    assert json.loads(db.get_setting("jobstatus:connect"))["reminders"] == 2          # kept for after a restart

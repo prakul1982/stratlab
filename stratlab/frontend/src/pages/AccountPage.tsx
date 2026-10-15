@@ -6,14 +6,14 @@ import { signOutHere } from "../lib/signout";
 import { useApp } from "../lib/app";
 import { download } from "../lib/share";
 import { dateOnly } from "../lib/format";
-import { endsAt } from "../lib/offer";
+import { endsAt, viewingPlansNote } from "../lib/offer";
 import { HELP } from "../lib/help";
 import { LegalLinks } from "../components/LegalLinks";
 import { InvoicesCard } from "../components/InvoicesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, monthlyUse, planRow, planRun, signedInWith } from "../lib/account";
+import { aiBuildsUse, confirmMatches, monthlyUse, planLabel, planRow, planRun, signedInWith } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 
 const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
@@ -43,7 +43,7 @@ export function AccountPage() {
   const method = signedInWith(provider, null);
   const run = planRun(me), row = planRow(me);   // the plan they have, not the launch offer (me.plan is Pro for everyone then)
   const until = b.renews_or_ends ? ` (${dateOnly(b.renews_or_ends)})` : "";
-  const planName = PLAN_NAME[me.paid_plan ?? me.plan] ?? me.plan_info.name;
+  const planName = planLabel(me);
 
   const cancel = async () => {
     setBusy(true);
@@ -88,20 +88,21 @@ export function AccountPage() {
           {name && <div><dt>Name</dt><dd>{name}</dd></div>}
           <div><dt>Email</dt><dd>{me.email ?? session?.user.email ?? "–"}</dd></div>
           {method && <div><dt>Signed in with</dt><dd>{method}</dd></div>}
-          <div><dt>Plan</dt><dd>{me.plan_info.name}</dd></div>
+          <div><dt>Plan</dt><dd>{planName}</dd></div>
         </dl>
       </Card>
 
       <Card id="plan" label="Plan and usage">
         <CardHead title="Plan and usage" info={HELP.experimentsQuota}
-          actions={<Badge tone="plain" dot={false}>{me.plan_info.name}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</Badge>} />
+          actions={<Badge tone="plain" dot={false}>{planName}{me.promo ? " (launch offer)" : me.free_basic_until ? " (free from invites)" : ""}</Badge>} />
         {/* View as shows the viewed plan's limits beside the account's own use: said, so "5 of 2" never reads as a fault (R6O-013) */}
         {me.view_as && <p className="k-small k-muted k-hint-line" data-testid="viewas-usage">Your own use this month, against the {me.plan_info.name} plan's limits you're viewing as. Your real plan's limits are unchanged.</p>}
         <div className="k-rows">{usage.map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>
         <div className="k-row">
           {run === "free" ? <Link to="/plans" className="btn">See paid plans</Link>
             : run === "given" ? <Link to="/plans" className="btn outline">Compare plans</Link>
-            : run === "cancelled" ? <><span className="k-small k-muted">Cancelled. You keep {me.plan_info.name} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
+            : run === "viewing" ? <><span className="k-small k-muted" data-testid="viewas-billing">{viewingPlansNote(PLAN_NAME[me.view_as ?? ""] ?? planName)}</span><Link to="/plans" className="btn outline">Compare plans</Link></>
+            : run === "cancelled" ? <><span className="k-small k-muted">Cancelled. You keep {planName} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
               : <><Link to="/plans" className="btn outline">Change plan</Link><button type="button" className="btn quiet danger" onClick={() => setAsk("cancel")}>Cancel subscription</button></>}
         </div>
       </Card>

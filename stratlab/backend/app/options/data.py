@@ -170,7 +170,7 @@ class OptionsData:
                         lot *= CDS_UNITS
                     out.append({"symbol": x["tradingsymbol"], "name": x.get("name") or "", "type": t,
                                 "strike": float(x.get("strike") or 0), "expiry": x["expiry"].isoformat(),
-                                "lot": lot, "exchange": exch})
+                                "lot": lot, "exchange": exch, "tick": float(x.get("tick_size") or 0) or None})
                 rows[exch] = out
             self._rows, self._day = rows, today
 
@@ -232,7 +232,7 @@ class OptionsData:
         e = self.pick_expiry(exchange, name, choice)
         if not e:
             return None
-        rows = [{"opt": r["type"], "strike": r["strike"], "symbol": r["symbol"], "lot": r["lot"]}
+        rows = [{"opt": r["type"], "strike": r["strike"], "symbol": r["symbol"], "lot": r["lot"], "tick": r.get("tick")}
                 for r in self._rows.get(exchange, []) if r["name"] == name and r["expiry"] == e and r["type"] != "FUT"]
         if not rows:
             return None

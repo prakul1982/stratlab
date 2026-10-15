@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Info } from "../ui";
 import { minusNode } from "../../lib/format";
+import { scrollToEnd } from "../../lib/phoneFit";
 
 export type Column<R> = {
   key: string;
@@ -33,7 +34,7 @@ function usePhone(): boolean {
   return on;
 }
 
-export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort, phonePage }: {
+export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "Nothing to show yet.", rowAttrs, rowNote, foot, sticky: _sticky, stack, pinHead, sort, phonePage, scrollEnd }: {
   label: string; columns: Column<R>[]; rows: R[]; rowKey: (row: R, index: number) => string; empty?: ReactNode;
   /** No longer used: a long table scrolls with the page, never in a box of its own. Kept so callers need not change. */
   sticky?: boolean;
@@ -42,6 +43,8 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   stack?: boolean;
   /** A table that fits its card (a few narrow columns) keeps its header row in view while the page scrolls past it. */
   pinHead?: boolean;
+  /** A wide table of periods opens scrolled to its right end, where the latest column is (R25-003). The order stays. */
+  scrollEnd?: boolean;
   /** Which column the rows are sorted by now, and what a click on a sortable header does. */
   sort?: { key: string; desc: boolean; onSort: (key: string) => void };
   /** A totals row under the rows: a cell for each column key (the first column's names the row). */
@@ -53,12 +56,14 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   const phone = usePhone();
   const [pages, setPages] = useState(1);
   useEffect(() => { setPages(1); }, [allRows.length]);
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (scrollEnd) scrollToEnd(box.current); }, [scrollEnd, columns.length, allRows.length]);
   const cap = stack && phonePage && phone ? phonePage * pages : Infinity;
   const rows = allRows.length > cap ? allRows.slice(0, cap) : allRows;
   const left = allRows.length - rows.length;
   return (
     <>
-    <div className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={`${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={`${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c) => {

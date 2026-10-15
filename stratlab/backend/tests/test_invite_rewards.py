@@ -511,3 +511,14 @@ def test_an_invite_whose_reward_failed_to_start_is_rewarded_on_the_next_try(w, m
     assert referrals.record(newcomer, code, NOW) == "recorded" and R.row("u-a") is None
     monkeypatch.setattr(R, "joined", real)
     assert referrals.record(newcomer, code, NOW) == "already" and R.row("u-a")["status"] == "waiting"
+
+
+def test_a_sweep_that_raises_doesnt_use_the_day_up(w, monkeypatch):
+    job = R.Job()
+    t = datetime(2026, 10, 10, 1, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(R, "sweep", lambda now=None: (_ for _ in ()).throw(RuntimeError("db blip")))
+    with pytest.raises(RuntimeError):
+        job.tick(t)
+    assert db.get_setting(R.MARK) is None and job.due(t + timedelta(minutes=10)) == "2026-10-10"
+    monkeypatch.setattr(R, "sweep", lambda now=None: {"given": 0})
+    assert job.tick(t + timedelta(minutes=10)) == {"given": 0} and db.get_setting(R.MARK) == "2026-10-10"

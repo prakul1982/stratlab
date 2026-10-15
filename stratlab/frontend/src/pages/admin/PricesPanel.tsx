@@ -4,12 +4,12 @@ import { useApp } from "../../lib/app";
 import { ago, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
-import { rateNote } from "./prices";
+import { parsePrice, rateNote, ratesRead } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
   auto: boolean; rate: number | null; no_rate?: boolean;
   plan_basic: string | null; plan_pro: string | null; plan_basic_year: string | null; plan_pro_year: string | null };
-type View = { currencies: Record<string, Row>; rates_at: string | null; rate_errors: string[] };
+type View = { currencies: Record<string, Row>; rates_at: string | null; rates_read_at?: Record<string, string>; rate_errors: string[] };
 const PRICE = ["basic", "pro", "basic_year", "pro_year"] as const;
 const PLAN = ["plan_basic", "plan_pro", "plan_basic_year", "plan_pro_year"] as const;
 const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / month", basic_year: "Basic / year", pro_year: "Pro / year" };
@@ -18,9 +18,10 @@ const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / mont
 export function PricesPanel() {
   const { fail, notify } = useApp();
   const [rows, setRows] = useState<Record<string, Row> | null>(null);
-  const [fx, setFx] = useState<{ at: string | null; errors: string[] }>({ at: null, errors: [] });
-  const show = (x: View) => { setRows(x.currencies); setFx({ at: x.rates_at, errors: x.rate_errors }); };
+  const [fx, setFx] = useState<{ readAt: Record<string, string>; errors: string[] }>({ readAt: {}, errors: [] });
+  const show = (x: View) => { setRows(x.currencies); setFx({ readAt: x.rates_read_at ?? (x.rates_at ? { all: x.rates_at } : {}), errors: x.rate_errors }); };
   const [edit, setEdit] = useState<Record<string, Partial<Record<string, string>>>>({});
+  const [errs, setErrs] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-prices", 2);     // the yearly prices: one click away, so the table fits a laptop
@@ -40,13 +41,21 @@ export function PricesPanel() {
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const val = (c: string, f: string) => edit[c]?.[f] ?? String((rows?.[c] as unknown as Record<string, unknown>)?.[f] ?? "");
-  const set = (c: string, f: string, v: string) => setEdit((e) => ({ ...e, [c]: { ...e[c], [f]: v } }));
+  const set = (c: string, f: string, v: string) => { setErrs((x) => { const n = { ...x }; delete n[`${c}.${f}`]; return n; }); setEdit((e) => ({ ...e, [c]: { ...e[c], [f]: v } })); };
   const save = async () => {
     const body: Record<string, Record<string, number | string | null>> = {};
+    const bad: Record<string, string> = {};
     for (const [c, ch] of Object.entries(edit)) {
       body[c] = {};
-      for (const [f, v] of Object.entries(ch)) body[c][f] = (PRICE as readonly string[]).includes(f) ? (v?.trim() ? Number(v.replace(/,/g, "")) : null) : (v ?? "").trim();
+      for (const [f, v] of Object.entries(ch)) {
+        if (!(PRICE as readonly string[]).includes(f)) { body[c][f] = (v ?? "").trim(); continue; }
+        const n = parsePrice(v);
+        if (n === undefined) bad[`${c}.${f}`] = "Type a number, like 8 or 1,999.50. Leave it empty for Automatic.";
+        else body[c][f] = n;
+      }
     }
+    setErrs(bad);
+    if (Object.keys(bad).length) return;
     setBusy(true);
     try { show(await api<View>("/admin/prices", { method: "PUT", body: { currencies: body } })); setEdit({}); notify("Prices saved."); } catch (e) { fail(e); } finally { setBusy(false); }
   };
@@ -56,7 +65,9 @@ export function PricesPanel() {
     { key: "cur", header: "Currency", rowHeader: true, wrap: true, cell: ({ c, r }) => (
       <span><b>{c}</b> <span className="k-small k-muted">{r.name}{r.rate ? ` · ${money(r.rate, "INR", r.rate < 1 ? 4 : 2)}` : ""}</span></span>) },
     ...shown.map((f): Column<{ c: string; r: Row }> => ({ key: f, header: LABEL[f], numeric: true, cell: ({ c }) => (
-      <input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`} />) })),
+      <span><input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`}
+        aria-invalid={errs[`${c}.${f}`] ? true : undefined} aria-describedby={errs[`${c}.${f}`] ? `price-err-${c}-${f}` : undefined} />
+        {errs[`${c}.${f}`] && <span id={`price-err-${c}-${f}`} className="k-note" role="alert">{errs[`${c}.${f}`]}</span>}</span>) })),
     { key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
       : r.auto ? <Badge tone="ok" dot={false}>Automatic</Badge>
       : <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)} title="Follow the rupee price again">Fixed · make automatic</button> },
@@ -73,7 +84,7 @@ export function PricesPanel() {
           <button type="button" className="btn quiet sm" disabled={busy} onClick={readRates}>Read today's rates</button>
           <button type="button" className="btn sm" disabled={busy || !Object.keys(edit).length} onClick={save}>{busy ? "Saving…" : "Save changes"}</button>
         </>} />
-      <p className="k-note k-muted">{fx.at ? `Exchange rates read ${ago(fx.at)}.` : "Exchange rates not read yet: the built-in amounts are shown."}
+      <p className="k-note k-muted">{ratesRead(fx.readAt, ago)}
         {rows ? ` ${rateNote(fx.errors, rows)}` : ""}</p>
       {!rows ? (failed ? <ErrorState title="The prices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading prices" />) : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
       {open && rows?.[open] && (

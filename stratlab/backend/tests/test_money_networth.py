@@ -499,6 +499,21 @@ def test_a_sunday_edit_does_not_overwrite_fridays_snapshot(w):
     assert [(h["d"], h["net"]) for h in rows] == [("2026-10-09", 100), ("2026-10-11", 130)]
 
 
+def test_a_partial_change_snapshot_never_replaces_a_complete_one_of_its_day(w):
+    lasting = {**_t(60, ["no price or buy price for 1 stock"]), "partial_lasting": True}
+    with time_machine.travel(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)):
+        nw.record("u-t", _t(100), "month", date(2026, 10, 5))
+        rows = nw.record("u-t", lasting, "change")
+        assert [(h["d"], h["net"], h["why"], h.get("partial")) for h in rows] == [("2026-10-05", 100, "month", None)]
+        nw.delete("u-t")
+        nw.record("u-t", _t(100), "change")
+        assert [(h["net"], h.get("partial")) for h in nw.record("u-t", lasting, "change")] == [(100, None)]
+    with time_machine.travel(datetime(2026, 10, 6, 5, 0, tzinfo=timezone.utc)):                # the next day: recorded, marked
+        rows = nw.record("u-t", lasting, "change")
+    assert [(h["d"], h["net"], h.get("partial")) for h in rows] == [
+        ("2026-10-05", 100, None), ("2026-10-06", 60, ["no price or buy price for 1 stock"])]
+
+
 def test_the_ppf_value_today_includes_the_yearly_deposits_since_its_balance():
     item = {"id": "p", "kind": "ppf", "balance": 100000, "yearly": 150000, "as_of": "2025-03-31", "rate": 7.1}
     row = nw._asset(item, date(2026, 10, 5), "", None, None, None)
@@ -632,3 +647,25 @@ def test_an_old_dollar_rate_is_dated_where_it_is_used():
     assert nw.rate_day("2026-10-12T01:00:00+00:00", now) == "" and nw.rate_day(None, now) == ""
     t = nw.build([], {"in": 0, "us": 8800.0, "count": 1, "usd_inr": 88.0, "usd_inr_at": "2026-09-01T03:00:00+00:00"}, None, nw.Prices())
     assert "at ₹88.00 a dollar (the rate of 1 Sep 2026)" in t["assets"][0]["rule"]
+
+
+def test_the_month_start_snapshot_retries_a_user_whose_read_failed(w, monkeypatch):
+    for u in ("u1", "u2"):
+        db.set_setting(nw.KEY + u, json.dumps({"items": []}))
+    calls = {"u1": 0}
+
+    def value_of(uid):
+        if uid == "u1":
+            calls["u1"] += 1
+            if calls["u1"] == 1:
+                raise RuntimeError("price source down")
+        return {"totals": {"assets": 100.0, "liabilities": 0.0, "net": 100.0}}
+    job = nw.Job(value_of)
+    assert job.tick(datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)) == 1            # u2 only
+    assert job.status["last_error"]
+    # the unfinished run is resumed once it has gone quiet
+    later = time.time() + 700
+    monkeypatch.setattr(time, "time", lambda: later)
+    assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 1           # u1 now
+    assert calls["u1"] == 2 and [h["d"][:7] for h in nw.history("u1")] == ["2026-11"]
+    assert job.status["last_error"] is None

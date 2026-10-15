@@ -33,7 +33,7 @@ export const PAGES: PageMeta[] = [
   // track it" over a drawn "Test it, research it, track it.")
   { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-08", heading: TAGLINE },
   { path: "/pricing", title: "Plans · StratLab",
-    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, updated: "2026-10-08",
+    description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/", updated: "2026-10-08",     // the landing page with its prices: one address for both (R26-006)
     heading: "Plans and prices",
     summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on experiments, AI builds and paper sessions.",
       "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
@@ -63,8 +63,8 @@ export const PAGES: PageMeta[] = [
       "Help: support@stratlab.studio. Billing and refunds: billing@stratlab.studio. Privacy requests: privacy@stratlab.studio."] },
   // addresses that open the landing page at a place, or ask for sign-in: not pages of their own, so not indexed (R10V-005
   // checked /about: the app sends it to /features signed in, scrolls the landing page to its About place signed out, and
-  // vercel.json and unit/seo.test.mjs both list it with the pages kept out of search results; the landing page and the
-  // features page are what search engines list). Not indexed, so no canonical address either.
+  // vercel.json and unit/seo.test.mjs both list it with the pages kept out of search results; the landing page is what
+  // search engines list: /features is also kept out, by vercel.json's noindex header). Not indexed, so no canonical address either.
   { path: "/about", title: "About · StratLab", description: "What StratLab is: three spaces, Trade, Invest and Money, for Indian and US stocks.", index: false,
     heading: "About StratLab",
     summary: ["StratLab has three spaces for Indian and US stocks. Trade: test trading ideas on years of real prices after costs, put them through four checks and paper trade them. Invest: research companies from their own filings. Money: track your holdings, funds and tax.",
@@ -258,6 +258,7 @@ export const landingHeading = (path: string): string | undefined => {
 
 /** What a page that is not in the table says: a sign-in page for an address inside the app, or a missing page. */
 export const GATE_DESCRIPTION = "Sign in to StratLab to open this page.";
+export const FEATURES_DESCRIPTION = "What StratLab does: test trading ideas on real prices, research companies from their filings, and track your holdings and tax.";
 export const NOT_FOUND_DESCRIPTION = "There is no page at this address on StratLab.";
 export const VERDICT_DESCRIPTION = "A strategy's verdict on past prices, shared by link: the result after costs and the four checks it was put through.";
 
@@ -267,11 +268,16 @@ const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/"
  * /pricing's page, so a visitor sees the prices' heading from the first frame and not the home page's hero (R17-002). */
 export const PAGE_ALIASES: Record<string, string> = { "/plans": "/pricing" };
 
+/** Signed-in addresses a visitor can land on that have no page of their own: they say what the page they lead to says
+ * (/upgrade opens Plans), or have a description of their own. Not written as pages by the build. */
+export const GATE_ALIASES: Record<string, string> = { "/upgrade": "/pricing" };
+export const GATE_DESCRIPTIONS: Record<string, string> = { "/features": FEATURES_DESCRIPTION };
+
 /** The table's entry for an address, if it has one. */
 export const pageMeta = (path: string): PageMeta | undefined => PAGES.find((p) => p.path === tidy(path));
 
 /** The full web address for a path on the site. */
 export const absolute = (path: string) => SITE + (path === "/" ? "/" : path);
 
-/** The pages a sitemap lists: indexable, and the page itself rather than an alias. */
-export const sitemapPages = () => PAGES.filter((p) => p.index);
+/** The pages a sitemap lists: indexable, and the page itself rather than an alias or a page whose canonical address is another's. */
+export const sitemapPages = () => PAGES.filter((p) => p.index && (p.canonical ?? p.path) === p.path);

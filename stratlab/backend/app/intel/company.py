@@ -63,6 +63,20 @@ def session_day(at, region: str) -> str | None:
     return (t if t.tzinfo else t.replace(tzinfo=tz)).astimezone(tz).date().isoformat()
 
 
+def change_2dp(price, prev, given=None) -> float | None:
+    """A day change in percent to two places, rounded half up from its decimal value: the level against the previous
+    close when both are known, else the change as given. The tile and the market read quote this one figure (R24-006:
+    the NIFTY tile showed +0.47% for a move of +0.476% while the read said +0.48%)."""
+    from decimal import ROUND_HALF_UP, Decimal
+    try:
+        v = (float(price) / float(prev) - 1) * 100 if price is not None and prev else (float(given) if given is not None else None)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    if v is None or v != v or v in (float("inf"), float("-inf")):
+        return None
+    return float(Decimal(repr(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
 def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:
     """One index's tile: its level and change with the session they are of. `stale`: the market is open today and this
     quote is still a previous session's, so its change is that session's and is never shown as today's (R7T-003: SENSEX
@@ -77,7 +91,8 @@ def index_level(name: str, q: dict, region: str, now: datetime | None = None) ->
         hi = q["high"]                          # today's high above the year's: the year's high is today's
     from .. import stock_pages
     settling = stock_pages.settling(region, now)
-    return {"name": name, "price": price, "change_pct": q.get("change_pct"), "high52": hi, "low52": q.get("low52"),
+    return {"name": name, "price": price, "change_pct": change_2dp(price, q.get("prev_close"), q.get("change_pct")),
+            "prev_close": q.get("prev_close"), "high52": hi, "low52": q.get("low52"),
             "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": q.get("at"), "day": day,
             "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today)),
             "settling": bool(settling and (day is None or day == settling))}
@@ -604,11 +619,16 @@ class Research:
         return [*bars, {"t": t, "o": o, "h": hi, "l": lo, "c": px, "v": num(q.get("volume")) or 0.0}]
 
     # ---------- market pulse ----------
+    LEVELS_WITHIN = 8.0       # seconds the index levels' reads may take together (R24-001: 20 s each, one after the other)
+
     def indices(self, region: str, now: datetime | None = None) -> list[dict]:
         """The market's index levels, each with the session it is of (see index_level). India's levels and day moves are
         the broker's live ones, the way NIFTY's spot is read for the option chains; the other source gives the 52-week
-        range, and the level itself when the broker is offline."""
+        range, and the level itself when the broker is offline. Every read is bounded: LEVELS_WITHIN for all of them, and
+        an index whose range hasn't come back by then keeps the broker's level without it."""
+        import time as _time
         out = []
+        deadline = _time.monotonic() + self.LEVELS_WITHIN
         futures = [(name, sym, _pool.submit(self.yahoo.meta, sym)) for name, sym in INDICES.get(region, [])]
         live: dict = {}
         if region == "IN" and self._kite():
@@ -618,16 +638,53 @@ class Research:
                 print("index levels: broker quotes unavailable,", str(e)[:120])
         for name, sym, f in futures:
             try:
-                m = f.result(timeout=20)
+                m = f.result(timeout=max(0.1, deadline - _time.monotonic()))
             except Exception:
                 m = {}
             k = live.get(KITE_INDEX.get(sym, "")) or {}
             if k.get("price") is not None:
-                m = {**m, **{x: k.get(x) for x in ("price", "change_pct", "high", "low", "at")}}
+                # the level, its previous close and its change all from one reading, so the change is the level's (R24-006)
+                m = {**m, **{x: k.get(x) for x in ("price", "prev_close", "change_pct", "high", "low", "at")}}
             if m.get("price") is None:
                 continue
             out.append(index_level(name, m, region, now))
         return out
+
+    # ---------- served from memory (R24-001) ----------
+    PULSE_FRESH = 15          # seconds the index levels are served from memory before a read behind the page
+    NEWS_FRESH = 300          # ...and the headlines
+    _levels_snap = None
+    _news_snap = None
+
+    def _snaps(self):
+        from .snapshot import Snapshot
+        if self._levels_snap is None:
+            self._levels_snap = Snapshot(self.PULSE_FRESH, give_up=30)
+            self._news_snap = Snapshot(self.NEWS_FRESH, give_up=45)
+        return self._levels_snap, self._news_snap
+
+    def forget_snapshots(self):
+        self._levels_snap = self._news_snap = None
+
+    def indices_now(self, region: str, wait: float = 6.0, now: datetime | None = None) -> tuple[list[dict] | None, float | None]:
+        """(the index levels, when they were read): the last read at once, a fresh one started behind it when that is over
+        PULSE_FRESH seconds old. Only the first request of a process waits, up to `wait` seconds: None while that read is
+        still going. Each level's live and stale marks are worked out now, not when it was read (the open passes)."""
+        levels, _ = self._snaps()
+        got, at = levels.get(region, lambda: self.indices(region), wait)
+        if got is None:
+            return None, None
+        return [index_level(i["name"], i, region, now) for i in got], at
+
+    def headlines_now(self, region: str, wait: float = 3.0) -> list[dict]:
+        """The market's headlines from memory, read again behind the page every NEWS_FRESH seconds; none while the first
+        read is still going (the page shows the levels without waiting for the news)."""
+        _, news = self._snaps()
+        try:
+            got, _ = news.get(region, lambda: self.headlines(region), wait)
+        except SourceError:
+            return []
+        return got or []
 
     def sector_moves(self, region: str) -> dict | None:
         """How the market's main sector indices (India: the NSE sector indices the rotation page shows first; the US: the
@@ -806,6 +863,14 @@ class Research:
         return {"unit": unit, "revenue": rev, "profit": ni, "revenue_label": "Revenue", "profit_label": "Net income"} \
             if len(rev) > 1 or len(ni) > 1 else None
 
+    PAGE_QUOTE_WAIT = 4.0     # seconds a company page's quote may wait for its turn on the broker's feed
+
+    def _page_quote(self, sym: str) -> dict | None:
+        try:
+            return self.kite.quote([sym], max_wait=self.PAGE_QUOTE_WAIT).get(sym)
+        except TypeError:             # a feed without the wait (an older stand-in)
+            return self.kite.quote([sym]).get(sym)
+
     def _company_in(self, sym: str, lean: bool = False) -> dict:
         kite_ok = self._kite()
         inst = (self.kite.equity(sym) or self.kite.by_symbol(sym)) if kite_ok else None
@@ -824,7 +889,8 @@ class Research:
         exchange = "BSE" if code else "NSE"
         tasks = {"scr": ("Screener.in", lambda: self.screener.company(code or sym))}
         if inst:
-            tasks["kq"] = ("Kite", lambda: self.kite.quote([sym]).get(sym))
+            # a page's quote never queues long behind the jobs' broker reads (R24-010: "live feed not answering", 27.7 s)
+            tasks["kq"] = ("Kite", lambda: self._page_quote(sym))
             tasks["k1y"] = ("Kite", lambda: self.kite.history(inst["token"], "1d", 370))
         else:
             tasks["y"] = ("Yahoo Finance", lambda: self.yahoo.meta(_yahoo_in(code or sym)))
@@ -844,7 +910,8 @@ class Research:
             quote = r["kq"]
         elif r.get("y"):
             y = r["y"]
-            quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume")}
+            # with the time of its last trade: a price from an earlier session is said as that session's, never "now"
+            quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume", "at")}
             lo52, hi52 = y.get("low52") or lo52, y.get("high52") or hi52
         if r.get("k1y"):
             # the year's range as the public page works it out: the candles of exactly the last 365 days (R12-003: the
@@ -857,7 +924,7 @@ class Research:
             if lo is not None and hi is not None:
                 lo52, hi52 = lo, hi
         if quote is None and s.get("price"):
-            quote = {"price": s["price"]}
+            quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})

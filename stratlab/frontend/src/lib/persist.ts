@@ -21,6 +21,13 @@ export function writePersisted<T>(key: string, value: T) {
   listeners.get(key)?.forEach((f) => f());
 }
 
+/** Forget a kept setting (sign-out): removed from this device and from memory, and everything reading it is told. */
+export function forgetPersisted(key: string) {
+  memory.delete(key);
+  try { localStorage.removeItem(key); } catch { /* storage off */ }
+  listeners.get(key)?.forEach((f) => f());
+}
+
 export function usePersisted<T>(key: string, fallback: T): [T, (v: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(() => read(key, fallback));
   useEffect(() => {

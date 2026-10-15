@@ -296,7 +296,7 @@ def test_a_broken_row_or_source_doesnt_stop_the_others(store):
 
 def test_limit_counts_only_active_alerts(store):
     body = {"region": "IN", "symbol": "TCS", "kind": "price", "op": "above", "value": 100}
-    made = [sa.create("u1", body, 3) for _ in range(3)]
+    made = [sa.create("u1", {**body, "value": 100 + i}, 3) for i in range(3)]
     with pytest.raises(sa.LimitReached):
         sa.create("u1", body, 3)
     row = json.loads(store["stockalerts:u1"])
@@ -371,8 +371,8 @@ def test_the_free_plan_has_five_alerts(w, monkeypatch):
     paid(monkeypatch)
     c, h = w["client"], headers("free-token")
     body = {"region": "IN", "symbol": "TCS", "kind": "move", "op": "either", "value": 5}
-    for _ in range(5):
-        assert c.post("/alerts", headers=h, json=body).status_code == 200
+    for i in range(5):
+        assert c.post("/alerts", headers=h, json={**body, "value": 5 + i}).status_code == 200
     r = c.post("/alerts", headers=h, json=body)
     assert r.status_code == 402 and "5 active alerts" in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
     assert c.get("/alerts", headers=h).json()["limit"] == 5
@@ -392,10 +392,10 @@ def test_a_failed_delivery_keeps_the_text_and_does_not_use_the_quota(store):
     a = sa.items("u1")[0]
     texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a.get("rev"))}, IN_OPEN)
     row = sa._read("u1")                                                    # handed out: off the list, being sent
-    assert texts and row["pending"] == [] and [t for t, _ in row["sending"]] == texts
+    assert texts and row["pending"] == [] and [e[0] for e in row["sending"]] == texts
     assert sa.flush("u1", {"id": "u1"}, texts, IN_OPEN, send=lambda *x: []) is False       # no channel reached
     row = sa._read("u1")
-    assert [t for t, _ in row["pending"]] == texts and row["sent"] == []
+    assert [e[0] for e in row["pending"]] == texts and row["sent"] == []
     assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=30)) == []                       # not retried within the hour
     again = sa.apply("u1", {}, IN_OPEN + timedelta(hours=1, minutes=1))
     assert again == texts
@@ -409,7 +409,7 @@ def test_an_error_while_sending_keeps_the_text(store):
         raise RuntimeError("down")
     assert sa.flush("u1", {"id": "u1"}, ["x crossed"], IN_OPEN, send=boom) is False
     row = sa._read("u1")
-    assert [t for t, _ in row["pending"]] == ["x crossed"] and row["sent"] == []
+    assert [e[0] for e in row["pending"]] == ["x crossed"] and row["sent"] == []
 
 
 def test_a_push_that_reached_no_device_is_not_a_delivery(monkeypatch):
@@ -446,7 +446,7 @@ def test_texts_handed_out_are_sent_at_most_once_so_a_crash_never_doubles_one(sto
     texts = sa.apply("u1", {a["id"]: ("RELIANCE crossed above ₹3,000", {}, a["rev"], sa._seen(a))}, IN_OPEN)
     assert len(texts) == 1                                                  # …and the process dies here, before flush
     row = sa._read("u1")
-    assert row["pending"] == [] and [t for t, _ in row["sending"]] == texts
+    assert row["pending"] == [] and [e[0] for e in row["sending"]] == texts
     assert sa.apply("u1", {}, IN_OPEN + timedelta(minutes=1)) == []         # a send is in flight: nothing handed out
     later = sa.apply("u1", {}, IN_OPEN + sa.CLAIM_FOR + timedelta(minutes=1))
     assert later == []                                                      # the restart doesn't send it again
@@ -494,14 +494,14 @@ def test_a_user_whose_profile_cant_be_read_keeps_the_waiting_texts(store):
         raise RuntimeError("profiles down")
     job = sa.Checker(Market().quotes, lambda r, s: [], lambda p: 5, send=lambda *a: sent.append(a) or ["push"], profile=down)
     job.tick(IN_OPEN)
-    assert sent == [] and [t for t, _ in sa._read("u1")["pending"]] == ["RELIANCE crossed"] and "claim" not in sa._read("u1")
+    assert sent == [] and [e[0] for e in sa._read("u1")["pending"]] == ["RELIANCE crossed"] and "claim" not in sa._read("u1")
 
 
 def test_a_disclosure_filed_before_the_alert_was_set_is_judged_on_the_india_date():
     # set at 00:30 on 2 Oct in India (19:00 on 1 Oct UTC): a filing dated 1 Oct came before it
     a = {**alert(kind="bizupdate"), "created_at": "2026-10-01T19:00:00+00:00"}
     rows = [{"id": "old", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-01", "text": "a"},
-            {"id": "new", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-02", "text": "b"}]
+            {"id": "new", "kind": "bizupdate", "symbol": "RELIANCE", "filed": "2026-10-03", "text": "b"}]
     text, st = sa.evaluate_event(a, rows)
     assert st["seen"] == ["new"] and text
 
@@ -542,3 +542,67 @@ def test_one_users_failed_send_bookkeeping_does_not_skip_the_others(store, monke
                      profile=lambda uid: {"id": uid})
     job.tick(IN_OPEN)
     assert sent == ["u2"] and job.status["sent"] == 1 and "u1" in job.status["last_error"]
+
+
+# ---------- editing, deleting, duplicates, since ----------
+DEAL = {"id": "d1", "kind": "insider", "symbol": "ITC", "filed": "2026-10-03", "date": "2026-10-03", "who": "A Shah", "side": "buy",
+        "qty": 100, "label": "Insider", "mode": "market", "relation": "promoter", "value": 100000}
+
+
+def _created(store, uid, at):
+    row = json.loads(store["stockalerts:" + uid])
+    row["items"][0]["created_at"] = at
+    store["stockalerts:" + uid] = json.dumps(row)
+
+
+def test_editing_a_disclosure_alert_does_not_send_a_disclosure_again(store):
+    a = sa.create("u1", {"region": "IN", "symbol": "ITC", "kind": "insider"}, 5)
+    _created(store, "u1", "2026-10-01T05:00:00+00:00")
+    sent = []
+    send = lambda p, s, t: sent.append(t) or ["push"]
+    now = datetime(2026, 10, 3, 15, 30, tzinfo=timezone.utc)
+    assert sa.fire_events([DEAL], now, lambda p: 5, send=send, profile=lambda u: {"id": u}) == 1
+    sa.update("u1", a["id"], {"region": "IN", "symbol": "ITC", "kind": "insider", "note": "watching"}, 5)
+    assert sa.items("u1")[0]["created_at"] == "2026-10-01T05:00:00+00:00"
+    sa.fire_events([DEAL], now + timedelta(days=1), lambda p: 5, send=send, profile=lambda u: {"id": u})
+    assert len(sent) == 1
+
+
+def test_changing_the_stock_of_an_alert_starts_it_from_now(store):
+    a = sa.create("u1", {"region": "IN", "symbol": "ITC", "kind": "insider"}, 5)
+    _created(store, "u1", "2026-10-01T05:00:00+00:00")
+    sa.update("u1", a["id"], {"region": "IN", "symbol": "TCS", "kind": "insider"}, 5)
+    assert sa.items("u1")[0]["created_at"] > "2026-10-15" and sa.items("u1")[0]["state"] == {}
+
+
+def test_a_text_waiting_for_a_deleted_alert_is_not_sent(store):
+    a = sa.create("u1", {"region": "IN", "symbol": "TCS", "kind": "price", "op": "above", "value": 100}, 5, {"price": 90})
+    sa.create("u1", {"region": "IN", "symbol": "INFY", "kind": "price", "op": "above", "value": 100}, 5, {"price": 90})
+    b = sa.items("u1")[1]
+    row = json.loads(store["stockalerts:u1"])
+    row["pending"] = [[f"{x['symbol']} crossed", IN_OPEN.isoformat(), x["id"]] for x in (a, b)]
+    row["retry_at"] = (IN_OPEN + timedelta(hours=1)).isoformat()
+    store["stockalerts:u1"] = json.dumps(row)
+    sa.delete("u1", a["id"])
+    assert sa.apply("u1", {}, IN_OPEN + timedelta(hours=2)) == ["INFY crossed"]
+
+
+def test_the_same_alert_twice_is_refused_with_a_reason(store):
+    body = {"region": "IN", "symbol": "TCS", "kind": "price", "op": "above", "value": 100}
+    sa.create("u1", body, 5)
+    with pytest.raises(sa.AlertError, match="already have this alert"):
+        sa.create("u1", {**body, "note": "again"}, 5)
+    sa.create("u1", {**body, "value": 101}, 5)                          # another level is another alert
+    other = sa.items("u1")[1]
+    with pytest.raises(sa.AlertError):
+        sa.update("u1", other["id"], body, 5)
+
+
+def test_a_disclosure_is_compared_with_the_alerts_time_not_only_its_date():
+    a = {**alert(kind="insider", symbol="ITC"), "created_at": "2026-10-03T08:30:00+00:00"}       # 14:00 in India
+    row = lambda i, filed: {**DEAL, "id": i, "filed": filed}
+    text, st = sa.evaluate_event(a, [row("morning", "2026-10-03 09:15:00"), row("evening", "2026-10-03 18:30:00")])
+    assert st["seen"] == ["evening"]
+    assert sa.evaluate_event(a, [row("same-day", "2026-10-03")])[0] is None          # date only, the creation day: ambiguous
+    assert sa.evaluate_event(a, [row("earlier", "2026-10-02")])[0] is None
+    assert sa.evaluate_event(a, [row("later", "2026-10-04")])[0] is not None

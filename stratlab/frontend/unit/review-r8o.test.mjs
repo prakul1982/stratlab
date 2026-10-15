@@ -124,8 +124,8 @@ test("R8O-008: the AI tile's denominator is said as System says it", async () =>
 test("R8O-011: the live price feed says when the options sessions are more than one person's", async () => {
   const { feedTile } = await import("../src/pages/admin/attention.ts");
   const sv = (x) => ({ feed_connected: false, live_sessions: 0, india_sessions: 0, ...x });
-  assert.equal(feedTile(sv({ options_sessions: 2, options_users: 2 })).detail, "Not needed: 2 options paper sessions running across 2 users on quotes read every few seconds");
-  assert.equal(feedTile(sv({ options_sessions: 1, options_users: 1 })).detail, "Not needed: 1 options paper session running on quotes read every few seconds");
+  assert.equal(feedTile(sv({ options_sessions: 2, options_users: 2 })).detail, "Not connected, and no session needs it: the 2 options paper sessions running across 2 users read quotes every few seconds instead");
+  assert.equal(feedTile(sv({ options_sessions: 1, options_users: 1 })).detail, "Not connected, and no session needs it: the 1 options paper session running read quotes every few seconds instead");
 });
 
 test("R8O-012: a chain from the live feed over two minutes old says its time, not \"live\"", async () => {

@@ -1601,6 +1601,8 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   /* the first column never takes the width: its words wrap inside 40vw (a cell with no-wrap text ignores max-width), so the next
      column's figures are in view and the rest scroll inside the box (R20-008: only the first column showed on three tables) */
   .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { white-space: normal; overflow-wrap: break-word; max-width: 40vw; min-width: 0; }
+  /* R25-004: and it keeps a floor, so a label wraps to two or three lines, not five to nine; an email breaks anywhere, not only at a hyphen */
+  .k-tbl-wrap:not(.stack):not(.pinhead) .k-table :is(thead th, tbody th, tbody td:not(.k-empty-row), tfoot th):first-child { min-width: min(9rem, 40vw); overflow-wrap: anywhere; }
 }
 .k-table .k-sub-line { display: block; font-size: var(--t-note); color: var(--muted); font-weight: 400; }
 .k-table td.k-wrap, .k-table th.k-wrap { white-space: normal; min-width: 160px; }
@@ -1828,7 +1830,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .spread.wrap { flex-wrap: wrap; }
 .k-measure.m60 { max-width: 60ch; } .k-measure.m80 { max-width: 80ch; }
 .lp-center { align-items: center; text-align: center; }
-.lp-final-h { max-width: 18ch; }
+.lp-final-h { max-width: 18ch; text-wrap: balance; }          /* no one-word last line on a phone (R26-010) */
 .lp-opt-title, .lp-rm-title { font-size: 24px; }
 .lp-rm-title { font-size: 26px; }
 .lp-why { font-size: 16px; color: var(--ink-2); }
@@ -1911,6 +1913,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   min-width: 190px; padding: 6px; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); }
 .lp-nav .lp-menu nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; }
 .lp-nav .lp-menu nav a:hover, .lp-nav .lp-menu nav a:focus-visible { background: var(--chip); }
+.pub-nav .lp-menu nav { display: flex; flex-direction: column; gap: 0; margin: 0; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  min-width: 190px; padding: 6px; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow); }
+.pub-nav .lp-menu nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.pub-nav .lp-menu nav a:hover, .pub-nav .lp-menu nav a:focus-visible { background: var(--chip); }
+.pub-nav .pub-menu { margin-left: auto; margin-right: var(--s3); }
+@media (min-width: 641px) { .pub-nav .pub-menu { display: none; } }          /* a phone's Menu: wider screens have the rows on the landing page */
 @media (max-width: 1000px) { .lp-menu { display: block; } .lp-nav > .btn { margin-left: 0; } }
 @media (max-width: 600px) { .lp-more > summary { min-height: 40px; } }
 
@@ -2021,7 +2029,12 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
    screen every field is 16px or more */
 @media (max-width: 640px), (pointer: coarse) {
   :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"]), select, textarea) { font-size: 16px; }
+  /* R25-002: the line above has no weight, so a field with its own size (.pc-sel 13.5px, .k-search input, .k-textarea) kept it and iOS
+     zoomed on focus; this one outweighs any single-class rule */
+  html :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="button"], [type="submit"]), select, textarea) { font-size: 16px; }
   .field input, .field select, .field textarea, .input, .k-input { font-size: 16px; }
+  /* R26-002: the search box (/library, a list's filter) and the notes box set their own size after the rule above (loaded later, same weight) */
+  body .k-search input, body .k-textarea { font-size: 16px; }
 }
 /* R13S-006: a switch's long label ("Yearly · about 2 months free") wraps inside its button instead of spilling out of the pill */
 .k-form > .k-field > .k-seg button { min-width: 0; height: auto; min-height: 32px; padding-block: 5px; white-space: normal; line-height: 1.25; }

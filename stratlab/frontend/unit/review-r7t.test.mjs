@@ -68,7 +68,7 @@ test("R7T-005: the PCR is one figure across the table, the chain panel and the h
   assert.doesNotMatch(page, /header: "Near the money"/);
   // R8B-005 changed this on purpose: the "All strikes read" column repeated the near-money PCR on every row (the live
   // read is the 31 strikes around the money), so the table now says how many strikes were read instead
-  assert.match(page, /header: "Strikes read"/);
+  assert.match(page, /header: "Strikes in the PCR"/);              // R24-004: renamed, one basis on every row
   assert.doesNotMatch(page, /header: "All strikes read"/);
   const { NEAR_STRIKES } = await import("../src/lib/positioning.ts");
   assert.equal(NEAR_STRIKES, 15);
@@ -118,7 +118,7 @@ test("R7T-012: Admin's live price feed counts options paper sessions as running"
   const sv = (o) => ({ feed_connected: false, live_sessions: 1, india_sessions: 0, options_sessions: 0, ...o });
   const t = feedTile(sv({ options_sessions: 1 }));
   assert.equal(t.state, "ok");
-  assert.equal(t.detail, "Not needed: 1 options paper session running on quotes read every few seconds");
+  assert.equal(t.detail, "Not connected, and no session needs it: the 1 options paper session running read quotes every few seconds instead");    // R24-011 wording
   assert.equal(feedTile(sv({})).detail, "Idle: no India paper sessions running");
   assert.match(feedTile(sv({ feed_connected: true, india_sessions: 2, options_sessions: 1 })).detail, /^Connected, 2 India paper sessions running · 1 options paper session/);
 });
@@ -131,7 +131,9 @@ test("R7T-013: after a stop-out the session says when the next entry may come", 
   assert.match(gapLine({ cool_until: "2026-10-09T15:00:00+05:30", next_entry: null }, 120, "14:45", "09:30", now), /next market day/);
   assert.equal(gapLine({ cool_until: "2026-10-09T09:00:00+05:30", next_entry: "09:00" }, 120, "14:45", "09:30", now), null);   // gap over
   assert.equal(gapLine({}, 120, "14:45", "09:30", now), null);
-  assert.match(read("src/pages/OptionsSession.tsx"), /gapLine\(a, s\.timing\.cooldown/);
+  // the flat line moved to lib/options.ts (flatLine, review 7a), which the session page calls
+  assert.match(read("src/lib/options.ts"), /gapLine\(a, s\.timing\.cooldown/);
+  assert.match(read("src/pages/OptionsSession.tsx"), /flatLine\(snap, /);
 });
 
 test("R7T-014: size changes are handled a frame later, never inside the observer (Safari's ResizeObserver loop error)", () => {

@@ -1,18 +1,21 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
+import { fmtDateTime } from "../../lib/format";
 import { Card, CardHead, DataTable, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
 import { errorCounts, service } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
+import { APP_BUILD, buildLine } from "../../lib/buildInfo";
+import { when } from "../../lib/format";
 
 type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[];
   documents_found?: number; document?: { ok: boolean; title: string; kind: string; chars?: number; error?: string } | null };
 
 const ERRORS: Column<ServerError>[] = [
   { key: "ref", header: "Ref", rowHeader: true, cell: (x) => <span className="adm-mono">{x.ref}</span> },
-  { key: "at", header: "When", cell: (x) => new Date(x.at).toLocaleString("en-GB") },
+  { key: "at", header: "When", cell: (x) => fmtDateTime(x.at, { seconds: true, zone: true }) },
   { key: "req", header: "Request", wrap: true, cell: (x) => <span className="adm-mono">{x.method} {x.path}</span> },
   { key: "err", header: "Error", wrap: true, cell: (x) => <span className="adm-cell">{x.error}</span> },
   { key: "where", header: "Where", wrap: true, cell: (x) => <span className="adm-mono">{x.where}</span> },
@@ -21,7 +24,7 @@ const ERRORS: Column<ServerError>[] = [
 /** Admin → System: server errors, the other services, AI providers, the feature check, and real prices for the tests. */
 export function SystemSection() {
   const { notify, fail, me } = useApp();
-  const { ov } = useAdmin();
+  const { ov, reload } = useAdmin();
   const chans = me?.alerts.channels;      // which ways of sending an alert the server has (the user's Settings shows only those)
   const [busy, setBusy] = useState<string | null>(null);
   const [filing, setFiling] = useState<FilingCheck | null>(null);
@@ -60,7 +63,7 @@ export function SystemSection() {
         {/* until the status has arrived there is nothing to count: a "0 errors, nothing has crashed" then would be false comfort (R7M-007) */}
         <CardHead title={sv ? `Server errors (${counted.since} since the last restart${counted.before ? `, ${counted.before} kept from before it` : ""})` : "Server errors"}
           info="Crashes newest first: those since the server last started, and the last ones from before it, which are kept across a restart. Users see the ref code in the error message." />
-        {!sv ? <Skeleton label="Loading the server errors" lines={2} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
+        {!sv ? <Skeleton label="Loading the server errors" lines={2} onRetry={() => { void reload(); }} /> : !errors.length ? <EmptyState title="No server errors">Nothing has crashed since the server last started, and none were kept from before it.</EmptyState>
           : <DataTable label="Server errors" rows={errors} rowKey={(x) => x.ref} columns={ERRORS} />}
       </Card>
 
@@ -89,6 +92,14 @@ export function SystemSection() {
                   : `Couldn't read "${filing.document.title}": ${filing.document.error}`} />}
           </StatusList>
         )}
+      </Card>
+
+      <Card label="Build">
+        <CardHead title="Build" info="Which code is running: the commit and branch each host deployed, when it was built if the host says, and when the server last started." />
+        <StatusList label="Build">
+          <StatusRow state={sv?.build?.sha ? "ok" : "warn"} word={sv?.build?.sha ? "Known" : "Not set"} label="Server" detail={sv ? buildLine(sv.build, (iso) => when(iso, "Asia/Kolkata", true, true)) : "Loading…"} />
+          <StatusRow state={APP_BUILD.sha ? "ok" : "warn"} word={APP_BUILD.sha ? "Known" : "Not set"} label="Web app" detail={buildLine(APP_BUILD, (iso) => when(iso, "Asia/Kolkata", true, true))} />
+        </StatusList>
       </Card>
 
       <AIPanel />

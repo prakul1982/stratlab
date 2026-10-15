@@ -4,10 +4,10 @@ input can't escape into HTML, links or other hosts."""
 import pytest
 from fastapi.routing import APIRoute
 
-from app import main
+from app import guard, main
 from tests import world as W
 
-PUBLIC = {"/health", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/c/{card}.png", "/c/{card}", "/billing/webhook",
+PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/c/{card}.png", "/c/{card}", "/billing/webhook",
           "/admin/kite/callback", "/unsubscribe", "/email/confirm",
           "/stocks/{region}/{symbol}", "/robots.txt", "/sitemap.xml", "/sitemaps/{name}.xml",   # public company pages, for search engines
           "/stocks", "/stocks/", "/stocks/{region}", "/stocks/{region}/", "/stocks/{region}/{symbol}/",   # their search, and one address each
@@ -50,6 +50,7 @@ def test_only_the_intended_routes_are_open_without_signing_in():
 def client():
     mp = pytest.MonkeyPatch()
     w = W.build(mp)
+    mp.setattr(guard, "BAD_TOKENS_PER_MINUTE", 10**6)     # this test sends a bad token to every route on purpose
     yield w["client"]
     w["close"]()
     mp.undo()
@@ -315,5 +316,29 @@ def test_parallel_research_reads_cannot_pass_the_daily_cap(monkeypatch):
         for i in range(6):
             assert getattr(__import__("pytest").raises(Exception, R.ai_call, profile, "t", ("f", i), 60, False, bad).value, "status_code") == 422
         assert db.count_usage("u-free", "research_ai", "2000-01-01T00:00:00+00:00") == before
+    finally:
+        w["close"]()
+
+from app import ai_providers as _providers
+REAL_COMPLETE = _providers.complete               # taken at import: the world swaps in a fake that never caches
+
+
+def test_a_strategy_answer_from_the_cache_is_not_charged(monkeypatch):
+    from app import ai_providers, db
+    w = W.build(monkeypatch)
+    try:
+        calls = []
+        out = '{"entry": [{"l": {"t": "price"}, "op": "gt", "r": {"t": "num", "v": 1}}]}'
+        monkeypatch.setattr(main.ai_writer, "complete", REAL_COMPLETE)
+        monkeypatch.setattr(ai_providers, "_names", lambda task: (["gemini"], []))
+        monkeypatch.setattr(ai_providers, "plan", lambda task, need: [("gemini", "m")])
+        monkeypatch.setattr(ai_providers.R, "ready", lambda *a, **k: 0)
+        monkeypatch.setattr(ai_providers.R, "ask_model", lambda *a, **k: calls.append(1) or out)
+        ai_providers.cache.clear()
+        c = w["client"]
+        body = [c.post("/ai/strategy", headers=W.headers("free-token"), json={"text": "buy when rsi is low"}).json() for _ in range(3)]
+        assert len(calls) == 1
+        assert [b["usage"]["ai_used"] for b in body] == [1, 1, 1]
+        assert db.count_usage("u-free", "ai", "2000-01-01T00:00:00+00:00") == 1
     finally:
         w["close"]()

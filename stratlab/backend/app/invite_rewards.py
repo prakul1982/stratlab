@@ -570,9 +570,18 @@ class Job:
         day = self.due(now)
         if not day:
             return None
+        before, was = self.last, db.get_setting(MARK)
         self.last = day
         db.set_setting(MARK, day)
-        result = sweep(now)
+        try:
+            result = sweep(now)
+        except Exception:
+            self.last = before                       # the day isn't used up: the next pass sweeps again
+            if was is None:
+                db.delete_setting(MARK)
+            else:
+                db.set_setting(MARK, was)
+            raise
         self.status.update(last_run=now.isoformat(), result=result, last_error=None)
         return result
 

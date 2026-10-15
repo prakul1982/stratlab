@@ -228,3 +228,18 @@ def test_one_subscribers_failure_does_not_stop_the_other_filing_alerts(monkeypat
     evening = datetime.now(F.IST).replace(hour=20, minute=45)
     F.Alerts(FakeFeed(rows), notify=lambda p, s, t, url: sent.append(t), can_alert=lambda p: True).tick(evening)
     assert len(sent) == 1
+
+
+def test_turning_the_alert_back_on_starts_from_now_not_from_the_old_mark(store):
+    store["filingalert:u1"] = json.dumps({"uid": "u1", "on": False, "seen": "2020-01-01T00:00", "seen_by": {"ABC": "2020-01-01T00:00"}})
+    F.set_alert("u1", True)
+    st = json.loads(store["filingalert:u1"])
+    assert st["on"] and st["seen"] > "2025" and "seen_by" not in st
+    st["seen"] = "2026-01-01T00:00"; store["filingalert:u1"] = json.dumps(st)
+    F.set_alert("u1", True)                                    # already on: left alone
+    assert json.loads(store["filingalert:u1"])["seen"] == "2026-01-01T00:00"
+
+
+def test_the_filing_alert_wording_is_neutral_and_names_holdings():
+    text = F.alert_text([("ABC", {"label": "Promoter pledge"})])
+    assert "on your watchlist or holdings" in text and "ABC: Promoter pledge" in text

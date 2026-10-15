@@ -5,6 +5,7 @@ import { asOf, marketTz, pct, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { dayName, issueStamp, issueTab, issueToShow, NEWS_FOOTER, type Issue, type IssueRow } from "../lib/news";
 import { Badge, Card, EmptyState, ErrorState, PageHeader, Seg, Skeleton } from "../components/kit";
+import { inAppPath } from "../lib/investUi";
 
 type Tab = "IN" | "US" | "mine";
 const TABS: [Tab, string][] = [["IN", "Market brief: India"], ["US", "Market brief: US"], ["mine", "My stocks"]];
@@ -151,9 +152,9 @@ function IssueView({ id }: { id: string }) {
 function ItemText({ text, url }: { text: string; url?: string | null }) {
   const href = safeHref(url);
   if (!href) return <>{text}</>;
-  const u = new URL(href, window.location.origin);
-  if (u.origin === window.location.origin || /^\/(research|paper|news|account)\b/.test(href)) {
-    return <Link className="link" to={u.pathname + u.search}>{text}</Link>;
-  }
+  // safeHref gives an absolute address: a page of this app is told by its host (this site's, with or without www.) and
+  // its path, then opened in the app (review 5c: the old test read the whole address and never matched)
+  const inApp = inAppPath(href, window.location);
+  if (inApp) return <Link className="link" to={inApp}>{text}</Link>;
   return <>{text} <a className="link" href={href} target="_blank" rel="noopener noreferrer">Source ↗</a></>;
 }

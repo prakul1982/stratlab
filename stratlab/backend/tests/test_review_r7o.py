@@ -83,7 +83,7 @@ def test_the_bank_page_has_no_ebitda_margin_and_the_model_gets_page_figures():
          "metrics": [{"title": "Valuation", "items": [{"label": "P/B", "value": 2.55977229601518, "unit": "x"},
                                                       {"label": "Div yield", "value": 0.8895, "unit": "%"}]}]}
     f = A.company_facts(c)
-    assert f["day_change_pct"] == -0.63 and f["metrics"]["Valuation: P/B"] == 2.56 and f["metrics"]["Valuation: Div yield"] == "0.9%"
+    assert "day_change_pct" not in f and "price" not in f and f["metrics"]["Valuation: P/B"] == 2.56 and f["metrics"]["Valuation: Div yield"] == "0.9%"
     assert f["market_cap"] == "₹9.68 lakh crore" and "lender" in f
 
 

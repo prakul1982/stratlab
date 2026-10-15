@@ -37,6 +37,7 @@ from . import money_mf_nav
 from . import money_mf_ter
 from . import money_mf_behaviour
 from . import sip_test
+from . import run_marks
 from . import fixed_income
 from . import loan_check
 from . import money_advance_tax, money_routes
@@ -51,6 +52,7 @@ from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
 from . import admin, audit, compute, invoices, pricing, basket, platform_check, billing, checklist, db, deck, deepdive, fixtures, importer, industry, investor, report_card, universes
+from .ai_providers import last_from_cache
 from .ai_providers import health as ai_health
 from . import ai_admin, ai_providers
 from . import ai_writer
@@ -81,10 +83,10 @@ from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteSer
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
-from .options.engine import fill_price, from_last, tick_for
+from .options.engine import fill_price, from_last, tick_for, margin_units as opt_margin_units
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
+from . import breadth, breadth_live, build_info, redflags, redflags_routes, scan_presets
 from . import plan_interest
 from . import email_kit
 from . import mail_pages
@@ -650,7 +652,14 @@ def health():
     "disconnected" means it was opened and has dropped. `feed_connected` is kept for monitors that read it."""
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
             "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
-            "ai_configured": any(p["in_use"] for p in ai_health())}
+            "ai_configured": any(p["in_use"] for p in ai_health()), "version": build_info.info()["short"]}
+
+
+@app.get("/version")
+def version():
+    """Public: which build is running (the commit, its branch, when it was built if the deploy says, when this server
+    started). From the host's deploy variables only, never a key (app/build_info.py, R24-009)."""
+    return build_info.info()
 
 
 @app.get("/plans")
@@ -673,15 +682,16 @@ def fx_rate(code: str) -> float:
     return pricing.cross_rate(code, lambda pair: research_hub.yahoo.meta(pair).get("price"))
 
 
-def rates_pass() -> bool:
-    """One read of the exchange rates; whether it failed (any currency without an answer counts)."""
+def rates_pass() -> bool | None:
+    """One read of the exchange rates; whether it failed (any currency without an answer counts). None: another
+    container leads, so nothing was read (the loop asks again soon, it is not a finished pass)."""
     try:
-        if leader.leading():      # another container leads: it runs this pass
-            return bool(pricing.refresh_rates(fx_rate).get("errors"))
+        if not leader.leading():      # another container leads: it runs this pass
+            return None
+        return bool(pricing.refresh_rates(fx_rate).get("errors"))
     except Exception as e:
         print("exchange rate refresh failed:", e)
         return True
-    return False
 
 
 def rates_job():
@@ -699,7 +709,12 @@ def prices_view() -> dict:
         fx = json.loads(db.get_setting(pricing.RATES) or "{}")
     except Exception:
         fx = {}
-    return {"currencies": pricing.table(), "rates_at": fx.get("at"), "rate_errors": fx.get("errors") or []}
+    # each rate's own time of reading (one kept from before has its older time), and the oldest of them: "at" moves only
+    # when every rate was read, so it stays still (or None on a first read with an error) while one currency keeps failing
+    read = {c: pricing.rate_at(c) for c in (fx.get("rates") or {})}
+    read = {c: t for c, t in read.items() if t}
+    return {"currencies": pricing.table(), "rates_at": min(read.values()) if read else None, "rates_read_at": read,
+            "rate_errors": fx.get("errors") or []}
 
 
 @app.get("/admin/prices")
@@ -1127,8 +1142,8 @@ def confirm_email_page(t: str = ""):
     got = _confirm_token(t)
     if not got:
         return _confirm_link_bad()
-    return HTMLResponse(content=mail_pages.ask(f"Send StratLab newsletters to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
-                                               "If you didn't ask for this, close this page.", manage=False))
+    return HTMLResponse(content=mail_pages.ask(f"Send StratLab emails to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
+                                               "Confirming also lets StratLab send the alert emails you turned on, not only newsletters. If you didn't ask for this, close this page.", manage=False))
 
 
 @app.post("/email/confirm", response_class=HTMLResponse)
@@ -1138,7 +1153,7 @@ def confirm_email(t: str = ""):
         return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())
-    return mail_page("Email confirmed", f"Newsletters you choose {WHERE_EMAILS} will go to {address}.")
+    return mail_page("Email confirmed", f"The newsletters and alert emails you choose {WHERE_EMAILS} will go to {address}.")
 
 
 # ---------- markets and instruments ----------
@@ -1206,6 +1221,12 @@ def ai_slot(profile):
 AI_BUILDS_PER_DAY = 200
 
 
+def limit_notice(e: HTTPException) -> dict:
+    """At the search box's daily limit the reader is told so ("You've used today's 40 AI answers…"), not given a bare fallback."""
+    d = e.detail if isinstance(e.detail, dict) else {}
+    return {"limit": True, "message": d.get("message") or ""} if d.get("code") == "search_ai_limit" else {}
+
+
 @app.post("/search/ideas")
 def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
     """Testable strategy ideas for anything typed into search. Shared cache; built-in ideas if the AI is down."""
@@ -1216,7 +1237,7 @@ def search_ideas(req: IdeasReq, profile=Depends(current_profile)):
         return {"ideas": out["ideas"], "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
-            return {"ideas": ideas.fallback(q), "fallback": True}
+            return {"ideas": ideas.fallback(q), "fallback": True, **limit_notice(e)}
         raise
 
 
@@ -1232,7 +1253,7 @@ def ask_route(req: IdeasReq, profile=Depends(current_profile)):
         return {**out, "fallback": False}
     except HTTPException as e:
         if e.status_code in (422, 429, 503):
-            return {**ask.guess(q), "fallback": True}
+            return {**ask.guess(q), "fallback": True, **limit_notice(e)}
         raise
 
 
@@ -1253,8 +1274,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     try:
         with ai_slot(profile) as (used, limit):
             out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
-            db.add_usage(profile["id"], "ai")
-        used_ai, usage = True, {"ai_used": used + 1, "ai_limit": limit}
+            cached = last_from_cache()          # an answer served from the cache costs nothing
+            if not cached:
+                db.add_usage(profile["id"], "ai")
+        used_ai, usage = True, {"ai_used": used + (not cached), "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
             out, used_ai = importer.pine(req.text), False
     except AIError as e:
@@ -1283,8 +1306,10 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
         except AIError as e:
             err(422, "ai_failed", str(e))
         out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
-        db.add_usage(profile["id"], "ai")
-    out["usage"] = {"ai_used": used + 1, "ai_limit": limit}
+        cached = last_from_cache()              # an answer served from the cache costs nothing
+        if not cached:
+            db.add_usage(profile["id"], "ai")
+    out["usage"] = {"ai_used": used + (not cached), "ai_limit": limit}
     return out
 
 
@@ -1306,6 +1331,11 @@ def throttle(profile, what: str, times: int, per_seconds: float, message: str):
 
 
 money_mf.setup(throttle)
+
+
+def heavy_read_throttle(profile):
+    """One account's scans, sector charts and watchlist pages share one allowance, so it can't keep the few heavy slots busy."""
+    throttle(profile, "heavy_read", 20, 60, "You're running scans and research pages very quickly. Wait a minute, then try again.")
 
 
 # ---------- backtests and notebooks ----------
@@ -1770,6 +1800,7 @@ def with_nse_close(region: str, rows: list[dict], day_key: str, change_key: str 
 def run_scan(req: ScanReq, profile=Depends(current_profile)):
     """A trend scan over a group: the Stage 2 + Supertrend scan (fresh signals first), or one of the preset rule sets
     (52-week high breakout, golden cross, ...), each stock's match stated as a fact with its date. Never advice."""
+    heavy_read_throttle(profile)
     need(profile, "scans", "Trend scans")
     if req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
         err(404, "not_found", "That scan isn't available.")
@@ -1817,6 +1848,7 @@ def _member_key(m) -> str:
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
     """Where each sector (or stock in a group) sits against the benchmark: relative strength and its momentum."""
+    heavy_read_throttle(profile)
     region = "US" if region.upper() == "US" else "IN"
     interval = "daily" if interval == "daily" else "weekly"
     prov = markets.provider(region)
@@ -1927,6 +1959,8 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
     q = alert_seed(body["region"], body["symbol"])
     try:
         a = (stock_alerts.update(profile["id"], aid, body, limit, q) if aid else stock_alerts.create(profile["id"], body, limit, q))
+    except stock_alerts.AlertError as e:             # e.g. the same alert twice
+        err(400, "bad_alert", str(e))
     except stock_alerts.LimitReached as e:
         nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["stock_alerts"] > e.limit), None)
         upgrade(f"Your plan has {e.limit} active alert{'s' if e.limit != 1 else ''}. Delete one"
@@ -2472,12 +2506,14 @@ _investor_pool = ThreadPoolExecutor(max_workers=4)
 def investor_home(region: str = "IN", profile=Depends(current_profile)):
     """Every watchlist company in one market (India or US): trend, sector rotation, red flags (India), checklist and
     report card on one page."""
+    heavy_read_throttle(profile)
     need(profile, "investor_home", "Watchlist at a glance")
     region = "US" if region.upper() == "US" else "IN"
     us = region == "US"
-    syms = filings.watchlist_symbols(profile["id"], region)[:investor.MAX]
+    listed = filings.watchlist_symbols(profile["id"], region)
+    syms = listed[:investor.MAX]
     if not syms:
-        return ok({"rows": [], "as_of": None, "region": region})
+        return ok({"rows": [], "as_of": None, "region": region, "total": 0})
     try:
         rot = rotation.run(markets, region, "sectors", None, "weekly", 4)
         quad = {r["symbol"]: {"symbol": r["symbol"], "name": r["name"], "quadrant": r["quadrant"]} for r in rot["rows"]}
@@ -2509,7 +2545,8 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
                             quotes.get(sym))
 
     rows = list(_investor_pool.map(one, syms))
-    return ok({"rows": rows, "region": region, "as_of": datetime.now(IST).isoformat(timespec="minutes")})
+    # `total`: every watchlist company in this market; the page checks the first MAX and says "Showing 20 of N"
+    return ok({"rows": rows, "region": region, "total": len(listed), "as_of": datetime.now(IST).isoformat(timespec="minutes")})
 
 
 # ---------- My Holdings: the user's own stocks, from their broker's export (everyone; paid plans keep more) ----------
@@ -2784,6 +2821,18 @@ def _same_avg(old: dict, sent) -> bool:
     return old.get("avg") is not None and sent is not None and abs(round(old["avg"], 2) - sent) < 1e-9
 
 
+def _typed_qty(old: dict, new: dict, out: dict) -> dict:
+    """An edited holding. A quantity typed over a synced broker's one keeps the difference as the user's added part, so
+    the next sync keeps the total typed (holdings.set_qty); one below the broker's part gets a note. A quantity typed
+    over a statement's per-account one replaces it (the next statement sets it again). Any other edit leaves the parts
+    as they are (an average alone follows the source's average on its next read)."""
+    if old.get("via") in holdings.SYNCED and abs(float(new["qty"]) - float(old["qty"])) > 1e-9:
+        new, note = holdings.set_qty(old, new["qty"], new.get("avg"))
+        if note:
+            out["notes"].append(note)
+    return holdings.drop_stale_accts([new])[0]
+
+
 @app.put("/holdings")
 def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     """Change the holdings by hand: add a stock, change a quantity or average price, remove one. `changes` are applied
@@ -2816,7 +2865,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
                 new = {**old, **({"qty": c.qty} if c.qty is not None else {})}
                 if "avg" in c.model_fields_set and not _same_avg(old, c.avg):
                     new["avg"] = c.avg or None
-                rows[k] = holdings.drop_stale_accts([new])[0]
+                rows[k] = _typed_qty(old, new, out)
             elif c.qty is None:
                 err(422, "bad_change", f"Enter the quantity of {k[1]}.")
             else:
@@ -2839,13 +2888,13 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
         for n, i in enumerate(req.items, 1):
             old = saved.get((i.market, i.symbol.strip().upper()))
             if old:                       # already matched: kept as it is, even while market data is offline
-                kept.append({**old, "qty": i.qty, "avg": old["avg"] if _same_avg(old, i.avg) else i.avg or None})
+                kept.append(_typed_qty(old, {**old, "qty": i.qty, "avg": old["avg"] if _same_avg(old, i.avg) else i.avg or None}, out))
             else:
                 (us_lines if i.market == "US" else lines).append({"line": n, "symbol": i.symbol, "qty": i.qty, "avg": i.avg or None, "text": i.symbol})
-        # a quantity typed over a statement's per-account one replaces it (the next statement sets it again)
-        return holdings.drop_stale_accts(kept), lines, us_lines
+        return kept, lines, us_lines
 
     def edited(before):                   # runs again on the newer holdings if another save lands first
+        out["notes"] = []
         saved = {(holdings.market_of(i), i["symbol"]) for i in before["items"]}
         kept, rows, us_rows = changed(before) if req.changes is not None else whole(before)
         found, out["missed"] = holdings.match_all(rows, holdings_matcher()) if rows else ([], [])
@@ -2863,7 +2912,7 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
             return with_sectors(found, known), before["source"] or "Manual"
         return None if out["missed"] else db.REMOVE      # every row removed
     holdings.update(profile["id"], edited)
-    return ok({"unmatched": out["missed"], "holdings": holdings_view(profile)})
+    return ok({"unmatched": out["missed"], "notes": out["notes"], "holdings": holdings_view(profile)})
 
 
 HOLDINGS_CA_NOW = 8                # held stocks without a stored history fetched while the page waits; the rest after
@@ -3445,6 +3494,7 @@ def unshare_experiment(nid: str, version: int, profile=Depends(current_profile))
     return {"shared": False}
 
 
+SHARED_LINK_CACHE = "public, max-age=60"      # a shared link someone turns off must stop being served within a minute
 PUBLIC_LIBRARY_HEADERS = {"Cache-Control": "public, max-age=300"}
 
 
@@ -3480,7 +3530,7 @@ def public_verdict_image(token: str):
     png = public.image(token)
     if not png:
         err(404, "not_found", "No image for this link.")
-    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/v/{token}")
@@ -3489,7 +3539,7 @@ def public_verdict_page(token: str):
     if not snap:
         # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
         return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
-    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=300"})
+    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=0, s-maxage=30, must-revalidate"})   # a link turned off stops within a minute
 
 
 # ---------- company fact cards: an image and a public link that previews as it ----------
@@ -3527,7 +3577,7 @@ def company_card_image(card: str):
     png = company_cards.image(card)
     if not png:
         err(404, "not_found", "No image for this link.")
-    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 @app.get("/c/{card}")
@@ -3535,7 +3585,7 @@ def company_card_page(card: str):
     c = company_cards.load(card)
     if not c:
         return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
-    return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": "public, max-age=300"})
+    return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 # ---------- public company pages, for search engines ----------
@@ -3855,12 +3905,13 @@ research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 
-def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str]:
+def stock_list_pass(only: tuple[str, ...] | None = None) -> list[str] | None:
     """One read of the lists of listed companies (India, NSE and BSE-only; the US), or just those regions in `only`;
-    the regions whose read failed."""
+    the regions whose read failed. None: another container leads, nothing was read."""
     failed = []
-    lists = (("IN", india_listing), ("US", _sec_companies)) if leader.leading() else ()   # another container leads: it reads them
-    for region, fn in lists:
+    if not leader.leading():      # another container leads: it reads them
+        return None
+    for region, fn in (("IN", india_listing), ("US", _sec_companies)):
         if only is not None and region not in only:
             continue
         try:
@@ -3878,6 +3929,9 @@ def stock_list_job():
     todo, tries = None, 0
     while True:
         failed = stock_list_pass(todo)
+        if failed is None:                  # not leading: keep what is still to read, ask again soon
+            time.sleep(next_pass_in(None, 0))
+            continue
         todo, tries = (tuple(failed) if failed else None), (tries + 1 if failed else 0)
         time.sleep(next_pass_in(bool(failed), tries))
 
@@ -4578,32 +4632,36 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
         # a currency option with no bid, no ask and nothing traded has no live quote: it isn't priced from a last trade
         # that can be weeks old (R13-002: USDINR's ATM straddle "priced" at ₹1.10 and ₹1.09, OI 0, volume 0)
         l["no_live"] = bool(l["key"]) and s.exchange == "CDS" and no_live_quote(l["quote"])
-        l["fill"] = None if l["no_live"] else fill_price(l["quote"], l["side"], s.costs.slippageTicks, tick_for(s.exchange))
+        l["fill"] = None if l["no_live"] else fill_price(l["quote"], l["side"], s.costs.slippageTicks, c.tick(l["key"]))
         # no bid or ask on the side it fills on: priced from the last trade, which may be hours old (R11C-007)
         l["from_last"] = l["fill"] is not None and from_last(l["quote"], l["side"])
         l["sym"] = l["key"].split(":", 1)[1] if l["key"] else None
     freeze = s.costs.freeze or freeze_limit(s.underlying)
     units = s.sizing.lots
     margin_one = margin_all = None
+    sizing_note = ""
     if all(l["key"] for l in legs):
         basket = [{"key": l["key"], "side": l["side"], "qty": l["lots"] * c.lot} for l in legs]
-        margin_one = options_data.margin(basket)
-        if s.sizing.mode == "margin" and margin_one:
-            units = max(0, int(s.sizing.capital * s.sizing.safety // margin_one))
-        if margin_one and units:
-            margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
+        if s.sizing.mode == "margin":    # sized as the session sizes it (options/engine.py margin_units)
+            units, margin_one, margin_all, sizing_note = opt_margin_units(options_data.margin, basket,
+                                                                          s.sizing.capital * s.sizing.safety)
+        else:
+            margin_one = options_data.margin(basket)
+            if margin_one and units:
+                margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
     priced = [{"side": l["side"], "opt": l["opt"], "strike": l["strike"], "fill": l["fill"], "qty": l["lots"] * units * c.lot}
               for l in legs if l["strike"] is not None and l["fill"] is not None]
     charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
                if units and priced and len(priced) == len(legs) else None)
     no_live = sum(1 for l in legs if l.get("no_live"))
     return {"spot": spot, "atm": atm, "step": c.step(spot), "expiry": c.expiry, "lot": c.lot, "freeze": freeze,
-            "tick": tick_for(s.exchange), "from_last": sum(1 for l in legs if l.get("from_last")),
+            "tick": c.tick(next((l["key"] for l in legs if l["key"]), None)), "from_last": sum(1 for l in legs if l.get("from_last")),
             # the underlying's source: its own quote, or for a currency option with no live future the spot rate it settles at
             "spot_from": spot_from, "no_live": no_live,
             "no_live_text": NO_LIVE.format(name=s.underlying) if no_live else None,
             "impossible": impossible(priced) if priced and len(priced) == len(legs) else None,
-            "units": units, "margin_one": margin_one, "margin": margin_all, "legs": legs, "charges": charges,
+            "units": units, "margin_one": margin_one, "margin": margin_all, "sizing_note": sizing_note or None,
+            "legs": legs, "charges": charges,
             "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (spot_q or {}).get("ts"),
             **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"))}
@@ -4752,9 +4810,11 @@ def import_options(text: str, profile) -> dict:
                 "The AI translator couldn't run just now, so this options strategy couldn't be imported. Try again in a minute.")
         except ValueError as e:
             err(422, "nothing_imported", str(e))
-        db.add_usage(profile["id"], "ai")
+        cached = last_from_cache()              # an answer served from the cache costs nothing
+        if not cached:
+            db.add_usage(profile["id"], "ai")
     return {"kind": "options", "strategy": strategy.model_dump(), "notes": notes, "used_ai": True,
-            "usage": {"ai_used": used + 1, "ai_limit": limit}}
+            "usage": {"ai_used": used + (not cached), "ai_limit": limit}}
 
 
 # ---------- billing ----------
@@ -4937,7 +4997,7 @@ def server_status() -> dict:
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)), "server_started_at": SERVER_STARTED_AT,
-            "calendar": calendar_status(), "invoice_seller": invoices.readiness(),
+            "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
@@ -4963,18 +5023,26 @@ RETRY_AFTER_FAIL = 3600           # a daily job whose read failed asks again in 
 QUICK_RETRIES = 6                # ...up to this many times in a row (a source that stays down is asked daily again)
 
 
-def next_pass_in(failed: bool, tries: int) -> int:
-    """Seconds until a daily job's next pass: about an hour after a failed one, a day after a good one."""
+FOLLOWER_RETRY = 60               # a pass skipped because another container leads is asked again in a minute
+
+
+def next_pass_in(failed: bool | None, tries: int) -> int:
+    """Seconds until a daily job's next pass: about an hour after a failed one, a day after a good one, a minute
+    after one that was skipped (None: this container wasn't leading, so nothing was done)."""
+    if failed is None:
+        return FOLLOWER_RETRY
     return RETRY_AFTER_FAIL if failed and tries <= QUICK_RETRIES else 24 * 3600
 
 
-def holiday_pass() -> bool:
-    """One read of the exchange's holiday lists; whether either failed (the last good lists stay either way)."""
+def holiday_pass() -> bool | None:
+    """One read of the exchange's holiday lists; whether either failed (the last good lists stay either way). None:
+    another container leads, nothing was read."""
     failed = False
     try:
-        if leader.leading():      # another container leads: it runs this pass
-            for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
-                failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
+        if not leader.leading():      # another container leads: it runs this pass
+            return None
+        for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
+            failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
     except Exception as e:
         print("holiday refresh failed:", e)
         failed = True
@@ -5544,6 +5612,7 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
     for r in out["checks"]:
         r["detail"] = public_text(r["detail"])
     out["auto"] = auto
+    out["build"] = build_info.info()["short"]           # which build ran it, so an old result isn't read as today's code's (R24-010)
     try:
         db.set_setting(PLATFORM_LAST, json.dumps(out))
         hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")[-13:]
@@ -5559,21 +5628,47 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
     return alerts.tell_admins(subject, text, label=label)
 
 
+PLATFORM_RUN = "platform-check-run"
+
+
+def platform_pass(now: datetime) -> bool | None:
+    """The day's check if it is due (PLATFORM_AT has passed) and hasn't run: a restart after that time still runs it.
+    None: another container leads (asked again soon); True: it failed (asked again in an hour); False: done or not due."""
+    at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
+    if now < at:
+        return False
+    if not leader.leading():
+        return None
+    day = now.date().isoformat()
+    run = run_marks.claim(PLATFORM_RUN, day)
+    if run is None:
+        return False
+    try:
+        daily_platform_check()
+    except Exception as e:
+        print("platform check job failed:", e)
+        db.delete_setting(PLATFORM_RUN)
+        return True
+    run.done()
+    return False
+
+
 def platform_job():
     """Every day at PLATFORM_AT (IST): check every feature, retry failures, and tell the admins only if something
     is still broken. Nothing to do when all is well."""
     while True:
         now = datetime.now(IST)
+        failed = platform_pass(now)
+        if failed is None:
+            time.sleep(FOLLOWER_RETRY)
+            continue
+        if failed:
+            time.sleep(RETRY_AFTER_FAIL)
+            continue
         at = now.replace(hour=PLATFORM_AT[0], minute=PLATFORM_AT[1], second=0, microsecond=0)
         if at <= now:
             at += timedelta(days=1)
-        time.sleep((at - now).total_seconds())
-        if not leader.leading():
-            continue
-        try:
-            daily_platform_check()
-        except Exception as e:
-            print("platform check job failed:", e)
+        time.sleep(max(1, min(3600, (at - now).total_seconds())))
 
 
 def daily_platform_check(retry_after: float = 120) -> dict:
@@ -5643,12 +5738,27 @@ def weekly_summary(now: datetime | None = None) -> tuple[str, str]:
     return weekly.summary(now, weekly_facts(now))
 
 
+WEEKLY_RUN = "weekly-summary-run"
+
+
 def send_weekly_summary(now: datetime) -> bool:
     """Send this week's summary if it's due and hasn't gone yet; the week is remembered so a restart never resends."""
-    if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == weekly.week_of(now):
+    week = weekly.week_of(now)
+    if not weekly.due(now) or db.get_setting(weekly.WEEK_KEY) == week:
         return False
-    db.set_setting(weekly.WEEK_KEY, weekly.week_of(now))
-    alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
+    run = run_marks.claim(WEEKLY_RUN, week)     # a second container (or a pass while one is sending) finds it taken
+    if run is None:
+        return False
+    try:
+        reached = alerts.tell_admins(*weekly_summary(now), label="Weekly summary")
+    except Exception:
+        db.delete_setting(WEEKLY_RUN)    # a stale "running" marker would hold the retry for ten minutes
+        raise
+    if not reached:
+        db.delete_setting(WEEKLY_RUN)   # nobody was told: the next pass asks again
+        return False
+    run.done()
+    db.set_setting(weekly.WEEK_KEY, week)
     return True
 
 
@@ -5923,7 +6033,7 @@ def news_link(iid: str, n: int):
     if not url:
         return HTMLResponse(mail_pages.notice("That link isn't available", "The story may have been taken down. The brief is on the "
                                             "Briefs page in the app."), status_code=404)
-    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "public, max-age=3600"})
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 @app.get("/news")

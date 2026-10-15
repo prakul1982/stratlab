@@ -141,3 +141,10 @@ test("R13S-016: an impossible date says so; the other small fixes", async () => 
   assert.match(breadth, /const fmtInt = \(v: number\) => minus\(Math\.round\(v\)\.toLocaleString\("en-IN"\)\);/);
   assert.match(breadth, /const fmt1 = \(v: number\) => minus\(/);
 });
+
+test("R26-002: the library's search box and the notes box are 16px on a phone too, whatever order the sheets load in", () => {
+  const css = read("src/styles.css");
+  const block = css.slice(css.indexOf("R13S-005"));
+  assert.match(block, /@media \(max-width: 640px\), \(pointer: coarse\) \{[^@]*body \.k-search input, body \.k-textarea \{ font-size: 16px; \}/);
+  assert.match(read("src/pages/trade/trade.css"), /\.k-search input \{[^}]*font-size: var\(--t-body\)/);   // the 15px it overrides, with less weight than `body .k-search input`
+});

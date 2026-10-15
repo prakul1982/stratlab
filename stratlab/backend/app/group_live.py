@@ -15,7 +15,7 @@ from datetime import datetime
 from . import risk
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import TF_MIN, Ctx, Engine, write_off
+from .engine.core import TF_MIN, Ctx, Engine, saved_totals, write_off
 from .engine.portfolio import _cash
 from .kite_service import IST, KiteService
 from .live import (CandleBuilder, _closed, _ts, candle_end, close_at_auction, day_close_minutes, drop_forming, official_close,
@@ -250,8 +250,9 @@ class GroupLiveSession:
         return value, cash - tied
 
     def realised(self) -> float:
-        return (sum(t["pnl"] for m in self.members for t in m.engine.trades) + self.corp_cash
-                + sum(t["pnl"] for st in self.waiting.values() for t in st.get("trades", [])))
+        # the engines' running totals: their trade lists keep only the newest trades after a restart
+        return (sum(m.engine.realised_total for m in self.members) + self.corp_cash
+                + sum(saved_totals(st)[0] for st in self.waiting.values()))
 
     def open_pnl(self) -> float:
         """The open positions' P&L at their last prices, those kept as saved at their last saved price."""
@@ -403,10 +404,10 @@ class GroupLiveSession:
             rows = []
             for m in self.members:
                 e = m.engine
-                rows.append({"symbol": m.sym, "id": m.inst["id"], "price": m.last_price, "trades": len(e.trades),
+                rows.append({"symbol": m.sym, "id": m.inst["id"], "price": m.last_price, "trades": e.trade_count,
                          "skipped": m.skips["spread"] + m.skips["price"],
                          "spread": round((m.ask - m.bid) / ((m.ask + m.bid) / 2) * 100, 3) if m.bid and m.ask else None,
-                             "pnl": round(sum(t["pnl"] for t in e.trades), 2),
+                             "pnl": round(e.realised_total, 2),
                              "position": None if e.qty <= 0 else {"side": "short" if e.dir == -1 else "long", "qty": e.qty,
                                                                   "entry": e.entry, "unrealised": round(m.open_pnl(), 2),
                                                                   "stop": e.sl if e.sl > 0 else None,
@@ -423,10 +424,11 @@ class GroupLiveSession:
                 "members": rows, "skipped": self.skipped, "events": events, "equity_curve": self.equity_curve,
                 "day_equity": self._days(), "closed": risk.closed_list(trades),
                 "bars": [], "overlays": {}, "oscillators": {},
-                "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(),
+                "account": {"capital": cap, "equity": self.equity(), "realised": self.realised(), "corp_cash": self.corp_cash,
                             "unrealised": self.open_pnl(), "open": open_n, "max_open": self.max_open,
                             "halted": self.halted, "emptied_on": self.emptied_on, "today": self.today(),
-                            "trades": len(trades), "wins": sum(1 for t in trades if t["pnl"] > 0),
+                            "trades": sum(m.engine.trade_count for m in self.members) + sum(saved_totals(st)[1] for st in self.waiting.values()),
+                            "wins": sum(m.engine.win_count for m in self.members) + sum(saved_totals(st)[2] for st in self.waiting.values()),
                             "skipped": {k: sum(m.skips[k] for m in self.members) for k in ("spread", "price")}},
                 "fast": self.fast,
                 "notice": (f"{', '.join(held)}: price history hasn't loaded since the restart. The open position is kept as "
@@ -461,18 +463,18 @@ def _saved_row(iid: str, m: dict, names: dict) -> dict:
         pos = {"side": "short" if d == -1 else "long", "qty": qty, "entry": m.get("entry"), "unrealised": round(_saved_open(m)[0], 2),
                "stop": m["sl"] if (m.get("sl") or 0) > 0 else None, "target": m.get("tg")}
     return {"symbol": m.get("symbol") or names.get(iid, iid.split(":", 1)[-1]), "id": iid, "price": m.get("last_price"),
-            "trades": len(m.get("trades", [])), "skipped": sum((m.get("skips") or {}).values()), "spread": None,
-            "pnl": round(sum(t["pnl"] for t in m.get("trades", [])), 2), "position": pos}
+            "trades": saved_totals(m)[1], "skipped": sum((m.get("skips") or {}).values()), "spread": None,
+            "pnl": round(saved_totals(m)[0], 2), "position": pos}
 
 
 def stopped_snapshot(row: dict) -> dict:
     st = row.get("state") or {}
     cap = row["strategy"]["risk"]["capital"]
-    trades = [t for m in (st.get("members") or {}).values() for t in m.get("trades", [])]
     names = row["instrument"].get("names") or {}
     events = sorted(({**ev, "sym": names.get(iid, iid.split(":", 1)[-1])} for iid, m in (st.get("members") or {}).items() for ev in m.get("events", [])[-60:]),
                     key=lambda e: str(e["t"]))[-200:]
-    realised = sum(t["pnl"] for t in trades) + st.get("corp_cash", 0.0)
+    totals = [saved_totals(m) for m in (st.get("members") or {}).values()]
+    realised = sum(t[0] for t in totals) + st.get("corp_cash", 0.0)
     # positions open at the stop stay open, each valued at its last price before the stop, as in the running session
     # (R11C-002: the page showed the realised P&L alone and no position)
     rows, open_pnl, unpriced = [], 0.0, False
@@ -493,5 +495,5 @@ def stopped_snapshot(row: dict) -> dict:
             "stopped_at": row.get("stopped_at"), "members": rows if n_open else [], "skipped": [], "events": events,
             "equity_curve": curve, "bars": [], "overlays": {}, "oscillators": {},
             "account": {"capital": cap, "equity": equity, "realised": realised, "unrealised": open_pnl, "open": n_open,
-                        "max_open": row["instrument"].get("maxOpen"), "halted": False, "emptied_on": st.get("emptied_on"), "today": 0, "trades": len(trades),
-                        "wins": sum(1 for t in trades if t["pnl"] > 0)}}
+                        "max_open": row["instrument"].get("maxOpen"), "halted": False, "emptied_on": st.get("emptied_on"), "today": 0, "trades": sum(t[1] for t in totals),
+                        "wins": sum(t[2] for t in totals), "corp_cash": st.get("corp_cash", 0.0)}}

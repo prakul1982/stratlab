@@ -1,7 +1,8 @@
 import { pageAt, type Located } from "./nav";
 import { usePersisted } from "./persist";
 
-const KEY = "stratlab.pins";
+export const PINS_KEY = "stratlab.pins";
+const KEY = PINS_KEY;
 const NONE: string[] = [];
 
 /** The pages the person pinned to Mine's sidebar, in the order they pinned them. Kept on this device: the account's
