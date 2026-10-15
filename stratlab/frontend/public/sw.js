@@ -82,9 +82,15 @@ self.addEventListener("push", (e) => {
   }));
 });
 
+// A push can carry any url; only a path on this site is opened, anything else opens the home page.
+function sameSitePath(u) {
+  if (typeof u !== "string" || u[0] !== "/" || u[1] === "/" || u[1] === "\\" || /[\u0000-\u001f]/.test(u)) return "/";
+  try { return new URL(u, self.location.origin).origin === self.location.origin ? u : "/"; } catch (e) { return "/"; }
+}
+
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || "/paper";
+  const url = sameSitePath((e.notification.data && e.notification.data.url) || "/paper");
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
     for (const c of list) { if ("focus" in c) { c.navigate(url); return c.focus(); } }
     return self.clients.openWindow(url);

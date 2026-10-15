@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, dateOnly, fmtDate } from "../../lib/format";
+import { ago, safeHref, dateOnly, fmtDate } from "../../lib/format";
 import { Card, CardHead, DataTable, ErrorState, Light, Skeleton, type Column } from "../../components/kit";
 
 type Rule = { id: string; area: string; name: string; value: string; where: string; source: string; since: string | null };
@@ -59,7 +59,7 @@ export function RulesPanel() {
               <Light state={s.pending ? "bad" : s.error ? "warn" : s.checked ? "ok" : "warn"} word={s.pending ? "Changed" : s.error ? "Unread" : s.checked ? "Same" : "Not read yet"} />
               <b>{s.name}</b>
               <span className="k-muted">{s.error ? `${s.error}${s.fails > 1 ? ` (${s.fails} days running)` : ""}` : s.shown ?? ""}{s.expected && !s.pending ? ` · StratLab uses ${s.expected}` : ""}</span>
-              <a className="link" href={s.url} target="_blank" rel="noreferrer">Source</a>
+              <a className="link" href={safeHref(s.url)} target="_blank" rel="noreferrer">Source</a>
             </p>
             {s.pending && (
               <div className="k-row k-small">

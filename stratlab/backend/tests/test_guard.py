@@ -42,7 +42,7 @@ def test_rate_limit_is_per_caller_and_skips_health(monkeypatch):
     user = {"Authorization": "Bearer abc"}
     assert [c.get("/x", headers=user).status_code for _ in range(6)] == [200] * 5 + [429]
     assert c.get("/x", headers={"Authorization": "Bearer other"}).status_code == 200
-    assert c.get("/x", headers={"X-Real-IP": "1.2.3.4"}).status_code == 200
+    assert c.get("/x", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 200      # the proxy's entry names another address
 
 
 def test_made_up_tokens_still_hit_the_address_limit(monkeypatch):

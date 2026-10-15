@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { analyticsDashboard } from "../../lib/analytics";
-import { money } from "../../lib/format";
+import { money, safeHref } from "../../lib/format";
 import { Badge, Card, CardHead, EmptyState, ErrorState, HealthGrid, HealthTile, Skeleton, Stat, StatRow } from "../../components/kit";
 import { ViewAsCard } from "../../components/ViewAs";
 import { useAdmin } from "./AdminContext";
@@ -92,7 +92,7 @@ export function OverviewSection() {
         {dash && (
           <div className="k-row">
             <span className="k-small k-muted">Usage analytics are on: page views and the sign-up to payment funnel, by user id only.</span>
-            <a className="btn outline sm" href={dash} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Open the PostHog dashboard</a>
+            <a className="btn outline sm" href={safeHref(dash)} target="_blank" rel="noopener noreferrer" data-testid="posthog-dashboard">Open the PostHog dashboard</a>
           </div>
         )}
       </Card>

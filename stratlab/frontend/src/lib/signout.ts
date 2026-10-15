@@ -1,4 +1,5 @@
 import { sessionKey } from "./config";
+import { clearLocalData } from "./localData";
 import { leavePush } from "./pwa";
 import { writeViewAs } from "./viewAs";
 
@@ -14,6 +15,7 @@ export async function signOutHere(auth: Auth, reload: () => void = () => locatio
   try { failed = !!(await auth.signOut({ scope: "local" })).error; } catch { failed = true; }
   if (!failed) return;
   try { localStorage.removeItem(sessionKey()); } catch { /* storage off: nothing saved to remove */ }
+  clearLocalData();
   writeViewAs(null);                   // the sign-out event that would have cleared it never came
   reload();
 }

@@ -5,6 +5,7 @@ token) or, for anonymous calls, per address; they're generous enough that normal
 tabs polling paper sessions, never reaches them."""
 import hashlib
 import json
+import os
 import re
 import threading
 import time
@@ -18,6 +19,7 @@ BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST, ("POST", "/trade/journal/i
 PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
+BAD_TOKENS_PER_MINUTE = 30          # made-up bearer tokens from one address, before it's answered 429 without asking the sign-in service
 EXEMPT = ("/health",)               # the host's health check
 HOOKS = "/hooks/signal/"            # signal webhooks (signals_routes.py): limited per secret URL, not per address
 
@@ -58,13 +60,38 @@ class Window:
             cur[1] += 1
             return cur[1] <= limit
 
+    def count(self, key: str, now: float | None = None) -> int:
+        """Requests counted for the caller so far this minute."""
+        now = time.time() if now is None else now
+        with self._lock:
+            cur = self._d.get(key)
+            return cur[1] if cur and cur[0] == int(now // 60) else 0
+
+
+def _hops() -> int:
+    try:
+        return max(1, int(os.environ.get("TRUSTED_PROXY_HOPS", "1")))
+    except ValueError:
+        return 1
+
 
 def address(scope) -> str:
+    """The caller's address. A client can send any X-Real-IP or X-Forwarded-For it likes, so neither is believed at face
+    value: the address is the X-Forwarded-For entry TRUSTED_PROXY_HOPS from the right (default 1, the one the host's
+    own proxy appended; a client can only add entries to the left of it), else the socket peer when the header is
+    missing or shorter. X-Real-IP is read only when TRUST_X_REAL_IP=1, for a proxy known to overwrite it."""
     headers = dict(scope.get("headers") or [])
-    ip = (headers.get(b"x-real-ip") or headers.get(b"x-forwarded-for", b"").split(b",")[0]).strip().decode("latin-1")
-    if not ip and scope.get("client"):
-        ip = scope["client"][0]
-    return ip or "?"
+    if os.environ.get("TRUST_X_REAL_IP") == "1":
+        ip = headers.get(b"x-real-ip", b"").strip().decode("latin-1")
+        if ip:
+            return ip
+    parts = [p.strip() for p in headers.get(b"x-forwarded-for", b"").decode("latin-1").split(",") if p.strip()]
+    n = _hops()
+    if len(parts) >= n:
+        return parts[-n]
+    if scope.get("client"):
+        return scope["client"][0] or "?"
+    return "?"
 
 
 def caller(scope) -> tuple[str, int]:
@@ -76,6 +103,14 @@ def caller(scope) -> tuple[str, int]:
     if auth[:7].lower() == b"bearer ":
         return "u:" + hashlib.sha256(auth[7:].strip()).hexdigest()[:32], PER_MINUTE_USER
     return "a:" + address(scope), PER_MINUTE_ANON
+
+
+def _known_token(scope) -> bool:
+    """A token the sign-in service accepted before (auth keeps them a while): real users are never held by the failure count."""
+    from . import auth
+    token = dict(scope.get("headers") or []).get(b"authorization", b"")[7:].strip().decode("latin-1")
+    with auth._lock:
+        return token in auth._cache
 
 
 async def _reply(send, status: int, code: str, message: str, extra: list | None = None):
@@ -91,6 +126,12 @@ class Guard:
         self.app = app
         self.window = window or Window()
 
+    @staticmethod
+    def _bad_key(scope) -> str | None:
+        """The failed-token counter of this request's address, when it carries a bearer token."""
+        auth = dict(scope.get("headers") or []).get(b"authorization", b"")
+        return "bad:" + address(scope) if auth[:7].lower() == b"bearer " else None
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
@@ -102,6 +143,11 @@ class Guard:
             if not (ok_caller and ok_address):
                 return await _reply(send, 429, "rate_limited", "Too many requests. Wait a minute and try again.",
                                     [(b"retry-after", b"60")])
+        bad_key = self._bad_key(scope) if path not in EXEMPT else None
+        if bad_key and self.window.count(bad_key) >= BAD_TOKENS_PER_MINUTE and not _known_token(scope):
+            # an address that keeps sending tokens the sign-in service refuses: answered here, without asking it again
+            return await _reply(send, 429, "rate_limited", "Too many failed sign-ins from this address. Wait a minute and try again.",
+                                [(b"retry-after", b"60")])
         headers = dict(scope.get("headers") or [])
         length = headers.get(b"content-length")
         if length is not None:
@@ -118,6 +164,8 @@ class Guard:
 
         async def send_with_headers(msg):
             if msg["type"] == "http.response.start":
+                if bad_key and msg.get("status") == 401:
+                    self.window.hit(bad_key, BAD_TOKENS_PER_MINUTE)       # a failed token check, counted per address
                 got = {k.lower(): v for k, v in msg.get("headers") or []}
                 extra = HEADERS + ([HTML_CSP] if got.get(b"content-type", b"").startswith(b"text/html") else [])
                 msg = {**msg, "headers": list(msg.get("headers") or []) + [h for h in extra if h[0] not in got]}

@@ -294,19 +294,44 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
 
 
 def handle_webhook(body: bytes, signature: str, event_id: str = ""):
-    """Act on a signed Razorpay event. Each event id is handled once, so a captured event replayed later does nothing."""
+    """Act on a signed Razorpay event. Each event is handled once, by its id and by the hash of its signed body, so a
+    captured event replayed later (even under a new, unsigned id header) does nothing."""
     if not settings.RAZORPAY_WEBHOOK_SECRET or not signature:
         # an empty secret would let anyone forge a valid signature
         raise SignatureVerificationError("Webhook secret is not configured.")
     client().utility.verify_webhook_signature(body.decode(errors="replace"), _sig(signature), settings.RAZORPAY_WEBHOOK_SECRET)
     event = json.loads(body)
-    # The event id is a header Razorpay doesn't sign. With it, the id is the key; a post without it (a replay that dropped
-    # it) is keyed by the signed body's own hash, so the same signed body is still handled once.
-    seen = f"rzp-event:{event_id[:80]}" if event_id else "rzp-body:" + hashlib.sha256(body).hexdigest()
-    if db.get_setting(seen):
-        return
-    _act(event)
-    db.set_setting(seen, "1")                  # marked only once handled, so Razorpay's retry of a failed one still runs
+    # The event id is a header Razorpay doesn't sign, so the signed body's hash is always a key too; either one seen skips it.
+    keys = ["rzp-body:" + hashlib.sha256(body).hexdigest()]
+    if event_id:
+        keys.append(f"rzp-event:{event_id[:80]}")
+    claimed = []
+    for k in keys:
+        if not _claim_mark(k):
+            for c in claimed:                  # seen under another key: give back what this delivery just took
+                db.update_setting(c, lambda cur: db.REMOVE)
+            return
+        claimed.append(k)
+    try:
+        _act(event)
+    except Exception:
+        for c in claimed:                      # not handled: free the marks so Razorpay's retry of a failed one still runs
+            db.update_setting(c, lambda cur: db.REMOVE)
+        raise
+
+
+def _claim_mark(key: str) -> bool:
+    """Set a mark only if absent (compare-and-set): False when it was already set, so two deliveries can't both act."""
+    won = []
+
+    def claim(cur):
+        won.clear()
+        if cur:
+            return None
+        won.append(1)
+        return "1"
+    db.update_setting(key, claim)
+    return bool(won)
 
 
 REVERSALS = ("refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.lost")

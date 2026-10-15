@@ -1320,6 +1320,11 @@ def throttle(profile, what: str, times: int, per_seconds: float, message: str):
 money_mf.setup(throttle)
 
 
+def heavy_read_throttle(profile):
+    """One account's scans, sector charts and watchlist pages share one allowance, so it can't keep the few heavy slots busy."""
+    throttle(profile, "heavy_read", 20, 60, "You're running scans and research pages very quickly. Wait a minute, then try again.")
+
+
 # ---------- backtests and notebooks ----------
 def use_backtest(profile, held: int = 0) -> int | None:
     """Check the monthly backtest limit before running one (`held`: runs of theirs already going); returns the limit."""
@@ -1782,6 +1787,7 @@ def with_nse_close(region: str, rows: list[dict], day_key: str, change_key: str 
 def run_scan(req: ScanReq, profile=Depends(current_profile)):
     """A trend scan over a group: the Stage 2 + Supertrend scan (fresh signals first), or one of the preset rule sets
     (52-week high breakout, golden cross, ...), each stock's match stated as a fact with its date. Never advice."""
+    heavy_read_throttle(profile)
     need(profile, "scans", "Trend scans")
     if req.scan != "st_s2" and req.scan not in scan_presets.BY_ID:
         err(404, "not_found", "That scan isn't available.")
@@ -1829,6 +1835,7 @@ def _member_key(m) -> str:
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
     """Where each sector (or stock in a group) sits against the benchmark: relative strength and its momentum."""
+    heavy_read_throttle(profile)
     region = "US" if region.upper() == "US" else "IN"
     interval = "daily" if interval == "daily" else "weekly"
     prov = markets.provider(region)
@@ -2484,6 +2491,7 @@ _investor_pool = ThreadPoolExecutor(max_workers=4)
 def investor_home(region: str = "IN", profile=Depends(current_profile)):
     """Every watchlist company in one market (India or US): trend, sector rotation, red flags (India), checklist and
     report card on one page."""
+    heavy_read_throttle(profile)
     need(profile, "investor_home", "Watchlist at a glance")
     region = "US" if region.upper() == "US" else "IN"
     us = region == "US"
@@ -3471,6 +3479,7 @@ def unshare_experiment(nid: str, version: int, profile=Depends(current_profile))
     return {"shared": False}
 
 
+SHARED_LINK_CACHE = "public, max-age=60"      # a shared link someone turns off must stop being served within a minute
 PUBLIC_LIBRARY_HEADERS = {"Cache-Control": "public, max-age=300"}
 
 
@@ -3515,7 +3524,7 @@ def public_verdict_page(token: str):
     if not snap:
         # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
         return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
-    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=60"})
+    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=0, s-maxage=30, must-revalidate"})   # a link turned off stops within a minute
 
 
 # ---------- company fact cards: an image and a public link that previews as it ----------
@@ -3553,7 +3562,7 @@ def company_card_image(card: str):
     png = company_cards.image(card)
     if not png:
         err(404, "not_found", "No image for this link.")
-    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 @app.get("/c/{card}")
@@ -3561,7 +3570,7 @@ def company_card_page(card: str):
     c = company_cards.load(card)
     if not c:
         return RedirectResponse(settings.PUBLIC_SITE_URL + "/")
-    return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": "public, max-age=300"})
+    return HTMLResponse(company_cards.preview_html(card, c, company_cards.has_image(card)), headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 # ---------- public company pages, for search engines ----------
@@ -5954,7 +5963,7 @@ def news_link(iid: str, n: int):
     if not url:
         return HTMLResponse(mail_pages.notice("That link isn't available", "The story may have been taken down. The brief is on the "
                                             "Briefs page in the app."), status_code=404)
-    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "public, max-age=3600"})
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": SHARED_LINK_CACHE})
 
 
 @app.get("/news")
