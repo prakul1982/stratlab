@@ -61,6 +61,7 @@ def analyse(bars: list[dict]) -> dict | None:
     return {
         "price": float(c.iloc[-1]), "chg": (float(c.iloc[-1]) / prev - 1) * 100 if prev else None,
         "stage": stage_now, "stage_days": since + 1 if stage_now else None,
+        "stage_capped": stage_now is not None and (since >= last or pd.isna(stg.iloc[last - since - 1])),      # began at or before the first candle read: the true length is longer
         "st_up": st_up, "st_days": flip + 1, "st_level": None if pd.isna(st.iloc[-1]) else float(st.iloc[-1]),
         "signal": "fresh" if in_s2 and flip + 1 <= FRESH else "st_s2" if in_s2 else "stage2" if stage_now == 2 else None,
         "st_since": str(bars[last - flip]["t"])[:10], "t": bars[-1]["t"], "recent": [float(x) for x in c.iloc[-5:]],
@@ -110,6 +111,24 @@ def _bars(registry, iid: str) -> list[dict]:
         bars = prov.history(inst, "1d", DAYS)
     _cache.set(iid, (time.time(), bars), 900)
     return bars
+
+
+def company_name(market: str, inst: dict | None, iid: str) -> str | None:
+    """A stock's name: the instrument master's, or when that has none (the broker's list leaves some blank: WIPRO, ITC) the
+    stored company lists' and the stored page facts' (R29D-001)."""
+    name = (inst or {}).get("name")
+    if name and str(name).strip():
+        return name
+    sym = str((inst or {}).get("symbol") or iid.split(":", 1)[-1]).upper()
+    try:
+        from . import stock_pages
+        region = "US" if market == "US" else "IN"
+        got = (stock_pages.companies(region).get(sym) or {}).get("name")
+        if not got:
+            got = ((stock_pages._setting(f"stocks:page:{region}:{sym}") or {}).get("facts") or {}).get("name")
+        return got or None
+    except Exception:
+        return None
 
 
 def _label(prov, iid: str) -> str:
@@ -174,7 +193,7 @@ def run(registry, market: str, members: list[dict], budget: float | None = None,
             problems.append(f"{_label(prov, iid)}: no recent daily prices")
             continue
         inst = names.get(iid) or {}
-        rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"),
+        rows.append({"id": iid, "symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": company_name(market, inst, iid),
                      "currency": inst.get("currency"), **res})
     problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
     rows.sort(key=lambda r: (RANK.get(r["signal"], 3), -(r["chg"] or 0)))
@@ -213,7 +232,7 @@ def run_preset(registry, market: str, members: list[dict], preset: str, session:
         days.append(res["as_of"])
         m = scan_presets.lagged(res["matches"].get(preset), res["as_of"], newest, preset)
         if m:
-            rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": inst.get("name"), "currency": inst.get("currency"),
+            rows.append({"symbol": inst.get("symbol") or iid.split(":", 1)[-1], "name": company_name(market, inst, iid), "currency": inst.get("currency"),
                          "price": res["price"], "chg": res["chg"], "as_of": res["as_of"], "days_ago": m["days_ago"], "day": m["day"],
                          "detail": m["detail"]})
     problems += [f"{x}: past the {MAX} stocks a scan reads" for x in over if x]
