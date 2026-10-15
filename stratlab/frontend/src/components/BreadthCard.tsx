@@ -31,7 +31,7 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
         : !f ? <p className="small muted">The first counts for {d.group.name} come after the next close.</p>
         : (
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>
-            <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span> {f.live && <Badge tone="live">Live</Badge>}</span>
+            <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span> {f.live && !f.final && <Badge tone="live">Live</Badge>}</span>
             <div className="k-stats">
               <Stat label="Rose / fell" value={`${count(f.adv)} / ${count(f.dec)}`} />
               <Stat label="Above 50-day average" value={share(f.pct50)} />

@@ -373,8 +373,12 @@ def view(profile: dict, now: datetime | None = None) -> dict:
         from_stored = True
     expiring = expiry_today(today) if trading else []
     nxt = next_window(local, trading, phase)
+    as_of = live.get("as_of") if not from_stored else None
+    # final prices shown: the stamp is the time of the read that held them, not the list's last stamp from the auction (R28-010)
+    if as_of and fresh and phase == "closed" and any(v.get("final_out") for v in stocks) and (live.get("read") or "") > as_of:
+        as_of = live["read"]
     return {"phase": phase, "today": today.isoformat(), "trading_day": trading, "timetable": S.describe(today),
-            "day": shown_day, "fresh": fresh, "read": live.get("read"), "as_of": live.get("as_of") if not from_stored else None,
+            "day": shown_day, "fresh": fresh, "read": live.get("read"), "as_of": as_of,
             "from_stored": from_stored, "next": nxt,
             "status": live.get("status"), "message": live.get("message"), "eligible": len(live.get("eligible") or []),
             "stocks": stocks, "indices": indices,

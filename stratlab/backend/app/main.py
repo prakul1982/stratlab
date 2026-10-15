@@ -4256,7 +4256,7 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         err(400, "bad_range", "Pick a time range from the list.")
     out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
-    live = breadth_live.view(group, ready=kite.ready())
+    live = breadth_live.settled(breadth_live.view(group, ready=kite.ready()), (out.get("today") or {}).get("day"))
     if brief and live:
         # the Invest home's card: the newest live point only (R7T-010: the card showed the 8 Oct close after the open
         # while the breadth page was live)
@@ -6078,7 +6078,10 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "a
 
 
 def news_view(issue: dict) -> dict:
+    issue = news.write.regional_links(issue)          # rotation links open the brief's own market (R28-006)
     out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
+    if out.get("ai_summary"):          # index levels as the tiles print them: two decimals (R28-009)
+        out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out

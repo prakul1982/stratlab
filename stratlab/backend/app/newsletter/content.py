@@ -428,6 +428,15 @@ def _plain_title(t: str) -> bool:
     return plain_headline(t)
 
 
+def page_shows_stage(region: str, sym: str) -> bool:
+    """False when the stock's stored page is built with no Stage row; a page not stored yet is built with one when it can."""
+    try:
+        facts = _main().stock_page_store.peek(region, sym)
+    except Exception:
+        return True
+    return not facts or bool(facts.get("stage"))
+
+
 def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dict | None:
     """What changed for one stock since `since` (an ISO date): price, stage, a fresh ST S2 signal, red or amber
     filings and a couple of headlines. None when there's no price data."""
@@ -459,6 +468,9 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
               for d in (_safe(lambda: deals.recent_for(sym, since)) or [] if region == "IN" else [])][:4]
     surv = _safe(lambda: surveillance_lines(sym, since)) if region == "IN" else None
     stage_before = before["stage"] if before else None
+    if not page_shows_stage(region, sym):          # the email states a Stage only where the stock's page shows one (R28-014)
+        now = {**now, "stage": None}
+        stage_before = None
     signal = now["signal"] == "fresh" and now["st_days"] <= (5 if weekly else 1)
     stage_moved = now["stage"] is not None and stage_before is not None and now["stage"] != stage_before
     changed = bool(stage_moved or signal or flags or trades or (surv or {}).get("changes") or (change is not None and abs(change) >= MOVE[weekly]))
