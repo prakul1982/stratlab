@@ -249,6 +249,9 @@ class KiteService:
                 print("BSE instruments unavailable:", e)       # NSE and F&O still work
                 continue
             if exch == "BSE":
+                # the full list kept as instruments_of keeps it: bse_twin finds an NSE company's BSE listing in it, in every
+                # process (not only the one whose stock-list pass calls instruments_of) and right after a login or IST midnight
+                self._raw["BSE"] = (today_ist(), raw)
                 raw = bse_only_rows(raw, rows)
             for x in raw:
                 itype = x.get("instrument_type")

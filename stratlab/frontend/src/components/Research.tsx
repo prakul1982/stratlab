@@ -4,7 +4,7 @@ import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { ago, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
-  SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist,
+  SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -34,9 +34,10 @@ export function StarButton({ region, symbol, name }: { region: Region; symbol: s
     <button className={`btn quiet sm star-btn${on ? " on" : ""}`} aria-pressed={on}
       onClick={async () => {
         try {
-          await toggle({ region, symbol, name: name ?? null });
-          if (!on) track("watchlist add", { region });
-          notify(on ? `${symbol} removed from your watchlist.` : `${symbol} added to your watchlist.`);
+          const want = !on;                // what the button said: Watch adds, Watching removes, whatever the list holds
+          const changed = await toggle({ region, symbol, name: name ?? null }, want);
+          if (want && changed) track("watchlist add", { region });
+          notify(watchNote(symbol, want, changed));
         } catch (e) { fail(e); }
       }}>
       <Star size={17} />{on ? "Watching" : "Watch"}

@@ -450,6 +450,8 @@ class LiveSession:
             e = self.engine
             if e.qty > 0:
                 raise ValueError("This session already has an open position. Close it first.")
+            stamp = self._stamp()
+            e.roll_day(stamp)            # yesterday's loss limit doesn't hold today, before today's first candle too
             if e.halted:
                 raise ValueError("This session hit its daily loss limit today, so it opens nothing more until tomorrow.")
             q = C.floor_to(float(qty), e.qty_step)
@@ -459,7 +461,7 @@ class LiveSession:
             need = e.manual_cost(side, q, px)
             if need > e.cash:
                 raise ValueError(f"That needs about {need:,.2f} and the session has {e.cash:,.2f} in cash.")
-            ev = e.open_manual(self._stamp(), px, d, q, MANUAL_WHY)
+            ev = e.open_manual(stamp, px, d, q, MANUAL_WHY)
             self.dirty = True
         self.mgr.on_order(self, ev)
         return ev
@@ -474,7 +476,8 @@ class LiveSession:
         with self.lock:
             if self.engine.qty <= 0:
                 raise ValueError("This session has no open position to close.")
-            ev = self.engine.close_manual(self._stamp(), float(self.last_price), MANUAL_CLOSE_WHY)
+            mark = self.bars[-1]["c"] if self.bars else None     # the last close: a carried position's day mark
+            ev = self.engine.close_manual(self._stamp(), float(self.last_price), MANUAL_CLOSE_WHY, mark)
             self.dirty = True
         self.mgr.on_order(self, ev)
         return ev
@@ -620,7 +623,8 @@ class LiveManager:
                 if n >= RESUME_TRIES:
                     self._attach_fails.pop(row["id"], None)
                     db.update_session(row["id"], status="stopped", stopped_at=db.now_iso(),
-                                      stop_reason=f"Could not resume after restart ({RESUME_TRIES} tries in a row): {e}")
+                                      stop_reason=f"Could not resume after restart ({RESUME_TRIES} tries in a row): the market's prices "
+                                                  "couldn't be read.")   # the error itself goes to the log: it can name the data source
 
     def _attach(self, row: dict):
         s = self._build(row)
@@ -635,6 +639,13 @@ class LiveManager:
         elif not s.polled:
             self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
         return s
+
+    @staticmethod
+    def row_kind(row: dict) -> str:
+        """The kind of session a stored row runs as (what _build makes of it): signal, options, group or rules."""
+        if (row.get("strategy") or {}).get("kind") == "signal":
+            return "signal"
+        return {"OPTIONS": "options", "GROUP": "group"}.get((row.get("instrument") or {}).get("type"), "rules")
 
     def _build(self, row: dict):
         kind = (row.get("instrument") or {}).get("type")
@@ -951,11 +962,22 @@ def structure_alert(s, evs: list[dict], net: float | None) -> tuple[str, str]:
     (after charges) when the step closed it, else the closed legs' P&L."""
     cur = s.inst.get("currency", "INR")
     opened, closed = [e for e in evs if e.get("pnl") is None], [e for e in evs if e.get("pnl") is not None]
-    word = "re-centred" if opened and closed else "opened" if opened else "closed"
+    # what happened, from the outcome: a trade closed in the step (`net`) leaves no position, whatever opened on the way
+    # (an entry abandoned when a leg couldn't open, a re-centre that couldn't open its new legs)
+    if net is not None:
+        word = "closed"
+    elif opened and closed:
+        word = "re-centred"               # the old legs closed and new ones opened: the position is still open
+    elif opened:
+        word = "opened"
+    elif all(e.get("why") == "Leg stop" for e in closed):
+        word = "leg stopped, position still open"
+    else:
+        word = "legs closed, position still open"
     legs = "; ".join(f"{e['side'].upper()} {e['qty']:g} {e.get('sym') or s.inst['symbol']} at {kit.money(e['px'], cur, 2)}" for e in evs)
     text = f"StratLab paper trade: {s.name} {word} ({len(evs)} order{'s' if len(evs) != 1 else ''}): {legs}"
     if closed:
-        why = str(closed[0].get("why") or "").lower()
+        why = str((closed[-1] if net is not None else closed[0]).get("why") or "").lower()
         if net is not None:
             text += f". {why.capitalize() + ': ' if why else ''}net P&L {kit.money(net, cur, signed=True)} after charges"
         else:

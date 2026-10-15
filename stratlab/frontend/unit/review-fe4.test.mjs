@@ -47,7 +47,8 @@ test("the company page names what is missing, never the source or its error", ()
   assert.equal(missingLine(many), "Some data is missing: prices, financials, news and the company profile.");
   assert.deepEqual(missingWhat([{ source: "News", ok: false }, { source: "News", ok: false, what: ["news"] }]), ["news"]);
   assert.equal(missingLine([{ source: "Fundamentals", ok: false }]), "Some data is missing: financials.");
-  assert.equal(missingLine([{ source: "Whatever", ok: false }]), "Some data is missing: some data.");
+  // an unknown label names nothing rather than "some data" twice (review 4d)
+  assert.equal(missingLine([{ source: "Whatever", ok: false }]), "Some data is missing.");
   assert.doesNotMatch(missingLine(many), /Yahoo|Finnhub|Screener|429/);
   const src = read("src/components/Research.tsx");
   assert.match(src, /\{missingLine\(sources\)\}/);
@@ -66,7 +67,7 @@ test("the watchlist is never saved over a list that was not read", () => {
   const src = read("src/lib/research.ts");
   // a save reads the saved list first (or refuses), and a toggle works from that list, never from a null one
   assert.match(src, /try \{ cur = await loadWatch\(\); \} catch \{ throw new Error\(WATCH_UNREAD\); \}/);
-  assert.match(src, /const toggle = \(item: WatchItem\) => save\(\(cur\) =>/);
+  assert.match(src, /const toggle = async \(item: WatchItem, want: boolean\): Promise<boolean> => \{\s*let changed = false;\s*await save\(\(cur\) =>/);
   assert.doesNotMatch(src, /\(items \?\? \[\]\)/);
   assert.match(src, /return \{ items, has, toggle, save, failed: failed && items === null, retry:/);
   for (const f of ["src/pages/Research.tsx", "src/pages/MineHome.tsx", "src/pages/SpaceHomes.tsx"]) {

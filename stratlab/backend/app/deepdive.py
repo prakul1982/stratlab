@@ -709,8 +709,20 @@ def stored(symbol: str) -> dict | None:
 
 def tidy(reads: dict) -> dict:
     """Stored reads as they'd be cleaned today: a read saved before a formatting fix (e.g. "$215,938 million") still
-    shows the amount in the unit people use ("$215.9 billion"). The amounts themselves never change."""
+    shows the amount in the unit people use ("$215.9 billion"), and one saved before the advice filter loses its advice
+    wording as a new read would (summary, segments, customers, drivers, strengths; risks keep the filing's own words).
+    The amounts themselves never change."""
     b, p = reads.get("business"), reads.get("plans")
+    if isinstance(b, dict):
+        for k, n in (("summary", 700), ("customers", 300)):
+            if isinstance(b.get(k), str):
+                b[k] = _plain(b[k], n)
+        if isinstance(b.get("segments"), list):
+            b["segments"] = [{**s, "what": _plain(s.get("what"), 200)} if isinstance(s, dict) and isinstance(s.get("what"), str) else s
+                             for s in b["segments"]]
+        for k in ("drivers", "strengths"):
+            if isinstance(b.get(k), list):
+                b[k] = _clip(b[k], 5, plain=True)
     if isinstance(b, dict) and isinstance(b.get("measures"), list):
         b["measures"] = [{**m, "value": in_billions(m.get("value"))} if isinstance(m, dict) else m for m in b["measures"]]
     if isinstance(p, dict) and isinstance(p.get("capex"), list):

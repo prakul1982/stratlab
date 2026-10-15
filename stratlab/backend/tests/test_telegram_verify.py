@@ -108,3 +108,24 @@ def test_a_chat_saved_before_codes_existed_is_unverified(w):
     w["prof"]["telegram_chat_id"] = "789"
     assert not alerts.telegram_verified(w["prof"])
     assert alerts.test(w["prof"]) == ([], {})
+
+
+
+def test_clearing_the_chat_from_the_form_resets_verification(w):
+    """The form sends null for an emptied chat field: the chat was cleared from the profile but its verification kept,
+    so typing the same id again counted as confirmed without a code."""
+    save(w, "123")
+    verify(w, code_of(w))
+    assert alerts.telegram_verified(w["prof"])
+    w["client"].put("/me/alerts", json={"alerts_enabled": False, "telegram_chat_id": None, "alert_email": None})
+    assert w["prof"]["telegram_chat_id"] is None
+    w["prof"]["telegram_chat_id"] = "123"           # typed again: a chat to confirm again
+    assert not alerts.telegram_verified(w["prof"])
+
+
+def test_the_test_alert_says_an_unconfirmed_chat_isnt_confirmed_yet(w):
+    save(w, "123")                                  # a code was sent, never entered
+    r = w["client"].post("/me/alerts/test")
+    assert r.status_code == 400
+    msg = r.json()["detail"]["message"]
+    assert "isn't confirmed yet" in msg and "add a Telegram chat ID" not in msg

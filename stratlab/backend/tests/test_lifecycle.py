@@ -492,3 +492,31 @@ def test_first_steps_dismiss_and_only_for_new_accounts(w):
     assert c.get("/me/first-steps", headers=headers("basic-token")).json()["show"] is False
     assert c.put("/me/first-steps", json={}, headers=headers("basic-token")).status_code == 422
     assert c.get("/me/first-steps").status_code == 401
+
+
+# ---------- acct4 ----------
+def test_the_plan_ended_note_says_free_when_the_account_cannot_be_read_again(w, outbox, monkeypatch):
+    """The caller's copy is from before the end (Pro, active): a failed re-read must not word the note from it."""
+    p = user("u-gone", "gone@example.com", plan="pro", plan_status="active", razorpay_subscription_id="sub_1",
+             current_period_end=(NOW + timedelta(days=20)).isoformat())
+
+    def boom(uid, *a):
+        raise RuntimeError("db blip")
+    monkeypatch.setattr(lifecycle.db, "get_profile", boom)
+    assert lifecycle.plan_ended(p, "sub_1", "pro")
+    assert outbox[-1]["subject"] == "Your StratLab plan has changed to Free" and "Pro plan now" not in outbox[-1]["text"]
+    plans._promo.update(read_at=time.monotonic(), until=datetime(2100, 1, 1, tzinfo=timezone.utc))      # the launch offer is on
+    assert lifecycle.plan_ended(p, "sub_2", "pro")
+    assert outbox[-1]["subject"] == "Your StratLab subscription has stopped" and "launch offer" in outbox[-1]["text"]
+
+
+def test_an_offer_ending_seconds_after_midnight_is_said_as_the_day_before(w):
+    end = datetime(2026, 10, 22, 0, 0, 30, tzinfo=IST)                    # 00:00:30 IST on Thu 22 Oct
+    assert lifecycle._end_text(end) == "at the end of Wed 21 Oct (India time)"
+    assert lifecycle._end_text(datetime(2026, 10, 22, 0, 1, tzinfo=IST)) == "on Thu 22 Oct at 12:01 am IST"
+    _, _, text = lifecycle.build("promo_end", {}, {"last_day": date(2026, 10, 21), "end": end})
+    assert "It ends at the end of Wed 21 Oct (India time)." in text and "22 Oct" not in text
+    p = user(created=NOW - timedelta(days=30))                            # the reminders go on the same days as the words
+    on = lambda d: datetime(2026, 10, d, 5, 0, tzinfo=timezone.utc)
+    assert lifecycle.due(p, on(20), {}, None, end)[0][1] == "promo_before:2026-10-21"
+    assert lifecycle.due(p, on(21), {}, None, end)[0][1] == "promo_end:2026-10-21"

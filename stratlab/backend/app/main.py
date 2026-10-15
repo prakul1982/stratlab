@@ -5,7 +5,6 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import math
-import unicodedata
 import logging
 from html import escape as html_escape
 import re
@@ -956,13 +955,16 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
     new_chat = (req.telegram_chat_id or "").strip()
-    chat_changed = bool(new_chat) and new_chat.lower() != (profile.get("telegram_chat_id") or "").strip().lower()
+    old_chat = (profile.get("telegram_chat_id") or "").strip().lower()
+    chat_changed = bool(new_chat) and new_chat.lower() != old_chat
     if chat_changed and alerts.telegram_ready():
         throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
     code_sent = None
-    if chat_changed or (req.telegram_chat_id is not None and not new_chat):       # a new chat, or the chat cleared
+    # a new chat, or the saved chat cleared: the save above clears it for "" and for null (the form sends null for an
+    # emptied field) alike, so the verification goes with it
+    if chat_changed or (not new_chat and old_chat):
         alerts.reset_telegram(profile["id"])       # a new chat starts unverified; nothing is sent there until its code is entered
     if chat_changed and alerts.telegram_ready():
         try:
@@ -1018,6 +1020,9 @@ def test_alert(profile=Depends(current_profile)):
     throttle(profile, "alert_test", 5, 3600, "You've sent 5 test alerts this hour. Try again later.")
     sent, failed = alerts.test(profile, admin.is_admin(profile))
     if not sent and not failed:
+        if profile.get("telegram_chat_id") and alerts.telegram_ready() and not alerts.telegram_verified(profile):
+            err(400, "no_channels", "Your Telegram chat isn't confirmed yet: enter the code sent to it on this page, "
+                "or send a new code. Test alerts go only to a confirmed chat.")
         err(400, "no_channels", "Turn on phone notifications on this device, or add a Telegram chat ID"
             + (" or an email" if alerts.email_ready() else "") + ", first.")
     if not sent:
@@ -1111,7 +1116,8 @@ def _confirm_token(t: str):
     got = mail_tokens.read(t, "confirm")
     if not got or not got[1]:
         return None
-    current = alerts.newsletter_email(db.get_profile(got[0]))
+    prof = db.find_profile(got[0])            # a link for a deleted account confirms nothing and makes no new profile
+    current = alerts.newsletter_email(prof) if prof else None
     return got if current and current.strip().lower() == got[1].strip().lower() else None
 
 
@@ -3272,7 +3278,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if "stratlab" in re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", req.author).casefold()) and not admin.is_admin(profile):
+    if library.reserved_author(req.author) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
     throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
@@ -3717,7 +3723,7 @@ def stock_page_bars(region: str, co: dict) -> list[dict]:
         # own candles are read as before (official_close.widen_to_range)
         try:
             rep = official_close.ranges() or {}
-            bars = stock_pages.fit_to_exchange_range(bars, (rep.get("rows") or {}).get(official_close.base_symbol(sym)), rep.get("day"))
+            bars = stock_pages.fit_to_exchange_range(bars, official_close.range_row(sym, rep), rep.get("day"))
         except Exception as e:                       # the candles as they are rather than none
             print("52-week report for the public page:", sym, str(e)[:120])
     return bars
@@ -5055,7 +5061,7 @@ def admin_sessions(_=Depends(admin.admin_profile)):
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
             out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
-                        "market": market, "kind": (r.get("strategy") or {}).get("kind") or "rules", "started_at": r.get("started_at"),
+                        "market": market, "kind": manager.row_kind(r), "started_at": r.get("started_at"),
                         "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
                         "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
     return out

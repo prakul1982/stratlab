@@ -44,10 +44,17 @@ export interface Company {
 /** What a lean company page leaves for its second request. */
 export interface CompanyMore { news: NewsItem[]; wiki: Company["about"]["wiki"]; peers: string[]; sources: SourceStatus[] }
 
-/** A lean company answer with what it left out put in: the news, the encyclopedia entry, the peers, and the sources' status. */
+/** A lean company answer with what it left out put in: the news, the encyclopedia entry, the peers, and the sources' status.
+ * The two answers' sources are merged by label: one that failed in either request shows as failed (so a news read that
+ * failed only in the second still says the news is missing). */
 export function withMore(c: Company, m: CompanyMore): Company {
-  const seen = new Set(c.sources.map((s) => s.source));
-  return { ...c, news: m.news, peers: m.peers, about: { ...c.about, wiki: m.wiki }, sources: [...c.sources, ...m.sources.filter((s) => !seen.has(s.source))], lazy: undefined };
+  const sources = [...c.sources];
+  for (const s of m.sources) {
+    const i = sources.findIndex((x) => x.source === s.source);
+    if (i < 0) sources.push(s);
+    else if (sources[i].ok && !s.ok) sources[i] = s;
+  }
+  return { ...c, news: m.news, peers: m.peers, about: { ...c.about, wiki: m.wiki }, sources, lazy: undefined };
 }
 
 export interface Idea { title: string; text: string; why: string }
@@ -226,6 +233,21 @@ function loadWatch(): Promise<WatchItem[]> {
 /** What an add / remove / save says when the saved list could not be read first. */
 export const WATCH_UNREAD = "Your watchlist couldn't be read, so nothing was changed. Try again.";
 
+/** The saved list with a company added (`want` true) only when it isn't on it, or removed only when it is; the same list
+ * (and `changed` false) when it already is as asked. */
+export function watchChange(cur: WatchItem[], item: WatchItem, want: boolean): { list: WatchItem[]; changed: boolean } {
+  const same = (i: WatchItem) => i.region === item.region && i.symbol === item.symbol;
+  const on = cur.some(same);
+  if (on === want) return { list: cur, changed: false };
+  return { list: want ? [...cur, item] : cur.filter((i) => !same(i)), changed: true };
+}
+
+/** What a press of Watch or Remove says, from what happened to the saved list. */
+export function watchNote(symbol: string, want: boolean, changed: boolean): string {
+  if (want) return changed ? `${symbol} added to your watchlist.` : `${symbol} is already on your watchlist.`;
+  return changed ? `${symbol} removed from your watchlist.` : `${symbol} isn't on your watchlist.`;
+}
+
 export function useWatchlist() {
   const [items, setItems] = useState<WatchItem[] | null>(watchCache);
   const [failed, setFailed] = useState(false);
@@ -242,15 +264,20 @@ export function useWatchlist() {
     let cur: WatchItem[];
     try { cur = await loadWatch(); } catch { throw new Error(WATCH_UNREAD); }
     const list = typeof next === "function" ? next(cur) : next;
+    if (list === cur) return;                     // nothing to change: no save
     const prev = watchCache;
     watchCache = list; watchSubs.forEach((f) => f(list));
     try { await api("/research/watchlist", { method: "PUT", body: { items: list } }); }
     catch (e) { watchCache = prev; watchSubs.forEach((f) => f(prev ?? [])); throw e; }
   }, []);
   const has = (r: Region, s: string) => !!items?.some((i) => i.region === r && i.symbol === s);
-  const toggle = (item: WatchItem) => save((cur) => cur.some((i) => i.region === item.region && i.symbol === item.symbol)
-    ? cur.filter((i) => !(i.region === item.region && i.symbol === item.symbol))
-    : [...cur, item]);
+  /** Adds (`want` true) or removes a company, as the reader asked, on the list as read: a press of "Watch" on a list not
+   * yet read never removes a company already saved. Resolves to whether the list changed (watchNote says which). */
+  const toggle = async (item: WatchItem, want: boolean): Promise<boolean> => {
+    let changed = false;
+    await save((cur) => { const r = watchChange(cur, item, want); changed = r.changed; return r.list; });
+    return changed;
+  };
   /** `failed`: the first read did not work and there is nothing to show; `retry` reads it again. */
   return { items, has, toggle, save, failed: failed && items === null, retry: () => setTries((n) => n + 1) };
 }

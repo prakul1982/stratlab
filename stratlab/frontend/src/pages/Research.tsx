@@ -6,7 +6,7 @@ import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, sig
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
-  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, withMore,
+  REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
   type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
 } from "../lib/research";
 import {
@@ -666,8 +666,8 @@ export function WatchlistPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
   const add = (symbol: string, r: Region) => {
-    if (has(r, symbol)) { notify(`${symbol} is already in your watchlist.`); return; }
-    toggle({ region: r, symbol, name: null }).then(() => notify(`${symbol} added to your watchlist.`)).catch(fail);
+    if (has(r, symbol)) { notify(watchNote(symbol, true, false)); return; }
+    toggle({ region: r, symbol, name: null }, true).then((changed) => notify(watchNote(symbol, true, changed))).catch(fail);
   };
   return (
     <div className="k-page">
@@ -699,7 +699,7 @@ export function WatchlistPage() {
               } },
               { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
-              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w).catch(fail)}>Remove</button> },
+              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w, false).catch(fail)}>Remove</button> },
             ]} />
         </Card>
       )}

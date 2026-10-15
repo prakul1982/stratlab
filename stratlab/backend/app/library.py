@@ -19,6 +19,24 @@ REASONS = {"spam": "Spam or advertising", "offensive": "Offensive or abusive", "
 HIDE_AFTER = 3          # reports from different people before an entry is hidden until the owner of the site looks
 MODERATION = ("reports", "hidden", "hidden_by")
 
+# Letters from other scripts that look like Latin ones (after casefold, so capitals are covered by their small letters):
+# Cyrillic а е о р с у х ѕ і ј ԁ ԛ ԝ ӏ and the small forms of the capitals В К М Н Т, Greek ο α ν ι κ τ β ε η, and a 1
+# or | for an l. Only used to tell whether a name spells StratLab: an ordinary name in another script is untouched.
+_LOOKALIKE = str.maketrans({
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "ѕ": "s", "і": "i", "ј": "j", "ԁ": "d",
+    "ԛ": "q", "ԝ": "w", "ӏ": "l", "в": "b", "к": "k", "м": "m", "н": "h", "т": "t",
+    "ο": "o", "α": "a", "ν": "v", "ι": "i", "κ": "k", "τ": "t", "β": "b", "ε": "e", "η": "n",
+    "1": "l", "|": "l"})
+
+
+def reserved_author(name: str) -> bool:
+    """Whether an author name spells StratLab, however it is written: full-width or styled letters (NFKC), accents,
+    look-alike letters from Cyrillic or Greek, and any spaces or punctuation in between."""
+    import unicodedata
+    t = unicodedata.normalize("NFKC", str(name or "")).casefold()
+    t = "".join(c for c in unicodedata.normalize("NFKD", t) if not unicodedata.combining(c))
+    return "stratlab" in re.sub(r"[\W_]+", "", t.translate(_LOOKALIKE))
+
 
 def _unseen(exp: dict) -> float | None:
     for c in (exp.get("verdict") or {}).get("checks") or []:

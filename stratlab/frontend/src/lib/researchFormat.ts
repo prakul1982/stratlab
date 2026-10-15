@@ -149,20 +149,27 @@ const WHAT_BY_LABEL: Record<string, string> = {
   "News": "news", "Company profile": "the company profile",
 };
 
-/** What the failed sources were for ("prices", "news", "the company profile", "financials"), each once, in order. */
+// a failed source whose label isn't one of the above, and that doesn't say what it was for
+const OTHER = "other data";
+
+/** What the failed sources were for ("prices", "news", "the company profile", "financials"), each once, in order; "other
+ * data" for a source that doesn't say. */
 export function missingWhat(sources: SourceLike[]): string[] {
   const out: string[] = [];
   for (const s of sources) {
     if (s.ok) continue;
-    for (const w of s.what?.length ? s.what : [WHAT_BY_LABEL[s.source] ?? "some data"]) if (!out.includes(w)) out.push(w);
+    for (const w of s.what?.length ? s.what : [WHAT_BY_LABEL[s.source] ?? OTHER]) if (!out.includes(w)) out.push(w);
   }
   return out;
 }
 
-/** "Some data is missing: prices and news." Never a provider's name or its error text. */
+/** "Some data is missing: prices and news." Never a provider's name or its error text. A source that doesn't say what
+ * it was for is "other data" beside named ones ("prices and other data"), and alone the line names nothing. */
 export function missingLine(sources: SourceLike[]): string {
-  const w = missingWhat(sources);
-  return `Some data is missing: ${w.length > 1 ? `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}` : w[0] ?? "some data"}.`;
+  const got = missingWhat(sources);
+  const w = [...got.filter((x) => x !== OTHER), ...(got.includes(OTHER) ? [OTHER] : [])];
+  if (!w.length || (w.length === 1 && w[0] === OTHER)) return "Some data is missing.";
+  return `Some data is missing: ${w.length > 1 ? `${w.slice(0, -1).join(", ")} and ${w[w.length - 1]}` : w[0]}.`;
 }
 
 const LINK_BY_KIND: Record<string, string> = { quote: "Quote page", profile: "Profile", financials: "Financials" };
