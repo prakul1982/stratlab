@@ -60,7 +60,7 @@ NOTES = [
     "Brokerage and other charges in the files are added to the cost or taken off the sale. STT is not deductible from capital gains.",
     "A bonus share costs nothing and is held from the bonus date. A split keeps the cost and the purchase date.",
     "Intraday trades (bought and sold the same day) are speculative business income, taxed at your slab rate. Where the "
-    "files have trade times, a sale before the day's buy comes out of the shares already held. Intraday STT "
+    "files have trade times, a sale made before that day's purchase comes out of the shares already held. Intraday STT "
     "is deducted (section 36(1)(xv)): the figure in your file, or 0.025% of the sale value where the file has none.",
     "F&O, commodity and currency trades are non-speculative business income, taxed at your slab rate. The charges in "
     "your broker's file (including STT and CTT, which business income can deduct) are taken off the result.",

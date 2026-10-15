@@ -57,7 +57,8 @@ export function trendValue(v: number, unit: string): string {
 export function trendShort(v: number, unit: string): string | null {
   if (/billion|lakh/i.test(unit) || !/cr/i.test(unit) || Math.abs(v) < 10000) return null;
   const a = Math.abs(v) / 1000;
-  return minus(`${v < 0 ? "-" : ""}${a >= 100 ? Math.round(a) : a.toFixed(1)}k`);
+  const r = a >= 100 ? Math.round(a) : Math.round(a * 10) / 10;           // "40k", never "40.0k"
+  return minus(`${v < 0 ? "-" : ""}${r}k`);
 }
 
 export function metricText(m: MetricItem, currency: string): string {
