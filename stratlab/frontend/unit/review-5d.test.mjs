@@ -35,6 +35,10 @@ test("B3: Account and the connection check name the real plan; the badge alone k
   const me = { plan: "pro", paid_plan: "free", plan_info: { name: "Pro" } };
   assert.equal(planLabel(me), "Free");
   assert.equal(planLabel({ ...me, paid_plan: "basic" }), "Basic");
+  // Basic earned through invites is the plan they have (paid_plan stays "free"); the launch offer still shows the paid one
+  const invited = { plan: "basic", paid_plan: "free", plan_info: { name: "Basic" }, free_basic_until: "2026-12-01", promo: null };
+  assert.equal(planLabel(invited), "Basic");
+  assert.equal(planLabel({ ...invited, plan: "pro", promo: { until: "2026-10-22" } }), "Free");
   const acc = src("pages/AccountPage.tsx");
   assert.doesNotMatch(acc, /<dd>\{me\.plan_info\.name\}/);
   assert.match(acc, /<dd>\{planName\}<\/dd>/);

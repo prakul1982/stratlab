@@ -32,7 +32,9 @@ export function planRun(me: Pick<Me, "plan" | "paid_plan" | "billing" | "view_as
 const PLAN_LABEL: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
 
 /** The plan they have (from `paid_plan`), not the launch offer's Pro that `plan` and `plan_info` show for everyone then. */
-export function planLabel(me: Pick<Me, "plan" | "paid_plan" | "plan_info">): string {
+export function planLabel(me: Pick<Me, "plan" | "paid_plan" | "plan_info"> & Partial<Pick<Me, "promo" | "free_basic_until">>): string {
+  // Basic earned through invites is the plan they have, though nothing is paid (paid_plan is "free" then)
+  if (me.free_basic_until && !me.promo) return PLAN_LABEL.basic ?? "Basic";
   return PLAN_LABEL[me.paid_plan ?? me.plan] ?? me.plan_info.name;
 }
 
