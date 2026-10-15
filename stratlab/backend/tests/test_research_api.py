@@ -12,6 +12,7 @@ from app.intel import ai as A
 from app.intel import routes
 from app.intel.company import Research
 from app.intel.finnhub import Finnhub
+from app.intel.net import RateLimit
 from app.intel.news import GoogleNews, Wikipedia
 from app.intel.screener import Screener
 from app.intel.yahoo import Yahoo
@@ -54,6 +55,11 @@ def api(monkeypatch):
     hub = Research(KiteService(), finnhub=Finnhub(transport=fake_finnhub()), yahoo=Yahoo(transport=fake_yahoo()),
                    screener=Screener(transport=fake_screener()), news=GoogleNews(transport=fake_news()),
                    wiki=Wikipedia(transport=fake_wiki()))
+    # the sources' pacing, off for the test: three company reads in a row emptied the fake company source's bucket and,
+    # with a request's 1 s wait, MSFT's read was "busy" (503) on some runs and not others
+    for src in (hub.finnhub, hub.yahoo, hub.screener, hub.news, hub.wiki):
+        if hasattr(src, "limit"):
+            monkeypatch.setattr(src, "limit", RateLimit(10**7, 10**6))
     # its own list of US companies: the app's list is whatever other tests loaded (the SEC list or the stored pages)
     own = suggest.Suggester({"US": lambda: suggest.us_rows(US_LIST), "IN": lambda: []}, {"US": dict, "IN": dict})
     hub.local_search = lambda q, region: own.search_ranked(q, region, 10)
