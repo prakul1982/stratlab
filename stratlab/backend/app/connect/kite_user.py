@@ -256,6 +256,14 @@ def disconnect(uid: str) -> None:
         except Exception:
             pass
     state.drop(uid, "kite")
+    from .. import holdings
+
+    def untag(before):          # what was read stays as holdings, but no longer blocks a newer statement
+        if not any(i.get("via") == "kite" for i in before["items"]):
+            return None
+        return ([{k: v for k, v in i.items() if k != "via"} if i.get("via") == "kite" else i for i in before["items"]],
+                before.get("source") or "Zerodha Kite", True)
+    holdings.update(uid, untag)
 
 
 def link_shared(uid: str, profile: dict) -> dict | None:

@@ -3045,8 +3045,19 @@ def _nw_gold():
         prov = markets.provider("MCX")
         inst = prov.instrument("GOLD") if prov and prov.ready() else None
         p = prov.ltp(inst) if inst else None
-        return (p / 10, datetime.now(timezone.utc).isoformat(timespec="minutes")) if p and p > 0 else None
+        return (p / 10, _gold_read_at()) if p and p > 0 else None
     return _nw_cached("gold", read)
+
+
+def _gold_read_at(now: datetime | None = None) -> str:
+    """When the gold price is from: now while the commodity exchange trades, else the time of its last close."""
+    from .data.calendar import is_trading_day
+    now = now or datetime.now(timezone.utc)
+    ist = now.astimezone(ZoneInfo("Asia/Kolkata"))
+    close = stock_pages.close_of("MCX", ist.date())
+    if is_trading_day("MCX", ist.date()) and close and "09:00" <= ist.strftime("%H:%M") < close:
+        return now.isoformat(timespec="minutes")
+    return stock_pages.last_close("MCX", now)[1].isoformat(timespec="minutes")
 
 
 def _nw_crypto(coin: str):

@@ -30,3 +30,8 @@ export function syncedNote(via: string): string {
   return `Synced from ${name}. A quantity you type is kept: the shares above ${name}'s are kept as your own, through its next read. ` +
     `An average price typed alone is replaced by ${name}'s average on its next read.`;
 }
+
+/** Whether to say "live prices are offline": prices are missing and at least one stock really has no value to show. */
+export function unpricedNote(prices: boolean, rows: { value: number | null }[]): boolean {
+  return !prices && rows.some((r) => r.value == null);
+}

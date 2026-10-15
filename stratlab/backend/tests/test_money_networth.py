@@ -314,7 +314,7 @@ def test_snapshot_on_the_first_of_each_month_once(w):
     assert job.tick(datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc)) == 0       # before 4 pm
     assert job.tick(first) == 1 and job.tick(first) == 0
     assert job.tick(datetime(2026, 11, 2, 11, 0, tzinfo=timezone.utc)) == 0      # the month is done
-    snap = [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]
+    snap = [h for h in nw.history("u-pro") if h["d"] == "2026-10-30"]
     assert snap and snap[0]["why"] == "month" and snap[0]["net"] == 7000
 
 
@@ -355,7 +355,7 @@ def test_a_partial_total_is_named_and_only_the_month_is_recorded_flagged(w, monk
     assert v["totals"]["partial"] == ["My Holdings couldn't be read"] and nw.history("u-pro") == before
     # the month's snapshot is taken anyway, flagged with what's missing (a fund never valued mustn't stop the history)
     assert main.networth_job.tick(datetime(2026, 11, 1, 11, 0, tzinfo=timezone.utc)) == 1
-    snap = [h for h in nw.history("u-pro") if h["d"] == "2026-11-01"]
+    snap = [h for h in nw.history("u-pro") if h["d"] == "2026-10-30"]
     assert len(snap) == 1 and snap[0]["partial"] == ["My Holdings couldn't be read"] and snap[0]["why"] == "month"
     t = nw.build([], {"in": 100.0, "us": 0, "count": 2, "us_no_rate": True}, {"value": 500.0, "at_cost": 1, "missing": 0}, nw.Prices())
     assert t["totals"]["partial"] == ["US stocks (no dollar rate right now)"]
@@ -551,7 +551,7 @@ def test_a_stock_at_cost_keeps_the_history_going(w):
     v = add(c, {"kind": "cash", "name": "x", "value": 1000})
     assert v["history"] and (v["history"][-1]["why"], v["history"][-1].get("partial"), v["history"][-1]["net"]) == ("change", None, v["totals"]["net"])
     assert nw.Job(main._nw_value_of).tick(datetime(2026, 11, 1, 11, 30, tzinfo=timezone.utc)) == 1
-    assert [(h["d"], h["why"], h.get("partial")) for h in nw.history("u-pro")][-1] == ("2026-11-01", "month", None)
+    assert [(h["d"], h["why"], h.get("partial")) for h in nw.history("u-pro")][-1] == ("2026-10-30", "month", None)
 
 
 def test_a_holding_with_nothing_to_value_it_by_is_named_and_the_history_goes_on_marked(w, monkeypatch):

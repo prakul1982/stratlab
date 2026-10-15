@@ -341,6 +341,9 @@ def ingest(uid: str, root: ET.Element) -> dict:
     fs, sp = fills(root), splits(root)
     n = read_trades(uid, fs, sp)
     why = sync.note(got, "Interactive Brokers")      # an empty statement or an unmatched line keeps the US holdings read before
+    if left:
+        more = f"{left} {'position' if left == 1 else 'positions'} in another currency or asset type {'isn' if left == 1 else 'aren'}'t counted."
+        why = f"{why} {more}" if why else more
     state.update(uid, "ibkr", synced_at=state.now(), status="partial" if why else "ok", detail=why, positions=got["count"], trades=n)
     return {"positions": got["count"], "unmatched": got["unmatched_count"], "left_out": left, "trades_added": n}
 

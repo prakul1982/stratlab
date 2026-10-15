@@ -487,7 +487,7 @@ def parse(data: bytes, filename: str = "") -> dict:
     for n, row in enumerate(body, start=first):
         sym, isin, nm = _cell(row, cols.get("symbol")), _cell(row, cols.get("isin")).upper(), _cell(row, cols.get("name"))
         text = " · ".join(c for c in (sym, isin, nm) if c)[:80]
-        if not text or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym or nm or ""):
+        if not text or re.match(r"(?i)^(total|grand total|net total|sub ?total)\b", sym or nm or ""):
             continue                        # blank lines, totals and notes under the table
         qty = number(_cell(row, cols.get("qty")))
         if qty is not None:
@@ -715,7 +715,7 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
     for n, row in enumerate(rows[at + 1:], start=at + 2):
         sym, isin, nm = _cell(row, cols.get("symbol")), _cell(row, cols.get("isin")).upper(), _cell(row, cols.get("name"))
         text = " · ".join(c for c in (sym, isin, nm) if c)[:80]
-        if not text or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym or nm or ""):
+        if not text or re.match(r"(?i)^(total|grand total|net total|sub ?total)\b", sym or nm or ""):
             continue
         seg = _cell(row, cols.get("segment"))
         if not derivatives and ((seg and NOT_EQUITY.match(seg)) or (not ISIN.match(isin) and DERIVATIVE.search(sym.upper()))):
@@ -1289,7 +1289,7 @@ def _biz_rows(rows, filename: str, seg: str | None, acc: _Business, label: str) 
         if line - len(head) > FNO_MAX_ROWS:
             raise FileError(f"{label} has more than {FNO_MAX_ROWS:,} lines. Upload it a quarter at a time.")
         sym = _cell(row, cols.get("symbol")).upper()
-        if not sym or re.match(r"(?i)^(total|grand total|sub ?total)\b", sym):
+        if not sym or re.match(r"(?i)^(total|grand total|net total|sub ?total)\b", sym):
             continue
         d = day(_cell(row, cols.get("date")))
         if not d:

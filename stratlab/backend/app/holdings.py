@@ -55,6 +55,16 @@ def load(uid: str) -> dict:
 ADJUST_KEYS = ("since", "applied", "dismissed", "adjusted")      # what corporate actions keep on a holding
 
 
+def pct_split(values: list[float]) -> list[float]:
+    """Shares of the total in tenths of a percent, rounded by largest remainder so they add to exactly 100."""
+    total = sum(values)
+    raw = [v / total * 1000 for v in values]
+    out = [int(x) for x in raw]
+    for i in sorted(range(len(raw)), key=lambda i: raw[i] - out[i], reverse=True)[:1000 - sum(out)]:
+        out[i] += 1
+    return [x / 10 for x in out]
+
+
 def stamp(items: list[dict], before: list[dict], day: str) -> list[dict]:
     """Each holding with the day its quantity was saved (`since`): kept from before while the quantity is the same,
     today's date when it is new or changed. A bonus or split from that day on is offered as an adjustment."""
@@ -468,18 +478,21 @@ def view(items: list[dict], quotes: dict[str, dict], us_quotes: dict[str, dict] 
                                       and r["day"] is not None and rate(r) is not None})
     # weights and the sector mix are shares of everything held that has a value (a position without a buy price too)
     value = sum((r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r) for r in rows if rate(r) is not None)
+    shown = [r for r in rows if rate(r) is not None]
+    shares = pct_split([((r["value"] if r["value"] is not None else r["invested"]) or 0) * rate(r) for r in shown]) if value else []
     for r in rows:
-        fx = rate(r)
-        weight = r["value"] if r["value"] is not None else r["invested"]
-        r["weight"] = _r((weight or 0) * fx / value * 100, 1) if value and fx is not None else None
+        r["weight"] = None
+    for r, w in zip(shown, shares):
+        r["weight"] = w
     rows.sort(key=lambda r: -((r["value"] if r["value"] is not None else r["invested"] or 0) * (rate(r) or 0)))
     sectors: dict[str, float] = {}
     for r in rows:
         if rate(r) is not None:
             sectors[r["sector"]] = sectors.get(r["sector"], 0) + (r["value"] if r["value"] is not None else r["invested"] or 0) * rate(r)
-    allocation = [{"sector": s, "value": _r(v), "pct": _r(v / value * 100, 1) if value else None,
-                   "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
-                  for s, v in sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))]      # "Not classified" last, whatever its size
+    ordered = sorted(sectors.items(), key=lambda kv: (kv[0] == UNCLASSIFIED, -kv[1]))      # "Not classified" last, whatever its size
+    pcts = pct_split([v for _, v in ordered]) if value and ordered else [None] * len(ordered)
+    allocation = [{"sector": s, "value": _r(v), "pct": p, "count": sum(1 for r in rows if r["sector"] == s and rate(r) is not None)}
+                  for (s, v), p in zip(ordered, pcts)]
     us = [r for r in rows if r["market"] == "US"]
     totals["count"] = len(rows)
     return {"rows": rows, "allocation": allocation, "totals": totals,

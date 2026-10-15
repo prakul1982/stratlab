@@ -15,7 +15,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Badge, BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, PlanNote, Seg, Signed, Skeleton, Stat, StatRow, StockPicker, UploadButton, type Column } from "../components/kit";
 import { PlanInline } from "../components/PlanInterest";
 import { zerodhaEmpty, type ZerodhaRead } from "../lib/zerodha";
-import { dollarRate, editChange, syncedNote, type Change, type Mkt } from "../lib/holdingsEdit";
+import { dollarRate, editChange, syncedNote, unpricedNote, type Change, type Mkt } from "../lib/holdingsEdit";
 
 /* /holdings: the stocks you hold, valued at today's prices: each one's value, gain or loss, trend and filings, the sector
  * mix, dividends and corporate actions, from a broker file or typed in. Facts, not advice. Built from the kit
@@ -263,7 +263,7 @@ export function HoldingsPage() {
             </StatRow>
             <p className="k-note">
               {t.count} stock{t.count === 1 ? "" : "s"}{view.source ? ` · from ${sourceWords(view.source)}` : ""}{view.updated_at ? ` · updated ${ago(view.updated_at)}` : ""}
-              {!view.prices && " · Live prices are offline right now, so values are shown at cost."}
+              {unpricedNote(view.prices, rows) && " · Live prices are offline right now, so values are shown at cost."}
             </p>
             {t.no_cost && (
               <p className="k-note">
