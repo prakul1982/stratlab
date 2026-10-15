@@ -72,7 +72,7 @@ from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
-from .intel.net import TTLCache
+from .intel.net import RequestWaits, TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
 from .intel.net import SourceError
@@ -150,7 +150,8 @@ def warm_caches():
     """Fill the caches the busiest pages share (instrument lists, the NIFTY 50 and US scans, sector rotation, the
     option contracts), so the first people after a restart or the morning login don't all wait on them at once.
     Each step is independent; one failing (a source down, the broker not logged in yet) skips only itself."""
-    steps = [("company list", lambda: isin_list()),         # full names and ISINs, for search by name
+    steps = [("stored company pages", db.warm_mirror),     # read whole once, here rather than on someone's page view
+             ("company list", lambda: isin_list()),         # full names and ISINs, for search by name
              ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
              ("market list", lambda: markets.markets()),
@@ -294,7 +295,8 @@ _jobs_started = False
 def lead():
     """This container holds the lease: start everything that must run in one place only, once."""
     global _jobs_started
-    db.forget_mirror()           # the settings the old container wrote since this one booted
+    db.reload_mirror()           # the settings the old container wrote since this one booted (read in the background,
+                                 # the copy there is served meanwhile)
     try:                         # ...among them today's Kite token, when it logged in after this one booted
         if kite.token_day != kite_today():      # (a token of today's that was cancelled stays off)
             kite.load_saved_token()
@@ -517,7 +519,8 @@ def _load_errors():
         print("could not load errors:", x)
 
 
-app.add_middleware(db.SettingsMemo)   # innermost: each request reads a setting from the database once
+app.add_middleware(RequestWaits)      # innermost: a request's source calls don't sleep long on the rate limit
+app.add_middleware(db.SettingsMemo)   # each request reads a setting from the database once
 app.add_middleware(HeavyGate)   # inside the guard: heavy work takes turns, ordinary pages don't wait behind it
 app.add_middleware(Guard)   # size cap, rate limit, security headers; inside CORS so its replies stay readable
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,

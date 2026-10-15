@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from .. import name_search
 from ..kite_service import KiteService
 from .finnhub import Finnhub
-from .net import NotFound, SourceError, num
+from .net import NotFound, SourceError, num, rate_wait, with_rate_wait
 from .news import GoogleNews, Wikipedia, company_headline, mentions, plain_headline
 from .screener import Screener, clean_profile, summary as scr_summary
 from .yahoo import Yahoo
@@ -434,7 +434,16 @@ class Research:
     def _run(tasks: dict) -> tuple[dict, list[dict]]:
         """Run {name: (source_name, fn)} in parallel; returns results and a per-source status list. A failed source also
         carries `what`: what its tasks were for ("prices", "news"), so a page can say what is missing without the source's name."""
-        futures = {k: (src, _pool.submit(fn)) for k, (src, fn) in tasks.items()}
+        return Research._collect(Research._start(tasks))
+
+    @staticmethod
+    def _start(tasks: dict) -> dict:
+        """Start {name: (source_name, fn)} on the pool; _collect waits for them."""
+        wait = rate_wait()          # a request's short rate-limit wait goes with its tasks onto the pool's threads
+        return {k: (src, _pool.submit(with_rate_wait(wait, fn))) for k, (src, fn) in tasks.items()}
+
+    @staticmethod
+    def _collect(futures: dict) -> tuple[dict, list[dict]]:
         results, status, lost = {}, {}, {}
         for k, (src, f) in futures.items():
             try:
@@ -752,23 +761,30 @@ class Research:
 
     def _company_us(self, sym: str, lean: bool = False) -> dict:
         fh = self.finnhub
-        p = fh.profile(sym)
-        if not p.get("name"):
-            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         tasks = {
             "listing": ("Yahoo Finance", lambda: self.yahoo.meta(sym)),
             "q": ("Finnhub", lambda: fh.quote(sym)), "m": ("Finnhub", lambda: fh.metrics(sym)),
             "news": ("Finnhub", lambda: fh.news(sym)), "peers": ("Finnhub", lambda: fh.peers(sym)),
             "rec": ("Finnhub", lambda: fh.recommendation(sym)), "earn": ("Finnhub", lambda: fh.earnings(sym)),
             "fin": ("Finnhub", lambda: fh.financials(sym)), "ins": ("Finnhub", lambda: fh.insider(sym)),
-            "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)), "wiki": ("Wikipedia", lambda: self.wiki.company(p["name"])),
+            "cal": ("Finnhub", lambda: fh.earnings_calendar(sym)),
             # the year's daily candles, for the 52-week range on the public page's rule (R13-008); the chart reads the same
             # (never a missing-data line of its own: without them the fundamentals' range stands)
             "k1y": ("Yahoo Finance", lambda: self._quiet_candles(sym)),
         }
         if lean:
-            tasks = {k: v for k, v in tasks.items() if k not in ("news", "wiki")}
-        r, sources = self._run(tasks)
+            tasks.pop("news")
+        # the profile is read here while the others run (R11E: it went first and alone); only the encyclopedia entry
+        # needs its name, so that one starts once it's in
+        started = self._start(tasks)
+        p = fh.profile(sym)
+        if not p.get("name"):
+            raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
+        if not lean:
+            k1y = started.pop("k1y")             # kept last, the order the tasks always had (the sources list follows it)
+            started.update(self._start({"wiki": ("Wikipedia", lambda: self.wiki.company(p["name"]))}))
+            started["k1y"] = k1y
+        r, sources = self._collect(started)
         q, M = r["q"] or {}, r["m"] or {}
         # the yearly results are in the currency the company reports in (Eni: euros), not the US listing's dollars
         trend = self._us_trend(r["fin"], (p.get("currency") or "USD").upper())

@@ -333,6 +333,7 @@ def _pick(pages: dict) -> dict:
 
 class Screener(Source):
     name = "Screener.in"
+    STALE_FOR = 0          # a page it sent can be judged a block page after the fact (_page drops it): no fallback copy
 
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://www.screener.in", per_minute=20, burst=6, transport=transport,

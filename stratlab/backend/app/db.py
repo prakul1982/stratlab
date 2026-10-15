@@ -1,6 +1,7 @@
 """Supabase access with the service-role key (bypasses RLS, server only)."""
 import contextvars
 import json
+import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -10,6 +11,8 @@ from supabase.lib.client_options import SyncClientOptions
 from .config import settings
 from . import http_retry, market_store
 from .flight import Flights
+
+log = logging.getLogger(__name__)
 
 _client: Client | None = None
 _client_lock = threading.Lock()
@@ -351,7 +354,10 @@ class SettingsMemo:
 
 def _read_setting(key: str) -> str | None:
     if _mirrored(key):
-        return _mirror_rows(_mirrored(key)).get(key)
+        rows = _mirror_rows(_mirrored(key), wait=False)
+        if rows is not None:
+            return rows.get(key)
+        # no copy yet (warm_caches reads it at startup): this one key from the database, not the whole prefix
     ms = _market(key)
     if ms is not None:
         v = ms.get(key)
@@ -570,31 +576,51 @@ def _all_from_db(prefix: str, page: int = 1000) -> list[tuple[str, str]]:
 # hours picks up anything written elsewhere (another instance during a deploy's overlap).
 MIRRORED = ("stocks:",)
 MIRROR_FOR = 6 * 3600
+MIRROR_RETRY = 60                       # seconds after a failed background read before the next one is tried
 _mirror: dict = {}                      # prefix -> {"at": monotonic time read, "client": id of the client, "rows": {key: value}}
-_mirror_lock = threading.Lock()         # guards _mirror and _mirror_log
+_mirror_lock = threading.Lock()         # guards _mirror, _mirror_log, _mirror_reloading and _mirror_retry_at
 _mirror_loading = threading.Lock()      # one full read at a time
 _mirror_log: dict | None = None         # while a full read runs: the writes made meanwhile, laid over it when it lands
+_mirror_reloading: set = set()          # prefixes with a background read under way
+_mirror_retry_at: dict = {}             # prefix -> monotonic time before which a failed background read isn't tried again
 
 
 def _mirrored(key_or_prefix: str) -> str | None:
     return next((p for p in MIRRORED if key_or_prefix.startswith(p)), None)
 
 
+def _mirror_usable(m: dict | None) -> bool:
+    return bool(m) and m["client"] == id(sb())
+
+
 def _mirror_fresh(m: dict | None) -> bool:
-    return bool(m) and m["client"] == id(sb()) and time.monotonic() - m["at"] < MIRROR_FOR
+    return _mirror_usable(m) and time.monotonic() - m["at"] < MIRROR_FOR
 
 
-def _mirror_rows(prefix: str) -> dict:
-    """Every setting under a mirrored prefix, read from the database at most once every MIRROR_FOR seconds."""
-    global _mirror_log
+def _mirror_rows(prefix: str, wait: bool = True) -> dict | None:
+    """Every setting under a mirrored prefix, read from the database at most once every MIRROR_FOR seconds. A copy past
+    that age is still served while one background thread reads the prefix again (a read that fails keeps the copy and
+    is logged), so no request waits on the full read. With no copy at all: wait=True reads it now (one read at a
+    time, the others wait for it); wait=False returns None, for a caller that needs one key and reads it itself."""
     with _mirror_lock:
         m = _mirror.get(prefix)
-        if _mirror_fresh(m):
+        if _mirror_usable(m):
+            if time.monotonic() - m["at"] >= MIRROR_FOR:
+                _start_reload(prefix)
             return m["rows"]
+    if not wait:
+        return None
+    return _load_mirror(prefix)
+
+
+def _load_mirror(prefix: str, since: float | None = None) -> dict:
+    """Read the prefix whole into the copy, unless a copy read at or after `since` (None: any copy) is there by the time
+    this read's turn comes. Raises when the read fails, leaving the copy there was."""
+    global _mirror_log
     with _mirror_loading:
         with _mirror_lock:
             m = _mirror.get(prefix)
-            if _mirror_fresh(m):
+            if _mirror_usable(m) and (since is None or m["at"] >= since):
                 return m["rows"]
             _mirror_log = {}
         client = id(sb())
@@ -614,6 +640,42 @@ def _mirror_rows(prefix: str) -> dict:
             _mirror_log = None
             _mirror[prefix] = {"at": time.monotonic(), "client": client, "rows": rows}
         return rows
+
+
+def _start_reload(prefix: str, force: bool = False) -> None:
+    """One background read of the prefix at a time (call with _mirror_lock held)."""
+    if prefix in _mirror_reloading or (not force and time.monotonic() < _mirror_retry_at.get(prefix, 0)):
+        return
+    _mirror_reloading.add(prefix)
+    threading.Thread(target=_reload, args=(prefix, time.monotonic()), daemon=True, name="settings-mirror").start()
+
+
+def _reload(prefix: str, since: float) -> None:
+    try:
+        _load_mirror(prefix, since)
+        with _mirror_lock:
+            _mirror_retry_at.pop(prefix, None)
+    except Exception as e:
+        log.error("settings mirror: could not read %s again; still serving the copy there was: %s", prefix, e)
+        with _mirror_lock:
+            _mirror_retry_at[prefix] = time.monotonic() + MIRROR_RETRY
+    finally:
+        with _mirror_lock:
+            _mirror_reloading.discard(prefix)
+
+
+def warm_mirror() -> None:
+    """Read every mirrored prefix now (at startup, so no request pays for it)."""
+    for p in MIRRORED:
+        _mirror_rows(p)
+
+
+def reload_mirror() -> None:
+    """Read every mirrored prefix again in the background, serving the copy there is meanwhile (on taking the lease: to
+    pick up what the old container wrote since this one booted)."""
+    with _mirror_lock:
+        for p in MIRRORED:
+            _start_reload(p, force=True)
 
 
 def _mirror_put(key: str, value: str | None) -> None:
@@ -636,6 +698,7 @@ def forget_mirror() -> None:
     """Drop the in-memory copies (the next read goes to the database)."""
     with _mirror_lock:
         _mirror.clear()
+        _mirror_retry_at.clear()
 
 
 # ---------- size ----------
