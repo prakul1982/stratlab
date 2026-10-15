@@ -1,54 +1,14 @@
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { money, monthYear, num, pct, TF_NAME } from "../lib/format";
-import { refName, opSay } from "../lib/rules";
-import type { Cond, Experiment, Strategy } from "../lib/types";
+import { money, monthYear, num, pct } from "../lib/format";
+import { changes } from "../lib/compare";
+import type { Experiment } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
 import { checksLine } from "../lib/tradeUi";
-import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
-
-const condText = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
-/** A strategy's direction as the notebook says it: "both ways" is its own, not "long". */
-const SIDE: Record<string, string> = { long: "long only", short: "short only", both: "both ways" };
-
-/** Plain-English list of what differs between two experiments' setups. */
-function changes(a: Experiment, b: Experiment): string[] {
-  const out: string[] = [];
-  const sa: Strategy = a.strategy, sb: Strategy = b.strategy;
-  if (a.instrument?.symbol !== b.instrument?.symbol) out.push(`Instrument: ${a.instrument?.symbol} → ${b.instrument?.symbol}`);
-  if ((sa.side ?? "long") !== (sb.side ?? "long")) out.push(`Direction: ${SIDE[sa.side ?? "long"]} → ${SIDE[sb.side ?? "long"]}`);
-  if (sa.tf !== sb.tf) out.push(`Candles: ${TF_NAME[sa.tf]} → ${TF_NAME[sb.tf]}`);
-  if (a.days !== b.days) out.push(`Test period: ${a.days} → ${b.days} days`);
-  const rules = (s: Strategy, k: "entry" | "exit") => (s[k] ?? []).map(condText).join(" · ") || "none";
-  if (rules(sa, "entry") !== rules(sb, "entry") || sa.entryJoin !== sb.entryJoin) out.push(`Entry: ${rules(sa, "entry")} → ${rules(sb, "entry")}`);
-  if (rules(sa, "exit") !== rules(sb, "exit")) out.push(`Exit: ${rules(sa, "exit")} → ${rules(sb, "exit")}`);
-  const risk: [keyof Strategy["risk"], string, string][] = [["sl", "Stop loss", "%"], ["tgt", "Target", "%"], ["trail", "Trailing stop", "%"],
-    ["maxBars", "Time limit", " candles"], ["riskPct", "Risk per trade", "%"], ["maxAlloc", "Most in one trade", "%"], ["capital", "Capital", ""],
-    ["brokerage", "Brokerage", ""], ["slippage", "Slippage", "%"]];
-  for (const [k, label, unit] of risk) {
-    const x = sa.risk[k] ?? 0, y = sb.risk[k] ?? 0;
-    if (x !== y) out.push(`${label}: ${x || "off"}${x ? unit : ""} → ${y || "off"}${y ? unit : ""}`);
-  }
-  const say = (v: unknown) => (v === "" || v == null || v === 0 ? "off" : String(v));
-  if ((sa.risk.stopType ?? "pct") !== (sb.risk.stopType ?? "pct")) out.push(`Stop measured in: ${sa.risk.stopType ?? "pct"} → ${sb.risk.stopType ?? "pct"}`);
-  if ((sa.risk.tgtType ?? "pct") !== (sb.risk.tgtType ?? "pct")) out.push(`Target measured in: ${sa.risk.tgtType ?? "pct"} → ${sb.risk.tgtType ?? "pct"}`);
-  if ((sa.risk.sizing ?? "risk") !== (sb.risk.sizing ?? "risk") || (sa.risk.perTrade ?? 0) !== (sb.risk.perTrade ?? 0) || (sa.risk.leverage ?? 1) !== (sb.risk.leverage ?? 1))
-    out.push(`Position size: ${sa.risk.sizing ?? "risk"} → ${sb.risk.sizing ?? "risk"}`);
-  if (rules(sa, "shortEntry" as "entry") !== rules(sb, "shortEntry" as "entry")) out.push(`Short entry: ${(sa.shortEntry ?? []).map(condText).join(" · ") || "none"} → ${(sb.shortEntry ?? []).map(condText).join(" · ") || "none"}`);
-  if (rules(sa, "shortExit" as "exit") !== rules(sb, "shortExit" as "exit")) out.push(`Short exit: ${(sa.shortExit ?? []).map(condText).join(" · ") || "none"} → ${(sb.shortExit ?? []).map(condText).join(" · ") || "none"}`);
-  if ((sa.product ?? "auto") !== (sb.product ?? "auto")) out.push(`Product: ${sa.product ?? "auto"} → ${sb.product ?? "auto"}`);
-  if (sa.entryJoin !== sb.entryJoin || (sa.minScore ?? 0) !== (sb.minScore ?? 0)) out.push(`Rules combine: ${sa.entryJoin}${sa.entryJoin === "score" ? ` ≥ ${sa.minScore}` : ""} → ${sb.entryJoin}${sb.entryJoin === "score" ? ` ≥ ${sb.minScore}` : ""}`);
-  const labels: [keyof NonNullable<Strategy["session"]>, string][] = [["start", "First entry"], ["end", "Last entry"], ["squareoff", "Square-off"],
-    ["maxTradesDay", "Trades a day"], ["cooldown", "Cooldown (candles)"], ["dailyLossPct", "Daily loss cap %"]];
-  for (const [k, label] of labels) {
-    const x = sa.session?.[k] ?? "", y = sb.session?.[k] ?? "";
-    if (say(x) !== say(y)) out.push(`${label}: ${say(x)} → ${say(y)}`);
-  }
-  return out;
-}
 
 type Line = { label: string; a: string; b: string; winA: boolean; winB: boolean; va: number | null; vb: number | null };
 
@@ -63,7 +23,7 @@ export function CompareExperiments() {
   const exps = nb.experiments;
   const va = Number(params.get("a")), vb = Number(params.get("b"));
   const a = exps.find((e) => e.v === va) ?? exps[exps.length - 2], b = exps.find((e) => e.v === vb) ?? exps[exps.length - 1];
-  if (!a || !b || a.v === b.v) return (
+  if (!a || !b) return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       <EmptyState title="Nothing to compare yet" action={{ label: exps.length ? "Change the rules and run again" : "Run the first test", to: `/n/${nb.id}` }}>
@@ -72,6 +32,23 @@ export function CompareExperiments() {
     </div>
   );
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };
+  const opts = exps.map((e) => ({ value: e.v, label: `v${e.v} · ${e.label}` }));
+  const pickers = (
+    <Card label="Pick two runs">
+      <FormGrid label="Pick two runs">
+        <Field label="Before">{(fid) => <Select id={fid} value={a.v} onChange={(v) => pick("a", Number(v))} options={opts} />}</Field>
+        <Field label="After">{(fid) => <Select id={fid} value={b.v} onChange={(v) => pick("b", Number(v))} options={opts} />}</Field>
+      </FormGrid>
+    </Card>
+  );
+  // the same run on both sides: the pickers stay, so either side can be changed
+  if (a.v === b.v) return (
+    <div className="k-page">
+      <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
+      {pickers}
+      <Notice tone="warn" role="status">Pick two different runs: v{a.v} is on both sides.</Notice>
+    </div>
+  );
 
   // both equity curves as % return, on one date axis
   const ret = (e: Experiment) => {
@@ -84,7 +61,6 @@ export function CompareExperiments() {
   const dates = Array.from(new Set([...ra.keys(), ...rb.keys()])).sort();
   const lbl = dates.map((d) => monthYear(d));
   const diff = changes(a, b);
-  const cur = b.instrument?.currency;
   // the last flag is true for a gain or loss, which is green or red like everywhere else
   const defs: [string, (e: Experiment) => string, (e: Experiment) => number | null, boolean, boolean?][] = [
     ["Return after costs", (e) => pct(e.stats.ret), (e) => e.stats.ret, true, true],
@@ -93,7 +69,9 @@ export function CompareExperiments() {
     ["Trades", (e) => String(e.stats.n), () => null, false],
     ["Win rate", (e) => e.stats.n ? `${e.stats.win.toFixed(0)}%` : "–", (e) => e.stats.win, true],
     ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
-    ["Costs paid", (e) => money(e.costs.total, cur), (e) => -e.costs.total, true],
+    // each run's costs in its own currency (v1 on NIFTY in rupees beside v2 on AAPL in dollars)
+    // ...and never marked the smaller of two currencies
+    ["Costs paid", (e) => money(e.costs.total, e.instrument?.currency), (e) => -e.costs.total, (a.instrument?.currency || "") === (b.instrument?.currency || "")],
     ["Checks passed", (e) => checksLine(e.verdict.passed, e.verdict.total), (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],
   ];
@@ -107,16 +85,10 @@ export function CompareExperiments() {
     { key: "a", header: `v${a.v}`, numeric: true, cell: (l) => { const t = <Signed value={l.va}>{l.a}</Signed>; return l.winA ? <b>{t}</b> : t; } },
     { key: "b", header: `v${b.v}`, numeric: true, cell: (l) => { const t = <Signed value={l.vb}>{l.b}</Signed>; return l.winB ? <b>{t}</b> : t; } },
   ];
-  const opts = exps.map((e) => ({ value: e.v, label: `v${e.v} · ${e.label}` }));
   return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title={`v${a.v} against v${b.v}`} lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
-      <Card label="Pick two runs">
-        <FormGrid label="Pick two runs">
-          <Field label="Before">{(fid) => <Select id={fid} value={a.v} onChange={(v) => pick("a", Number(v))} options={opts} />}</Field>
-          <Field label="After">{(fid) => <Select id={fid} value={b.v} onChange={(v) => pick("b", Number(v))} options={opts} />}</Field>
-        </FormGrid>
-      </Card>
+      {pickers}
       <div className="k-two">
         {[a, b].map((e) => (
           <Card key={e.v} label={`v${e.v}`}>

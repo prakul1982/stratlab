@@ -129,7 +129,8 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
 }
 
 export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFocus, initial = "", market, symbol, byHand = true }: {
-  onBuilt: (b: Built) => Promise<void> | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
+  /** false when what was built couldn't be kept (the notebook wasn't made): the words stay in the box to try again */
+  onBuilt: (b: Built) => Promise<boolean | void> | boolean | void; busyLabel?: string; autoFocus?: boolean; initial?: string;
   /** Offer "Build the rules by hand" when a build finds no rule (off where that would wipe rules already written). */
   byHand?: boolean;
   /** The market and instrument already chosen: the examples use them, and names in the idea are looked up there. */
@@ -155,8 +156,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
       const r = await buildIdea(idea, market);
       if (r.usedAI) refreshMe();
       if (!r.built) { setNote(r.note); setStuck(true); return; }
-      await onBuilt(r.built);
-      setText("");
+      if ((await onBuilt(r.built)) !== false) setText("");
     } catch (e) {
       fail(e);
     } finally {
@@ -171,9 +171,8 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     const p = parseStrategyText(idea), s = blankStrategy(nameFor(blankStrategy(), symbol ?? undefined));
     setBusy(true);
     try {
-      await onBuilt({ strategy: { ...s, text: idea, risk: { ...s.risk, ...p.risk } }, instrument: null, question: questionFrom(idea, symbol),
-        gaps: { mentioned: Object.keys(p.risk), notes: [], instName: null, usedAI: false, fallback: "" } });
-      setText("");
+      if (await onBuilt({ strategy: { ...s, text: idea, risk: { ...s.risk, ...p.risk } }, instrument: null, question: questionFrom(idea, symbol),
+        gaps: { mentioned: Object.keys(p.risk), notes: [], instName: null, usedAI: false, fallback: "" } }) !== false) setText("");
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
 

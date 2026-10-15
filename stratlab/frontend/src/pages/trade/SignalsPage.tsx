@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, CFG } from "../../lib/api";
+import { api, ApiError, CFG } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { money, price, fmtDateTime } from "../../lib/format";
+import { money, price, fmtDateTime, tzOf } from "../../lib/format";
 import type { Instrument } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { STATUS_NAME } from "../../components/ui";
 import { Earlier } from "../../components/Earlier";
-import { upDown } from "../../lib/tradeUi";
+import { capitalField, stoppable, testQty, testSignalId, upDown } from "../../lib/tradeUi";
 import { Badge, Card, CardHead, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import "./trade.css";
 import "./paper.css";
@@ -19,7 +19,7 @@ import { usePlansAction } from "../../components/PlanInterest";
  * verdict's luck checks run on the forward test. Paper only: no real orders. Facts, not advice. */
 
 type Hook = { created: string; hint: string; last_used: string | null } | null;
-type Row = { id: string; name: string; symbol: string; status: string; started_at: string; stopped_at: string | null };
+type Row = { id: string; name: string; symbol: string; status: string; started_at: string; stopped_at: string | null; market?: string | null; tz?: string | null };
 type Miss = { at: string; status: string; reason: string; action?: string; session?: string };
 type Overview = {
   allowed: boolean; plan: string; hook: Hook; sessions: Row[]; misses: Miss[]; format: Record<string, unknown>;
@@ -101,6 +101,8 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
   const [capital, setCapital] = useState("");
   const [short, setShort] = useState(false);
   const [busy, setBusy] = useState(false);
+  // the instrument's own currency, the market's until one is picked: never rupees on a US or crypto session
+  const cap = capitalField(inst?.currency || market?.currency);
   const start = async () => {
     if (!inst) return;
     setBusy(true);
@@ -124,7 +126,7 @@ function NewSession({ onStarted }: { onStarted: (id: string) => void }) {
         ) : market ? <InstrumentSearch market={market} compact onPick={setInst} /> : <p className="k-small k-muted">Market data is offline right now.</p>}
         <FormGrid label="Session settings" onSubmit={(e) => { e.preventDefault(); void start(); }}>
           <Field label="Name" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="My breakout alert" />
-          <Field label="Paper capital" inputMode="decimal" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder="10,00,000" unit="₹" />
+          <Field label="Paper capital" inputMode="decimal" value={capital} onChange={(e) => setCapital(e.target.value)} placeholder={cap.placeholder} unit={cap.unit} />
           <div className="k-field wide"><CheckField label="Allow short positions" checked={short} onChange={setShort} /></div>
           <FormActions>
             <button type="submit" className="btn" disabled={!inst || busy}>{busy ? "Starting…" : "Start session"}</button>
@@ -166,33 +168,58 @@ function SignalLog({ rows, cur }: { rows: Sig[]; cur: string }) {
 }
 
 function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {
-  const { fail, refreshMe } = useApp();
+  const { fail, notify, refreshMe } = useApp();
   const [snap, setSnap] = useState<Snap | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const [qty, setQty] = useState("1");
+  const [qtyNote, setQtyNote] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);    // a second click before the buttons are drawn disabled is dropped too
   const [ask, setAsk] = useState<"stop" | "delete" | null>(null);
-  const load = useCallback(() => api<Snap>(`/trade/signals/sessions/${sid}`).then(setSnap).catch((e) => { fail(e); onGone(); }), [sid, fail, onGone]);
+  // the parent's "gone" handler changes on every render of the page (a toast, a reload): held in a ref, so the polling
+  // below doesn't start over, and the snapshot isn't blanked, each time it does
+  const gone = useRef(onGone);
+  gone.current = onGone;
+  const told = useRef(false);        // a failing poll is said once, not every 5 seconds
+  const load = useCallback(() => api<Snap>(`/trade/signals/sessions/${sid}`).then((x) => { setSnap(x); setProblem(null); told.current = false; }).catch((e) => {
+    // only a session that isn't there any more leaves the page; any other error keeps what is shown and tries again
+    if (e instanceof ApiError && e.status === 404) { fail(e); gone.current(); return; }
+    setProblem((e as Error)?.message || "The session couldn't be read.");
+    if (!told.current) { told.current = true; fail(e); }
+  }), [sid, fail]);
   useEffect(() => {
-    setSnap(null); load();
+    load();
     const t = window.setInterval(() => { if (!document.hidden) load(); }, 5000);
     return () => window.clearInterval(t);
   }, [load]);
+  if (!snap && problem) return <Card><ErrorState title="The session couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>{problem}</ErrorState></Card>;
   if (!snap) return <Card><Skeleton label="Opening the session" /></Card>;
   const cur = curOf(snap.instrument);
   const a = snap.account;
   const running = snap.status === "running";
   const test = async (action: string) => {
+    if (inFlight.current) return;
+    let body: Record<string, unknown> = { action, id: testSignalId() };
+    if (action !== "exit") {
+      const q = testQty(qty);
+      if ("error" in q) { setQtyNote(q.error); return; }
+      body = { ...body, qty: q.qty };
+    }
+    setQtyNote(null);
+    inFlight.current = true;
+    setSending(true);
     try {
-      await api(`/trade/signals/sessions/${sid}/test`, { method: "POST", body: action === "exit" ? { action } : { action, qty: Number(qty) || 1 } });
-      load();
-    } catch (e) { fail(e); load(); }
+      await api(`/trade/signals/sessions/${sid}/test`, { method: "POST", body });
+      await load();
+    } catch (e) { fail(e); await load(); } finally { inFlight.current = false; setSending(false); }
   };
   const stop = async () => {
     setAsk(null);
-    try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); refreshMe(); load(); } catch (e) { fail(e); }
+    try { await api(`/live/sessions/${sid}/stop`, { method: "POST" }); refreshMe(); await load(); notify("Stopped. It can be deleted now."); } catch (e) { fail(e); }
   };
   const remove = async () => {
     setAsk(null);
-    try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onGone(); } catch (e) { fail(e); }
+    try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); gone.current(); } catch (e) { fail(e); }
   };
   const v = snap.verdict;
   type Tr = Snap["trade_list"][number];
@@ -212,10 +239,14 @@ function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {
           <h2 className="k-session-name" data-testid="sg-name">{snap.name}</h2>
           <span className="k-note">Session id <code data-testid="sg-id">{snap.id}</code></span>
         </div>
-        {running ? <button type="button" className="btn danger sm" onClick={() => setAsk("stop")}>Stop session</button>
+        {/* a paused session (saved as running, not attached anywhere right now) is stopped like a running one, then deleted */}
+        {stoppable(snap.status)
+          ? <div className="k-row">{!running && <Badge tone={statusTone(snap.status)}>{STATUS_NAME?.[snap.status as keyof typeof STATUS_NAME] ?? snap.status}</Badge>}<button type="button" className="btn danger sm" onClick={() => setAsk("stop")}>Stop session</button></div>
           : <div className="k-row"><Badge tone={statusTone(snap.status)}>{STATUS_NAME?.[snap.status as keyof typeof STATUS_NAME] ?? snap.status}</Badge><button type="button" className="btn danger sm" onClick={() => setAsk("delete")}>Delete</button></div>}
       </div>
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
+      {snap.status === "paused" && <Notice tone="warn" role="status">Paused: the session is saved as running, but nothing is running it right now, so signals sent to it are refused. Stop it to delete it.</Notice>}
+      {problem && <Notice tone="warn" role="status">{problem} Showing the last figures read; trying again.</Notice>}
       <Card label="Paper account">
         <CardHead level={3} title="Paper account" actions={<span className="k-note">Fake money</span>} />
         <StatRow label="Paper account">
@@ -228,10 +259,12 @@ function SessionView({ sid, onGone }: { sid: string; onGone: () => void }) {
         </StatRow>
         {running && (
           <FormGrid label="Send a test signal">
-            <Field label="Test qty" aria-label="Test quantity" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)}
+            <Field label="Test qty" aria-label="Test quantity" inputMode="decimal" value={qty} onChange={(e) => { setQty(e.target.value); setQtyNote(null); }}
+              error={qtyNote ?? undefined}
               info="A test signal goes through every check a real alert does, and fills on paper the same way. It's marked as a test in the log." />
             <FormActions>
-              {["buy", "sell", "exit"].map((x) => <button type="button" key={x} className="btn outline sm" onClick={() => test(x)} aria-label={`Send a test ${x} signal`}>Test <code>{x}</code></button>)}
+              {["buy", "sell", "exit"].map((x) => <button type="button" key={x} className="btn outline sm" disabled={sending} onClick={() => void test(x)} aria-label={`Send a test ${x} signal`}>Test <code>{x}</code></button>)}
+              {sending && <span className="k-note" role="status">Sending…</span>}
             </FormActions>
           </FormGrid>
         )}
@@ -272,12 +305,12 @@ export function SignalsPage() {
   const [failed, setFailed] = useState(false);
   const load = useCallback(() => api<Overview>("/trade/signals").then((o) => { setOv(o); setFailed(false); }).catch((e) => { fail(e); setFailed(true); }), [fail]);
   useEffect(() => { load(); }, [load, sid]);
-  const gone = useCallback(() => { nav("/trade/signals"); }, [nav]);
+  const onGone = useCallback(() => { void load(); nav("/trade/signals"); }, [load, nav]);
   const current = (ov?.sessions ?? []).filter((r) => r.status === "running" || r.status === "paused");
   const stopped = (ov?.sessions ?? []).filter((r) => !current.includes(r));
   const card = (r: Row) => (
     <Link key={r.id} to={`/trade/signals/${r.id}`} className="k-sess-link" aria-current={r.id === sid ? "page" : undefined}>
-      <b>{r.name}</b><span className="k-note">{r.symbol}</span><Badge tone={statusTone(r.status)}>{r.status}</Badge>
+      <b>{r.name}</b><span className="k-note">{r.symbol}{r.started_at ? ` · started ${fmtDateTime(r.started_at, { tz: tzOf({ market: r.market ?? undefined, tz: r.tz ?? undefined }), year: false, zone: true })}` : ""}</span><Badge tone={statusTone(r.status)}>{r.status}</Badge>
     </Link>
   );
   return (
@@ -301,7 +334,7 @@ export function SignalsPage() {
               </Earlier>
             </Card>
           )}
-          {sid ? <SessionView key={sid} sid={sid} onGone={() => { load(); gone(); }} /> : (
+          {sid ? <SessionView key={sid} sid={sid} onGone={onGone} /> : (
             <>
               <div className="k-two">
                 <UrlCard ov={ov} reload={load} />

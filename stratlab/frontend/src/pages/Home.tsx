@@ -22,15 +22,23 @@ export function useCreateNotebook(where?: Where | null) {
   const nav = useNavigate();
   const loc = useLocation();
   const { refreshNotebooks, fail, notify } = useApp();
-  return async (b: Built) => {
+  /** Make the notebook and open it. True once it is made; false when it couldn't be (said), so the words or the pasted
+   * script that built it stay to try again. */
+  return async (b: Built): Promise<boolean> => {
     // what you picked above wins over what the idea text mentions
     const instrument = where?.instrument ?? (where?.market === "CSV" ? null : b.instrument);
     const strategy = instrument ? { ...b.strategy, risk: riskForCurrency(b.strategy.risk, instrument.currency) } : b.strategy;
+    let nb: Notebook;
     try {
-      const nb = await api<Notebook>("/notebooks", {
+      nb = await api<Notebook>("/notebooks", {
         method: "POST",
         body: { name: strategy.name, question: b.question, strategy, instrument: instrument?.id ?? null },
       });
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+    try {
       if (b.group && !where?.instrument) {
         // the notebook exists by now: a group that couldn't be attached is said, not a reason to leave it unopened (a second try would make a second notebook)
         try { await api(`/notebooks/${nb.id}`, { method: "PUT", body: { group: b.group } }); }
@@ -41,8 +49,10 @@ export function useCreateNotebook(where?: Where | null) {
       else if (where?.market === "CSV") nav(`/n/${nb.id}/market`, { state: { market: "CSV" } });
       else nav(`/n/${nb.id}`, { state: { gaps: { ...b.gaps, mentioned: instrument ? [...b.gaps.mentioned, "instrument"] : b.gaps.mentioned } } });
     } catch (e) {
-      fail(e);
+      fail(e);            // the notebook is made (a second try would make a second one): it is opened, and the rest said
+      nav(`/n/${nb.id}`);
     }
+    return true;
   };
 }
 

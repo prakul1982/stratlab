@@ -176,13 +176,19 @@ def account(e: OptionsEngine, q: dict | None) -> dict:
             "unrealised": (e.mtm(q or {}) - e.pos["costs"]) if e.pos else 0.0}
 
 
-def stopped_snapshot(row: dict) -> dict:
-    """What a stopped session looks like, rebuilt from its saved state."""
+def stopped_snapshot(row: dict, now: datetime | None = None) -> dict:
+    """What a stopped session looks like, rebuilt from its saved state. The saved day's P&L is today's only while that day
+    is today (IST): a session stopped on an earlier day isn't trading today, so its "today" is None, not an old day's
+    figure (R5B-015)."""
     st = row.get("state") or {}
     s = OptionStrategy(**row["strategy"])
     e = OptionsEngine(s, state=st or None)
+    acct = account(e, {})
+    today = (now or datetime.now(IST)).astimezone(IST).date().isoformat()
+    if e.day != today:
+        acct["today"] = None
     return {"id": row["id"], "name": row["name"], "kind": "options", "status": row["status"],
             "stop_reason": row.get("stop_reason"), "instrument": row["instrument"], "strategy": row["strategy"],
             "started_at": row["started_at"], "stopped_at": row.get("stopped_at"), "spot": None, "fresh": False,
             "legs": e.legs_view({}), "position": _position(e, {}), "events": e.events[-200:], "trades": e.trades[-100:],
-            "equity_curve": st.get("equity_curve", []), "account": account(e, {}), "note": ""}
+            "equity_curve": st.get("equity_curve", []), "account": acct, "note": ""}

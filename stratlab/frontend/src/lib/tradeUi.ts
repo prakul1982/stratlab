@@ -1,11 +1,11 @@
 import type { CheckStatus } from "./types";
-import { signCls } from "./format";
+import { currencySymbol, signCls } from "./format";
 
 /** A paper session's own page: options sessions at /options/s/<id>, a notebook signal's at /trade/signals/<id>, the rest at
  * /paper/<id> (R7T-011: an options session opened at /paper/<id> crashed the page). */
 export function sessionPath(s: { id: string; kind?: string | null; instrument?: { type?: string | null; signal?: boolean } | null }): string {
   if (s.kind === "options" || s.instrument?.type === "OPTIONS") return `/options/s/${s.id}`;
-  if (s.instrument?.signal) return `/trade/signals/${s.id}`;
+  if (s.kind === "signal" || s.instrument?.signal) return `/trade/signals/${s.id}`;
   return `/paper/${s.id}`;
 }
 
@@ -52,4 +52,44 @@ export function tradeListFacts(e: { trades: { exit_t?: string | null; pnl: numbe
     open, closed, hidden, total, hiddenPnl: hidden ? total - listed : 0,
     caption: hidden ? `Newest ${count(closed)} of ${count(n)} closed${still}` : `${count(closed)} closed${still}`,
   };
+}
+
+/* ---------- signal sessions (review 5b) ---------- */
+
+/** A signal session that can still take signals, or would once it is attached again: "paused" is the server's word for a
+ * session saved as running that no container is running right now. Either is stopped before it can be deleted. */
+export const stoppable = (status: string) => status === "running" || status === "paused";
+
+/** The test signal's quantity as typed: a number above 0 (the server's own rule), or why not. Nothing is ever sent as 1
+ * in its place. */
+export function testQty(text: string): { qty: number } | { error: string } {
+  const t = text.replace(/,/g, "").trim();
+  const v = Number(t);
+  if (!t || !Number.isFinite(v)) return { error: "Enter the test quantity as a number, for example 1." };
+  if (v <= 0) return { error: "The test quantity has to be above 0." };
+  return { qty: v };
+}
+
+/** A test signal's own id, so a second send of the same click is logged as a repeat and never fills twice (the server
+ * takes up to 64 letters, digits or . _ : -). */
+export function testSignalId(now = Date.now(), rnd = Math.random()): string {
+  return `page-${now.toString(36)}-${Math.floor(rnd * 36 ** 6).toString(36).padStart(6, "0")}`;
+}
+
+/** The paper capital box of a new signal session, in the instrument's currency (the market's until one is picked): the
+ * symbol beside it and the server's default as the example (10,00,000 rupees; 10,000 of anything else). */
+export function capitalField(currency: string | null | undefined): { unit: string; placeholder: string } {
+  const c = currency || "INR";
+  return { unit: currencySymbol(c), placeholder: c === "INR" ? "10,00,000" : "10,000" };
+}
+
+/** The account's day figure on a paper session's page (options, group). A running session shows today's P&L (closed trades plus the
+ * open one); a stopped or paused one isn't trading today, so its last saved day isn't "Today": the server sends null
+ * when that day is gone, and the label never says "Today". */
+export function dayStat(running: boolean, status: string, today: number | null | undefined, openNet: number):
+  { label: string; value: number | null; text: string | null } {
+  if (running) return { label: "Today", value: (today ?? 0) + openNet, text: null };
+  const word = status === "paused" ? "paused" : "stopped";
+  if (today == null) return { label: "Day's P&L", value: null, text: `None today: the session is ${word}` };
+  return { label: `Day's P&L, up to the ${status === "paused" ? "pause" : "stop"}`, value: today + openNet, text: null };
 }

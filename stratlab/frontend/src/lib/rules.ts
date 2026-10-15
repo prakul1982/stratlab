@@ -347,6 +347,53 @@ export function statedIn(text: string | undefined | null): string[] {
   return out;
 }
 
+/** The most rules one list (entry, exit, short entry, short exit) may hold: the server refuses a 13th. */
+export const MAX_RULES = 12;
+
+/** The parts of the money side that are the rules' own (the stop, the target, the trail, the time limit): rebuilding the
+ * rules from words always takes them from the new words. */
+const RULE_RISK = ["sl", "tgt", "stopType", "tgtType", "trail", "maxBars"] as const;
+/** The parts that are the account's (capital, sizing, risk per trade, costs): kept unless the new words state them. */
+const ACCOUNT_RISK = ["capital", "riskPct", "maxAlloc", "sizing", "perTrade", "leverage", "brokerage", "slippage"] as const;
+
+/** The money side after rules are rebuilt from words ("Edit in words", "Describe the idea again"): the stop, target,
+ * trail and time limit come from the new words; capital, sizing, risk per trade and costs stay as they were unless the
+ * words state them (`mentioned`, the keys the words gave). `keepCapital` keeps the capital even when the words give one
+ * (the rule editor says "the market and your capital stay"). */
+export function rebuiltRisk(old: Risk, built: Partial<Risk>, mentioned: string[], keepCapital = false): Risk {
+  const out = { ...old } as Record<string, unknown>;
+  const b = built as Record<string, unknown>;
+  for (const k of RULE_RISK) out[k] = b[k];
+  for (const k of ACCOUNT_RISK) {
+    if (keepCapital && k === "capital") continue;
+    if (mentioned.includes(k) && b[k] !== undefined) out[k] = b[k];
+  }
+  return out as unknown as Risk;
+}
+
+/** The stop's unit changed: a number that can't mean anything in the new unit is cleared, and said. A percent stop
+ * must be under 100% (the server refuses 100 or more), so a 150-point stop switched to % is cleared, not kept as 150%;
+ * a swing stop counts whole candles. */
+export function switchStopUnit(risk: Risk, to: NonNullable<Risk["stopType"]>): { risk: Partial<Risk>; note: string | null } {
+  const from = risk.stopType ?? "pct";
+  if (from === to) return { risk: {}, note: null };
+  const was = stopWords(risk.sl, from);
+  if (to === "pct" && risk.sl >= 100)
+    return { risk: { stopType: to, sl: 0 }, note: `A percent stop has to be under 100%, so the ${was} was cleared. Set the stop in percent.` };
+  if (to === "swing" && !Number.isInteger(risk.sl))
+    return { risk: { stopType: to, sl: Math.max(1, Math.round(risk.sl)) }, note: `A swing stop counts whole candles, so the ${was} became ${Math.max(1, Math.round(risk.sl))} candles.` };
+  return { risk: { stopType: to }, note: null };
+}
+
+/** A stop as words, in its own unit: "2%", "150 points", "1.5 × ATR", "the 5-candle swing". */
+export function stopWords(v: number, unit: Risk["stopType"]): string {
+  if (!v) return "no stop";
+  if (unit === "points") return `${v}-point stop`;
+  if (unit === "atr") return `${v} × ATR stop`;
+  if (unit === "swing") return `${v}-candle swing stop`;
+  return `${v}% stop`;
+}
+
 /** Whether a notebook's name is one it was given rather than one the person typed: none, "Untitled notebook", or the
  * strategy's own name (numbered "… 2" or "… (copy)" as a new notebook or a copy gets it). Only such a name may follow
  * the strategy's (R11C-001: every rule edit put "TCS SMA Crossover" back over the person's own name). */

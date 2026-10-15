@@ -133,8 +133,7 @@ export function MarketPage() {
 
   const choose = async (i: Instrument) => {
     patch({ instrument: i, instrumentId: i.id, strategy: { ...nb.strategy, risk: riskForCurrency(nb.strategy.risk, i.currency) } }, true);
-    await flush();
-    nav(`/n/${nb.id}`);
+    if (await flush(true)) nav(`/n/${nb.id}`);      // a save that failed stays here, said, to be tried again
   };
 
   const onFile = async (f: File | undefined) => {
@@ -151,8 +150,7 @@ export function MarketPage() {
     const name = upName.trim() || "Uploaded data";
     saveUpload(nb.id, { name, currency: upCur, step: upStep, bars: upload.bars });
     patch({ instrument: { id: "CSV:upload", symbol: name, market: "CSV", currency: upCur }, instrumentId: `CSV:${name}` }, true);
-    await flush();
-    nav(`/n/${nb.id}`);
+    if (await flush(true)) nav(`/n/${nb.id}`);      // a save that failed stays here, said, to be tried again
   };
 
   return (

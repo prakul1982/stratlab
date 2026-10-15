@@ -14,7 +14,7 @@ interface Cur {
   curve: { t: string; pnl: number }[];
 }
 interface Row { id: string; name: string; kind: string; currency: string; open_value: number; today: number; pnl: number; capital: number }
-const KIND: Record<string, string> = { single: "Rules", group: "Group", options: "Options" };
+const KIND: Record<string, string> = { single: "Rules", group: "Group", options: "Options", signal: "Signals" };
 const day = (d: string) => fmtDate(d, { year: false });
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 

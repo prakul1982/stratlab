@@ -1,7 +1,7 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
-import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, meaningful, mkRef, NO_SESSION, OPS, opSay, refName } from "../lib/rules";
+import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, switchStopUnit } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/intervals";
 import { Info } from "./ui";
@@ -36,11 +36,17 @@ const TF_ORDER: Tf[] = ["5m", "15m", "1h", "1d"];
 const HTF_NAME: Record<HigherTf, string> = { "15m": "15-minute candles", "1h": "1-hour candles", "1d": "Daily candles" };
 const HTF_ONE: Record<HigherTf, string> = { "15m": "15-minute", "1h": "1-hour", "1d": "daily" };
 
-/** A number box for the small editors: the kit's Field with its hint behind an (i). */
+/** A number box for the small editors: the kit's Field with its hint behind an (i). What is typed stays in the box while
+ * it is typed (an empty box, "0.", a number out of range on its way to one in range); each number is handed to `onValid`,
+ * which keeps it only if it's in range, and leaving the box puts back the value the rules hold. */
 function NumField({ label, value, min, max, step, hint, onValid }: { label: string; value: number | string; min?: number; max?: number; step?: number | string; hint?: ReactNode; onValid: (v: number) => void }) {
+  const [txt, setTxt] = useState(String(value));
+  // the rules changed elsewhere: show their value, unless the box already says that number ("1.50" for 1.5)
+  useEffect(() => { setTxt((t) => (t !== "" && parseFloat(t) === Number(value) ? t : String(value))); }, [value]);
   return (
-    <Field label={label} info={hint} type="number" min={min} max={max} step={step} value={value}
-      onChange={(e) => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) onValid(v); }} />
+    <Field label={label} info={hint} type="number" min={min} max={max} step={step} value={txt}
+      onChange={(e) => { setTxt(e.target.value); const v = parseFloat(e.target.value); if (Number.isFinite(v)) onValid(v); }}
+      onBlur={() => setTxt(String(value))} />
   );
 }
 
@@ -191,6 +197,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
   const [rebuilding, setRebuilding] = useState(false);
   const [rewriteNote, setRewriteNote] = useState("");
   const [rewriteWarnings, setRewriteWarnings] = useState<string[]>([]);
+  const [unitNote, setUnitNote] = useState<string | null>(null);
   const rebuild = async () => {
     if (rewrite === null) return;
     setRebuilding(true); setRewriteNote(""); setRewriteWarnings([]);
@@ -199,9 +206,11 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
       if (out.usedAI) refreshMe();
       if (!out.built) { setRewriteNote(out.note); return; }
       const n = out.built.strategy;
+      // the stop, target, trail and time limit come from the words; risk per trade, sizing and the rest only when the words
+      // state them; the capital stays (as the box says)
       onChange({ ...s, text: n.text, entry: n.entry, exit: n.exit, entryJoin: n.entryJoin, side: n.side, shortEntry: n.shortEntry, shortExit: n.shortExit,
         minScore: n.minScore, tf: n.tf, session: n.session, product: n.product,
-        risk: { ...s.risk, sl: n.risk.sl, tgt: n.risk.tgt, stopType: n.risk.stopType, tgtType: n.risk.tgtType, trail: n.risk.trail, maxBars: n.risk.maxBars } });
+        risk: rebuiltRisk(s.risk, n.risk, out.built.gaps.mentioned, true) });
       setRewrite(null);
       if (out.note) setRewriteNote(out.note);
       // a rule left out or a number that didn't make it into the rules is said where the rules are (R11C-004)
@@ -249,18 +258,22 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
         onChange={(v) => set({ minScore: v })} hint="Add up the points of the rules that are true; enter when the total reaches this. 0 means every rule must be true." />)</>}:</p>
   );
   const unitTok = (kind: "stop" | "tgt") => kind === "stop"
-    ? <Choice title="Stop measured in" value={stopType} onChange={(v) => setRisk({ stopType: v })} options={STOP_UNITS.map(([v, l, h]) => [v, l, h])} />
+    ? <Choice title="Stop measured in" value={stopType} onChange={(v) => { const x = switchStopUnit(r, v); setRisk(x.risk); setUnitNote(x.note); }} options={STOP_UNITS.map(([v, l, h]) => [v, l, h])} />
     : <Choice title="Target measured in" value={tgtType} onChange={(v) => setRisk({ tgtType: v })} options={TGT_UNITS.map(([v, l, h]) => [v, l, h])} />;
-  const addRule = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond) => set({ [key]: [...((s[key] as Cond[] | undefined) ?? []), c] } as Partial<Strategy>);
+  // the server keeps at most 12 rules in a list: a 13th is never added here to be refused later
+  const full = (key: "entry" | "exit" | "shortEntry" | "shortExit") => ((s[key] as Cond[] | undefined) ?? []).length >= MAX_RULES;
+  const addRule = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond) => { if (!full(key)) set({ [key]: [...((s[key] as Cond[] | undefined) ?? []), c] } as Partial<Strategy>); };
+  const fullNote = <p className="k-note">{MAX_RULES} rules is the most a list can hold. Remove one to add another.</p>;
 
   // how many advanced settings are in use, so "More settings" says so while closed
   const moreOn = [r.trail, r.maxBars, intraday && (sess.start || sess.end), intraday && sess.squareoff, intraday && sess.maxTradesDay,
     intraday && sess.cooldown, intraday && sess.dailyLossPct, (r.sizing ?? "risk") === "capital"].filter(Boolean).length;
-  const addBtn = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond, label: string) => (
+  const addBtn = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond, label: string) => full(key) ? fullNote : (
     <button type="button" className="add-rule" onClick={() => addRule(key, c)}>+ {label}</button>
   );
   // "+ Add an exit rule" opens a short list of common sell rules to start from, instead of adding one on its own (R5O-010)
   const exitPick = (key: "exit" | "shortExit", label: string) => {
+    if (full(key)) return fullNote;
     const closesShort = key === "shortExit" || short;
     const turn = closesShort ? [] : defaultExit(s);
     const common: Cond[] = [
@@ -352,7 +365,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
               "or a no target" (R6O-010) */}
           {s.exit.length || shortExit.length ? "Also close" : <b>Close</b>}{r.sl > 0 ? " at a " : " with "}
           <NumTok title="Stop loss" value={r.sl} missing="no stop loss" max={stopType === "pct" ? 99 : 100000} step={stopType === "swing" ? 1 : 0.1}
-            render={(v) => `${v}`} onChange={(v) => setRisk({ sl: v })} hint="0 turns it off. Tap the word after the number to change the unit." />
+            render={(v) => `${v}`} onChange={(v) => { setRisk({ sl: v }); setUnitNote(null); }} hint="0 turns it off. Tap the word after the number to change the unit." />
           {/* "3% stop", never "3 % stop" (R6O-010): no space before a percent sign */}
           {r.sl > 0 && <>{stopType === "pct" ? "" : " "}{unitTok("stop")}</>}{r.tgt > 0 ? (r.sl > 0 ? " or a " : " and at a ") : (r.sl > 0 ? ", with " : " and ")}
           <NumTok title="Target" value={r.tgt} missing="no target" max={100000} render={(v) => `${v}`}
@@ -360,6 +373,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           {r.tgt > 0 && <>{tgtType === "pct" ? "" : " "}{unitTok("tgt")}</>}.
           <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
         </p>
+        {unitNote && <Notice tone="warn" role="status" className="stop-unit-note">{unitNote}</Notice>}
         {/* below the block's rules, like the entry's add button */}
         {exitPick("exit", both ? "Add a sell rule" : "Add an exit rule")}
         {both && exitPick("shortExit", "Add a buy-back rule")}

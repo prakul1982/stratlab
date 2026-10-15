@@ -4,22 +4,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
 import * as I from "../src/charts/price/indicators.ts";
+
+register("data:text/javascript," + encodeURIComponent(`export async function resolve(s, c, next) {
+  try { return await next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.\\w+$/.test(s)) return next(s + ".ts", c); throw e; } }`));
 
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
 
+// "What changed" moved to src/lib/compare.ts (review 5b: stops in their own units, each run's currency, no raw codes);
+// these two now run it
+const C = await import("../src/lib/compare.ts");
+const R = await import("../src/lib/rules.ts");
+const run = (over = {}, risk = {}) => ({ strategy: { ...R.blankStrategy(), ...over, risk: { ...R.blankStrategy().risk, ...risk } }, instrument: { symbol: "NIFTY 50", currency: "INR" }, days: 365 });
+
 test("the compare page writes a direction of both ways as itself, not long", () => {
-  const src = read("src/pages/CompareExperiments.tsx");
-  assert.match(src, /const SIDE: Record<string, string> = \{ long: "long only", short: "short only", both: "both ways" \};/);
-  assert.match(src, /`Direction: \$\{SIDE\[sa\.side \?\? "long"\]\} → \$\{SIDE\[sb\.side \?\? "long"\]\}`/);
-  assert.doesNotMatch(src, /sa\.side === "short" \? "short" : "long"/);
+  assert.deepEqual(C.changes(run({ side: "long" }), run({ side: "both" })), ["Direction: long only → both ways"]);
+  assert.deepEqual(C.changes(run({ side: "short" }), run({ side: "both" })), ["Direction: short only → both ways"]);
+  assert.match(read("src/pages/CompareExperiments.tsx"), /import \{ changes \} from "\.\.\/lib\/compare";/);
 });
 
 test("the compare page lists most in one trade, the product and the short exit among the changes", () => {
-  const src = read("src/pages/CompareExperiments.tsx");
-  assert.match(src, /\["maxAlloc", "Most in one trade", "%"\]/);
-  assert.match(src, /`Product: \$\{sa\.product \?\? "auto"\} → \$\{sb\.product \?\? "auto"\}`/);
-  assert.match(src, /rules\(sa, "shortExit" as "exit"\) !== rules\(sb, "shortExit" as "exit"\)\) out\.push\(`Short exit: /);
+  assert.deepEqual(C.changes(run({}, { maxAlloc: 100 }), run({}, { maxAlloc: 40 })), ["Most in one trade: 100% → 40%"]);
+  assert.deepEqual(C.changes(run({ product: "auto" }), run({ product: "intraday" })), ["Indian stock costs: automatic → intraday (MIS)"]);
+  const exit = [{ l: { t: "price" }, op: "xa", r: { t: "sma", p: 20 } }];
+  assert.deepEqual(C.changes(run({ side: "both", shortExit: [] }), run({ side: "both", shortExit: exit })), ["Short exit: none → Price crosses above SMA 20"]);
 });
 
 test("the compare page counts the checks with checksLine, out of four like the other pages", () => {

@@ -1399,12 +1399,14 @@ def save_notebook(profile, nb: dict) -> dict:
     return notebook_from_row(row)
 
 
-def instrument_summary(inst_id: str | None) -> dict | None:
+def instrument_summary(inst_id: str | None, currency: str | None = None) -> dict | None:
+    """What a notebook keeps of the instrument it tests on. An uploaded CSV keeps the currency picked for the upload
+    (the file can't say), so its money reads in that currency (R5B: it was stored as "")."""
     if not inst_id:
         return None
     if inst_id.startswith("CSV:"):
         name = inst_id[4:].strip()[:60] or "Uploaded data"
-        return {"id": "CSV:upload", "symbol": name, "name": name, "market": "CSV", "currency": "", "tz": "UTC"}
+        return {"id": "CSV:upload", "symbol": name, "name": name, "market": "CSV", "currency": (currency or "").upper()[:8], "tz": "UTC"}
     try:
         return get_instrument(inst_id)[1]
     except (HTTPException, KiteNotReady, DataError):
@@ -1459,7 +1461,7 @@ def with_rule_problems(nb: dict) -> dict:
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
     nb = {"name": unique_name(profile, req.name or strategy.name), "question": req.question or "", "notes": req.notes or "",
-          "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument),
+          "strategy": strategy.model_dump(), "instrument": instrument_summary(req.instrument, req.currency),
           "experiments": [], "summary": research.summary([])}
     if req.group is not None and not req.instrument:
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
@@ -1489,7 +1491,7 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
     if req.strategy is not None:
         nb["strategy"] = req.strategy.model_dump()
     if req.instrument is not None:
-        nb["instrument"] = instrument_summary(req.instrument or None)
+        nb["instrument"] = instrument_summary(req.instrument or None, req.currency)
     if req.pinned is not None:
         nb["pinned"] = req.pinned
     if req.instrument is not None or req.clearGroup:
@@ -1583,6 +1585,10 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     cur["experiments"], cur["summary"] = experiments, research.summary(experiments)
     if defaulted:
         cur["instrument"] = nb["instrument"]
+    up_inst = cur.get("instrument") or {}
+    if req.upload and req.upload.currency and up_inst.get("market") == "CSV" and not up_inst.get("currency"):
+        # a notebook set to an upload before its currency was kept: the run's own upload says it
+        cur["instrument"] = {**up_inst, "currency": req.upload.currency.upper()[:8]}
     nb = save_notebook(profile, cur)
     return ok({"experiment": rec, "usage": out["usage"], "summary": nb["summary"], "defaulted": defaulted,
                "instrument": nb.get("instrument") if defaulted else None})
