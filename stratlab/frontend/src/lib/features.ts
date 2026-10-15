@@ -67,7 +67,7 @@ export const FEATURES: Feature[] = [
     words: "fast entries tick live price spread liquidity filter minimum price group", level: "advanced" },
   { id: "share", title: "Share a verdict", what: "A card from your phone or a public link. Your rules stay private.", to: "@verdict",
     words: "share link card image whatsapp twitter public verdict" },
-  { id: "alerts", title: "Alerts and the daily report", what: "Telegram or email for each trade, and a report after the market closes.", to: "/settings#notifications",
+  { id: "alerts", title: "Alerts and the daily report", what: "On your phone or by email for each trade, and a report after the market closes.", to: "/settings#notifications",
     words: "alerts telegram email notifications daily report close", home: true, goal: "trade" },
   { id: "themes", title: "Themes", what: "Map a sector or trend and see the listed companies linked to it.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks", goal: "understand" },
   { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },

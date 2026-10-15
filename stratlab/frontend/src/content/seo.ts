@@ -7,7 +7,7 @@ export const SITE = "https://stratlab.studio";
 
 export const TAGLINE = "Test it, research it, track it.";
 export const HOME_TITLE = "StratLab: test it, research it, track it";
-export const HOME_DESCRIPTION = "Test trading ideas on years of real prices and paper trade them, options included. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.";
+export const HOME_DESCRIPTION = "Test trading ideas on years of real prices and paper trade them, options too. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.";
 
 export type PageMeta = {
   /** the address the page lives at */

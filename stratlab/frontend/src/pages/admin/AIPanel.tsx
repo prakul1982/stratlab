@@ -4,6 +4,7 @@ import { useApp } from "../../lib/app";
 import { ago, safeHref, fmtDate } from "../../lib/format";
 import { Badge, Card, CardHead, ConfirmDialog, Disclosure, Light, Skeleton } from "../../components/kit";
 import { blockedLine } from "./aiBlocks";
+import { aiCountText } from "../../lib/connection";
 import { shortLinks } from "./attention";
 
 // Admin only: provider names are fine here (never on public pages).
@@ -18,6 +19,7 @@ type Model = {
 type Provider = {
   name: string; label: string; configured: boolean; missing: string[]; key_url: string; free: string; terms: "ok" | "prototype" | "paid";
   note: string; variables: string[]; model_variable: string; state: "ok" | "warn" | "fail" | "off" | "idle"; state_text: string;
+  result?: string | null;
   quota: { limited: boolean; reset_at: number | null; remaining: { requests?: number; tokens?: number } | null; remaining_at: number | null };
   last_ok: number | null; last_error: string | null; last_used_model: string | null; pinned: string | null; pinned_by: "admin" | "railway" | null;
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
@@ -137,7 +139,9 @@ export function AIPanel({ onChanged }: { onChanged?: () => void }) {
       {!v ? <Skeleton label="Loading the AI providers" lines={3} /> : (
         <>
           <p className="k-small k-muted">
-            {on.length} of {v.providers.length} providers set up. Each one's models are measured with a short test every {v.rerank_every_hours} hours
+            {/* the count as Overview words it, on the same readings (R29A-014: "5 working of 10 set up (11 known)" there beside
+                "10 of 11 providers set up" here) */}
+            AI providers: {aiCountText(on.filter((p) => p.result === "working").length, on.length, v.providers.length)}. Each one's models are measured with a short test every {v.rerank_every_hours} hours
             {lastRank ? ` (last ${ago(iso(lastRank))})` : " (not yet)"}, and the ones that answer correctly and fast are used. A provider that fails,
             runs out of free quota or is rate limited is skipped until it's back.{reused != null && ` ${reused}% of questions since the last restart were answered from the cache.`}
           </p>

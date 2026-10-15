@@ -249,7 +249,7 @@ def _exchange_files():
 
 
 # one official close per Indian symbol across the public pages, the screens and ETF vs NAV (R7O-004, R7O-007)
-official_close.setup(_exchange_files, lambda syms: kite.quote(syms) if kite.ready() else {},
+official_close.setup(_exchange_files, lambda syms, max_wait=None: kite.quote(syms, max_wait=max_wait) if kite.ready() else {},
                      all_quotes_fn=lambda: kite.day_quotes() if kite.ready() else {})
 # ...and in every daily candle read from the broker: charts, scans, briefs, My Stocks, alerts, backtests (R8B-001)
 kite.day_close = official_close.history_close

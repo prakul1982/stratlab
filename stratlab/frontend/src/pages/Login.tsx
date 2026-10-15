@@ -372,7 +372,7 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       <section id="alerts" className="lp-sec">
         <div className="lp-wrap stack g32">
           <Head eyebrow="Alerts" title="Hear about it when it happens.">
-            On your phone, on Telegram or by email, including every paper trade. Alerts report what happened, never what to do about it.
+            On your phone or by email, including every paper trade. Alerts report what happened, never what to do about it.
           </Head>
           <ToolList items={ALERTS} label="kinds of alert" shown={3} three />
         </div>

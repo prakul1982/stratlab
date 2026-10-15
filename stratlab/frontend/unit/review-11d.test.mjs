@@ -52,7 +52,7 @@ test("the browser bar colour follows the app's dark paper colour", () => {
 
 test("the privacy page names the Account page controls, and the terms don't promise billing that isn't open", () => {
   const legal = read("src/pages/LegalPage.tsx");
-  assert.match(legal, /"Download everything" to get a copy[^]*"Delete all my data"[^]*PrivacyMail/);
+  assert.match(legal, /"Download all my data" to get a copy[^]*"Delete all my data"[^]*PrivacyMail/);
   assert.match(legal, /Paid plans are billed only once they are on sale; the Plans page shows whether they are\./);
 });
 

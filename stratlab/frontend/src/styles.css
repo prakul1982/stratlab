@@ -1918,6 +1918,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .pub-nav .lp-menu nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
 .pub-nav .lp-menu nav a:hover, .pub-nav .lp-menu nav a:focus-visible { background: var(--chip); }
 .pub-nav .pub-menu { margin-left: auto; margin-right: var(--s3); }
+.pub-nav .pub-menu-start nav { left: 0; right: auto; }
 @media (min-width: 641px) { .pub-nav .pub-menu { display: none; } }          /* a phone's Menu: wider screens have the rows on the landing page */
 @media (max-width: 1000px) { .lp-menu { display: block; } .lp-nav > .btn { margin-left: 0; } }
 @media (max-width: 600px) { .lp-more > summary { min-height: 40px; } }
