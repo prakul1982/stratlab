@@ -216,7 +216,7 @@ def advance_view(profile, fy: int | None = None) -> dict:
                                       i["business"], i["income"], {**earlier, fy: div}, limit=0)[fy]
         return (y["total"].get("total") or 0.0) if y["total"].get("available") else 0.0
     full_tax = tax_by(None)
-    upto = [tax_by(d["date"]) for d in adv.due_dates(fy)[:3]] + [full_tax]
+    upto = [tax_by(d["date"]) for d in adv.due_dates(fy)]       # the last, to 15 March: the 234C proviso covers later gains
     business = any(b["fy"] == fy for b in i["business"]) or any(x["fy"] == fy for x in c["intraday"])
     out.update({"schedule": adv.schedule(fy, full_tax, upto, mine["tds"], mine["paid"], t, business), "inputs": mine,
                 "dividends_in_estimate": round(sum(a for _, a in div_events), 2),

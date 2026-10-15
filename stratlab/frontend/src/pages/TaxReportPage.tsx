@@ -12,6 +12,7 @@ import { useMoreColumns } from "../components/MoreColumns";
 import { Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PageNav, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton, type Column } from "../components/kit";
 import { fyLink, movedYearNote, openFy, rememberFy, yearHasTrades } from "../lib/fy";
 import { useAskedFy } from "../lib/useFy";
+import { gainLabel, usSharesNote } from "../lib/usGains";
 
 /* /tax-report: capital gains on shares and funds from the tradebooks you upload, matched first in, first out, with the
  * exemption and set-off, F&O and intraday kept apart, and the year's total tax estimate. Estimates, never advice.
@@ -37,7 +38,7 @@ type Total = {
   notes?: string[]; confirmed?: boolean; source?: string | null;
 };
 type Year = {
-  fy: number; label: string; stcg: Side; ltcg: Side; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
+  fy: number; label: string; stcg: Side; ltcg: Side; foreign?: { st: Side; lt: Side; count: number } | null; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
   intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number; stt?: number; stt_estimated?: boolean }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
@@ -333,13 +334,14 @@ export function TaxReportPage() {
           <Card id="tax-gains">
             <CardHead title={`Gains in ${y.label}`} />
             <StatRow>
-              <Stat label="Short-term gains (net)" value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
-              <Stat label="Long-term gains (net)" value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} note={`${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses`} />
+              <Stat label={gainLabel("st", !!y.foreign)} value={inr(y.stcg.net)} tone={signTone(y.stcg.net)} note={`${inr(y.stcg.gains)} gains · ${inr(y.stcg.losses)} losses`} />
+              <Stat label={gainLabel("lt", !!y.foreign)} value={inr(y.ltcg.net)} tone={signTone(y.ltcg.net)} note={`${inr(y.ltcg.gains)} gains · ${inr(y.ltcg.losses)} losses`} />
               <Stat label="Long-term exemption used" value={inr(y.exemption.used)} note={`of ${inr(y.exemption.limit)}${y.exemption.limit ? ` · ${inr(y.exemption.left)} left` : ""}`} />
               <Stat label={<>Tax on share gains, before basic exemption, rebate and surcharge <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>}
                 value={inr(y.tax)} note={`${inr(y.tax_with_cess)} with 4% cess`} />
             </StatRow>
             {y.exemption.limit > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
+            {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is in the estimate; the US card below has each sale.</p>}
           </Card>
 
           <Card>

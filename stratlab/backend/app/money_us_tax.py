@@ -574,7 +574,7 @@ def schedule_fa(cy: int, trades: list[dict], splits: dict[str, list[dict]], clos
                 closing = q_end * _after_factor(sp, days[-1]) * px[days[-1]] * end_rate["rate"]
             else:
                 closing = None
-            if closing is None or (peak is None and q_end > 1e-7):
+            if closing is None or peak is None:     # a lot sold in the year needs its peak too
                 missing_prices.add(sym)
             income = 0.0
             for dv in divs.get(sym) or []:

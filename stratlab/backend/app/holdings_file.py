@@ -71,8 +71,9 @@ def number(v) -> float | None:
     s = str(v or "").strip().replace("\u2212", "-")
     if not s:
         return None
+    s = re.sub(r"(?i)rs\.?|inr|₹|\s", "", s)          # the currency first: "₹ (1,234)" and "Rs.(500)" are negative
     neg = s.startswith("(") and s.endswith(")")
-    s = re.sub(r"(?i)rs\.?|inr|₹|[\s()]", "", s)
+    s = s.replace("(", "").replace(")", "")
     if "," in s and not re.match(r"\d{3}(\.\d*)?$", s.rsplit(",", 1)[1]):
         return None
     s = s.replace(",", "")
@@ -785,7 +786,21 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
     return {"broker": name, "kind": kind, "trades": out, "problems": problems, "gross": gross, "taxable": taxable}
 
 
+def business_source(broker: str, filename: str) -> str:
+    """Where a file's F&O, commodity and currency totals come from, to match saved totals against: the broker when the
+    file says which, or else the file's own name."""
+    return broker if broker and broker != "CSV" else "file:" + _base(filename or "file").lower()[:80]
+
+
 def parse_trades(data: bytes, filename: str = "") -> dict:
+    """parse_trades_raw, with each F&O, commodity and currency total marked with its source (business_source)."""
+    got = parse_trades_raw(data, filename)
+    src = business_source(got.get("broker") or "", filename)
+    got["business"] = [{**b, "src": src} for b in got.get("business") or []]
+    return got
+
+
+def parse_trades_raw(data: bytes, filename: str = "") -> dict:
     """A tradebook (each buy and sale), a tax P&L export (each sale with its buy), or the ZIP of tax P&L files a
     broker gives, from any of the brokers or a plain CSV with date, symbol or ISIN, buy/sell, quantity and price. An
     F&O, commodity or currency P&L file is read as business income: totals per year, not trades.
@@ -811,10 +826,22 @@ def parse_trades(data: bytes, filename: str = "") -> dict:
         raise FileError("We couldn't read that file. Export the tradebook again as CSV or Excel and upload that.") from None
     if looks_derivative(rows):
         return parse_business(data, filename, None)
-    got = _read_trades(rows, filename)
+    acc, b_read, b_skipped, b_probs = _Business(), [], [], []
+    if data[:4] == b"PK\x03\x04" and _is_xlsx(data):
+        b_read, b_skipped, b_probs, _ = book_business(data, _base(filename or "file"), acc)
+    business = acc.result()
+    try:
+        got = _read_trades(rows, filename)
+    except FileError:
+        if not business:
+            raise
+        broker = trade_broker([], [], filename)
+        return {"broker": broker, "kind": "business", "trades": [], "problems": b_probs[:500], "skipped": b_skipped,
+                "check": [], "files": b_read, "business": business}
     if NON_EQUITY_FILE.search(filename or ""):
         got = _units_only(got)
-    return {**got, "problems": got["problems"][:500], "skipped": [], "check": [], "files": [], "business": []}
+    return {**got, "problems": (got["problems"] + b_probs)[:500], "skipped": b_skipped, "check": [], "files": b_read,
+            "business": business}
 
 
 # ---------- a broker's ZIP of tax P&L files ----------
@@ -958,6 +985,7 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
     trades, problems, skipped, read, sums, brokers = [], [], [], [], {}, []
     sheet: dict[str, float] = {}
     biz, biz_sheet, biz_files = _Business(), {}, set()
+    books: list[tuple[str, bytes]] = []      # workbooks: their F&O, commodity and currency sheets, read at the end
     try:
         for info in infos:
             if _junk(info.filename):
@@ -1018,6 +1046,8 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
                     if s_seg and (got_ := business_summary(srows)):
                         from_here = True
                         biz_sheet.setdefault(s_seg, got_)
+            if book:
+                books.append((base, raw))
             if not section and (totals or biz_sheet) and (rows is not None or totals or from_here):
                 sheet.update({k_: v for k_, v in totals.items() if k_ not in sheet})
                 continue                     # the summary workbook: its totals check the files read
@@ -1042,6 +1072,12 @@ def parse_tax_zip(data: bytes, filename: str = "") -> dict:
             problems += [{**p, "text": f"{label} · {p['text']}"[:120]} for p in got["problems"]]
             if len(trades) > MAX_TRADES:
                 raise FileError(f"That ZIP has more than {MAX_TRADES:,} trades; upload its files one year or quarter at a time.")
+        for base, raw in books:              # never twice: a segment read from its own file isn't read from a sheet
+            r_, s_, p_, got_segs = book_business(raw, base, biz, {"fno", "commodity", "currency"} - biz_files)
+            read += r_
+            skipped += s_
+            problems += p_
+            biz_files |= got_segs
     except FileError:
         raise
     except Exception:                        # a damaged entry of any kind: one plain answer
@@ -1092,20 +1128,26 @@ FNO_MAX_ROWS = 300_000                  # lines in one such file (a busy year ha
 MAX_CONTRACTS = 200_000                 # contracts netted at once, for the turnover the broker's summary shows
 TOP_UNDERLYINGS = 25                    # per segment and year: the biggest by result, the rest as one line
 # (file name, segment): which tax P&L files are business income, read as totals, not trades
-BUSINESS = [(re.compile(r"(?i)f\s*&\s*o|(^|[^a-z])fno([^a-z]|$)|futures|options|derivative"), "fno"),
-            (re.compile(r"(?i)commodit"), "commodity"),
-            (re.compile(r"(?i)currenc"), "currency")]
+# commodity and currency first: "Commodity Futures" and "Currency Options" are their own segments, not F&O
+BUSINESS = [(re.compile(r"(?i)commodit|(^|[^a-z])mcx([^a-z]|$)"), "commodity"),
+            (re.compile(r"(?i)currenc|(^|[^a-z])cds([^a-z]|$)"), "currency"),
+            (re.compile(r"(?i)f\s*&\s*o|(^|[^a-z])fno([^a-z]|$)|futures|options|derivative"), "fno")]
 SEGMENT_NAMES = {"fno": "F&O", "commodity": "Commodity", "currency": "Currency"}
 BIZ_COLUMNS = {
     "symbol": {"contract", "contractname", "instrumentname", "scripname", "contractdescription"},
     "date": PNL_COLUMNS["sell_date"] | {"closedate", "closingdate", "squareoffdate", "exitdatetime", "selldatetime"},
     "pnl": {"profit", "pnl", "realisedpnl", "realizedpnl", "realisedprofit", "realizedprofit", "netpnl", "grosspnl",
             "profitloss", "realisedprofitloss", "realizedprofitloss", "bookedpnl", "bookedprofitloss", "realisedgainloss",
-            "realizedgainloss", "profitorloss"},
+            "realizedgainloss", "profitorloss",
+            # "P&L" and "P/L" lose their "&" and "/" in key(): "Realised P&L" is realisedpl
+            "pl", "realisedpl", "realizedpl", "netpl", "grosspl", "bookedpl", "netrealisedpl", "netrealizedpl", "netrealisedpnl",
+            "netrealizedpnl", "netprofit", "netprofitloss"},
+    "open_date": PNL_COLUMNS["buy_date"] | {"opendate", "openingdate", "buydatetime", "entrydatetime"},
     "buy_value": PNL_COLUMNS["buy_value"],
     "sell_value": PNL_COLUMNS["sell_value"],
 }
 BIZ_TAX = STT | {"ctt", "commoditiestransactiontax", "commoditytransactiontax"}
+NET_PNL = {"netpnl", "netpl", "netrealisedpl", "netrealizedpl", "netrealisedpnl", "netrealizedpnl", "netprofit", "netprofitloss"}
 DERIVATIVE = re.compile(r"\d.*(FUT|CE|PE)$")
 COMMODITIES = re.compile(r"^(CRUDEOIL|NATURALGAS|NATGAS|GOLD|SILVER|COPPER|ZINC|LEAD|ALUMINI|ALUMINIUM|NICKEL|COTTON|"
                          r"MENTHAOIL|CARDAMOM|KAPAS|CASTORSEED|GUARSEED|JEERA|TURMERIC|DHANIYA|STEEL)")
@@ -1148,6 +1190,11 @@ def _biz_columns(row: list[str]) -> dict[str, int]:
         for field, names in BIZ_COLUMNS.items():
             if k in names and field not in found:
                 found[field] = i
+    # a P&L before charges is preferred to one after them, whichever comes first
+    if "pnl" in found and key(row[found["pnl"]]) in NET_PNL:
+        gross = next((i for i, c in enumerate(row) if key(c) in BIZ_COLUMNS["pnl"] - NET_PNL), None)
+        if gross is not None:
+            found["pnl"] = gross
     return found
 
 
@@ -1232,6 +1279,7 @@ def _biz_rows(rows, filename: str, seg: str | None, acc: _Business, label: str) 
     if not cols:
         raise FileError(f"{label}: we couldn't find the columns. " + NOT_SUPPORTED)
     keys = [key(c) for c in head[-1]]
+    net_col = "pnl" in cols and keys[cols["pnl"]] in NET_PNL        # already after the charges: they're added back for the gross
     total = next((i for i, k in enumerate(keys) if k in CHARGE_TOTAL), None)
     parts = [i for i, k in enumerate(keys) if k in CHARGE_PARTS]
     taxes = [i for i, k in enumerate(keys) if k in BIZ_TAX]
@@ -1248,6 +1296,8 @@ def _biz_rows(rows, filename: str, seg: str | None, acc: _Business, label: str) 
             if any(number(c) is not None for c in row):
                 problems.append({"line": line, "text": f"{label} · {sym[:40]}", "reason": "The exit date couldn't be read."})
             continue
+        if "open_date" in cols:              # a short position is sold first: it closes on the later of the two dates
+            d = max(d, day(_cell(row, cols["open_date"])) or d)
         if "pnl" in cols:
             pnl = number(_cell(row, cols["pnl"]))
         else:
@@ -1261,7 +1311,10 @@ def _biz_rows(rows, filename: str, seg: str | None, acc: _Business, label: str) 
             charges = max(abs(number(_cell(row, total)) or 0), tax)
         else:
             charges = sum(abs(number(_cell(row, i)) or 0) for i in parts) + tax
-        acc.add(seg or _segment_of(sym), d, sym[:40], pnl, min(charges, 1e10), tax)
+        charges = min(charges, 1e10)
+        if net_col:
+            pnl += charges
+        acc.add(seg or _segment_of(sym), d, sym[:40], pnl, charges, tax)
         n += 1
     return n, problems[:500]
 
@@ -1350,6 +1403,39 @@ def business_summary(rows: list[list[str]]) -> dict[str, float]:
                     out[kind] = out.get(kind, 0.0) + v
                 break
     return out
+
+
+def book_business(raw: bytes, base: str, acc: _Business, segs: set[str] | None = None) -> tuple[list[dict], list[dict], list[dict], set[str]]:
+    """The F&O, commodity and currency sheets of a tax P&L workbook (by their names), added to `acc`: (files read,
+    skipped, problems, segments read). Only the segments in `segs`, when given. A sheet with only summary totals and
+    no lines is left alone (its totals check the files); any other sheet that can't be read is listed as skipped."""
+    read, skipped, problems, got = [], [], [], set()
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+        names = _sheet_list(zf)
+    except Exception:
+        return read, skipped, problems, got
+    for name, path in names:
+        seg = business_kind(name)
+        if not seg or (segs is not None and seg not in segs):
+            continue
+        label = SEGMENT_NAMES[seg]
+        where = f"{base} · {name}"
+        rows = None
+        try:
+            rows = _xlsx(raw, FNO_MAX_ROWS, path, True)
+            n, probs = _biz_rows(iter(rows), where, seg, acc, label)
+        except FileError as e:
+            if rows is not None and not any(_biz_header(r) for r in rows[:HEADER_SCAN]) and (
+                    business_summary(rows) or not any(DERIVATIVE.search(str(c).strip().upper()) for r in rows for c in r[:4])):
+                continue                     # totals only, or nothing that looks like a contract: not a table of trades
+            skipped.append({"name": where, "reason": str(e)})
+            continue
+        if n:
+            read.append({"name": where, "section": label, "lines": n})
+            problems += [{**p_, "text": f"{label} · {p_['text']}"[:120]} for p_ in probs]
+            got.add(seg)
+    return read, skipped, problems, got
 
 
 def parse_business(data: bytes, filename: str = "", seg: str | None = None) -> dict:

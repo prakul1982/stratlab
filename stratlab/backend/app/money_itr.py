@@ -353,11 +353,11 @@ def t_business(g: dict) -> dict:
 
 def t_tax_paid(g: dict) -> dict:
     fy = g["fy"]
-    end = f"{fy + 1}-03-31"
-    rows = [["Advance tax" if p["d"] <= end else "Self-assessment tax", p["d"], r2(p["amount"]), "", ""] for p in g["paid"]]
+    advance, later = adv.split_paid(fy, g["paid"])           # the same split as the 234B working in Tax tools
+    rows = [["Advance tax", p["d"], r2(p["amount"]), "", ""] for p in advance] + [["Self-assessment tax", p["d"], r2(p["amount"]), "", ""] for p in later]
     if g["paid"]:
-        adv_t = sum(p["amount"] for p in g["paid"] if p["d"] <= end)
-        sa_t = sum(p["amount"] for p in g["paid"] if p["d"] > end)
+        adv_t = sum(p["amount"] for p in advance)
+        sa_t = sum(p["amount"] for p in later)
         rows.append(["Total advance tax", "", r2(adv_t), "", ""])
         rows.append(["Total self-assessment tax", "", r2(sa_t), "", ""])
     if g["tds"]:
@@ -427,7 +427,7 @@ def fa_table(fa: dict | None) -> dict:
              "Schedule FA is filed with the return by its due date. Since 1 Oct 2024 the Black Money Act's ₹10 lakh penalty "
              "doesn't apply when foreign assets other than property total ₹20 lakh or less, but the disclosure has no minimum."]
     if fa and fa.get("missing_prices"):
-        notes.append("No prices for " + ", ".join(fa["missing_prices"]) + ": their peak and closing values are blank. Use your broker's statement.")
+        notes.append("No prices for " + ", ".join(fa["missing_prices"]) + ": their peak value, and the closing value of shares still held on 31 December, are blank. Use your broker's statement.")
     if fa and fa.get("fallback"):
         notes.append("Some rates are the RBI reference rate because SBI's rate for that date isn't known.")
     return table("fa", "Schedule FA, Table A3 (foreign equity)", COLS_FA, rows, notes)
@@ -438,12 +438,18 @@ def tables(g: dict) -> list[dict]:
             fa_table(g["fa"])]
 
 
+IN_ONLY = ", Indian shares and funds"       # beside the US shares' own lines
+
+
 def summary(g: dict) -> list[tuple[str, str]]:
     y = g["y"]
     t = y.get("total") or {}
     out = [("Financial year", f"{y['label']} (assessment year {g['fy'] + 1}-{str(g['fy'] + 2)[2:]})"),
            ("Return that fits", "ITR-3 (business income: intraday or F&O)" if y["intraday"]["count"] or y["business"]["segments"] else "ITR-2 (capital gains, no business income)"),
-           ("Short-term gains (net)", money(y["stcg"]["net"])), ("Long-term gains (net)", money(y["ltcg"]["net"])),
+           (f"Short-term gains{IN_ONLY if y.get('foreign') else ''} (net)", money(y["stcg"]["net"])),
+           (f"Long-term gains{IN_ONLY if y.get('foreign') else ''} (net)", money(y["ltcg"]["net"])),
+           *([("US shares: short-term gains (net)", money(y["foreign"]["st"]["net"])),
+              ("US shares: long-term gains (net)", money(y["foreign"]["lt"]["net"]))] if y.get("foreign") else []),
            ("Section 112A exemption used", money(y["exemption"]["used"])),
            ("Intraday result", money(y["intraday"]["pnl"])), ("F&O, commodity and currency result after charges", money(y["business"]["net"])),
            ("Dividends in the year (India)", money(sum(r["amount"] for r in g["div_lines"])))]
@@ -452,7 +458,10 @@ def summary(g: dict) -> list[tuple[str, str]]:
         out.append(("Foreign tax credit (lower of US tax and Indian tax on it)", money(g["us_div"]["ftc"]["credit"])))
     if t.get("available"):
         out.append(("Total tax estimate (" + ("new" if t["regime"] == "new" else "old") + " regime, with cess)", money(t["total"])))
-    out.append(("Advance tax entered", money(sum(p["amount"] for p in g["paid"] if p["d"] <= f"{g['fy'] + 1}-03-31"))))
+    advance, later = adv.split_paid(g["fy"], g["paid"])
+    out.append(("Advance tax entered", money(sum(p["amount"] for p in advance))))
+    if later:
+        out.append(("Self-assessment tax entered", money(sum(p["amount"] for p in later))))
     out.append(("TDS entered", money(g["tds"])))
     if g["fa"]:
         out.append((f"Schedule FA lines (calendar year {g['fy']})", str(len(g["fa"]["rows"]))))
