@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
-import { isAutoNotebookName, riskForCurrency, usesPro } from "../lib/rules";
+import { currencySymbol, dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
+import { isAutoNotebookName, rebuiltRisk, riskForCurrency, usesPro } from "../lib/rules";
 import { runCopy, runTime } from "../lib/notebookText";
 import type { Experiment, Instrument, LiveRow, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
+import { makeSaver, type SaveState } from "../lib/notebookSave";
 import { track, trackBacktest } from "../lib/analytics";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { GapsCard, type GapInfo } from "../components/Gaps";
@@ -19,7 +20,7 @@ import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
-import { usePlansToast } from "../components/PlanInterest";
+import { usePlansAction, usePlansToast } from "../components/PlanInterest";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the two-column layout with the lab notes beside it stays. */
@@ -34,9 +35,9 @@ export function useNotebook(id: string | undefined) {
   const [nb, setNb] = useState<Notebook | null>(null);
   // why there's no notebook to show: none at this address (deleted, mistyped, another account's), or it couldn't be read
   const [problem, setProblem] = useState<"missing" | "error" | null>(null);
-  const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
+  // "failed": the last save didn't reach the server; its edits wait for Retry (or the next save)
+  const [saving, setSaving] = useState<SaveState>("idle");
   const timer = useRef<number>(undefined);
-  const pending = useRef<Record<string, unknown>>({});
 
   const seq = useRef(0);       // a slower answer for the notebook just left must not land on this one
   const load = useCallback(async () => {
@@ -52,17 +53,17 @@ export function useNotebook(id: string | undefined) {
   }, [id, fail]);
   useEffect(() => { setNb(null); load(); }, [load]);
 
-  const flush = useCallback(async () => {
-    if (!id || !Object.keys(pending.current).length) return;
-    const body = pending.current;
-    pending.current = {};
-    setSaving("saving");
-    try {
-      await api(`/notebooks/${id}`, { method: "PUT", body });
-      setSaving("saved");
-      if ("name" in body || "instrument" in body || "question" in body) refreshNotebooks();
-    } catch (e) { fail(e); setSaving("idle"); }
-  }, [id, fail, refreshNotebooks]);
+  // the edits on their way to the server (lib/notebookSave): a failed save keeps them for Retry or the next save
+  const failRef = useRef(fail);
+  failRef.current = fail;
+  const refreshRef = useRef(refreshNotebooks);
+  refreshRef.current = refreshNotebooks;
+  const saver = useMemo(() => makeSaver((body) => api(`/notebooks/${id}`, { method: "PUT", body }), {
+    state: setSaving,
+    saved: (body) => { if ("name" in body || "instrument" in body || "question" in body) refreshRef.current(); },
+    failed: (e, quiet) => { if (!quiet) failRef.current(e); },
+  }), [id]);
+  const flush = useCallback((quiet = false): Promise<boolean> => (id ? saver.flush(quiet) : Promise.resolve(true)), [id, saver]);
 
   const patch = useCallback((p: Partial<Notebook> & { instrumentId?: string | null }, now = false) => {
     setNb((cur) => (cur ? { ...cur, ...p } : cur));
@@ -72,12 +73,14 @@ export function useNotebook(id: string | undefined) {
     if (p.notes !== undefined) body.notes = p.notes;
     if (p.strategy !== undefined) body.strategy = p.strategy;
     if (p.instrumentId !== undefined) body.instrument = p.instrumentId ?? "";
-    Object.assign(pending.current, body);
+    // an upload's currency is the one picked for it (the server can't tell from the file)
+    if (p.instrumentId?.startsWith("CSV:") && p.instrument && "currency" in p.instrument && p.instrument.currency) body.currency = p.instrument.currency;
+    saver.add(body);
     window.clearTimeout(timer.current);
-    if (now) flush(); else timer.current = window.setTimeout(flush, 700);
-  }, [flush]);
+    if (now) void flush(); else timer.current = window.setTimeout(() => void flush(), 700);
+  }, [flush, saver]);
 
-  useEffect(() => () => { window.clearTimeout(timer.current); flush(); }, [flush]);
+  useEffect(() => () => { window.clearTimeout(timer.current); void flush(); }, [flush]);
   return { nb, setNb, patch, saving, reload: load, flush, problem };
 }
 
@@ -121,9 +124,14 @@ function NotebookView() {
   const { id } = useParams();
   const nav = useNavigate();
   const plansToast = usePlansToast();
+  const plansAction = usePlansAction();
   const loc = useLocation();
   const { markets, fail, notify, refreshMe, refreshNotebooks, me, allIndicators, fno } = useApp();
-  const canExport = !!me?.plan_info.features?.export;
+  const feats = me?.plan_info.features;
+  const canExport = !!feats?.export;
+  // what the plan allows, known before Start (the server says the same at Start): paper trading a group (Basic), and its
+  // faster entries and spread limit (Pro)
+  const groupOk = feats ? !!feats.group_live : true, fastOk = feats ? !!feats.fast_entries : true;
   const { nb, patch, saving, setNb, flush, problem, reload } = useNotebook(id);
   const [gaps, setGaps] = useState<GapInfo | null>((loc.state as { gaps?: GapInfo } | null)?.gaps ?? null);
   const [days, setDays] = useState("");
@@ -233,7 +241,12 @@ function NotebookView() {
     starting.current = true;
     setRunning(true);
     try {
-      await flush();
+      // the run tests the rules on the server: a save that didn't get there would test the old ones
+      if (!(await flush(true))) {
+        notify("The rules couldn't be saved, so nothing was run. The experiment would have tested the rules as they were before your edit.",
+          { label: "Retry the save", run: () => void flush() });
+        return;
+      }
       const out = await api<{ experiment: Experiment; defaulted?: string | null; instrument?: Instrument | null }>(`/notebooks/${nb.id}/experiments`, { method: "POST", body });
       trackBacktest(group ? "group" : "notebook");
       setNb((cur) => (cur ? { ...cur, ...(out.instrument ? { instrument: out.instrument } : {}), experiments: [...(cur.experiments || []), out.experiment] } : cur));
@@ -267,7 +280,8 @@ function NotebookView() {
 
   const duplicate = async () => {
     try {
-      await flush();   // copy the rules as they are on screen, including an edit that hasn't saved yet
+      // copy the rules as they are on screen, including an edit that hasn't saved yet
+      if (!(await flush(true))) { notify("The rules couldn't be saved, so no copy was made.", { label: "Retry the save", run: () => void flush() }); return; }
       const copy = await api<Notebook>(`/notebooks/${nb.id}/duplicate`, { method: "POST" });
       await refreshNotebooks();
       nav(`/n/${copy.id}`);
@@ -291,6 +305,7 @@ function NotebookView() {
 
   const paperTrade = async () => {
     if (group) {
+      if (!groupOk) { plansToast("Paper trading a group is on the Basic plan."); return; }
       if (s.tf === "1d") { notify("Paper trading a group needs intraday candles. Switch the rules to 5-minute, 15-minute or 1-hour candles first."); return; }
       setGroupStart(true);
       return;
@@ -351,13 +366,15 @@ function NotebookView() {
       <div className="k-page">
         <PageHeader eyebrow="Trade · Build and test" title={nb.name}
           lede={nb.question || "Write the question this notebook should answer."}
-          actions={<span className="k-note" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
+          actions={<span className="k-note" aria-live="polite">{saving === "failed"
+            ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>
+            : saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />
 
         <Card label="About this notebook">
           <CardHead title="About this notebook" info={HELP.notebook} infoLabel="About notebooks" actions={<>
             <button type="button" className="btn quiet sm" onClick={() => setRewrite(true)}><Sparkle size={17} />Describe the idea again</button>
             {live ? <Link className="btn quiet sm" to={`/paper/${live.id}`} title={`Running since ${dateOnly(live.started_at)}`}><Pulse size={17} />Paper trading · open</Link>
-              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade</button>}
+              : <button type="button" className="btn quiet sm" onClick={paperTrade} disabled={(!inst && !group) || isUpload}><Pulse size={17} />Paper trade{group && !groupOk ? " (Basic)" : ""}</button>}
             <button type="button" className="btn quiet sm" onClick={togglePin} aria-pressed={!!nb.pinned}><Pin size={17} filled={!!nb.pinned} />{nb.pinned ? "Pinned" : "Pin"}</button>
             <MoreMenu align="right" items={[
               { label: "Make a copy", icon: <Copy size={16} />, run: duplicate },
@@ -467,18 +484,19 @@ function NotebookView() {
             <p className="k-small k-muted">{group.name}: {group.members.length} instruments, up to {group.maxOpen} open at once, on {TF_NAME[s.tf]} candles, with fake money.</p>
             {group.market === "IN" && (
               <div className="k-stack k-tight">
-                <CheckField label={<b>Faster entries</b>} checked={fast.ticks} onChange={(on) => setFast({ ...fast, ticks: on })} />
+                <CheckField label={<><b>Faster entries</b>{!fastOk && " (Pro)"}</>} checked={fast.ticks} disabled={!fastOk && !fast.ticks} onChange={(on) => setFast({ ...fast, ticks: on })} />
                 <span className="k-note">Check the entry rules on the live price every 15 seconds, and enter as soon as they hold, instead of waiting for the candle to close. Exits still wait for the close. A backtest can't see inside a candle, so paper results will differ from it.</span>
               </div>
             )}
             <FormGrid label="Group limits">
               {group.market === "IN" && (
-                <Field label="Skip if the spread is over" unit="% of price" info="The spread is the gap between the best bid and ask. With a spread limit set, an entry is skipped when the order book is too thin or unknown; the session counts how many were skipped." type="number" min={0} max={5} step={0.05}
+                <Field label={`Skip if the spread is over${fastOk ? "" : " (Pro)"}`} unit="% of price" disabled={!fastOk && !fast.maxSpreadPct} info="The spread is the gap between the best bid and ask. With a spread limit set, an entry is skipped when the order book is too thin or unknown; the session counts how many were skipped." type="number" min={0} max={5} step={0.05}
                   value={fast.maxSpreadPct || ""} placeholder="Off" onChange={(e) => setFast({ ...fast, maxSpreadPct: Math.max(0, Math.min(5, +e.target.value || 0)) })} />
               )}
-              <Field label="Skip anything cheaper than" type="number" min={0} step={1} value={fast.minPrice || ""} placeholder="Off"
+              <Field label="Skip anything cheaper than" unit={currencySymbol(currency) || undefined} type="number" min={0} step={1} value={fast.minPrice || ""} placeholder="Off"
                 onChange={(e) => setFast({ ...fast, minPrice: Math.max(0, +e.target.value || 0) })} />
             </FormGrid>
+            {group.market === "IN" && !fastOk && <Notice action={plansAction}>Faster entries and the spread limit are on the Pro plan.</Notice>}
             <div className="k-row">
               <button type="button" className="btn" onClick={() => { setGroupStart(false); startGroup(); }}>Start paper trading</button>
               <button type="button" className="btn quiet" onClick={() => setGroupStart(false)}>Cancel</button>
@@ -490,8 +508,12 @@ function NotebookView() {
       {rewrite && (
         <Modal title="Describe the idea again" onClose={() => setRewrite(false)}>
           <p className="k-small k-muted">This replaces the rules in this notebook. Your experiments stay as they are.</p>
-          <IdeaComposer busyLabel="Replace the rules" autoFocus byHand={false} onBuilt={async (b) => {
-            patch({ strategy: { ...b.strategy, name: nb.name }, ...(b.instrument && !inst ? { instrument: b.instrument, instrumentId: b.instrument.id } : {}) }, true);
+          <IdeaComposer busyLabel="Replace the rules" autoFocus byHand={false} market={group?.market ?? inst?.market} symbol={inst?.symbol ?? null} onBuilt={async (b) => {
+            // the rules are replaced; the capital, costs, sizing and risk per trade stay unless the new words give them
+            const picked = b.instrument && !inst ? b.instrument : null;
+            const kept = rebuiltRisk(s.risk, b.strategy.risk, b.gaps.mentioned);
+            const risk = picked ? riskForCurrency(kept, picked.currency) : kept;
+            patch({ strategy: { ...b.strategy, name: nb.name, risk }, ...(picked ? { instrument: picked, instrumentId: picked.id } : {}) }, true);
             saveGaps(b.gaps);
             setRewrite(false);
           }} />

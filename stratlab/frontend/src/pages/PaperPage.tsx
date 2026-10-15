@@ -1,7 +1,7 @@
 import { RiskOverview } from "../components/RiskOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { money, pct, price, qty, TF_NAME, tzOf, when, fmtDate, fmtDateTime } from "../lib/format";
 import { sessionPath, upDown } from "../lib/tradeUi";
@@ -71,13 +71,22 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   };
 
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
+  const told = useRef(false);          // a failing poll is said once, not every 3 seconds
+  const poll = useRef<number>(undefined);
 
   // `live` is false once the effect is cleaned up (another session, or the page left): a late answer is dropped
   const load = useCallback(async (live: () => boolean = () => true) => {
     try {
       const s = withLists(await api<LiveSnapshot>(`/live/sessions/${sid}`));
-      if (live()) { setSnap(s); setError(null); }
-    } catch (e) { if (live()) { setError((e as Error)?.message || "Something went wrong. Try again."); fail(e); } }
+      if (live()) { setSnap(s); setError(null); told.current = false; }
+    } catch (e) {
+      if (!live()) return;
+      setError((e as Error)?.message || "Something went wrong. Try again.");
+      // no session at this address: nothing will come back, so the polling stops and the page says so
+      if (e instanceof ApiError && (e.status === 404 || e.status === 400 || e.status === 422)) { setMissing(true); window.clearInterval(poll.current); return; }
+      if (!told.current) { told.current = true; fail(e); }
+    }
   }, [sid, fail]);
 
   useEffect(() => {
@@ -85,15 +94,18 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     const on = () => live;
     setSnap(null);
     setError(null);
+    setMissing(false);
+    told.current = false;
     void load(on);
-    const t = window.setInterval(() => { if (!document.hidden) void load(on); }, 3000);
-    return () => { live = false; window.clearInterval(t); };
+    poll.current = window.setInterval(() => { if (!document.hidden) void load(on); }, 3000);
+    return () => { live = false; window.clearInterval(poll.current); };
   }, [load]);
 
   // an options or signal session's id here opens its own page (R7T-011)
   const own = snap ? sessionPath({ id: sid, kind: (snap as unknown as { kind?: string }).kind, instrument: snap.instrument as { type?: string; signal?: boolean } }) : null;
   useEffect(() => { if (own && own !== `/paper/${sid}`) nav(own, { replace: true }); }, [own, sid, nav]);
 
+  if (!snap && missing) return <Card><EmptyState title="Session not found" action={{ label: "See your sessions", to: "/paper" }}>There's no paper session at this address. It may have been deleted, or the link may be from another account.</EmptyState></Card>;
   if (!snap && error) return <Card><ErrorState title="The session didn't load" action={{ label: "Try again", onClick: () => { void load(); } }}>{error}</ErrorState></Card>;
   if (!snap || (own && own !== `/paper/${sid}`)) return <Card><Skeleton label="Connecting to the session" /></Card>;
   if ((snap as unknown as GroupSnapshot).kind === "group") {
@@ -211,7 +223,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
       {rows.map((r) => (
         <button type="button" key={r.id} className="k-sess" onClick={() => open(r)} aria-current={r.id === sid}>
           <b>{r.name}</b>
-          <span className="k-note">{r.instrument.symbol} · started {fmtDate(r.started_at, { year: false })}</span>
+          <span className="k-note">{r.instrument.symbol} · started {fmtDateTime(r.started_at, { tz: tzOf(r.instrument), year: false, zone: true })}</span>
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <Badge tone={statusTone(r.status)}>{r.status}</Badge>
@@ -281,7 +293,7 @@ export function PaperPage() {
           </Card>
         )}
       {!sid && rows && rows.some((r) => r.status === "running") && (
-        <RiskOverview onOpen={(id, kind) => nav(kind === "options" ? `/options/s/${id}` : `/paper/${id}`)} />
+        <RiskOverview onOpen={(id, kind) => nav(sessionPath({ id, kind }))} />
       )}
       {sid && <SessionView sid={sid} onStopped={load} onDeleted={() => { nav("/paper"); load(); }} />}
       {!sid && rows && rows.length > 0 && <p className="k-small k-muted">Pick a session above to see its chart, account and orders.</p>}

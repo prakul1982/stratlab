@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type ApiError } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { fmtDate, money, price, tzLabel, when } from "../lib/format";
-import { upDown } from "../lib/tradeUi";
+import { dayStat, upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
 import { atExpiry, gapLine, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
-import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, Notice, PageHeader, Skeleton, Stat, StatRow, type Column } from "../components/kit";
+import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, ErrorState, Notice, PageHeader, Skeleton, Stat, StatRow, type Column } from "../components/kit";
 import { Earlier, splitToday } from "../components/Earlier";
 import { contract, OrderList, ordersBetween, ordersSince } from "../components/OrderList";
 import { moneyCompact } from "../lib/chartFormat";
@@ -36,16 +36,35 @@ export function OptionsSession() {
   const [shown, setShown] = useState<Set<string>>(new Set());     // closed trades whose orders are open
   const toggle = (k: string) => setShown((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
+  // why there's nothing to show: no session at this address (polling stops), or it couldn't be read (said once, retried)
+  const [problem, setProblem] = useState<{ missing: boolean; text: string } | null>(null);
+  const told = useRef(false);
+  const poll = useRef<number>(undefined);
   const load = useCallback(async () => {
-    try { setSnap(await api<OptionSnapshot>(`/live/sessions/${sid}`)); } catch (e) { fail(e); }
+    try { setSnap(await api<OptionSnapshot>(`/live/sessions/${sid}`)); setProblem(null); told.current = false; } catch (e) {
+      const missing = e instanceof ApiError && (e.status === 404 || e.status === 400 || e.status === 422);
+      setProblem({ missing, text: (e as Error)?.message || "Something went wrong." });
+      if (missing) { window.clearInterval(poll.current); return; }        // nothing will come back at this address
+      if (!told.current) { told.current = true; fail(e); }
+    }
   }, [sid, fail]);
   useEffect(() => {
     setSnap(null);
+    setProblem(null);
+    told.current = false;
     load();
-    const h = window.setInterval(() => { if (!document.hidden) load(); }, 3000);
-    return () => window.clearInterval(h);
+    poll.current = window.setInterval(() => { if (!document.hidden) load(); }, 3000);
+    return () => window.clearInterval(poll.current);
   }, [load]);
 
+  if (!snap && problem?.missing) return (
+    <div className="k-page">
+      <PageHeader eyebrow="Not found" title="Options session not found" lede="There's no options session at this address. It may have been deleted, or the link may be from another account." />
+      <div className="gate-actions"><Link className="btn" to="/options">Go to the options builder</Link></div>
+    </div>
+  );
+  if (!snap && problem) return <div className="k-page"><PageHeader eyebrow="Trade · Practise" title="Options session" />
+    <ErrorState title="The session couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>{problem.text} It is tried again every few seconds.</ErrorState></div>;
   if (!snap) return <div className="k-page"><PageHeader eyebrow="Trade · Practise" title="Options session" /><Card><Skeleton label="Connecting to the session" /></Card></div>;
   const running = snap.status === "running";
   const a = snap.account, p = snap.position, s = snap.strategy;
@@ -108,7 +127,8 @@ export function OptionsSession() {
       <Card label="The account">
         <StatRow label="Session results">
           <Stat item label="Open trade, after costs" value={p ? inr(p.net) : "No open trade"} tone={tone(p ? p.net : null)} />
-          <Stat item label="Today" value={inr(a.today + (p ? p.net : 0))} tone={tone(a.today + (p ? p.net : 0))} />
+          {(() => { const d = dayStat(running, snap.status, a.today, p ? p.net : 0);
+            return <Stat item label={d.label} value={d.text ?? inr(d.value)} tone={tone(d.value)} />; })()}
           <Stat item label="All closed trades" value={inr(a.realised)} tone={tone(a.realised)} />
           <Stat item label="Paper account" value={inr(a.equity)} tone={tone(a.equity - a.capital)} />
         </StatRow>

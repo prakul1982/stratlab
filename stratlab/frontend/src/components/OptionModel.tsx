@@ -260,7 +260,7 @@ function RollResult({ r }: { r: OptRoll }) {
     <div className="k-stack" data-testid="roll-result">
       <p className="k-small">Closes the {SIDE[o.side]} {pts(c.strike, r.model.tick)} {c.opt} ({shortDate(c.expiry)}) at {inr(c.px, 2)} and opens a {SIDE[o.side]} {pts(o.strike, r.model_to.tick)} {o.opt} ({shortDate(o.expiry)}) at {inr(o.px, 2)}, at today's bid and ask.</p>
       <StatRow label="Roll result">
-        <Stat label={`Premium ${r.premium >= 0 ? "taken in" : "paid out"}`} value={inr(r.premium, 2)} tone={tone(r.premium)} />
+        <Stat label={`Premium ${r.premium >= 0 ? "taken in" : "paid out"}`} value={inr(Math.abs(r.premium), 2)} tone={tone(r.premium)} />
         <Stat label="Charges, two orders" value={inr(r.charges.total, 2)} />
         <div data-testid="roll-net"><Stat label="After charges" value={inr(r.net, 2)} tone={tone(r.net)} /></div>
         <Stat label="New leg's IV" value={o.iv ? pctIv(o.iv) : "–"} />

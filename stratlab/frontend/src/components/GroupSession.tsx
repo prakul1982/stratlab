@@ -3,7 +3,7 @@ import { STOP_DIALOG } from "../lib/paperText";
 import { useApp } from "../lib/app";
 import { fmtDate, money, price, qty, TF_NAME, tzOf, when } from "../lib/format";
 import { HELP } from "../lib/help";
-import { upDown } from "../lib/tradeUi";
+import { dayStat, upDown } from "../lib/tradeUi";
 import { ChartEmpty, LineChart } from "./Charts";
 import { ChartFrame, Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, Notice, Stat, StatRow, type Column } from "./kit";
 import { moneyCompact } from "../lib/chartFormat";
@@ -84,7 +84,9 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
       <Card label="The account">
         <StatRow label="Group account">
           <Stat item label="Open positions" value={`${a.open} of ${a.max_open}`} />
-          <Stat item label="Today" value={money(a.today, cur)} tone={tone(a.today)} />
+          {/* a stopped group isn't trading today: its page doesn't read "Today ₹0" */}
+          {(() => { const d = dayStat(running, snap.status, running ? a.today : null, 0);
+            return <Stat item label={d.label} value={d.text ?? money(d.value, cur)} tone={tone(d.value)} />; })()}
           <Stat item label="Closed trades" value={money(a.realised, cur)} tone={tone(a.realised)} note={`${a.trades} trade${a.trades === 1 ? "" : "s"}`} />
           <Stat item label="Paper account" value={money(a.equity, cur)} tone={tone(a.equity - a.capital)} note="Fake money" />
         </StatRow>

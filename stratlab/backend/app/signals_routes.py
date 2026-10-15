@@ -53,6 +53,9 @@ class SessionReq(BaseModel):
 class TestReq(BaseModel):
     action: str = Field(..., pattern=r"^(buy|sell|exit)$")
     qty: float | None = Field(None, gt=0, le=SG.MAX_QTY)
+    # the page's own id for this click: the same signal sent twice (a double click, a retry) is logged as a repeat and
+    # never fills twice, as an alert's id does
+    id: str | None = Field(None, pattern=SG.ID.pattern)
 
 
 def _plan_name() -> str:
@@ -70,8 +73,10 @@ def _rows(uid: str) -> list[dict]:
         status = r["status"]
         if status == "running" and r["id"] not in running:
             status = "paused"
-        out.append({"id": r["id"], "name": r["name"], "symbol": (r.get("instrument") or {}).get("symbol"), "status": status,
-                    "started_at": r["started_at"], "stopped_at": r.get("stopped_at")})
+        inst = r.get("instrument") or {}
+        # the market and its zone: the page writes the start in the market's own time, labelled (as trades are)
+        out.append({"id": r["id"], "name": r["name"], "symbol": inst.get("symbol"), "status": status,
+                    "started_at": r["started_at"], "stopped_at": r.get("stopped_at"), "market": inst.get("market"), "tz": inst.get("tz")})
     return out
 
 
@@ -167,6 +172,8 @@ def test_signal(sid: str, req: TestReq, profile=Depends(current_profile)):
     body = {"session": row["id"], "action": req.action, "note": "Test from the StratLab page"}
     if req.action != "exit":
         body["qty"] = req.qty if req.qty is not None else 1
+    if req.id:
+        body["id"] = req.id
     try:
         sig = SG.parse(json.dumps(body).encode())
     except SG.SignalError as e:

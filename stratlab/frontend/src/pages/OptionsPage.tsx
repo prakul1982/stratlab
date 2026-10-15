@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { axisInrFor, money, price, fmtDate, IST, tzLabel } from "../lib/format";
+import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
+import { blankOptions, convertOptLimit, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -74,14 +74,14 @@ function InTime({ label, value, onChange }: { label: string; value: string; onCh
 }
 
 /** How a leg's strike is picked, and the number(s) the rule needs. */
-function PickCell({ l, i, unit, upd, rules }: { l: OptLeg; i: number; unit: "points" | "strikes"; upd: (i: number, p: Partial<OptLeg>) => void; rules: boolean }) {
+function PickCell({ l, i, unit, upd, rules, step }: { l: OptLeg; i: number; unit: "points" | "strikes"; upd: (i: number, p: Partial<OptLeg>) => void; rules: boolean; step: number | null }) {
   const pick = l.pick ?? "offset";
   const n = (k: keyof OptLeg, d: number) => (l[k] as number | undefined) ?? d;
   return (
     <div className="k-leg-pick">
       <Select small label={`Leg ${i + 1} strike by`} value={pick} onChange={(v) => upd(i, { pick: v as StrikePick })}
         options={PICKS.map(([v, name]) => ({ value: v, label: `${name}${v !== "offset" && !rules ? " (Pro)" : ""}`, disabled: v !== "offset" && !rules && v !== pick }))} />
-      {pick === "offset" && <InNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? 50 : 1} onChange={(v) => upd(i, { offset: v })} />}
+      {pick === "offset" && <InNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? step ?? 1 : 1} onChange={(v) => upd(i, { offset: v })} />}
       {pick === "offset" && <span className="k-note">{unit}</span>}
       {(pick === "delta" || pick === "delta_range") && <InNum label={`Leg ${i + 1} delta`} value={n("delta", 0.2)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { delta: v })} />}
       {pick === "delta_range" && <><span className="k-note">to</span><InNum label={`Leg ${i + 1} delta, high end`} value={n("deltaTo", 0.3)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { deltaTo: v })} /></>}
@@ -96,7 +96,9 @@ function PickCell({ l, i, unit, upd, rules }: { l: OptLeg; i: number; unit: "poi
 
 type LegRow = { l: OptLeg; i: number };
 
-function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs: OptLeg[]) => void; preview: OptPreview | null; rules: boolean }) {
+function LegsEditor({ s, set, preview, rules, step }: { s: OptionStrategy; set: (legs: OptLeg[]) => void; preview: OptPreview | null; rules: boolean;
+  /** the underlying's strike step, when known (the chain's or the preview's) */
+  step: number | null }) {
   const upd = (i: number, p: Partial<OptLeg>) => set(s.legs.map((l, j) => (j === i ? { ...l, ...p } : l)));
   const unit = s.offsetUnit === "points" ? "points" : "strikes";
   const picks = preview ? preview.legs.map((p, i) => [i, p.pick] as const).filter(([, w]) => !!w) : [];
@@ -105,7 +107,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
   const cols: Column<LegRow>[] = [
     { key: "side", header: "Buy or sell", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} buy or sell`} value={l.side} onChange={(v) => upd(i, { side: v as OptLeg["side"] })} options={[{ value: "sell", label: "Sell" }, { value: "buy", label: "Buy" }]} /> },
     { key: "opt", header: "Type", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} call or put`} value={l.opt} onChange={(v) => upd(i, { opt: v as OptLeg["opt"] })} options={[{ value: "CE", label: "Call (CE)" }, { value: "PE", label: "Put (PE)" }]} /> },
-    { key: "by", header: "Strike by", info: HELP.optStrikeRule, cell: ({ l, i }) => <PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} /> },
+    { key: "by", header: "Strike by", info: HELP.optStrikeRule, cell: ({ l, i }) => <PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} step={step} /> },
     { key: "lots", header: "Lots", cell: ({ l, i }) => <input className="k-input sm k-in num" aria-label={`Leg ${i + 1} lots`} type="number" min={1} max={50} value={l.lots}
       onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /> },
     ...(preview ? [
@@ -127,7 +129,7 @@ function LegsEditor({ s, set, preview, rules }: { s: OptionStrategy; set: (legs:
         Deltas are the pricing model's estimates.{!rules && " Picking strikes by delta or premium is on the Pro plan; Price it now shows what a rule would pick."}
       </p>}
       {s.legs.length < 8 && <button type="button" className="btn quiet sm k-btn-end"
-        onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 500 : 6, lots: 1 }])}>Add a leg</button>}
+        onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 6 * (step ?? 100) : 6, lots: 1 }])}>Add a leg</button>}
     </div>
   );
 }
@@ -322,6 +324,8 @@ export function OptionsPage() {
   const { fail, notify, refreshMe, notebooks, me } = useApp();
   const feats = me?.plan_info?.features;
   const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
+  // entering on a notebook's signal is on Pro: said on the choice and the Start button, not first at Start
+  const signalOk = feats ? !!feats.options_signal : true;
   const nav = useNavigate();
   const plansToast = usePlansToast();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
@@ -368,6 +372,24 @@ export function OptionsPage() {
     patch({ structure: id, offsetUnit: st.unit, legs: st.legs.map((l) => ({ ...l })), ...named(`${s.underlying} ${st.name.toLowerCase()}`) });
   };
   const hasShort = s.legs.some((l) => l.side === "sell");
+  // the underlying's strike step (NIFTY 50, BANKNIFTY 100, USDINR 0.25), from the priced preview or the chain, kept per
+  // underlying: every edit clears the preview, and the step mustn't go with it
+  const undKey = `${s.exchange}:${s.underlying}`;
+  const [steps, setSteps] = useState<Record<string, number>>({});
+  useEffect(() => { if (preview?.step) setSteps((x) => ({ ...x, [undKey]: preview.step })); }, [preview, undKey]);
+  const step = preview?.step ?? steps[undKey] ?? null;
+  const switchUnit = async (to: "strikes" | "points") => {
+    if (to === s.offsetUnit) return;
+    let k: number | null = step;
+    if (!k) {     // not priced yet: the chain says the step
+      try { k = (await api<OptChain>(`/options/chain?exchange=${s.exchange}&underlying=${encodeURIComponent(s.underlying)}&expiry=${s.expiry}`)).step ?? null; }
+      catch { k = null; }
+      const got = k;
+      if (got) setSteps((x) => ({ ...x, [undKey]: got }));
+    }
+    if (!k) { notify(`${s.underlying}'s strike step isn't known yet, so the distances can't be turned into ${to}. Price it first, then switch.`); return; }
+    patch({ offsetUnit: to, legs: offsetsIn(s.legs, to, k) });
+  };
 
   const price_ = async () => {
     setPricing(true);
@@ -379,7 +401,15 @@ export function OptionsPage() {
     setConfirmStart(false);
     setStarting(true);
     try {
-      const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy: s } });
+      // the notebook's rules as they are now, read right before Start: an edit made since they were picked is what runs
+      let strategy = s;
+      if (s.signal?.notebook) {
+        const fresh = await readSignal(s.signal.notebook);
+        if (!fresh) return;
+        strategy = { ...s, signal: fresh };
+        setS((x) => ({ ...x, signal: fresh }));
+      }
+      const snap = await api<{ id: string }>("/options/sessions", { method: "POST", body: { strategy } });
       track("paper trading started", { kind: "options" });
       refreshMe();
       nav(`/options/s/${snap.id}`);
@@ -398,16 +428,24 @@ export function OptionsPage() {
 
   const [sigBusy, setSigBusy] = useState(false);
   const [ruleMode, setRuleMode] = useState(() => !!s.signal || new URLSearchParams(location.search).get("enter") === "rules");
-  const pickRules = async (id: string) => {
+  /** A notebook's rules as they are now, as the signal to enter on; null (said) when they can't be used. */
+  const readSignal = async (id: string) => {
+    const nb = await api<Notebook>(`/notebooks/${id}`);
+    if (!["5m", "15m", "1h"].includes(nb.strategy.tf)) {
+      notify(`"${nb.name}" uses daily candles. Option trades close every day, so pick rules on 5-minute, 15-minute or hourly candles.`);
+      return null;
+    }
+    return signalFrom(nb, s.signal, new Date().toISOString());
+  };
+  const pickRules = async (id: string, say = true) => {
     if (!id) return;
     setSigBusy(true);
     try {
-      const nb = await api<Notebook>(`/notebooks/${id}`);
-      if (!["5m", "15m", "1h"].includes(nb.strategy.tf)) {
-        notify(`"${nb.name}" uses daily candles. Option trades close every day, so pick rules on 5-minute, 15-minute or hourly candles.`);
-        return;
-      }
-      const signal = { rules: nb.strategy, notebook: nb.id, name: nb.name, short: s.signal?.short ?? (nb.strategy.side === "long" ? "none" : "mirror") as "none" | "mirror" };
+      const signal = await readSignal(id);
+      if (!signal) return;
+      // the same notebook picked again: its rules are read again, nothing else changes
+      if (s.signal?.notebook === id) { patch({ signal }); if (say) notify(`${signalLine(signal)}.`); return; }
+      const nb = { name: signal.name };
       // a directional signal usually buys an option; swap out the default short straddle
       const bc = STRUCTURES.find((x) => x.id === "buy_call")!;
       if (s.structure === "short_straddle") {
@@ -417,8 +455,9 @@ export function OptionsPage() {
     } catch (e) { fail(e); } finally { setSigBusy(false); }
   };
   useEffect(() => {   // "Trade it with options" on a verdict hands over its notebook
+    // its rules are read now even when the draft already has that notebook: the copy in the draft may be days old
     const id = new URLSearchParams(location.search).get("nb");
-    if (id && id !== s.signal?.notebook) pickRules(id);
+    if (id) pickRules(id, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const sigTf = s.signal ? ({ "5m": "5-minute", "15m": "15-minute", "1h": "hourly" } as Record<string, string>)[s.signal.rules.tf] : "";
@@ -429,6 +468,13 @@ export function OptionsPage() {
   const setZ = (p: Partial<OptionStrategy["sizing"]>) => patch({ sizing: { ...z, ...p } });
   const setC = (p: Partial<OptionStrategy["costs"]>) => patch({ costs: { ...c, ...p } });
   const lossOpts = [{ value: "none", label: "Off" }, { value: "amount", label: "₹" }, { value: "credit_pct", label: "% of premium" }];
+  // a stop or target switched between ₹ and % of the premium is converted at the priced premium, or cleared and said
+  const switchLimit = (k: "stop" | "tgt", to: OptionStrategy["risk"]["stopType"]) => {
+    const from = k === "stop" ? r.stopType : r.tgtType;
+    const x = convertOptLimit(k === "stop" ? r.stop : r.tgt, from, to, preview ? payoff(preview).credit : null, k === "stop" ? "stop" : "target");
+    setRisk(k === "stop" ? { stopType: to, stop: x.value } : { tgtType: to, tgt: x.value });
+    if (x.note) notify(x.note);
+  };
   const legsText = s.legs.map((l) => `${l.side === "sell" ? "Sell" : "Buy"} ${l.lots > 1 ? l.lots + "× " : ""}${legRule(l, s.offsetUnit)} ${l.opt}`).join(" · ");
   const vf = s.vix;
   const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
@@ -490,9 +536,9 @@ export function OptionsPage() {
               <div className="k-row">
                 <span className="k-small k-muted">Distance in</span>
                 <Seg label="Distance unit" value={s.offsetUnit} options={[{ value: "strikes", label: "Strikes" }, { value: "points", label: "Points" }]}
-                  onChange={(v) => patch({ offsetUnit: v as "strikes" | "points", legs: s.legs.map((l) => ({ ...l, offset: v === "points" ? l.offset * (preview?.step ?? 50) : Math.round(l.offset / (preview?.step ?? 50)) })) })} />
+                  onChange={(v) => void switchUnit(v as "strikes" | "points")} />
               </div>
-              <LegsEditor s={s} preview={preview} rules={rulesOk} set={(legs) => patch({ legs, structure: "custom" })} />
+              <LegsEditor s={s} preview={preview} rules={rulesOk} step={step} set={(legs) => patch({ legs, structure: "custom" })} />
             </div>
           </Disclosure>
         </div>
@@ -505,18 +551,22 @@ export function OptionsPage() {
           <p className="k-sentence">
             <b>Enter</b>
             <Seg label="When to enter" value={ruleMode ? "rules" : "time"}
-              options={[{ value: "time", label: "At a set time" }, { value: "rules", label: "When a notebook's rules say so" }]}
+              options={[{ value: "time", label: "At a set time" }, { value: "rules", label: `When a notebook's rules say so${signalOk ? "" : " (Pro)"}`, disabled: !signalOk && !ruleMode }]}
               onChange={(v) => { setRuleMode(v === "rules"); if (v === "time") patch({ signal: null }); }} />
+            {!signalOk && !ruleMode && <span className="k-note">Entering on a notebook's rules is on the Pro plan. <Link className="link" to="/plans">Plans</Link></span>}
           </p>
           {ruleMode ? (
             <>
               <p className="k-sentence">
                 <b>Enter when</b>{" "}
                 <Select small label="Notebook with the rules" value={s.signal?.notebook ?? ""} disabled={sigBusy} onChange={pickRules}
-                  options={[{ value: "", label: s.signal ? s.signal.name : "Use a notebook's rules…" },
-                    ...(notebooks ?? []).filter((n) => n.id !== s.signal?.notebook).map((n) => ({ value: n.id, label: `${n.name}${n.tf ? ` (${n.tf})` : ""}` }))]} />{" "}
+                  options={[...(s.signal ? [] : [{ value: "", label: "Use a notebook's rules…" }]),
+                    ...(s.signal?.notebook && !(notebooks ?? []).some((n) => n.id === s.signal?.notebook) ? [{ value: s.signal.notebook, label: s.signal.name }] : []),
+                    ...(notebooks ?? []).map((n) => ({ value: n.id, label: `${n.name}${n.tf ? ` (${n.tf})` : ""}` }))]} />{" "}
                 signals a trade, from <InTime label="Earliest entry" value={t.entry} onChange={(v) => setTiming({ entry: v })} /> to <InTime label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />.
               </p>
+              {s.signal && <p className="k-note" data-testid="opt-signal-asof">{signalLine(s.signal)}. They are read again right before Start.{" "}
+                {s.signal.notebook && <button type="button" className="link" disabled={sigBusy} onClick={() => void pickRules(s.signal!.notebook!)}>Read them again now</button>}</p>}
               {s.signal && <Seg label="Short signals" value={s.signal.short}
                 options={[{ value: "mirror", label: "Short signals: swap calls and puts" }, { value: "none", label: "Long signals only" }]}
                 onChange={(v) => patch({ signal: { ...s.signal!, short: v as "mirror" | "none" } })} />}
@@ -535,14 +585,14 @@ export function OptionsPage() {
             <div className="k-field">
               <div className="k-label-row"><span className="k-lbl">Exit sooner at a loss of</span></div>
               <div className="k-row">
-                <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => setRisk({ stopType: v as OptionStrategy["risk"]["stopType"] })} />
+                <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => switchLimit("stop", v as OptionStrategy["risk"]["stopType"])} />
                 {r.stopType !== "none" && <input className="k-input k-in num" type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
               </div>
             </div>
             <div className="k-field">
               <div className="k-label-row"><span className="k-lbl">Or at a gain of</span></div>
               <div className="k-row">
-                <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => setRisk({ tgtType: v as OptionStrategy["risk"]["tgtType"] })} />
+                <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => switchLimit("tgt", v as OptionStrategy["risk"]["tgtType"])} />
                 {r.tgtType !== "none" && <input className="k-input k-in num" type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
               </div>
             </div>
@@ -592,9 +642,10 @@ export function OptionsPage() {
           <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
           <FormActions>
             <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && !s.signal)} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : canStart ? "Start paper trading" : "🔒 Start paper trading (Basic)"}</button>
+            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk))} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
             {!canStart && <span className="k-note">Paper trading at set times is on the Basic plan. Price it now works on every plan.</span>}
-            {canStart && ruleMode && !s.signal && <span className="k-note">Pick the notebook whose rules give the signal first.</span>}
+            {canStart && ruleMode && !signalOk && <span className="k-note">Entering on a notebook's rules is on the Pro plan; at a set time works on yours. <Link className="link" to="/plans">Plans</Link></span>}
+            {canStart && signalOk && ruleMode && !s.signal && <span className="k-note">Pick the notebook whose rules give the signal first.</span>}
           </FormActions>
         </FormGrid>
         {preview && (
@@ -641,7 +692,7 @@ function OptSessionCards({ rows }: { rows: LiveRow[] }) {
       {rows.map((x) => (
         <Link key={x.id} to={`/options/s/${x.id}`} className="k-sess-link">
           <b>{x.name}</b>
-          <span className="k-note">{fmtDate(x.started_at, { year: false })}</span>
+          <span className="k-note">started {fmtDateTime(x.started_at, { tz: IST, year: false, zone: true })}</span>
           <FoBadges region="IN" symbol={foSymbol(x.instrument)} plain />
           <Badge tone={x.status === "running" ? "ok" : x.status === "paused" ? "warn" : "plain"}>{x.status}</Badge>
         </Link>

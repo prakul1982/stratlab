@@ -1,4 +1,4 @@
-import { inr } from "./format";
+import { fmtDateTime, inr, IST } from "./format";
 import type { OptLeg, OptionStrategy, OptPreview, StrikePick } from "./types";
 
 /** A premium, a profit or a loss in the options builder: whole rupees, the same everywhere (the premium collected, the
@@ -194,4 +194,39 @@ export function gapLine(a: { cool_until?: string | null; next_entry?: string | n
   if (Number.isNaN(until.getTime()) || until.getTime() <= now.getTime()) return null;
   const gap = cooldown ? `entries are ${cooldown} min apart` : "the rules keep a gap between entries";
   return a.next_entry ? `Next entry from ${a.next_entry}: ${gap}.` : `Next entry ${entry} on the next market day: ${gap}, past the last entry at ${lastEntry}.`;
+}
+
+/* ---------- Trade space fixes (review 5b) ---------- */
+
+/** The legs' distances in the other unit: strikes × the underlying's own strike step = points, and back. The step is the
+ * chain's or the priced preview's (50 for NIFTY, 100 for BANKNIFTY, 0.25 for USDINR); never assumed. */
+export function offsetsIn(legs: OptLeg[], to: "strikes" | "points", step: number): OptLeg[] {
+  const tidy = (v: number) => Math.round(v * 1e6) / 1e6;
+  return legs.map((l) => ({ ...l, offset: to === "points" ? tidy(l.offset * step) : Math.round(l.offset / step) }));
+}
+
+/** A stop or target switched between rupees and % of the premium: converted at the priced premium when there is one (a
+ * whole-rupee figure, or a percent to one decimal), else cleared to 0 with a line saying so. `premium` is the premium in
+ * rupees for the units priced (collected or paid), null when nothing is priced. */
+export function convertOptLimit(value: number, from: OptionStrategy["risk"]["stopType"], to: OptionStrategy["risk"]["stopType"],
+  premium: number | null, what: "stop" | "target"): { value: number; note: string | null } {
+  if (from === to || to === "none" || from === "none" || !value) return { value, note: null };
+  const p = premium != null ? Math.abs(premium) : 0;
+  if (p > 0) {
+    const v = to === "amount" ? Math.round((value / 100) * p) : Math.round((value / p) * 1000) / 10;
+    return { value: v, note: `The ${what} of ${from === "amount" ? `₹${value.toLocaleString("en-IN")}` : `${value}% of the premium`} is ${to === "amount" ? `₹${v.toLocaleString("en-IN")}` : `${v}% of the premium`} at the premium priced now.` };
+  }
+  return { value: 0, note: `The ${what} was ${from === "amount" ? `₹${value.toLocaleString("en-IN")}` : `${value}% of the premium`}; with nothing priced yet it can't be turned into ${to === "amount" ? "rupees" : "a percent"}, so it was cleared. Enter it again, or price the structure first.` };
+}
+
+/** The notebook signal an options session enters on, read from the notebook now (`asOf`, an instant). */
+export type OptSignal = NonNullable<OptionStrategy["signal"]>;
+export function signalFrom(nb: { id: string; name: string; strategy: OptSignal["rules"] }, prev: OptSignal | null | undefined, asOf: string): OptSignal {
+  return { rules: nb.strategy, notebook: nb.id, name: nb.name, short: prev?.short ?? (nb.strategy.side === "long" ? "none" : "mirror"), asOf };
+}
+
+/** "Rules from RSI dips, as of 15 Oct, 10:20 IST": which notebook's rules the session will run, and when they were read
+ * (they are read again right before Start). */
+export function signalLine(sig: Pick<OptSignal, "name" | "asOf">): string {
+  return `Rules from ${sig.name}${sig.asOf ? `, as of ${fmtDateTime(sig.asOf, { tz: IST, year: false, zone: true })}` : ", as of when they were picked"}`;
 }
