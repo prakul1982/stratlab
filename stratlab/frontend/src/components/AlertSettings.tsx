@@ -4,6 +4,7 @@ import { api, type ApiError } from "../lib/api";
 import { alertsApi } from "../lib/alerts";
 import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
+import { telegramState } from "../lib/telegramState";
 import { Badge, Card, CardHead, CheckField, Field, FieldGroup, FormActions, FormGrid, Notice } from "./kit";
 
 /** Settings → Notifications → Alerts: what to send (the report after each market closes, a message for every paper trade)
@@ -15,6 +16,7 @@ export function AlertSettingsCard() {
   const [alerts, setAlerts] = useState({ enabled: false, tg: "", email: "", daily: true });
   // where an alert can go right now (a phone, Telegram, a confirmed email): a test needs one of them
   const [routes, setRoutes] = useState<string[] | null>(null);
+  const [code, setCode] = useState("");
   const [testNote, setTestNote] = useState<string | null>(null);
   useEffect(() => { alertsApi.list().then((p) => setRoutes(p.channels)).catch(() => setRoutes(null)); }, [me?.alerts.telegram_chat_id, me?.alerts.email]);
 
@@ -35,9 +37,17 @@ export function AlertSettingsCard() {
   const save = async (emailsBackOn = false) => {
     try {
       await api("/me/alerts", { method: "PUT", body: { alerts_enabled: canAlert && alerts.enabled, telegram_chat_id: alerts.tg.trim() || null, alert_email: alerts.email.trim() || null, daily_report: alerts.daily, ...(emailsBackOn ? { alert_emails: true } : {}) } });
-      await refreshMe(); notify(emailsBackOn ? "Alert emails are on again." : "Alert settings saved.");
+      await refreshMe(); setCode("");
+      notify(emailsBackOn ? "Alert emails are on again." : "Alert settings saved.");
     } catch (e) { fail(e); }
   };
+  const sendCode = async () => {
+    try { await api("/me/alerts/telegram/code", { method: "POST" }); notify("Code sent to your Telegram chat."); } catch (e) { fail(e); }
+  };
+  const confirmCode = async () => {
+    try { await api("/me/alerts/telegram/verify", { method: "POST", body: { code: code.trim() } }); setCode(""); await refreshMe(); notify("Telegram chat confirmed."); } catch (e) { fail(e); }
+  };
+  const tgState = telegramState(me.alerts.telegram_chat_id, alerts.tg, !!me.alerts.telegram_verified);
   const test = async () => {
     const names: Record<string, string> = { push: "phone notification", telegram: "Telegram", email: "email" };
     try {
@@ -64,6 +74,16 @@ export function AlertSettingsCard() {
         </FieldGroup>
         {ch.telegram && <Field label="Telegram chat ID" optional info="Open the StratLab bot and press Start, then message @userinfobot to find your chat ID."
           value={alerts.tg} disabled={!canReport} inputMode="numeric" maxLength={40} onChange={(e) => setAlerts({ ...alerts, tg: e.target.value })} />}
+        {ch.telegram && tgState === "verified" && <p className="k-small k-hint-line" data-testid="telegram-verified">Verified</p>}
+        {ch.telegram && tgState === "unsaved" && !!alerts.tg.trim() && <p className="k-small k-muted k-hint-line">After you save, we'll send a code to this chat. Enter it here to turn on Telegram alerts.</p>}
+        {ch.telegram && tgState === "confirm" && <div className="k-stack" data-testid="telegram-confirm">
+          <p className="k-small k-muted k-hint-line">Confirm this chat to keep Telegram alerts: we'll send a code. Until then nothing is sent to it.</p>
+          <Field label="Code from Telegram" value={code} inputMode="numeric" maxLength={6} onChange={(e) => setCode(e.target.value)} />
+          <FormActions>
+            <button type="button" className="btn" disabled={!/^\d{6}$/.test(code.trim())} onClick={() => void confirmCode()}>Confirm</button>
+            <button type="button" className="btn outline" onClick={() => void sendCode()}>Send code again</button>
+          </FormActions>
+        </div>}
         {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
         {ch.email && me.alerts.email_off && <p className="k-small k-muted k-hint-line" data-testid="alert-emails-off">Alert emails are off: you used the unsubscribe link in one.{" "}
           {me.alerts.email && <button type="button" className="link" disabled={!canReport} onClick={() => void save(true)}>Turn alert emails back on</button>}</p>}

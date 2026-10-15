@@ -108,7 +108,7 @@ from . import mtf, slb, stock_desks, stock_futures     # the per-stock market de
 from .models import (ReferralReq, ShareReq, GroupLiveReq, OptionStartReq, OptGreeksReq, OptRollReq, HoldingsImportReq, HoldingsReq)
 from .models import BreadthAlertReq, DeleteMyDataReq
 from .models import CorpActionReq, TaxFmvReq, TaxImportReq, TaxInputsReq
-from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
+from .models import (AdminPlanReq, AIReq, EmailPrefsReq, FirstStepsReq, NewsletterReq, OnboardingReq, AuditReq, MarketAuditReq, PricesReq, SellerReq, BillingDetailsReq, HolidaysReq, ModerateReq, PromoReq, ReportReq, ScanAlertReq, ScanReq, ScreenRunReq, ScreenSaveReq, StockAlertReq, IdeasReq, LibraryReq, PlanInterestReq, PrefsReq, PushReq, ImportReq, AlertsReq, TelegramCodeReq, ExperimentReq, LiveStartReq, NotebookReq, SaveStrategyReq,
                      Strategy, SubscribeReq, VerifyReq, ViewAsReq)
 from .plans import holdings_limit
 from . import money_networth
@@ -773,6 +773,7 @@ def me(profile=Depends(current_profile)):
         "live_running": len(manager.user_running(profile["id"])) if leader.leading() else db.count_running(profile["id"]),
         "live_limit": info["live_limit"],
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
+                   "telegram_verified": alerts.telegram_verified(profile),
                    "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
         "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
         "data_online": kite.ready(),
@@ -954,8 +955,22 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         need(profile, "daily_report", "Alerts and the daily report")
     if req.alerts_enabled:
         need(profile, "alerts", "Trade alerts")
+    new_chat = (req.telegram_chat_id or "").strip()
+    chat_changed = bool(new_chat) and new_chat.lower() != (profile.get("telegram_chat_id") or "").strip().lower()
+    if chat_changed and alerts.telegram_ready():
+        throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
+    code_sent = None
+    if chat_changed or not new_chat:
+        alerts.reset_telegram(profile["id"])       # a new chat starts unverified; nothing is sent there until its code is entered
+    if chat_changed and alerts.telegram_ready():
+        try:
+            alerts.send_telegram_code(profile["id"], new_chat)
+            code_sent = True
+        except Exception as e:
+            print("telegram code send failed:", str(e)[:200])
+            code_sent = False
     new_addr = (req.alert_email or "").strip().lower()
     # a new address, or the "turn them back on" button, turns alert emails back on after an unsubscribe; saving the
     # same address with another setting doesn't
@@ -963,7 +978,38 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
         alerts.set_alert_emails(profile["id"], True)
     if req.daily_report is not None:
         change_prefs(profile["id"], lambda cur: {**cur, "daily_report": req.daily_report})
-    return {"saved": True}
+    return {"saved": True, "telegram_code_sent": code_sent}
+
+
+@app.post("/me/alerts/telegram/code")
+def telegram_code(profile=Depends(current_profile)):
+    """Send a new code to the saved Telegram chat (5 an hour)."""
+    need(profile, "daily_report", "Alerts and the daily report")
+    chat = profile.get("telegram_chat_id")
+    if not chat:
+        err(400, "no_chat", "Save a Telegram chat ID first.")
+    if not alerts.telegram_ready():
+        err(503, "telegram_off", "Telegram isn't set up on the server yet.")
+    throttle(profile, "telegram_code", 5, 3600, "You've asked for 5 Telegram codes this hour. Try again later.")
+    try:
+        alerts.send_telegram_code(profile["id"], chat)
+    except Exception as e:
+        print("telegram code send failed:", str(e)[:200])
+        err(502, "code_failed", "The code couldn't be sent to that chat.")
+    return {"sent": True}
+
+
+@app.post("/me/alerts/telegram/verify")
+def telegram_verify(req: TelegramCodeReq, profile=Depends(current_profile)):
+    """Turn on Telegram alerts for the saved chat with the code sent to it (5 wrong tries void the code)."""
+    got = alerts.confirm_telegram(profile, req.code)
+    if got == "wrong":
+        err(400, "wrong_code", "That code is wrong.")
+    if got == "locked":
+        err(400, "code_void", "Too many wrong tries. Send a new code.")
+    if got == "expired":
+        err(400, "code_expired", "There's no valid code for this chat (they last 15 minutes). Send a new code.")
+    return {"verified": True}
 
 
 @app.post("/me/alerts/test")

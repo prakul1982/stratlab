@@ -151,7 +151,7 @@ export interface Me {
     ai_reads_plan_limit?: number | null; ai_builds_per_day?: number | null };
   trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
   live_running: number; live_limit: number;
-  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; email: string | null; email_off?: boolean; daily_report?: boolean };
+  alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; telegram_verified?: boolean; email: string | null; email_off?: boolean; daily_report?: boolean };
   data_online: boolean;
   data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null; billing_enabled?: boolean; yearly_enabled?: boolean; is_admin?: boolean;
   plans?: Record<string, { price: number; price_year: number } & Record<string, unknown>>;

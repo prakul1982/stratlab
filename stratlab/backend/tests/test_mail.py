@@ -259,6 +259,7 @@ def test_the_alert_test_does_not_pass_on_telegrams_own_error(monkeypatch):
             raise RuntimeError("Telegram 400: Bad Request: chat not found (token 123:SECRET)")
         monkeypatch.setattr(alerts, "send_telegram", refuse)
         db.update_profile("u-pro", telegram_chat_id="123456789")
+        db.set_setting(alerts.TG_VERIFY + "u-pro", '{"verified": "123456789"}')     # Telegram only reaches a verified chat
         r = c.post("/me/alerts/test", headers=W.headers("pro-token"))
         assert r.status_code == 502
         assert "chat not found" not in r.text and "SECRET" not in r.text and "Telegram couldn't deliver to that chat" in r.text
