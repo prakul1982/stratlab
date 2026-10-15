@@ -1185,11 +1185,57 @@ def test_ibkr_fifo_counts_a_split_between_the_buy_and_the_sale():
                          '<CorporateAction assetCategory="STK" symbol="X" type="TC" dateTime="20260110;202500" actionDescription="X MERGED"/>'
                          '</CorporateActions></FlexStatement>')
     sp = ibkr.splits(root)
-    assert sp == {"X": [("2026-02-10", 4.0)]}
+    assert sp == {"X": [("2026-02-11", 4.0)]}                         # the day it takes effect (reportDate)
     assert [(t["side"], t["qty"], t["entry"], t["exit"]) for t in ibkr.closed_trades(fs, sp)] == [("long", 40.0, 100.0, 110.0)]
     assert sum(t["charges"] for t in ibkr.closed_trades(fs, sp)) == pytest.approx(5.0)
     assert ibkr.closed_trades(fs, sp) == ibkr.closed_trades(fs, sp) and ibkr.closed_trades(fs)[0]["qty"] == 10.0     # without the data, as before
     assert ibkr.closed_trades(fs, {"X": [("2026-03-02", 4.0)]})[0]["qty"] == 10.0                  # a split after the sale changes nothing
+
+
+SPLIT_FS = [{"id": "a", "sym": "X", "side": "B", "qty": 10, "price": 400.0, "d": "2026-01-01", "t": "10:00:00", "fee": 0.0},
+            {"id": "b", "sym": "X", "side": "S", "qty": 5, "price": 400.0, "d": "2026-02-10", "t": "10:00:00", "fee": 0.0},
+            {"id": "c", "sym": "X", "side": "S", "qty": 20, "price": 110.0, "d": "2026-03-01", "t": "10:00:00", "fee": 0.0}]
+
+
+def split_action(attrs: str) -> str:
+    return (f'<CorporateActions><CorporateAction assetCategory="STK" symbol="X" type="FS" {attrs} '
+            'actionDescription="X(US0000000001) SPLIT 4 FOR 1 (X, X INC, US0000000001)"/></CorporateActions>')
+
+
+@pytest.mark.parametrize("attrs", ['dateTime="20260210;202500" reportDate="20260211"', 'dateTime="20260210;202500"',
+                                   'reportDate="20260211"'])
+def test_ibkr_a_fill_on_the_day_a_split_is_booked_is_in_the_old_shares(attrs):
+    # IBKR books the split the evening before it takes effect: that day's sale is at the old price, of the old shares
+    sp = ibkr.splits(ET.fromstring(f"<FlexStatement>{split_action(attrs)}</FlexStatement>"))
+    assert sp == {"X": [("2026-02-11", 4.0)]}
+    got = ibkr.closed_trades(SPLIT_FS, sp)
+    assert [(t["xd"], t["qty"], t["entry"], t["exit"]) for t in got] == [("2026-02-10", 5, 400.0, 400.0), ("2026-03-01", 20, 100.0, 110.0)]
+    # a fill on the day it takes effect is in the new shares
+    fs = SPLIT_FS[:1] + [{**SPLIT_FS[2], "d": "2026-02-11", "qty": 40}]
+    assert [(t["qty"], t["entry"]) for t in ibkr.closed_trades(fs, sp)] == [(40, 100.0)]
+
+
+def test_ibkr_trades_read_before_a_split_was_counted_are_replaced_not_doubled(w, flex):
+    trades = ("<Trades>" + "".join(
+        f'<Trade assetCategory="STK" symbol="X" currency="USD" buySell="{s}" quantity="{q}" tradePrice="{p}" tradeDate="{d}" '
+        f'dateTime="{d};100000" ibCommission="0" tradeID="{i}"/>'
+        for s, q, p, d, i in (("BUY", 10, 400, "20260105", "X1"), ("SELL", -40, 110, "20260301", "X2"))) + "</Trades>")
+    action = split_action('dateTime="20260210;202500" reportDate="20260211"')
+    root = ET.fromstring(f"<FlexQueryResponse><FlexStatements><FlexStatement>{trades}{action}</FlexStatement></FlexStatements></FlexQueryResponse>")
+    # what an earlier read saved without the split: 10 shares from 400 to 110; and two trades the statement doesn't cover
+    ibkr.save_trades(PRO_ID, ibkr.closed_trades(ibkr.fills(root)))
+    older = {"id": "ibolder", "sym": "X", "segment": "us", "side": "long", "ed": "2025-06-02", "xd": "2025-07-01", "qty": 3,
+             "entry": 300.0, "exit": 320.0, "charges": 0.0, "via": "ibkr"}
+    other = {**older, "id": "ibother", "sym": "Y", "ed": "2026-01-06", "xd": "2026-03-02"}
+    j = journal.load(PRO_ID)
+    j["manual"] += [older, other]
+    journal.save(PRO_ID, j)
+    got = ibkr.ingest(PRO_ID, root)
+    mine = sorted(((m["sym"], m["ed"], m["qty"], m["entry"], m["exit"]) for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"))
+    assert mine == [("X", "2025-06-02", 3, 300.0, 320.0), ("X", "2026-01-05", 40, 100.0, 110.0), ("Y", "2026-01-06", 3, 300.0, 320.0)]
+    assert got["trades_added"] == 1
+    assert ibkr.ingest(PRO_ID, root)["trades_added"] == 0                       # read again: nothing changes
+    assert len([m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]) == 3
 
 
 # ---------- EPF, NPS, AIS ----------

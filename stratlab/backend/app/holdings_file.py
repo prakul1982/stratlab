@@ -547,6 +547,25 @@ def _year(text: str) -> int:
     return y
 
 
+CLOCK = re.compile(r"(?<!\d)(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:\s*([AP])\.?M\b\.?)?(\s*(?:Z|[+-]\d{2}:?\d{2})(?![\d:]))?", re.I)
+
+
+def trade_time(v) -> str:
+    """A fill's time of day as the tax report and the journal keep it: HH:MM:SS on a 24-hour clock, whatever the
+    cell had around it ("2025-06-10 02:15:00 PM" -> "14:15:00"). A time with a time zone is kept as written (the tax
+    report reads the zone); a cell with no time we can read, as before, its first 20 characters."""
+    s = str(v or "").strip()
+    m = CLOCK.search(s)
+    if not m:
+        return s[:20]
+    if m[5]:
+        return s[:40]
+    h, mi, sec = int(m[1]), int(m[2]), int(m[3] or 0)
+    if m[4]:
+        h = h % 12 + (12 if m[4].upper() == "P" else 0)
+    return f"{h:02d}:{mi:02d}:{sec:02d}" if h < 24 and mi < 60 and sec < 60 else s[:20]
+
+
 def day(v) -> str | None:
     """A trade date as the broker wrote it, as YYYY-MM-DD: 2024-07-22, 22-07-2024, 22/07/24, 22-Jul-2024,
     Jul 22, 2024, with or without a time after it, or an Excel date number. Day first when it's ambiguous."""
@@ -737,7 +756,7 @@ def _read_trades(rows: list[list[str]], filename: str = "", derivatives: bool = 
                 hit = re.search(r"\d{1,2}:\d{2}(:\d{2})?(\s*[AP]M)?", _cell(row, cols.get("date")), re.I)
                 tm = hit.group(0) if hit else ""
             fmv = _fmv(number(_cell(row, cols.get("fmv"))), qty, price) if sd_ == "B" and d <= "2018-01-31" else None
-            out.append({**base, "d": d, "t": tm[:20], "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges, "stt": stt,
+            out.append({**base, "d": d, "t": trade_time(tm), "side": sd_, "qty": qty, "price": round(price, 4), "charges": charges, "stt": stt,
                         "tid": _cell(row, cols.get("trade_id"))[:40], "fmv": fmv, "src": "trades", **({"seg": seg[:20]} if derivatives else {})})
     if not out:
         if problems:

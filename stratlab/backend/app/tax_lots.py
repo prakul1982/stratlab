@@ -137,7 +137,17 @@ def lot_key(t: dict) -> str:
 def _dedup(t: dict) -> tuple:
     if t.get("tid"):
         return (t["d"], t["side"], lot_key(t), t["tid"])
-    return (t["d"], t["side"], lot_key(t), round(float(t["qty"]), 4), round(float(t["price"]), 4), t.get("t") or "")
+    return (t["d"], t["side"], lot_key(t), round(float(t["qty"]), 4), round(float(t["price"]), 4), time_key(t.get("t")))
+
+
+def time_key(t) -> str:
+    """A fill's time as the duplicate check compares it: the time of day on a 12-hour clock, so a fill saved when the
+    time was cut to 20 characters ("2025-06-10 02:15:00 " from "... 02:15:00 PM") matches the same fill read now
+    ("14:15:00"); the text itself when it has no time."""
+    m = re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?::(\d{2}))?", str(t or ""))
+    if not m or int(m[1]) > 23:
+        return str(t or "")[:20]
+    return f"{int(m[1]) % 12:02d}:{m[2]}:{int(m[3] or 0):02d}"
 
 
 def merge(old: list[dict], new: list[dict]) -> tuple[list[dict], int, int]:
@@ -374,31 +384,69 @@ def _pairs(trades: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
     return pairs, rest
 
 
-def _covered(pairs: list[tuple[dict, dict]], rest: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
+def _counted(actions: list[dict]) -> list[tuple[str, float, bool]]:
+    """(ex-date, shares after a share before, whether it's a bonus that adds its own lot) for each bonus or split, once
+    a day and kind, as _one applies them."""
+    out, seen = [], set()
+    for a in actions or []:
+        ex = a.get("ex_date") or ""
+        if not ex or (ex, a.get("kind")) in seen:
+            continue
+        r = a.get("ratio")
+        if a.get("kind") == "bonus" and r and len(r) == 2 and all(isinstance(x, (int, float)) and x > 0 for x in r):
+            seen.add((ex, a.get("kind")))
+            out.append((ex, (r[0] + r[1]) / r[1], True))
+            continue
+        f = a.get("factor")
+        if isinstance(f, (int, float)) and math.isfinite(f) and f > 0:
+            seen.add((ex, a.get("kind")))
+            out.append((ex, float(f), False))
+    return out
+
+
+def _covered(pairs: list[tuple[dict, dict]], rest: list[dict], actions: list[dict] | None = None) -> tuple[list[tuple[dict, dict]], list[dict]]:
     """(pairs, rest) with a sale that is in both a tradebook and a tax P&L file counted once, as journal.covered does
     for the journal. A P&L line whose sale and buy the tradebook both has on those days is dropped, and the
-    tradebook's fills, with their times, are matched the usual way. Otherwise the line stays as the broker matched it,
-    and the tradebook's sale or buy of it on those days is taken out, so neither is counted twice and a buy sold only
-    in the P&L file isn't left open."""
+    tradebook's fills, with their times, are matched the usual way; the line's 31 Jan 2018 value, and its charges and
+    STT, go to that day's tradebook fills that have none. Otherwise the line stays as the broker matched it, and the
+    tradebook's sale or buy of it on those days is taken out, so neither is counted twice and a buy sold only in the
+    P&L file isn't left open.
+
+    A P&L line counts its shares as they were on the sale day; a tradebook buy before a split (`actions`) counts them
+    as they were bought, so the buy's shares are scaled by the splits in between. A P&L line for the shares a bonus
+    issue added (bought on its ex-date) has no tradebook buy: when the tradebook has the sale, it is the bonus lot
+    the tradebook's own shares get, and is dropped too."""
     left: dict[tuple, float] = {}           # (side, day): tradebook shares not yet claimed by a P&L line
     for t in rest:
         if t.get("src") != "pnl":
             left[(t["side"], t["d"])] = left.get((t["side"], t["d"]), 0.0) + t["qty"]
-    keep, take = [], {}
+    acts = _counted(actions or [])
+    first_buy = min((d for side, d in left if side == "B"), default=None)
+    bonus_days = {ex for ex, _, bonus in acts if bonus and first_buy is not None and first_buy < ex}
+    keep, take, carry = [], {}, {}
     for b, s in pairs:
         q = min(b["qty"], s["qty"])
         sk, bk = ("S", s["d"]), ("B", b["d"])
-        if left.get(sk, 0.0) >= q - EPS and left.get(bk, 0.0) >= q - EPS:
+        f = 1.0                              # tradebook shares bought that day -> shares on the sale day
+        for ex, k, bonus in acts:
+            if not bonus and b["d"] < ex <= s["d"]:
+                f *= k
+        sale_ok = left.get(sk, 0.0) >= q - EPS
+        if sale_ok and left.get(bk, 0.0) * f >= q - EPS:
             left[sk] -= q
-            left[bk] -= q
+            left[bk] -= q / f
+            _carry(carry, b, s, q, f, bk, sk)
+            continue
+        if sale_ok and b["d"] in bonus_days and b["d"] < s["d"]:
+            left[sk] -= q                    # the bonus lot the tradebook's earlier buys get
+            _carry(carry, None, s, q, f, bk, sk)
             continue
         keep.append((b, s))
-        for k in (sk, bk):
-            n = min(q, left.get(k, 0.0))
+        for k, n in ((sk, min(q, left.get(sk, 0.0))), (bk, min(q / f, left.get(bk, 0.0)))):
             if n > EPS:
                 left[k] -= n
                 take[k] = take.get(k, 0.0) + n
-    if not take:
+    if not take and not carry:
         return keep, rest
     out = []
     for t in rest:
@@ -411,7 +459,67 @@ def _covered(pairs: list[tuple[dict, dict]], rest: list[dict]) -> tuple[list[tup
             f = (t["qty"] - n) / t["qty"]
             t = {**t, "qty": t["qty"] - n, **{x: t[x] * f for x in ("charges", "stt") if isinstance(t.get(x), (int, float))}}
         out.append(t)
-    return keep, out
+    return keep, _give(out, carry) if carry else out
+
+
+def _carry(carry: dict, b: dict | None, s: dict, q: float, f: float, bk: tuple, sk: tuple):
+    """What a dropped P&L line knows that the tradebook may not: the 31 Jan 2018 value of a tradebook share bought
+    that day (the line's value a share, in the shares of the sale day), and its share of the line's charges and STT."""
+    for t, k in ((b, bk), (s, sk)):
+        if t is None:
+            continue
+        c = carry.setdefault(k, {"fmv": None, "charges": 0.0, "stt": None})
+        if t["side"] == "B" and t.get("fmv") and c["fmv"] is None:
+            c["fmv"] = t["fmv"] * f
+        if t.get("charges"):
+            c["charges"] += t["charges"] * q / t["qty"]
+        if isinstance(t.get("stt"), (int, float)):
+            c["stt"] = (c["stt"] or 0.0) + t["stt"] * q / t["qty"]
+
+
+def _give(rows: list[dict], carry: dict) -> list[dict]:
+    """The tradebook fills with what the dropped P&L lines carried (_carry): the value on buys that have none, and
+    charges or STT spread by shares over a day's fills when none of them has any."""
+    day: dict[tuple, dict] = {}
+    for t in rows:
+        k = (t["side"], t["d"])
+        if k in carry and t.get("src") != "pnl":
+            g = day.setdefault(k, {"qty": 0.0, "charges": False, "stt": False})
+            g["qty"] += t["qty"]
+            g["charges"] = g["charges"] or bool(t.get("charges"))
+            g["stt"] = g["stt"] or t.get("stt") is not None
+    out = []
+    for t in rows:
+        k = (t["side"], t["d"])
+        g = day.get(k) if t.get("src") != "pnl" else None
+        if g and g["qty"] > EPS:
+            c, add = carry[k], {}
+            if t["side"] == "B" and not t.get("fmv") and c["fmv"]:
+                add["fmv"] = c["fmv"]
+            if not g["charges"] and c["charges"] > EPS:
+                add["charges"] = c["charges"] * t["qty"] / g["qty"]
+            if not g["stt"] and c["stt"] is not None:
+                add["stt"] = c["stt"] * t["qty"] / g["qty"]
+            if add:
+                t = {**t, **add}
+        out.append(t)
+    return out
+
+
+def fmv_in_files(trades: list[dict], actions: dict[str, list[dict]] | None = None) -> set[str]:
+    """The companies whose buys on or before 31 Jan 2018 all have that day's value from a file, as compute() counts
+    them: a tradebook buy also has a tax P&L line's value for the same day when the line is counted by the tradebook."""
+    by: dict[str, list[dict]] = {}
+    for t in trades:
+        by.setdefault(lot_key(t), []).append(t)
+    out = set()
+    for k, ts in by.items():
+        if not any(t["side"] == "B" and t["d"] <= GF_DATE for t in ts):
+            continue
+        pairs, rest = _covered(*_pairs(ts), (actions or {}).get(k) or [])
+        if all(t.get("fmv") for t in [b for b, _ in pairs] + rest if t["side"] == "B" and t["d"] <= GF_DATE):
+            out.add(k)
+    return out
 
 
 def _intraday_stt(sells: list[dict], frac: float) -> tuple[float, bool]:
@@ -523,14 +631,21 @@ def _day(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
 
 
 def _clock(t) -> str | None:
-    """A trade's time as HH:MM:SS ("09:15:02", "9:15 AM", "2024-05-01 14:30"), or None when it has none."""
-    m = re.search(r"(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)?", str(t or ""), re.I)
+    """A trade's time as HH:MM:SS ("09:15:02", "9:15 AM", "2024-05-01 14:30"), or None when it has none. A time with a
+    zone ("2024-05-01T04:30:00Z", "...+05:30") is India time, as the rest of the day's fills."""
+    m = re.search(r"(?<!\d)(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(?:([AP])\.?M\b\.?|(Z|([+-])(\d{2}):?(\d{2}))(?![\d:]))?",
+                  str(t or ""), re.I)
     if not m:
         return None
     h, mi, sec = int(m[1]), int(m[2]), int(m[3] or 0)
     if m[4]:
-        h = h % 12 + (12 if m[4].upper() == "PM" else 0)
-    return f"{h:02d}:{mi:02d}:{sec:02d}" if h < 24 and mi < 60 and sec < 60 else None
+        h = h % 12 + (12 if m[4].upper() == "P" else 0)
+    if not (h < 24 and mi < 60 and sec < 60):
+        return None
+    if m[5]:
+        off = 0 if m[5].upper() == "Z" else (1 if m[6] == "+" else -1) * (int(m[7]) * 60 + int(m[8]))
+        h, mi = divmod((h * 60 + mi - off + 330) % 1440, 60)
+    return f"{h:02d}:{mi:02d}:{sec:02d}"
 
 
 def _timed(key: str, d: str, trades: list[dict], lots: list[Lot], out: dict):
@@ -618,7 +733,7 @@ def compute(trades: list[dict], actions: dict[str, list[dict]] | None = None, fm
         n["isin"] = n["isin"] or t.get("isin") or ""
     out = {"realised": [], "intraday": [], "open": [], "unmatched": [], "names": names}
     for k, ts in by.items():
-        pairs, rest = _covered(*_pairs(ts))
+        pairs, rest = _covered(*_pairs(ts), (actions or {}).get(k) or [])
         for b, s in pairs:
             _pair(k, b, s, (fmv or {}).get(k), out)
         rest.sort(key=lambda t: (t["d"], t.get("t") or ""))
