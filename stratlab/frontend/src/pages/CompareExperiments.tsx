@@ -5,25 +5,29 @@ import type { Cond, Experiment, Strategy } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
+import { checksLine } from "../lib/tradeUi";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 
 const condText = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
+/** A strategy's direction as the notebook says it: "both ways" is its own, not "long". */
+const SIDE: Record<string, string> = { long: "long only", short: "short only", both: "both ways" };
 
 /** Plain-English list of what differs between two experiments' setups. */
 function changes(a: Experiment, b: Experiment): string[] {
   const out: string[] = [];
   const sa: Strategy = a.strategy, sb: Strategy = b.strategy;
   if (a.instrument?.symbol !== b.instrument?.symbol) out.push(`Instrument: ${a.instrument?.symbol} → ${b.instrument?.symbol}`);
-  if ((sa.side ?? "long") !== (sb.side ?? "long")) out.push(`Direction: ${sa.side === "short" ? "short" : "long"} → ${sb.side === "short" ? "short" : "long"}`);
+  if ((sa.side ?? "long") !== (sb.side ?? "long")) out.push(`Direction: ${SIDE[sa.side ?? "long"]} → ${SIDE[sb.side ?? "long"]}`);
   if (sa.tf !== sb.tf) out.push(`Candles: ${TF_NAME[sa.tf]} → ${TF_NAME[sb.tf]}`);
   if (a.days !== b.days) out.push(`Test period: ${a.days} → ${b.days} days`);
   const rules = (s: Strategy, k: "entry" | "exit") => (s[k] ?? []).map(condText).join(" · ") || "none";
   if (rules(sa, "entry") !== rules(sb, "entry") || sa.entryJoin !== sb.entryJoin) out.push(`Entry: ${rules(sa, "entry")} → ${rules(sb, "entry")}`);
   if (rules(sa, "exit") !== rules(sb, "exit")) out.push(`Exit: ${rules(sa, "exit")} → ${rules(sb, "exit")}`);
   const risk: [keyof Strategy["risk"], string, string][] = [["sl", "Stop loss", "%"], ["tgt", "Target", "%"], ["trail", "Trailing stop", "%"],
-    ["maxBars", "Time limit", " candles"], ["riskPct", "Risk per trade", "%"], ["capital", "Capital", ""], ["brokerage", "Brokerage", ""], ["slippage", "Slippage", "%"]];
+    ["maxBars", "Time limit", " candles"], ["riskPct", "Risk per trade", "%"], ["maxAlloc", "Most in one trade", "%"], ["capital", "Capital", ""],
+    ["brokerage", "Brokerage", ""], ["slippage", "Slippage", "%"]];
   for (const [k, label, unit] of risk) {
     const x = sa.risk[k] ?? 0, y = sb.risk[k] ?? 0;
     if (x !== y) out.push(`${label}: ${x || "off"}${x ? unit : ""} → ${y || "off"}${y ? unit : ""}`);
@@ -34,6 +38,8 @@ function changes(a: Experiment, b: Experiment): string[] {
   if ((sa.risk.sizing ?? "risk") !== (sb.risk.sizing ?? "risk") || (sa.risk.perTrade ?? 0) !== (sb.risk.perTrade ?? 0) || (sa.risk.leverage ?? 1) !== (sb.risk.leverage ?? 1))
     out.push(`Position size: ${sa.risk.sizing ?? "risk"} → ${sb.risk.sizing ?? "risk"}`);
   if (rules(sa, "shortEntry" as "entry") !== rules(sb, "shortEntry" as "entry")) out.push(`Short entry: ${(sa.shortEntry ?? []).map(condText).join(" · ") || "none"} → ${(sb.shortEntry ?? []).map(condText).join(" · ") || "none"}`);
+  if (rules(sa, "shortExit" as "exit") !== rules(sb, "shortExit" as "exit")) out.push(`Short exit: ${(sa.shortExit ?? []).map(condText).join(" · ") || "none"} → ${(sb.shortExit ?? []).map(condText).join(" · ") || "none"}`);
+  if ((sa.product ?? "auto") !== (sb.product ?? "auto")) out.push(`Product: ${sa.product ?? "auto"} → ${sb.product ?? "auto"}`);
   if (sa.entryJoin !== sb.entryJoin || (sa.minScore ?? 0) !== (sb.minScore ?? 0)) out.push(`Rules combine: ${sa.entryJoin}${sa.entryJoin === "score" ? ` ≥ ${sa.minScore}` : ""} → ${sb.entryJoin}${sb.entryJoin === "score" ? ` ≥ ${sb.minScore}` : ""}`);
   const labels: [keyof NonNullable<Strategy["session"]>, string][] = [["start", "First entry"], ["end", "Last entry"], ["squareoff", "Square-off"],
     ["maxTradesDay", "Trades a day"], ["cooldown", "Cooldown (candles)"], ["dailyLossPct", "Daily loss cap %"]];
@@ -88,7 +94,7 @@ export function CompareExperiments() {
     ["Win rate", (e) => e.stats.n ? `${e.stats.win.toFixed(0)}%` : "–", (e) => e.stats.win, true],
     ["Sharpe", (e) => num(e.stats.sharpe, 2), (e) => e.stats.sharpe, true],
     ["Costs paid", (e) => money(e.costs.total, cur), (e) => -e.costs.total, true],
-    ["Checks passed", (e) => `${e.verdict.passed} of ${e.verdict.total}`, (e) => e.verdict.passed, true],
+    ["Checks passed", (e) => checksLine(e.verdict.passed, e.verdict.total), (e) => e.verdict.passed, true],
     ["Buy and hold", (e) => pct(e.stats.buy_hold_ret), () => null, false],
   ];
   const lines: Line[] = defs.map(([label, show, score, better, gain]) => {

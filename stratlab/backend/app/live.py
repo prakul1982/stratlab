@@ -12,7 +12,7 @@ from . import risk
 from .alerts import notify
 from .corp_actions import PaperActions
 from .engine import costs as C
-from .engine.core import Ctx, Engine, chart_series, cond_text
+from .engine.core import TF_MIN, Ctx, Engine, chart_series, cond_text
 from .kite_service import IST, KiteService, TickHub
 from .models import Strategy
 from .daily_report import Reporter
@@ -392,7 +392,7 @@ class LiveSession:
             self.bars = self.bars[-500:]
         if self.corp.waiting:
             self.corp.on_bar(self.bars)
-        ctx = Ctx(self.bars, intraday=self.tf != "1d")
+        ctx = Ctx(self.bars, intraday=self.tf != "1d", base_min=TF_MIN.get(self.tf))
         new = self.engine.step(self.bars, ctx, len(self.bars) - 1)
         # the account's value at the candle's close, stamped when the candle closed: the 14:00-14:05 candle's close is the
         # 14:05 price (R11C-011: the curve said 14:00 and marked the 14:05 price)

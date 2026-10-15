@@ -209,7 +209,7 @@ def test_import_maps_delta_and_vix_wording():
     assert [l.pick for l in s.legs] == ["delta", "delta"] and s.vix.max == 18 and notes == []
     s, notes = oi.parse_ai({"underlying": "NIFTY", "legs": [{"side": "sell", "opt": "CE"}], "vix": {"min": 30, "max": 10}})
     assert s.vix is None and any("vix" in n for n in notes)
-    assert oi.is_options("Sell the 0.2 delta strangle on NIFTY at 9:20", "words")
+    assert oi.is_options("Sell the 0.2 delta strangle on NIFTY at 9:20", "text")
     exact = OptionStrategy(**{**STRAT, "legs": [{"side": "sell", "opt": "CE", "pick": "straddle_pct", "pct": 30}]})
     import json
     back = oi.from_json(json.dumps({"stratlab": "options", "strategy": exact.model_dump()}))
