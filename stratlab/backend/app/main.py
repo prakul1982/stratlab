@@ -634,6 +634,14 @@ def _research_error(request, exc):
     return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": public_text(exc.message)}})
 
 
+@app.exception_handler(db.DatabaseUnavailable)
+def _database_unavailable(request, exc):
+    """A database read for this request ran out of time (app/db.py): said in seconds, not a hang until the proxy's 502."""
+    print("database unavailable:", request.method, request.url.path, str(exc)[:160])
+    return JSONResponse(status_code=503, headers={"Retry-After": "5"}, content={"detail": {
+        "code": "db_unavailable", "message": "Couldn't reach the database, try again."}})
+
+
 @app.exception_handler(DataError)
 def _data_error(request, exc):
     return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": public_text(str(exc))}})
@@ -4256,7 +4264,7 @@ def market_breadth(group: str = breadth.DEFAULT, range: str = "1y", brief: bool 
         err(400, "bad_range", "Pick a time range from the list.")
     out = breadth.view(group, range, full=allows(profile["_plan"], "breadth"), brief=brief)
     out["plan_needed"] = PLANS[FEATURE_PLAN["breadth"]]["name"]
-    live = breadth_live.view(group, ready=kite.ready())
+    live = breadth_live.settled(breadth_live.view(group, ready=kite.ready()), (out.get("today") or {}).get("day"))
     if brief and live:
         # the Invest home's card: the newest live point only (R7T-010: the card showed the 8 Oct close after the open
         # while the breadth page was live)
@@ -6078,7 +6086,10 @@ NEWS_FIELDS = ("id", "kind", "region", "day", "weekly", "subject", "summary", "a
 
 
 def news_view(issue: dict) -> dict:
+    issue = news.write.regional_links(issue)          # rotation links open the brief's own market (R28-006)
     out = {k: issue.get(k) for k in NEWS_FIELDS if k != "ai_summary" or issue.get(k)}
+    if out.get("ai_summary"):          # index levels as the tiles print them: two decimals (R28-009)
+        out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
     return out

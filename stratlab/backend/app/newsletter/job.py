@@ -9,8 +9,10 @@ import json
 import re
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, time as clock, timedelta
 from zoneinfo import ZoneInfo
+
+import httpx
 
 from .. import alerts, db, email_kit as kit, leader, newsletter_prefs, run_marks
 from ..plans import allows, plan_of
@@ -25,6 +27,11 @@ SEND_WORDS = "India 4:15 PM IST and US 4:50 PM New York time"     # what the pag
 WEEKLY_AT = ("Asia/Kolkata", 5, "08:00")         # Saturday morning, India time
 AFTER_CLOSE = {"market-IN", "market-US", "stocks"}   # issues built from the day's closes: never before they are final
 INDEX_CAP = 60
+# a send that couldn't start because the database timed out (15 Oct: the India brief went 19 minutes late) is tried again
+# after these pauses, within the same check, before waiting for the next one
+START_RETRY_PAUSES = (60, 120)
+LATE_AFTER = timedelta(minutes=30)       # a daily brief not on its way this long after its slot: the admins are told
+LATE_KEY = "newslate:"                   # app_settings: the day a region's late alert went, so a restart doesn't send it twice
 _ID = re.compile(r"^(market|my_stocks)\.([A-Za-z0-9\-]{1,64})\.(\d{4}-\d{2}-\d{2}(?:-weekly)?)$")
 
 
@@ -578,6 +585,11 @@ def due_today(region: str, now: datetime | None = None) -> str | None:
         return None
 
 
+def passing(e: Exception) -> bool:
+    """An error that a try a minute later can get past: the database (or the network to it) timing out or dropping."""
+    return isinstance(e, (httpx.TransportError, TimeoutError, ConnectionError))
+
+
 def skipped_words(skipped: dict) -> dict:
     """{reason in words: how many} from a ledger's uid -> reason."""
     out: dict[str, int] = {}
@@ -598,6 +610,8 @@ class Job:
         self.hold: dict[str, float] = {}          # run name -> not asked again before this time (give_back)
         self.all_failed = False                   # the last record() was a read where every source failed
         self._open: dict[str, bool] = {}          # issue id -> whether some reader may still be sent it today (catch_up)
+        self.sleep = time.sleep                   # the pause between tries to start a send (tests pass their own)
+        self.alerted: set[tuple[str, str]] = set()    # (region, day) whose late-brief alert went (check_late)
         # stores itself whenever a run is written into it, so Admin has it after a restart (R6O-003)
         self.status = job_status.Status(self.status_key, {"last_run": None, "sent": 0, "last_error": None})
 
@@ -712,7 +726,48 @@ class Job:
             except Exception as e:
                 self.status["last_error"] = str(e)[:200]
                 print("newsletters:", e)
+            try:
+                if leader.leading():
+                    self.check_late(datetime.now(ZoneInfo("UTC")))
+            except Exception as e:
+                print("newsletters: late check:", e)
             time.sleep(300)
+
+    def check_late(self, now: datetime) -> list[str]:
+        """Tell the admins (alerts.tell_admins) when a region's daily brief still isn't on its way LATE_AFTER past its
+        slot, once per region and day. Returns the regions told about."""
+        told = []
+        for region, (tz, at) in SEND_AT.items():
+            day = due_today(region, now)
+            if not day or (region, day) in self.alerted:
+                continue
+            local = now.astimezone(ZoneInfo(tz))
+            if local < datetime.combine(local.date(), clock.fromisoformat(at), ZoneInfo(tz)) + LATE_AFTER:
+                continue
+            name = f"market-{region}"
+            if self.last.get(name) == day:
+                continue
+            try:                           # the database not answering is no reason to keep quiet: it is the likely cause
+                if run_marks.status(f"newsjob:{name}", day) == "done" or db.get_setting(LATE_KEY + region) == day:
+                    self.alerted.add((region, day))
+                    continue
+            except Exception as e:
+                print("newsletters: late check couldn't read the run:", str(e)[:160])
+            where = {"IN": "India", "US": "US"}.get(region, region)
+            local_at = datetime.strptime(at, "%H:%M").strftime("%-I:%M %p")
+            minutes = int((local - datetime.combine(local.date(), clock.fromisoformat(at), ZoneInfo(tz))).total_seconds() // 60)
+            err = ((self.status.get("regions") or {}).get(region) or {}).get("error") or self.status.get("last_error")
+            text = (f"The {where} Market Brief for {day} was due at {local_at} ({tz}) and still hasn't started sending, "
+                    f"{minutes} minutes later." + (f" Last error: {str(err)[:200]}." if err else "")
+                    + " It is tried again every five minutes; see Admin → Data and jobs.")
+            self.alerted.add((region, day))
+            alerts.tell_admins(f"{where} Market Brief is late ({day})", text, label="Admin alert")
+            told.append(region)
+            try:
+                db.set_setting(LATE_KEY + region, day)
+            except Exception as e:
+                print("newsletters: late alert not recorded:", str(e)[:160])
+        return told
 
     def due(self, name: str, now: datetime, tz: str, at: str, region: str | None = None, weekday: int | None = None) -> date | None:
         """The local day when `name` is due now and hasn't run today; a trading day in `region`, or on `weekday`."""
@@ -768,22 +823,33 @@ class Job:
         if not day:
             return 0, False
         name = f"weekly-{region}" if weekly else f"market-{region}"
-        try:
-            issue = build_market(region, day, weekly)
-            if not issue:                  # every source down: try again on the next check
-                return 0, False
-            open_ledger(issue["id"])
-            self.mark(name, day)
-        except Exception as e:
-            msg = f"{region}{' weekly' if weekly else ''}: {str(e)[:160]}"
-            print("newsletters: run failed before sending,", msg)
-            problems.append(msg)
-            self._report(f"{region}-weekly" if weekly else region, {
-                "issue": issue_id("market", region, day.isoformat(), weekly), "day": day.isoformat(), "weekly": weekly,
-                "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"), "readers": 0, "sent": 0, "other_edition": 0,
-                "skipped": {}, "error": f"couldn't start the send ({str(e)[:160]}); tried again at the next check"})
-            return 0, True
+        for pause in (*START_RETRY_PAUSES, None):
+            try:
+                issue = build_market(region, day, weekly)
+                if not issue:                  # every source down: try again on the next check
+                    return 0, False
+                open_ledger(issue["id"])
+                self.mark(name, day)
+                break
+            except Exception as e:
+                if pause is not None and passing(e):
+                    print(f"newsletters: couldn't start {region}{' weekly' if weekly else ''} ({type(e).__name__}); "
+                          f"trying again in {pause} s")
+                    self.sleep(pause)
+                    continue
+                return self._start_failed(region, day, weekly, e, problems)
         return self._send(region, issue, weekly, problems), True
+
+    def _start_failed(self, region: str, day: date, weekly: bool, e: Exception, problems: list) -> tuple[int, bool]:
+        """Said in Admin and the log, per region; the day stays open, so the next check tries again."""
+        msg = f"{region}{' weekly' if weekly else ''}: {str(e)[:160]}"
+        print("newsletters: run failed before sending,", msg)
+        problems.append(msg)
+        self._report(f"{region}-weekly" if weekly else region, {
+            "issue": issue_id("market", region, day.isoformat(), weekly), "day": day.isoformat(), "weekly": weekly,
+            "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"), "readers": 0, "sent": 0, "other_edition": 0,
+            "skipped": {}, "error": f"couldn't start the send ({str(e)[:160]}); tried again at the next check"})
+        return 0, True
 
     def tick(self, now: datetime) -> int:
         sent, ran, problems = 0, False, []

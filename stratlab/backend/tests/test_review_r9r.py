@@ -420,6 +420,18 @@ def test_every_long_lived_client_retries_a_dropped_read(no_pause, name):
     client = _clients()[name]()
     try:
         transport = client._transport
+        if isinstance(transport, db.Lanes):          # the database: each of its lanes (15 Oct), the request lanes included
+            for lane, in_request in ((transport.job, False), (transport.request, True)):
+                assert isinstance(lane[0], http_retry.RetryReads), name
+                flaky = Flaky(httpx.RemoteProtocolError)
+                lane[0].inner = flaky
+                token = db._in_request.set(in_request)
+                try:
+                    r = client.get("https://api.example/x")
+                finally:
+                    db._in_request.reset(token)
+                assert r.status_code == 200 and flaky.calls == ["GET", "GET"]
+            return
         assert isinstance(transport, http_retry.RetryReads), name
         flaky = Flaky(httpx.RemoteProtocolError)
         transport.inner = flaky
@@ -442,9 +454,11 @@ def test_keep_alive_is_shorter_than_any_idle_timeout_we_know_of():
     transport uses the transport's.)"""
     client = db._http()
     try:
-        pool = client._transport.inner._pool
-        assert pool._keepalive_expiry == http_retry.KEEPALIVE_EXPIRY and 0 < pool._keepalive_expiry <= 10
-        assert pool._http2 is False and pool._http1 is True
+        lanes = client._transport
+        for transport, _ in (lanes.request, lanes.signin, lanes.job):          # each lane has its own pool (15 Oct)
+            pool = transport.inner._pool
+            assert pool._keepalive_expiry == http_retry.KEEPALIVE_EXPIRY and 0 < pool._keepalive_expiry <= 10
+            assert pool._http2 is False and pool._http1 is True
     finally:
         client.close()
 

@@ -734,3 +734,79 @@ def test_a_failed_ai_summary_is_retried_after_a_few_minutes_not_a_day(monkeypatc
     monkeypatch.setattr(net, "time", SimpleNamespace(time=lambda: real.time() + 11 * 60))
     assert write.summary(f)["ai"] is True                                  # after them the AI is asked again
     write._cache.clear()
+
+
+# ---------- 15 Oct: the India brief's start timed out on the database and went 19 minutes late, with no word ----------
+def test_a_timeout_starting_the_send_is_tried_again_within_minutes(w, monkeypatch, outbox):
+    import httpx
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-pro", "pro@example.com", market_in="daily")
+    real, failed = job.open_ledger, []
+
+    def slow_once(iid):
+        if not failed:
+            failed.append(iid)
+            raise httpx.ReadTimeout("The read operation timed out")
+        return real(iid)
+    monkeypatch.setattr(job, "open_ledger", slow_once)
+    j = job.Job("newsletters")
+    pauses = []
+    j.sleep = pauses.append
+    assert j.tick(AFTER_IN_CLOSE) == 1 and failed                 # sent in the same check, after one pause
+    assert pauses == [job.START_RETRY_PAUSES[0]] and pauses[0] <= 120
+    assert [to for to, *_ in outbox] == ["pro@example.com"]
+
+
+def test_the_tries_to_start_are_bounded_and_the_next_check_still_tries(w, monkeypatch, outbox):
+    import httpx
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-pro", "pro@example.com", market_in="daily")
+    real, tries = job.open_ledger, []
+
+    def down(iid):
+        tries.append(iid)
+        raise httpx.PoolTimeout("timed out")
+    monkeypatch.setattr(job, "open_ledger", down)
+    j = job.Job("newsletters")
+    pauses = []
+    j.sleep = pauses.append
+    assert j.tick(AFTER_IN_CLOSE) == 0 and outbox == []
+    assert len(tries) == len(job.START_RETRY_PAUSES) + 1 and pauses == list(job.START_RETRY_PAUSES)
+    assert "couldn't start the send" in j.status["regions"]["IN"]["error"]
+    monkeypatch.setattr(job, "open_ledger", real)                 # the database is back
+    assert j.tick(AFTER_IN_CLOSE + timedelta(minutes=5)) == 1
+
+
+def test_an_error_that_wont_pass_is_not_retried_in_the_check(w, monkeypatch, outbox):
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    monkeypatch.setattr(job, "open_ledger", lambda iid: (_ for _ in ()).throw(ValueError("bad issue")))
+    j = job.Job("newsletters")
+    j.sleep = lambda s: pytest.fail("no pause for an error a retry can't fix")
+    assert j.tick(AFTER_IN_CLOSE) == 0
+
+
+def test_the_admins_are_told_when_the_brief_is_30_minutes_late(w, monkeypatch, outbox):
+    told = []
+    monkeypatch.setattr(alerts, "tell_admins", lambda subject, text, label="Admin alert": told.append((subject, text)) or 1)
+    j = job.Job("newsletters")
+    j.status["last_error"] = "IN: The read operation timed out"
+    slot = datetime(2026, 10, 1, 10, 45, tzinfo=timezone.utc)         # 16:15 IST
+    assert j.check_late(slot + timedelta(minutes=29)) == [] and told == []
+    assert j.check_late(slot + timedelta(minutes=31)) == ["IN"]
+    subject, text = told[0]
+    assert subject == "India Market Brief is late (2026-10-01)"
+    assert "4:15 PM" in text and "31 minutes" in text and "timed out" in text
+    assert j.check_late(slot + timedelta(minutes=36)) == [] and len(told) == 1       # once a day
+    assert job.Job("newsletters").check_late(slot + timedelta(minutes=41)) == []     # and not again after a restart
+    assert len(told) == 1
+
+
+def test_no_late_alert_once_the_brief_went(w, monkeypatch, outbox):
+    told = []
+    monkeypatch.setattr(alerts, "tell_admins", lambda subject, text, label="Admin alert": told.append(subject) or 1)
+    monkeypatch.setattr(content, "market_facts", lambda region, day, weekly=False: market(region, weekly, day))
+    reader("u-pro", "pro@example.com", market_in="daily")
+    assert job.Job("newsletters").tick(AFTER_IN_CLOSE) == 1
+    late = datetime(2026, 10, 1, 11, 30, tzinfo=timezone.utc)
+    assert job.Job("newsletters").check_late(late) == [] and told == []                # a restarted job reads the mark
+    assert job.Job("newsletters").check_late(datetime(2026, 10, 2, 11, 30, tzinfo=timezone.utc)) == []   # holiday

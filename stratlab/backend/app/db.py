@@ -33,13 +33,111 @@ class RetryReads(http_retry.RetryReads):
         return RETRY_PAUSE
 
 
+# Three lanes, each its own connection pool (15 Oct: one pool of 40 for everything, with 30 s waits for a connection and
+# for each read, and a timed-out read sent again. After the close the jobs' slow reads held every connection, so each
+# signed-in call, the sign-in check included, queued 30 s for one, then 30 s again: 502s at Railway's 31 s, /me over 45 s.)
+#  - request: reads made while answering an HTTP request. Few connections, short waits, a timeout is not tried again:
+#    a slow database gives a 503 in seconds (DatabaseUnavailable) instead of holding the request's thread.
+#  - signin: the token check (GET /auth/v1/user), so an invalid token never waits behind data reads.
+#  - job: everything else (the scheduled jobs, background threads), with the long waits a big read needs.
+REQUEST_TIMEOUT = httpx.Timeout(6.0, connect=3.0, pool=2.0)
+REQUEST_DEADLINE = 8.0          # seconds for a whole request-lane reply: the read timeout is per read, a trickle never trips it
+REQUEST_CONNECTIONS = 16        # also the bound on request threads in a database call: the rest wait REQUEST_TIMEOUT.pool at most
+SIGNIN_TIMEOUT = httpx.Timeout(5.0, connect=3.0, pool=1.0)
+SIGNIN_CONNECTIONS = 8
+JOB_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+JOB_CONNECTIONS = 24
+
+_in_request: contextvars.ContextVar[bool] = contextvars.ContextVar("db_in_request", default=False)
+
+
+class DatabaseUnavailable(httpx.TimeoutException):
+    """A database call made for an HTTP request that ran out of time: the API answers 503 (main.py), and code that
+    treats a transport error as "unreachable" (auth._unreachable) still does."""
+
+    def __init__(self, message: str = "Couldn't reach the database", request: httpx.Request | None = None):
+        super().__init__(message, request=request)
+
+
+def in_request() -> bool:
+    """Whether this code runs for an HTTP request (SettingsMemo marks it; it follows the request into its threadpool
+    thread, not into threads the request starts)."""
+    return _in_request.get()
+
+
+class _Deadline(httpx.SyncByteStream):
+    def __init__(self, inner, end: float, request: httpx.Request):
+        self.inner, self.end, self.request = inner, end, request
+
+    def __iter__(self):
+        for chunk in self.inner:
+            if time.monotonic() > self.end:
+                raise httpx.ReadTimeout("the reply took too long", request=self.request)
+            yield chunk
+
+    def close(self):
+        self.inner.close()
+
+
+class QuickReads(RetryReads):
+    """The request lanes: a broken connection is still tried once more, a timeout is not, and the whole reply has a
+    deadline."""
+    retry_timeouts = False
+
+    def __init__(self, inner: httpx.BaseTransport, deadline: float):
+        super().__init__(inner)
+        self.deadline = deadline
+
+    def _send(self, request: httpx.Request) -> httpx.Response:
+        end = time.monotonic() + self.deadline
+        resp = self.inner.handle_request(request)
+        resp.stream = _Deadline(resp.stream, end, request)
+        try:
+            resp.read()
+        except BaseException:
+            resp.close()
+            raise
+        return resp
+
+
+def _network(connections: int) -> httpx.BaseTransport:
+    # the connection limits belong to the transport: a client given a transport ignores its own `limits` (R9R-009); a
+    # short keep-alive keeps a pooled connection inside the idle timeout of the server at the other end
+    return httpx.HTTPTransport(http2=False, limits=httpx.Limits(
+        max_connections=connections, max_keepalive_connections=min(connections, 20),
+        keepalive_expiry=http_retry.KEEPALIVE_EXPIRY))
+
+
+class Lanes(httpx.BaseTransport):
+    """Sends each database call down its lane (see REQUEST_TIMEOUT), with that lane's timeouts."""
+
+    def __init__(self, network=_network):
+        self.request = (QuickReads(network(REQUEST_CONNECTIONS), REQUEST_DEADLINE), REQUEST_TIMEOUT)
+        self.signin = (QuickReads(network(SIGNIN_CONNECTIONS), REQUEST_DEADLINE), SIGNIN_TIMEOUT)
+        self.job = (RetryReads(network(JOB_CONNECTIONS)), JOB_TIMEOUT)
+
+    def lane(self, request: httpx.Request):
+        if request.method == "GET" and request.url.path.endswith("/auth/v1/user"):
+            return self.signin
+        return self.request if in_request() else self.job
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        transport, timeout = self.lane(request)
+        request.extensions = {**request.extensions, "timeout": timeout.as_dict()}
+        if transport is self.job[0]:
+            return transport.handle_request(request)
+        try:
+            return transport.handle_request(request)
+        except httpx.TimeoutException as e:
+            raise DatabaseUnavailable(f"Couldn't reach the database ({type(e).__name__})", request=request) from e
+
+    def close(self) -> None:
+        for transport, _ in (self.request, self.signin, self.job):
+            transport.close()
+
+
 def _http() -> httpx.Client:
-    # the connection limits belong to the transport: a client given a transport ignores its own `limits`, which is why the
-    # 30 s keep-alive once written here never applied (R9R-009); a short one keeps a pooled connection inside the idle timeout
-    # of the server at the other end
-    return httpx.Client(http2=False, follow_redirects=True, timeout=httpx.Timeout(30.0, connect=10.0),
-                        transport=RetryReads(httpx.HTTPTransport(http2=False, limits=httpx.Limits(
-                            max_connections=40, max_keepalive_connections=20, keepalive_expiry=http_retry.KEEPALIVE_EXPIRY))))
+    return httpx.Client(http2=False, follow_redirects=True, timeout=JOB_TIMEOUT, transport=Lanes())
 
 
 def sb() -> Client:
@@ -88,14 +186,20 @@ def cached_profile(user_id: str, email: str | None = None) -> dict:
     if hit and hit[0] > now:
         return dict(hit[1])
     # a page's dozen calls at once each need the profile: the first reads it, the others wait and find it kept (R9R-010)
-    with _profile_flights.hold(user_id):
+    with _profile_flights.hold(user_id) as flight:
+        if flight.get("down"):          # the read these calls waited on timed out: not one more slow read each, in turn
+            raise DatabaseUnavailable()
         with _profiles_lock:
             hit = _profiles.get(user_id)
         if hit and hit[0] > time.monotonic():
             return dict(hit[1])
         with _profiles_lock:
             seen = _profile_versions.get(user_id, 0)
-        row = get_profile(user_id, email)
+        try:
+            row = get_profile(user_id, email)
+        except httpx.TimeoutException:
+            flight["down"] = True
+            raise
         with _profiles_lock:
             if len(_profiles) > 5000:
                 _profiles.clear()
@@ -343,10 +447,11 @@ class SettingsMemo:
         memo: dict = {}
         with _memo_lock:
             _memos[id(memo)] = memo
-        token = _memo.set(memo)
+        token, lane = _memo.set(memo), _in_request.set(True)      # this request's database calls take the request lane
         try:
             await self.app(scope, receive, send)
         finally:
+            _in_request.reset(lane)
             _memo.reset(token)
             with _memo_lock:
                 _memos.pop(id(memo), None)
@@ -616,30 +721,39 @@ def _mirror_rows(prefix: str, wait: bool = True) -> dict | None:
 def _load_mirror(prefix: str, since: float | None = None) -> dict:
     """Read the prefix whole into the copy, unless a copy read at or after `since` (None: any copy) is there by the time
     this read's turn comes. Raises when the read fails, leaving the copy there was."""
+    # a request waits for another thread's full read no longer than for a read of its own (that one may be a job's, slow)
+    if not _mirror_loading.acquire(timeout=REQUEST_DEADLINE if in_request() else -1):
+        raise DatabaseUnavailable()
+    try:
+        return _load_mirror_held(prefix, since)
+    finally:
+        _mirror_loading.release()
+
+
+def _load_mirror_held(prefix: str, since: float | None) -> dict:
     global _mirror_log
-    with _mirror_loading:
+    with _mirror_lock:
+        m = _mirror.get(prefix)
+        if _mirror_usable(m) and (since is None or m["at"] >= since):
+            return m["rows"]
+        _mirror_log = {}
+    client = id(sb())
+    try:
+        rows = dict(_all_from_db(prefix))
+    except Exception:
         with _mirror_lock:
-            m = _mirror.get(prefix)
-            if _mirror_usable(m) and (since is None or m["at"] >= since):
-                return m["rows"]
-            _mirror_log = {}
-        client = id(sb())
-        try:
-            rows = dict(_all_from_db(prefix))
-        except Exception:
-            with _mirror_lock:
-                _mirror_log = None
-            raise
-        with _mirror_lock:
-            for k, v in (_mirror_log or {}).items():          # written while the read was on its way: the write is newer
-                if k.startswith(prefix):
-                    if v is None:
-                        rows.pop(k, None)
-                    else:
-                        rows[k] = v
             _mirror_log = None
-            _mirror[prefix] = {"at": time.monotonic(), "client": client, "rows": rows}
-        return rows
+        raise
+    with _mirror_lock:
+        for k, v in (_mirror_log or {}).items():          # written while the read was on its way: the write is newer
+            if k.startswith(prefix):
+                if v is None:
+                    rows.pop(k, None)
+                else:
+                    rows[k] = v
+        _mirror_log = None
+        _mirror[prefix] = {"at": time.monotonic(), "client": client, "rows": rows}
+    return rows
 
 
 def _start_reload(prefix: str, force: bool = False) -> None:

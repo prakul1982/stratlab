@@ -289,7 +289,7 @@ export function TaxReportPage() {
         )}
         {has && rep && rep.files.length > 0 && (
           <p className="k-note">
-            {rep.trades.toLocaleString("en-IN")} trades{rep.business_lines > 0 && ` and ${rep.business_lines.toLocaleString("en-IN")} F&O lines`} from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · updated ${ago(rep.updated_at)}` : ""}
+            {rep.trades.toLocaleString("en-IN")} trades{rep.business_lines > 0 && ` and ${rep.business_lines.toLocaleString("en-IN")} F&O lines`} from {rep.files.length} file{rep.files.length === 1 ? "" : "s"}: {rep.files.map((f) => `${f.name} (${f.broker})`).join(", ")}{rep.updated_at ? ` · files updated ${ago(rep.updated_at)}` : ""}
           </p>
         )}
       </Card>

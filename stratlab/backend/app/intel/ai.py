@@ -309,6 +309,7 @@ def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], a
     """`cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
     sold (R10O-004)."""
     cash_facts = grounding.flow_facts(cash)
+    headlines = grounding.session_headlines(headlines, ist_date())          # nothing older than the session day (R28-004)
     where = "Indian market only (NSE/BSE, Nifty/Sensex, rupees)." if region == "IN" else "US market (S&P 500, Nasdaq, Dow)."
     system = f"""You are a market reporter writing today's market read. {where}
 Base everything ONLY on the live index levels and headlines given. Don't pull events or dates from memory.
