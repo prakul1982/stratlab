@@ -356,3 +356,109 @@ def test_a_user_list_never_opens_another_buyers_invoice(store):
     theirs = invoices.make(PAY, {"id": "u1", "email": "a@b.c"}, "pro", "month")
     store["invoices:u2"] = json.dumps([theirs["number"]])                      # a list pointing at someone else's number
     assert invoices.of_user("u2") == [] and invoices.of_user("u1")[0]["number"] == theirs["number"]
+
+
+# ---------- acct4: an invoice that can't be made now leaves the webhook for Razorpay's retry ----------
+def _charge_world(monkeypatch):
+    """An in-memory database with a Pro user on sub_9, and a count of every side effect a charged event has."""
+    import time as _time
+    from tests.fake_db import FakeSupabase
+    db = invoices.db
+    monkeypatch.setattr(db, "_client", FakeSupabase())
+    monkeypatch.setattr(settings, "RAZORPAY_WEBHOOK_SECRET", "w")
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(utility=SimpleNamespace(verify_webhook_signature=lambda *a: True),
+                                                            subscription=SimpleNamespace(cancel=lambda *a: None)))
+    monkeypatch.setattr("app.admin.mark_granted", lambda *a: None)
+    seen = {"later": [], "paid": [], "analytics": [], "plan": []}
+    monkeypatch.setattr(billing.lifecycle, "later", lambda fn, *a: seen["later"].append(fn.__name__))
+    monkeypatch.setattr(billing.invite_rewards, "safe_paid", lambda p, pay: seen["paid"].append(pay["id"]))
+    monkeypatch.setattr(billing.product_analytics, "payment_completed", lambda *a: seen["analytics"].append(1))
+    real_update = db.update_profile
+    monkeypatch.setattr(billing.db, "update_profile", lambda uid, **kw: seen["plan"].append(kw.get("plan")) or real_update(uid, **kw))
+    invoices.save_seller(SELLER)
+    db.get_profile("u-x", "x@example.com")
+    real_update("u-x", plan="pro", plan_status="active", razorpay_subscription_id="sub_9")
+    body = json.dumps({"event": "subscription.charged", "payload": {
+        "subscription": {"entity": {"id": "sub_9", "status": "active", "notes": {"user_id": "u-x", "plan": "pro", "period": "month"}}},
+        "payment": {"entity": {**PAY, "id": "pay_9"}}}}).encode()
+    return db, seen, body, _time
+
+
+def test_a_busy_invoice_claim_is_left_for_the_webhook_retry_which_issues_it_once(monkeypatch):
+    db, seen, body, _time = _charge_world(monkeypatch)
+    db.set_setting("invoice-of:pay_9", json.dumps({"pending": "other", "at": _time.time()}))   # the checkout callback is on it
+    with pytest.raises(invoices.InvoiceBusy):
+        billing.handle_webhook(body, "sig", "evt_9")
+    assert db.get_setting("rzp-event:evt_9") is None and not db.get_setting("invoices:u-x")      # not marked handled
+    assert seen["later"] == [] and seen["paid"] == [] and seen["analytics"] == []
+    db.update_setting("invoice-of:pay_9", lambda raw: db.REMOVE)       # the other server failed before taking a number
+    billing.handle_webhook(body, "sig", "evt_9")                       # Razorpay's retry
+    billing.handle_webhook(body, "sig", "evt_9")                       # and a replay of it: nothing more
+    assert [i["payment_id"] for i in invoices.of_user("u-x")] == ["pay_9"] and db.get_setting("rzp-event:evt_9")
+    assert seen["later"] == ["receipt"] and seen["paid"] == ["pay_9"] and seen["analytics"] == [1]
+    assert set(seen["plan"]) == {"pro"}                                # the plan change ran again with the same values only
+    assert (db.get_profile("u-x")["plan"], db.get_profile("u-x")["plan_status"]) == ("pro", "active")
+
+
+def test_a_read_that_fails_while_invoicing_is_retried_by_the_webhook(monkeypatch):
+    db, seen, body, _ = _charge_world(monkeypatch)
+    real, blips = db.get_setting, [1]
+
+    def flaky(key):
+        if key == "billing:u-x" and blips:
+            blips.pop()
+            raise TimeoutError("read timed out")
+        return real(key)
+    monkeypatch.setattr(db, "get_setting", flaky)
+    with pytest.raises(TimeoutError):
+        billing.handle_webhook(body, "sig", "evt_8")
+    assert real("rzp-event:evt_8") is None
+    billing.handle_webhook(body, "sig", "evt_8")
+    assert [i["payment_id"] for i in invoices.of_user("u-x")] == ["pay_9"] and seen["later"] == ["receipt"]
+
+
+def test_the_checkout_still_switches_the_plan_on_while_the_invoice_is_busy(monkeypatch):
+    db, seen, _, _time = _charge_world(monkeypatch)
+    db.update_profile("u-x", plan="free", plan_status="cancelled", razorpay_subscription_id=None, pending_subscription_id="sub_5")
+    sub = {"id": "sub_5", "status": "active", "notes": {"user_id": "u-x", "plan": "pro", "period": "month"}, "current_end": 1793000000}
+    monkeypatch.setattr(billing, "_client", SimpleNamespace(
+        utility=SimpleNamespace(verify_subscription_payment_signature=lambda *a: True),
+        subscription=SimpleNamespace(fetch=lambda sid: sub, cancel=lambda *a: None),
+        payment=SimpleNamespace(fetch=lambda pid: {**PAY, "id": pid})))
+    db.set_setting("invoice-of:pay_5", json.dumps({"pending": "webhook", "at": _time.time()}))
+    billing.verify_checkout(db.get_profile("u-x"), "pay_5", "sub_5", "abc123")       # no error for the payer
+    p = db.get_profile("u-x")
+    assert (p["plan"], p["plan_status"], p["razorpay_subscription_id"]) == ("pro", "active", "sub_5")
+    assert seen["paid"] == ["pay_5"]
+
+
+def _alerts(monkeypatch) -> list:
+    told = []
+    monkeypatch.setattr("app.alerts.tell_admins", lambda subject, text, *a, **k: told.append((subject, text)) or 1)
+    return told
+
+
+def test_a_permanent_invoice_error_is_alerted_at_once_and_the_event_marked_handled(monkeypatch):
+    """A failure a retry would only repeat must not fail the webhook again and again (Razorpay disables it)."""
+    db, seen, body, _ = _charge_world(monkeypatch)
+    told = _alerts(monkeypatch)
+    monkeypatch.setattr(invoices, "tax_lines", lambda *a: (_ for _ in ()).throw(KeyError("state")))     # a bug
+    billing.handle_webhook(body, "sig", "evt_7")                       # not raised
+    assert db.get_setting("rzp-event:evt_7") and not db.get_setting("invoices:u-x")
+    assert len(told) == 1 and told[0][0] == "StratLab: no invoice for payment pay_9" and "u-x" in told[0][1]
+    assert seen["paid"] == ["pay_9"] and db.get_profile("u-x")["plan"] == "pro"      # the rest of the event still ran
+
+
+def test_a_transient_invoice_error_is_raised_five_times_then_given_up_and_alerted(monkeypatch):
+    db, seen, body, _ = _charge_world(monkeypatch)
+    told = _alerts(monkeypatch)
+    real = db.get_setting
+    monkeypatch.setattr(db, "get_setting", lambda key: (_ for _ in ()).throw(ConnectionError("db down"))
+                        if key == "billing:u-x" else real(key))
+    for _ in range(billing.INVOICE_TRIES):
+        with pytest.raises(ConnectionError):
+            billing.handle_webhook(body, "sig", "evt_6")
+        assert real("rzp-event:evt_6") is None and told == []
+    billing.handle_webhook(body, "sig", "evt_6")                       # the 6th try: no longer raised
+    assert real("rzp-event:evt_6") and len(told) == 1 and "failed 6 times" in told[0][1]
+    assert seen["paid"] == ["pay_9"]

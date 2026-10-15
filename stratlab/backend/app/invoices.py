@@ -193,8 +193,12 @@ def _issued(number: str, payment: dict, user: dict, plan: str, period: str) -> d
 def make(payment: dict, user: dict, plan: str, period: str) -> dict:
     """The invoice for one payment, created once (a second call for the same payment returns the first). The payment's
     claim, the number and the lists are compare-and-set writes, so two servers never share or overwrite one. The claim
-    comes first and the number only after it is won, so a lost race leaves no numbered record and no gap in the series.
-    The claim holds the number once taken; a call that stops after that is finished by the next one, under that number."""
+    comes first and the number only after it is won, so a lost race for the claim takes no number. The claim holds the
+    number once it is filled in; a call that stops after that is finished by the next one, under that number.
+    Gaps are still possible, and rare: a number the counter gave out is not used when the call then fails before the
+    claim holds it (the fill's write fails, the process stops, or a call slower than PENDING_FOR finds its claim taken
+    over). Such a number is logged ("invoice number skipped") and not reused, so the series stays in date order; the
+    owner reports it as unused in the GST return."""
     import time
     import uuid
     pid = payment["id"]
@@ -220,6 +224,7 @@ def make(payment: dict, user: dict, plan: str, period: str) -> dict:
             return _issued(got, payment, user, plan, period)
         if got != mine:
             raise InvoiceBusy(f"invoice for {pid} is being issued")
+        number = None
         try:
             year = body["fy"]
             n = json.loads(db.update_setting(f"invoice:counter:{year}", lambda raw: json.dumps(int(json.loads(raw) if raw else 0) + 1)))
@@ -232,9 +237,11 @@ def make(payment: dict, user: dict, plan: str, period: str) -> dict:
                 raise InvoiceBusy(f"invoice for {pid} was taken over")
         except BaseException:
             try:       # no number is held in the claim: let it go so a retry can take it (a claim holding the number stays)
-                db.update_setting(key, lambda raw: db.REMOVE if raw and json.loads(raw) == mine else None)
+                left = db.update_setting(key, lambda raw: db.REMOVE if raw and json.loads(raw) == mine else None)
+                if number and not (left and json.loads(left) == number):
+                    print(f"invoice number skipped: {number} (payment {pid})")
             except Exception as e:
-                print("invoice claim release failed:", str(e)[:160])
+                print("invoice claim release failed:", str(e)[:160], "number:", number)
             raise
         inv = {"number": number, **body}
         _store(inv)

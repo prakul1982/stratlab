@@ -525,3 +525,19 @@ def test_business_read_drops_advice_wording():
     assert b["drivers"] == ["Rural demand"] and b["customers"] == ""
     risky = deepdive.clean_business({"summary": "x", "risks": ["Higher steel prices could pressure margins"]})
     assert risky["risks"] == ["Higher steel prices could pressure margins"]          # a risk is a filing's own words
+
+
+def test_a_read_saved_before_the_advice_filter_loses_its_advice_wording(monkeypatch):
+    """acct4: stored reads are filtered as a new read is; risks keep the filing's own words."""
+    saved = json.dumps({"at": "2026-10-10T10:00:00+00:00", "ts": 1, "business": {
+        "summary": "TCS sells IT services. The stock looks undervalued with significant upside.",
+        "segments": [{"name": "BFSI", "share_pct": 31, "what": "Banking software. Poised to benefit from rate cuts."}],
+        "customers": "Large banks. A good time to buy for long-term holders.",
+        "drivers": ["Upside from deal wins", "Large multi-year contracts"], "strengths": ["Attractively valued entry", "Deep client ties"],
+        "risks": ["Visa rules could pressure margins"], "measures": []}})
+    monkeypatch.setattr(deepdive.db, "get_setting", lambda key: saved)
+    b = deepdive.stored("TCS")["business"]
+    assert b["summary"] == "TCS sells IT services." and b["customers"] == "Large banks."
+    assert b["segments"] == [{"name": "BFSI", "share_pct": 31, "what": "Banking software."}]
+    assert b["drivers"] == ["Large multi-year contracts"] and b["strengths"] == ["Deep client ties"]
+    assert b["risks"] == ["Visa rules could pressure margins"]

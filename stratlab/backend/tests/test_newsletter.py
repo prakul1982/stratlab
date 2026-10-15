@@ -584,3 +584,14 @@ def test_the_52_week_line_says_below_only_for_an_index_below_its_high():
         return write._tiles([{"name": "NIFTY 50", "price": 25000.0, "change_pct": 0.5, "from_high_pct": from_high}], False)[0].sub
     assert sub(-1.8) == "1.8% below its 52-week high"
     assert sub(1.8) is None and sub(0.0) is None and sub(None) is None  # a positive figure used to read "1.8% below"
+
+
+def test_a_confirm_link_for_a_deleted_account_makes_no_new_profile(w):
+    """acct4: the link reads the profile without creating one (db.get_profile would make a fresh row)."""
+    from app import mail_tokens
+    c = w["client"]
+    t = mail_tokens.make("u-deleted", "confirm", "gone@example.com")
+    assert c.get("/email/confirm", params={"t": t}).status_code == 400
+    assert c.post("/email/confirm", params={"t": t}).status_code == 400
+    assert not db.sb().table("profiles").select("id").eq("id", "u-deleted").execute().data
+    assert db.get_setting(alerts.CONFIRMED + "u-deleted") is None

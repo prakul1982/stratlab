@@ -317,3 +317,32 @@ def test_the_export_drops_any_name_with_a_secret_word_in_it_but_keeps_the_instru
     got = user_data._clean({"bot_token": "x", "kite_api_key": "k", "client_secret": "s", "private_key": "p",
                             "feed_token": "f", "instrument_token": 408065, "name": "TCS"})
     assert got == {"instrument_token": 408065, "name": "TCS"}
+
+
+# ---------- acct4: a number given out and then lost is logged, not hidden ----------
+def test_a_number_lost_to_a_takeover_is_logged_as_skipped(shared_db, monkeypatch, capsys):
+    invoices.save_seller(SELLER)
+    real = db.update_setting
+
+    def slow(key, fn, tries=10):
+        out = real(key, fn, tries)
+        if key.startswith("invoice:counter:"):         # this call was slow: another took the claim over meanwhile
+            db.set_setting("invoice-of:pay_1", json.dumps({"pending": "another", "at": time.time()}))
+        return out
+    monkeypatch.setattr(db, "update_setting", slow)
+    with pytest.raises(invoices.InvoiceBusy):
+        invoices.make(PAY, U1, "pro", "month")
+    assert "invoice number skipped: SL/2026-27/0001 (payment pay_1)" in capsys.readouterr().out
+    assert "Gaps are still possible" in invoices.make.__doc__
+
+
+def test_a_follower_lists_options_and_group_sessions_by_their_kind(w):
+    """acct4: the kind comes from the row's type, as the leader's session classes have it."""
+    from app import main
+    main.manager.sessions.clear()
+    rules = running_row()
+    opts = running_row(instrument={"type": "OPTIONS", "symbol": "NIFTY", "market": "IN"})
+    group = running_row(instrument={"type": "GROUP", "symbol": "Banks", "market": "IN"})
+    signal = running_row(strategy={"kind": "signal", "risk": {"capital": 1}})
+    kinds = {r["id"]: r["kind"] for r in w["client"].get("/admin/sessions", headers=ADMIN).json()}
+    assert kinds == {rules["id"]: "rules", opts["id"]: "options", group["id"]: "group", signal["id"]: "signal"}

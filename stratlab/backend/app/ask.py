@@ -6,8 +6,9 @@ reached, simple word rules pick the action instead, so the box always does somet
 import hashlib
 import re
 
+from .ai_reply import AIError
 from .ideas import MARKETS, guess_market
-from .intel.grounding import ADVICE, _SENT
+from .intel.grounding import _SENT
 
 ACTIONS = ("test", "paper", "research", "ideas", "answer", "library", "options", "open")
 PAGES = {"paper": "/paper", "options": "/options", "library": "/library", "research": "/research", "import": "/import",
@@ -62,8 +63,39 @@ def guess(q: str) -> dict:
     return {"action": "ideas", "text": t, "title": "Get testable ideas"}
 
 
-def clean(raw, q: str) -> dict:
-    """Keep only well-formed fields; anything odd falls back to the word rules."""
+# An answer explains how trading works, so the research reads' advice check (which drops "short sell", "buy them back",
+# "breakout") would empty most of them. Here only a real recommendation is dropped: buy/sell/hold advice about a named
+# stock, a target price, or a call worded as one ("you should buy", "worth buying", "good time to sell").
+_ACTS = r"(buy|sell|hold|accumulate|avoid|short|exit|book profits?)"
+RECOMMEND = re.compile(
+    r"\b(target price|price target)s?\b|\btarget(s|ed)?\b[^.\d%]{0,14}(₹|rs\.?\s*|inr\s*|\$)?\d[\d,]{2,}"
+    rf"|\b(should|ought to)\s+{_ACTS}\b|\brecommend|\bworth (buying|owning|selling)\b|\bmultibagger"
+    r"|\b(good|great|right|ideal|best) time to (buy|sell|invest|enter|exit)\b|\bstocks? to (buy|watch|sell)\b"
+    rf"|^\W*{_ACTS}\b[^.]*\b(now|today|immediately)\b", re.I)
+# what a named stock (a ticker in capitals) is advised or forecast to do
+_CALL = re.compile(r"\b(buy|sell|hold|accumulate|avoid|short|undervalued|overvalued|upside|downside|cheap|expensive|target)\b"
+                   r"|\b(will|could|may|might|is likely to|is set to|is poised to)\s+(rise|fall|rally|climb|drop|gain|"
+                   r"outperform|underperform|recover|rebound|double)\b", re.I)
+_TICKER = re.compile(r"\b[A-Z][A-Z0-9&]{1,}(?:-[A-Z]{1,3})?\b")
+TERMS = {"RSI", "EMA", "SMA", "WMA", "MACD", "VWAP", "ATR", "ADX", "OBV", "CCI", "MFI", "ROC", "DMI", "NSE", "BSE", "NYSE",
+         "NASDAQ", "LSE", "ETF", "ETFS", "IPO", "SIP", "FO", "PE", "EPS", "ROE", "ROCE", "GDP", "CPI", "RBI", "SEBI", "US",
+         "UK", "EU", "USD", "INR", "OHLC", "AI", "API", "CSV", "PDF", "SL", "TP", "PNL", "FII", "DII", "OI", "PCR", "IV",
+         "ITM", "OTM", "ATM", "CE", "F&O", "LTP", "MTM", "CAGR", "XIRR", "NAV", "AMC", "KYC", "GST", "TDS", "STT", "OK",
+         "I", "A", "ID", "JSON", "FAQ", "FX", "IST", "UTC", "EOD", "DMA"}
+
+
+def recommends(sentence: str) -> bool:
+    """A sentence that tells the reader to buy, sell or hold a named stock, or gives a target price."""
+    if RECOMMEND.search(sentence):
+        return True
+    named = [t for t in _TICKER.findall(sentence) if t.replace("-", "") not in TERMS]
+    return bool(named) and bool(_CALL.search(sentence))
+
+
+def clean(raw, q: str, strict: bool = False) -> dict:
+    """Keep only well-formed fields; anything odd falls back to the word rules. `strict` (the AI's own reply): an answer
+    left empty once recommendations are out raises AIError instead, so the call is neither counted nor cached and the
+    search box shows its fallback."""
     if not isinstance(raw, dict) or raw.get("action") not in ACTIONS:
         return guess(q)
     out = {"action": raw["action"], "title": str(raw.get("title") or "")[:80] or None}
@@ -78,9 +110,11 @@ def clean(raw, q: str) -> dict:
     if out["action"] == "open" and not out["page"]:
         return guess(q)
     if out["action"] == "answer":
-        # sentences worded as advice or a forecast never reach the reader (the check the research reads use)
-        ans = " ".join(x for x in _SENT.split(" ".join(str(raw.get("answer") or "").split())) if not ADVICE.search(x))
+        # a sentence that recommends buying, selling or holding a named stock, or gives a target, never reaches the reader
+        ans = " ".join(x for x in _SENT.split(" ".join(str(raw.get("answer") or "").split())) if x and not recommends(x))
         if not ans:
+            if strict:
+                raise AIError("No answer could be written for that. Try rephrasing the question.")
             return guess(q)
         out["answer"] = ans[:1200]
     if out["action"] == "research" and not out["symbol"]:
@@ -90,7 +124,7 @@ def clean(raw, q: str) -> dict:
 
 def build(ask_json, q: str) -> dict:
     q = q[:400]                  # what the cache key covers: nothing past it may shape an answer another person gets
-    return clean(ask_json(SYSTEM, q, 700), q)
+    return clean(ask_json(SYSTEM, q, 700), q, strict=True)
 
 
 def key(q: str) -> tuple:

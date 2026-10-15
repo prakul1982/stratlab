@@ -172,16 +172,17 @@ def _day(d: date) -> str:
 
 
 def _last_day(end: datetime) -> date:
-    """The India date of the last moment before `end` (an offer ending at midnight ends the day before)."""
-    return (end - timedelta(seconds=1)).astimezone(IST).date()
+    """The India date of the last moment before `end` (an offer ending at midnight ends the day before). Taken to the
+    minute, as every page and email says the time: 00:00:30 is said "12:00 am", so it too ends the day before."""
+    return (end.replace(second=0, microsecond=0) - timedelta(seconds=1)).astimezone(IST).date()
 
 
 def _end_text(end: datetime) -> str:
     """An instant in India time, as the pages say it: on Thu 22 Oct at 5:20 pm IST. Midnight is the end of the day
     before, not 12:00 am of the next one: at the end of Thu 22 Oct (India time)."""
-    t = end.astimezone(IST)
+    t = end.astimezone(IST).replace(second=0, microsecond=0)      # said to the minute, as the pages do
     if (t.hour, t.minute) == (0, 0):
-        d = _last_day(end)
+        d = _last_day(t)
         return f"at the end of {d:%a} {d.day} {d:%b} (India time)"
     return f"on {t:%a} {t.day} {t:%b} at {t.hour % 12 or 12}:{t:%M} {'am' if t.hour < 12 else 'pm'} IST"
 
@@ -437,6 +438,10 @@ def plan_ended(profile: dict, sub_id: str, plan: str | None) -> bool:
         profile = db.get_profile(profile["id"])        # as it is now, after the subscription ended (the caller's copy is from before)
     except Exception as e:
         print("plan ended: profile not re-read,", str(e)[:120])
+        # the caller's copy is from before the end (still on the paid plan): word the email as the account is now, on
+        # Free with no subscription (the launch offer and free Basic time are still read as usual by access_plan)
+        profile = {**profile, "plan": "free", "plan_status": "cancelled", "razorpay_subscription_id": None,
+                   "cancel_at_period_end": False}
     return send(profile, "plan_ended", f"plan_ended:{sub_id}", {"plan": plan if plan in PLANS else "pro"})
 
 

@@ -63,6 +63,12 @@ def get_profile(user_id: str, email: str | None = None) -> dict:
     return sb().table("profiles").select("*").eq("id", user_id).limit(1).execute().data[0]
 
 
+def find_profile(user_id: str) -> dict | None:
+    """A profile by id, or None: unlike get_profile, a missing one (a deleted account) is never made."""
+    rows = sb().table("profiles").select("*").eq("id", user_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
 # Signed-in requests read the profile on every call (a paper page polls every 3 s), so keep it for a few
 # seconds. Every change goes through update_profile, which drops the copy, and the server runs one process.
 PROFILE_TTL = 10.0
