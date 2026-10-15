@@ -4,6 +4,7 @@ Plain ASGI, so it sees every request before FastAPI reads the body. Limits are p
 token) or, for anonymous calls, per address; they're generous enough that normal use, including several
 tabs polling paper sessions, never reaches them."""
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -19,7 +20,7 @@ BIG_BODY = {("POST", "/tax/import"): TAX_MAX_REQUEST, ("POST", "/trade/journal/i
 PER_MINUTE_USER = 600
 PER_MINUTE_ANON = 240
 PER_MINUTE_ADDRESS = 1200           # every request from one address, signed in or not: made-up tokens can't dodge the limit
-BAD_TOKENS_PER_MINUTE = 30          # made-up bearer tokens from one address, before it's answered 429 without asking the sign-in service
+BAD_TOKENS_PER_MINUTE = 120         # refused bearer tokens from one address (generous: mobile carriers share one address), then 429
 EXEMPT = ("/health",)               # the host's health check
 HOOKS = "/hooks/signal/"            # signal webhooks (signals_routes.py): limited per secret URL, not per address
 
@@ -68,11 +69,24 @@ class Window:
             return cur[1] if cur and cur[0] == int(now // 60) else 0
 
 
+# a host's internal hops: RFC 1918, carrier-grade NAT, loopback, link-local and IPv6 unique-local / link-local
+_INTERNAL = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "127.0.0.0/8",
+                                              "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10")]
+
+
 def _hops() -> int:
     try:
         return max(1, int(os.environ.get("TRUSTED_PROXY_HOPS", "1")))
     except ValueError:
         return 1
+
+
+def _private(ip: str) -> bool:
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(a.version == n.version and a in n for n in _INTERNAL)
 
 
 def address(scope) -> str:
@@ -88,7 +102,11 @@ def address(scope) -> str:
     parts = [p.strip() for p in headers.get(b"x-forwarded-for", b"").decode("latin-1").split(",") if p.strip()]
     n = _hops()
     if len(parts) >= n:
-        return parts[-n]
+        # the host's own internal hops (private addresses) come after the client's; skip them, but never past the n-th
+        i = len(parts) - n
+        while i > 0 and _private(parts[i]):
+            i -= 1
+        return parts[i]
     if scope.get("client"):
         return scope["client"][0] or "?"
     return "?"

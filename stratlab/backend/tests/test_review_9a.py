@@ -116,3 +116,14 @@ def test_heavy_reads_are_throttled_per_user(w):
         assert again.status_code == 429 and "wait a minute" in again.json()["detail"]["message"].lower()
         break          # the three share one allowance, so the first route used it up
     assert c.get("/research/investor", headers=world.headers("basic-token")).status_code != 429     # another account isn't held
+
+
+def test_the_hosts_internal_hops_are_skipped_not_the_clients_entries(monkeypatch):
+    monkeypatch.delenv("TRUSTED_PROXY_HOPS", raising=False)
+    monkeypatch.delenv("TRUST_X_REAL_IP", raising=False)
+    # the edge appended the client 198.51.100.7, then an internal proxy appended its own 10.x / 100.64.x hop
+    assert guard.address(scope({"x-forwarded-for": "198.51.100.7, 10.20.0.3"})) == "198.51.100.7"
+    assert guard.address(scope({"x-forwarded-for": "1.1.1.1, 198.51.100.7, 100.64.3.2, 10.0.0.1"})) == "198.51.100.7"
+    # every user doesn't collapse onto one internal address, and a lone internal entry is still used rather than nothing
+    assert guard.address(scope({"x-forwarded-for": "10.20.0.3"})) == "10.20.0.3"
+    assert guard.address(scope({"x-forwarded-for": "2001:db8::1, fd00::5"})) == "2001:db8::1"
