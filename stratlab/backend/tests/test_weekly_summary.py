@@ -111,3 +111,14 @@ def test_admin_can_send_it_now_and_no_one_else_can(monkeypatch):
         assert main.db.get_setting(weekly.WEEK_KEY) is None                       # Monday's still goes out
     finally:
         w["close"]()
+
+
+def test_the_summary_prints_days_the_way_the_app_does_and_its_email_title_is_the_subject():
+    from app import email_kit as kit
+    facts = {"stats": {"users": 1, "new": 2, "paid": {}, "experiments": 0, "ai": 0}, "checks": [],
+             "audits": {}, "errors": 0, "admin_url": None}
+    subject, text = weekly.summary(MONDAY, facts)                                  # Mon 5 Oct: "05 Oct" had a zero in front
+    assert text.splitlines()[0] == "StratLab, 28 Sep to 5 Oct 2026"
+    html, plain = kit.message(subject, text, "/admin", "Weekly summary", "You get this because you are an admin.")
+    assert subject == "StratLab weekly: 2 new users, all quiet"
+    assert f"\n{subject}\n" in plain and "\nWeekly: " not in plain and f"{subject}</h1>" in html.replace("\n", "")

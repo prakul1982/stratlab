@@ -382,6 +382,7 @@ def test_a_straddles_legs_make_one_alert_with_the_trades_net_pnl():
 
 
 def test_the_alert_text_names_the_structure_once():
+    from app import email_kit as kit
     from app.live import structure_alert
     s, calls = quiet_session()
     poll(s, "09:40")
@@ -389,7 +390,7 @@ def test_the_alert_text_names_the_structure_once():
     subject, text = structure_alert(s, calls[0][0], None)
     assert subject == "x: opened" and text.count("SELL 75") == 2 and "NIFTY25000CE" in text and "NIFTY25000PE" in text
     subject, text = structure_alert(s, calls[1][0], calls[1][1])
-    assert subject == "x: closed" and f"net P&L {calls[1][1]:,.0f} INR after charges" in text and "Square-off" in text
+    assert subject == "x: closed" and f"net P&L {kit.money(calls[1][1], 'INR', signed=True)} after charges" in text and "INR" not in text and "Square-off" in text
 
 
 def test_a_quiet_poll_does_not_mark_the_session_for_saving():

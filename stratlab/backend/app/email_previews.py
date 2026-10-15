@@ -72,13 +72,13 @@ def _saturday(day: date) -> date:
 # made-up figures, each set shaped as its own issue: a day's move and distance from the high for the daily brief,
 # the move over the five sessions for the weekly one (content.index_moves gives the weekly issue no "from high")
 SAMPLE_INDICES = {
-    ("IN", False): [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.62, "from_high_pct": 1.8},
-                    {"name": "SENSEX", "price": 74210.3, "change_pct": 0.55, "from_high_pct": 1.9},
+    ("IN", False): [{"name": "NIFTY 50", "price": 22555.75, "change_pct": 0.62, "from_high_pct": -1.8},
+                    {"name": "SENSEX", "price": 74210.3, "change_pct": 0.55, "from_high_pct": -1.9},
                     {"name": "INDIA VIX", "price": 13.2, "change_pct": -3.1},
                     {"name": "NIFTY BANK", "price": 48120.4, "change_pct": -0.21}],
     ("IN", True): [{"name": "NIFTY 50", "price": 22410.2, "change_pct": -1.34}, {"name": "SENSEX", "price": 73755.9, "change_pct": -1.18},
                    {"name": "INDIA VIX", "price": 14.6, "change_pct": 8.9}, {"name": "NIFTY BANK", "price": 47630.15, "change_pct": -2.05}],
-    ("US", False): [{"name": "S&P 500", "price": 5712.6, "change_pct": -0.34, "from_high_pct": 2.4},
+    ("US", False): [{"name": "S&P 500", "price": 5712.6, "change_pct": -0.34, "from_high_pct": -2.4},
                     {"name": "Nasdaq 100", "price": 19840.2, "change_pct": -0.52}, {"name": "VIX", "price": 16.8, "change_pct": 4.2}],
     ("US", True): [{"name": "S&P 500", "price": 5688.1, "change_pct": 0.91}, {"name": "Nasdaq 100", "price": 19702.4, "change_pct": 1.27},
                    {"name": "VIX", "price": 15.9, "change_pct": -6.4}],

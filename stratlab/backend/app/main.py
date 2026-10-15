@@ -1105,11 +1105,21 @@ def _confirm_link_bad() -> HTMLResponse:
     return mail_page("This link doesn't work", f"It may have expired (links work for 3 days). Ask for a new one {WHERE_EMAILS}.", 400)
 
 
+def _confirm_token(t: str):
+    """(uid, address) of a confirmation link that is still for the reader's current newsletter address, else None: a link
+    sent to an address they have since changed confirms nothing."""
+    got = mail_tokens.read(t, "confirm")
+    if not got or not got[1]:
+        return None
+    current = alerts.newsletter_email(db.get_profile(got[0]))
+    return got if current and current.strip().lower() == got[1].strip().lower() else None
+
+
 @app.get("/email/confirm", response_class=HTMLResponse)
 def confirm_email_page(t: str = ""):
     """Asks before confirming: mail scanners open every link, and shouldn't sign anyone up for newsletters."""
-    got = mail_tokens.read(t, "confirm")
-    if not got or not got[1]:
+    got = _confirm_token(t)
+    if not got:
         return _confirm_link_bad()
     return HTMLResponse(content=mail_pages.ask(f"Send StratLab newsletters to {got[1]}?", f"/email/confirm?t={t}", "Confirm my email",
                                                "If you didn't ask for this, close this page.", manage=False))
@@ -1117,8 +1127,8 @@ def confirm_email_page(t: str = ""):
 
 @app.post("/email/confirm", response_class=HTMLResponse)
 def confirm_email(t: str = ""):
-    got = mail_tokens.read(t, "confirm")
-    if not got or not got[1]:
+    got = _confirm_token(t)
+    if not got:
         return _confirm_link_bad()
     uid, address = got
     db.set_setting(alerts.CONFIRMED + uid, address.strip().lower())

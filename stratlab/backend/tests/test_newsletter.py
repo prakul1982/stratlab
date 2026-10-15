@@ -4,6 +4,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+import time_machine
 
 from app import alerts, db, main, newsletter_prefs
 from app.config import settings
@@ -61,9 +62,12 @@ def reader(uid, email, plan="pro", confirmed=True, **choices):
 
 # ---------- facts ----------
 def test_market_facts_from_the_world(w, monkeypatch):
-    # the brief's day is India's date, not UTC's: the day the world's market headline (a couple of hours old) falls on
-    day = (datetime.now(timezone.utc) - timedelta(hours=2)).astimezone(content.ZoneInfo("Asia/Kolkata")).date()
-    f = content.market_facts("IN", day)
+    # the brief's day is India's date, not UTC's: the day the world's market headline (a couple of hours old) falls on. The
+    # clock is pinned to a Wednesday after the close: the world's index levels are of the last session, which an issue
+    # dated an earlier or later day no longer takes as its own (review 3m)
+    with time_machine.travel(datetime(2026, 10, 14, 12, 0, tzinfo=timezone.utc), tick=False):
+        day = (datetime.now(timezone.utc) - timedelta(hours=2)).astimezone(content.ZoneInfo("Asia/Kolkata")).date()
+        f = content.market_facts("IN", day)
     assert f["kind"] == "market" and f["region"] == "IN"
     assert f["indices"] and all("change_pct" in i for i in f["indices"])
     assert f["headlines"] and len(f["headlines"]) <= content.HEADLINES and all(h["headline"] for h in f["headlines"])
@@ -504,3 +508,79 @@ def test_my_stocks_issues_off_the_index_are_deleted_with_their_ledger(monkeypatc
     for i in range(70):
         job.save({"id": job.issue_id("market", "IN", (d0 + timedelta(days=i)).isoformat(), False), "html": "x", "text": "y"})
     assert len([k for k in store if k.startswith("news:market:IN:")]) == 70     # briefs are not pruned here
+
+
+# ---------- review 3m: what the emails say about the day, week and level they measure from ----------
+def _bars(last_day: str, n=40, last_close=140.0, skip=(), tz="-04:00"):
+    """n weekday candles ending on `last_day` (days in `skip` had no session), the last one closing at `last_close`."""
+    end, days, d = date.fromisoformat(last_day), [], date.fromisoformat(last_day)
+    while len(days) < n:
+        if d.weekday() < 5 and d.isoformat() not in skip:
+            days.append(d)
+        d -= timedelta(days=1)
+    days.reverse()
+    return [{"t": f"{d.isoformat()}T00:00:00{tz}", "o": 100.0, "h": 101.0, "l": 99.0, "c": last_close if d == end else 100.0, "v": 1000.0}
+            for d in days]
+
+
+def _row(monkeypatch, region, sym, day, weekly, bars):
+    content._cache.clear()
+    monkeypatch.setattr(content, "_symbol_data", lambda r, s, d: {"bars": bars, "filings": [], "news": []})
+    monkeypatch.setattr(content.official_close, "with_reference", lambda b, s, ref: b)
+    monkeypatch.setattr(content.deals, "recent_for", lambda *a: [])
+    monkeypatch.setattr(content, "surveillance_lines", lambda *a: None)
+    return content.stock_row(region, sym, day, weekly, "2026-01-01")
+
+
+def _since_labels(row, issue_since):
+    """What the email says a stock changed since: the section row's label and the price line."""
+    f = {"stocks": [row], "since": issue_since}
+    item = write.stock_sections(f)[0]["items"][0]
+    return item["since"], write.stock_lines(row, issue_since)[0]["text"]
+
+
+def test_a_us_stocks_since_day_is_the_session_its_change_is_measured_from(monkeypatch):
+    """The Wed 14 Oct India-dated issue is measured from the day before (Tue 13 Oct), but a US stock's last bar is the 13 Oct
+    session, so its change is from Mon 12 Oct: the email said Tue 13 Oct."""
+    row = _row(monkeypatch, "US", "AAPL", date(2026, 10, 14), False, _bars("2026-10-13"))
+    assert row["since_day"] == "2026-10-12" and row["change_pct"] == 40.0
+    issue_since = content.reference_day("US", date(2026, 10, 14), False).isoformat()
+    assert issue_since == "2026-10-13"
+    label, line = _since_labels(row, issue_since)
+    assert label == "since Mon 12 Oct" and line.endswith("since Mon 12 Oct")
+
+
+def test_a_weekly_stocks_since_day_is_the_last_session_on_or_before_the_week_back(monkeypatch):
+    """A week back from Fri 9 Oct is the 2 Oct holiday: the change is from the Thu 1 Oct close, not "Fri 2 Oct"."""
+    row = _row(monkeypatch, "IN", "TCS", date(2026, 10, 9), True, _bars("2026-10-09", skip=("2026-10-02",), tz="+05:30"))
+    issue_since = content.reference_day("IN", date(2026, 10, 9), True).isoformat()
+    assert issue_since == "2026-10-02" and row["since_day"] == "2026-10-01"
+    label, line = _since_labels(row, issue_since)
+    assert label == "since Thu 1 Oct" and line.endswith("since Thu 1 Oct")
+
+
+def test_a_row_without_a_since_day_keeps_the_issues():
+    row = {"symbol": "TCS", "region": "IN", "price": 100.0, "change_pct": 1.0, "stage": 2, "stage_before": 2, "stage_changed": False}
+    assert _since_labels(row, "2026-10-13")[0] == "since Tue 13 Oct"
+
+
+def test_a_live_index_quote_is_used_only_if_it_is_todays_and_fresh(monkeypatch):
+    from types import SimpleNamespace
+    day = date(2026, 10, 14)
+    quote = {"name": "NIFTY 50", "price": 25000.0, "change_pct": 0.5, "from_high_pct": -1.0}
+    monkeypatch.setattr(content, "index_close", lambda sym, d, since=None: None)       # the day's candle isn't out yet
+
+    def moves(**fields):
+        monkeypatch.setattr(content, "_main", lambda: SimpleNamespace(research_hub=SimpleNamespace(indices=lambda region: [{**quote, **fields}])))
+        return [m["name"] for m in content.index_moves("IN", day, False)]
+    assert moves(day="2026-10-14", stale=False) == ["NIFTY 50"]
+    assert moves(day="2026-10-13", stale=False) == []                  # the previous session's level, not today's
+    assert moves(day="2026-10-14", stale=True) == []
+    assert moves() == []                                                # no day on it: not known to be today's
+
+
+def test_the_52_week_line_says_below_only_for_an_index_below_its_high():
+    def sub(from_high):
+        return write._tiles([{"name": "NIFTY 50", "price": 25000.0, "change_pct": 0.5, "from_high_pct": from_high}], False)[0].sub
+    assert sub(-1.8) == "1.8% below its 52-week high"
+    assert sub(1.8) is None and sub(0.0) is None and sub(None) is None  # a positive figure used to read "1.8% below"
