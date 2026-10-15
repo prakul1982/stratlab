@@ -132,7 +132,7 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   // in Mine, a page that is neither pinned nor one of its own links opens its own space's menu
   await page.goto("/research/pulse");
   side = await menu(page, phone);
-  await expect(side.getByRole("radio", { name: "Invest" })).toHaveAttribute("aria-checked", "true");
+  await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Invest" })).toHaveAttribute("aria-pressed", "true");
   await expect(side.locator('[data-group="market-view"] .side-toggle')).toHaveAttribute("aria-expanded", "true");
   await sane(page, errors, phone);
 });
@@ -148,7 +148,7 @@ test("spaces: a deep link opens its own space, without changing the account's ch
     await page.goto(path);
     await expect(page.locator("main").getByText(ready).first()).toBeVisible({ timeout: 30_000 });
     const side = await menu(page, phone);
-    await expect(side.getByRole("radio", { name }), `${path} opens in ${name}`).toHaveAttribute("aria-checked", "true");
+    await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name }), `${path} opens in ${name}`).toHaveAttribute("aria-pressed", "true");
     if (name === "Money") await expect(side.getByRole("link", { name: path === "/holdings" ? "Holdings" : "Tax report", exact: true })).toHaveClass(/active/);
   }
   // a deep link only switches the menu on this device; `/` still opens the space the person picked

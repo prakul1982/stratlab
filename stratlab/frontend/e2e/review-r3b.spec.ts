@@ -67,9 +67,9 @@ test("My space has one name, and Look up a company differs from the Invest home 
   if (phone) await page.getByRole("button", { name: /menu/i }).first().click();
   const side = page.locator("aside.sidebar");
   await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "My space" })).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
-  await expect(side.getByRole("radio", { name: "Mine", exact: true })).toHaveCount(0);
+  await expect(side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Mine", exact: true })).toHaveCount(0);
   await expect(side.getByRole("link", { name: "My space", exact: true })).toBeVisible();
-  const labels = await side.getByRole("radio").allInnerTexts();
+  const labels = await side.getByRole("group", { name: "Space" }).getByRole("button").allInnerTexts();
   expect(labels).toEqual(["My space", "Trade", "Invest", "Money"]);
   // every label fits its tab
   expect(await side.locator(".space-switch button").evaluateAll((bs) => bs.filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent))).toEqual([]);
