@@ -496,8 +496,8 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
     history mustn't stop for it), and as a "change" when what's missing is a holding or entry that has nothing to value
     it by (`partial_lasting`: the total leaves out the same thing until it gets a price, so the history goes on, marked).
     A total missing a whole source that couldn't be read is stored only as the month's: any other snapshot of it would
-    show as a fall that didn't happen. A partial month snapshot never replaces a complete one of its day, and a month
-    keeps one "month" snapshot, the complete one if any. A "change" is always dated today, the day the entry changed
+    show as a fall that didn't happen. A partial snapshot (month or change) never replaces a complete one of its day,
+    and a month keeps one "month" snapshot, the complete one if any. A "change" is always dated today, the day the entry changed
     (dated by the last close, a weekend edit would replace Friday's snapshot, the one the headline change is read
     against, and read as no change)."""
     partial = bool(totals.get("partial"))
@@ -506,7 +506,7 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
     d = (today() if why == "change" else day or today()).isoformat()
     old = history(uid)
     done = {h["d"] for h in old if not h.get("partial")}
-    if partial and why != "change" and (d in done or any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
+    if partial and (d in done or why != "change" and any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
         return old
     rows = [h for h in old if h["d"] != d and not (why == "month" and h["d"][:7] == d[:7] and h.get("why") == "month" and h.get("partial"))]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}

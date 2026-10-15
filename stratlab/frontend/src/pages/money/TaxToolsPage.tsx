@@ -119,9 +119,9 @@ function DividendsTab() {
     if (f.size > 10 * 1024 * 1024) { notify("That file is larger than 10 MB."); reset(); return; }
     setBusy(true);
     try {
-      const r = await api<{ read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; dividends: Dividends }>(
+      const r = await api<{ read: number; added: number; duplicates: number; problems: { line: number; text: string; reason: string }[]; date_note?: string | null; dividends: Dividends }>(
         `/money/dividends/import?${new URLSearchParams({ filename: f.name.slice(0, 200) })}`, { method: "POST", file: f });
-      setNote(`${r.added} dividend${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.`);
+      setNote(`${r.added} dividend${r.added === 1 ? "" : "s"} added${r.duplicates ? `, ${r.duplicates} already there (skipped)` : ""}${r.problems.length ? `, ${r.problems.length} line${r.problems.length === 1 ? "" : "s"} left out` : ""}.${r.date_note ? ` ${r.date_note}` : ""}`);
       setFy(null);
       show(r.dividends);
       track("dividends imported", { rows: r.added });

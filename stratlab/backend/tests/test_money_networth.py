@@ -499,6 +499,21 @@ def test_a_sunday_edit_does_not_overwrite_fridays_snapshot(w):
     assert [(h["d"], h["net"]) for h in rows] == [("2026-10-09", 100), ("2026-10-11", 130)]
 
 
+def test_a_partial_change_snapshot_never_replaces_a_complete_one_of_its_day(w):
+    lasting = {**_t(60, ["no price or buy price for 1 stock"]), "partial_lasting": True}
+    with time_machine.travel(datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)):
+        nw.record("u-t", _t(100), "month", date(2026, 10, 5))
+        rows = nw.record("u-t", lasting, "change")
+        assert [(h["d"], h["net"], h["why"], h.get("partial")) for h in rows] == [("2026-10-05", 100, "month", None)]
+        nw.delete("u-t")
+        nw.record("u-t", _t(100), "change")
+        assert [(h["net"], h.get("partial")) for h in nw.record("u-t", lasting, "change")] == [(100, None)]
+    with time_machine.travel(datetime(2026, 10, 6, 5, 0, tzinfo=timezone.utc)):                # the next day: recorded, marked
+        rows = nw.record("u-t", lasting, "change")
+    assert [(h["d"], h["net"], h.get("partial")) for h in rows] == [
+        ("2026-10-05", 100, None), ("2026-10-06", 60, ["no price or buy price for 1 stock"])]
+
+
 def test_the_ppf_value_today_includes_the_yearly_deposits_since_its_balance():
     item = {"id": "p", "kind": "ppf", "balance": 100000, "yearly": 150000, "as_of": "2025-03-31", "rate": 7.1}
     row = nw._asset(item, date(2026, 10, 5), "", None, None, None)

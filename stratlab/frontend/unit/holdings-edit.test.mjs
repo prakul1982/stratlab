@@ -28,3 +28,13 @@ test("item a: a dollar rate older than a day says its date", () => {
   assert.equal(dollarRate(88.2, null, now), "₹88.20 a dollar");
   assert.match(dollarRate(88.2, "2026-10-09T03:00:00Z", now), /^₹88\.20 a dollar \(the rate of 9 Oct 2026\)$/);
 });
+
+test("rev6a: a synced row's edit form says a typed quantity is kept and a typed average follows the broker's", async () => {
+  const { syncedNote } = await import("../src/lib/holdingsEdit.ts");
+  assert.equal(syncedNote("kite"), "Synced from Kite. A quantity you type is kept: the shares above Kite's are kept as your own, " +
+    "through its next read. An average price typed alone is replaced by Kite's average on its next read.");
+  assert.match(syncedNote("cas"), /^From your depository statement\. The next statement sets the quantity and average/);
+  const page = readFileSync(new URL("../src/pages/HoldingsPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /row\.via && <p className="k-note" data-testid="synced-note">\{syncedNote\(row\.via\)\}/);
+  assert.match(page, /r\.notes\?\.length/);
+});

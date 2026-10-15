@@ -202,6 +202,33 @@ def test_a_us_brokers_dates_are_month_first_even_when_every_day_is_small():
     """B7: 03/05/2025 on a US broker's file is 5 March, though no date in the file has a day above 12."""
     got = us.parse_upload(b"Date,Action,Symbol,Quantity,Price\n03/05/2025,Buy,AAPL,1,200\n04/06/2025,Sell,AAPL,1,210\n", "x.csv")
     assert [r["d"] for r in got["rows"]] == ["2025-03-05", "2025-04-06"] and got["month_first"]
+    assert got["date_note"] == "Dates like 03/05/2025 were read as month/day (5 March)."
+
+
+def test_an_indian_brokers_export_of_us_lines_is_read_day_first():
+    """rev6a: dates that read either way, in a file whose name or the lines above its table name an Indian broker, or
+    whose columns are its tradebook's, are day first; any other file stays month first, and says so."""
+    data = b"Date,Action,Symbol,Quantity,Price\n03/05/2025,Buy,AAPL,1,200\n04/06/2025,Sell,AAPL,1,210\n"
+    got = us.parse_upload(data, "groww_us_stocks.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-05-03", "2025-06-04"] and not got["month_first"]
+    assert got["date_note"] == "Dates like 03/05/2025 were read day first (3 May), as Groww writes them."
+    got = us.parse_upload(b"Client: Zerodha Broking\n" + data, "export.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-05-03", "2025-06-04"]
+    # a date only month first reads one way, whoever's file it is; ISO dates need no note
+    got = us.parse_upload(b"Date,Action,Symbol,Quantity,Price\n03/24/2025,Buy,AAPL,1,200\n", "groww.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-03-24"] and got["month_first"] and got["date_note"] is None
+    assert us.parse_upload(b"Date,Action,Symbol,Quantity,Price\n2025-03-05,Buy,AAPL,1,200\n", "x.csv")["date_note"] is None
+
+
+def test_us_dividend_lines_in_an_indian_brokers_export_are_read_day_first():
+    from app import money_dividends as md
+    data = b"Date,Symbol,Currency,Amount,TDS\n03/05/2025,AAPL,USD,10,2.5\n24/05/2025,TCS,INR,100,0\n"
+    got = md.parse_upload(data, "indmoney.csv")              # not a broker we know: month first, said
+    assert [r["d"] for r in got["rows"]] == ["2025-03-05", "2025-05-24"]
+    assert got["date_note"] == "Dates like 03/05/2025 were read as month/day (5 March)."
+    got = md.parse_upload(data, "Upstox dividends.csv")
+    assert [r["d"] for r in got["rows"]] == ["2025-05-03", "2025-05-24"]
+    assert got["date_note"] == "Dates like 03/05/2025 were read day first (3 May), as Upstox writes them."
 
 
 # ---------- reading a US broker's file ----------

@@ -4,12 +4,12 @@ import { useApp } from "../../lib/app";
 import { ago, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
-import { rateNote } from "./prices";
+import { rateNote, ratesRead } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
   auto: boolean; rate: number | null; no_rate?: boolean;
   plan_basic: string | null; plan_pro: string | null; plan_basic_year: string | null; plan_pro_year: string | null };
-type View = { currencies: Record<string, Row>; rates_at: string | null; rate_errors: string[] };
+type View = { currencies: Record<string, Row>; rates_at: string | null; rates_read_at?: Record<string, string>; rate_errors: string[] };
 const PRICE = ["basic", "pro", "basic_year", "pro_year"] as const;
 const PLAN = ["plan_basic", "plan_pro", "plan_basic_year", "plan_pro_year"] as const;
 const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / month", basic_year: "Basic / year", pro_year: "Pro / year" };
@@ -18,8 +18,8 @@ const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / mont
 export function PricesPanel() {
   const { fail, notify } = useApp();
   const [rows, setRows] = useState<Record<string, Row> | null>(null);
-  const [fx, setFx] = useState<{ at: string | null; errors: string[] }>({ at: null, errors: [] });
-  const show = (x: View) => { setRows(x.currencies); setFx({ at: x.rates_at, errors: x.rate_errors }); };
+  const [fx, setFx] = useState<{ readAt: Record<string, string>; errors: string[] }>({ readAt: {}, errors: [] });
+  const show = (x: View) => { setRows(x.currencies); setFx({ readAt: x.rates_read_at ?? (x.rates_at ? { all: x.rates_at } : {}), errors: x.rate_errors }); };
   const [edit, setEdit] = useState<Record<string, Partial<Record<string, string>>>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,7 +73,7 @@ export function PricesPanel() {
           <button type="button" className="btn quiet sm" disabled={busy} onClick={readRates}>Read today's rates</button>
           <button type="button" className="btn sm" disabled={busy || !Object.keys(edit).length} onClick={save}>{busy ? "Saving…" : "Save changes"}</button>
         </>} />
-      <p className="k-note k-muted">{fx.at ? `Exchange rates read ${ago(fx.at)}.` : "Exchange rates not read yet: the built-in amounts are shown."}
+      <p className="k-note k-muted">{ratesRead(fx.readAt, ago)}
         {rows ? ` ${rateNote(fx.errors, rows)}` : ""}</p>
       {!rows ? (failed ? <ErrorState title="The prices couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading prices" />) : <DataTable label="Prices outside India" rows={list} rowKey={(x) => x.c} columns={cols} />}
       {open && rows?.[open] && (
