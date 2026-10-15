@@ -68,6 +68,10 @@ def summary(now: datetime, facts: dict) -> tuple[str, str]:
         # "9 runs, 5 with failures" listed per-check counts adding up to 8)
         runs = [f"{', '.join(c.get('failed') or []) or 'see Admin'}{_when(c.get('at'), now)}" for c in failed_runs]
         lines.append(f"- {_n(len(checks), 'run')}, {len(failed_runs)} with failures: {'; '.join(runs)}")
+        for c in failed_runs:       # what each failed check said (R29C-004)
+            for d in c.get("failed_detail") or []:
+                if d.get("detail"):
+                    lines.append(f"  - {d.get('name')}{_when(c.get('at'), now)}: {str(d['detail'])[:300]}")
         lines.append("- Counted: every run of the daily checks in these 7 days, automatic and Run now. Each failed run is "
                      "listed once, with the checks that failed in it.")
     lines.append("")

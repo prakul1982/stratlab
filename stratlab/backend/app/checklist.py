@@ -122,7 +122,7 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
 
         # balance sheet
         neg = s.get("debt_equity") is None and s.get("net_worth_negative")
-        add("Balance sheet", "Debt to equity", "watch" if neg else _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
+        add("Balance sheet", "Total debt / equity", "watch" if neg else _state(s.get("debt_equity"), 0.5, 1.0, higher_better=False),
             "n/a, net worth is negative" if neg else "–" if s.get("debt_equity") is None else f"{s['debt_equity']:.2f}",
             "Pass at 0.5 or less; fail above 1. Not meaningful when net worth is negative: watch.",
             soft=grp == "utility" or realty)

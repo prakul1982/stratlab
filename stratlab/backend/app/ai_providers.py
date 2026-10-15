@@ -23,6 +23,7 @@ from collections import OrderedDict
 
 from .ai_catalog import PROVIDERS, TASK_LABELS, TASKS, configured, missing, model_setting, thinks
 from .ai_clients import CallError
+from .connect.redact import redact_ids
 from .ai_reply import (AIBusy, AIConfig, AIError, BadReply, RateLimited, check, extract_json, salvage_items)  # noqa: F401
 from .ai_reply import answer as _message_answer
 from . import ai_rank as R
@@ -289,7 +290,9 @@ _UUID_IN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 def named(st, text):
     """An error text with any model UUID in it given the model's name (or shortened, as model_name does)."""
-    return _UUID_IN.sub(lambda m: model_name(st, m.group(0)), text) if isinstance(text, str) else text
+    if not isinstance(text, str):
+        return text
+    return redact_ids(_UUID_IN.sub(lambda m: model_name(st, m.group(0)), text))      # then any account id left (R29C-001)
 
 
 QUOTA_TEXT = "Free quota used up for now; it resets on its own."
@@ -342,7 +345,7 @@ def health() -> list[dict]:
                     "quick_rank": q.index(name) + 1 if name in q else None,
                     "research_rank": r.index(name) + 1 if name in r else None,
                     "model": st.model or (R.in_use(name)[:1] or [None])[0] if configured(name) else None,
-                    "last_ok": st.last_ok, "last_error": st.last_error, "quota": st.quota,
+                    "last_ok": st.last_ok, "last_error": named(st, st.last_error), "quota": st.quota,
                     "answering": answering, "result": view["result"] if view else None, "state": view["state"] if view else "off",
                     "state_text": view["state_text"] if view else None,
                     "paused_models": view["paused_models"] if view else 0,
@@ -426,9 +429,9 @@ def _provider_view(name: str, now: float) -> dict:
         models.append({"id": m, "name": model_name(st, m), "in_use": m in use, "rank": use.index(m) + 1 if m in use else None,
                        "success": round(ok * 100 / tries) if tries else None, "tries": tries,
                        "median_ms": round(med) if med is not None else None,
-                       "probe": {"ok": s.probe_ok, "tries": s.probe_tries, "at": s.probe_at or None, "error": s.probe_error},
-                       "last_error": s.last_error, "last_error_at": s.last_error_at,
-                       "open_until": s.open_until if s.open_until > now else None, "open_reason": s.open_reason if s.open_until > now else None,
+                       "probe": {"ok": s.probe_ok, "tries": s.probe_tries, "at": s.probe_at or None, "error": named(st, s.probe_error)},
+                       "last_error": named(st, s.last_error), "last_error_at": s.last_error_at,
+                       "open_until": s.open_until if s.open_until > now else None, "open_reason": named(st, s.open_reason) if s.open_until > now else None,
                        "blocked": R.blocked(name, m), "blocked_by": (R.block_info(name, m) or {}).get("by"),
                        "blocked_at": (R.block_info(name, m) or {}).get("at"), "pinned": m == (pin_admin or pin_env), "ctx": s.ctx, "thinks": thinks(m)})
     cooling = st.cooldown_until > now

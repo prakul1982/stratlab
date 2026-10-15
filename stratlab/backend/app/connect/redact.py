@@ -20,6 +20,10 @@ ID_PATTERNS = [
     (re.compile(r"\b(?:acct|cus|org|usr|user|sk|pk|key|client|merchant)[_-][A-Za-z0-9]{6,}\b"), "[id]"),
     (re.compile(r"(?i)\b(account|acct|customer|organi[sz]ation|org|user|client|merchant|sender|member)(\s*(?:id|number|no\.?)?\s*[:=#]?\s*)(?=[\"']?[A-Za-z0-9_-]{6,})(?=[\"']?[A-Za-z0-9_-]*\d)[\"']?[A-Za-z0-9_-]{6,}[\"']?"), r"\1\2[id]"),
     (re.compile(r"\b\d{9,}\b"), "[id]"),
+    # "for account 'BlwS…'": a quoted token of 20+ URL-safe characters after "account" (R29C-001)
+    (re.compile(r"(?i)\b(account|acct)(\s*(?:id)?\s*[:=#]?\s*)([\"'`])[A-Za-z0-9_-]{20,}\3"), r"\1\2[id]"),
+    # a bare long base64 / URL-safe token: 32+ characters with a digit and a letter, not a word, path or number
+    (re.compile(r"(?<![A-Za-z0-9_/.-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_/.-])"), "[id]"),
 ]
 
 

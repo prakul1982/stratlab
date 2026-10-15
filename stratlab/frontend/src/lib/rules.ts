@@ -289,6 +289,20 @@ const PRICE_SCALE = new Set<RefType>(["price", "open", "high", "low", "prev_clos
 const SCALE_100 = new Set<RefType>(["rsi", "stoch_k", "adx"]);
 const sameRef = (a: Ref, b: Ref) => JSON.stringify(Object.entries(a).filter(([, v]) => v != null).sort()) === JSON.stringify(Object.entries(b).filter(([, v]) => v != null).sort());
 
+const noK = (r: Ref) => { const { k: _k, ...rest } = r; return rest as Ref; };
+/** "Price is above 1.05 × Price": the engine compares the two on the same candle, so the rule is never true (or always
+ * true). It does not mean a gain on the entry price; a profit target or stop does (R29C-006). Null for any other rule. */
+export function selfMultipleNote(c: Cond): string | null {
+  const [a, b] = [c.l, c.r];
+  if (a.t === "num" || b.t === "num" || !sameRef(noK(a), noK(b)) || (a.k ?? 1) === (b.k ?? 1)) return null;
+  const say = `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
+  const k = (b.k ?? 1) / (a.k ?? 1);
+  const up = c.op === "gt" || c.op === "xa";
+  const hint = up && k > 1 ? `a profit target of ${+((k - 1) * 100).toFixed(2)}% over your entry price`
+    : !up && k < 1 ? `a stop loss of ${+((1 - k) * 100).toFixed(2)}% under your entry price` : "a stop loss or a profit target";
+  return `"${say}" compares the price with itself on the same candle, so it isn't a gain on your entry price and can't work as a rule. Use ${hint} in the risk settings instead.`;
+}
+
 /** Rules that can't mean anything, left out with a word for each: a price against 0 or less ("Price crosses below 0"),
  * a 0-100 value against a number outside 0-100, a 0-100 value against a price, a value against itself. */
 export function meaningful(conds: Cond[]): { kept: Cond[]; dropped: string[] } {
@@ -296,7 +310,7 @@ export function meaningful(conds: Cond[]): { kept: Cond[]; dropped: string[] } {
   for (const c of conds) {
     const say = `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
     const pairs: [Ref, Ref][] = [[c.l, c.r], [c.r, c.l]];
-    const bad = sameRef(c.l, c.r)
+    const bad = sameRef(c.l, c.r) || selfMultipleNote(c) != null
       || pairs.some(([a, b]) => PRICE_SCALE.has(a.t) && b.t === "num" && (b.v == null || b.v <= 0))
       || pairs.some(([a, b]) => SCALE_100.has(a.t) && b.t === "num" && b.v != null && (b.v < 0 || b.v > 100))
       || pairs.some(([a, b]) => SCALE_100.has(a.t) && PRICE_SCALE.has(b.t));

@@ -13,8 +13,8 @@ test("R29A-002: the landing page, All features and the alerts help say phone or 
   assert.match(read("src/lib/features.ts"), /what: "On your phone or by email for each trade/);
   assert.doesNotMatch(read("src/lib/help.ts"), /alerts: "Get a Telegram/);
   const legal = read("src/pages/LegalPage.tsx");
-  assert.match(legal, /a Telegram chat ID if you connect Telegram where Settings offers it/);
-  assert.match(legal, /Telegram delivers them if you connect it/);
+  assert.match(legal, /a Telegram chat ID if Telegram is offered in Settings and you connect it/);
+  assert.match(legal, /Telegram delivers them if it is offered in Settings and you connect it/);
 });
 
 test("R29A-005: Privacy quotes the Account buttons as they read, with one updated date", () => {
