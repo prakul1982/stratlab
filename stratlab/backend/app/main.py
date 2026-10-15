@@ -962,7 +962,7 @@ def set_alerts(req: AlertsReq, profile=Depends(current_profile)):
     db.update_profile(profile["id"], alerts_enabled=req.alerts_enabled,
                       telegram_chat_id=(req.telegram_chat_id or None), alert_email=(req.alert_email or None))
     code_sent = None
-    if chat_changed or not new_chat:
+    if chat_changed or (req.telegram_chat_id is not None and not new_chat):       # a new chat, or the chat cleared
         alerts.reset_telegram(profile["id"])       # a new chat starts unverified; nothing is sent there until its code is entered
     if chat_changed and alerts.telegram_ready():
         try:
