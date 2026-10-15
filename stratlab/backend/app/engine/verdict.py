@@ -363,6 +363,10 @@ def _pc(v: float) -> str:
     return ("" if float(s) == 0 else "+" if v > 0 else "−") + s + "%"
 
 
+_VS_HOLD = re.compile(r" The strategy returned \S+ after costs, (?:about the same as|more than|less than) buying and holding over "
+                      r"the same period \([^)]*\)\.")
+
+
 def versus_hold(ret: float, hold: float | None) -> str:
     """The plain comparison with buying and holding, stated as a fact in every verdict."""
     if hold is None:
@@ -453,8 +457,10 @@ def restate_verdict(v: dict | None, old_ret: float, ret: float, hold: float | No
         checks.append(c)
     summary = v.get("summary")
     if isinstance(summary, str) and hold is not None:
-        old = versus_hold(old_ret, hold)
-        summary = (summary[: -len(old)] if summary.endswith(old) else summary) + versus_hold(ret, hold)
+        # the comparison is replaced where it stands: notes (with_notes) may follow it, so it isn't always the last sentence
+        new = versus_hold(ret, hold)
+        summary, found = _VS_HOLD.subn(lambda _: new, summary, count=1)
+        summary += "" if found else new
     out = {**v, "checks": checks, "summary": summary}
     if v.get("headline") and v.get("verdict"):
         out["headline"] = fact_headline(v["verdict"], checks, n, ret, hold, n == 0 and abs(ret) < 1e-9)

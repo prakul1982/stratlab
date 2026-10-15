@@ -169,12 +169,12 @@ def test_pine_settings_it_cannot_use_are_named():
     assert importer.pine(HEAD + "if ta.crossover(fast, slow)\n    strategy.entry(\"L\", strategy.long)\n")["notes"] == []
 
 
-# ---------- 3. a higher timeframe's "candles ago" counts that timeframe's candles ----------
+# ---------- 3. a higher timeframe's "candles ago" counts that timeframe's completed candles ----------
 THREE_DAYS = (day("2026-01-05", [100, 101, 102, 103, 104, 105, 106, 107]) + day("2026-01-06", [110, 111, 112, 113, 114, 115, 116, 117])
               + day("2026-01-07", [120, 121, 122, 123, 124, 125, 126, 127]))
 
 
-def test_yesterdays_daily_close_is_one_daily_candle_ago():
+def test_higher_timeframe_candles_ago_counts_completed_daily_candles():
     ctx = Ctx(THREE_DAYS, True)
     ago = ctx.series(Ref(t="price", tf="1d", ago=1))
     assert list(ago[16:23]) == [107] * 7                    # on day 3, before its close: day 1's close (day 2 is yesterday's)

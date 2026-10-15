@@ -185,6 +185,7 @@ def pine(code: str) -> dict:
     # each strategy.entry / close call with the conditions it runs under: its when=, and every `if` it sits in (by
     # indentation: an `if` inside an `if` needs both); a call under an `else` can't be read (it runs when a condition is false)
     calls = []
+    order = r"strategy\.(?:entry|close_all|close|exit|order)\s*\("     # a call; strategy.position_size and the like are values
     stack: list[tuple[int, str | None]] = []          # (indent, condition) of the open `if` blocks; None for an else
     for line in code.splitlines():
         if not line.strip():
@@ -196,7 +197,7 @@ def pine(code: str) -> dict:
         if re.match(r"\s*else\b", line):
             stack.append((indent, None))
             continue
-        if head and "strategy." not in head.group(1):
+        if head and not re.search(order, head.group(1)):   # `if x strategy.entry(...)` on one line is a call, not a block
             stack.append((indent, head.group(1)))
             continue
         call = re.search(r"strategy\.(entry|close_all|close)\s*\((.*)\)", line)
@@ -204,7 +205,7 @@ def pine(code: str) -> dict:
             continue
         args = call.group(2)
         when = re.search(r"when\s*=\s*(.+?)\s*(?:,\s*\w+\s*=|$)", args)
-        same = re.match(r"\s*if\s+(.+?)\s+strategy\.", line)
+        same = re.match(r"\s*if\s+(.+?)\s+" + order, line)
         own = [c for _, c in stack] + [x.group(1) for x in (same, when) if x]
         cid = re.match(r"\s*[\"']([^\"']*)[\"']", args)
         side = "short" if re.search(r"strategy\.short|direction\s*=\s*strategy\.direction\.short", args) else "long"
@@ -214,8 +215,10 @@ def pine(code: str) -> dict:
     entries: dict[str, list] = {"long": [], "short": []}
     exits: dict[str, list] = {"long": [], "short": []}
     for c in calls:
-        if not c["conds"]:
-            continue                       # no condition: a close at the end of the script, an entry on every candle
+        if not c["conds"]:                 # no condition: a close at the end of the script, an entry on every candle
+            notes.append(f"\"{c['text']}\" runs without a condition, on every candle, which StratLab's rules can't express, "
+                         "so it was left out.")
+            continue
         if any(x is None for x in c["conds"]):
             notes.append(f"\"{c['text']}\" sits under an else, which StratLab's rules can't express, so it was left out.")
             continue
@@ -229,7 +232,11 @@ def pine(code: str) -> dict:
     other = "short" if side == "long" else "long"
     # entries: each entry statement opens a trade on its own, so several are any-of; one statement keeps its own and/or
     entry, join = [], "all"
-    read = [flat(c["conds"]) for c in entries[side]]
+    read = []
+    for c in entries[side]:                # the same conditions over several calls are one entry statement
+        r = flat(c["conds"])
+        if r is None or r not in read:
+            read.append(r)
     if any(r is None for r in read):
         notes.append("The entry conditions mix and with or in a way StratLab's rules can't hold (all of the rules, or any "
                      "of them), so the entry rules were left out. Add them by hand.")
@@ -237,22 +244,28 @@ def pine(code: str) -> dict:
         join, atoms = read[0]
         entry = rules(atoms)
     elif read:
-        if any(j == "all" and len(a) > 1 for j, a in read):
+        if any(j == "all" and len(rules(a)) > 1 for j, a in read):   # what translates: a dropped atom isn't a condition
             notes.append(f"The script has {len(read)} entry statements (any one of them opens a trade) and at least one needs "
                          "several conditions together; StratLab's rules can't hold both, so the entry rules were left out. "
                          "Add them by hand.")
         else:
             join, entry = "any", rules([x for _, a in read for x in a])
-    # exits close on any one rule: an exit that needs several conditions together can't be one, so it is left out whole
+    # exits close on any one rule: an exit that needs several conditions together can't be one, so it is left out whole.
+    # Only what translates counts: a guard that can't be (strategy.position_size > 0) is left out with a note, not the exit
     exit_ = []
     flips = entries[other]
     for c in [*exits[side], *flips]:
         r = flat(c["conds"])
-        if r is None or (r[0] == "all" and len(r[1]) > 1):
+        got = rules(r[1]) if r else []
+        if r is None or (r[0] == "all" and len(got) > 1):
             notes.append(f"An exit needs several conditions together (\"{' and '.join(c['conds'])[:80]}\"); StratLab's exit "
                          "rules close on any one of them, so that exit was left out. Add it by hand.")
             continue
-        exit_ += [x for x in rules(r[1]) if x not in exit_]
+        dropped = ", ".join(f'"{_unwrap(a)[:60]}"' for a in r[1] if cond(a) is None) if r[0] == "all" and got else ""
+        if dropped:
+            notes.append(f"The exit \"{' and '.join(c['conds'])[:80]}\" was imported without {dropped}, so it closes the "
+                         "trade on the rest alone.")
+        exit_ += [x for x in got if x not in exit_]
     if flips:
         # a long-and-short script flips on the opposite signal: here that signal closes the trade
         notes.append(f"The script also trades {other}. StratLab tests one direction at a time, so the {other} signal is used as the exit.")

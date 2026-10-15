@@ -203,6 +203,18 @@ def test_the_verdict_of_a_restated_run_states_the_restated_figures():
     assert [c["status"] for c in v["checks"]] == ["fail", "fail", "fail", "pass"]          # the findings themselves stand
 
 
+def test_a_restated_verdict_with_notes_after_the_buy_and_hold_sentence_states_it_once():
+    # with_notes puts the run's notes after the buy-and-hold sentence: the restate replaces that sentence where it
+    # stands, keeps the notes, and doesn't add a second one (R4B)
+    e = legacy_experiment()
+    note = "RSI (14) had 3 candles of history before the first entry."
+    e["verdict"] = V.with_notes(e["verdict"], [note])
+    v = V.restate_empty(e)["verdict"]
+    assert v["summary"].count("buying and holding") == 1 and "352" not in v["summary"]
+    assert v["summary"].endswith("The strategy returned −100.0% after costs, less than buying and holding over the same "
+                                 "period (+12.0%). " + note)
+
+
 def test_a_group_run_past_zero_keeps_its_members_adding_up():
     e = V.restate_empty(legacy_experiment(group=True))
     assert sum(m["pnl"] for m in e["group"]["members"]) == pytest.approx(-CAP, abs=0.01)

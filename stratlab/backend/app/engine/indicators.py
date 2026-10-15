@@ -235,7 +235,9 @@ def higher_tf(df: pd.DataFrame, tf: str, base_min: float | None = None) -> tuple
 
 def compute_full(ref, df: pd.DataFrame, intraday: bool, base_min: float | None = None) -> pd.Series:
     """compute(), plus the higher timeframe, "candles ago" and multiplier options a rule can add. On a higher timeframe,
-    "candles ago" counts that timeframe's candles (yesterday's daily close is 1 daily candle ago, not 1 base candle)."""
+    "candles ago" counts that timeframe's completed candles: 0 is the last one that has closed, 1 the one before it. On
+    15-minute candles a daily value with 0 candles ago is yesterday's close until today's last candle closes the day,
+    and with 1 it is the day before yesterday's."""
     tf = getattr(ref, "tf", None)
     ago = int(getattr(ref, "ago", None) or 0)
     if tf and len(df):
