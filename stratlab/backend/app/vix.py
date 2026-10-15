@@ -313,7 +313,9 @@ def nifty_iv(options_data, now: datetime) -> dict:
         # (R7T-005: 14.40% here against 13.3% in the chain panel for the same 8 Oct close)
         got, _, stats = positioning.chain_now(options_data, "NIFTY", "current", now)
         if got and stats and stats.get("atm_iv") is not None:
-            today = {"iv": stats["atm_iv"], "as_of": got["taken_at"], "source": got["source"], "at_close": bool(got.get("at_close"))}
+            # the strike it is at, so the VIX card and the chain panel name the same figure the same way (R24-005)
+            today = {"iv": stats["atm_iv"], "strike": stats.get("atm"), "as_of": got["taken_at"], "source": got["source"],
+                     "at_close": bool(got.get("at_close"))}
     except Exception as e:
         print("india vix: nifty iv", str(e)[:120])
     since = (now.date() - timedelta(days=YEAR_DAYS)).isoformat()

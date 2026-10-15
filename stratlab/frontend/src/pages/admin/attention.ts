@@ -50,9 +50,12 @@ export function feedTile(sv: Overview["server"]): Service {
   // every user's sessions: said when they are more than one person's (R8O-011: "2 options paper sessions" beside the owner's 1)
   const across = (sv.options_users ?? 0) > 1 ? ` across ${sv.options_users} users` : "";
   const opts = options ? `${plural(options, "options paper session")} running${across} on quotes read every few seconds` : "";
+  // with only options sessions the feed is shut and that is fine: said as one plain fact, not "OK" beside "Not needed"
+  // (R24-011: "Live price feed OK / Not needed: 2 options paper sessions running…" read as a contradiction)
   const detail = sv.feed_connected ? [`Connected${india ? `, ${plural(india, "India paper session")} running` : ""}`, opts].filter(Boolean).join(" · ")
     : india ? [`Not connected, with ${plural(india, "India paper session")} running`, opts].filter(Boolean).join(" · ")
-    : options ? `Not needed: ${opts}` : "Idle: no India paper sessions running";
+    : options ? `Not connected, and no session needs it: the ${plural(options, "options paper session")} running${across} read quotes every few seconds instead`
+    : "Idle: no India paper sessions running";
   return { key: "feed", label: "Live price feed", state: sv.feed_connected || india === 0 ? "ok" : "warn", to: "/admin/data", detail };
 }
 

@@ -6,6 +6,8 @@ import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
 import { errorCounts, service } from "./attention";
 import { PlatformPanel } from "./PlatformPanel";
+import { APP_BUILD, buildLine } from "../../lib/buildInfo";
+import { when } from "../../lib/format";
 
 type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string; latest?: { at: string; label: string; subject: string }[];
   documents_found?: number; document?: { ok: boolean; title: string; kind: string; chars?: number; error?: string } | null };
@@ -89,6 +91,14 @@ export function SystemSection() {
                   : `Couldn't read "${filing.document.title}": ${filing.document.error}`} />}
           </StatusList>
         )}
+      </Card>
+
+      <Card label="Build">
+        <CardHead title="Build" info="Which code is running: the commit and branch each host deployed, when it was built if the host says, and when the server last started." />
+        <StatusList label="Build">
+          <StatusRow state={sv?.build?.sha ? "ok" : "warn"} word={sv?.build?.sha ? "Known" : "Not set"} label="Server" detail={sv ? buildLine(sv.build, (iso) => when(iso, "Asia/Kolkata", true, true)) : "Loading…"} />
+          <StatusRow state={APP_BUILD.sha ? "ok" : "warn"} word={APP_BUILD.sha ? "Known" : "Not set"} label="Web app" detail={buildLine(APP_BUILD, (iso) => when(iso, "Asia/Kolkata", true, true))} />
+        </StatusList>
       </Card>
 
       <AIPanel />

@@ -84,7 +84,7 @@ from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_
 from .options.engine import fill_price, from_last, tick_for
 from .options.session import stopped_snapshot as options_stopped
 from .options.recorder import Recorder, parse_targets
-from . import breadth, breadth_live, redflags, redflags_routes, scan_presets
+from . import breadth, breadth_live, build_info, redflags, redflags_routes, scan_presets
 from . import plan_interest
 from . import email_kit
 from . import mail_pages
@@ -650,7 +650,14 @@ def health():
     "disconnected" means it was opened and has dropped. `feed_connected` is kept for monitors that read it."""
     return {"ok": True, "data_online": kite.ready(), "feed_connected": hub.connected,
             "feed": "connected" if hub.connected else "disconnected" if hub.started else "idle",
-            "ai_configured": any(p["in_use"] for p in ai_health())}
+            "ai_configured": any(p["in_use"] for p in ai_health()), "version": build_info.info()["short"]}
+
+
+@app.get("/version")
+def version():
+    """Public: which build is running (the commit, its branch, when it was built if the deploy says, when this server
+    started). From the host's deploy variables only, never a key (app/build_info.py, R24-009)."""
+    return build_info.info()
 
 
 @app.get("/plans")
@@ -4877,7 +4884,7 @@ def server_status() -> dict:
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": list(reversed(RECENT_ERRORS)), "server_started_at": SERVER_STARTED_AT,
-            "calendar": calendar_status(), "invoice_seller": invoices.readiness(),
+            "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
@@ -5484,6 +5491,7 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
     for r in out["checks"]:
         r["detail"] = public_text(r["detail"])
     out["auto"] = auto
+    out["build"] = build_info.info()["short"]           # which build ran it, so an old result isn't read as today's code's (R24-010)
     try:
         db.set_setting(PLATFORM_LAST, json.dumps(out))
         hist = json.loads(db.get_setting(PLATFORM_HISTORY) or "[]")[-13:]

@@ -105,6 +105,32 @@ def _problems(st: dict) -> list[str]:
 KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains")
 
 
+def breadth_live_row(st: dict, job: dict | None = None, now: datetime | None = None) -> dict:
+    """The quarter-hour breadth rounds while India's market is open (R24-002: Admin had no row for them, and two rounds
+    were missed unseen): the last round's time, how many stocks it read, and whether the latest is late or failed."""
+    from . import breadth_live as BL
+    now = now or datetime.now(timezone.utc)
+    s = (st or {}).get("IN") or {}
+    log = []
+    if s.get("time"):
+        log.append(f"Last round {s.get('day')} {s['time']} IST: {s.get('quoted', 0):,} of {s.get('stocks', 0):,} stocks read"
+                   + (f" in {s['seconds']:g} s" if isinstance(s.get("seconds"), (int, float)) else ""))
+    error = None
+    if s.get("failed_at") and (not s.get("at") or s["failed_at"] > s["at"]):
+        error = s.get("error") or "The last round failed."
+    row = _row("breadth-live", "Intraday breadth rounds", "Every quarter hour (09:15 to 15:30 IST) while the Indian market is open",
+               s.get("at"), error, log + ([f"Scheduler: {(job or {})['last_error']}"] if (job or {}).get("last_error") else []),
+               note="Each round reads the live prices of every stock in the India breadth groups, a few requests in all.")
+    if not error and BL.is_open("IN", now):
+        day, slot = now.astimezone(BL.IST).date().isoformat(), BL.slot_of(now)
+        if s.get("day") == day and s.get("time"):
+            last = datetime.fromisoformat(f"{day}T{s['time']}:00").replace(tzinfo=BL.IST)
+            age = int((now - last).total_seconds() // 60)
+            if age * 60 > BL.LATE_AFTER:
+                row["state"], row["error"] = "warn", f"Late: the last round was at {s['time']} IST, {age} minutes ago (the {slot} round is due)."
+    return row
+
+
 def rows() -> list[dict]:
     """Every job's row. The rows are read side by side (each one's database and file reads), in the order listed, so
     Overview's data feeds no longer wait for each job in turn (R7O-006: 8 to 23 s)."""
@@ -134,6 +160,7 @@ def rows() -> list[dict]:
                     running=m.breadth_runner.running,
                     note="The first run reads two years of prices: a few minutes for the US, 20 to 25 minutes for India (it needs the day's broker login).")
     add("Market breadth", breadth)
+    add("Intraday breadth rounds", lambda: breadth_live_row(m.breadth_live.status(), m.breadth_live_job.status))
 
     def redflags():
         st = {r: m.redflags.state(r) for r in m.redflags.REGIONS}

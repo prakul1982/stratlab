@@ -12,7 +12,18 @@ export type Flow = { buy: number | null; sell: number | null; net: number | null
 /** `pcr_oi` and `pcr_vol` are over the strikes near the money the recordings keep (`near_strikes` each side), the same PCR as
  * the chain panel and the history (R7T-005); `pcr_all` over every strike read. */
 export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: "weekly" | "monthly" | null; pcr_oi?: number | null; pcr_vol?: number | null; pcr_near?: number | null;
-  pcr_all?: number | null; strikes_read?: number; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string };
+  pcr_all?: number | null; strikes_read?: number; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string;
+  /** R24-004: the strikes of the PCR's window (`strikes_window`, 31) that had open interest read, and whether that is short of
+   * the window (older servers send none of these) */
+  basis?: "near"; strikes_counted?: number; strikes_window?: number; partial?: boolean };
+
+/** The PCR table's strikes cell: the strikes the PCR counted out of its window, the same basis on every row ("31 of 31"),
+ * with "partial" when some had no open interest read (R24-004: "Strikes read" showed 81 or 31 beside the same near-the-money
+ * PCR). An older server's row says the strikes read. */
+export function pcrStrikes(r: Pick<PcrRow, "strikes_counted" | "strikes_window" | "partial" | "strikes_read">): string {
+  if (r.strikes_counted == null || !r.strikes_window) return r.strikes_read ? String(r.strikes_read) : "–";
+  return `${r.strikes_counted} of ${r.strikes_window}${r.partial ? ", partial" : ""}`;
+}
 
 /** The line under the PCR table, in words that fit the hour (R10O-008: with the market shut the rows are the recording of
  * the last close, not live chains read just then). */
@@ -152,4 +163,16 @@ export function statusLine(s: PartStatus, what: string): string {
   if (s.status === "pending") return `${base} ${s.reason ?? `${dayName(s.expected)}'s ${what} aren't published yet.`}`;
   if (s.today === "pending") return `${base} Today's ${what} aren't published yet: the exchange usually puts them out between 18:30 and 20:00 IST.`;
   return base;
+}
+
+/** The two NIFTY ATM IV figures, named apart (R24-005: "NIFTY ATM IV" 13.45% on the VIX card and 13.6% in the chain facts at
+ * the same minute). Both are StratLab's model on a chain's prices at the strike nearest the spot; each says its strike, and
+ * both show two decimals, so the same reading reads the same. */
+export function atmIvLabel(atm: number | null | undefined, fmt: (v: number) => string): string {
+  return atm ? `ATM IV at the ${fmt(atm)} strike` : "ATM implied volatility";
+}
+export const VIX_IV_LABEL = "NIFTY ATM IV, StratLab model";
+/** The VIX card's note under its ATM IV: the strike, then where the chain came from and when. */
+export function vixIvNote(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string): string {
+  return strikeAt ? `At the ${fmt(strikeAt)} strike · ${chain}` : chain;
 }

@@ -7,8 +7,9 @@ import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
   REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
-  type Company, type CompareAI, type Idea, type IndexLevel, type NewsItem, type PulseAI, type Quote, type Region, type SectorAI,
+  type Company, type CompareAI, type Idea, type IndexLevel, type PulseAI, type PulseData, type Quote, type Region, type SectorAI,
 } from "../lib/research";
+import { askAgain, PULSE_PENDING_EVERY_MS, PULSE_SLOW_MS, pulseLoad } from "../lib/pulseLoad";
 import {
   AIRead, aiLimited, aiReason, Change, EarningsBars, MarginCascade, MetricsGrid, NewsList, PriceChart, QuarterTable, QuoteGrid, Rail52, RegionSwitch,
   Shareholding, SourcesNote, StarButton, TrendBars,
@@ -78,16 +79,50 @@ function OpenCompany({ region, label = "Company", autoFocus }: { region: Region;
   );
 }
 
+/** The market's index levels and headlines for a region, as the pulse pages load them: asked again while the server's first
+ * read is pending, "Still loading…" with Retry after PULSE_SLOW_MS, an error with Try again when the request failed
+ * (R24-001: on an iPhone the skeleton stayed for ever). */
+function usePulse(region: Region) {
+  const [data, setData] = useState<PulseData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
+  const [again, setAgain] = useState(0);
+  useEffect(() => {
+    let live = true, tries = 0;
+    let next: ReturnType<typeof setTimeout> | undefined;
+    setData(null); setError(null); setSlow(false);
+    const late = setTimeout(() => { if (live) setSlow(true); }, PULSE_SLOW_MS);
+    const load = () => researchApi.pulse(region).then((d) => {
+      if (!live) return;
+      if (askAgain(d.pending, tries++)) { next = setTimeout(load, PULSE_PENDING_EVERY_MS); return; }
+      if (d.pending) { setSlow(true); return; }
+      setData(d);
+    }).catch((e) => { if (live) setError((e as Error).message || "The index levels couldn't be read."); });
+    load();
+    return () => { live = false; clearTimeout(late); if (next) clearTimeout(next); };
+  }, [region, again]);
+  return { data, error, slow, state: pulseLoad({ data, error, slow }), retry: () => setAgain((n) => n + 1) };
+}
+
+/** The index levels card's body for each loading state. */
+function PulseLevels({ p }: { p: ReturnType<typeof usePulse> }) {
+  if (p.state === "error") return <ErrorState title="The index levels couldn't be read" action={{ label: "Try again", onClick: p.retry }}>{p.error}</ErrorState>;
+  if (p.state === "slow") {
+    return (
+      <div className="k-row" role="status" data-testid="pulse-slow">
+        <span className="k-small k-muted">Still loading… The index levels are taking longer than usual.</span>
+        <button type="button" className="btn quiet sm" onClick={p.retry}>Retry</button>
+      </div>
+    );
+  }
+  return <IndexStrip indices={p.data?.indices ?? null} missing={p.data?.missing} />;
+}
+
 /* ================= Companies (home) ================= */
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
-  const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] } | null>(null);
-  useEffect(() => {
-    let live = true;
-    setPulse(null);
-    researchApi.pulse(region).then((p) => live && setPulse(p)).catch(() => live && setPulse({ indices: [], headlines: [] }));
-    return () => { live = false; };
-  }, [region]);
+  const p = usePulse(region);
+  const pulse = p.data;
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research")} title="Look up a company"
@@ -103,7 +138,7 @@ export function ResearchHome() {
       </Card>
       <Card>
         <CardHead title={`${REGION_NAME[region]} today`} info={HELP.researchPulse} actions={<Link to={`/research/pulse?region=${region}`} className="btn quiet sm">Full market pulse →</Link>} />
-        <IndexStrip indices={pulse?.indices ?? null} missing={pulse?.missing} />
+        <PulseLevels p={p} />
       </Card>
       <Card>
         <CardHead title="Explore a theme" info={HELP.researchThemes} actions={<Link to={`/research/themes?region=${region}`} className="btn quiet sm">Themes →</Link>} />
@@ -467,7 +502,8 @@ export function ThemesPage() {
 /* ================= Market pulse ================= */
 export function PulsePage() {
   const [region, setRegion] = useRegion();
-  const [data, setData] = useState<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] } | null>(null);
+  const levels = usePulse(region);
+  const data = levels.data;
   const [ai, setAi] = useState<PulseAI | null>(null);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -480,11 +516,8 @@ export function PulsePage() {
     finally { if (mine === seq.current) setBusy(false); }
   };
   useEffect(() => {
-    let live = true;
-    setData(null); setAi(null);
-    researchApi.pulse(region).then((d) => live && setData(d)).catch(() => live && setData({ indices: [], headlines: [] }));
+    setAi(null);
     loadAI();
-    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region]);
   return (
@@ -493,7 +526,7 @@ export function PulsePage() {
         lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
-      <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><IndexStrip indices={data?.indices ?? null} missing={data?.missing} /></Card>
+      <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       <Card>
         <CardHead title="The mood" info={HELP.researchPulse}
           actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />

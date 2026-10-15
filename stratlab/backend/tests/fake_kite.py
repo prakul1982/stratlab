@@ -185,4 +185,5 @@ def online() -> KiteService:
     k.kite = fake
     k.access_token, k.token_day = "fake-token", today_ist()
     k._throttle = lambda: None
+    k.GAP = 0              # no pacing for a page's own quote either (KiteService._slot)
     return k

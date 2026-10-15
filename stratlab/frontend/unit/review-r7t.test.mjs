@@ -68,7 +68,7 @@ test("R7T-005: the PCR is one figure across the table, the chain panel and the h
   assert.doesNotMatch(page, /header: "Near the money"/);
   // R8B-005 changed this on purpose: the "All strikes read" column repeated the near-money PCR on every row (the live
   // read is the 31 strikes around the money), so the table now says how many strikes were read instead
-  assert.match(page, /header: "Strikes read"/);
+  assert.match(page, /header: "Strikes in the PCR"/);              // R24-004: renamed, one basis on every row
   assert.doesNotMatch(page, /header: "All strikes read"/);
   const { NEAR_STRIKES } = await import("../src/lib/positioning.ts");
   assert.equal(NEAR_STRIKES, 15);
@@ -118,7 +118,7 @@ test("R7T-012: Admin's live price feed counts options paper sessions as running"
   const sv = (o) => ({ feed_connected: false, live_sessions: 1, india_sessions: 0, options_sessions: 0, ...o });
   const t = feedTile(sv({ options_sessions: 1 }));
   assert.equal(t.state, "ok");
-  assert.equal(t.detail, "Not needed: 1 options paper session running on quotes read every few seconds");
+  assert.equal(t.detail, "Not connected, and no session needs it: the 1 options paper session running read quotes every few seconds instead");    // R24-011 wording
   assert.equal(feedTile(sv({})).detail, "Idle: no India paper sessions running");
   assert.match(feedTile(sv({ feed_connected: true, india_sessions: 2, options_sessions: 1 })).detail, /^Connected, 2 India paper sessions running · 1 options paper session/);
 });

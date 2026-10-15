@@ -125,3 +125,17 @@ def fresh_trackers():
     results.forget_trackers()
     yield
     results.forget_trackers()
+
+
+@pytest.fixture(autouse=True)
+def fresh_pulse_snapshots():
+    """The market pulse's index levels and headlines are served from memory (app/intel/snapshot.py, R24-001): a test's
+    levels don't carry over to the next test on the same worker."""
+    routes = sys.modules.get("app.intel.routes")
+    hub = getattr(routes, "hub", None) if routes else None
+    if hub is not None and hasattr(hub, "forget_snapshots"):
+        hub.forget_snapshots()
+    yield
+    hub = getattr(routes, "hub", None) if routes else None
+    if hub is not None and hasattr(hub, "forget_snapshots"):
+        hub.forget_snapshots()

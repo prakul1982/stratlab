@@ -1033,11 +1033,22 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
         if not got:
             out.append({"name": name, "exchange": ex, "source": None})
             continue
-        p, w = pcr(got["chain"]), pcr(near(got["chain"], got.get("spot")))
+        win = near(got["chain"], got.get("spot"))
+        p, w = pcr(got["chain"]), pcr(win)
+        counted = window_read(win)
         out.append({"name": name, "exchange": ex, "expiry": got["expiry"], "cycle": expiry_cycle(ex, name), "pcr_oi": w["oi"], "pcr_vol": w["vol"],
                     "pcr_near": w["oi"], "pcr_all": p["oi"], "strikes_read": len(got["chain"]), "near_strikes": NEAR, "spot": got.get("spot"),
+                    # R24-004: every row's PCR is over the same window, and says how many of its strikes had open interest read
+                    # (the live chain reads 81 strikes, a recording 31: "Strikes read" showed 81 or 31 beside the same 31-strike PCR)
+                    "basis": "near", "strikes_counted": counted, "strikes_window": 2 * NEAR + 1, "partial": counted < 2 * NEAR + 1,
                     "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
     return out
+
+
+def window_read(rows: list[list]) -> int:
+    """How many strikes of a PCR's window had open interest read on both the call and the put: fewer than the window's
+    2 x NEAR + 1 is a partial read (strikes with no quote back, or a chain that ends inside the window)."""
+    return sum(1 for r in rows if _at(r, 4) is not None and _at(r, 8) is not None)
 
 
 def summary(options_data, full: bool, brief: bool = False, with_pcr: bool = True, now: datetime | None = None) -> dict:

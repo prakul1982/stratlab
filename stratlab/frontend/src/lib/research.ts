@@ -78,6 +78,7 @@ export interface SectorAI {
 }
 /** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */
+export type PulseData = { indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[]; pending?: boolean; read_at?: string | null };
 export interface IndexLevel {
   name: string; price: number; change_pct: number | null; high52: number | null; from_high_pct: number | null;
   at?: string | null; day?: string | null; live?: boolean; stale?: boolean; settling?: boolean;
@@ -183,7 +184,8 @@ export const researchApi = {
     api<{ currency: string; source: string; candles: { t: string; c: number }[] }>(`/research/chart/${r}/${encodeURIComponent(s)}?range=${range}`),
   quotes: (r: Region, syms: string[]) => api<Record<string, Quote | null>>(`/research/quotes?region=${r}&symbols=${syms.map(encodeURIComponent).join(",")}`),
   search: (r: Region, q: string) => api<{ symbol: string; name: string; exchange: string; region: Region }[]>(`/research/search?region=${r}&q=${encodeURIComponent(q)}`),
-  pulse: (r: Region, focus = "") => api<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] }>(`/research/pulse?region=${r}${focusParam(focus)}`),
+  /** `pending`: the server's first read of the levels since it started isn't back yet (ask again in a moment, R24-001) */
+  pulse: (r: Region, focus = "") => api<PulseData>(`/research/pulse?region=${r}${focusParam(focus)}`),
   /** The market read, or an Error saying why there is none (like companyAI: "unavailable" is a 200 on the wire). */
   pulseAI: async (r: Region, focus = "", refresh = false): Promise<PulseAI> => {
     const got = await api<PulseAI | { unavailable: true; message: string }>(`/research/pulse/ai?region=${r}${focusParam(focus)}${refresh ? "&refresh=true" : ""}`);

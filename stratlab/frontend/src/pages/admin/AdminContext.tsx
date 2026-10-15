@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { ServerBuild } from "../../lib/buildInfo";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import type { CalendarStatus } from "./HolidaysPanel";
@@ -26,6 +27,8 @@ export interface Overview {
     server_started_at?: string | null;
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
     calendar?: CalendarStatus; invoice_seller?: InvoiceSeller; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
+    /** which build the server is (R24-009; older servers don't send it) */
+    build?: ServerBuild;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
   };
   stats: { users: number; plans: Record<Plan, number>; new_7d: number; signups_today: number; experiments_month: number; ai_month: number; ai_reads_month?: number;

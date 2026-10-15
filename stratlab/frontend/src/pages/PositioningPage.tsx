@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
-  chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
-  pcrNote, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
+  atmIvLabel, chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
+  pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { signTone } from "../lib/format";
@@ -205,12 +205,12 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
     { key: "vol", header: "PCR (volume)", numeric: true, cell: (r) => ratio(r.pcr_vol) },
-    { key: "read", header: "Strikes read", numeric: true, cell: (r) => (r.strikes_read ? String(r.strikes_read) : "–") },
+    { key: "read", header: "Strikes in the PCR", numeric: true, cell: (r) => pcrStrikes(r) },
   ];
   return (
     <Card id="pos-pcr" label="Put-call ratio by index">
       <CardHead title="Put-call ratio by index" infoLabel="About the put-call ratio"
-        info={`Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the ${NEAR_STRIKES} strikes either side of the money that StratLab's recordings keep: the same PCR as the chain panel and the history. 'Strikes read' is how many strikes of the chain were read for it.`} />
+        info={`Total open interest in the nearest expiry's puts divided by its calls' (and the same for the day's volume), over the ${NEAR_STRIKES} strikes either side of the money that StratLab's recordings keep: the same PCR as the chain panel and the history, on every row. 'Strikes in the PCR' is how many of those ${2 * NEAR_STRIKES + 1} strikes had open interest read; 'partial' means some had none, so that row's PCR counts fewer strikes.`} />
       <Source testId="pcr-source">From each index's live option chain, or StratLab's newest recording of it when the live chain is offline.</Source>
       {rows === null ? <Skeleton label="Reading each index's chain" />
         : rows === "error" ? <ErrorState title="The chains couldn't be read just now" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Try again in a minute.</ErrorState>
@@ -280,7 +280,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <Stat label="Max-pain strike" value={strike(c.max_pain)} note={`within the ${c.strikes_counted ?? c.rows.length} strikes shown`} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
-              <Stat label="ATM implied volatility" value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(1)}%`} note={c.atm ? `At the ${strike(c.atm)} strike` : undefined} />
+              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}`} />
               <IvFig c={c} full={full} plan={plan} />
             </StatRow>
             <div className="k-spread">

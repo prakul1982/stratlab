@@ -5,7 +5,8 @@ import { ago, plainDates } from "../../lib/format";
 import { Card, CardHead, StatusList, StatusRow, type HealthState } from "../../components/kit";
 
 type Check = { name: string; area: string; state: "pass" | "warn" | "fail"; detail: string; seconds: number | null };
-type Result = { at: string; counts: Record<"pass" | "warn" | "fail", number>; checks: Check[]; auto?: boolean };
+/** `build`: the short commit of the server that ran it (older results have none), so an old run isn't read as today's code's */
+type Result = { at: string; counts: Record<"pass" | "warn" | "fail", number>; checks: Check[]; auto?: boolean; build?: string | null };
 type Day = { at: string; auto: boolean; pass: number; warn: number; fail: number; failed: string[] };
 const LIGHT: Record<Check["state"], HealthState> = { pass: "ok", warn: "warn", fail: "bad" };
 const WORD: Record<Check["state"], string> = { pass: "Pass", warn: "Check", fail: "Fail" };
@@ -33,7 +34,7 @@ export function PlatformPanel() {
         {history.some((h) => h.fail) ? ` · last failure ${ago(history.filter((h) => h.fail).slice(-1)[0].at)}` : " · no failures"}</p>}
       {r && (
         <>
-          <p className="k-small">{r.auto ? "Automatic check, " : ""}{ago(r.at)} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
+          <p className="k-small">{r.auto ? "Automatic check, " : ""}{ago(r.at)}{r.build ? ` on build ${r.build}` : ""} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
           <StatusList label="Feature checks">
             {[...r.checks].sort((a, b) => order[a.state] - order[b.state] || a.area.localeCompare(b.area)).map((c) => (
               <StatusRow key={c.name} state={LIGHT[c.state]} word={WORD[c.state]} label={c.name} detail={`${plainDates(c.detail)}${c.seconds != null ? ` (${c.seconds}s)` : ""}`} />

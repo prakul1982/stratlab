@@ -6,7 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { dayStat, upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, gapLine, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, costsLine, gapLine, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -156,7 +156,7 @@ export function OptionsSession() {
         {!p ? <p className="k-small k-muted">{flatLine(snap, today.length)}</p> : (
           <>
             <p className="k-small k-muted">Open since {when(p.opened, TZ, true, true)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
-              {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
+              {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} {costsLine(inr(p.costs), openOrders)}</p>
             <DataTable label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l) => l.sym + l.side + l.entry} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
             <Earlier label="Orders in this trade" count={openOrders.length} className="in-card">
               <OrderList events={openOrders} cur="INR" tz={TZ} />
