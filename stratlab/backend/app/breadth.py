@@ -487,7 +487,7 @@ class Runner:
             sec = self.sectors(region) or {}
         except Exception:
             sec = {}
-        tally, loaded, failed, streak, last_error = Tally(), 0, 0, 0, None
+        tally, loaded, failed, streak, last_error, unlisted = Tally(), 0, 0, 0, None, 0
         bases: dict[str, list] = {}                              # each stock's finished days, for the intraday view
         scans: dict[str, dict[str, dict | None]] = {}            # group -> {symbol: scan_presets.evaluate answer}
         scan_secs, scan_groups = 0.0, set(scan_presets.STORED.values())
@@ -498,6 +498,9 @@ class Runner:
                 bars = self.load(region, sym, days)
                 flags = stock_flags(bars, through)
                 streak = 0
+            except LookupError:
+                unlisted += 1               # not on the exchange's list any more: left out, not a failed read
+                continue
             except Exception as e:
                 failed, streak, last_error = failed + 1, streak + 1, f"{sym}: {str(e)[:120] or e.__class__.__name__}"
                 if streak >= GIVE_UP and not loaded:
@@ -524,7 +527,7 @@ class Runner:
                     scans.setdefault(g, {})[sym] = res
         if not loaded:
             raise RuntimeError(f"No stock's prices could be read ({last_error or 'no data'}).")
-        total = len(by_stock)
+        total = len(by_stock) - unlisted
         if loaded < MIN_LOADED * total - 1e-9 or failed > MAX_FAILED * total + 1e-9:
             # most of the market failed after the first stock loaded (a cancelled token, a throttled source): laying
             # this thin universe over the stored days would rewrite months of counts, so the stored history stays
