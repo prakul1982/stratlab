@@ -46,7 +46,7 @@ def test_share_responses_are_not_kept_long(api, capped):
     nb = api.post("/notebooks", json={"name": "T", "strategy": EMA, "instrument": "CRYPTO:BTC-USD"}).json()
     api.post(f"/notebooks/{nb['id']}/experiments", json={"days": 400})
     token = api.post(f"/notebooks/{nb['id']}/experiments/1/share", json={"image": "data:image/png;base64," + PNG}).json()["token"]
-    assert api.get(f"/v/{token}").headers["cache-control"] == "public, max-age=60"
+    assert api.get(f"/v/{token}").headers["cache-control"] == "public, max-age=0, s-maxage=30, must-revalidate"
     assert api.get(f"/v/{token}.png").headers["cache-control"] == "no-cache"
 
 

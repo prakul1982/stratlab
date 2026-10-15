@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/auth-js";
 import { api, ApiError, setApiHandlers, supabase } from "./api";
+import { clearLocalData } from "./localData";
 import { signOutHere } from "./signout";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
@@ -141,7 +142,7 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     });
     check(0);
     const { data } = supabase.auth.onAuthStateChange((e, s) => {
-      if (e === "SIGNED_OUT") writeViewAs(null);          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
+      if (e === "SIGNED_OUT") { writeViewAs(null); clearLocalData(); }          // "View as" is the owner's, on this device: it doesn't outlive the sign-in
       setSession(s);
       if (s) setReady(true);
     });

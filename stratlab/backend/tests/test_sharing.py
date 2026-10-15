@@ -92,7 +92,7 @@ def test_a_shared_card_preview_is_kept_out_of_search_and_names_no_canonical(w):
     page = c.get(f"/c/{token}")
     assert '<meta name="robots" content="noindex,follow">' in page.text
     assert 'rel="canonical"' not in page.text                  # a kept-out page names no address to point search engines at
-    assert page.headers["cache-control"] == "public, max-age=300"
+    assert page.headers["cache-control"] == "public, max-age=60"
 
 
 def test_the_card_image_check_does_not_decode_the_picture(w, monkeypatch):
@@ -279,3 +279,11 @@ def test_sharing_cards_and_trying_invite_codes_are_limited(w):
     assert codes == [200] * 10 + [429]
     shares = [c.post("/cards/company/IN/RELIANCE", headers=_h("free-token"), json={}).status_code for _ in range(31)]
     assert shares == [200] * 30 + [429]
+
+
+def test_shared_links_are_cached_for_at_most_a_minute(w):
+    c = w["client"]
+    token = c.post("/cards/company/IN/RELIANCE", headers=_h("pro-token"), json={"image": PNG}).json()["token"]
+    for path in (f"/c/{token}", f"/c/{token}.png"):
+        r = c.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "public, max-age=60"

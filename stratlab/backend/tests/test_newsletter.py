@@ -681,6 +681,7 @@ def test_r23_004_a_sent_briefs_link_numbers_survive_a_later_headline_filter(w, m
     db.set_setting(f"news:market:US:2026-10-01", json.dumps(issue))
     c = w["client"]
     r = c.get(f"/news-link/{iid}/2", follow_redirects=False)
+    assert r.headers["cache-control"] == "public, max-age=60"
     assert r.status_code == 302 and r.headers["location"] == heads[2]["url"]  # the story the email named, not a 404
     gone = c.get(f"/news-link/{iid}/9", follow_redirects=False)
     assert gone.status_code == 302 and gone.headers["location"].endswith(f"/news?tab=US&issue={iid}")

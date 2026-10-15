@@ -4,7 +4,7 @@ input can't escape into HTML, links or other hosts."""
 import pytest
 from fastapi.routing import APIRoute
 
-from app import main
+from app import guard, main
 from tests import world as W
 
 PUBLIC = {"/health", "/version", "/plans", "/pricing", "/markets", "/public/v/{token}", "/v/{token}.png", "/v/{token}", "/c/{card}.png", "/c/{card}", "/billing/webhook",
@@ -50,6 +50,7 @@ def test_only_the_intended_routes_are_open_without_signing_in():
 def client():
     mp = pytest.MonkeyPatch()
     w = W.build(mp)
+    mp.setattr(guard, "BAD_TOKENS_PER_MINUTE", 10**6)     # this test sends a bad token to every route on purpose
     yield w["client"]
     w["close"]()
     mp.undo()

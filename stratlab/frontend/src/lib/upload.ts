@@ -5,7 +5,7 @@ export interface Candle { t: string; o: number; h: number; l: number; c: number;
 export interface Upload { name: string; currency: string; step: number; bars: Candle[] }
 
 const mem = new Map<string, Upload>();
-const key = (nid: string) => `stratlab-upload-${nid}`;
+const key = (nid: string) => `${PREFIX}${nid}`;
 
 export function saveUpload(nid: string, u: Upload) {
   mem.set(nid, u);
@@ -18,6 +18,16 @@ export function getUpload(nid: string): Upload | null {
     if (raw) { const u = JSON.parse(raw) as Upload; mem.set(nid, u); return u; }
   } catch { /* unavailable */ }
   return null;
+}
+
+const PREFIX = "stratlab-upload-";
+
+/** Sign-out: every CSV this browser kept, from memory and from storage. */
+export function clearUploads() {
+  mem.clear();
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(PREFIX)) localStorage.removeItem(k);
+  } catch { /* storage off: nothing kept */ }
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
-import { asOf, fmtTime, IST, money, price } from "../../lib/format";
+import { asOf, safeHref, fmtTime, IST, money, price } from "../../lib/format";
 import { upDown } from "../../lib/tradeUi";
 import { gapText, LIVE_PHASES, PHASE_TEXT, qtyText, steps, type CasDay, type CasHistory, type CasPosition, type CasStock, type CasView } from "../../lib/closingAuction";
 import { Earlier } from "../../components/Earlier";
@@ -67,7 +67,7 @@ function Coming({ v }: { v: CasView }) {
       <p className="k-small">{v.expiry.proposal}</p>
       <ul className="k-list muted">
         <li>No change to the 15:15–15:35 timetable or to how expiring contracts settle has a date yet. What is in force: {v.expiry.settlement}</li>
-        {v.sources.consultation && <li><a className="link" href={v.sources.consultation} target="_blank" rel="noopener noreferrer">SEBI's consultation paper of 12 Sep 2026</a></li>}
+        {v.sources.consultation && <li><a className="link" href={safeHref(v.sources.consultation)} target="_blank" rel="noopener noreferrer">SEBI's consultation paper of 12 Sep 2026</a></li>}
       </ul>
     </Card>
   );

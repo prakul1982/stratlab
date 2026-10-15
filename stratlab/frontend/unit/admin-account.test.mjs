@@ -150,7 +150,7 @@ test("Invite: plain words, and a paying user is never offered a month of Basic n
 test("signing out clears the owner's \"View as\" and Overview says AI reads apart from builds", async () => {
   const { readFileSync } = await import("node:fs");
   const app = readFileSync(new URL("../src/lib/app.tsx", import.meta.url), "utf8");
-  assert.match(app, /"SIGNED_OUT"\) writeViewAs\(null\)/);
+  assert.match(app, /"SIGNED_OUT"\) \{ writeViewAs\(null\)/);
   assert.match(readFileSync(new URL("../src/pages/admin/OverviewSection.tsx", import.meta.url), "utf8"), /AI reads/);
 });
 

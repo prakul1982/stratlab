@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { asOf } from "../../lib/format";
+import { asOf, safeHref } from "../../lib/format";
 import { evDay, evWhen, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
 import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
@@ -28,7 +28,7 @@ function Detail({ e }: { e: MarketEvent }) {
       {e.status === "scheduled" && e.title.endsWith("(due)") && <span className="k-note"> due</span>}
       {e.figure && <p className="k-small ev-figure" data-testid="ev-figure"><b>{e.figure}</b>{e.previous && <span className="k-muted"> · {e.previous}</span>}</p>}
       {e.detail && <p className="k-note">{e.detail}</p>}
-      {e.url && <a className="link k-note" href={e.url} target="_blank" rel="noopener noreferrer">Official release ↗</a>}
+      {e.url && <a className="link k-note" href={safeHref(e.url)} target="_blank" rel="noopener noreferrer">Official release ↗</a>}
     </div>
   );
 }
@@ -75,7 +75,7 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
       {shown.slice(0, 4).map((c, n) => (
         <Card key={c.id} testId="ev-index-change">
           <CardHead level={3} title={c.effective ? `From ${evDay(c.effective, true)}` : c.title}
-            actions={<span className="k-note">Announced {asOf(c.announced)} · <a className="link" href={c.url} target="_blank" rel="noopener noreferrer">Press release ↗</a></span>} />
+            actions={<span className="k-note">Announced {asOf(c.announced)} · <a className="link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">Press release ↗</a></span>} />
           {/* each table names its own announcement: two changes on one date gave two landmarks with one name (R5O-030) */}
           <DataTable label={`Index changes ${c.effective ? `from ${evDay(c.effective, true)}` : c.title}, announcement ${n + 1} of ${Math.min(4, shown.length)}`} columns={cols} rows={c.sections} rowKey={(s) => s.index} />
         </Card>

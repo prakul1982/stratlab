@@ -142,7 +142,7 @@ def test_a_replayed_webhook_event_does_nothing(store, monkeypatch):
     billing.handle_webhook(body, "sig", "evt_1")
     billing.handle_webhook(body, "sig", "evt_1")                                  # the same signed event, sent again
     billing.handle_webhook(body, "sig", "evt_2")
-    assert acted == ["sub_old", "sub_old"]
+    assert acted == ["sub_old"]                                                   # one handling, whatever the unsigned id header said
 
 
 _ids = __import__("itertools").count()
@@ -156,8 +156,9 @@ def _webhook(monkeypatch, profile, sub, event="subscription.activated", payment=
     monkeypatch.setattr(billing, "activate", lambda p, s: acted.append(s["id"]))
     monkeypatch.setattr(billing, "invoice_for", lambda p, s, pay: made.append(pay))
     monkeypatch.setattr(billing.invite_rewards, "safe_paid", lambda *a: None)
-    body = {"event": event, "payload": {"subscription": {"entity": sub}, "payment": {"entity": payment or PAY}}}
-    billing.handle_webhook(json.dumps(body).encode(), "sig", f"evt_{next(_ids)}")      # each call its own event
+    n = next(_ids)
+    body = {"event": event, "created_at": n, "payload": {"subscription": {"entity": sub}, "payment": {"entity": payment or PAY}}}
+    billing.handle_webhook(json.dumps(body).encode(), "sig", f"evt_{n}")      # each call its own event, body and id
     return acted, made
 
 
