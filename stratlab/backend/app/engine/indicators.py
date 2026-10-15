@@ -316,7 +316,7 @@ def compute(ref, df: pd.DataFrame, intraday: bool) -> pd.Series:
         return fo_value(t, df)
     if t in ("volume", "vol_sma"):
         vol = df.v.where(df.v > 0)        # indices have no volume: leave it blank rather than zero
-        return vol if t == "volume" else vol.rolling(p).mean()
+        return vol if t == "volume" else vol.rolling(p, min_periods=max(1, p // 2)).mean()   # a halt day (no volume) doesn't blank the average
     raise ValueError(f"Unknown indicator {t}")
 
 

@@ -344,12 +344,15 @@ def _when(e: dict) -> str:
     return str(e.get("expiry") or e.get("effective") or e.get("date") or e.get("seen") or "")[:10]
 
 
-def text_of(e: dict) -> str:
-    """One change in plain words."""
+def text_of(e: dict, today: date | None = None) -> str:
+    """One change in plain words; with `today`, a stock whose last expiry has passed is said to have left, not to leave."""
     k, sym = e.get("kind"), e.get("symbol") or ""
     series = series_name(e.get("series") or "")
     if e.get("source") == "circular":
         return f"Exchange circular{' ' + e['no'] if e.get('no') else ''}: {e.get('subject')}"
+    if k == "exit" and today and _when(e) < today.isoformat():
+        return (f"{sym} left F&O. The {series} series, which expired {_day(e.get('expiry'))}, was the last one the contract "
+                f"file listed.")
     if k == "exit":
         return (f"{sym} leaves F&O. The {series} series, expiring {_day(e.get('expiry'))}, is the last one the contract "
                 f"file lists.")
@@ -438,7 +441,7 @@ def sources_for(e: dict, circs: list[dict]) -> list[dict]:
         when = date.fromisoformat(_when(e))
     except ValueError:
         return []
-    out = []
+    out, nameless = [], []
     for c in circs:
         if c["kind"] != e.get("kind"):
             continue
@@ -450,7 +453,9 @@ def sources_for(e: dict, circs: list[dict]) -> list[dict]:
         except ValueError:
             continue
         if when - timedelta(days=SOURCE_DAYS[0]) <= d <= when + timedelta(days=SOURCE_DAYS[1]):
-            out.append(c)
+            (out if named else nameless).append(c)
+    if not out and len(nameless) == 1:      # a circular naming no stock covers this one only when it is the sole candidate
+        out = nameless
     return sorted(out, key=lambda c: c["date"], reverse=True)[:3]
 
 
@@ -472,7 +477,7 @@ def view(today: date | None = None) -> dict:
     for e in events:
         row = {k: e.get(k) for k in ("id", "kind", "symbol", "symbols", "segment", "series", "expiry", "effective", "was", "now",
                                      "lot", "seen", "source", "no", "subject", "within")}
-        row.update(date=_when(e), text=text_of(e), series_label=series_name(e["series"]) if e.get("series") else None)
+        row.update(date=_when(e), text=text_of(e, today), series_label=series_name(e["series"]) if e.get("series") else None)
         row["upcoming"] = row["date"] >= today.isoformat()
         if e.get("source") == "circular":
             row["sources"] = [source_of(e)]

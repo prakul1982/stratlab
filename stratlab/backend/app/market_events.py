@@ -783,7 +783,12 @@ def rbi_events(part: dict, today: date) -> list[dict]:
     return out
 
 
-def fed_events(part: dict, today: date) -> list[dict]:
+def _passed(day: date, at: str, today: date, now: datetime | None) -> bool:
+    """Whether a release dated `day` (India date, time `at`) is behind us: an earlier day, or today past its time."""
+    return day < today or (day == today and now is not None and now.astimezone(IST).strftime("%H:%M") >= at)
+
+
+def fed_events(part: dict, today: date, now: datetime | None = None) -> list[dict]:
     out, last = [], None
     for m in sorted(part.get("meetings") or [], key=lambda m: m["end"]):
         start, end = _day(m.get("start")), _day(m.get("end"))
@@ -797,8 +802,8 @@ def fed_events(part: dict, today: date) -> list[dict]:
         out.append(_ev("us", day, "US Fed decision (FOMC)",
                        f"The FOMC meets {_short(start)} to {nice(end)} in Washington. The statement comes at 2:00 pm New York "
                        f"time, {at} India time on {nice(day)}.{sep}", eid=_id("fomc", end), time_ist=at, figure=fig, previous=prev,
-                       url=m.get("statement_url"), status="released" if rng or (m.get("statement_url") and day < today)
-                       else "scheduled" if day >= today else "awaiting"))
+                       url=m.get("statement_url"), status="released" if rng or (m.get("statement_url") and _passed(day, at, today, now))
+                       else "scheduled" if not _passed(day, at, today, now) else "awaiting"))
         last = rng                                        # "before" is the meeting just before, or nothing
     return out
 
@@ -807,7 +812,7 @@ US_TITLES = {"us_cpi": ("US consumer prices (CPI)", "The US consumer price index
              "us_jobs": ("US jobs report", "US employment and unemployment for the month before (the Employment Situation).")}
 
 
-def us_events(part: dict, today: date) -> list[dict]:
+def us_events(part: dict, today: date, now: datetime | None = None) -> list[dict]:
     out = []
     for r in part.get("releases") or []:
         d = _day(r.get("date"))
@@ -816,7 +821,7 @@ def us_events(part: dict, today: date) -> list[dict]:
         day, at = ist_time(d, r.get("time") or "08:30", NY)
         title, what = US_TITLES[r["kind"]]
         out.append(_ev("us", day, title, f"{what} Released at {r.get('time') or '08:30'} New York time, {at} India time.",
-                       eid=_id(r["kind"], d), time_ist=at, status="released" if day < today else "scheduled"))
+                       eid=_id(r["kind"], d), time_ist=at, status="released" if _passed(day, at, today, now) else "scheduled"))
     return out
 
 
@@ -953,14 +958,15 @@ def custom_events(today: date) -> list[dict]:
     return out
 
 
-def events(today: date | None = None, listed=None, frm: date | None = None, to: date | None = None) -> list[dict]:
+def events(today: date | None = None, listed=None, frm: date | None = None, to: date | None = None, now: datetime | None = None) -> list[dict]:
     """Every event between `frm` and `to` (by default the last 180 days and the next 400), by date and time. A part that
     fails is left out, never the whole list."""
-    today = today or ist_now().date()
+    now = now or (ist_now() if today is None else None)       # the time of day matters only for the real today
+    today = today or now.date()
     frm, to = frm or today - timedelta(days=VIEW_BACK), to or today + timedelta(days=VIEW_AHEAD)
     st = load_state()
-    parts = [lambda: rbi_events(st.get("rbi") or {}, today), lambda: fed_events(st.get("fed") or {}, today),
-             lambda: us_events(st.get("us_data") or {}, today), lambda: india_events(st.get("india_data") or {}, today),
+    parts = [lambda: rbi_events(st.get("rbi") or {}, today), lambda: fed_events(st.get("fed") or {}, today, now),
+             lambda: us_events(st.get("us_data") or {}, today, now), lambda: india_events(st.get("india_data") or {}, today),
              lambda: index_events(st.get("index") or {}, today), lambda: expiry_events(today, listed, frm, to),
              lambda: holiday_events(today, frm, to), lambda: custom_events(today)]
     out = []

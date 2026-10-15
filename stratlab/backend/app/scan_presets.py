@@ -188,6 +188,24 @@ def is_stale(last: str, newest: str | None) -> bool:
         return False
 
 
+def lag_sessions(last: str, newest: str | None) -> int:
+    """Weekdays between a stock's last candle and the group's newest one: how many sessions it is behind."""
+    try:
+        return int(np.busday_count(str(last)[:10], str(newest)[:10])) if newest and str(newest)[:10] > str(last)[:10] else 0
+    except ValueError:
+        return 0
+
+
+def lagged(m: dict | None, last: str, newest: str | None, pid: str) -> dict | None:
+    """A match counted from the group's newest session, not the stock's own last candle: a stock that stopped trading a
+    few sessions ago matched that long ago, and one past the preset's window doesn't match now."""
+    lag = lag_sessions(last, newest)
+    if not m or not lag:
+        return m
+    days_ago = m["days_ago"] + lag
+    return {**m, "days_ago": days_ago} if days_ago < BY_ID[pid]["within"] else None
+
+
 def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:
     """The stored shape for one group from {symbol: evaluate() answer}: only stocks that match something get a row."""
     rows, counts = [], {p["id"]: 0 for p in PRESETS}
@@ -195,11 +213,12 @@ def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:
     per_stock = {k: r for k, r in per_stock.items() if r and not is_stale(r["as_of"], newest)}   # a suspended or delisted stock's last candle isn't the day's
     for sym in sorted(per_stock):
         r = per_stock[sym]
-        for pid in r["matches"]:
+        found = {pid: m for pid, m in ((pid, lagged(m, r["as_of"], newest, pid)) for pid, m in r["matches"].items()) if m}
+        for pid in found:
             counts[pid] += 1
-        if r["matches"]:
+        if found:
             rows.append({"s": sym, "p": round(r["price"], 4), "c": None if r["chg"] is None else round(r["chg"], 2), "d": r["as_of"],
-                         "m": {pid: [m["days_ago"], m["day"], m["detail"]] for pid, m in r["matches"].items()}})
+                         "m": {pid: [m["days_ago"], m["day"], m["detail"]] for pid, m in found.items()}})
     checked = [r for r in per_stock.values() if r]
     return {"as_of": max((r["as_of"] for r in checked), default=None), "at": (now or datetime.now(ZoneInfo("UTC"))).isoformat(timespec="seconds"),
             "checked": len(checked), "counts": counts, "rows": rows}

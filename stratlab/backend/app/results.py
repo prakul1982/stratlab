@@ -114,7 +114,10 @@ def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict
         filed = parse_day(str(i.get("at") or "")[:10])
         if not filed or (today - filed).days > 45:
             continue
-        day = next((d for d in dates_in(hay) if filed <= d <= filed + timedelta(days=60)), None)
+        # a date after the filing day first: the letter's own date ("Date: October 28") is the filing day, not the meeting's;
+        # the filing day itself only when the notice names no later one (a meeting held the same day)
+        found = [d for d in dates_in(hay) if filed <= d <= filed + timedelta(days=60)]
+        day = next((d for d in found if d > filed), found[0] if found else None)
         if day and day >= today - timedelta(days=KEEP_DAYS):
             out.append(row("IN", symbol, day, "Board meeting to consider financial results", url=i.get("url"), src="announcement"))
     return out[:1]                      # the newest notice wins (items come newest first)

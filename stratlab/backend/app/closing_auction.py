@@ -248,10 +248,11 @@ def stock_view(sym: str, r: dict, phase: str) -> dict:
             "text": f"{sym}: {'final price' if final else 'IEP'} {words(g)}" if g is not None else None}
 
 
-def index_view(name: str, r: dict, start: float | None) -> dict:
-    value, ind = pos(r.get("value")), pos(r.get("indicative"))
+def index_view(name: str, r: dict, start: float | None, earlier: bool = False) -> dict:
+    """`earlier`: the read is from an earlier day, so its indicative close is that day's finished auction, not a figure for now."""
+    value, ind = pos(r.get("value")), None if earlier else pos(r.get("indicative"))
     return {"name": name, "value": value, "prev_close": pos(r.get("prev_close")), "indicative": ind,
-            "status": r.get("status"), "start": pos(start), "gap": gap(ind, value) if ind else None,
+            "status": None if earlier else r.get("status"), "start": pos(start), "gap": gap(ind, value) if ind else None,
             "close_gap": gap(value, start) if start and value else None}
 
 
@@ -359,7 +360,7 @@ def view(profile: dict, now: datetime | None = None) -> dict:
     rows_phase = phase if fresh else "closed"          # a read from an earlier day is that day's finished auction
     stocks = [stock_view(s, r, rows_phase) for s, r in live["stocks"].items()] if live["stocks"] else []
     stocks.sort(key=lambda v: (v["gap"] is None, -abs(v["gap"] or 0), v["symbol"]))
-    indices = [index_view(n, r, live["start"].get(n)) for n, r in live["indices"].items()]
+    indices = [index_view(n, r, live["start"].get(n), not fresh) for n, r in live["indices"].items()]
     shown_day, from_stored = live.get("day"), False
     # nothing read lately (a holiday, a new server, the stored read cleared): the last stored auction is the page, not an empty one
     days = _days()

@@ -127,7 +127,10 @@ def change_text(c: dict) -> str:
     was, now = c.get("was"), c.get("now")
     name = LISTS.get(lst, (lst, lst))[1]
     if was and now:
-        return f"moved from Stage {split(was)[1]} to Stage {split(now)[1]} of {name}"
+        a, b = split(was)[1], split(now)[1]
+        if a is None or b is None:          # the list gave no stage on one side (both none: the same list, so no change of words)
+            return f"moved to Stage {b} of {name}" if b is not None else f"moved to {name}, no stage stated"
+        return f"moved from Stage {a} to Stage {b} of {name}"
     if now:
         return f"entered {label(now)['label']}" if lst != "fo_ban" else "entered the F&O ban period"
     return f"left {name}" if lst != "fo_ban" else "left the F&O ban period"

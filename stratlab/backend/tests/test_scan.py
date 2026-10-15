@@ -50,6 +50,7 @@ def fake_setup(monkeypatch):
     reg = FakeRegistry(series)
     monkeypatch.setattr(scan, "_bars", lambda registry, iid: series[iid.split(":")[1]])
     scan._cache.clear()
+    monkeypatch.setattr(scan, "session_day", lambda market, now=None: None)         # the candles are made up, dated before today
     return reg
 
 

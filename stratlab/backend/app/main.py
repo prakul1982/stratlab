@@ -1820,9 +1820,9 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
-            out = {"kind": "st_s2", **scan.run(markets, req.region, members)}
+            out = {"kind": "st_s2", **scan.run(markets, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(markets, req.region, members, req.scan)
+            got = scan.run_preset(markets, req.region, members, req.scan, session=scan.session_day(req.region))
             out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
                    "stored": False, **got}
         _results.set(key, out, 300)

@@ -91,6 +91,9 @@ def parse_purpose(text: str, face_value: float | None = None, cur: str = "₹") 
             amt = _AMOUNT.search(seg)
             amount = _f(amt.group(1)) if amt else None
             pct = re.search(r"(\d+(?:\.\d+)?)\s*%", seg)
+            if amt and pct and re.search(r"(?:face\s*value|\bf\.?\s?v\.?)(?:\s+of)?\W*$", seg[:amt.start()], re.I):
+                # "50% (FV Rs 10)": the rupee figure is the face value the percentage is of, not the dividend
+                face_value, amount = amount, None
             if amount is None and pct and face_value:
                 amount = round(face_value * float(pct.group(1)) / 100, 4)
             label = "Distribution" if "distribution" in low and "dividend" not in low else f"{word.title()} dividend" if word else "Dividend"
@@ -492,7 +495,9 @@ def adjusted(qty: float, avg: float | None, a: dict) -> tuple[float, float | Non
 
 def saved_day(stamp: str | None, today: date) -> str:
     """The India day a holdings file was saved on, from its stamp (UTC, as `updated_at` is kept), else today's: the day
-    the quantity is as of, so an action that went ex that day is already in it. A bare date is taken as it is."""
+    the quantity is as of. An action that went ex that day is not in it yet (the new shares are credited days after the
+    ex-date, as holdings.saved_day says), so it is still offered; `_included` counts only the ones before it. A bare date
+    is taken as it is."""
     s = str(stamp or "")
     try:
         t = datetime.fromisoformat(s) if len(s) > 10 else None
