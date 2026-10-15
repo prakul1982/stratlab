@@ -17,14 +17,23 @@ export function signedInWith(session: string | null | undefined, server: string 
  * - "given": the site owner gave it by hand; it has an end date or none, and there is nothing to renew or cancel;
  * - "cancelled": a subscription that ends at the period's end;
  * - "renews": a subscription that renews;
+ * - "viewing": the owner's "View as": the plan is only a preview, so nothing is billed, changed or cancelled;
  * - "free": no paid plan. */
-export type PlanRun = "given" | "cancelled" | "renews" | "free";
+export type PlanRun = "given" | "cancelled" | "renews" | "viewing" | "free";
 
-export function planRun(me: Pick<Me, "plan" | "paid_plan" | "billing">): PlanRun {
+export function planRun(me: Pick<Me, "plan" | "paid_plan" | "billing" | "view_as">): PlanRun {
   const paid = me.paid_plan ?? me.plan;
   if (paid === "free") return "free";
+  if (me.view_as) return "viewing";
   if (me.billing.given_by_owner) return "given";
   return me.billing.cancel_at_period_end ? "cancelled" : "renews";
+}
+
+const PLAN_LABEL: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
+
+/** The plan they have (from `paid_plan`), not the launch offer's Pro that `plan` and `plan_info` show for everyone then. */
+export function planLabel(me: Pick<Me, "plan" | "paid_plan" | "plan_info">): string {
+  return PLAN_LABEL[me.paid_plan ?? me.plan] ?? me.plan_info.name;
 }
 
 /** The typed confirmation before data is deleted: the text matches, ignoring case and spaces around it. Never matches an
@@ -63,9 +72,9 @@ export function aiBuildsUse(used: number, limit: number | null | undefined, perD
 }
 
 /** The plan's row in "Plan and usage", or null for Free. */
-export function planRow(me: Pick<Me, "plan" | "paid_plan" | "billing">): [string, string] | null {
+export function planRow(me: Pick<Me, "plan" | "paid_plan" | "billing" | "view_as">): [string, string] | null {
   const run = planRun(me), end = me.billing.renews_or_ends;
-  if (run === "free") return null;
+  if (run === "free" || run === "viewing") return null;
   if (run === "given") return ["Given by the owner", end ? `Until ${dateOnly(end)}` : "No end date"];
   if (!end) return null;
   return [run === "cancelled" ? "Ends on" : "Renews on", dateOnly(end)];

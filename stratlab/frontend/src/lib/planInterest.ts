@@ -5,7 +5,9 @@ import { useEffect, useSyncExternalStore } from "react";
 import { api } from "./api";
 
 export type InterestSource = "lock" | "plans" | "limit" | "inline";
-export interface Interest { registered: boolean; at: string | null }
+/** `unread`: the read failed, so whether they're on the list isn't known; the button is offered anyway (joining again is harmless)
+ * and the next screen that asks reads it again. */
+export interface Interest { registered: boolean; at: string | null; unread?: boolean }
 
 let state: Interest | null = null;
 let loading: Promise<void> | null = null;
@@ -14,8 +16,8 @@ const set = (s: Interest | null) => { state = s; subs.forEach((f) => f()); };
 
 /** Read it once (a second call waits for the first). */
 export function loadInterest(): Promise<void> {
-  if (state) return Promise.resolve();
-  loading ??= api<Interest>("/me/plan-interest").then(set).catch(() => undefined).finally(() => { loading = null; });
+  if (state && !state.unread) return Promise.resolve();
+  loading ??= api<Interest>("/me/plan-interest").then(set).catch(() => { state ??= { registered: false, at: null, unread: true }; subs.forEach((f) => f()); }).finally(() => { loading = null; });
   return loading;
 }
 

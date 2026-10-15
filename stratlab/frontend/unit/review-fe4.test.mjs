@@ -151,11 +151,11 @@ test("the ITR year select stays enabled while a year loads; the old view is dimm
 
 test("Admin: users search drops a late answer; first-load failures offer Try again; prices take commas; invoices use money()", () => {
   const A = "src/pages/admin/";
-  assert.match(read(A + "UsersSection.tsx"), /if \(n === seq\.current\) setUsers\(r\)/);
+  assert.match(read(A + "UsersSection.tsx"), /if \(n === seq\.current\) \{ setUsers\(r\)/);
   assert.match(read(A + "RulesPanel.tsx"), /ErrorState title="The rates and rules couldn't be read" action=\{\{ label: "Try again"/);
   assert.match(read(A + "OverviewSection.tsx"), /ErrorState title="The server's status couldn't be read" action=\{\{ label: "Try again"/);
   assert.match(read(A + "PricesPanel.tsx"), /ErrorState title="The prices couldn't be read" action=\{\{ label: "Try again"/);
-  assert.match(read(A + "PricesPanel.tsx"), /Number\(v\.replace\(\/,\/g, ""\)\)/);
+  assert.match(read(A + "PricesPanel.tsx"), /parsePrice\(v\)/);   // commas are taken by parsePrice (review-5d)
   const inv = read(A + "InvoiceAdminPanel.tsx");
   assert.match(inv, /money\(r\.total, r\.currency, 2\)/);
   assert.match(inv, /money\(r\.tax, r\.currency, 2\)/);

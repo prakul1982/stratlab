@@ -274,6 +274,8 @@ def save_billing(uid: str, data: dict) -> dict:
     out = {k: str(data.get(k) or "").strip()[:300] for k in ("name", "address", "state", "gstin", "country")}
     out["country"] = (out["country"] or "IN").upper()[:2]
     out["gstin"] = out["gstin"].upper()
+    if out["country"] != "IN":
+        out["state"] = out["gstin"] = ""         # a state and a GSTIN are India's: none kept (or checked) for another country
     if out["gstin"] and not re.fullmatch(r"\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]", out["gstin"]):
         raise ValueError("That GSTIN doesn't look right: 15 characters, like 27ABCDE1234F1Z5.")
     if out["country"] == "IN" and out["state"] and out["state"] not in STATES:
@@ -283,8 +285,6 @@ def save_billing(uid: str, data: dict) -> dict:
             out["state"] = out["gstin"][:2]
         elif out["gstin"][:2] != out["state"]:
             raise ValueError(f"The GSTIN starts with {out['gstin'][:2]}, which is {STATES.get(out['gstin'][:2], 'another state')}, not the state chosen.")
-    if out["country"] != "IN":
-        out["state"] = ""
     db.set_setting(f"billing:{uid}", json.dumps(out))
     return out
 

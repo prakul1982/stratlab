@@ -219,3 +219,10 @@ def test_stats_count_research_ai_reads_apart_from_builds(monkeypatch):
     monkeypatch.setattr(db, "sb", lambda: FakeSB())
     st = admin.stats(main.month_start_iso())
     assert "ai_reads_month" in st and st["ai_month"] == 1
+
+
+def test_users_say_when_a_subscription_is_cancelled(client):
+    """The list carries cancel_at_period_end, so Admin words a cancelled subscription as ending, not renewing."""
+    c, _ = client
+    users = c.get("/admin/users").json()
+    assert all(isinstance(u["cancel_at_period_end"], bool) for u in users)

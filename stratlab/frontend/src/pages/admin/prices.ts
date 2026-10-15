@@ -28,3 +28,11 @@ export function ratesRead(readAt: Record<string, string> | null | undefined, ago
   for (const [c, t] of older) byTime.set(t, [...(byTime.get(t) ?? []), c]);
   return `Exchange rates read ${ago(newest)}; ${[...byTime].map(([t, cs]) => `${cs.join(", ")} ${ago(t)}`).join("; ")}.`;
 }
+
+/** A typed price: a number (commas allowed) or null for an empty box (Automatic); undefined when it isn't a positive number. */
+export function parsePrice(v: string | undefined): number | null | undefined {
+  const t = (v ?? "").trim();
+  if (!t) return null;
+  const n = /^\d[\d,]*(\.\d+)?$/.test(t) ? Number(t.replace(/,/g, "")) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}

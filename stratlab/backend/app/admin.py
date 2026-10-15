@@ -177,7 +177,7 @@ def _at(s) -> datetime | None:
 def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -> list[dict]:
     """The newest `limit` users: those whose email contains `q`, and on `plan` when given (the plan they have now, so
     a paid plan that ended counts as Free)."""
-    cols = "id,email,plan,plan_status,current_period_end,razorpay_subscription_id,created_at"
+    cols = "id,email,plan,plan_status,current_period_end,cancel_at_period_end,razorpay_subscription_id,created_at"
     if plan in PLANS:
         rows = sorted(_profiles(cols, plan, q), key=lambda r: r.get("created_at") or "", reverse=True)
         rows = [r for r in rows if effective_plan(r) == plan][:limit]
@@ -202,7 +202,8 @@ def users(q: str, month_start: str, limit: int = 200, plan: str | None = None) -
     return [{
         "id": r["id"], "email": r.get("email"), "created_at": r.get("created_at"),
         "plan": effective_plan(r), "plan_set": r.get("plan"), "plan_status": r.get("plan_status"),
-        "plan_until": r.get("current_period_end"), "paying": _paying(r, given),
+        "plan_until": r.get("current_period_end"), "cancel_at_period_end": bool(r.get("cancel_at_period_end")),
+        "paying": _paying(r, given),
         "experiments": usage[r["id"]]["backtest"], "ai_builds": usage[r["id"]]["ai"], "referrals": invited.get(r["id"], 0),
         "free_months": months.get(r["id"], 0),
     } for r in rows]

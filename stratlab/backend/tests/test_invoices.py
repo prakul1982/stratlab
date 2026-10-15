@@ -462,3 +462,12 @@ def test_a_transient_invoice_error_is_raised_five_times_then_given_up_and_alerte
     billing.handle_webhook(body, "sig", "evt_6")                       # the 6th try: no longer raised
     assert real("rzp-event:evt_6") and len(told) == 1 and "failed 6 times" in told[0][1]
     assert seen["paid"] == ["pay_9"]
+
+
+def test_billing_details_outside_india_keep_no_state_or_gstin(store):
+    """Changing the country away from India drops the state and the GSTIN that the form no longer shows."""
+    invoices.save_billing("uc", {"name": "Acme", "state": "27", "gstin": "27ABCDE1234F1Z5", "country": "IN"})
+    out = invoices.save_billing("uc", {"name": "Acme", "state": "27", "gstin": "27ABCDE1234F1Z5", "country": "US"})
+    assert out["state"] == "" and out["gstin"] == "" and out["country"] == "US"
+    assert invoices.billing_of("uc")["gstin"] == ""
+    assert invoices.save_billing("uc", {"country": "SG", "gstin": "garbage"})["gstin"] == ""     # nothing to check for another country

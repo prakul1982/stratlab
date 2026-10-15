@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
+import { fmtDateTime } from "../../lib/format";
 import { Card, CardHead, DataTable, EmptyState, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type ServerError } from "./AdminContext";
 import { AIPanel } from "./AIPanel";
@@ -14,7 +15,7 @@ type FilingCheck = { ok: boolean; symbol: string; count?: number; error?: string
 
 const ERRORS: Column<ServerError>[] = [
   { key: "ref", header: "Ref", rowHeader: true, cell: (x) => <span className="adm-mono">{x.ref}</span> },
-  { key: "at", header: "When", cell: (x) => new Date(x.at).toLocaleString("en-GB") },
+  { key: "at", header: "When", cell: (x) => fmtDateTime(x.at, { seconds: true, zone: true }) },
   { key: "req", header: "Request", wrap: true, cell: (x) => <span className="adm-mono">{x.method} {x.path}</span> },
   { key: "err", header: "Error", wrap: true, cell: (x) => <span className="adm-cell">{x.error}</span> },
   { key: "where", header: "Where", wrap: true, cell: (x) => <span className="adm-mono">{x.where}</span> },

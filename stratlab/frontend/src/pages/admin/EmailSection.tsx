@@ -108,8 +108,11 @@ export function EmailSection() {
   const { fail } = useApp();
   const { kind } = useParams();
   const [items, setItems] = useState<Item[] | null>(null);
-  useEffect(() => { api<{ previews: Item[] }>("/admin/email-previews").then((x) => setItems(x.previews)).catch(fail); }, [fail]);
+  const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => { setFailed(false); api<{ previews: Item[] }>("/admin/email-previews").then((x) => setItems(x.previews)).catch((e) => { setFailed(true); fail(e); }); }, [fail, tries]);
   if (kind) return <One kind={kind} />;
+  if (!items && failed) return <ErrorState title="The emails couldn't be listed" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} />;
   if (!items) return <Card label="Emails"><Skeleton label="Building the sample emails" lines={6} /></Card>;
   if (!items.length) return <EmptyState title="No emails">There are no email types to show.</EmptyState>;
   return <List items={items} />;

@@ -4,7 +4,7 @@ import { useApp } from "../../lib/app";
 import { ago, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
-import { rateNote, ratesRead } from "./prices";
+import { parsePrice, rateNote, ratesRead } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
   auto: boolean; rate: number | null; no_rate?: boolean;
@@ -21,6 +21,7 @@ export function PricesPanel() {
   const [fx, setFx] = useState<{ readAt: Record<string, string>; errors: string[] }>({ readAt: {}, errors: [] });
   const show = (x: View) => { setRows(x.currencies); setFx({ readAt: x.rates_read_at ?? (x.rates_at ? { all: x.rates_at } : {}), errors: x.rate_errors }); };
   const [edit, setEdit] = useState<Record<string, Partial<Record<string, string>>>>({});
+  const [errs, setErrs] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const more = useMoreColumns("admin-prices", 2);     // the yearly prices: one click away, so the table fits a laptop
@@ -40,13 +41,21 @@ export function PricesPanel() {
     } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const val = (c: string, f: string) => edit[c]?.[f] ?? String((rows?.[c] as unknown as Record<string, unknown>)?.[f] ?? "");
-  const set = (c: string, f: string, v: string) => setEdit((e) => ({ ...e, [c]: { ...e[c], [f]: v } }));
+  const set = (c: string, f: string, v: string) => { setErrs((x) => { const n = { ...x }; delete n[`${c}.${f}`]; return n; }); setEdit((e) => ({ ...e, [c]: { ...e[c], [f]: v } })); };
   const save = async () => {
     const body: Record<string, Record<string, number | string | null>> = {};
+    const bad: Record<string, string> = {};
     for (const [c, ch] of Object.entries(edit)) {
       body[c] = {};
-      for (const [f, v] of Object.entries(ch)) body[c][f] = (PRICE as readonly string[]).includes(f) ? (v?.trim() ? Number(v.replace(/,/g, "")) : null) : (v ?? "").trim();
+      for (const [f, v] of Object.entries(ch)) {
+        if (!(PRICE as readonly string[]).includes(f)) { body[c][f] = (v ?? "").trim(); continue; }
+        const n = parsePrice(v);
+        if (n === undefined) bad[`${c}.${f}`] = "Type a number, like 8 or 1,999.50. Leave it empty for Automatic.";
+        else body[c][f] = n;
+      }
     }
+    setErrs(bad);
+    if (Object.keys(bad).length) return;
     setBusy(true);
     try { show(await api<View>("/admin/prices", { method: "PUT", body: { currencies: body } })); setEdit({}); notify("Prices saved."); } catch (e) { fail(e); } finally { setBusy(false); }
   };
@@ -56,7 +65,9 @@ export function PricesPanel() {
     { key: "cur", header: "Currency", rowHeader: true, wrap: true, cell: ({ c, r }) => (
       <span><b>{c}</b> <span className="k-small k-muted">{r.name}{r.rate ? ` · ${money(r.rate, "INR", r.rate < 1 ? 4 : 2)}` : ""}</span></span>) },
     ...shown.map((f): Column<{ c: string; r: Row }> => ({ key: f, header: LABEL[f], numeric: true, cell: ({ c }) => (
-      <input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`} />) })),
+      <span><input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`}
+        aria-invalid={errs[`${c}.${f}`] ? true : undefined} aria-describedby={errs[`${c}.${f}`] ? `price-err-${c}-${f}` : undefined} />
+        {errs[`${c}.${f}`] && <span id={`price-err-${c}-${f}`} className="k-note" role="alert">{errs[`${c}.${f}`]}</span>}</span>) })),
     { key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
       : r.auto ? <Badge tone="ok" dot={false}>Automatic</Badge>
       : <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)} title="Follow the rupee price again">Fixed · make automatic</button> },

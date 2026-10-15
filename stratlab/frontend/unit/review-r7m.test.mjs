@@ -51,7 +51,7 @@ test("Plans and the confirm step say nothing of GST while the invoice carries no
   assert.match(paymentWindowLine("Pro", "year"), /StratLab · Pro, yearly/);
   const plans = read("src/pages/PlansPage.tsx");
   assert.doesNotMatch(plans, /shows the amount only/);
-  assert.match(plans, /paymentWindowLine\(planName\(switching\), period\)/);
+  assert.match(plans, /paymentWindowLine\(planName\(switching\), period, ownCurrency\)/);
   assert.match(plans, /const gst = pricing\?\.invoice\?\.gst === true/);
   assert.match(plans, /\{price\.inr && gst && <span className="k-note">incl\. GST<\/span>\}/);
   assert.doesNotMatch(read("src/content/seo.ts"), /include 18% GST/);
