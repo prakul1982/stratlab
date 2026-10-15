@@ -434,7 +434,7 @@ function NotebookView() {
             </FormActions>
           </FormGrid>
           <p className="k-note">
-            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month${outOfRuns ? ", limit reached" : ""}. ` : ""}
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}
             {runCopy(group?.members.length ?? 0, running, elapsed)}
             {outOfRuns && <> <Link className="link" to="/plans">Plans</Link></>}
           </p>

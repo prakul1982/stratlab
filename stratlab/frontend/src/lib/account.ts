@@ -38,15 +38,21 @@ export function confirmMatches(typed: string, word: string): boolean {
  * the launch offer lifts for now, "0 (unlimited during early access; Free has 2 a month)", so Account and the Plans
  * page never disagree. */
 export function monthlyUse(used: number, limit: number | null | undefined, planLimit?: number | null, lifted?: string | null, plan?: string): string {
-  if (limit != null) return `${used} of ${limit}`;
+  if (limit != null) return countOf(used, limit);
   if (planLimit != null && lifted) return `${used} (unlimited during ${lifted}; ${plan ?? "your plan"} has ${planLimit} a month)`;
   return `${used} (unlimited)`;
 }
 
-/** "2 of 2" with "limit reached" after it once the count is at the limit: a count past it (the owner's own use, viewed as a
- * smaller plan) reads as the limit, never "8 of 2" (R17-004). */
+/** "2 of 2 (limit reached)" once the count is at the limit: a count past it (the owner's own use, viewed as a smaller plan)
+ * reads as the limit, never "8 of 2" (R17-004, R22-001). The one form Account and the deep dive both use. */
 export function countOf(used: number, limit: number): string {
-  return used >= limit ? `${limit} of ${limit}, limit reached` : `${used} of ${limit}`;
+  return used >= limit ? `${limit} of ${limit} (limit reached)` : `${used} of ${limit}`;
+}
+
+/** The deep dive's line under its buttons: "Companies opened this month: 2 of 2 (limit reached). Decks: 1 of 1 (limit
+ * reached). Opening a company again this month doesn't count." (R22-002) */
+export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, deckUsed: number, deckLimit: number | null | undefined): string {
+  return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}.` : ""} Opening a company again this month doesn't count.`;
 }
 
 /** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap

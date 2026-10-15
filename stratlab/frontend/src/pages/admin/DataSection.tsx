@@ -5,7 +5,7 @@ import { useApp } from "../../lib/app";
 import { ago, dateOnly, plainDates } from "../../lib/format";
 import { Card, CardHead, DataTable, Light, Skeleton, StatusList, StatusRow, type Column } from "../../components/kit";
 import { useAdmin, type JobRow } from "./AdminContext";
-import { services } from "./attention";
+import { plainError, services } from "./attention";
 import { HolidaysPanel } from "./HolidaysPanel";
 import { StoragePanel } from "./StoragePanel";
 
@@ -30,7 +30,7 @@ function JobLog({ job, mine, onClose }: { job: JobRow; mine: Outcome[]; onClose:
           <div><span>Next run</span><b>{job.schedule || "–"}</b></div>
           <div><span>Status</span><b><Light state={job.state} /></b></div>
         </div>
-        {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert">Last problem: {job.error}</p>}
+        {job.error && <p className={`k-small ${job.state === "bad" ? "k-down" : ""}`} role="alert" title={plainError(job.error).full}>Last problem: {plainError(job.error).text}</p>}
         {job.note && <p className="k-small k-muted">{job.note}</p>}
         <h3 className="adm-sub">What it reported</h3>
         {job.log.length ? <ul className="adm-log">{job.log.map((l, i) => <li key={i}>{plainDates(l)}</li>)}</ul> : <p className="k-small k-muted">Nothing besides the times above.</p>}
@@ -83,7 +83,7 @@ export function DataSection() {
   });
 
   const cols: Column<JobRow>[] = [
-    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => <span className="k-stack"><b>{j.name}</b><span className="k-note k-muted">Next run: {j.schedule || "–"}</span>{j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`}>{j.error}</span>}</span> },
+    { key: "job", header: "Job", rowHeader: true, wrap: true, cell: (j) => <span className="k-stack"><b>{j.name}</b><span className="k-note k-muted">Next run: {j.schedule || "–"}</span>{j.error && <span className={`k-note ${j.state === "bad" ? "k-down" : "k-muted"}`} title={plainError(j.error).full}>{plainError(j.error).text}</span>}</span> },
     { key: "state", header: "Status", cell: (j) => <Light state={j.state} word={j.running ? "Running" : undefined} /> },
     { key: "last", header: "Last run", cell: (j) => (j.last_run ? ago(j.last_run) : <span className="k-muted">Not yet</span>) },
     { key: "do", header: <span className="sr-only">Run now and log</span>, action: true, cell: (j) => (

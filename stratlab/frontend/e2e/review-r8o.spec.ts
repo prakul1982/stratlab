@@ -127,7 +127,7 @@ test("R8O-006: a euro price charged in rupees says that charge in euros, and the
       converted: false, charge_about: { basic: 6.44, pro: 18.43, basic_year: 64.53, pro_year: 184.39 } } },
     countries: { ...j.countries, DE: "EUR" } })));
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "EUR" });
-  await expect(page.getByTestId("charged-basic")).toContainText("Charged as ₹699 incl. GST (about €6.44 today) / month", { timeout: 30_000 });
+  await expect(page.getByTestId("charged-basic")).toContainText("Charged as ₹699 / month incl. GST (about €6.44 today)", { timeout: 30_000 });
   await expect(page.getByTestId("charged-pro")).toContainText("(about €18.43 today)");
   const main = page.locator("main");
   await expect(main).toContainText("about €6.44 for Basic and €18.43 for Pro at today's rate, not the EUR prices shown");

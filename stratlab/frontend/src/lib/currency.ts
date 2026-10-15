@@ -53,9 +53,9 @@ export function aboutMoney(row: CurrencyRow, v: number, code: string): string {
   return `${row.symbol}${code === "JPY" ? Math.round(v).toLocaleString("en-US") : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** The note under a plan's price when the card is charged in rupees: "Charged as ₹699 incl. GST (about €6.40 today) / month". */
+/** The note under a plan's price when the card is charged in rupees: "Charged as ₹699 / month incl. GST (about €6.40 today)", the visitor's Plans wording and order (R22-004). */
 export function chargedLine(charged: string, gst: boolean, period: string, about: string | null): string {
-  return `Charged as ${charged}${gst ? " incl. GST" : ""}${about ? ` (about ${about} today)` : ""} / ${period}`;
+  return `Charged as ${charged} / ${period}${gst ? " incl. GST" : ""}${about ? ` (about ${about} today)` : ""}`;
 }
 
 /** The page's note while a currency is charged in rupees, with the actual amounts when its price is a fixed one
