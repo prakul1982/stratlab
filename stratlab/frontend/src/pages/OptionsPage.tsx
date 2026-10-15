@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
 import { chainStamp } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, convertOptLimit, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES } from "../lib/options";
+import { blankOptions, convertOptLimit, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -35,7 +35,7 @@ const DRAFT = "stratlab.options.draft.v1";
 const loadDraft = (): OptionStrategy => {
   try {
     const raw = localStorage.getItem(DRAFT);
-    if (raw) return { ...blankOptions(), ...JSON.parse(raw) };
+    if (raw) return mergeDraft(blankOptions(), JSON.parse(raw));
   } catch { /* storage off */ }
   return blankOptions();
 };
@@ -165,7 +165,7 @@ function Charges({ c }: { c: OptCharges }) {
         <DataTable label="Charges line by line" columns={cols} rows={c.items} rowKey={(r) => r.key} foot={{ label: "Total", amount: inr(c.total, 2) }} />
         <p className="k-note">
           {c.orders} orders at {inr(c.brokerage_per_order)} brokerage each{c.freeze ? `; orders above ${c.freeze.toLocaleString("en-IN")} units go in slices, each one an order` : ""}.
-          Every leg opened and closed once at the fill shown. Rates as of {asOf(c.rates_as_of)}.
+          Every leg opened and closed once at the fill shown. Rates as of {asOf(c.rates_as_of)}. {STT_NOTE}
         </p>
       </Disclosure>
     </div>
@@ -348,7 +348,7 @@ export function OptionsPage() {
       if (imp) {
         sessionStorage.removeItem(IMPORTED);
         const d = JSON.parse(imp) as { strategy: OptionStrategy; notes: string[] };
-        setS({ ...blankOptions(), ...d.strategy }); setNotes(d.notes || []);
+        setS(mergeDraft(blankOptions(), d.strategy)); setNotes(d.notes || []);
       }
     } catch { /* nothing imported */ }
   }, []);
@@ -651,6 +651,7 @@ export function OptionsPage() {
         {preview && (
           <p className="k-note" data-testid="opt-spot-line">{spotText(s.underlying, preview.spot, preview.tick, preview.spot_from)} · ATM {preview.atm} · expiry {expiryName(preview.expiry)} · lot {preview.lot} · {preview.units} unit{preview.units === 1 ? "" : "s"}{s.sizing.mode === "margin" && preview.margin_one ? ` (${inr(preview.margin_one)} margin each)` : ""}</p>
         )}
+        {preview?.sizing_note && preview.units !== 0 && <Notice>{preview.sizing_note}</Notice>}
         {preview && preview.units === 0 && <Notice tone="warn">Not enough capital for one unit at today's margin.</Notice>}
       </Card>
       {/* no live quote at all (no bid, no ask, nothing traded): said, and nothing priced from a last trade weeks old (R13-002) */}

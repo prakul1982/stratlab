@@ -163,3 +163,64 @@ def test_usdinr_options_trade_in_lots_of_a_thousand_dollars(monkeypatch):
     finally:
         main.manager.sessions.clear()
         app.dependency_overrides.clear()
+
+
+def test_margin_preview_sizes_as_the_session_does(monkeypatch):
+    from app.models import OptionStrategy
+    from app.options.engine import OptionsEngine
+    data, rows = setup(monkeypatch)
+
+    def marg(legs):                                  # dearer per unit as size grows, as a SPAN margin is
+        q = sum(l["qty"] for l in legs)
+        return q * 150 * (1 + q / 40000)
+    try:
+        c = TestClient(app)
+        strat = {**STRAT, "sizing": {"mode": "margin", "capital": 5000000}}
+        data.margin = marg
+        pv = c.post("/options/preview", json={"strategy": strat}).json()
+        s = OptionStrategy(**strat)
+        cs = data.contracts("NFO", "NIFTY", "current")
+        e = OptionsEngine(s, margin_fn=marg)
+        assert pv["units"] == e._units(cs, [(lg.opt, lg.side, cs.atm(25000), lg.lots, None) for lg in s.legs]) == 120
+        assert pv["margin"] <= 5000000 * 0.98 and not pv["sizing_note"]
+        # no margin figure: 1 unit, as the session trades, with the session's note
+        data.margin = lambda legs: None
+        pv = c.post("/options/preview", json={"strategy": {**strat, "sizing": {"mode": "margin", "capital": 5000000, "lots": 3}}}).json()
+        assert pv["units"] == 1 and pv["sizing_note"] == "Couldn't get the margin for this structure; used 1 unit."
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_restart_with_a_position_open_keeps_the_positions_series(monkeypatch):
+    data, rows = setup(monkeypatch)
+    try:
+        c = TestClient(app)
+        snap = c.post("/options/sessions", json={"strategy": {**STRAT, "expiry": "next"}}).json()
+        sid = snap["id"]
+        main.manager.sessions[sid].on_timer(midday())
+        held = main.manager.sessions[sid].engine.pos["expiry"]
+        assert held == data.pick_expiry("NFO", "NIFTY", "next") != data.pick_expiry("NFO", "NIFTY", "current")
+        main.manager.persist(only_dirty=False)
+        main.manager.sessions.pop(sid)
+        rows[sid]["strategy"] = {**rows[sid]["strategy"], "expiry": "current"}   # "next" has moved on since entry
+        s = main.manager._attach(rows[sid])
+        s.on_timer(midday())
+        snap = c.get(f"/live/sessions/{sid}").json()
+        assert snap["expiry"] == held and s.contracts.expiry == held
+    finally:
+        main.manager.sessions.clear()
+        app.dependency_overrides.clear()
+
+
+def test_preview_fills_on_the_instrument_lists_tick(monkeypatch):
+    data, rows = setup(monkeypatch)
+    inner = data.kite.kite
+    plain = inner.instruments
+    monkeypatch.setattr(inner, "instruments", lambda exch: [{**r, "tick_size": 0.5} for r in plain(exch)])
+    try:
+        c = TestClient(app)
+        pv = c.post("/options/preview", json={"strategy": {**STRAT, "costs": {"slippageTicks": 2}}}).json()
+        assert pv["tick"] == 0.5
+        assert all(l["fill"] == round(l["quote"]["bid"] - 2 * 0.5, 2) for l in pv["legs"])
+    finally:
+        app.dependency_overrides.clear()

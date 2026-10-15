@@ -6,7 +6,7 @@ import { fmtDate, money, price, tzLabel, when } from "../lib/format";
 import { dayStat, upDown } from "../lib/tradeUi";
 import { HELP } from "../lib/help";
 import type { HeldGreeks, OptionSnapshot } from "../lib/types";
-import { atExpiry, gapLine, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
+import { atExpiry, flatLine, STT_NOTE, legName, legRule, levelText, priceGrid, type HeldLeg } from "../lib/options";
 import { ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
 import { ChartEmpty, LineChart } from "../components/Charts";
 import { Info } from "../components/ui";
@@ -153,11 +153,11 @@ export function OptionsSession() {
 
       <Card label="Today">
         <CardHead level={3} title="Today" actions={snap.spot != null ? <span className="k-small">{snap.instrument.underlying} {price(snap.spot, "INR")}</span> : undefined} />
-        {!p ? <p className="k-small k-muted">{flatLine(snap, today.length)}</p> : (
+        {!p ? <p className="k-small k-muted">{flatLine(snap, today.length, optionsMarket(markets, s.exchange))}</p> : (
           <>
-            <p className="k-small k-muted">Open since {when(p.opened, TZ, true, true)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"} {inr(Math.abs(p.credit))}.
+            <p className="k-small k-muted">Open since {when(p.opened, TZ, true, true)} with {snap.instrument.underlying} at {p.spot_in.toLocaleString("en-IN")} (centre {p.center}). {p.credit >= 0 ? "Premium collected" : "Premium paid"}{p.rolls ? " over every leg opened, re-centred ones included," : ""} {inr(Math.abs(p.credit))}.
               {" "}Best {inr(p.best)}, worst {inr(p.worst)} so far.{p.rolls ? ` Re-centred ${p.rolls} time${p.rolls === 1 ? "" : "s"}.` : ""} Costs so far {inr(p.costs)} over {p.orders} orders.</p>
-            <DataTable label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l) => l.sym + l.side + l.entry} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
+            <DataTable label="Open legs" columns={legCols} rows={snap.legs} rowKey={(l, i) => `${i}:${l.sym}:${l.side}`} rowAttrs={(l): Record<string, string> => (l.open ? {} : { "data-closed": "1" })} />
             <Earlier label="Orders in this trade" count={openOrders.length} className="in-card">
               <OrderList events={openOrders} cur="INR" tz={TZ} />
             </Earlier>
@@ -176,6 +176,7 @@ export function OptionsSession() {
             </ul>
           </Earlier>
         )}
+        <p className="k-note" data-testid="opt-stt-note">{STT_NOTE}</p>
       </Card>
 
       {running && p && snap.legs.some((l) => l.open) && <SessionModel snap={snap} />}
@@ -298,21 +299,4 @@ function TradeList({ rows, events, shown, toggle }: { rows: Trade[]; events: Ord
 function Totals({ rows }: { rows: Trade[] }) {
   const pnl = rows.reduce((n, x) => n + x.pnl, 0), won = rows.filter((x) => x.pnl > 0).length;
   return <><span className={upDown(pnl)}>{inr(pnl)}</span> after costs · {won} won</>;
-}
-
-/** What a flat session is waiting for, in one line: "No trades today. Next entry 09:30." */
-function flatLine(snap: OptionSnapshot, closedToday: number): string {
-  const s = snap.strategy, a = snap.account;
-  const none = closedToday ? "Nothing open." : "No trades today.";
-  if (snap.status !== "running") return none;
-  if (a.halted || a.entries_today >= s.timing.maxEntries) return `${none} Done for today; next entry ${s.timing.entry} on the next market day.`;
-  if (s.signal) return `${none} Enters when ${s.signal.name} signals, from ${s.timing.entry}.`;
-  const now = new Date();
-  const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ });
-  const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: TZ });
-  if (wd === "Sat" || wd === "Sun" || hm > s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
-  // the gap the rules keep between trades, still running after a trade closed (R7T-013)
-  const gap = gapLine(a, s.timing.cooldown, s.timing.lastEntry, s.timing.entry, now);
-  if (gap) return `${none} ${gap}`;
-  return hm < s.timing.entry ? `${none} Next entry ${s.timing.entry}.` : `${none} Entries open until ${s.timing.lastEntry}.`;
 }

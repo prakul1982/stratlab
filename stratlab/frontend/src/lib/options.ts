@@ -1,5 +1,9 @@
 import { fmtDateTime, inr, IST } from "./format";
-import type { OptLeg, OptionStrategy, OptPreview, StrikePick } from "./types";
+import { marketState } from "./marketHours";
+import type { Market, OptLeg, OptionSnapshot, OptionStrategy, OptPreview, StrikePick } from "./types";
+
+/** What the costs leave out, said on the builder and the session page. */
+export const STT_NOTE = "STT on options exercised at expiry is not included.";
 
 /** A premium, a profit or a loss in the options builder: whole rupees, the same everywhere (the premium collected, the
  * most it can make, and what is left after charges); paise only for a figure under ₹100, where they are the answer
@@ -120,6 +124,35 @@ export function blankOptions(): OptionStrategy {
     costs: { brokerage: 20, slippageTicks: 0, freeze: 0 },
     notes: "",
   };
+}
+
+/** A saved draft over today's defaults, nested settings (risk, sizing, re-centring, timing, costs) field by field: a draft
+ * saved before a field existed keeps the default for it rather than showing "undefined". Arrays (the legs) are taken
+ * whole. */
+export function mergeDraft<T>(base: T, saved: unknown): T {
+  const plain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+  if (!plain(base) || !plain(saved)) return (saved === undefined || saved === null ? base : saved) as T;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(saved)) out[k] = plain(out[k]) ? mergeDraft(out[k], v) : v === undefined ? out[k] : v;
+  return out as T;
+}
+
+/** What a flat session is waiting for, in one line: "No trades today. Next entry 09:30." `market` is the session's
+ * exchange's market (its holidays): on an exchange holiday it says the market is closed for it. */
+export function flatLine(snap: OptionSnapshot, closedToday: number, market: Market | null | undefined, now = new Date()): string {
+  const s = snap.strategy, a = snap.account;
+  const none = closedToday ? "Nothing open." : "No trades today.";
+  if (snap.status !== "running") return none;
+  if (a.halted || a.entries_today >= s.timing.maxEntries) return `${none} Done for today; next entry ${s.timing.entry} on the next market day.`;
+  if (market && marketState(market, now).closedFor === "holiday") return `${none} The market is closed today for a holiday; next entry ${s.timing.entry} on the next market day.`;
+  if (s.signal) return `${none} Enters when ${s.signal.name} signals, from ${s.timing.entry}.`;
+  const hm = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST });
+  const wd = now.toLocaleDateString("en-GB", { weekday: "short", timeZone: IST });
+  if (wd === "Sat" || wd === "Sun" || hm > s.timing.lastEntry) return `${none} Next entry ${s.timing.entry} on the next market day.`;
+  // the gap the rules keep between trades, still running after a trade closed (R7T-013)
+  const gap = gapLine(a, s.timing.cooldown, s.timing.lastEntry, s.timing.entry, now);
+  if (gap) return `${none} ${gap}`;
+  return hm < s.timing.entry ? `${none} Next entry ${s.timing.entry}.` : `${none} Entries open until ${s.timing.lastEntry}.`;
 }
 
 /** MCX trades into the evening and currency options until 17:00; everything else follows equity hours. */

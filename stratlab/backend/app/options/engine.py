@@ -30,6 +30,12 @@ class Contracts:
         self.expiry, self.lot, self.exchange = expiry, int(lot), exchange
         self.by = {(r["opt"], float(r["strike"])): r for r in rows}
         self.strikes = sorted({float(r["strike"]) for r in rows})
+        # each contract's price step from the instrument list, where it gives one
+        self.ticks = {f"{exchange}:{r['symbol']}": float(r["tick"]) for r in rows if r.get("tick") and float(r["tick"]) > 0}
+
+    def tick(self, key: str | None) -> float:
+        """A contract's price step: the instrument list's, else the exchange's usual one."""
+        return self.ticks.get(key or "") or tick_for(self.exchange)
 
     def key(self, opt: str, strike: float) -> str | None:
         r = self.by.get((opt, float(strike)))
@@ -88,6 +94,31 @@ def fill_price(q: dict | None, side: str, slip_ticks: int, tick: float = TICK) -
     return max(round(px, 4 if tick < 0.01 else 2), tick)
 
 
+def margin_units(margin_fn, legs: list[dict], cap: float) -> tuple[int, float | None, float | None, str]:
+    """How many units of a structure fit in `cap` of margin, as (units, margin of one unit, margin of that many units,
+    note). Margin isn't linear in size, so the full size is checked and shrunk until it fits. The session and the
+    builder's preview both size this way, so the preview shows the size the session trades. Without a margin figure
+    it is 1 unit and the note says why."""
+    if not margin_fn:
+        return 1, None, None, "Margin sizing needs the broker's margin service, which isn't available; used 1 unit."
+    one = margin_fn(legs)
+    if not one or one <= 0:
+        return 1, None, None, "Couldn't get the margin for this structure; used 1 unit."
+    units, need = max(0, int(cap // one)), None
+    for _ in range(12):
+        if units <= 0:
+            need = None
+            break
+        need = margin_fn([{**l, "qty": l["qty"] * units} for l in legs])
+        if need is None or need <= cap:
+            break
+        units = min(units - 1, int(units * cap / need))
+    else:
+        units, need = 0, None      # never settled under the cap: no size shown that the margin can't hold
+    note = "" if units > 0 else f"Not enough capital for even one unit (needs about {one:,.0f} of margin)."
+    return units, one, need, note
+
+
 def from_last(q: dict | None, side: str) -> bool:
     """Whether a fill comes from the last traded price because the side it fills on (the bid to sell, the ask to buy) has
     no quote: a price that may be hours old (R11C-007)."""
@@ -109,6 +140,12 @@ class OptionsEngine:
         self.cash = st.get("cash", s.sizing.capital)
         self.pos = st.get("pos")
         self.trades = st.get("trades", [])
+        # running totals over every closed trade: the saved list keeps only the last 500. A state saved before these
+        # totals were kept falls back to what its list holds
+        tot = st.get("totals") or {}
+        self.realised_total = tot.get("realised", sum(t.get("pnl") or 0 for t in self.trades))
+        self.trade_count = tot.get("count", len(self.trades))
+        self.win_count = tot.get("wins", sum(1 for t in self.trades if (t.get("pnl") or 0) > 0))
         self.events = st.get("events", [])
         self.day = st.get("day")
         self.entries_today = st.get("entries_today", 0)
@@ -123,7 +160,8 @@ class OptionsEngine:
         return {"cash": self.cash, "pos": self.pos, "trades": self.trades[-500:], "events": self.events[-400:],
                 "day": self.day, "entries_today": self.entries_today, "day_realised": self.day_realised,
                 "halted": self.halted, "cool_until": self.cool_until, "note": self.note, "used_signal": self.used_signal,
-                "vix_skip": self.vix_skip}
+                "vix_skip": self.vix_skip,
+                "totals": {"realised": self.realised_total, "count": self.trade_count, "wins": self.win_count}}
 
     def legs_for(self, direction: str | None):
         """The structure for a signal's direction: the legs as set for long, calls and puts swapped for short."""
@@ -134,10 +172,13 @@ class OptionsEngine:
     # ---------- marks ----------
     def _mark(self, leg: dict, quotes: dict) -> float:
         """What closing a leg gets now; remembers the last good mark when a quote is missing."""
-        px = fill_price(quotes.get(leg["key"]), "buy" if leg["side"] == "sell" else "sell", 0, tick_for(self.s.exchange))
+        px = fill_price(quotes.get(leg["key"]), "buy" if leg["side"] == "sell" else "sell", 0, self._tick(leg))
         if px is not None:
             leg["mark"] = px
         return leg.get("mark", leg["entry"])
+
+    def _tick(self, leg: dict) -> float:
+        return leg.get("tick") or tick_for(self.s.exchange)
 
     def _stop_price(self, leg: dict, quotes: dict) -> float:
         """What a leg stop judges: the bid-ask middle (the last price without a two-sided quote), not the ask a sold
@@ -178,25 +219,30 @@ class OptionsEngine:
         self.events.append(ev)
         return ev
 
-    def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out, picked: str | None = None) -> bool:
+    def _open_leg(self, now, contracts: Contracts, quotes, opt, side, strike, qty, why, out, picked: str | None = None,
+                  idx: int | None = None) -> bool:
         key = contracts.key(opt, strike)
         if key and self.s.exchange == "CDS":
             from .data import no_live_quote
             if no_live_quote(quotes.get(key)):     # no bid, no ask, nothing traded: no live price to enter at (R13-002)
                 return False
-        px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks, tick_for(self.s.exchange)) if key else None
+        tick = contracts.tick(key)
+        px = fill_price(quotes.get(key), side, self.s.costs.slippageTicks, tick) if key else None
         if px is None:
             return False
         sym = key.split(":", 1)[1]
         leg = {"key": key, "sym": sym, "opt": opt, "side": side, "strike": strike, "qty": qty, "entry": px,
-               "mark": px, "open": True, "entry_mid": G.mid(quotes.get(key)) or px}   # the leg stop's base
+               "mark": px, "open": True, "entry_mid": G.mid(quotes.get(key)) or px,   # the leg stop's base
+               "tick": tick, "idx": idx}      # idx: which of the strategy's legs this is, so a stopped one stays out
         self.pos["legs"].append(leg)
+        # the premium taken in over every leg opened, re-centred and closed ones included: the % stop and target's basis
+        self.pos["credit"] = self.pos.get("credit", 0.0) + (px if side == "sell" else -px) * qty
         out.append(self._order(now, leg, side, px, why, picked=picked))
         return True
 
     def _close_leg(self, now, leg, quotes, why, out):
         side = "buy" if leg["side"] == "sell" else "sell"
-        px = fill_price(quotes.get(leg["key"]), side, self.s.costs.slippageTicks, tick_for(self.s.exchange)) or leg.get("mark", leg["entry"])
+        px = fill_price(quotes.get(leg["key"]), side, self.s.costs.slippageTicks, self._tick(leg)) or leg.get("mark", leg["entry"])
         pnl = self._leg_pnl(leg, px)
         leg.update(open=False, exit=px, mark=px)
         self.pos["closed_pnl"] += pnl
@@ -258,25 +304,10 @@ class OptionsEngine:
         z = self.s.sizing
         if z.mode == "lots":
             return z.lots
-        if not self.margin_fn:
-            self.note = "Margin sizing needs the broker's margin service, which isn't available; used 1 unit."
-            return 1
         legs = [{"key": contracts.key(o, k), "side": sd, "qty": n * contracts.lot} for o, sd, k, n, _ in plan]
-        one = self.margin_fn(legs)
-        if not one or one <= 0:
-            self.note = "Couldn't get the margin for this structure; used 1 unit."
-            return 1
-        cap = min(z.capital, self.cash) * z.safety
-        units = max(0, int(cap // one))
-        for _ in range(5):   # margin isn't linear in size, so confirm the full size fits and shrink if not
-            if units <= 0:
-                break
-            need = self.margin_fn([{**l, "qty": l["qty"] * units} for l in legs])
-            if need is None or need <= cap:
-                break
-            units = max(0, int(units * cap / need))
-        if units <= 0:
-            self.note = f"Not enough capital for even one unit (needs about {one:,.0f} of margin)."
+        units, _, _, note = margin_units(self.margin_fn, legs, min(z.capital, self.cash) * z.safety)
+        if note:
+            self.note = note
         return units
 
     def _priced(self, contracts: Contracts, quotes: dict, opt: str, side: str, strike: float) -> bool:
@@ -310,13 +341,11 @@ class OptionsEngine:
                     "costs": 0.0, "orders": 0, "peak": 0.0, "low": 0.0, "rolls": 0, "expiry": contracts.expiry,
                     "units": units, "last_check": now.isoformat(), "credit": 0.0, "dir": direction}
         # buy the hedges first, as a broker would, so the sold legs get the margin benefit
-        for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
-            if not self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out, why):
+        for i, (opt, side, k, n, why) in sorted(enumerate(plan), key=lambda x: x[1][1] != "buy"):
+            if not self._open_leg(now, contracts, quotes, opt, side, k, n * units * contracts.lot, "Entry", out, why, i):
                 self._abandon(now, quotes, "A leg couldn't open", out)    # never a structure with a leg missing
                 self.note = f"No price for {k:g} {opt} ({side}) at entry, so no entry."
                 return False
-        p = self.pos
-        p["credit"] = sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"] for l in p["legs"])
         self.entries_today += 1
         return True
 
@@ -337,6 +366,9 @@ class OptionsEngine:
         net = p["closed_pnl"] - p["costs"]
         self.cash += net
         self.day_realised += net
+        self.realised_total += round(net, 2)
+        self.trade_count += 1
+        self.win_count += round(net, 2) > 0
         self.trades.append({
             "opened": p["opened"], "closed": now.isoformat(), "why": why, "pnl": round(net, 2),
             "gross": round(p["closed_pnl"], 2), "costs": round(p["costs"], 2), "credit": round(p["credit"], 2),
@@ -349,6 +381,14 @@ class OptionsEngine:
         if self.s.timing.cooldown:
             self.cool_until = (now + timedelta(minutes=self.s.timing.cooldown)).isoformat()
 
+    def _leg_idx(self, leg: dict) -> int | None:
+        """Which of the strategy's legs a position leg is; a leg saved before that was recorded is matched on its
+        type and side."""
+        if leg.get("idx") is not None:
+            return leg["idx"]
+        return next((i for i, lg in enumerate(self.legs_for(self.pos.get("dir")))
+                     if lg.opt == leg.get("opt") and lg.side == leg["side"]), None)
+
     def _recenter(self, now, spot, contracts: Contracts, quotes, out):
         p, r = self.pos, self.s.recenter
         last = datetime.fromisoformat(p["last_check"])
@@ -358,21 +398,24 @@ class OptionsEngine:
         atm = contracts.atm(spot)
         if abs(atm - p["center"]) < r.threshold * contracts.step(spot) - 1e-9:
             return
-        legs = [lg for lg in self.legs_for(p.get("dir")) if r.roll == "all" or lg.side == "sell"]
-        plan = self._plan(contracts, atm, legs, quotes, spot, now)
+        # a leg the leg stop closed stays closed: only the legs still open are rolled
+        stopped = set(p.get("stopped") or [])
+        rolled = [(i, lg) for i, lg in enumerate(self.legs_for(p.get("dir")))
+                  if (r.roll == "all" or lg.side == "sell") and i not in stopped]
+        if not rolled:
+            return
+        plan = self._plan(contracts, atm, [lg for _, lg in rolled], quotes, spot, now)
         if plan is None or not all(self._priced(contracts, quotes, o, sd, k) for o, sd, k, _, _ in plan):
             return   # try again at the next check
         for leg in p["legs"]:
             if leg["open"] and (r.roll == "all" or leg["side"] == "sell"):
                 self._close_leg(now, leg, quotes, "Re-centre", out)
-        for opt, side, k, n, why in sorted(plan, key=lambda x: x[1] != "buy"):
-            if not self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out, why):
+        for (i, _), (opt, side, k, n, why) in sorted(zip(rolled, plan), key=lambda x: x[1][1] != "buy"):
+            if not self._open_leg(now, contracts, quotes, opt, side, k, n * p["units"] * contracts.lot, "Re-centre", out, why, i):
                 self._exit(now, quotes, "Re-centre: a leg couldn't open", out)    # never a structure with a leg missing
                 return
         p["center"] = atm
         p["rolls"] += 1
-        p["credit"] = p["closed_pnl"] + sum((l["entry"] if l["side"] == "sell" else -l["entry"]) * l["qty"]
-                                           for l in p["legs"] if l["open"])
 
     # ---------- one pass ----------
     def step(self, now: datetime, spot: float | None, contracts: Contracts | None, quotes: dict, fresh: bool,
@@ -417,6 +460,7 @@ class OptionsEngine:
                         leg["entry_mid"] = leg["entry"] + (lq["ask"] - lq["bid"]) / 2   # saved before entry_mid: entry was the bid
                     if leg["open"] and leg["side"] == "sell" and self._stop_price(leg, quotes) >= leg.get("entry_mid", leg["entry"]) * (1 + rk.legStopPct / 100):
                         self._close_leg(now, leg, quotes, "Leg stop", out)
+                        p.setdefault("stopped", []).append(self._leg_idx(leg))
                         stopped = True
                 if stopped and not any(l["open"] and l["side"] == "sell" for l in p["legs"]):
                     self._exit(now, quotes, "Leg stops hit", out)

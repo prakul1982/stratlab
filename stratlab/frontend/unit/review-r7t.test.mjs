@@ -131,7 +131,9 @@ test("R7T-013: after a stop-out the session says when the next entry may come", 
   assert.match(gapLine({ cool_until: "2026-10-09T15:00:00+05:30", next_entry: null }, 120, "14:45", "09:30", now), /next market day/);
   assert.equal(gapLine({ cool_until: "2026-10-09T09:00:00+05:30", next_entry: "09:00" }, 120, "14:45", "09:30", now), null);   // gap over
   assert.equal(gapLine({}, 120, "14:45", "09:30", now), null);
-  assert.match(read("src/pages/OptionsSession.tsx"), /gapLine\(a, s\.timing\.cooldown/);
+  // the flat line moved to lib/options.ts (flatLine, review 7a), which the session page calls
+  assert.match(read("src/lib/options.ts"), /gapLine\(a, s\.timing\.cooldown/);
+  assert.match(read("src/pages/OptionsSession.tsx"), /flatLine\(snap, /);
 });
 
 test("R7T-014: size changes are handled a frame later, never inside the observer (Safari's ResizeObserver loop error)", () => {
