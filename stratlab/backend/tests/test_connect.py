@@ -1238,6 +1238,64 @@ def test_ibkr_trades_read_before_a_split_was_counted_are_replaced_not_doubled(w,
     assert len([m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]) == 3
 
 
+def window_statement(*fills, split=False) -> ET.Element:
+    """A statement with these of B1, B2 (bought), S1, S2 (sold), as a query over the last 365 days sees them on some day."""
+    t = {"B1": ("BUY", 10, 100, "20250101"), "B2": ("BUY", 10, 110, "20250105"), "S1": ("SELL", -10, 150, "20250410"),
+         "S2": ("SELL", -10, 160, "20250420")}
+    body = "".join(f'<Trade assetCategory="STK" symbol="N" currency="USD" buySell="{t[i][0]}" quantity="{t[i][1]}" tradePrice="{t[i][2]}" '
+                   f'tradeDate="{t[i][3]}" dateTime="{t[i][3]};100000" ibCommission="0" tradeID="{i}" '
+                   f'openCloseIndicator="{"O" if t[i][0] == "BUY" else "C"}"/>' for i in fills)
+    action = ('<CorporateActions><CorporateAction assetCategory="STK" symbol="N" actionDescription="N SPLIT 10 FOR 1" '
+              'dateTime="20250607;202500" reportDate="20250610"/></CorporateActions>') if split else ""
+    return ET.fromstring(f"<FlexQueryResponse><FlexStatements><FlexStatement>{action}<Trades>{body}</Trades></FlexStatement></FlexStatements></FlexQueryResponse>")
+
+
+def ibkr_trades():
+    return sorted((m["ed"], m["entry"], m["xd"], m["exit"], m["qty"]) for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr")
+
+
+PAIRS = [("2025-01-01", 100.0, "2025-04-10", 150.0, 10.0), ("2025-01-05", 110.0, "2025-04-20", 160.0, 10.0)]
+
+
+@pytest.mark.parametrize("split", [False, True])
+def test_ibkr_a_sale_paired_before_is_not_paired_again_when_the_window_has_slid_past_its_purchase(w, flex, split):
+    assert ibkr.ingest(PRO_ID, window_statement("B1", "B2", "S1", "S2", split=split))["trades_added"] == 2
+    assert ibkr.ingest(PRO_ID, window_statement("B1", "B2", "S1", "S2", split=split))["trades_added"] == 0     # the same statement again
+    # a year on, the 365-day query no longer has B1: S1 stays paired with B1, S2 with B2, and nothing is taken out
+    assert ibkr.ingest(PRO_ID, window_statement("B2", "S1", "S2", split=split))["trades_added"] == 0
+    assert ibkr_trades() == PAIRS
+    assert ibkr.ingest(PRO_ID, window_statement("S1", "S2", split=split))["trades_added"] == 0
+    assert ibkr_trades() == PAIRS
+    saved = [m for m in journal.load(PRO_ID)["manual"] if m.get("via") == "ibkr"]
+    assert sorted((m["ef"], m["xf"]) for m in saved) == [("B1", "S1"), ("B2", "S2")]
+
+
+def test_ibkr_trades_saved_before_fill_ids_were_kept_are_not_doubled(w, flex):
+    ibkr.ingest(PRO_ID, window_statement("B1", "B2", "S1", "S2"))
+    j = journal.load(PRO_ID)
+    j["manual"] = [{k: v for k, v in m.items() if k not in ("ef", "xf")} for m in j["manual"]]     # as an older read saved them
+    journal.save(PRO_ID, j)
+    assert ibkr.ingest(PRO_ID, window_statement("B2", "S1", "S2"))["trades_added"] == 0
+    assert ibkr_trades() == PAIRS
+    assert sorted(m.get("xf") for m in journal.load(PRO_ID)["manual"]) == ["S1", "S2"]          # matched to their fills now
+
+
+def test_ibkr_a_new_sale_in_a_later_window_pairs_with_the_lot_still_open(w, flex):
+    ibkr.ingest(PRO_ID, window_statement("B1", "B2", "S1"))
+    assert ibkr.ingest(PRO_ID, window_statement("B2", "S1", "S2"))["trades_added"] == 1
+    assert ibkr_trades() == PAIRS
+
+
+def test_ibkr_a_query_without_the_open_close_mark_lets_either_side_open():
+    trades = "".join(f'<Trade assetCategory="STK" symbol="A" currency="USD" buySell="{s}" quantity="{q}" tradePrice="{p}" '
+                     f'tradeDate="{d}" dateTime="{d};100000" ibCommission="0" tradeID="{i}"/>'
+                     for i, (s, q, p, d) in enumerate((("SELL", -10, 100, "20250301"), ("BUY", 10, 90, "20250305"),
+                                                       ("BUY", 10, 95, "20250310"), ("SELL", -10, 105, "20250320"))))
+    root = ET.fromstring(f"<FlexStatement><Trades>{trades}</Trades></FlexStatement>")
+    got = ibkr.closed_trades(ibkr.fills(root))
+    assert [(t["side"], t["entry"], t["exit"]) for t in got] == [("short", 100.0, 90.0), ("long", 95.0, 105.0)]
+
+
 # ---------- EPF, NPS, AIS ----------
 def text_pdf(lines: list[str]) -> bytes:
     buf = io.BytesIO()

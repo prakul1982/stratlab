@@ -123,19 +123,29 @@ def _nodes(doc) -> list[list]:
 
 
 def _year_of(v, assessment: bool) -> int | None:
-    """The financial year's first year from a value like "2025-26" or "2025-2026" (the year of a pair of consecutive years,
-    which an ISO date like 2025-03-15 never is), or from an assessment year, which starts a year after its financial year."""
-    m = re.fullmatch(r"\s*(20\d\d)\s*[-–/]\s*(?:20)?(\d\d)\s*", str(v)) if isinstance(v, str) else None
+    """The financial year's first year from a value like "2025-26", "2025-2026" or "FY 2025-26" (the year of a pair of
+    consecutive years, which an ISO date like 2025-03-15 never is) or a whole year like 2025, or from an assessment year,
+    which starts a year after its financial year."""
+    if isinstance(v, int) and not isinstance(v, bool) and 2000 <= v <= 2100:
+        return v - (1 if assessment else 0)
+    m = re.fullmatch(r"\s*(?:[FA]\.?\s?Y\.?\s*:?\s*)?(20\d\d)\s*[-–/]\s*(?:20)?(\d\d)\s*", str(v), re.I) if isinstance(v, str) else None
     if not m or int(m.group(2)) != (int(m.group(1)) + 1) % 100:
         return None
     return int(m.group(1)) - (1 if assessment else 0)
 
 
+PAIR = r"(20\d\d)\s*[-–]\s*(\d\d)\b(?![-–/]?\d)"
+
+
 def _year_in(text: str) -> int | None:
-    """The first pair of consecutive years like "2025-26" in some text (an ISO date like 2025-03-15 isn't one)."""
-    for m in re.finditer(r"\b(20\d\d)\s*[-–]\s*(\d\d)\b(?![-–/]?\d)", text):
-        if int(m.group(2)) == (int(m.group(1)) + 1) % 100:
-            return int(m.group(1))
+    """The financial year from some text: the one it names as the financial year ("FY 2024-25"), else the one before
+    the assessment year it names ("AY 2025-26"), else the first pair of consecutive years like "2025-26" (an ISO date like
+    2025-03-15 isn't one)."""
+    for words, back in ((r"F\.?\s?Y\.?|financial\s+year", 0), (r"A\.?\s?Y\.?|assessment\s+year", 1), (None, 0)):
+        rx = (r"(?i)\b(?:" + words + r")\s*[:\-–]?\s*" + PAIR) if words else r"\b" + PAIR
+        for m in re.finditer(rx, text):
+            if int(m.group(2)) == (int(m.group(1)) + 1) % 100:
+                return int(m.group(1)) - back
     return None
 
 
@@ -151,50 +161,62 @@ def _filing_year(objects) -> int | None:
     return None
 
 
+def _kind(label: str) -> str | None:
+    return "dividend" if "dividend" in label else "interest" if "interest" in label else None
+
+
 def read_ais_json(data: bytes) -> dict:
     """Entries that say dividend, interest or TDS (any nesting) added up, and dividend lines that carry a date. Only the
-    entries at the bottom are added: one that holds others (a section with its total) is not, or the figures would count
-    twice; an entry with no description of its own takes its section's. The year from the financial or assessment year the
-    file names."""
+    entries at the bottom are added: one that holds dividend or interest entries with amounts (a section, or a payer, with
+    its total) is not, or the figures would count twice; an entry with no description of its own takes its section's, and
+    one with no payer or date of its own takes those of the dividend or interest entry it sits in. Two payments are one
+    only when their date, payer and amount are all the same. The year from the financial or assessment year the file
+    names."""
     try:
         doc = json.loads(data.decode("utf-8-sig"))
     except (ValueError, RecursionError):                # a broken file, or one nested too deep (UnicodeDecodeError is a ValueError)
         raise DocError("unreadable", "This file isn't an AIS JSON file.") from None
     found = _nodes(doc)
     fy = _filing_year(n for n, _ in found) or _year_in(data.decode("utf-8", "ignore"))
-    labels, held_amt, held_tds = [], [False] * len(found), [False] * len(found)
+    labels, names, dates = [], [], []
     for i, (n, parent) in enumerate(found):
         own = " ".join(str(n.get(k)) for k in INFO_KEYS if isinstance(n.get(k), (str, int))).lower()
         labels.append(own or (labels[parent] if parent >= 0 else ""))
+        up = parent >= 0 and _kind(labels[parent]) is not None             # a payer's entry, its payments listed below it
+        names.append(_first(n, NAME_KEYS) or (names[parent] if up else None))
+        dates.append(_first(n, DATE_KEYS) or (dates[parent] if up else None))
+    kinds = [_kind(x) for x in labels]
     amounts = [(_money(_first(n, AMOUNT_KEYS)) or 0) > 0 for n, _ in found]
-    tdses = [bool(_money(_first(n, TDS_KEYS))) for n, _ in found]
-    for i in range(len(found) - 1, -1, -1):             # children come after their parents: an entry is "held" if anything below it has a figure
+    tdses = [bool(_money(_first(n, TDS_KEYS))) and ("tds" in x or k is not None) for (n, _), x, k in zip(found, labels, kinds)]
+    held_amt, held_tds = [False] * len(found), [False] * len(found)
+    for i in range(len(found) - 1, -1, -1):             # children come after their parents
         parent = found[i][1]
         if parent >= 0:
-            held_amt[parent] |= amounts[i] or held_amt[i]
+            # an entry is "held" (its figure is the total of those below it) when one below it is counted itself: a
+            # dividend or interest entry with an amount; a detail like who reported it is not
+            held_amt[parent] |= kinds[parent] is not None and kinds[i] is not None and (amounts[i] or held_amt[i])
             held_tds[parent] |= tdses[i] or held_tds[i]
     div = intr = tds = 0.0
     lines, seen = [], set()
     for i, (n, _) in enumerate(found):
-        label = labels[i]
         amt = _money(_first(n, AMOUNT_KEYS))
         t = _money(_first(n, TDS_KEYS))
-        if t and not held_tds[i] and ("tds" in label or "dividend" in label or "interest" in label):
+        if t and tdses[i] and not held_tds[i]:
             tds += t
         if not amt or amt <= 0 or held_amt[i]:
             continue
-        if "dividend" in label:
-            key = (str(_first(n, DATE_KEYS)), str(_first(n, NAME_KEYS)), amt)
+        if kinds[i] == "dividend":
+            name, d = names[i], dates[i]
+            key = (str(d), str(name), amt)
             if key in seen:
                 continue
             seen.add(key)
             div += amt
-            d = _first(n, DATE_KEYS)
             day = _date(str(d)) or (str(d)[:10] if re.match(r"\d{4}-\d{2}-\d{2}", str(d or "")) else None)
             if day:
-                lines.append({"d": day, "sym": str(_first(n, NAME_KEYS) or "AIS")[:20].upper(), "name": str(_first(n, NAME_KEYS) or "")[:60],
+                lines.append({"d": day, "sym": str(name or "AIS")[:20].upper(), "name": str(name or "")[:60],
                               "amount": round(amt, 2), "tds": round(t, 2) if t else None, "cur": "INR", "src": "AIS", "isin": ""})
-        elif "interest" in label:
+        elif kinds[i] == "interest":
             intr += amt
     return {"fy": fy, "dividend": round(div, 2) or None, "interest": round(intr, 2) or None, "tds": round(tds, 2) or None,
             "lines": lines[:500]}
