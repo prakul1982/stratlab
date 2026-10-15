@@ -29,6 +29,9 @@ def _hours(m: dict, day) -> dict | None:
     if m["id"] == "IN":
         from . import sessions
         return {**h, "fo_close": sessions.fo_close(day).strftime("%H:%M")}
+    if m["id"] in calendar.OWN_HOURS:
+        # an early close (13:00 the day after Thanksgiving, 12:30 on London's Christmas Eve) from the exchange's calendar
+        return {**h, "close": calendar.day_close(m["id"], day) or h["close"]}
     return h
 
 

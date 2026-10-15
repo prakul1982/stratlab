@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
   atmIvLabel, chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
-  pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
+  chainCounts, pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { signTone } from "../lib/format";
@@ -277,7 +277,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
             <StatRow label="Option chain figures">
               <Stat label="PCR (open interest)" value={ratio(c.pcr?.oi)} note={[`${c.near_strikes ?? NEAR_STRIKES} strikes either side of the money`, `volume ${ratio(c.pcr?.vol)}`,
                 strikesRead(c.strikes_counted, c.near_strikes, c.pcr_all, ratio)].filter(Boolean).join(" · ")} />
-              <Stat label="Max-pain strike" value={strike(c.max_pain)} note={`within the ${c.strikes_counted ?? c.rows.length} strikes shown`} />
+              <Stat label="Max-pain strike" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
               <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}`} />
@@ -298,7 +298,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
-            <p className="k-note">The PCR, max pain and the top strikes count the {c.strikes_counted ?? c.rows.length} strikes read around the money; the chart shows the 41 nearest. {c.note}</p>
+            <p className="k-note">{chainCounts(c).note} {c.note}</p>
           </div>
         )}
     </Card>

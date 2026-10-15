@@ -223,10 +223,11 @@ def test_rounds_follow_the_clock_and_catch_up_after_a_restart(mem):
     # a deploy restarts the server at 09:41: the new process remembers nothing, the stored rounds say 09:30 is done
     job = BL.LiveJob(live(mem, calls=calls))
     assert job.tick(ist("09:41:00")) == 0
-    # down through 09:45: the quarter hour that is due runs as soon as the new process looks, with its own time
+    # down through 09:45: the quarter hour that is due runs as soon as the new process looks
     assert job.tick(ist("09:52:00")) == 1
     assert job.tick(ist("10:00:10")) == 1
-    assert [p[0] for p in BL.load("nifty500", "2026-10-01")["points"]] == ["09:15", "09:30", "09:52", "10:00"]
+    # R11A: a point is its quarter hour's: the round run late at 09:52 is the 09:45 point
+    assert [p[0] for p in BL.load("nifty500", "2026-10-01")["points"]] == ["09:15", "09:30", "09:45", "10:00"]
     assert BL.status()["IN"]["slot"] == "10:00"
 
 

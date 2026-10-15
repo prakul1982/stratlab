@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -149,7 +149,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
     return (
       <Card label="Breadth today" testId="breadth-live-off">
         <CardHead title="Today, live" info={LIVE_INFO} infoLabel="About the live numbers" />
-        <Notice tone="warn" role="status">{live.message ?? "Live prices aren't available right now. The numbers below are the last close."}</Notice>
+        <Notice tone={liveNoticeTone(live)} role="status">{live.message ?? "Live prices aren't available right now. The numbers below are the last close."}</Notice>
       </Card>
     );
   }

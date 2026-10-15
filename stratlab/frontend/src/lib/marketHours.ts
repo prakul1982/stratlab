@@ -2,7 +2,7 @@ import { fmtTime } from "./format";
 import type { Market } from "./types";
 
 /** When each market is open, and how long until it opens or closes, skipping weekends and the exchange
- * holidays the server sends with each market. Half-days aren't known. */
+ * holidays the server sends with each market. A half-day's early close comes as that day's `close` from the server. */
 
 const DAY = 24 * 60;
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -16,6 +16,16 @@ function wall(now: Date, tz: string) {
   const offset = Math.round((Date.UTC(y, mo - 1, d, h, mi) - now.getTime()) / 60000);
   const iso = (n: number) => new Date(Date.UTC(y, mo - 1, d + n)).toISOString().slice(0, 10);
   return { wd: WD.indexOf(get("weekday")), min: h * 60 + mi, offset, iso };
+}
+
+/** The real moment of a wall-clock time `mins` past midnight on the local date `iso` in `tz`: built with the zone's offset
+ * now, read back, and corrected once, so a clock change in between (US 1 Nov, UK and EU 25 Oct 2026) lands on the hour. */
+function zoned(iso: string, mins: number, tz: string, offset: number): Date {
+  const [y, mo, d] = iso.split("-").map(Number);
+  const local = Date.UTC(y, mo - 1, d, 0, mins);
+  const guess = new Date(local - offset * 60000);
+  const off = wall(guess, tz).offset;
+  return off === offset ? guess : new Date(local - off * 60000);
 }
 
 const hm = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
@@ -70,7 +80,7 @@ export function marketState(m: Market, now = new Date()): MarketState {
       days = 1;
       while (!trades(days) && days < 30) days++;
     }
-    until = days * DAY + o - w.min;
+    until = (zoned(w.iso(days), o, m.tz, w.offset).getTime() - now.getTime()) / 60000;
   }
   // shut until a later day: say why, the same way for every exchange (Friday evening counts as the weekend)
   const skipped = Array.from({ length: days }, (_, n) => n).filter((n) => n > 0 || !trades(0));

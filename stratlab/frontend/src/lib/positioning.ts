@@ -28,8 +28,12 @@ export function pcrStrikes(r: Pick<PcrRow, "strikes_counted" | "strikes_window" 
 /** The line under the PCR table, in words that fit the hour (R10O-008: with the market shut the rows are the recording of
  * the last close, not live chains read just then). */
 export function pcrNote(rows: PcrRow[]): string {
-  if (rows.some((r) => r.at_close)) return "The market is shut, so each index shows StratLab's recording of its last close. Live chains are read while the market trades, at most once a minute.";
-  return `${rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
+  // a recording older than the close (the recorder missed that day) is named with its own time, never called "the last close"
+  const older = rows.filter((r) => r.source === "recorded" && !r.at_close && r.as_of)
+    .map((r) => `${r.name} shows StratLab's newest recording, from ${fmtDateTime(r.as_of!, { tz: IST, zone: true, weekday: true, year: false })}.`);
+  const dated = older.length ? `${older.join(" ")} ` : "";
+  if (rows.some((r) => r.at_close)) return `The market is shut, so ${older.length ? "the other indices show" : "each index shows"} StratLab's recording of its last close. ${dated}Live chains are read while the market trades, at most once a minute.`;
+  return `${older.length ? dated : rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
 }
 
 /** The strikes either side of the money the recordings keep, and the headline PCR counts. */
@@ -73,7 +77,22 @@ export type ChainFacts = {
   iv: IvStats | null; note: string; plan_needed: string; recorded?: Span;
   /** open interest, its change and volume are in `unit`: contracts (lots of `lot` shares), or shares when the lot isn't known */
   lot?: number | null; unit?: "lots" | "shares"; pcr_all?: number | null; near_strikes?: number;
+  /** how many strikes the PCR and max pain count: the window of `near_strikes` either side of the money (fewer at a chain's edge) */
+  window_strikes?: number;
 };
+
+/** The strikes each chain figure counts, as the server works them out: the PCR and max pain over the window around the
+ * money (the history's own), the top strikes over every strike read, the chart over the rows it draws. */
+export function chainCounts(c: Pick<ChainFacts, "near_strikes" | "window_strikes" | "strikes_counted" | "rows">) {
+  const near = c.near_strikes ?? NEAR_STRIKES;
+  const window = c.window_strikes ?? 2 * near + 1;
+  const read = c.strikes_counted ?? c.rows.length;
+  return {
+    maxPain: `over the ${window} strikes around the money, as the PCR`,
+    note: `The PCR and max pain count the ${window} strikes around the money (${near} either side, as StratLab's history keeps); `
+      + `the most call and put open interest are over all ${read} strikes read; the chart shows the ${c.rows.length} nearest.`,
+  };
+}
 
 /** The word for the chain's counts: "contracts" (lots), as the exchange and the participant table count them (R7T-002). */
 export const chainUnit = (c: Pick<ChainFacts, "unit">): "contracts" | "shares" => (c.unit === "shares" ? "shares" : "contracts");
