@@ -65,6 +65,7 @@ export async function findInstrument(name: string, market?: string | null): Prom
  * Throws only on errors worth showing as-is. */
 export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean }> {
   let out: AIOut, usedAI = true, fallback = "";
+  let parsedDropped: string[] = [];   // rules the simple converter read and left out as meaningless: said, never silent
   try {
     out = await api<AIOut>("/ai/strategy", { method: "POST", body: { text: idea } });
   } catch (e) {
@@ -75,6 +76,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
       ? `${err.message} We used the simple converter instead.`
       : "The AI builder isn't available right now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
     const p = parseStrategyText(idea);
+    parsedDropped = p.dropped;
     const mentioned = Object.keys(p.risk);
     const tf = detectTf(idea), inst = detectInstrument(idea);
     if (p.exit.length) mentioned.push("exit");
@@ -85,6 +87,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
   if (!out.entry?.length && usedAI) {
     // the AI answered with no rule: the simple converter gets a go before anyone is told their wording is the problem
     const p = parseStrategyText(idea);
+    parsedDropped = p.dropped;
     if (p.entry.length) {
       const mentioned = Object.keys(p.risk);
       const tf = detectTf(idea), inst = detectInstrument(idea);
@@ -124,7 +127,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
     built: { strategy: built, instrument, question: questionFrom(idea, instrument?.symbol),
       gaps: { mentioned, notes: out.notes || [], instName: out.instrument, usedAI, fallback,
-        warnings: ruleWarnings(idea, built, Object.values(checked).flatMap((x) => x.dropped), [out.instrument, instrument?.symbol, instrument?.name]) } },
+        warnings: ruleWarnings(idea, built, [...Object.values(checked).flatMap((x) => x.dropped), ...parsedDropped], [out.instrument, instrument?.symbol, instrument?.name]) } },
   };
 }
 

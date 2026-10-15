@@ -175,10 +175,11 @@ function parseRef(s: string): Ref | null {
   if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
   if ((m = s.match(/\b(ema|sma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
   if (/\brsi\b/.test(s)) return { t: "rsi", p: 14 };
+  if (/\bstage\b/.test(s)) return { t: "stage", p: 150, m: 20 };
   if (/\b(price|close|ltp|it)\b/.test(s)) return { t: "price" };
   return null;
 }
-export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short" } {
+export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short"; dropped: string[] } {
   let t = " " + raw.toLowerCase().replace(/\s+/g, " ") + " ";
   const short = /\b(sell short|short sell|go short|short(?:ing)?\b(?! ?-?term))/.test(t);
   const out: { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short" } = { entry: [], exit: [], risk: {}, side: short ? "short" : "long" };
@@ -220,10 +221,11 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   t = t.replace(new RegExp(`(?:with |and |, )?(?:an? )?${N} ?% ?(?:${STOP}|${TARGET})`, "g"), " ");
   t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
   const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
-  const opRe = /((?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?)(?= (?:its |the |a |an |new |their )*(?:52|fifty[- ]?two|one|1)[- ]?(?:weeks?|wks?|w|year)\b)|cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<)/;
+  const opRe = /((?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?)(?= (?:its |the |a |an |new |their )*(?:52|fifty[- ]?two|one|1)[- ]?(?:weeks?|wks?|w|year)\b)|cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<|\bis\b(?! (?:now |just |not |no longer |back |still )?(?:above|below|over|under|greater|less|more|crossing|touch|hit|reach|the (?:above|below)))|\bequals?\b|=)/;
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
   let lastCross: Cond | null = null;
+  let lastRight: Ref | null = null;   // what "it" on the right of a clause stands for: the line the last rule compared against
   // "close" as a way out ("close the trade"), never the price closing ("the price closes above the SMA", R11C-004: that
   // buy rule became a sell rule); the first of the two kinds of word in a clause decides which it is
   const EXIT = /\b(sell|exit|close\b(?! (?:is |was )?(?:above|below|over|under))|square off|book profit)/;
@@ -253,10 +255,14 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
       lastRef = L;
       const right = p.slice(om.index + om[0].length);
       const w = om[0];
+      // "sell when it crosses below it": a right-hand side that is only the word "it" is the line the last rule used
+      const itOnly = /^\s*it\s*$/.test(right);
       let R = parseRef(right);
-      if (!R && /cross/.test(w) && lastCross && !/\d/.test(right)) {
+      if (/cross/.test(w) && lastCross && !/\d/.test(right) && (!R || itOnly)) {
         // "sell when it crosses back below": the same two lines as the last crossing, the other way
         L = lastCross.l; R = lastCross.r;
+      } else if (itOnly && lastRight && !/cross/.test(w)) {
+        R = lastRight;
       }
       if (!R) {
         const nm = right.match(/-?\d+(?:\.\d+)?/);
@@ -267,12 +273,14 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
       const reaches = /^(touch|hit|reach)/.test(w);
       if (reaches && R.t !== "dc_lower" && R.t !== "dc_upper") continue;
       if (reaches && L.t === "price") L = { t: R.t === "dc_lower" ? "low" : "high" };
-      const op: Op = reaches ? (R.t === "dc_lower" ? "lt" : "gt") : /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
+      const op: Op = /^(is|equals?|=)$/.test(w) ? "eq" : reaches ? (R.t === "dc_lower" ? "lt" : "gt") : /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
       out[side].push({ l: L, op, r: R });
+      if (R.t !== "num") lastRight = R;
       if (op === "xa" || op === "xb") lastCross = { l: L, op, r: R };
     }
   }
-  return { ...out, entry: meaningful(out.entry).kept, exit: meaningful(out.exit).kept };
+  const entry = meaningful(out.entry), exit = meaningful(out.exit);
+  return { ...out, entry: entry.kept, exit: exit.kept, dropped: [...entry.dropped, ...exit.dropped] };
 }
 
 /* ---------- checks on built rules (R11C-004) ---------- */
@@ -473,3 +481,8 @@ export function ruleWarnings(idea: string, s: Strategy, dropped: string[], names
   }
   return out;
 }
+
+/** Sizing by risk needs a stop to measure the risk from: with no stop loss and no trailing stop the engine ignores the risk
+ * share and puts in the most one trade may hold ("Most in one trade", maxAlloc). */
+export const sizedWithoutStop = (r: Pick<Risk, "sl" | "trail" | "sizing">) => (r.sizing ?? "risk") === "risk" && !(r.sl > 0) && !((r.trail ?? 0) > 0);
+export const NO_STOP_SIZE_NOTE = "There is no stop loss, so there is nothing to measure risk from. Position size comes from \"Most in one trade\" instead, and the risk per trade does not apply.";
