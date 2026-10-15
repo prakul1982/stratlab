@@ -4,13 +4,14 @@ Screener has no API, so this reads the page the way Hindsight did, but from the
 server (no public CORS proxies). If Screener changes its layout, the parser
 degrades to whatever it can still find instead of failing the whole page."""
 import copy
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import re
 
 import httpx
 from bs4 import BeautifulSoup
 
-from .net import BROWSER_UA, Source, SourceError, num
+from .net import BROWSER_UA, Source, SourceError, num, rate_wait, with_rate_wait
 
 
 _CITE = re.compile(r"\s*\[\d{1,3}\]")
@@ -331,6 +332,9 @@ def _pick(pages: dict) -> dict:
     return {**(con or std), "basis": "consolidated" if con else "standalone"}
 
 
+_pair = ThreadPoolExecutor(max_workers=8, thread_name_prefix="screener-pages")
+
+
 class Screener(Source):
     name = "Screener.in"
     STALE_FOR = 0          # a page it sent can be judged a block page after the fact (_page drops it): no fallback copy
@@ -405,6 +409,18 @@ class Screener(Source):
         breakdown of Cash from Investing Activity (the page shows only the total). Unchanged when it can't be read."""
         return self._with_line(p, "cashflow", "Capex", "Cash from Investing Activity", "cash-flow", r"fixed assets purchased")
 
+    def _both(self, base: str) -> list[tuple]:
+        """[(kind, the page or the SourceError it raised)] for the consolidated and the standalone page, read at once."""
+        wait = rate_wait()
+        def one(path):
+            try:
+                return self._page(path)
+            except SourceError as e:
+                return e
+        paths = (("consolidated", base + "consolidated/"), ("standalone", base))
+        futures = [(kind, _pair.submit(with_rate_wait(wait, lambda p=path: one(p)))) for kind, path in paths]
+        return [(kind, f.result()) for kind, f in futures]
+
     RENAMED = {"TATAMOTORS": "TMPV"}   # known symbol changes only: a fuzzy site search can land on another company
 
     def company(self, symbol: str) -> dict:
@@ -418,15 +434,14 @@ class Screener(Source):
         base = f"/company/{sym}/"
         for attempt in (0, 1):
             pages = {}
-            # consolidated first; companies without subsidiaries only have standalone numbers
-            for kind, path in (("consolidated", base + "consolidated/"), ("standalone", base)):
-                try:
-                    p = self._page(path)
-                except SourceError as e:
-                    last = e
+            # consolidated first; companies without subsidiaries only have standalone numbers. Both read at once (R29A-001:
+            # one after the other, a company page waited for two reads and two parses in a row)
+            for kind, got in self._both(base):
+                if isinstance(got, SourceError):
+                    last = got
                     continue
-                if p:
-                    pages[kind] = p
+                if got:
+                    pages[kind] = got
             if pages:
                 got = _pick(pages)
                 if (got.get("pl") or {}).get("cols") or reloaded or self.cache.get(("reloaded", sym)):

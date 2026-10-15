@@ -674,15 +674,23 @@ class KiteService:
         self._require()
         rows = [r for r in self.equities() if r["exchange"] == "NSE"]
         out: dict[str, dict] = {}
+        error = None
         for i in range(0, len(rows), 500):
             part = {f"NSE:{r['symbol']}": r["symbol"] for r in rows[i:i + 500]}
             self._throttle()
-            for k, v in (self.kite.quote(list(part)) or {}).items():
+            try:
+                got = self.kite.quote(list(part)) or {}
+            except Exception as e:         # one batch refused: the others' quotes are kept (R29A-001), not all thrown away
+                error = e
+                continue
+            for k, v in got.items():
                 traded = v.get("last_trade_time")
                 if hasattr(traded, "tzinfo") and traded.tzinfo is None:
                     traded = traded.replace(tzinfo=IST)
                 out[part.get(k, k.split(":", 1)[-1])] = {"price": v.get("last_price"),
                                                          "at": traded.isoformat() if hasattr(traded, "isoformat") else None}
+        if error is not None and not out:
+            raise error
         return out
 
     @staticmethod
