@@ -3,7 +3,7 @@ and its management report card. Each check says pass, watch or fail with the num
 
 These are screening rules the user can read and disagree with, not a view on the stock; the page says so."""
 from . import industry
-from .deepdive import money
+from .deepdive import money, part_year
 from .intel.screener import summary
 
 GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Insiders", "Filings", "Management"]
@@ -74,7 +74,8 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
     financial = grp in ("lender", "insurer", "holding", "bdc")
     realty = grp in ("realty", "reit")          # a US REIT is held to the same softened rules as a developer
     g = nums.get("growth") or {}
-    years = [y for y in nums.get("years") or [] if y.get("sales") is not None]
+    # full years only: a first, part-year report ("Mar 2023 3m") is no base for the margin three years ago (R10C-004)
+    years = [y for y in nums.get("years") or [] if y.get("sales") is not None and not part_year(y.get("year"))]
     quarters = [q for q in nums.get("quarters") or [] if q.get("sales_yoy") is not None]
     out: list[dict] = []
 
@@ -96,7 +97,7 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
     add("Growth", "Sales growth, 3 years", _state(g.get("sales_cagr_3y"), 10, 0), _pct(g.get("sales_cagr_3y")) + " a year",
         "Pass at 10% a year or more; fail if sales shrank.", soft=grp in ("cyclical", "holding") or realty)
     add("Growth", "Profit growth, 3 years", _state(g.get("profit_cagr_3y"), 10, 0), _pct(g.get("profit_cagr_3y")) + " a year",
-        "Pass at 10% a year or more; fail if profit shrank.", soft=grp in ("cyclical", "holding") or realty)
+        "Pass at 10% a year or more; fail if profit shrank. n/a when either year is a loss: there's no growth rate to or from a loss.", soft=grp in ("cyclical", "holding") or realty)
     last_q = quarters[-1] if quarters else None
     add("Growth", "Latest quarter sales vs a year ago", _state(last_q and last_q["sales_yoy"], 5, 0),
         f"{_pct(last_q['sales_yoy'])} ({last_q['quarter']})" if last_q else "–", "Pass at +5% or more; fail if lower than a year ago.",

@@ -175,14 +175,19 @@ def row(region: str, symbol: str, f: dict) -> dict | None:
     # public page now reads them: its value is left out until the page is built again (R7O-004: Ecopetrol at $697.3 bn
     # here, $34.8 bn on its public page)
     stale_adr = region == "US" and (f.get("v") or 1) < stock_pages.ADR_CHECKED and not str(f.get("unit") or "$").startswith("$")
+    # the newest year's own figures as the public page shows them: n/a when that year ended more than 15 months before
+    # the price (figures_stale), and the margins n/a beyond ±100% (extreme), so a screen never ranks on them (R10C-002)
+    old, wild = stock_pages.figures_stale(f), stock_pages.extreme(f)
+    year = lambda v: None if old else _num(v)              # noqa: E731
+    margin = lambda v: None if old or wild else _num(v)    # noqa: E731
     out = {"symbol": symbol, "name": str(f.get("name") or symbol)[:120], "sector": _sector(region, symbol, f),
            "industry": str((f.get("industry") or [None])[-1] or "")[:80] or None,
            # a market value (and P/E) that fails its checks is left out, so it never tops a list by size (R6V-001)
            "market_cap": None if stale_adr else stock_pages.shown_cap(f), "cap_checked": True, "price": price,
            "from_high": round((price / high - 1) * 100, 2) if price and high and high > 0 else None,
-           "sales_cagr_3y": _num(g.get("sales_cagr_3y")), "net_margin": _num(f.get("net_margin")),
-           "opm": None if f.get("bank") else _num(f.get("opm")), "debt_equity": None if f.get("bank") else _num(f.get("debt_equity")),
-           "roe": _num(f.get("roe")), "roce": _num(f.get("roce")), "div_yield": None if stale_adr else stock_pages.shown_yield(f), "pe": None if stale_adr else stock_pages.shown_pe(f),
+           "sales_cagr_3y": _num(g.get("sales_cagr_3y")), "net_margin": margin(f.get("net_margin")),
+           "opm": None if f.get("bank") else margin(f.get("opm")), "debt_equity": None if f.get("bank") else year(f.get("debt_equity")),
+           "roe": year(f.get("roe")), "roce": year(f.get("roce")), "div_yield": None if stale_adr else stock_pages.shown_yield(f), "pe": None if stale_adr else stock_pages.shown_pe(f),
            "stage": int(f["stage"]) if _num(f.get("stage")) in STAGES else None,
            "red_flags": _red_count(f) if region == "IN" else None,
            # a foreign company's page (a 20-F filer, depositary shares): a US company's peers aren't foreign filers (R10V-007)

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { asOf, fmtDate, latestDue, marketTz, pct, price } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
-import { REGION_NAME, useRegion, type Region } from "../lib/research";
+import { REGION_NAME, screenCap, screenNum, useRegion, type Region } from "../lib/research";
 import {
   NO_FILTERS, conditionCount, screensApi, staleNote, type Bound, type Filters, type RangeId, type SavedPage, type SavedScreen,
   type ScreenMeta, type ScreenResult, type ScreenRow,
@@ -21,11 +21,8 @@ import {
 type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
 type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => ReactNode; india?: boolean; text?: boolean };
 
-const num = (v: number | null, dp = 1, unit = "") => (v == null ? "–" : `${v.toFixed(dp)}${unit}`);
-/** A market value in one unit down the whole column, so values compare at a glance: Indian figures (they arrive in
- * crore) as whole crore with Indian grouping ("₹7,35,120 cr"), US ones (millions of dollars) in billions. */
-const cap = (v: number | null, region: Region) => (v == null ? "–" : region === "IN"
-  ? `₹${Math.round(v).toLocaleString("en-IN")} cr` : `$${(v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} bn`);
+const num = screenNum;
+const cap = screenCap;
 
 const COLS: Col[] = [
   { id: "name", label: "Company", cell: (r) => r.name, text: true },

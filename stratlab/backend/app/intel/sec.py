@@ -206,11 +206,63 @@ def flows(facts: dict, concepts: tuple, kind: str, unit: str = "USD") -> dict[st
             filed = f.get("filed") or ""
             if f["end"] not in best or filed > best[f["end"]][0]:
                 best[f["end"]] = (filed, float(f["val"]))
+        if kind == "annual" and "/shares" in unit:
+            best = split_adjusted(facts_rows(facts, concept, unit), best)
         if kind == "annual" and "pershare" not in concept.lower():      # a per-share figure doesn't add up across share counts
             for end, got in split_years(_facts(facts, concept, unit)).items():
                 best.setdefault(end, got)
         for end, (_, v) in best.items():
             out.setdefault(end, v)
+    return out
+
+
+SPLIT_MIN = 1.4                # a later annual report's per-share figure for a year this many times (or 1/this) the earlier one's
+SPLIT_FIT = 0.03               # ...and within this of a split's ratio (n for m): a split restated it
+
+
+def facts_rows(facts: dict, concept: str, unit: str) -> list[dict]:
+    """The annual rows of one concept (as flows reads them)."""
+    return [f for f in _facts(facts, concept, unit) if f.get("start") and f.get("val") is not None
+            and 340 <= _days(f["start"], f["end"]) <= 380 and f.get("form") in ANNUAL]
+
+
+def _split_like(r: float) -> bool:
+    x = r if r >= 1 else 1 / r
+    return x >= SPLIT_MIN and any(abs(x / (n / m) - 1) <= SPLIT_FIT for n in range(2, 51) for m in range(1, 5) if n / m >= SPLIT_MIN)
+
+
+def split_adjusted(rows: list[dict], best: dict[str, tuple[str, float]]) -> dict[str, tuple[str, float]]:
+    """Per-share figures for each year on the newest share basis (R10C-006). The newest filing wins for each year, but a
+    year older than the newest annual report's comparatives is only in reports filed before a split, so its earnings per
+    share are on the old count (a 4:1 split made 2019's 8.00 against 2020's 2.20: -16.6% a year over five years where
+    the true growth was 10%). A split shows as a report restating a year that an earlier one gave, by a split's ratio:
+    a figure from a report filed before it is multiplied by that ratio; one from between the last report on the old
+    basis and the restating one, where the basis can't be told, is left out."""
+    seen: dict[str, set] = {}
+    for f in rows:
+        seen.setdefault(f["end"], set()).add((f.get("filed") or "", float(f["val"])))
+    events: dict[str, list[tuple[str, float]]] = {}       # restating filing: [(the earlier filing, ratio)]
+    for vals in seen.values():
+        vals = sorted(vals)
+        for (f1, v1), (f2, v2) in zip(vals, vals[1:]):
+            if f1 < f2 and v1 and v2 and (v1 > 0) == (v2 > 0) and _split_like(v2 / v1):
+                events.setdefault(f2, []).append((f1, v2 / v1))
+    if not events:
+        return best
+    out: dict[str, tuple[str, float]] = {}
+    for end, (filed, v) in best.items():
+        k = 1.0
+        for f2, obs in events.items():
+            old = max(f1 for f1, _ in obs)
+            if filed >= f2:
+                continue
+            if filed > old:
+                k = None
+                break
+            ratios = sorted(r for _, r in obs)
+            k *= ratios[len(ratios) // 2]
+        if k is not None:
+            out[end] = (filed, v * k)
     return out
 
 

@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from ..deepdive import _cagr, _series, _years, numbers
+from ..deepdive import _series, _years, numbers
 from ..engine.indicators import stage
 from .net import num
 from .screener import summary
@@ -49,12 +49,12 @@ def _a_year(v) -> str | None:
 def growth(c: dict, nums: dict | None) -> dict | None:
     """Sales and profit growth, compounded over three and five reported years."""
     g = (nums or {}).get("growth") or {}
-    trend = c.get("trend") or {}
-    profit = [num(p.get("v")) for p in trend.get("profit") or []]
     sales3 = _first(g.get("sales_cagr_3y"), _metric(c, "Sales growth", "3Y CAGR"), _metric(c, "Growth", "Revenue 3Y"))
     sales5 = _first(g.get("sales_cagr_5y"), _metric(c, "Sales growth", "5Y CAGR"), _metric(c, "Growth", "Revenue 5Y"))
-    profit3 = _first(g.get("profit_cagr_3y"), _metric(c, "Profit growth", "3Y CAGR"), _cagr(profit, 3))
-    profit5 = _first(g.get("profit_cagr_5y"), _metric(c, "Profit growth", "5Y CAGR"), _cagr(profit, 5))
+    # never compounded again from the page's profit trend: it leaves blank years out, so three of its points can span
+    # five years (R10C-005, the R10V-001 gap); the deep dive's sums keep each blank year as a gap
+    profit3 = _first(g.get("profit_cagr_3y"), _metric(c, "Profit growth", "3Y CAGR"))
+    profit5 = _first(g.get("profit_cagr_5y"), _metric(c, "Profit growth", "5Y CAGR"))
     return _row("growth", "Growth",
                 _item("Sales, 3 years", _a_year(sales3)), _item("Sales, 5 years", _a_year(sales5)),
                 _item("Net profit, 3 years", _a_year(profit3)), _item("Net profit, 5 years", _a_year(profit5)))
