@@ -146,7 +146,8 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
         # on the line, so the summary's figure and date are what the line shows (R31-010)
         line = [(d, v) for d, v in combined]
         if fall and not fall["t"].endswith(END):
-            line = sorted(line + [(fall["t"], fall["level"])])
+            # a day's close is the end of its day, so the low sits before the close of the day it was reached
+            line = sorted(line + [(fall["t"], fall["level"])], key=lambda p: p[0] if "T" in p[0] else p[0] + END)
         worst = min(moves, key=lambda m: m[1]) if moves else None
         best = max(moves, key=lambda m: m[1]) if moves else None
         rows = [r for r, *_ in items]
