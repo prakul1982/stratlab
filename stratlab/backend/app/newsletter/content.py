@@ -120,10 +120,12 @@ def stage2_names(region: str, weekly: bool) -> dict:
     def row(r):
         return {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2),
                 "change_pct": None if r.get("chg") is None else round(r["chg"], 2)}
-    st_s2 = [row(r) for r in res["rows"] if r["signal"] == "fresh" and r["st_days"] <= window and r.get("stage") == 2
-             and r.get("st_up", True)]
-    named = {r["symbol"] for r in st_s2}
-    stage2 = [row(r) for r in res["rows"] if r["stage"] == 2 and (r.get("stage_days") or 99) <= window and r["symbol"] not in named]
+    # the scan's own reading of each stock (analyse): in Stage 2 with the Supertrend up is the whole rule, whichever of the two
+    # came later; new = either began within the window. Stage 2 alone is Stage 2 with the Supertrend not up (R30-001: GOOGL,
+    # in Stage 2 for a day with its Supertrend up for 19 days, was listed as "its Supertrend isn't up")
+    rule = [r for r in res["rows"] if r["stage"] == 2 and r.get("st_up") and min(r["st_days"], r.get("stage_days") or 99) <= window]
+    st_s2 = [row(r) for r in rule]
+    stage2 = [row(r) for r in res["rows"] if r["stage"] == 2 and not r.get("st_up") and (r.get("stage_days") or 99) <= window]
     return {"group": group["name"], "st_s2": st_s2[:12], "stage2": stage2[:12]}
 
 
@@ -285,6 +287,12 @@ def publisher(source) -> str | None:
     return None if not s or s.lower() in ("google news", "google", "yahoo", "yahoo finance", "finnhub", "rss") else s
 
 
+def _story_url(url):
+    """The story's own address where a news aggregator's redirect carries it (R30-006)."""
+    from ..intel.news import publisher_url
+    return publisher_url(url)
+
+
 def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[str] | None = None, n: int = HEADLINES,
                    indices: list[dict] | None = None) -> list[dict]:
     """The brief's headlines (R6O-004, R7O-005): stories about the region's market, an index or its economy, never
@@ -305,7 +313,7 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
         if k in keys:
             continue
         keys.add(k)
-        out.append({"headline": title, "url": h.get("url"), "at": h.get("at"), "source": source})
+        out.append({"headline": title, "url": _story_url(h.get("url")), "at": h.get("at"), "source": source})
     return out[:n]
 
 

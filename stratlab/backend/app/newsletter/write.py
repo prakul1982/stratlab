@@ -13,6 +13,7 @@ from ..ai_providers import AIError, complete, extract_json
 from ..config import settings
 from ..data.expiries import trading_on_or_before
 from ..intel.net import TTLCache
+from ..intel.news import aggregator_url, publisher_url
 
 FOOTER = "Facts from exchange filings, company documents and market data. Not investment advice."
 UNSUBSCRIBE = kit.UNSUBSCRIBE               # the sender fills this in per reader
@@ -102,11 +103,11 @@ def market_sections(f: dict) -> list[dict]:
     scan = f.get("scan") or {}
     # the whole rule and Stage 2 alone are two lists, so the lead's count is the first list's (R13-003)
     if scan.get("st_s2"):
-        out.append({"title": f"New on Stage 2 + Supertrend ({scan['group']})", "items": [
+        out.append({"title": f"Newly matched Stage 2 + Supertrend {'in the last 5 days' if f['weekly'] else 'today'} ({scan['group']})", "items": [
             _item(f"{r['symbol']} matches the Stage 2 rule with the price above its Supertrend (ST S2)", stock_url(region, r["symbol"]))
             for r in scan["st_s2"]]})
     if scan.get("stage2"):
-        out.append({"title": f"New in Stage 2 only ({scan['group']})", "items": [
+        out.append({"title": f"Newly in Stage 2, Supertrend not up ({scan['group']})", "items": [
             _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]))
             for r in scan["stage2"]]})
     heads = [h for h in f.get("headlines") or [] if not banned(h["headline"])]
@@ -216,10 +217,10 @@ def template(f: dict) -> str:
         scan = f.get("scan") or {}
         if scan.get("st_s2"):
             n = len(scan["st_s2"])
-            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the Stage 2 + Supertrend rule.")
+            parts.append(f"{n} stock{'s' if n != 1 else ''} from the {scan['group']} newly matched the Stage 2 + Supertrend rule {'in the last 5 days' if f['weekly'] else 'today'}.")
         if scan.get("stage2"):
             n = len(scan["stage2"])
-            parts.append(f"{n} {'other ' if scan.get('st_s2') else ''}stock{'s' if n != 1 else ''} newly entered Stage 2 without the Supertrend.")
+            parts.append(f"{n} {'other ' if scan.get('st_s2') else ''}stock{'s' if n != 1 else ''} newly entered Stage 2 {'in the last 5 days' if f['weekly'] else 'today'} without the Supertrend.")
         return " ".join(parts) or f"Here is the {REGION_NAME[f['region']]} market {span}."
     n = len(f.get("stocks") or [])
     flags = sum(len(r.get("filings") or []) for r in f.get("stocks") or [])
@@ -439,6 +440,11 @@ def link_path(issue_id: str, n: int) -> str:
     return f"/news-link/{issue_id}/{n}"
 
 
+def _headline_link(url):
+    u = publisher_url(url)
+    return None if aggregator_url(u) else u
+
+
 def headline_urls(issue: dict) -> list[str | None]:
     """The brief's headline links in order, as link_path numbers them: the list frozen when the issue was first sent
     (`links`), else the issue's Headlines as they are now. A later headline rule that drops a story from a sent brief
@@ -517,7 +523,10 @@ def render(issue: dict) -> tuple[str, str]:
             if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
                 # a sent issue numbers its links by the list frozen at the send, so the page and the email agree (R23-004)
                 k = frozen.index(it.get("url")) if frozen is not None and it.get("url") in frozen else n
-                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # an aggregator's long redirect: the short address in both parts
+                # the story's own address where an aggregator's redirect carries it; a redirect that doesn't is no link at
+                # all, as it opens a blank page (R30-006): the headline stays plain text
+                it = {**it, "url": _headline_link(it.get("url"))}
+                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # a long address: the short one in both parts
                     it = {**it, "url": kit.site(link_path(issue["id"], k))}
                 n += 1
             rows.append(_row(it))

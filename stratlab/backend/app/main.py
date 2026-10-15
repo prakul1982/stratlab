@@ -6111,7 +6111,7 @@ def news_link(iid: str, n: int):
     # the links frozen when the brief was sent, else its headlines as stored: a later headline rule that dropped a story
     # used to turn a sent email's link into a 404 (R23-004)
     urls = news.write.headline_urls(issue) if issue else []
-    url = news.write.kit.safe_url(urls[n]) if 0 <= n < len(urls) else None
+    url = news.write.kit.safe_url(news.write.publisher_url(urls[n])) if 0 <= n < len(urls) else None
     if not url and issue:
         # the story is no longer listed: the brief itself, rather than an error page
         return RedirectResponse(news.write.kit.news_url(iid), status_code=302)

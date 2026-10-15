@@ -108,6 +108,9 @@ export function NotebookProblem({ problem, retry }: { problem: "missing" | "erro
   return null;
 }
 
+/** A return at the account's floor says the money was lost, not just "−100.0%" (R30-012: the engine holds a wiped-out account's loss to −100%). */
+const lost = (v: number | null | undefined) => (typeof v === "number" && v <= -100 ? `Capital lost (${pct(v)})` : pct(v));
+
 function marketName(inst: Instrument | null, markets: { id: string; name: string }[]) {
   if (!inst) return null;
   return markets.find((m) => m.id === inst.market)?.name ?? (inst.market === "IN" ? "India" : inst.market);
@@ -355,9 +358,9 @@ function NotebookView() {
 
   const cols: Column<Experiment>[] = [
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
-    { key: "ret", header: "Overall", numeric: true, cell: (e) => <Signed value={e.stats.ret}>{pct(e.stats.ret)}</Signed> },
+    { key: "ret", header: "Overall", numeric: true, cell: (e) => <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
     { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
-    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{pct(u.unseen_ret)}</Signed> : "–"; } },
+    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
     { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
   ];
 

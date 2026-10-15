@@ -332,7 +332,7 @@ def test_the_plain_text_part_names_the_headline_and_its_publisher_not_a_wall_of_
     assert "Sensex ends 879 points higher as IT stocks rally (Economic Times)" in text
     assert "news.google.com" not in text and "CBMi" not in text and max(len(ln) for ln in text.splitlines()) < 200
     assert "(https://example.com/rupee)" in text                                       # a short address still prints
-    assert "news.google.com" not in issue["html"] and "/news-link/" in issue["html"]    # R19-006: the HTML links the same short address as the text
+    assert "news.google.com" not in issue["html"] and "/news-link/" not in issue["html"]    # R30-006: a redirect with no story address is plain text in both parts
     assert write.banned("") is False
 
 

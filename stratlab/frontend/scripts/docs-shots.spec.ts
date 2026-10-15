@@ -2,10 +2,14 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 
 // The README's screenshots, light and dark, 1280px wide: the landing page (top, its Money section, plans), the three space
-// homes, Positioning, an options paper session, a company page's price chart, ETF vs NAV and F&O changes. Run with scripts/docs-shots.config.ts (see there); files land in
+// homes, Positioning, an options paper session, a company page's price chart, ETF vs NAV and F&O changes, and (into
+// docs/images) a verdict page and a company deep dive. Run with scripts/docs-shots.config.ts (see there); files land in
 // docs/screenshots. The fake world's data is synthetic, so nothing here is real market data.
 const API = process.env.E2E_API ?? "http://127.0.0.1:8765";
 const OUT = resolve(process.env.DOCS_SHOTS_DIR ?? "../../docs/screenshots");
+// the verdict page and a company deep dive, which the README shows from docs/images
+const IMAGES = resolve(process.env.DOCS_IMAGES_DIR ?? "../../docs/images");
+const notebooks: string[] = [];
 const THEMES = ["light", "dark"] as const;
 type Theme = (typeof THEMES)[number];
 const admin = { Authorization: "Bearer admin-token" };
@@ -54,6 +58,7 @@ test.beforeAll(async ({ request }) => {
   for (const [name, inst, fast, slow] of [["Trend follower on Bitcoin", "CRYPTO:BTC-USD", 10, 30], ["EMA 20/50 on Ethereum", "CRYPTO:ETH-USD", 20, 50]] as const) {
     const nb = await post("/notebooks", { name, question: "Does the cross hold up after costs?", strategy: cross(name, fast, slow), instrument: inst });
     await post(`/notebooks/${nb.id}/experiments`, { days: 1500 });
+    notebooks.push(nb.id);
   }
   await post("/live/sessions", { strategy: cross("Trend follower on Bitcoin", 10, 30), instrument: "CRYPTO:BTC-USD" });
 });
@@ -71,7 +76,7 @@ for (const theme of THEMES) {
     await ctx.close();
   });
 
-  for (const [space, path, ready] of [["trade", "/trade", "Straddles, strangles"], ["invest", "/invest", "Which company do you want to look into?"],
+  for (const [space, path, ready] of [["trade", "/trade", "Straddles, strangles"], ["invest", "/invest", "Your research desk"],
     ["money", "/money", "Your money"]] as const) {
     test(`${space} home, ${theme}`, async ({ browser }) => {
       const { ctx, page } = await open(browser, theme, { signedIn: true, space });
@@ -115,6 +120,24 @@ for (const theme of THEMES) {
       await ctx.close();
     });
   }
+
+  test(`verdict, ${theme}`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, theme, { signedIn: true, space: "trade", height: 900 });
+    await page.goto(`/n/${notebooks[1]}/e/1`);
+    await expect(page.getByText("Unseen data").first()).toBeVisible({ timeout: 30_000 });
+    await settle(page);
+    await page.screenshot({ path: `${IMAGES}/verdict-${theme}.png` });
+    await ctx.close();
+  });
+
+  test(`deep dive, ${theme}`, async ({ browser }) => {
+    const { ctx, page } = await open(browser, theme, { signedIn: true, space: "invest", height: 900 });
+    await page.goto("/research/IN/RELIANCE/deep");
+    await expect(page.getByText(/Sales/).first()).toBeVisible({ timeout: 30_000 });
+    await settle(page);
+    await page.screenshot({ path: `${IMAGES}/deepdive-${theme}.png` });
+    await ctx.close();
+  });
 
   test(`options session, ${theme}`, async ({ browser }) => {
     const { ctx, page } = await open(browser, theme, { signedIn: true, space: "trade", height: 1120 });

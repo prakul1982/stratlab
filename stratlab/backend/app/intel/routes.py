@@ -590,7 +590,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
             sectors = hub.sector_moves(r)
         except Exception:
             sectors = None
-        read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r), sectors=sectors, cash=cash)
+        early = before_close_at(r, indices)
+        read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r) and not early, sectors=sectors, cash=cash, before_close=early)
         # the time of the levels the text quotes, so a read kept while the tiles move on says what its numbers are of (R16B-002)
         return {**read, "levels_at": max((i["at"] for i in indices if i.get("at")), default=None)}
     try:
@@ -607,6 +608,18 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         if d.get("code") in ("ai_failed", "ai_busy", "research_ai_limit"):
             return ok({"unavailable": True, "code": d["code"], "message": d.get("message") or "No AI read right now."})
         raise
+
+
+def before_close_at(region: str, indices: list[dict]) -> str | None:
+    """The time ("15:32 ET") of the earliest level when the market has closed but a level is still from before the close,
+    else None: the read then says "at", never "closed at" (R30-002)."""
+    early = sorted(i["at"] for i in indices if i.get("pre_close") and i.get("at"))
+    if not early:
+        return None
+    from zoneinfo import ZoneInfo
+    from ..data.markets import BY_ID
+    t = datetime.fromisoformat(str(early[0]).replace("Z", "+00:00")).astimezone(ZoneInfo((BY_ID.get(region) or {}).get("tz") or "UTC"))
+    return t.strftime("%H:%M") + {"US": " ET", "IN": " IST"}.get(region, "")
 
 
 CLOSED_MOOD_TTL = 20 * 3600      # a closed session's mood read: kept until the next session, never written again on "Ask again"
@@ -633,7 +646,7 @@ def mood_key(indices: list[dict], is_open: bool) -> tuple:
     session and its move to the nearest half percent. A read is kept while these stay the same and written again when they
     change (the open, a turn, the settled close: R16B-002 kept 7,719.51 beside tiles of 7,718.94)."""
     import math
-    return (is_open, any(i.get("settling") for i in indices), tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
+    return (is_open, any(i.get("settling") for i in indices), any(i.get("pre_close") for i in indices), tuple((i.get("name"), i.get("day"), math.floor((i.get("change_pct") or 0.0) * 2) / 2) for i in indices))
 
 
 @router.get("/sector")
