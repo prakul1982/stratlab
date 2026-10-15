@@ -156,6 +156,15 @@ def test_fno_summary_that_differs_or_a_missing_file_is_flagged():
     assert {"section": "F&O", "file": None, "summary": -1112.5, "ok": False, "what": "pnl"} in no_file["check"]
 
 
+def test_a_summary_workbook_with_a_very_long_first_sheet_still_gives_its_fno_totals():
+    long_first = M.TAX_SUMMARY + [[None, "Line", i] for i in range(hf.MAX_TRADE_ROWS + 100)]
+    sheets = [("Equity and Non Equity", long_first), ("F&O", M.deriv_summary("F&O", (1287.5, 1287.5), (-2400, 2400)))]
+    got = hf.parse_trades(make_zip([(EXITS + "F&O.csv", M._csv(M.TAX_FNO).encode()), ("taxpnl.xlsx", M.make_workbook(sheets))]))
+    fno = {c["section"]: c for c in got["check"]}
+    assert fno["F&O"]["summary"] == -1112.5 and fno["F&O"]["ok"] is False
+    assert all(s_["name"] != "taxpnl.xlsx" for s_ in got["skipped"])
+
+
 def test_a_summary_that_differs_is_flagged():
     rows = [r if r[1:2] != ["Short Term profit"] else [None, "Short Term profit", 4999] for r in M.TAX_SUMMARY]
     check = hf.parse_trades(M.zerodha_tax_zip(rows))["check"]
