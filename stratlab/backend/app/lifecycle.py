@@ -212,6 +212,39 @@ def _compose(subject: str, paras: list[str], cta: tuple[str, str] | None = None,
     return subject, html, text
 
 
+def own_plan(profile: dict) -> str:
+    """The plan the account has apart from the launch offer: what it pays for or was given, the site owner's Pro, or
+    Basic while free Basic time from invites lasts (access_plan without the offer)."""
+    try:
+        from .admin import recorded_owner
+        if recorded_owner(profile):
+            return "pro"
+    except Exception:
+        pass
+    plan = effective_plan(profile)
+    if plan == "free":
+        try:
+            if free_basic_until(profile):
+                return "basic"
+        except Exception:
+            pass
+    return plan
+
+
+def brief_line(profile: dict) -> str:
+    """What the Market Brief is for this account (R23-005: the welcome promised "after each market closes" to Free
+    accounts, which get the weekly edition): daily on Basic and up; on Free, the Saturday digest, with the daily one
+    while the launch offer gives everyone Pro, said with the offer's end as the pages say it."""
+    from .plans import allows
+    if allows(own_plan(profile), "newsletter"):
+        return "a short email after each market closes."
+    end = promo_until()
+    if promo_active() and end:
+        return (f"a short email after each market closes during the launch offer, which ends {_end_text(end)}; "
+                "then a weekly email on Saturday morning on the Free plan.")
+    return "a weekly email on Saturday morning on the Free plan. The daily one, after each market closes, comes with Basic and up."
+
+
 def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, str]:
     """(subject, html, text) for one email. `ctx` carries what the email is about: the trial's or offer's end, the
     invoice for a receipt, the plan that ended."""
@@ -226,7 +259,7 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             ("Test an idea", "describe it in plain words, or start from a ready-made one.", "/new"),
             ("Look into a company", "the numbers, its filings and the business in its own words.", "/research"),
             ("Trade it on paper", "run a strategy live with pretend money.", "/paper"),
-            ("Get the Market Brief", "a short email after each market closes.", "/settings#newsletters")], label="Welcome")
+            ("Get the Market Brief", brief_line(profile), "/settings#newsletters")], label="Welcome")
     if kind == "day2":
         return _compose("Test your first strategy in two minutes", [
             "You haven't run a backtest yet. Start from a ready-made idea, such as a moving-average crossover, or "

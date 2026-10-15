@@ -5555,8 +5555,8 @@ def run_platform_check(retry_after: float = 120, auto: bool = False) -> dict:
     return out
 
 
-def tell_admins(subject: str, text: str) -> int:
-    return alerts.tell_admins(subject, text)
+def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
+    return alerts.tell_admins(subject, text, label=label)
 
 
 def platform_job():
@@ -5623,8 +5623,18 @@ def weekly_facts(now: datetime) -> dict:
             if "mismatch" in levels or "error" in levels:
                 issues.append({"symbol": r.get("symbol"), "mismatches": levels.count("mismatch"), "errors": levels.count("error")})
         audits[market] = {"enabled": bool(m.state.get("enabled")), "checked": len(rows), "issues": issues}
+    week = [e for e in RECENT_ERRORS if after(e.get("at"))]
+    start = datetime.fromisoformat(SERVER_STARTED_AT)
+
+    def since_start(e) -> bool:
+        try:
+            return datetime.fromisoformat(str(e.get("at")).replace("Z", "+00:00")) >= start
+        except ValueError:
+            return False
+    fresh = sum(1 for e in week if since_start(e))
+    # the week's errors, each once, split by the last restart (R23-003: the kept ones were added on top of the week's)
     return {"stats": admin.week_stats(since), "checks": [h for h in hist if after(h.get("at"))], "audits": audits,
-            "errors": sum(1 for e in RECENT_ERRORS if after(e.get("at"))), **error_counts(),
+            "errors": len(week), **error_counts(), "errors_week_since_restart": fresh, "errors_week_before_restart": len(week) - fresh,
             "admin_url": email_kit.site("/admin")}
 
 
@@ -5881,7 +5891,8 @@ def admin_weekly_test(profile=Depends(admin.admin_profile)):
     """This week's summary, built and sent to the admins now. Monday's automatic one still goes out."""
     throttle(profile, "admin_weekly_test", 5, 3600, "You've sent 5 summaries this hour. Try again later.")
     subject, text = weekly_summary()
-    return {"subject": subject, "text": text, "reached": tell_admins(subject, text)}
+    # labelled as the Monday one is, not "Admin alert" (R23-003)
+    return {"subject": subject, "text": text, "reached": tell_admins(subject, text, label="Weekly summary")}
 
 
 # ---------- newsletters: the Market Brief and My Stocks ----------
@@ -5902,8 +5913,13 @@ def news_link(iid: str, n: int):
     are ever forwarded to, so it is no open redirect; a reader needs no sign-in to follow a link from their email."""
     parts = news.parse_id(iid)
     issue = news.load(iid) if parts and parts[0] == "market" else None
+    # the links frozen when the brief was sent, else its headlines as stored: a later headline rule that dropped a story
+    # used to turn a sent email's link into a 404 (R23-004)
     urls = news.write.headline_urls(issue) if issue else []
     url = news.write.kit.safe_url(urls[n]) if 0 <= n < len(urls) else None
+    if not url and issue:
+        # the story is no longer listed: the brief itself, rather than an error page
+        return RedirectResponse(news.write.kit.news_url(iid), status_code=302)
     if not url:
         return HTMLResponse(mail_pages.notice("That link isn't available", "The story may have been taken down. The brief is on the "
                                             "Briefs page in the app."), status_code=404)

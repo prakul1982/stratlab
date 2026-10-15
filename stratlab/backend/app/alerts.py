@@ -76,18 +76,30 @@ def _brevo_sender() -> str:
     return first
 
 
+# Brevo's open and click tracking rewrites every link to its own sendibt2/3.com host and adds a pixel (R6V-016, R15-005,
+# R23-001). Brevo reads these headers on a message (the transactional API's `headers` and its SMTP relay alike) to leave
+# one untracked: X-Mailin-Track turns both off, the other two each one. The account's own tracking setting in Brevo is
+# still the switch to check if a message ever arrives tracked.
+NO_TRACKING = {"X-Mailin-Track": "0", "X-Mailin-Track-Clicks": "0", "X-Mailin-Track-Opens": "0"}
+
+
+def manage_unsubscribe_headers() -> dict:
+    """List-Unsubscribe for an email that has no unsubscribe of its own (receipts, plan changes, test emails, the
+    confirm-your-address email, admin notes): StratLab's own Manage emails page, so the mail app's Unsubscribe button
+    never falls back to the mail service's link, which would block the address there, receipts included (R23-001). No
+    One-Click header: the page is where the reader chooses, nothing is turned off by the button alone."""
+    from .email_kit import MANAGE_NEWSLETTERS
+    return {"List-Unsubscribe": f"<{email_link_base()}{MANAGE_NEWSLETTERS}>"}
+
+
 def _send_brevo(to: str, subject: str, body: str, html: str | None = None, headers: dict | None = None) -> None:
-    # Brevo's open and click tracking (links rewritten to its own sendibt3.com domain, R6V-016) is an account setting:
-    # its transactional API has no per-message switch for it, so it is turned off in Brevo's own settings (or by asking
-    # Brevo's support), not here. The links in the text version are always the site's own.
     msg = {"sender": {"name": "StratLab", "email": _brevo_sender()}, "to": [{"email": to}], "subject": subject,
            "textContent": body}
     if settings.REPLY_TO_EMAIL:
         msg["replyTo"] = {"email": settings.REPLY_TO_EMAIL}
     if html:
         msg["htmlContent"] = html
-    if headers:
-        msg["headers"] = headers
+    msg["headers"] = {**(headers or {}), **NO_TRACKING}       # every StratLab email untracked (R23-001)
     r = httpx.post("https://api.brevo.com/v3/smtp/email", timeout=15,
                    headers={"api-key": settings.BREVO_API_KEY, "accept": "application/json"}, json=msg)
     if r.status_code >= 400:
@@ -197,7 +209,10 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     from .email_kit import subject_line
     one_line = lambda v: " ".join(str(v).split())         # a line break in a header would start a new header
     subject = subject_line(one_line(subject))              # one rule for every email's subject: no "StratLab:" prefix
-    headers = {k: one_line(v) for k, v in (headers or {}).items()} or None
+    headers = {k: one_line(v) for k, v in (headers or {}).items()}
+    if not any(k.lower() == "list-unsubscribe" for k in headers):
+        # an email with no unsubscribe of its own still names one: ours, never the mail service's (R23-001)
+        headers.update(manage_unsubscribe_headers())
     if settings.BREVO_API_KEY:
         _send_brevo(to, subject, body, html, headers)
         return
@@ -212,7 +227,8 @@ def send_email(to: str, subject: str, body: str, html: str | None = None, header
     msg["Subject"] = subject
     if settings.REPLY_TO_EMAIL:
         msg["Reply-To"] = settings.REPLY_TO_EMAIL
-    for k, v in (headers or {}).items():
+    smtp_brevo = any(w in (settings.SMTP_HOST or "").lower() for w in ("brevo", "sendinblue"))
+    for k, v in {**(headers or {}), **(NO_TRACKING if smtp_brevo else {})}.items():      # Brevo's relay reads them too
         msg[k] = v
     msg.set_content(body)
     if html:
