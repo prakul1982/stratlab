@@ -149,15 +149,18 @@ export function LegalPage() {
   const { pathname } = useLocation();
   // the seller's details set in Admin → Invoices (legal name, address, business email), when the owner has set them
   const [, seen] = useState(0);
+  const [loaded, setLoaded] = useState(false);      // the seller's details are shown once fetched (or the fetch failed), not the fallback first
   useEffect(() => {
     let live = true;
     publicGet<{ legal_name?: string; address?: string; email?: string }>("/public/business").then((b) => {
-      if (!live || !b) return;
+      if (!live) return;
+      setLoaded(true);
+      if (!b) return;
       if (b.legal_name) BUSINESS.name = b.legal_name;
       if (b.address && !CFG.BUSINESS_ADDRESS) BUSINESS.address = b.address;
       if (b.email) BUSINESS.email = b.email;
       seen((n) => n + 1);
-    }).catch(() => undefined);
+    }).catch(() => { if (live) setLoaded(true); });
     return () => { live = false; };
   }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
@@ -176,7 +179,7 @@ export function LegalPage() {
         <article className="legal-body stack">
           <h1 className="page-title">{page.title}</h1>
           <p className="small muted">Last updated {UPDATED[page.path]}</p>
-          <Body />
+          {loaded ? <Body /> : <p className="small muted" role="status">Loading…</p>}
         </article>
       </main>
     </div>

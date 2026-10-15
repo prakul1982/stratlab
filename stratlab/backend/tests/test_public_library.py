@@ -62,7 +62,7 @@ def test_a_crowd_of_visitors_reads_the_store_once_a_minute(api, store, monkeypat
     library.save(_entry("seed-ema-nifty50"))
     reads = []
     real = library.all_entries
-    monkeypatch.setattr(library, "all_entries", lambda: reads.append(1) or real())
+    monkeypatch.setattr(library, "all_entries", lambda everything=False: reads.append(1) or real(everything))
     main.app.dependency_overrides.pop(main.current_profile, None)
     try:
         for _ in range(5):

@@ -3480,7 +3480,7 @@ def public_verdict_image(token: str):
     png = public.image(token)
     if not png:
         err(404, "not_found", "No image for this link.")
-    return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/v/{token}")
@@ -3489,7 +3489,7 @@ def public_verdict_page(token: str):
     if not snap:
         # the verdict page says the link was turned off or never existed, not the landing page in silence (R11C-015)
         return RedirectResponse(settings.PUBLIC_SITE_URL + (f"/verdict/{token}" if public.TOKEN.match(token) else "/"))
-    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=300"})
+    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=60"})
 
 
 # ---------- company fact cards: an image and a public link that previews as it ----------

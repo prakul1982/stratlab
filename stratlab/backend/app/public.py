@@ -94,6 +94,8 @@ def publish(nb: dict, exp: dict, image: str | None) -> str:
     img = decode_image(image)
     if img:
         db.set_setting(f"shareimg:{token}", img)
+    else:
+        db.delete_setting(f"shareimg:{token}")      # a refresh without a valid card picture must not keep the old one
     return token
 
 

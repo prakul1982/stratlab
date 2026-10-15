@@ -222,7 +222,7 @@ def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=
 
 
 def seeded() -> list[dict]:
-    return [e for e in library.all_entries() if e.get("official")]
+    return [e for e in library.all_entries(everything=True) if e.get("official")]
 
 
 if __name__ == "__main__":          # python -m app.library_seed

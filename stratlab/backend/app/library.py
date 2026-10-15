@@ -399,7 +399,7 @@ def public_entries() -> list[dict]:
     """StratLab's own visible entries, for the routes that need no sign-in (kept for a minute)."""
     import time
     if time.time() - _official_cache[0] >= OFFICIAL_TTL:
-        _official_cache[:] = [time.time(), [e for e in all_entries() if is_public(e)]]
+        _official_cache[:] = [time.time(), [e for e in all_entries(everything=True) if is_public(e)]]
     return _official_cache[1]
 
 

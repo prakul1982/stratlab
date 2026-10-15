@@ -1990,12 +1990,12 @@ def with_surveillance(page: str, flags: list[dict]) -> str:
 
 def with_ref(page: str, code: str) -> str:
     """A page whose links into the app (sign up, test, deep dive) carry an invite code, for someone who arrived from
-    a shared card. Links to other company pages, and the canonical address, stay as they are."""
+    a shared card. Links to other company pages and the /stocks list, and the canonical address, stay as they are."""
     site = re.escape(settings.PUBLIC_SITE_URL)
 
     def add(m):
         return f'{m.group(1)}{m.group(2)}{"&amp;" if "?" in m.group(2) else "?"}ref={code}"'
-    return re.sub(rf'(<a [^>]*?href=")({site}/(?!stocks/)[^"#]*)"', add, page)
+    return re.sub(rf'(<a [^>]*?href=")({site}/(?!stocks(?:/|"))[^"#]*)"', add, page)
 
 
 def not_found(region: str | None, symbol: str) -> str:
@@ -2123,7 +2123,7 @@ def sitemap(name: str) -> str | None:
     if name == "pages":
         # /stocks is the API's own list of company pages, not one of the site's pages: it changes with the companies list
         listed = max((str(((_setting(f"stocks:list:{R}") or {}).get("at")) or "")[:10] for R in REGIONS.values()), default="")
-        return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + "/stocks", listed or max(d for _, d in site_pages.PAGES))]
+        return _urlset([(site + p, d) for p, d in site_pages.PAGES] + [(site + p, listed or max(d for _, d in site_pages.PAGES)) for p in ["/stocks"] + [f"/stocks/{r}" for r in REGIONS]]
                        + [(site + p, d) for p, d in site_pages.library_pages()])
     bits = name.split("-")
     if len(bits) != 3 or bits[0] != "stocks" or bits[1] not in REGIONS or not bits[2].isdigit() or len(bits[2]) > 6:
