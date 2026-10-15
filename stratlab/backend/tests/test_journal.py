@@ -562,3 +562,12 @@ def test_the_tax_reports_fno_commodity_and_currency_totals_show_beside_the_trade
     opt = c.get("/trade/journal?segment=opt", headers=PRO).json()
     assert [x["seg"] for x in opt["tax_totals"]] == ["fno"]                                    # the F&O total belongs to futures and options
     assert c.get("/trade/journal?segment=eq_intraday", headers=PRO).json()["tax_totals"] == []
+
+
+def test_a_tradebook_read_again_now_that_times_keep_pm_adds_no_fill_twice():
+    from app import holdings_file as hf
+    raw = {"d": "2025-06-10", "side": "B", "qty": 100, "price": 200.0, "symbol": "INFY", "isin": "INE009A01021", "tid": ""}
+    before = J._fill({**raw, "t": "2025-06-10 02:15:00 PM"[:20]})          # saved when the time was cut, PM and all
+    now = J._fill({**raw, "t": hf.trade_time("2025-06-10 02:15:00 PM")})
+    assert (before["t"], now["t"]) == ("02:15:00", "14:15:00")
+    assert J._merge([before], [now], J._fill_key)[1:] == (0, 1)

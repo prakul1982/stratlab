@@ -3018,7 +3018,9 @@ def tax_inputs(profile) -> dict:
     fmv, fmv_src = {}, {}
     pre = sorted({tax_lots.lot_key(t) for t in trades if t["side"] == "B" and t["d"] <= tax_lots.GF_DATE})
     looked = 0
-    in_file = {k for k in pre if all(t.get("fmv") for t in trades if tax_lots.lot_key(t) == k and t["side"] == "B" and t["d"] <= tax_lots.GF_DATE)}
+    # a tradebook buy counted with a tax P&L line has the line's value (tax_lots._covered)
+    keys = set(pre)
+    in_file = tax_lots.fmv_in_files([t for t in trades if tax_lots.lot_key(t) in keys], acts) & keys
     for k in pre:
         if k in data["fmv"]:
             fmv[k], fmv_src[k] = data["fmv"][k], "yours"

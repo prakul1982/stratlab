@@ -258,6 +258,95 @@ def test_a_tradebook_buy_sold_only_in_a_tax_pnl_file_isnt_left_open():
     assert [(r["bought"], r["qty"], r["gain"]) for r in c["realised"]] == [("2023-01-02", 10, 500)] and c["unmatched"] == []
 
 
+def pnl_line(bd, sd, q, bp, sp, key="X", fmv=None, charges=0.0, stt=None):
+    """A tax P&L line as holdings_file reads it: a buy and its sale, ids ending :b and :s."""
+    i = f"pnl:{bd}:{sd}:{q:g}:{bp:.4f}:{sp:.4f}"
+    return [b(bd, q, bp, key, src="pnl", tid=i + ":b", fmv=fmv, charges=0.0, t=""),
+            s(sd, q, sp, key, src="pnl", tid=i + ":s", charges=charges, stt=stt, t="")]
+
+
+def tb_row(side, d, q, p, tid, key="X", **kw):
+    return {"d": d, "side": side, "qty": q, "price": p, "sym": key, "src": "trades", "tid": tid, "charges": 0.0, **kw}
+
+
+def test_a_tax_pnl_line_after_a_split_is_counted_by_the_tradebook_in_its_own_shares():
+    # 100 bought at 100, a 1:5 split, 200 of the 500 sold: the P&L line says 200 (shares of the sale day)
+    acts = {"X": [{"kind": "split", "factor": 5.0, "ex_date": "2025-03-01", "id": "s"}]}
+    tb = [tb_row("B", "2025-01-10", 100, 100, "a"), tb_row("S", "2025-06-10", 200, 30, "b")]
+    c = T.compute(pnl_line("2025-01-10", "2025-06-10", 200, 20, 30) + tb, actions=acts, today=TODAY)
+    assert [(r["bought"], r["qty"], r["gain"]) for r in c["realised"]] == [("2025-01-10", 200, 2000)]
+    assert [(l["d"], l["qty"], l["cost"]) for l in c["open"]] == [("2025-01-10", 300, 6000)] and c["unmatched"] == []
+    # a later sale only in the tradebook comes out of the same lot, not unmatched
+    c = T.compute(pnl_line("2025-01-10", "2025-06-10", 200, 20, 30) + tb + [tb_row("S", "2025-07-10", 100, 32, "c")],
+                  actions=acts, today=TODAY)
+    assert [(r["sold"], r["qty"], r["gain"]) for r in c["realised"]] == [("2025-06-10", 200, 2000), ("2025-07-10", 100, 1200)]
+    assert [(l["qty"], l["cost"]) for l in c["open"]] == [(200, 4000)] and c["unmatched"] == []
+    # a reverse split (10 to 1): the line's 5 shares are 50 of the tradebook's
+    acts = {"X": [{"kind": "split", "factor": 0.1, "ex_date": "2025-03-01", "id": "s"}]}
+    c = T.compute(pnl_line("2025-01-10", "2025-06-10", 5, 100, 120) + [tb_row("B", "2025-01-10", 100, 10, "a"),
+                  tb_row("S", "2025-06-10", 5, 120, "b")], actions=acts, today=TODAY)
+    assert [(r["qty"], r["gain"]) for r in c["realised"]] == [(5, 100)] and [(l["qty"], l["cost"]) for l in c["open"]] == [(5, 500)]
+    # without the tradebook's sale the line stays as the broker matched it, and takes 40 of the 200 bought
+    c = T.compute(pnl_line("2025-01-10", "2025-06-10", 200, 20, 30) + [tb_row("B", "2025-01-10", 200, 100, "a")],
+                  actions={"X": [{"kind": "split", "factor": 5.0, "ex_date": "2025-03-01", "id": "s"}]}, today=TODAY)
+    assert [(r["qty"], r["gain"]) for r in c["realised"]] == [(200, 2000)]
+    assert [(l["qty"], l["cost"]) for l in c["open"]] == [(800, 16000)]
+
+
+def test_bonus_shares_on_their_own_tax_pnl_line_leave_nothing_open():
+    acts = {"X": [{"kind": "bonus", "ratio": [1, 1], "factor": 2.0, "ex_date": "2025-03-01", "id": "b"}]}
+    tb = [tb_row("B", "2025-01-10", 100, 100, "a"), tb_row("S", "2025-06-10", 200, 80, "b")]
+    lines = pnl_line("2025-01-10", "2025-06-10", 100, 100, 80) + pnl_line("2025-03-01", "2025-06-10", 100, 0.0001, 80)
+    c = T.compute(lines + tb, actions=acts, today=TODAY)
+    assert c["open"] == [] and c["unmatched"] == []
+    assert sorted((r["bought"], r["qty"], r["gain"], r["bonus"]) for r in c["realised"]) == [
+        ("2025-01-10", 100, -2000, False), ("2025-03-01", 100, 8000, True)]
+    # the broker's line with the bonus shares in it (200 from the first buy) is counted once too
+    c = T.compute(pnl_line("2025-01-10", "2025-06-10", 200, 50, 80) + tb, actions=acts, today=TODAY)
+    assert c["open"] == [] and c["unmatched"] == [] and sum(r["qty"] for r in c["realised"]) == 200
+
+
+def test_a_tax_pnl_lines_fmv_and_charges_go_to_the_tradebook_fills_that_count_it():
+    tb = [tb_row("B", "2017-06-01", 10, 100, "a"), tb_row("S", "2025-06-10", 10, 200, "b")]
+    line = pnl_line("2017-06-01", "2025-06-10", 10, 100, 200, fmv=120, charges=15.0, stt=20.0)
+    c = T.compute(line + tb, today=TODAY)
+    r = c["realised"]
+    assert [(x["qty"], x["gf"], x["cost"]) for x in r] == [(10, "applied", 1200)]
+    assert r[0]["gain"] == pytest.approx(800 - 15)                      # the line's charges, which the tradebook hadn't
+    assert T.fmv_in_files(line + tb) == {"X"} and T.fmv_in_files(tb) == set()
+    # the tradebook's own charges and value are kept
+    tb2 = [tb_row("B", "2017-06-01", 10, 100, "a", fmv=130), {**tb_row("S", "2025-06-10", 10, 200, "b"), "charges": 5.0}]
+    r = T.compute(line + tb2, today=TODAY)["realised"]
+    assert r[0]["cost"] == 1300 and r[0]["gain"] == pytest.approx(700 - 5)
+    # the files themselves aren't changed
+    assert "fmv" not in tb[0] and tb[1]["charges"] == 0.0
+    # across a split the value is in the tradebook's shares: 60 a share of the line's is 120 one bought before 1:2
+    acts = {"X": [{"kind": "split", "factor": 2.0, "ex_date": "2020-01-01", "id": "s"}]}
+    r = T.compute(pnl_line("2017-06-01", "2025-06-10", 20, 50, 100, fmv=60) + tb, actions=acts, today=TODAY)["realised"]
+    assert [(x["qty"], x["gf"], x["cost"]) for x in r] == [(20, "applied", 1200)]
+
+
+def test_tradebook_times_keep_am_and_pm_and_the_duplicate_check_still_matches_saved_fills():
+    csv = (b"symbol,isin,trade_date,exchange,segment,trade_type,quantity,price,order_execution_time\n"
+           b"INFY,INE009A01021,2025-06-10,NSE,EQ,sell,100,200,2025-06-10 09:30:00 AM\n"
+           b"INFY,INE009A01021,2025-06-10,NSE,EQ,buy,100,200,2025-06-10 02:15:00 PM\n"
+           b"INFY,INE009A01021,2022-01-03,NSE,EQ,buy,100,100,2022-01-03 11:00:00 AM\n")
+    got = hf.parse_trades(csv, "tradebook.csv")["trades"]
+    assert [(t["d"], t["side"], t["t"]) for t in got] == [("2025-06-10", "S", "09:30:00"), ("2025-06-10", "B", "14:15:00"),
+                                                          ("2022-01-03", "B", "11:00:00")]
+    c = T.compute([{**t, "sym": "INFY"} for t in got], today=TODAY)
+    assert [(r["bought"], r["qty"], r["term"]) for r in c["realised"]] == [("2022-01-03", 100, "LT")] and c["intraday"] == []
+    assert [(l["d"], l["qty"]) for l in c["open"]] == [("2025-06-10", 100)]
+    # fills saved before, with the time cut at 20 characters, are the same fills
+    saved = [{**t, "t": raw[:20]} for t, raw in zip(got, ("2025-06-10 09:30:00 AM", "2025-06-10 02:15:00 PM", "2022-01-03 11:00:00 AM"))]
+    assert T.merge(saved, got)[1:] == (0, 3)
+    assert hf.trade_time("2025-06-10T04:00:00Z") == "2025-06-10T04:00:00Z" and hf.trade_time("no time") == "no time"
+    # a time with a zone is India time: 04:00 UTC is 09:30, before the 09:45 buy
+    c = T.compute([b("2022-01-03", 100, 100), s("2025-06-10", 100, 200, t="2025-06-10T04:00:00Z"),
+                   b("2025-06-10", 100, 200, t="2025-06-10T09:45:00+05:30")], today=TODAY)
+    assert [r["qty"] for r in c["realised"]] == [100] and c["intraday"] == []
+
+
 def test_a_sale_then_a_buy_the_same_day_is_not_intraday_when_the_times_say_so():
     # LTCG harvesting: 100 held since 2022, sold at 10:00 and bought back at 14:00
     c = T.compute([b("2022-01-03", 100, 100), s("2025-06-10", 100, 200, t="10:00:00"), b("2025-06-10", 100, 200, t="14:00:00")], today=TODAY)
@@ -409,7 +498,7 @@ def test_charges_without_stt_and_values_without_prices():
     icici = hf.parse_trades((FIX / "icici_direct_tradebook.csv").read_bytes())["trades"]
     assert icici[0]["charges"] == 42.7 and "stt" in icici[0] and icici[0]["isin"] == "INE062A01020"
     groww = hf.parse_trades((FIX / "groww_order_history.xlsx").read_bytes())["trades"]
-    assert groww[0]["price"] == 410.2 and groww[0]["t"] == "10:15 AM"
+    assert groww[0]["price"] == 410.2 and groww[0]["t"] == "10:15:00"               # "10:15 AM", on a 24-hour clock
     assert not any(t["symbol"] == "TATASTEEL" and t["side"] == "S" for t in groww)   # the cancelled order
 
 
