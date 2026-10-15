@@ -40,7 +40,7 @@ def test_a_headline_has_the_same_short_link_in_both_parts():
              "sections": [{"title": "Headlines", "items": [{"text": "Sensex gains", "url": "https://news.google.com/rss/articles/CBMi", "source": "Mint", "lines": []}]}]}
     html, text = write.render(issue)
     link = "/news-link/market.IN.2026-10-10-weekly/0"
-    assert link in html and link in text and "news.google.com" not in html
+    assert link not in html and link not in text and "news.google.com" not in html and "Sensex gains" in html      # R30-006: no story address, no link
     assert "as of the 15:30 IST close of 9 Oct 2026" in text
 
 

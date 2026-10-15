@@ -267,7 +267,7 @@ export function CompanyPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrow} title={c.name} lede={`${c.exchange || REGION_NAME[region]} · ${c.symbol}${c.industry ? ` · ${c.industry}` : ""}`}
-        asOf={c.as_of} asOfLabel="Prices as of" asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
+        asOf={c.as_of} asOfLabel={c.phase === "settling" ? "Provisional prices as of" : "Prices as of"} asOfTz={marketTz(region)} actions={c.quarters?.cols.length ? <Badge>Latest results: quarter to {c.quarters.cols[c.quarters.cols.length - 1]}{resultsAge(c.quarters.cols[c.quarters.cols.length - 1])}</Badge> : c.numbers_at ? <Badge>Reported numbers as of {asOf(c.numbers_at, { tz: marketTz(region) })}</Badge> : undefined} />
       <Card>
         <div className="inv-head">
           <div className="k-stack">

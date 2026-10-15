@@ -672,7 +672,7 @@ def test_r23_002_admin_says_when_a_due_brief_has_no_run(monkeypatch):
 
 # ---------- R23-004: a sent brief's links keep working after a headline rule shrinks its list ----------
 def test_r23_004_a_sent_briefs_link_numbers_survive_a_later_headline_filter(w, monkeypatch, outbox):
-    heads = [{"headline": f"Wall Street story {i}", "url": f"https://news.google.com/rss/articles/CBMi{i}?oc=5"} for i in range(3)]
+    heads = [{"headline": f"Wall Street story {i}", "url": f"https://www.reuters.com/markets/us/{'a' * 200}/{i}"} for i in range(3)]   # long: the short address stands in
     facts = lambda region, day, weekly=False: {**market(region, weekly, day), "headlines": heads}   # noqa: E731
     monkeypatch.setattr(content, "market_facts", facts)
     reader("u-pro", "pro@example.com", market_us="daily")

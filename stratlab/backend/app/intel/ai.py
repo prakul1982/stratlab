@@ -305,8 +305,9 @@ companies with the most direct link to the theme, in value-chain order, not rank
 
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,
-          sectors: dict | None = None, cash: dict | None = None) -> dict:
-    """`cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
+          sectors: dict | None = None, cash: dict | None = None, before_close: str | None = None) -> dict:
+    """`before_close`: the market has closed but the levels are from this earlier time (R30-002): the read says "at" that
+    time, never "closed at". `cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
     sold (R10O-004)."""
     cash_facts = grounding.flow_facts(cash)
     headlines = grounding.session_headlines(headlines, ist_date())          # nothing older than the session day (R28-004)
@@ -339,6 +340,7 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     facts = {"today": ist_date().isoformat(), **({"focus": focus} if focus else {}), "indices": grounding.market_facts(indices),
              # after the close the levels are the day's close: the read says the market closed, never "opened" (R6O-025)
              **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
+             **({"session": f"The market has closed, but these levels are as of {before_close}, before the close. Say \"at\" the level as of that time; never say it closed at it."} if before_close else {}),
              # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)
              **({"sectors": {k: sectors[k] for k in ("up", "down", "unchanged", "of")}} if sectors else {}),
              # the FII and DII figures StratLab's Positioning page shows for the day, in ₹ crore (R10O-004)
@@ -360,6 +362,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
     out = grounding.ground_pulse(read, indices, headlines, sectors, cash_facts)
     out = grounding.closed_words(out) if closed else out
+    if before_close:                 # the model's own wording is not trusted with it
+        out = {**out, "tone": re.sub(r"\bclosed at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
     tidy = lambda t: grounding.tidy_numbers(t, region)          # noqa: E731  (numbers the page's way, R7O-001)
     return {**out, "tone": tidy(out.get("tone")),
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}

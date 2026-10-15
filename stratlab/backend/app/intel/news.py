@@ -1,4 +1,6 @@
 """Headlines from Google News RSS (India, and market-wide) and company facts from Wikipedia."""
+import base64
+import binascii
 import re
 from email.utils import parsedate_to_datetime
 from html import unescape
@@ -45,6 +47,27 @@ class GoogleNews(Source):
             if len(out) >= limit:
                 break
         return out
+
+
+def publisher_url(url: str | None) -> str | None:
+    """The publisher's own address for a Google News redirect (news.google.com/rss/articles/<token>) when the token carries
+    it: older tokens are the address itself, base64-encoded, so it is read from data already in hand, with no request. Any
+    other address is returned as it is; a token that doesn't carry one is returned as it is too (R30-006)."""
+    m = re.match(r"https?://news\.google\.com/(?:rss/)?articles/([A-Za-z0-9_-]+)", url or "")
+    if not m:
+        return url
+    tok = m.group(1)
+    try:
+        raw = base64.urlsafe_b64decode(tok + "=" * (-len(tok) % 4))
+    except (ValueError, binascii.Error):
+        return url
+    hit = re.search(rb"https?://[\x21-\x7e]+", raw)
+    return hit.group(0).decode("ascii") if hit else url
+
+
+def aggregator_url(url) -> bool:
+    """Whether an address is still a news aggregator's redirect (a blank page in a browser), not a story."""
+    return bool(re.match(r"https?://news\.google\.com/", str(url or ""), re.I))
 
 
 # ---------- headlines a page may carry (R7O-005) ----------

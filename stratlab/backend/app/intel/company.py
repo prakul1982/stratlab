@@ -6,7 +6,8 @@ carries a `sources` list saying which ones answered, so the page can show what's
 missing instead of breaking."""
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from datetime import time as dtime
 
 from .. import name_search
 from ..kite_service import KiteService
@@ -93,11 +94,37 @@ def index_level(name: str, q: dict, region: str, now: datetime | None = None) ->
         hi = q["high"]                          # today's high above the year's: the year's high is today's
     from .. import stock_pages
     settling = stock_pages.settling(region, now)
+    at, pre_close = q.get("at"), False
+    close_at = _close_time(day, region)
+    if close_at is not None:
+        try:
+            t = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+            t = t if t.tzinfo else t.replace(tzinfo=close_at.tzinfo)
+            if t > close_at:
+                at = close_at.isoformat()          # a level is never stamped later than its session's close (R30-002)
+            elif not is_open and t < close_at - timedelta(minutes=5) and (now or datetime.now(timezone.utc)) >= close_at:
+                pre_close = True                   # the session has closed but this level is from before the close
+        except (TypeError, ValueError):
+            pass
     return {"name": name, "price": price, "change_pct": change_2dp(price, q.get("prev_close"), q.get("change_pct")),
             "prev_close": q.get("prev_close"), "high52": hi, "low52": q.get("low52"),
-            "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": q.get("at"), "day": day,
+            "from_high_pct": ((price / hi - 1) * 100) if hi else None, "at": at, "day": day,
             "live": bool(is_open and day == today), "stale": bool(is_open and (day is None or day < today)),
-            "settling": bool(settling and (day is None or day == settling))}
+            "settling": bool(settling and (day is None or day == settling)), "pre_close": pre_close}
+
+
+def _close_time(day: str | None, region: str) -> datetime | None:
+    """When the market closed on a day (ISO), in its own zone; None on a day without a close."""
+    from datetime import date as _date
+    from zoneinfo import ZoneInfo
+    from ..data.markets import BY_ID
+    from ..stock_pages import close_of
+    try:
+        d = _date.fromisoformat(day)
+        hh, mm = (close_of(region, d) or "").split(":")
+        return datetime.combine(d, dtime(int(hh), int(mm)), ZoneInfo((BY_ID.get(region) or {}).get("tz") or "UTC"))
+    except (TypeError, ValueError):
+        return None
 
 
 def _fy(label: str) -> str:

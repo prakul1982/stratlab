@@ -254,11 +254,11 @@ def test_the_stage_2_plus_supertrend_list_holds_only_the_whole_rule(monkeypatch)
     assert [r["symbol"] for r in got["st_s2"]] == ["V", "MA"] and [r["symbol"] for r in got["stage2"]] == ["UNH"]
     f = {"kind": "market", "region": "US", "day": "2026-10-09", "weekly": False, "scan": got}
     secs = write.market_sections(f)
-    assert [s["title"] for s in secs] == ["New on Stage 2 + Supertrend (20 of the largest US companies)", "New in Stage 2 only (20 of the largest US companies)"]
+    assert [s["title"] for s in secs] == ["Newly matched Stage 2 + Supertrend today (20 of the largest US companies)", "Newly in Stage 2, Supertrend not up (20 of the largest US companies)"]
     assert [i["text"].split()[0] for i in secs[0]["items"]] == ["V", "MA"]
     lead = write.template(f)
-    assert "2 stocks from the 20 of the largest US companies newly matched the Stage 2 + Supertrend rule." in lead
-    assert "1 other stock newly entered Stage 2 without the Supertrend." in lead
+    assert "2 stocks from the 20 of the largest US companies newly matched the Stage 2 + Supertrend rule today." in lead
+    assert "1 other stock newly entered Stage 2 today without the Supertrend." in lead
 
 
 def test_the_brief_reads_candles_taken_after_the_close_settled(monkeypatch):
@@ -299,8 +299,9 @@ def test_the_plain_text_brief_gives_every_headline_an_address_and_the_close_as_i
                                                            {"text": "Stocks rise", "url": "https://example.com/a"}]}]}
     html, text = write.render(issue)
     short = "https://stratlab.studio/news-link/market.US.2026-10-09/0"
-    assert short in text and "(https://example.com/a)" in text and google not in text
-    assert short in html and google.replace("&", "&amp;") not in html and google not in html      # R19-006: the HTML links the same short address
+    # R30-006: a redirect that carries no story address opens a blank page, so that headline is plain text
+    assert short not in text and "(https://example.com/a)" in text and google not in text
+    assert short not in html and google not in html and "Wall Street set for weekly gains" in html
     assert "Prices and numbers as of the 16:00 ET close of 9 Oct 2026" in text and "16:32" not in text
     job.save(issue)
     c = TestClient(main.app)
