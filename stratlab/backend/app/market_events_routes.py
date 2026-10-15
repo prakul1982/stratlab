@@ -66,8 +66,8 @@ def _send(profile: dict, subject: str, text: str) -> list[str]:
         if channel == "email":
             continue
         try:
-            send()
-            sent.append(channel)
+            if alerts.reached(channel, send()):
+                sent.append(channel)
         except Exception as e:
             print("market events reminder failed:", channel, str(e)[:120])
     to = alerts.newsletter_email(profile)

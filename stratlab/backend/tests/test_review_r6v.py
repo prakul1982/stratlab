@@ -363,7 +363,7 @@ def test_admin_emails_say_why_an_admin_gets_them(monkeypatch):
     monkeypatch.setattr(alerts, "send_message", lambda *a, **k: sent.append((a, k)))
     monkeypatch.setattr(alerts, "email_ready", lambda: True)
     monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
-    for _, job in alerts.jobs_for({"alert_email": "a@x.com"}, "S", "T", "/admin", alerts.ADMIN_WHY, "Admin alert"):
+    for _, job in alerts.jobs_for({"alert_email": "a@x.com", "_plan": "basic"}, "S", "T", "/admin", alerts.ADMIN_WHY, "Admin alert"):
         job()
     (args, kw), = sent
     assert args[4] == "Admin alert" and kw["why"] == alerts.ADMIN_WHY and "turned on notifications" not in kw["why"]

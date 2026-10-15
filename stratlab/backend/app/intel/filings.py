@@ -1452,9 +1452,11 @@ def alert_state(uid: str) -> dict:
 
 def set_alert(uid: str, on: bool):
     st = alert_state(uid)
+    was_on = bool(st.get("on"))
     st.update(uid=uid, on=bool(on))
-    if on and not st.get("seen"):     # start from now: only filings made after switching on are sent
+    if on and (not was_on or not st.get("seen")):     # start from now: only filings made after switching on are sent
         st["seen"] = ist_now().isoformat(timespec="minutes")
+        st.pop("seen_by", None)
     db.set_setting(ALERT_KEY + uid, json.dumps(st))
 
 
@@ -1532,7 +1534,7 @@ def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
 def alert_text(new: list[tuple[str, dict]]) -> str:
     parts = [f"{sym}: {i['label']}" for sym, i in new[:8]]
     more = f" and {len(new) - 8} more" if len(new) > 8 else ""
-    return "New filings on your watchlist: " + "; ".join(parts) + more + ". From the exchange's filings; not advice."
+    return "New filings on your watchlist or holdings: " + "; ".join(parts) + more + ". From the exchange's filings; not advice."
 
 
 class Alerts:
@@ -1612,7 +1614,7 @@ class Alerts:
                 db.set_setting(ALERT_KEY + sub["uid"], json.dumps(sub))
                 if new:
                     new.sort(key=lambda x: (x[1]["severity"] != "red", x[1]["at"]))
-                    self.notify(profile, "StratLab: new filings to look at", alert_text(new), url="/research/filings")
+                    self.notify(profile, "New filings: " + ", ".join(dict.fromkeys(s for s, _ in new[:8])), alert_text(new), url="/research/filings")
                     sent += 1
             except Exception as e:                 # one subscriber's failure mustn't stop the rest
                 print("filing alerts:", sub.get("uid"), e)

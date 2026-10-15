@@ -92,7 +92,7 @@ def test_keys_are_made_once_saved_and_sign_real_pushes(kv, monkeypatch):
 
 def test_unset_channels_are_skipped_and_tests_report_each_channel(kv, monkeypatch):
     monkeypatch.setattr(settings, "SMTP_HOST", ""); monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "t")
-    prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42"}
+    prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42", "_plan": "basic"}
     sent = []
     db.set_setting(alerts.TG_VERIFY + "u1", json.dumps({"verified": "42"}))      # Telegram only reaches a chat whose code was entered
     monkeypatch.setattr(alerts, "send_telegram", lambda chat, text: sent.append(("tg", chat)))
@@ -144,3 +144,43 @@ def test_an_endpoint_belongs_to_the_last_user_who_subscribed_it(kv):
     assert [s["endpoint"][-1] for s in push.devices("u3")] == ["1"] and [s["endpoint"][-1] for s in push.devices("u2")] == ["9"]
     push.remove("u3", SUB(1)["endpoint"]); push.remove("u1", SUB(2)["endpoint"])
     assert "push:u1" not in kv and "push:u3" not in kv
+
+
+# ---------- a push that reached no device isn't a delivery ----------
+def _push_down(monkeypatch):
+    def webpush(**kw):
+        raise ConnectionError("timeout")             # the push service is down: send() swallows it and returns 0
+    monkeypatch.setitem(sys.modules, "pywebpush", SimpleNamespace(webpush=webpush, WebPushException=Exception))
+
+
+def test_reminders_and_the_test_alert_do_not_count_a_push_that_reached_no_device(kv, monkeypatch):
+    from app import fo_changes_routes, market_events_routes, money_calendar, stock_alerts
+    push.add("u1", SUB(1))
+    _push_down(monkeypatch)
+    prof = {"id": "u1", "_plan": "basic"}
+    assert push.send("u1", "t", "b") == 0
+    assert market_events_routes._send(prof, "s", "t") == []
+    assert fo_changes_routes._send(prof, "s", "t") == []
+    assert money_calendar._send(prof, "push", "s", "t") == []
+    assert stock_alerts.deliver(prof, "s", "t") == []
+    sent, failed = alerts.test(prof)
+    assert sent == [] and "push" in failed and "No phone received it" in failed["push"]
+
+
+def test_a_push_that_reached_a_device_still_counts(kv, monkeypatch):
+    from app import market_events_routes
+    push.add("u1", SUB(1))
+    monkeypatch.setitem(sys.modules, "pywebpush", SimpleNamespace(webpush=lambda **kw: None, WebPushException=Exception))
+    assert market_events_routes._send({"id": "u1"}, "s", "t") == ["push"]
+    assert alerts.test({"id": "u1"}) == (["push"], {})
+
+
+def test_telegram_and_email_stop_after_a_downgrade_but_the_phone_stays(kv, monkeypatch):
+    monkeypatch.setattr(settings, "TELEGRAM_BOT_TOKEN", "t")
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    monkeypatch.setattr(alerts, "email_confirmed", lambda p: True)
+    push.add("u1", SUB(1))
+    db.set_setting(alerts.TG_VERIFY + "u1", json.dumps({"verified": "42"}))
+    prof = {"id": "u1", "alert_email": "a@b.c", "telegram_chat_id": "42"}
+    assert [c for c, _ in alerts.jobs_for({**prof, "_plan": "basic"}, "s", "t")] == ["push", "telegram", "email"]
+    assert [c for c, _ in alerts.jobs_for({**prof, "_plan": "free"}, "s", "t")] == ["push"]

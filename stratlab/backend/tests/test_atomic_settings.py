@@ -145,7 +145,7 @@ def test_a_repeating_alert_does_not_fire_twice_from_one_check(fake):
     assert sa.apply("u1", change, IN_OPEN) == []                              # …and again (a second container's copy of it)
     row = sa._read("u1")
     assert row["items"][0]["fired"] == 1 and row["pending"] == []
-    assert [t for t, _ in row["sending"]] == ["RELIANCE crossed above ₹3,000"]           # handed out once, being sent
+    assert [e[0] for e in row["sending"]] == ["RELIANCE crossed above ₹3,000"]           # handed out once, being sent
 
 
 # ---------- holdings ----------
