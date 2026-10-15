@@ -163,13 +163,16 @@ def activate(profile: dict, sub: dict):
             print("could not cancel old subscription:", e)
 
 
+FINAL = ("refunded", "cancelled", "completed", "expired")     # a subscription in one of these never comes back
+
+
 def _stale(profile: dict, sub: dict) -> bool:
     """A late or retried event for a subscription that must not change the plan: it has ended, or the user has since
     moved to another active one (and this one isn't the checkout in progress), or a refund ended it."""
     if sub.get("status") in ("cancelled", "completed", "halted", "expired"):
         return True
     cur = profile.get("razorpay_subscription_id")
-    if profile.get("plan_status") in ("refunded", "cancelled", "completed", "expired") and cur == sub["id"]:
+    if profile.get("plan_status") in FINAL and cur == sub["id"]:
         return True                            # ended for good: a late "activated" or "charged" for it can't bring it back
     return bool(profile.get("plan_status") == "active" and cur and cur != sub["id"]
                 and sub["id"] != profile.get("pending_subscription_id"))
@@ -179,16 +182,19 @@ PAYMENT_SUB = "payment-sub:"
 
 
 def invoice_for(profile: dict, sub: dict, payment: dict | None):
-    """The payment's invoice; a failure here never stops the plan switching on (the webhook tries again)."""
+    """The payment's invoice. A failure to make it (another server holds the payment's claim, or a read failed) is
+    raised: the webhook then isn't marked handled, and Razorpay's retry issues it. The rest of the event is safe to run
+    again (the plan change sets the same values, the receipt, analytics and invite reward go once per payment). The
+    checkout callback catches it, so the plan still switches on there and the webhook issues the invoice."""
     if not payment or not payment.get("id") or payment.get("status") not in (None, "captured", "authorized"):
         return None
+    notes = sub.get("notes") or {}
+    plan, period = plan_for(sub) or "pro", notes.get("period") or "month"
     try:
-        notes = sub.get("notes") or {}
-        plan, period = plan_for(sub) or "pro", notes.get("period") or "month"
         inv = invoices.make(payment, profile, plan, period)
     except Exception as e:
-        print("invoice failed:", e)
-        return None
+        print("invoice failed:", str(e)[:160])
+        raise
     try:   # which subscription and user a payment belongs to, for a later refund or chargeback
         db.set_setting(PAYMENT_SUB + payment["id"], json.dumps({"sub": sub.get("id"), "user": profile.get("id")}))
     except Exception as e:
@@ -224,7 +230,10 @@ def verify_checkout(profile: dict, payment_id: str, sub_id: str, signature: str)
     except Exception as e:
         print("could not fetch the payment for its invoice:", e)
         return
-    invoice_for(profile, sub, payment)
+    try:
+        invoice_for(profile, sub, payment)
+    except Exception:
+        pass             # the plan is on; the charged webhook issues the invoice (it is retried until it does)
     invite_rewards.safe_paid(profile, payment)    # an invited friend's first payment (the webhook brings it too)
 
 
@@ -330,7 +339,9 @@ def _act(event: dict):
             invoice_for(profile, sub, payment)
             invite_rewards.safe_paid(profile, payment)      # an invited friend's first real payment
     elif name in ("subscription.cancelled", "subscription.completed", "subscription.halted", "subscription.paused"):
-        if profile.get("razorpay_subscription_id") == sub["id"] and profile.get("plan_status") != "refunded":   # a refund already ended it
+        # only the current subscription, and never out of a final state: a late "halted" after "cancelled" would
+        # otherwise let a later "activated" bring the plan back (a halted one can recover; a new id starts fresh)
+        if profile.get("razorpay_subscription_id") == sub["id"] and profile.get("plan_status") not in FINAL:
             db.update_profile(profile["id"], plan="free", plan_status=sub.get("status", "cancelled"),
                               cancel_at_period_end=False)
             if profile.get("plan") in ("basic", "pro"):

@@ -297,3 +297,13 @@ def test_refreshing_a_link_keeps_a_new_one_made_meanwhile(api, store, monkeypatc
     monkeypatch.setattr(main.public, "publish", racing)
     assert api.post(f"/notebooks/{nid}/experiments/1/share", json={}).json()["token"] == "newer-token"
     assert main.public.load(old) is None
+
+
+def test_a_stratlab_author_spelt_with_cyrillic_look_alikes_is_refused(api, store):
+    """acct4: "Strаtlаb" (Cyrillic а) and "Ѕtratlab" (Cyrillic Ѕ) read as StratLab; a name in another script is fine."""
+    nid, _ = _published(api)
+    for name in ("Strаtlаb", "Ѕtratlab", "STRАTLАB fan"):
+        r = api.post(f"/notebooks/{nid}/experiments/1/library", json={"author": name})
+        assert r.status_code == 400 and r.json()["detail"]["code"] == "author_reserved", name
+    for name in ("Пётр", "Strategy Lab"):
+        assert api.post(f"/notebooks/{nid}/experiments/1/library", json={"author": name}).status_code == 200, name

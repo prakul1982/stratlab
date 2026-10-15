@@ -636,6 +636,13 @@ class LiveManager:
             self.hub.add(s.id, int(s.inst["token"]), s.on_tick)
         return s
 
+    @staticmethod
+    def row_kind(row: dict) -> str:
+        """The kind of session a stored row runs as (what _build makes of it): signal, options, group or rules."""
+        if (row.get("strategy") or {}).get("kind") == "signal":
+            return "signal"
+        return {"OPTIONS": "options", "GROUP": "group"}.get((row.get("instrument") or {}).get("type"), "rules")
+
     def _build(self, row: dict):
         kind = (row.get("instrument") or {}).get("type")
         if (row.get("strategy") or {}).get("kind") == "signal":      # moved by outside signals (signal_session.py)

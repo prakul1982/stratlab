@@ -5,7 +5,6 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor, wait as wait_all
 import json
 import math
-import unicodedata
 import logging
 from html import escape as html_escape
 import re
@@ -1111,7 +1110,8 @@ def _confirm_token(t: str):
     got = mail_tokens.read(t, "confirm")
     if not got or not got[1]:
         return None
-    current = alerts.newsletter_email(db.get_profile(got[0]))
+    prof = db.find_profile(got[0])            # a link for a deleted account confirms nothing and makes no new profile
+    current = alerts.newsletter_email(prof) if prof else None
     return got if current and current.strip().lower() == got[1].strip().lower() else None
 
 
@@ -3272,7 +3272,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
         err(404, "not_found", "Experiment not found.")
     if (exp.get("instrument") or {}).get("market") == "CSV":
         err(400, "library_upload", "Strategies tested on uploaded data can't go in the library: nobody else has that data to re-test on.")
-    if "stratlab" in re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", req.author).casefold()) and not admin.is_admin(profile):
+    if library.reserved_author(req.author) and not admin.is_admin(profile):
         err(400, "author_reserved", "That name is StratLab's own. Pick another.")
     throttle(profile, "library_publish", 20, 86400, "You've published a lot today. Try again tomorrow.")
     old = library.load(exp.get("library") or "")
@@ -5055,7 +5055,7 @@ def admin_sessions(_=Depends(admin.admin_profile)):
                 print("admin sessions:", r.get("id"), e)
             market = inst.get("market")
             out.append({"id": r["id"], "name": r.get("name"), "email": emails.get(r.get("user_id")), "symbol": inst.get("symbol"),
-                        "market": market, "kind": (r.get("strategy") or {}).get("kind") or "rules", "started_at": r.get("started_at"),
+                        "market": market, "kind": manager.row_kind(r), "started_at": r.get("started_at"),
                         "capital": ((r.get("strategy") or {}).get("risk") or {}).get("capital"), "equity": None, "trades": None,
                         "currency": inst.get("currency") or ("INR" if market == "IN" else "USD")})
     return out
