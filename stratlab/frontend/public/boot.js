@@ -45,6 +45,15 @@
     if (once()) location.reload(); else show();
   }
 
+  // a saved sign-in: the page says "Opening StratLab…" while the app starts, never the visitor's marketing words for the seconds
+  // a slow start takes (R29B-019); the style for it is in index.html
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && /^sb-.+-auth-token$/.test(k) && localStorage.getItem(k)) { document.documentElement.setAttribute("data-saved", "1"); break; }
+    }
+  } catch (e) { /* storage off */ }
+
   // the saved light or dark choice, here as well as in theme.js: if that file fails to load the page still draws in the right theme
   try { var saved = localStorage.getItem("stratlab-theme"); if (saved) document.documentElement.dataset.theme = saved; } catch (e) { /* storage off */ }
 

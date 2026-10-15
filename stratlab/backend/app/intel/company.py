@@ -852,7 +852,7 @@ class Research:
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
                             _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
                 ("Financial health", [_item("Current ratio", None if lender else M.get("currentRatioQuarterly")),
-                                      _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
+                                      _item("Long-term debt / equity", M.get("longTermDebt/equityQuarterly")),
                                       _item("Interest coverage", M.get("netInterestCoverageTTM")),
                                       _item("Asset turnover", None if lender else M.get("assetTurnoverTTM"))]),
                 # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
@@ -1024,7 +1024,7 @@ class Research:
                 ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
                                          _item("Net margin", s.get("net_margin"), "%"),
                                          _item("EBITDA margin", None if lender else s.get("opm"), "%"),
-                                         _item("Debt", s.get("debt_cr"), "cr", f"as of {s['debt_as_of']}" if s.get("debt_as_of") else None), _item("Debt / equity", None if lender else s.get("debt_equity"))]),
+                                         _item("Debt", s.get("debt_cr"), "cr", f"as of {s['debt_as_of']}" if s.get("debt_as_of") else None), _item("Total debt / equity", None if lender else s.get("debt_equity"))]),
                 ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
                                   _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
                 ("Profit growth", [_item("Latest YoY", s.get("profit_yoy"), "%±"), _item("3Y CAGR", gp.get("3 Years"), "%±"),

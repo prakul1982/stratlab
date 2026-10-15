@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 from . import db
@@ -28,6 +30,24 @@ _lock = threading.Lock()
 _src: dict = {"files": None, "quotes": None, "all": None}
 QUOTES_FOR = 10 * 60          # how long the broker's after-the-close quotes of every stock are reused
 QUOTES_EARLY = 60             # ...and in the first minutes after the auction, while a quote may still be catching up
+QUOTES_STALE = 30 * 60        # an older copy of them a page may use while a fresh one is read in the background
+PAGE_WAIT = 1.0               # how long the first page waits on the whole-market quotes before going on without them
+PAGE_QUOTE_WAIT = 4.0         # ...and on its one stock's quote instead (as the page's own quote, Research.PAGE_QUOTE_WAIT)
+
+# R29A-001: the India company page took 12 to 13 s on every load in the evening. Its daily candles go through
+# history_close, which after the close read every NSE stock's quote (six broker calls of 500, each queued behind the jobs'
+# reads) on the page's request, under the lock the exchange-file reads also hold. The whole-market quotes and the
+# "asked already" marks were kept in _mem, a 2,000-item LRU that a walk over the BSE-only companies (one quote each) fills,
+# so they were dropped and read again on the next page. After 18:00 the page also read the exchange's files itself, and
+# waited out a source that hung (two 10 s timeouts in a row). Now the marks and the quotes are kept outside _mem; the
+# reads run in the background, one at a time; a page never waits on an exchange file, waits PAGE_WAIT at most for the
+# first whole-market read, and else uses its own stock's quote.
+_asked: dict = {}             # (kind, day) -> until when a file isn't asked for again (time.time())
+_allq: dict = {"value": None, "until": 0.0, "stale": 0.0, "flight": None}
+_allq_lock = threading.Lock()
+_flights: dict = {}           # (kind, day) -> the background read of an exchange file under way
+_files_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="official-files")
+_quotes_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="official-quotes")   # never behind a hanging file
 
 
 def setup(files_fn=None, quotes_fn=None, force: bool = False, all_quotes_fn=None):
@@ -39,10 +59,60 @@ def setup(files_fn=None, quotes_fn=None, force: bool = False, all_quotes_fn=None
     if os.environ.get("OFFICIAL_CLOSE_FETCH") == "0" and not force:
         files_fn = quotes_fn = all_quotes_fn = None
     _src["files"], _src["quotes"], _src["all"] = files_fn, quotes_fn, all_quotes_fn
+    _forget_quotes()
 
 
 def forget():
     _mem.clear()
+    _asked.clear()
+    _forget_quotes()
+
+
+def _forget_quotes():
+    with _allq_lock:
+        _allq.update(value=None, until=0.0, stale=0.0, flight=None)
+
+
+def _on_request() -> bool:
+    """Whether this runs for someone's request (the sources' short rate-limit wait is set), not for a job."""
+    from .intel.net import JOB_WAIT, rate_wait
+    return rate_wait() < JOB_WAIT
+
+
+def _was_asked(kind: str, d: str) -> bool:
+    until = _asked.get((kind, d))
+    return until is not None and time.time() < until
+
+
+def _mark_asked(kind: str, d: str) -> None:
+    if len(_asked) > 200:
+        _asked.clear()
+    _asked[(kind, d)] = time.time() + RETRY
+
+
+def _in_background(kind: str, d: str, fn):
+    """fn() (an exchange file's read) in the background, one at a time per (kind, day): a job waits for it, a page never
+    does (None until it is in; it is stored for the next page)."""
+    with _allq_lock:
+        f = _flights.get((kind, d))
+        if f is None or f.done():
+            f = _flights[(kind, d)] = _files_pool.submit(fn)
+    if not _on_request():
+        return f.result()
+    return f.result() if f.done() else None
+
+
+def _page_wait(f):
+    """A background read's answer for a page: the first page to ask waits PAGE_WAIT for it at most, the ones asking while
+    it is still under way don't wait again (the answer is stored for the next page). None when it isn't in."""
+    if not f.done():
+        if getattr(f, "page_waited", False):
+            return None
+        f.page_waited = True
+    try:
+        return f.result(timeout=PAGE_WAIT)
+    except Exception:              # still reading (or failed): the page goes on without it
+        return None
 
 
 def _day(d) -> str:
@@ -102,13 +172,19 @@ def closes(day, now: datetime | None = None) -> dict[str, float] | None:
     now = (now or datetime.now(timezone.utc)).astimezone(IST)
     if d > now.date().isoformat() or (d == now.date().isoformat() and now.hour < PUBLISHED_AT):
         return None
-    if _mem.get(("asked", d)) is not None:
+    if _was_asked("asked", d):
         return None
+    return _in_background("closes", d, lambda: _read_closes(d, files_fn))
+
+
+def _read_closes(d: str, files_fn) -> dict[str, float] | None:
     with _lock:
         got = stored(d)
         if got:
             return got
-        _mem.set(("asked", d), 1, RETRY)
+        if _was_asked("asked", d):
+            return None
+        _mark_asked("asked", d)
         try:
             from . import exchange_days
             rows = exchange_days.cash_closes(files_fn(), date.fromisoformat(d)) or {}
@@ -286,31 +362,51 @@ def _stored_quick(d: str) -> dict[str, float] | None:
     return got
 
 
-def _all_quotes(now: datetime) -> dict:
-    """Every NSE stock's quote, read in one go after the close and reused for a few minutes."""
+def _all_quotes(now: datetime) -> dict | None:
+    """Every NSE stock's quote, read in one go after the close and reused for a few minutes. One read at a time, in the
+    background: a job waits for it; a page uses the last copy (QUOTES_STALE), or with none waits briefly (_page_wait),
+    else gets None (it reads its own stock's quote instead)."""
     fn = _src.get("all")
     if not fn:
         return {}
-    hit = _mem.get(("allq",))
-    if hit is not None:
-        return hit
-    with _lock:
-        hit = _mem.get(("allq",))
-        if hit is not None:
-            return hit
-        try:
-            got = {base_symbol(k): v for k, v in (fn() or {}).items() if isinstance(v, dict)}
-        except Exception as e:
-            print("official closes: quotes:", str(e)[:120])
-            got = {}
-        early = now.astimezone(IST) < out_at(now.astimezone(IST).date()) + timedelta(minutes=5)
-        _mem.set(("allq",), got, QUOTES_EARLY if early or not got else QUOTES_FOR)
-    return got
+    t = time.time()
+    with _allq_lock:
+        value, until, stale, f = _allq["value"], _allq["until"], _allq["stale"], _allq["flight"]
+        if value is not None and t < until:
+            return value
+        if f is None or f.done():
+            f = _allq["flight"] = _quotes_pool.submit(_read_all_quotes, fn, now)
+    if not _on_request():
+        return f.result()
+    if value is not None and t < stale:      # a page: the last copy while the fresh one is read
+        return value
+    return _page_wait(f)
+
+
+def _read_all_quotes(fn, now: datetime) -> dict:
+    try:
+        got = {base_symbol(k): v for k, v in (fn() or {}).items() if isinstance(v, dict)}
+    except Exception as e:
+        print("official closes: quotes:", str(e)[:120])
+        got = {}
+    early = now.astimezone(IST) < out_at(now.astimezone(IST).date()) + timedelta(minutes=5)
+    t = time.time()
+    with _allq_lock:
+        if got:
+            _allq.update(value=got, until=t + (QUOTES_EARLY if early else QUOTES_FOR), stale=t + QUOTES_STALE)
+        elif _allq["value"] and t < _allq["stale"]:        # a failed read: the last copy while it may still be used
+            _allq["until"] = min(t + QUOTES_EARLY, _allq["stale"])
+        else:
+            _allq.update(value=got, until=t + QUOTES_EARLY, stale=t + QUOTES_EARLY)
+        return _allq["value"]
 
 
 def _quote_of(symbol: str, exchange: str, now: datetime) -> dict | None:
     if exchange == "NSE" and _src.get("all"):
-        return _all_quotes(now).get(base_symbol(symbol))
+        got = _all_quotes(now)
+        # a page whose stock the whole-market read hasn't got (not read yet, or its batch was refused) reads its own
+        if got is not None and (got.get(base_symbol(symbol)) or not _on_request()):
+            return got.get(base_symbol(symbol))
     key = ("q1", exchange, str(symbol).upper())
     hit = _mem.get(key)
     if hit is not None:
@@ -319,7 +415,14 @@ def _quote_of(symbol: str, exchange: str, now: datetime) -> dict | None:
     if not fn:
         return None
     try:
-        got = (fn([symbol]) or {}).get(str(symbol).upper()) or {}
+        if _on_request():          # a page's one quote: its turn behind the jobs' broker reads, PAGE_QUOTE_WAIT at most
+            try:
+                got = fn([symbol], max_wait=PAGE_QUOTE_WAIT)
+            except TypeError:      # a source without the wait
+                got = fn([symbol])
+        else:
+            got = fn([symbol])
+        got = (got or {}).get(str(symbol).upper()) or {}
     except Exception:
         got = {}
     _mem.set(key, got, QUOTES_EARLY)
@@ -344,7 +447,7 @@ def day_close(symbol: str, day, kind: str = "cas", exchange: str = "NSE", now: d
     got = None
     if exchange == "NSE":                             # the exchange's file names NSE's stocks
         got = _stored_quick(d)
-        if (not got and fetch and _src.get("files") and _mem.get(("asked", d)) is None
+        if (not got and fetch and _src.get("files") and not _was_asked("asked", d)
                 and (d < now.date().isoformat() or now.hour >= PUBLISHED_AT)):
             got = closes(d, now)
     if got and got.get(sym):
@@ -410,15 +513,22 @@ def fetch_ranges(day, now: datetime | None = None) -> dict | None:
     if not files_fn or d > now.date().isoformat() or (d == now.date().isoformat() and now.hour < PUBLISHED_AT) \
             or d < (now.date() - timedelta(days=5)).isoformat():          # only the newest report is kept
         return have
-    if _mem.get(("w52asked", d)) is not None:
+    if _was_asked("w52asked", d):
         return have
-    _mem.set(("w52asked", d), 1, RETRY)
+    got = _in_background("w52", d, lambda: _read_ranges(d, files_fn))
+    return got if got is not None else have
+
+
+def _read_ranges(d: str, files_fn) -> dict | None:
+    if _was_asked("w52asked", d):
+        return ranges()
+    _mark_asked("w52asked", d)
     try:
         from . import exchange_days
         rows = exchange_days.week52(files_fn(), date.fromisoformat(d))
     except Exception as e:
         print("52-week report:", d, str(e)[:120])
-        return have
+        return ranges()
     if rows:
         save_ranges(d, rows)
     return ranges()

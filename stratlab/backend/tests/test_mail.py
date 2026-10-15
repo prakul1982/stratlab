@@ -79,7 +79,7 @@ def test_provider_order_brevo_then_resend_then_smtp(no_email, monkeypatch):
     monkeypatch.setattr(alerts.smtplib, "SMTP_SSL", FakeSMTP)
     monkeypatch.setattr(settings, "RESEND_API_KEY", "")
     assert alerts.email_ready()
-    alerts.send_email("a@b.c", "s", "plain", html="<p>rich</p>", headers={"List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+    alerts.send_email("a@b.c", "s", "plain", html="<p>rich</p>", headers={"List-Unsubscribe": "<https://x.example/unsubscribe?t=abc>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
     msg = message_from_bytes(sent[0].as_bytes())
     assert msg.get_content_type() == "multipart/alternative" and msg["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert [p.get_content_type() for p in msg.get_payload()] == ["text/plain", "text/html"]

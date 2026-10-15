@@ -328,12 +328,23 @@ def earlier_titles(region: str, day: date) -> set[str]:
     return out
 
 
+def week_window(region: str, day: date) -> tuple[str, str]:
+    """The days a weekly brief covers: the first trading day after the reference close to the last one on or before `day`
+    (Monday to Friday for a Saturday's issue), so a headline from the weekend either side isn't taken for the week's (R29B-016)."""
+    start = reference_day(region, day, True) + timedelta(days=1)
+    for _ in range(7):
+        if is_trading_day(region, start):
+            break
+        start += timedelta(days=1)
+    return start.isoformat(), previous_trading_day(region, day + timedelta(days=1)).isoformat()
+
+
 def market_headlines(region: str, day: date | None = None, weekly: bool = False, indices: list[dict] | None = None) -> list[dict]:
     rows = [h for h in _main().research_hub.headlines(region) if h.get("headline")]
     if day is None:
         return pick_headlines(region, rows, "0000-00-00", "9999-99-99")
-    frm = reference_day(region, day, True).isoformat() if weekly else day.isoformat()
-    return pick_headlines(region, rows, frm, day.isoformat(), set() if weekly else _safe(lambda: earlier_titles(region, day), set()) or set(),
+    frm, to = week_window(region, day) if weekly else (day.isoformat(), day.isoformat())
+    return pick_headlines(region, rows, frm, to, set() if weekly else _safe(lambda: earlier_titles(region, day), set()) or set(),
                           indices=None if weekly else indices)
 
 
@@ -370,7 +381,8 @@ def _instrument(out: list, seen: set, inst):
 
 
 def my_stocks(uid: str) -> list[tuple[str, str]]:
-    """(region, symbol) for the user's watchlist, holdings, notebook instruments and running paper sessions, up to 25."""
+    """(region, symbol) for the user's watchlist and holdings only, up to 25 (R29B-012: notebook and paper instruments put RELIANCE
+in an email for a watchlist of TCS and NVDA)."""
     out, seen = [], set()
     try:
         items = json.loads(db.get_setting(f"watchlist:{uid}") or "{}").get("items") or []
@@ -381,12 +393,6 @@ def my_stocks(uid: str) -> list[tuple[str, str]]:
             _add(out, seen, i.get("region"), i.get("symbol"))
     for sym in _safe(lambda: holdings.symbols(uid), []) or []:     # holdings count like watchlist names (Indian stocks)
         _add(out, seen, "IN", sym)
-    for nb in _safe(lambda: db.list_notebook_rows(uid), []) or []:
-        _instrument(out, seen, nb.get("instrument"))
-    for s in _safe(lambda: _main().manager.user_running(uid), []) or []:
-        _instrument(out, seen, getattr(s, "inst", None))
-        for m in getattr(s, "members", None) or []:
-            _instrument(out, seen, getattr(m, "inst", None))
     return out
 
 

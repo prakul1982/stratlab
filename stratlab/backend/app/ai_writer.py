@@ -290,7 +290,8 @@ def _scaled_from_text(kind: str, period, text: str) -> dict | None:
     return {"l": {"t": kind, **({"p": period} if period else {})}, "op": op, "r": {"t": "num", "v": v}}
 
 
-_W52 = re.compile(r"\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b", re.I)
+_W52 = re.compile(r"\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b"
+                  r"|\b(?:12|twelve)[- ]?months?[- ]*(low|high)s?\b|\b(?:yearly|annual)\s+(low|high)s?\b", re.I)
 _TOUCH = re.compile(r"\b(?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?|mak(?:e|es|ing) a new)\b", re.I)
 
 
@@ -298,7 +299,7 @@ def _year_rule(c: dict, price: dict, price_on_left: bool, text: str, tf: str | N
     """A rule that set a price against 0 or less, read as the 52-week low or high the sentence names: the lowest low /
     highest high of the previous 252 daily candles (a daily one on intraday candles). "Touches" reads the candle's low or
     high; any other wording keeps the price the rule had. With both named, a rule that looks down takes the low."""
-    found = {(m.group(1) or m.group(2)).lower() for m in _W52.finditer(text)}
+    found = {next(g for g in m.groups() if g).lower() for m in _W52.finditer(text)}
     if not found:
         return None
     op = c.get("op") if price_on_left else FLIP.get(c.get("op"), "gt")
@@ -319,6 +320,7 @@ def check_against_text(out: dict, text: str) -> dict:
     - "sell" means selling what was bought: a short side only when the sentence says short ("sell short", "go short");
     - "no stop loss" is a stop of 0, said (and so never asked again), and "after 15 bars" is a time exit."""
     notes = list(out.get("notes") or [])
+    risk0 = dict(out.get("risk") or {})            # a target or stop read from a rule against the entry price
 
     def clean(conds: list[dict]) -> list[dict]:
         kept = []
@@ -326,6 +328,20 @@ def check_against_text(out: dict, text: str) -> dict:
             l, r = c.get("l") or {}, c.get("r") or {}
             if _same(l, r):
                 notes.append("A rule that compared a value with itself was left out.")
+                continue
+            own = {k: v for k, v in r.items() if k != "k"}
+            if r.get("k") not in (None, 1) and r.get("t") == l.get("t") and _same(own, {k: v for k, v in l.items() if k != "k"}) and l.get("k") in (None, 1):
+                # "Price is above 1.05 × Price": the sentence means the trade's entry price, which a rule can't name; a stop or target can
+                k = float(r["k"])
+                up = c.get("op") in ("gt", "xa")
+                if up and k > 1 and not risk0.get("tgt"):
+                    risk0["tgt"] = round((k - 1) * 100, 2)
+                    notes.append(f"\"Price above {k:g} × Price\" was read as a profit target of {risk0['tgt']:g}% over the entry price.")
+                elif not up and 0 < k < 1 and not risk0.get("sl"):
+                    risk0["sl"] = round((1 - k) * 100, 2)
+                    notes.append(f"\"Price below {k:g} × Price\" was read as a stop loss of {risk0['sl']:g}% under the entry price.")
+                else:
+                    notes.append("A rule that compared the price with a multiple of itself was left out: it doesn't say what it is measured from. Use a stop loss or target instead.")
                 continue
             bad = None
             for a, b in ((l, r), (r, l)):
@@ -376,8 +392,12 @@ def check_against_text(out: dict, text: str) -> dict:
         elif _BUY.search(text):
             out.update(side="long")
             notes.append('"Sell" was read as selling what was bought, not as a short sale. Say "sell short" to trade short.')
-    risk = dict(out.get("risk") or {})
+    risk = {**dict(out.get("risk") or {}), **{k: v for k, v in risk0.items() if k in ("tgt", "sl")}}
     mentioned = set(out.get("mentioned") or [])
+    if risk0.get("tgt"):
+        mentioned.add("tgt")
+    if risk0.get("sl"):
+        mentioned.add("sl")
     if _NO_STOP.search(text):
         risk["sl"] = 0                      # said: no stop, and so not asked again (R11C-005: it came back as a 2% stop)
         mentioned.add("sl")

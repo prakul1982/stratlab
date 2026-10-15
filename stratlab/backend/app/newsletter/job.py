@@ -30,6 +30,7 @@ INDEX_CAP = 60
 # a send that couldn't start because the database timed out (15 Oct: the India brief went 19 minutes late) is tried again
 # after these pauses, within the same check, before waiting for the next one
 START_RETRY_PAUSES = (60, 120)
+STOCKS_WAIT = timedelta(minutes=60)      # My stocks waits this long past the India slot for the brief, then goes without it
 LATE_AFTER = timedelta(minutes=30)       # a daily brief not on its way this long after its slot: the admins are told
 LATE_KEY = "newslate:"                   # app_settings: the day a region's late alert went, so a restart doesn't send it twice
 _ID = re.compile(r"^(market|my_stocks)\.([A-Za-z0-9\-]{1,64})\.(\d{4}-\d{2}-\d{2}(?:-weekly)?)$")
@@ -851,12 +852,27 @@ class Job:
             "skipped": {}, "error": f"couldn't start the send ({str(e)[:160]}); tried again at the next check"})
         return 0, True
 
+    def brief_started(self, name: str, day: date, now: datetime) -> bool:
+        """Whether the India brief of `day` has been built and its send begun (the day is marked), so what follows it may go;
+        past STOCKS_WAIT after its slot My stocks goes anyway, so a brief that can't be built doesn't hold it all day."""
+        tz, at = (SEND_AT["IN"] if name.endswith("IN") and not name.startswith("weekly") else (WEEKLY_AT[0], WEEKLY_AT[2]))
+        if now.astimezone(ZoneInfo(tz)) >= datetime.combine(day, clock.fromisoformat(at), ZoneInfo(tz)) + STOCKS_WAIT:
+            return True
+        if self.last.get(name) == day.isoformat():
+            return True
+        try:
+            return run_marks.status(f"newsjob:{name}", day.isoformat()) == "done"
+        except Exception:
+            return False
+
     def tick(self, now: datetime) -> int:
         sent, ran, problems = 0, False, []
         for region, (tz, at) in SEND_AT.items():
             n, did = self.run_market(region, self.due(f"market-{region}", now, tz, at, region=region), False, problems)
             sent, ran = sent + n, ran or did
         day = self.due("stocks", now, *SEND_AT["IN"], region="IN")
+        if day and not self.brief_started("market-IN", day, now):
+            day = None                            # My stocks follows the India brief, never before it (R29B-020)
         run = self.begin("stocks", day) if day else None
         if run:
             try:
@@ -870,6 +886,8 @@ class Job:
             n, did = self.run_market(region, self.due(f"weekly-{region}", now, tz, at, weekday=weekday), True, problems)
             sent += n
         day = self.due("weekly", now, tz, at, weekday=weekday)
+        if day and not self.brief_started("weekly-IN", day, now):
+            day = None
         run = self.begin("weekly", day) if day else None
         if run:
             try:

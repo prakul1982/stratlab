@@ -411,11 +411,11 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
 
       <More id="rules" what={intraday ? "trailing stop, time limit, intraday limits, costs" : "trailing stop, time limit, costs, sizing"} on={moreOn}>
         <p className="sentence">
-          Trail the stop by{" "}
-          <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="nothing (off)" max={50} onChange={(v) => setRisk({ trail: v })}
-            hint="Moves the stop with the best price since the trade opened, staying this far behind it. It never moves back. 0 turns it off." />{" "}and close any trade after{" "}
-          <NumTok title="Close after (candles)" value={r.maxBars ?? 0} step={1} max={5000} missing="no time limit" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
-            onChange={(v) => setRisk({ maxBars: Math.round(v) })} hint="Closes a trade that's still open after this many candles, at the close. 0 turns it off." />.
+          Trailing stop:{" "}
+          <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="off" max={50} onChange={(v) => setRisk({ trail: v })}
+            hint="Moves the stop with the best price since the trade opened, staying this far behind it. It never moves back. 0 turns it off." />. Time limit:{" "}
+          <NumTok title="Close after (candles)" value={r.maxBars ?? 0} step={1} max={5000} missing="none" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
+            onChange={(v) => setRisk({ maxBars: Math.round(v) })} hint="Closes a trade that's still open after this many candles, at the close. 0 turns it off." /> (a trade still open after that many candles is closed).
           <Info label="Trailing stops and time limits"><b>Trailing stop:</b> {HELP.trail}<br /><br /><b>Time limit:</b> {HELP.maxBars}</Info>
         </p>
         {intraday && (

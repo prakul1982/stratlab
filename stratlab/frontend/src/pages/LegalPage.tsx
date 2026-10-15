@@ -68,7 +68,7 @@ function Privacy() {
         <li><b>Your Google account's email and ID</b>, to sign you in.</li>
         <li><b>What you create:</b> notebooks, strategies, experiments, paper trading sessions, watchlists and settings.</li>
         <li><b>Usage counts</b>, such as experiments and AI builds this month, to apply plan limits.</li>
-        <li><b>Alert contacts you choose to add:</b> an email address, a Telegram chat ID, and each device's notification address if you turn on phone notifications.</li>
+        <li><b>Alert contacts you choose to add:</b> an email address, each device's notification address if you turn on phone notifications, and a Telegram chat ID if you connect Telegram where Settings offers it.</li>
         <li><b>Billing records:</b> your plan and Razorpay subscription ID. Card, UPI and bank details go to Razorpay only.</li>
         <li><b>Usage analytics:</b> which pages you open and which features you use (such as running a backtest or saving a screen), without your holdings, symbols you search or amounts. No screen recordings or typed text. Before you sign in, this is tied only to a random ID made in your browser, not to any account. Once you sign in, it is linked to your account's internal ID, never your email or name. Not collected at all if your browser sends Do Not Track or Global Privacy Control.</li>
         <li><b>Technical logs:</b> request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.</li>
@@ -80,7 +80,7 @@ function Privacy() {
         <li>Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.</li>
         <li>Razorpay processes payments.</li>
         <li>AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.</li>
-        <li>Telegram and our email provider deliver alerts you turn on. Sentry receives error reports without personal details.</li>
+        <li>Our email provider delivers the alerts you turn on by email, and Telegram delivers them if you connect it. Sentry receives error reports without personal details.</li>
         <li>PostHog (hosted in the US) receives the usage analytics described above.</li>
       </ul>
       <p>Some of these providers store data outside India, under their own security and privacy commitments.</p>
@@ -94,7 +94,7 @@ function Privacy() {
       </ul>
       <p>You can clear all of this from your browser's settings; you will be signed out and the choices above reset.</p>
       <h2 className="h3">Keeping and deleting</h2>
-      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has "Download everything" to get a copy of what we hold, and "Delete all my data" to erase it. Or email <PrivacyMail /> to see what we hold, correct it, or delete your account and its data; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
+      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has "Download all my data" to get a copy of what we hold, and "Delete all my data" to erase it. Or email <PrivacyMail /> to see what we hold, correct it, or delete your account and its data; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
       <h2 className="h3">Security</h2>
       <p>Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires.</p>
       <h2 className="h3">Children</h2>

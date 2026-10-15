@@ -36,6 +36,7 @@ TOLERANCE = {0: 0.12, 1: 0.36}    # paid at least this share by June and Septemb
 RATE = 0.01                       # a month, for 234B and 234C
 MONTHS_234C = (3, 3, 3, 1)
 RETURN_BY = (7, 31)               # 234B is shown as if the rest is paid with the return, by 31 July
+RETURN_BY_AUDIT = (10, 31)        # with a tax audit (section 44AB): 31 October, as the tax report says (R29B-015)
 RETURN_BY_BUSINESS = (8, 31)      # with business income and no audit, by 31 August from FY 2025-26 (Finance Act 2026)
 MAX_AMOUNT = 1e11
 MAX_PAYMENTS = 24
@@ -52,7 +53,7 @@ ASSUMPTIONS = [
     "return) isn't included.",
     "Payments dated after 31 March are self-assessment tax. Section 234B interest runs to each one on the shortfall then "
     "outstanding, and after it only on what is left (section 234B(2)). On an amount still unpaid it is counted to the "
-    "return's due date (31 July, or 31 August with intraday or F&O income from FY 2025-26, Finance Act 2026), or to "
+    "return's due date (31 July, 31 August with intraday or F&O income from FY 2025-26 under Finance Act 2026, or 31 October when a tax audit applies), or to "
     "today once that date has passed.",
     "Section 234C: tax on gains and dividends that arose after 15 March carries no interest for March when paid by "
     "31 March (first proviso to section 234C).",
@@ -81,9 +82,11 @@ def months_234b(fy: int, pay_day: date) -> int:
     return max(0, (pay_day.year - (fy + 1)) * 12 + pay_day.month - 3)
 
 
-def return_due(fy: int, business: bool = False) -> date:
-    """The return's due date without an audit: 31 July, or 31 August with business income (intraday, F&O) from
-    FY 2025-26."""
+def return_due(fy: int, business: bool = False, audit: bool = False) -> date:
+    """The return's due date: 31 October when a tax audit applies, else 31 July, or 31 August with business income
+    (intraday, F&O) from FY 2025-26."""
+    if audit:
+        return date(fy + 1, *RETURN_BY_AUDIT)
     return date(fy + 1, *(RETURN_BY_BUSINESS if business and fy >= 2025 else RETURN_BY))
 
 
@@ -135,7 +138,7 @@ def interest_234b(fy: int, short: float, later: list[dict], today: date, return_
 
 
 def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: list[dict], today: date,
-             business: bool = False) -> dict:
+             business: bool = False, audit: bool = False) -> dict:
     """The year's instalments. `tax` is the year's total tax; `tax_upto[i]` the same with only the share gains and
     dividends that had arisen by due date i (the last is to 15 March). `tds` is the TDS for the year and `payments`
     the tax paid ({d, amount}): by 31 March advance tax, after it self-assessment tax. `business` is whether the year
@@ -179,7 +182,7 @@ def schedule(fy: int, tax: float, tax_upto: list[float], tds: float, payments: l
     paid_year = paid_march_end
     b_short = round(max(0.0, net - paid_year), 2)
     b_applies = due and paid_year < 0.9 * net
-    rb = return_due(fy, business)
+    rb = return_due(fy, business, audit)
     b = interest_234b(fy, b_short, later, today, rb) if b_applies else None
     b234 = {"applies": b_applies, "paid": paid_year, "ninety_pct": round(0.9 * net, 2), "short": b_short,
             "months": b["months"] if b else 0, "until": b["until"] if b else rb.isoformat(),

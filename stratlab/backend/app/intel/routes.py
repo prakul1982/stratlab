@@ -252,8 +252,9 @@ def page_figures(region: str, c: dict) -> dict:
     yield than the page's); a US company's market value, P/E and EPS on its public page's definitions (R7T-008); the
     52-week range checked against the price and taking in today's high and low (R7T-001, R7T-007)."""
     from .company import with_today_range
-    out = with_dividend_yield(c, stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
-    return with_today_range(per_share_checked(with_public_eps(region, out)))
+    # the public EPS first: the payout ratio is the dividends over the EPS TTM the page shows, not the source's (R29B-013: $8.72 vs $8.71)
+    out = with_dividend_yield(with_public_eps(region, c), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    return with_today_range(per_share_checked(out))
 
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends

@@ -138,6 +138,7 @@ class _Guarded:
 class KiteService:
     # the exchange's list of companies, () -> {isin: [symbol, name]}, for search by full name and ISIN. Set by main.
     names_fn = None
+    _reject_lock = threading.Lock()         # two calls refused at once are one event (R29B-006)
 
     def __init__(self):
         self.kite = _Guarded(KiteConnect(api_key=settings.KITE_API_KEY), self._token_rejected)
@@ -185,18 +186,22 @@ class KiteService:
         """Zerodha refused today's token, usually because the account logged in to this API key somewhere else.
         Go offline rather than failing every request, and don't log in again automatically: that would cancel
         the other login's token in turn."""
-        if not self.ready():
-            return
-        self.invalid_reason = (f"Zerodha cancelled today's Kite token at {datetime.now(IST):%H:%M} IST. Zerodha does that when the "
-                               "same account logs in to this Kite Connect app somewhere else (another bot or script using the "
-                               "same API key), and when its own daily reset ends the login. To log in again, open Admin → Data "
-                               "and jobs and press \"Run the automatic login now\" (or log in by hand there).")
+        with self._reject_lock:
+            if not self.ready():
+                return
+            self.invalid_reason = self._cancelled_words()
         print("Kite token rejected:", e)
         if self.on_invalid:
             try:
                 self.on_invalid(self.invalid_reason)
             except Exception as x:
                 print("token alert failed:", x)
+
+    def _cancelled_words(self) -> str:
+        return (f"Zerodha cancelled today's Kite token at {datetime.now(IST):%H:%M} IST. Zerodha does that when the "
+                               "same account logs in to this Kite Connect app somewhere else (another bot or script using the "
+                               "same API key), and when its own daily reset ends the login. To log in again, open Admin → Data "
+                               "and jobs and press \"Run the automatic login now\" (or log in by hand there).")
 
     def ready(self) -> bool:
         return bool(self.access_token) and token_valid(self.token_day) and not self.invalid_reason
@@ -674,15 +679,23 @@ class KiteService:
         self._require()
         rows = [r for r in self.equities() if r["exchange"] == "NSE"]
         out: dict[str, dict] = {}
+        error = None
         for i in range(0, len(rows), 500):
             part = {f"NSE:{r['symbol']}": r["symbol"] for r in rows[i:i + 500]}
             self._throttle()
-            for k, v in (self.kite.quote(list(part)) or {}).items():
+            try:
+                got = self.kite.quote(list(part)) or {}
+            except Exception as e:         # one batch refused: the others' quotes are kept (R29A-001), not all thrown away
+                error = e
+                continue
+            for k, v in got.items():
                 traded = v.get("last_trade_time")
                 if hasattr(traded, "tzinfo") and traded.tzinfo is None:
                     traded = traded.replace(tzinfo=IST)
                 out[part.get(k, k.split(":", 1)[-1])] = {"price": v.get("last_price"),
                                                          "at": traded.isoformat() if hasattr(traded, "isoformat") else None}
+        if error is not None and not out:
+            raise error
         return out
 
     @staticmethod

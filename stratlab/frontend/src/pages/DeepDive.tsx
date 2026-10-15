@@ -1,3 +1,4 @@
+import { unsettledNote, saidOn } from "../lib/reportCard";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
@@ -82,11 +83,11 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
         <Stat label="Targets met" value={checked ? `${c.met} of ${checked}` : "–"} />
         <Stat label="Missed" value={String(c.missed)} />
         <Stat label="Not due yet" value={String(c.pending)} />
-        <Stat label="Can't check yet" value={String(c.unchecked)} />
+        <Stat label="Couldn't check" value={String(c.unchecked)} />
       </StatRow>
       <p className="k-small">{checked
         ? <>Of the {checked} targets from past calls that can be settled, by the reported numbers or by what the company itself said later, <b>{c.met} {c.met === 1 ? "was" : "were"} met</b> and {c.missed} missed ({c.score}% met).</>
-        : "None of the targets found can be settled yet: their period hasn't ended, or no later number or statement gives the result."}</p>
+        : unsettledNote(c)}</p>
       {c.rows.length > 0 ? (
         <div className="promises">{c.rows.map((r, i) => {
           const [label, tone] = RESULT[r.result];
@@ -384,7 +385,7 @@ export function DeepDivePage() {
                 <div className="k-stack">
                   <b className="k-small">Outlook</b>
                   {p.outlook.map((o, i) => (
-                    <div key={i} className="quote-row"><span className="k-small">{o.statement}</span>{o.quote && <span className="k-note">"{o.quote}"</span>}<SourceLink s={o.source} /></div>))}
+                    <div key={i} className="quote-row"><span className="k-small">{o.statement} <span className="k-note">({saidOn(o.source?.at, day)})</span></span>{o.quote && <span className="k-note">"{o.quote}"</span>}<SourceLink s={o.source} /></div>))}
                 </div>
               )}
             </Panel>

@@ -228,6 +228,12 @@ const [saveNote, setSaveNote] = useState("");
     return () => { cancelAnimationFrame(raf); mo.disconnect(); mq?.removeEventListener?.("change", retheme); e.destroy(); engineRef.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the legend's box, so the last price's line goes round it (R29B-017); measured after every draw, it wraps as the width changes
+  useEffect(() => {
+    const e = engineRef.current, lg = canvasRef.current?.parentElement?.querySelector<HTMLElement>(".pc-legend");
+    if (e) e.setLegendBox(lg && lg.offsetWidth ? { w: lg.offsetWidth, h: lg.offsetHeight } : null);
+  });
+
   const lineish = type === "line" || type === "area" || type === "baseline";
   const shownType: ChartType = props.closesOnly && !lineish ? "line" : type;
   useEffect(() => { engineRef.current?.setType(shownType); rootRef.current!.dataset.type = shownType; }, [shownType]);

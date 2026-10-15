@@ -8,7 +8,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from . import corp_actions, holdings, holdings_file, instrument_kinds, tax_lots
+from . import corp_actions, holdings, holdings_file, instrument_kinds, tax_lots, tax_total
 from . import money_advance_tax as adv
 from . import money_dividends as divs
 from . import money_ltcg as ltcg
@@ -218,7 +218,9 @@ def advance_view(profile, fy: int | None = None) -> dict:
     full_tax = tax_by(None)
     upto = [tax_by(d["date"]) for d in adv.due_dates(fy)]       # the last, to 15 March: the 234C proviso covers later gains
     business = any(b["fy"] == fy for b in i["business"]) or any(x["fy"] == fy for x in c["intraday"])
-    out.update({"schedule": adv.schedule(fy, full_tax, upto, mine["tds"], mine["paid"], t, business), "inputs": mine,
+    turnover = tax_lots.business_year(fy, i["business"])["turnover"] + sum(x.get("turnover") or 0 for x in c["intraday"] if x["fy"] == fy)
+    audit = tax_total.audit_applies(fy, turnover, business)      # the tax report's 31 October, not 31 July / August (R29B-015)
+    out.update({"schedule": adv.schedule(fy, full_tax, upto, mine["tds"], mine["paid"], t, business, audit), "inputs": mine,
                 "dividends_in_estimate": round(sum(a for _, a in div_events), 2),
                 "dividend_tds": next((y["tds"]["expected"] for y in dv["years"] if y["fy"] == fy), 0.0),
                 "income_saved": bool(inputs)})
