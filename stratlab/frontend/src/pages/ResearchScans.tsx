@@ -1,3 +1,4 @@
+import { stageDaysText } from "../lib/stageDays";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -21,7 +22,7 @@ import {
 /* ---------- Trend scan: Stage 2 + Supertrend, and the preset rule sets (Basic and up) ---------- */
 interface ScanRow {
   id: string; symbol: string; name: string | null; currency: string | null; price: number; chg: number | null;
-  stage: number | null; stage_days: number | null; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
+  stage: number | null; stage_days: number | null; stage_capped?: boolean; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
 }
 interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number>;
   price_day?: string | null; settling?: boolean }
@@ -202,7 +203,7 @@ export function ScanPage() {
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "st", header: "Stage", cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{days(r.stage_days)}</span> : null}</> },
+              { key: "st", header: "Stage", cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
               { key: "sp", header: "Supertrend", cell: (r) => <>{r.st_up ? "Up" : "Down"}<span className="k-sub-line">for {days(r.st_days)}</span></> },
               { key: "sg", header: "Signal", cell: (r) => (r.signal ? <Badge tone={SIGNAL[r.signal][0]} dot={false}>{SIGNAL[r.signal][1]}</Badge> : <span className="k-muted">–</span>) },
             ]} />

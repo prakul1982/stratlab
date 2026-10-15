@@ -2,6 +2,7 @@
  * drawings, so moving the pointer never repaints the candles. Repaints are batched into animation frames and only
  * happen when something changed. Only the bars on screen are drawn; when they are thinner than ~1.5 px they are
  * merged into one candle per group so a long history pans as fast as a short one. */
+import { legendIndex } from "./legend";
 import { barsBetween, buildPosition, CLICKS, durationText, History, moveHandle, shiftDrawing, snapOhlc, thinStroke, type Pt } from "./drawGeo";
 import { hitDrawing, paintDrawing, toolForKey, type DrawFmt, type DrawTheme, type Drawing, type DrawingKind, type Mapper } from "./drawings";
 import { attachGestures } from "./interaction";
@@ -603,6 +604,12 @@ export class PriceChartEngine {
     if (i === this.hoverIndex) return;
     this.hoverIndex = i;
     this.on.crosshair?.(i < 0 ? null : this.hoverAt(i));
+  }
+
+  /** The legend's candle: under the pointer, else the newest, from the bars as they are now. */
+  legendHover(): Hover | null {
+    const i = legendIndex(this.hoverIndex, this.bars.length);
+    return i < 0 ? null : this.hoverAt(i);
   }
 
   hoverAt(i: number): Hover | null {

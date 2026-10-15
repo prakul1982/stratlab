@@ -208,3 +208,26 @@ def test_run_leaves_out_a_stock_whose_last_candle_is_weeks_old(monkeypatch):
     out = scan.run(reg, "US", [{"symbol": "AAA"}, {"symbol": "BBB"}])
     assert [r["symbol"] for r in out["rows"]] == ["AAA"]
     assert out["problems"] == ["BBB: no recent daily prices"]
+
+
+def test_scan_fills_a_blank_name_from_the_stored_company_lists(monkeypatch):
+    """R29D-001: the broker's list leaves some names blank (WIPRO, ITC); the stored company lists supply them."""
+    from app import stock_pages
+    reg = fake_setup(monkeypatch)
+    reg.prov.instrument = lambda key: {"symbol": key, "name": "" if key == "AAA" else "Bee Ltd", "currency": "USD"}
+    monkeypatch.setattr(stock_pages, "companies", lambda region: {"AAA": {"name": "Aaa Corp", "sym": "AAA", "bse": None}})
+    monkeypatch.setattr(stock_pages, "_setting", lambda key: None)
+    rows = {r["symbol"]: r for r in scan.run(reg, "US", [{"symbol": "AAA"}, {"symbol": "BBB"}])["rows"]}
+    assert rows["AAA"]["name"] == "Aaa Corp" and rows["BBB"]["name"] == "Bee Ltd"
+    monkeypatch.setattr(stock_pages, "companies", lambda region: {})
+    monkeypatch.setattr(stock_pages, "_setting", lambda key: {"facts": {"name": "Aaa From Facts"}} if key.endswith(":AAA") else None)
+    assert scan.company_name("US", {"symbol": "AAA", "name": None}, "US:AAA") == "Aaa From Facts"
+
+
+def test_stage_days_flag_a_stage_that_began_before_the_look_back():
+    """R29D-002: a stage running since the first candle read is a lower bound, not a fact."""
+    r = scan.analyse(bars_from(list(np.linspace(100, 300, 420))))
+    assert r["stage"] == 2 and r["stage_capped"] is True
+    up = list(np.linspace(200, 90, 200)) + list(np.linspace(90, 200, 120))      # stage 2 begins well inside the window
+    r = scan.analyse(bars_from(up))
+    assert r["stage"] == 2 and r["stage_capped"] is False and r["stage_days"] < 120

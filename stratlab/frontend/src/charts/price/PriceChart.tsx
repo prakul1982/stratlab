@@ -391,6 +391,7 @@ const [saveNote, setSaveNote] = useState("");
         rootRef.current!.dataset.loaded = tf;
         e.setData(shownFrom(bars, tf));
         setStatus(bars.length ? "ready" : "empty");
+        setTick((x) => x + 1);
         if (range) applyRange(range);
         else applyOpenFrom();
         syncData();
@@ -433,6 +434,7 @@ const [saveNote, setSaveNote] = useState("");
     if (m.kind === "reset" || !was.length) { e.setData(m.bars, was.length > 0); if (!was.length) applyOpenFrom(); }
     else for (const b of m.bars.slice(Math.max(0, was.length - 1))) e.update(b);
     setStatus(m.bars.length ? "ready" : "empty");
+    setTick((x) => x + 1);        // the legend reads the new last candle now, not at the next pointer move
     syncData();
   }, [load, props.bars, syncData, applyOpenFrom]);
 
@@ -529,7 +531,7 @@ const [saveNote, setSaveNote] = useState("");
 
   // ---------- the legend ----------
   const e = engineRef.current;
-  const h = hover ?? (e && e.bars.length ? e.hoverAt(e.bars.length - 1) : null);
+  const h = e ? e.legendHover() : hover;   // read from the live bars, not the throttled pointer snapshot
   const fmt = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "–" : (e ? e.priceText(v) : String(v)));
   const chg = h && h.prev ? h.bar.c - h.prev.c : null;
   const chgPct = h && h.prev && h.prev.c ? ((h.bar.c / h.prev.c) - 1) * 100 : null;
