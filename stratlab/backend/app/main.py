@@ -2362,6 +2362,9 @@ def deep_view(sym: str, base: dict) -> dict:
     snap = screener_summary(p)
     if not us:      # at the last close, as on the company page (the source's own ratios are at its once-a-day price)
         snap = at_live_price(snap, (base.get("trend") or {}).get("price"), sym, p.get("fetched_at"))
+        # the public page's market value check: a failed value is blank here too, with the P/E, the deck's tile, the
+        # valuation and the P/E worked out from it (R10C-001)
+        snap = stock_pages.india_snap_checked(snap, p)
     # the yield as the public page works it out (ex-dated dividends of the year to the last close): the source's own
     # figure never stays, so a missing list is n/a here as there, not the source's 0.00%
     as_of = candle_day((base.get("trend") or {}).get("t")) or datetime.now(IST).date().isoformat()
@@ -2374,7 +2377,8 @@ def deep_view(sym: str, base: dict) -> dict:
     return {"symbol": sym, "region": "US" if us else "IN", "currency": "USD" if us else "INR", "source_url": p.get("url"),
             "reporting_currency": p.get("currency") or ("USD" if us else "INR"),
             "name": p.get("name") or sym, "about": (p.get("about") or "")[:1200], "numbers": nums,
-            "snapshot": {k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+            "snapshot": {**{k: snap.get(k) for k in ("market_cap_cr", "price", "pe", "pb", "roce", "roe", "debt_equity", "div_yield")},
+                         "cap_note": stock_pages.CAP_UNAVAILABLE if snap.get("cap_problem") else None},
             "industry_measures": industry.measures(p, sym),
             "valuation": industry.valuation(p, snap, industry.classify(p, nums, sym)["group"], industry.measures(p, sym)["key"]),
             "documents": base["docs"], "doc_note": base["doc_note"], "reads": reads, "reads_stale": not deepdive.fresh(reads),

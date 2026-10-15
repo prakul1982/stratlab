@@ -113,6 +113,20 @@ def _year_key(col: str) -> str:
     return re.sub(r"\s+\d+m$", "", str(col).strip())
 
 
+def part_year(col) -> bool:
+    """Whether a results column is a company's first, part-year report ("Mar 2023 3m"): not a year to grow from."""
+    return bool(re.search(r"\s\d+m$", str(col).strip()))
+
+
+def _month(col) -> tuple[int, int] | None:
+    """(year, month) of a table column ("Jun 2026"), None for one that isn't a month."""
+    try:
+        d = datetime.strptime(_year_key(col), "%b %Y")
+    except ValueError:
+        return None
+    return d.year, d.month
+
+
 def _align(cols_a: list[str], vals_a: list, cols_b: list[str]) -> list:
     """Values of series A at the columns of table B (None where A has no such year)."""
     m = {_year_key(c): v for c, v in zip(cols_a, vals_a)}
@@ -161,12 +175,21 @@ def numbers(p: dict) -> dict:
     qcols = _years(q)
     qs, qp, qo = _series(q, "Sales", "Revenue"), _series(q, "Net Profit"), _series(q, "OPM", "Financing Margin")
     quarters = []
+    # a quarter against the same quarter a year before, found by its period, never by position: a missing quarter in
+    # between would set Jun 2026 against Mar 2025 (R10C-003). Columns that aren't months are taken four back.
+    at = {_month(c): i for i, c in enumerate(qcols)}
+    dated = bool(qcols) and None not in at
     for i, c in enumerate(qcols):
-        yoy = (qs[i] / qs[i - 4] - 1) * 100 if i >= 4 and i < len(qs) and qs[i] and qs[i - 4] else None
+        m = _month(c)
+        j = (at.get((m[0] - 1, m[1])) if dated else i - 4 if i >= 4 else None)
+        yoy = (qs[i] / qs[j] - 1) * 100 if j is not None and i < len(qs) and j < len(qs) and qs[i] and qs[j] else None
         quarters.append({"quarter": c, "sales": qs[i] if i < len(qs) else None, "profit": qp[i] if i < len(qp) else None,
                          "opm": qo[i] if i < len(qo) else None, "sales_yoy": round(yoy, 1) if yoy is not None else None})
     recent_capex = [y["capex"] for y in years[-3:] if y["capex"] is not None]
     eps = _series(pl, "EPS")[:n]
+    # growth compounds over full years only: a part-year first report is a gap, as a blank year is (R10C-004: "Mar 2023
+    # 3m" sales of 25 against 150 gave 81.7% a year)
+    full = lambda vals: [None if part_year(c) else v for c, v in zip(ycols, vals)]     # noqa: E731
     # what the figures are in (a foreign filer's own currency) and what isn't shown for this kind of company (US)
     notes = [p[k] for k in ("basis_note", "currency_note", "share_note", "margin_note") if p.get(k)]
     note = profit_note(p)
@@ -174,9 +197,9 @@ def numbers(p: dict) -> dict:
         notes.append(note)
     return {
         "years": years[-10:], "quarters": quarters[-12:],
-        "growth": {"sales_cagr_3y": _cagr(sales, 3), "sales_cagr_5y": _cagr(sales, 5),
-                   "profit_cagr_3y": _cagr(profit, 3), "profit_cagr_5y": _cagr(profit, 5),
-                   "eps_cagr_3y": _cagr(eps, 3), "eps_cagr_5y": _cagr(eps, 5)},
+        "growth": {"sales_cagr_3y": _cagr(full(sales), 3), "sales_cagr_5y": _cagr(full(sales), 5),
+                   "profit_cagr_3y": _cagr(full(profit), 3), "profit_cagr_5y": _cagr(full(profit), 5),
+                   "eps_cagr_3y": _cagr(full(eps), 3), "eps_cagr_5y": _cagr(full(eps), 5)},
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None, "capex_years": len(recent_capex),     # of the last 3
         "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
         "no_revenue": list(p.get("no_revenue") or []),

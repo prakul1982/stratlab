@@ -795,14 +795,16 @@ class Research:
                       "at": datetime.fromtimestamp(q["t"], timezone.utc).isoformat(timespec="seconds") if isinstance(q.get("t"), (int, float)) and q["t"] > 0 else None,
                       } if q.get("c") else None,
             "range52": one["range52"],
-            "margins": {"gross": num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
+            # a bank's or lender's gross margin, EV/FCF, current ratio and asset turnover describe a deposit book, not the
+            # business: left out with its EV/EBITDA (R10C)
+            "margins": {"gross": None if lender else num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
                 ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _item("Fwd P/E", M.get("forwardPE")),
                                _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
-                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", M.get("currentEv/freeCashFlowTTM")),
+                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", None if lender else M.get("currentEv/freeCashFlowTTM")),
                                _item("PEG (fwd)", M.get("forwardPEG"))]),
-                ("Profitability", [_item("Gross margin", M.get("grossMarginTTM"), "%"),
+                ("Profitability", [_item("Gross margin", None if lender else M.get("grossMarginTTM"), "%"),
                                    _item("Operating margin", M.get("operatingMarginTTM"), "%"),
                                    _item("Net margin", M.get("netProfitMarginTTM"), "%", "Last 12 months"),
                                    _item("ROE", M.get("roeTTM"), "%", "Last 12 months"), _item("ROA", M.get("roaTTM"), "%")]),
@@ -810,10 +812,10 @@ class Research:
                             _item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±"),
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
                             _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
-                ("Financial health", [_item("Current ratio", M.get("currentRatioQuarterly")),
+                ("Financial health", [_item("Current ratio", None if lender else M.get("currentRatioQuarterly")),
                                       _item("LT debt / equity", M.get("longTermDebt/equityQuarterly")),
                                       _item("Interest coverage", M.get("netInterestCoverageTTM")),
-                                      _item("Asset turnover", M.get("assetTurnoverTTM"))]),
+                                      _item("Asset turnover", None if lender else M.get("assetTurnoverTTM"))]),
                 # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
                 ("Per share and returns", [_item("EPS TTM", None if one["foreign"] else M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
                                            _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
@@ -822,8 +824,9 @@ class Research:
             ),
             "trend": trend,
             "earnings": [{"period": e.get("period"), "actual": e["actual"], "estimate": e["estimate"],
-                          "surprise_pct": e.get("surprisePercent") if e.get("surprisePercent") is not None else
-                          ((e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100 if e["estimate"] else 0)} for e in earn],
+                          # against an estimate of 0 there's no percentage to give (R10C: it read 0%)
+                          "surprise_pct": None if not e["estimate"] else e.get("surprisePercent") if e.get("surprisePercent") is not None
+                          else (e["actual"] - e["estimate"]) / abs(e["estimate"]) * 100} for e in earn],
             "next_earnings": {"date": nxt[0]["date"], "eps_estimate": nxt[0].get("epsEstimate")} if nxt else None,
             "analysts": {k: rec.get(k, 0) for k in ("strongBuy", "buy", "hold", "sell", "strongSell")} | {"period": rec.get("period")} if rec else None,
             "insider": insider_view(ins),
@@ -926,6 +929,8 @@ class Research:
         if quote is None and s.get("price"):
             quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
+        from .. import stock_pages
+        s = stock_pages.india_snap_checked(s, scr) if scr else s
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})
         # one value per figure on the page: growth compounded over the reported years (as the AI read's facts and the
@@ -965,7 +970,9 @@ class Research:
         return {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
             "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
-            "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr") else []),
+            "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
+                                                                                                    else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
+            "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
             "quote": quote, "range52": {"low": lo52, "high": hi52},
             "margins": None,

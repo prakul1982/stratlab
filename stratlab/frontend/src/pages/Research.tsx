@@ -272,6 +272,7 @@ export function CompanyPage() {
         <div className="inv-head">
           <div className="k-stack">
             {c.market_cap != null && <Stat label="Market value" value={bigMoney(c.market_cap, ccy)} />}
+            {c.market_cap == null && c.cap_note && <p className="k-small k-muted" data-cap-check>{c.cap_note}</p>}
             <div className="inv-badges">
               <SurvBadges region={region} symbol={c.symbol} />
               {region === "IN" && <EtfGapBadge symbol={c.symbol} price={c.quote?.price} day={c.quote?.at ? dayIn(c.quote.at) : null} />}

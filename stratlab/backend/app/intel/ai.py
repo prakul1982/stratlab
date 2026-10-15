@@ -79,7 +79,7 @@ def company_facts(c: dict) -> dict:
     metrics = {f"{g['title']}: {i['label']}": grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
                for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
-             "currency": c.get("currency"), "industry": c.get("industry"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c),
+             "currency": c.get("currency"), "industry": c.get("industry"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c) or ("Market cap unavailable" if c.get("cap_note") else None),
              "metrics": metrics, "margins": c.get("margins"),
              "annual_trend": c.get("trend"), "earnings_surprises": c.get("earnings"),
              "shareholding": c.get("shareholding"),

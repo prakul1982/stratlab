@@ -262,17 +262,25 @@ class Source:
 
 
 def num(v) -> float | None:
-    """A float from anything numeric-looking: 1,23,456.7 · "12.5 %" · None."""
+    """A float from anything numeric-looking: 1,23,456.7 · "12.5 %" · None. An accountant's "(12.5)" and a figure signed
+    with any dash ("−5", "–5", "—5") are negative; "nan" and "inf" are no number."""
+    import math
+    import re
     if v is None or isinstance(v, bool):
         return None
     if isinstance(v, (int, float)):
-        return float(v) if v == v else None   # NaN check
-    s = str(v).replace(",", "").replace("₹", "").replace("%", "").replace("−", "-").strip()
-    if s in ("", "-", "—", "--"):
+        return float(v) if math.isfinite(v) else None
+    s = str(v).replace(",", "").replace("₹", "").replace("%", "").strip()
+    s = re.sub(r"^[−–—]", "-", s)
+    if s in ("", "-", "--"):
         return None
+    m = re.fullmatch(r"\(\s*([^()]*?)\s*\)", s)
+    if m:
+        inner = num(m.group(1))
+        return -abs(inner) if inner is not None else None
     try:
-        return float(s)
+        f = float(s)
+        return f if math.isfinite(f) else None
     except ValueError:
-        import re
-        m = re.search(r"-?\d+(?:\.\d+)?", s)
+        m = re.search(r"-?\d+(?:\.\d+)?", s.replace("−", "-"))
         return float(m.group()) if m else None
