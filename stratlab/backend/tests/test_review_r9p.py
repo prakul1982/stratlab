@@ -52,11 +52,13 @@ def test_an_alert_email_carries_our_own_unsubscribe_headers_and_link(brevo):
 
 
 def test_a_purely_transactional_email_sends_no_unsubscribe_header(brevo):
-    # the test email, a confirmation, a receipt: nothing to unsubscribe from (Brevo may still add its own to these: that
-    # is an account setting, not something a message can switch off)
+    # the test email, a confirmation, a receipt: nothing to unsubscribe from, so no one-click header of a list. R23-001:
+    # Brevo added its own List-Unsubscribe to these, whose button would block the address at Brevo (receipts included),
+    # so they now name StratLab's own Manage emails page, without One-Click
     subject, html, text = P.test_email()
     alerts.send_email("a@example.com", subject, text, html=html)
-    assert "headers" not in brevo[0]
+    assert brevo[0]["headers"]["List-Unsubscribe"] == "<https://stratlab.studio/settings#newsletters>"
+    assert "List-Unsubscribe-Post" not in brevo[0]["headers"]
     html, text, headers_ = kit.finish(html, text, "u-1", None)
     assert headers_ is None
 
@@ -82,7 +84,8 @@ def test_lifecycle_tips_and_the_admin_test_of_them_carry_it_but_a_receipt_does_n
     assert brevo[0]["headers"]["List-Unsubscribe"].startswith("<https://stratlab.studio/unsubscribe?t=")
     brevo.clear()
     lifecycle.send_test("receipt", {"id": "u-1", "email": "a@example.com"}, "owner@example.com")
-    assert "headers" not in brevo[0]
+    assert brevo[0]["headers"]["List-Unsubscribe"] == "<https://stratlab.studio/settings#newsletters>"    # ours, not Brevo's (R23-001)
+    assert "List-Unsubscribe-Post" not in brevo[0]["headers"]
 
 
 def test_unsubscribing_from_alert_emails_stops_them_and_saving_an_address_turns_them_back_on(monkeypatch):
@@ -179,7 +182,7 @@ def test_the_weekly_error_line_uses_admins_wording_and_numbers(monkeypatch):
     facts = {"stats": {"users": 9, "new": 4, "paid": {}, "paying": {}, "given": {"pro": 6}, "experiments": 14, "ai": 16},
              "checks": [], "audits": {}, "errors": 21, "errors_since_restart": 0, "errors_before_restart": 23, "admin_url": None}
     _, text = weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)
-    assert "- 21 server errors this week; 23 more from before the last restart are kept" in text
+    assert "- 21 server errors this week" in text and "more from before" not in text      # R23-003: each error once
     assert "listed on Admin" not in text
     facts.update(errors_since_restart=2, errors_before_restart=0, errors=2)
     assert "- 2 server errors this week" in weekly.summary(datetime(2026, 10, 12, 9, 0, tzinfo=IST), facts)[1]

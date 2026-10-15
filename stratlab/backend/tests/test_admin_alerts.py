@@ -77,7 +77,8 @@ def test_email_goes_over_https_through_resend_when_its_key_is_set(monkeypatch):
     url, kw = calls[0]
     assert url == "https://api.resend.com/emails" and kw["headers"]["Authorization"] == "Bearer re_test"
     assert kw["json"] == {"from": alerts.RESEND_FROM, "to": ["owner@example.com"], "subject": "Subject", "text": "Body",
-                          "reply_to": "support@stratlab.studio"}      # replies reach a real inbox
+                          "reply_to": "support@stratlab.studio",      # replies reach a real inbox
+                          "headers": alerts.manage_unsubscribe_headers()}   # R23-001: our own Manage emails page, never the service's
     import pytest
     with pytest.raises(RuntimeError, match="own address"):
         alerts.send_email("someone@example.com", "s", "b")

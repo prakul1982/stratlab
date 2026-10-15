@@ -520,3 +520,21 @@ def test_an_offer_ending_seconds_after_midnight_is_said_as_the_day_before(w):
     on = lambda d: datetime(2026, 10, d, 5, 0, tzinfo=timezone.utc)
     assert lifecycle.due(p, on(20), {}, None, end)[0][1] == "promo_before:2026-10-21"
     assert lifecycle.due(p, on(21), {}, None, end)[0][1] == "promo_end:2026-10-21"
+
+
+# ---------- R23-005: the welcome says what the Market Brief is on the reader's plan ----------
+def test_r23_005_the_welcome_promises_the_brief_the_plan_gives(w):
+    daily = "Get the Market Brief: a short email after each market closes."
+    free = user("u-free", "free@example.com")
+    _, _, text = lifecycle.build("welcome", free)
+    assert "a weekly email on Saturday morning on the Free plan" in text and daily not in text
+    basic = user("u-basic", "basic@example.com", plan="basic", plan_status="active")
+    assert daily in lifecycle.build("welcome", basic)[2]
+    plans.set_promo(7)                                                     # the launch offer: daily for now, said with its end
+    try:
+        text = lifecycle.build("welcome", free)[2]
+        assert "a short email after each market closes during the launch offer, which ends on " in text
+        assert "then a weekly email on Saturday morning on the Free plan" in text
+        assert daily in lifecycle.build("welcome", basic)[2]
+    finally:
+        plans.set_promo(None)

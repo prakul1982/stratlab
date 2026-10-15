@@ -461,7 +461,10 @@ def teaser(profile: dict, issue: dict):
 
 # why a reader didn't get an issue, in the words Admin → Data and jobs uses (R7M-005)
 WHY = {"unconfirmed": "email address not confirmed", "no_address": "no email address", "email_off": "email isn't set up on the server",
-       "error": "the email failed to send", "profile": "the account couldn't be read", "nothing_new": "nothing changed for their stocks"}
+       "error": "the email failed to send", "profile": "the account couldn't be read", "nothing_new": "nothing changed for their stocks",
+       # chose Daily, but their plan has the weekly edition only: they get Saturday's digest instead (R23-002: said as
+       # "chose the other edition" before, so a daily reader left out looked like one who had picked weekly)
+       "plan_weekly": "chose daily, but their plan has the weekly edition only"}
 RETRY = ("unconfirmed", "no_address", "email_off", "error", "profile")       # worth trying again later the same day
 SENT = "newssent:"          # app_settings: who an issue went to, so a retry never sends twice
 
@@ -529,6 +532,29 @@ def save_ledger(iid: str, led: dict) -> None:
     db.set_setting(SENT + iid, json.dumps(led))
 
 
+def freeze_links(issue: dict) -> dict:
+    """Keep the issue's headline links as they are when it is first sent (R23-004): its emails number them
+    (/news-link/<issue>/<n>), and a later headline rule that drops a story from the stored issue must not move or
+    break those numbers. Stored in place; an issue already frozen is left as it is."""
+    if issue.get("kind", "market") != "market" or isinstance(issue.get("links"), list):
+        return issue
+    issue["links"] = write.headline_urls(issue)
+    parts = parse_id(issue.get("id") or "")
+    if parts:
+        db.set_setting(_key(*parts), json.dumps(issue))       # in place: the list keeps its order
+    return issue
+
+
+def open_ledger(iid: str) -> None:
+    """Write the issue's ledger (no one sent to yet) before its day is marked as run (R23-002). The day mark used to come
+    first: a database error or a deploy between the mark and the ledger left an issue that was built and marked but had
+    no ledger, which reads as "sent before the ledger existed" and is never sent, with nothing in Admin to say so. With
+    the ledger first, a run cut short after the mark is picked up by catch_up; one cut short before it isn't marked, so
+    the next check runs it again."""
+    if not has_ledger(iid):
+        save_ledger(iid, ledger(iid))
+
+
 def retryable(led: dict) -> bool:
     return not led.get("done") or any(r in RETRY for r in led.get("skipped", {}).values())
 
@@ -536,6 +562,20 @@ def retryable(led: dict) -> bool:
 def quiet(led: dict) -> bool:
     """A run that didn't finish and has made no progress for a while: it was cut short, not still sending."""
     return not led.get("done") and time.time() - led.get("beat", 0) >= run_marks.STALE
+
+
+def due_today(region: str, now: datetime | None = None) -> str | None:
+    """The region's trading day whose daily brief is due by now (its send time has passed), or None (not a trading day,
+    or not yet time). For Admin: a due brief with no run recorded is said, not left out."""
+    from ..data.calendar import is_trading_day
+    tz, at = SEND_AT[region]
+    local = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(tz))
+    if local.strftime("%H:%M") < at:
+        return None
+    try:
+        return local.date().isoformat() if is_trading_day(region, local.date()) else None
+    except Exception:
+        return None
 
 
 def skipped_words(skipped: dict) -> dict:
@@ -721,14 +761,35 @@ class Job:
         self.last[name] = day.isoformat()
         self.keep()
 
+    def run_market(self, region: str, day: date | None, weekly: bool, problems: list) -> tuple[int, bool]:
+        """One region's issue for the day: built (or the stored one), its ledger opened, the day marked, then sent.
+        (sent, whether it ran). Whatever goes wrong is said, per region, in Admin and the log; the day is marked only
+        once the ledger is written, so a failure before that is tried again at the next check (R23-002)."""
+        if not day:
+            return 0, False
+        name = f"weekly-{region}" if weekly else f"market-{region}"
+        try:
+            issue = build_market(region, day, weekly)
+            if not issue:                  # every source down: try again on the next check
+                return 0, False
+            open_ledger(issue["id"])
+            self.mark(name, day)
+        except Exception as e:
+            msg = f"{region}{' weekly' if weekly else ''}: {str(e)[:160]}"
+            print("newsletters: run failed before sending,", msg)
+            problems.append(msg)
+            self._report(f"{region}-weekly" if weekly else region, {
+                "issue": issue_id("market", region, day.isoformat(), weekly), "day": day.isoformat(), "weekly": weekly,
+                "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"), "readers": 0, "sent": 0, "other_edition": 0,
+                "skipped": {}, "error": f"couldn't start the send ({str(e)[:160]}); tried again at the next check"})
+            return 0, True
+        return self._send(region, issue, weekly, problems), True
+
     def tick(self, now: datetime) -> int:
         sent, ran, problems = 0, False, []
         for region, (tz, at) in SEND_AT.items():
-            day = self.due(f"market-{region}", now, tz, at, region=region)
-            issue = build_market(region, day) if day else None
-            if issue:                      # every source down: try again on the next check
-                self.mark(f"market-{region}", day)
-                sent, ran = sent + self._send(region, issue, False, problems), True
+            n, did = self.run_market(region, self.due(f"market-{region}", now, tz, at, region=region), False, problems)
+            sent, ran = sent + n, ran or did
         day = self.due("stocks", now, *SEND_AT["IN"], region="IN")
         run = self.begin("stocks", day) if day else None
         if run:
@@ -740,11 +801,8 @@ class Job:
                 ran = True
         tz, weekday, at = WEEKLY_AT
         for region in SEND_AT:            # per region, like the daily brief: marked only once its issue is built
-            day = self.due(f"weekly-{region}", now, tz, at, weekday=weekday)
-            issue = build_market(region, day, True) if day else None
-            if issue:
-                self.mark(f"weekly-{region}", day)
-                sent += self._send(region, issue, True, problems)
+            n, did = self.run_market(region, self.due(f"weekly-{region}", now, tz, at, weekday=weekday), True, problems)
+            sent += n
         day = self.due("weekly", now, tz, at, weekday=weekday)
         run = self.begin("weekly", day) if day else None
         if run:
@@ -767,6 +825,11 @@ class Job:
         except Exception as e:
             print("newsletter send failed:", region, str(e)[:160])
             problems.append(f"{region}{' weekly' if weekly else ''}: {str(e)[:160]}")
+            led = ledger(issue["id"]) if has_ledger(issue["id"]) else {"sent": [], "skipped": {}}
+            self._report(f"{region}-weekly" if weekly else region, {
+                "issue": issue["id"], "day": issue.get("day"), "weekly": weekly, "at": datetime.now(ZoneInfo("UTC")).isoformat(timespec="seconds"),
+                "readers": None, "sent": len(led["sent"]), "other_edition": 0, "skipped": skipped_words(led["skipped"]),
+                "error": f"the send stopped ({str(e)[:160]}); the readers not reached are tried again during the day"})
             return 0
 
     def catch_up(self, now: datetime, problems: list) -> int:
@@ -794,9 +857,22 @@ class Job:
         return total
 
     def _report(self, key: str, rep: dict) -> None:
-        """Remember how a send went, per region, for Admin → Data and jobs (kept across restarts with the job's status)."""
-        regions = dict(self.status.get("regions") or {})
+        """Remember how a send went, per region, for Admin → Data and jobs (kept across restarts with the job's status).
+        After a restart the status in memory starts empty: the regions kept from before it are taken up first, so the
+        US run after a deploy no longer wipes out how that day's India run went (R23-002: Admin said nothing of it)."""
+        regions = self.status.get("regions")
+        if regions is None and self.status_key:
+            try:
+                from .. import job_status
+                regions = (job_status.kept(self.status_key, {}) or {}).get("regions")
+            except Exception as e:
+                print("newsletters: couldn't read the kept runs,", str(e)[:120])
+        regions = {k: v for k, v in dict(regions or {}).items() if isinstance(v, dict)}
         regions[key] = rep
+        skipped = rep.get("skipped") or {}
+        print(f"newsletters: {key} {rep.get('day')}: sent {rep.get('sent')} of {rep.get('readers')}"
+              + (f", other edition {rep['other_edition']}" if rep.get("other_edition") else "")
+              + (f", skipped {skipped}" if skipped else "") + (f", {rep['error']}" if rep.get("error") else ""))
         self.status.update(regions=regions, last_run=self.status.get("last_run") or rep["at"])
 
     def send_market(self, region: str, issue: dict, weekly: bool, retry: bool = False) -> int:
@@ -806,6 +882,7 @@ class Job:
         what, sent = f"market_{region.lower()}", 0
         if retry and not has_ledger(issue["id"]):
             return 0
+        freeze_links(issue)                       # before the first email goes: its link numbers stay good (R23-004)
         led = ledger(issue["id"])
         if not retry or not led["done"]:
             save_ledger(issue["id"], led)         # from the first reader on, a run cut short can be picked up again
@@ -829,6 +906,9 @@ class Job:
                 led["skipped"][uid] = "profile"
                 continue
             # daily readers get each day's issue; weekly ones, and daily ones whose plan no longer has it, the digest
+            if not weekly and how == "daily" and not daily_ok:
+                led["skipped"][uid] = "plan_weekly"       # said in Admin as such, not as a reader who chose weekly
+                continue
             if not ((not weekly and how == "daily" and daily_ok) or (weekly and (how == "weekly" or not daily_ok))):
                 other += 1
                 led["skipped"].pop(uid, None)
@@ -872,7 +952,10 @@ class Job:
                 continue
             daily_ok = allowed(profile, "my_stocks", "daily")
             # as with the Market Brief: a daily reader whose plan no longer has daily editions gets the weekly one
-            if (not weekly and not daily_ok) or (weekly and how == "daily" and daily_ok):
+            if not weekly and not daily_ok:
+                skipped["plan_weekly"] = skipped.get("plan_weekly", 0) + 1
+                continue
+            if weekly and how == "daily" and daily_ok:
                 other += 1
                 continue
             try:

@@ -51,6 +51,17 @@ def _num(x) -> str:
     return "" if x is None else kit.num(x)          # 1,23,456.75: Indian digit grouping
 
 
+CURRENCY = {"IN": "INR", "US": "USD"}
+
+
+def _price(x, region: str | None) -> str:
+    """A stock's price with its market's currency sign: ₹925.40, $341.27 (R23-006: "925.40" said neither)."""
+    if x is None:
+        return ""
+    cur = CURRENCY.get(region or "")
+    return kit.money(x, cur, 2) if cur else kit.num(x)
+
+
 def _day(iso: str) -> str:
     """A day in the app's format: Wed 7 Oct."""
     return kit.fmt_date(str(iso), year=False, weekday=True)
@@ -91,7 +102,7 @@ def market_sections(f: dict) -> list[dict]:
 def stock_lines(r: dict, since: str) -> list[dict]:
     lines = []
     if r.get("change_pct") is not None:
-        lines.append({"text": f"Price {_num(r['price'])}, {_pct(r['change_pct'])} since {_day(r.get('since_day') or since)}", "url": None})
+        lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} since {_day(r.get('since_day') or since)}", "url": None})
     if r.get("stage_changed"):
         lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}, was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
     elif r.get("stage"):
@@ -135,6 +146,7 @@ def stock_sections(f: dict) -> list[dict]:
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
             _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
+                  currency=CURRENCY.get(r.get("region") or ""),
                   change_pct=r.get("change_pct"), since=f"since {_day(r.get('since_day') or f['since'])}" if r.get("change_pct") is not None else None)
             for r in f["stocks"]]})
     if f.get("results"):
@@ -394,7 +406,9 @@ def _tiles(indices: list[dict], weekly: bool) -> list[kit.Tile]:
 def _row(it: dict) -> kit.Row:
     lines = tuple((ln["text"], ln.get("url")) for ln in it.get("lines") or [])
     if it.get("change_pct") is not None or it.get("price") is not None:
-        return kit.Row(it["text"], value=kit.num(it["price"]) if it.get("price") is not None else None, change=it.get("change_pct"),
+        price = it.get("price")
+        value = None if price is None else kit.money(price, it["currency"], 2) if it.get("currency") else kit.num(price)
+        return kit.Row(it["text"], value=value, change=it.get("change_pct"),
                        since=it.get("since"), url=it.get("url"), lines=lines)
     return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
 
@@ -407,8 +421,47 @@ def link_path(issue_id: str, n: int) -> str:
 
 
 def headline_urls(issue: dict) -> list[str | None]:
-    """The brief's headline links in order, as link_path numbers them."""
+    """The brief's headline links in order, as link_path numbers them: the list frozen when the issue was first sent
+    (`links`), else the issue's Headlines as they are now. A later headline rule that drops a story from a sent brief
+    no longer moves the numbers its email links carry (R23-004)."""
+    frozen = issue.get("links")
+    if isinstance(frozen, list):
+        return list(frozen)
     return [i.get("url") for s in issue.get("sections") or [] if s.get("title") == "Headlines" for i in s.get("items") or []]
+
+
+_NUMBER = re.compile(r"(?<![\w.,])(\d{1,3}(?:,\d{2,3})+|\d+)(\.\d+)?(?![\w,]*\d)(?!%)")
+_PERCENT = re.compile(r"(?<![\w.])([+\-\u2212]?)(\d+(?:\.\d+)?)%")
+
+
+def house_numbers(text: str | None, indices: list[dict] | None) -> str | None:
+    """The AI's words with the index numbers as the tiles print them (R23-007: "22,622.7 (-0.44%)" beside a tile of
+    "22,622.70 ▼ 0.44%"): an index level it names to fewer places gets the tile's two decimals, a move it names gets
+    two decimals too, and every minus before a number is a real one. Numbers that aren't an index's are left alone."""
+    if not text:
+        return text
+    levels = [float(i["price"]) for i in indices or [] if isinstance(i.get("price"), (int, float))]
+    moves = [abs(float(i["change_pct"])) for i in indices or [] if isinstance(i.get("change_pct"), (int, float))]
+
+    def level(m: re.Match) -> str:
+        whole, frac = m.group(1), m.group(2) or ""
+        if not (frac or "," in whole):          # a plain small number ("October 14", "3 sectors") is not a level
+            return m.group(0)
+        v, places = float(whole.replace(",", "") + frac), max(len(frac) - 1, 0)
+        if places >= 2:
+            return m.group(0)
+        hits = {p for p in levels if p >= 100 and round(p, places) == round(v, places)}
+        return kit.num(hits.pop()) if len(hits) == 1 else m.group(0)
+
+    def move(m: re.Match) -> str:
+        sign, body = m.group(1), m.group(2)
+        places = len(body.split(".")[1]) if "." in body else 0
+        hits = {c for c in moves if places < 2 and round(c, places) == round(float(body), places)}
+        body = f"{hits.pop():.2f}" if len(hits) == 1 else body      # two indices that round alike: left as written
+        return ("\u2212" if sign in ("-", "\u2212") else sign) + body + "%"
+
+    out = _PERCENT.sub(move, _NUMBER.sub(level, text))
+    return re.sub(r"(^|[\s(:;,])-(?=\d)", "\\1\u2212", out)
 
 
 def render(issue: dict) -> tuple[str, str]:
@@ -431,17 +484,21 @@ def render(issue: dict) -> tuple[str, str]:
                                                              tone=_tone(i["name"]), since="over the week" if weekly else None)
                                                      for i in indices[3:]]))
     if issue.get("ai_summary"):
-        # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007)
-        blocks.insert(0, kit.para(issue["ai_summary"]))
+        # every brief opens with the same facts line; the AI's words, when they passed the checks, come under it (R8B-007),
+        # with the index numbers printed as the tiles print them (R23-007)
+        blocks.insert(0, kit.para(house_numbers(issue["ai_summary"], indices)))
     n = 0
+    frozen = issue.get("links") if isinstance(issue.get("links"), list) else None
     for sec in issue.get("sections") or []:
         if tiles and sec["title"] == "Indices":
             continue                                         # already shown as tiles
         rows = []
         for it in sec["items"]:
             if sec["title"] == "Headlines" and kind == "market" and issue.get("id"):
+                # a sent issue numbers its links by the list frozen at the send, so the page and the email agree (R23-004)
+                k = frozen.index(it.get("url")) if frozen is not None and it.get("url") in frozen else n
                 if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # an aggregator's long redirect: the short address in both parts
-                    it = {**it, "url": kit.site(link_path(issue["id"], n))}
+                    it = {**it, "url": kit.site(link_path(issue["id"], k))}
                 n += 1
             rows.append(_row(it))
         blocks.append(kit.card(sec["title"], rows))

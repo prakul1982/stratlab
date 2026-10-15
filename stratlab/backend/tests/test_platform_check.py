@@ -260,3 +260,42 @@ def test_bad_candles_are_named_with_their_prices():
     r = pc.check_market(Reg(), "UK", date(2026, 10, 14))
     assert r["state"] == "fail"
     assert "14 Oct (o 8.10 h 8.15 l 8.00 c 8.30), today's candle while the session is still trading" in r["detail"]
+
+
+def test_r23_008_spy_and_usdinr_a_day_behind_were_the_check_time_not_the_feed(monkeypatch):
+    """R23-008: Admin showed SPY and USDINR at 13 Oct beside 14 Oct for the others. That list is the automatic check of
+    14 Oct (main.PLATFORM_AT, 16:50 IST = 11:20 UTC, "14 h ago" at the review): New York hadn't opened and the rupee
+    pairs trade until 17:00 IST, so 13 Oct was their latest finished candle. The same candles read after both closes
+    are flagged."""
+    from datetime import datetime, timezone
+
+    from app import platform_check as pc
+    from app import main
+    assert main.PLATFORM_AT == (16, 50)
+    clock = {"now": datetime(2026, 10, 14, 11, 20, tzinfo=timezone.utc)}
+
+    class Fixed(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock["now"].astimezone(tz) if tz else clock["now"].replace(tzinfo=None)
+    monkeypatch.setattr(pc, "datetime", Fixed)
+
+    class Prov:
+        def __init__(self, sym):
+            self.sym = sym
+
+        def ready(self):
+            return True
+
+        def defaults(self):
+            return [{"symbol": self.sym}]
+
+        def history(self, inst, tf, days):
+            return [{"t": "2026-10-12T00:00:00", "o": 1, "h": 2, "l": 0.5, "c": 1.5}, {"t": "2026-10-13T00:00:00", "o": 1, "h": 2, "l": 0.5, "c": 1.5}]
+
+    class Reg:
+        def provider(self, market):
+            return Prov({"US": "SPY", "CDS": "USDINR"}[market])
+    assert pc.check_market(Reg(), "US")["state"] == "pass" and pc.check_market(Reg(), "CDS")["state"] == "pass"
+    clock["now"] = datetime(2026, 10, 15, 2, 30, tzinfo=timezone.utc)      # after both closes and their grace
+    assert pc.check_market(Reg(), "US")["state"] == "warn" and pc.check_market(Reg(), "CDS")["state"] == "fail"
