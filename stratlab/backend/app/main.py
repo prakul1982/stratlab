@@ -634,6 +634,14 @@ def _research_error(request, exc):
     return JSONResponse(status_code=exc.status, content={"detail": {"code": exc.code, "message": public_text(exc.message)}})
 
 
+@app.exception_handler(db.DatabaseUnavailable)
+def _database_unavailable(request, exc):
+    """A database read for this request ran out of time (app/db.py): said in seconds, not a hang until the proxy's 502."""
+    print("database unavailable:", request.method, request.url.path, str(exc)[:160])
+    return JSONResponse(status_code=503, headers={"Retry-After": "5"}, content={"detail": {
+        "code": "db_unavailable", "message": "Couldn't reach the database, try again."}})
+
+
 @app.exception_handler(DataError)
 def _data_error(request, exc):
     return JSONResponse(status_code=502, content={"detail": {"code": "data_error", "message": public_text(str(exc))}})
