@@ -8,22 +8,25 @@ const initials = (s: Suggestion) => s.symbol.replace(/[^A-Za-z0-9]/g, "").slice(
  * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region)`.
  * `value` is the symbol the page is showing now; the box shows it until you type. Give it an `id` (a Field does) so
  * its label points at it. */
-export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus }: {
+export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search }: {
   value?: string; onPick: (symbol: string, region: "IN" | "US") => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
+  /** Text to open with as if typed: its matches are looked up and listed (a search handed over in the address). */
+  search?: string;
   /** Called with the text as it is typed, for a form that accepts an exact symbol typed without picking. */
   onText?: (text: string) => void;
 }) {
   const auto = useId();
   const fid = id ?? auto;
   const listId = `${fid}-list`;
-  const [text, setText] = useState(value);
-  const [typed, setTyped] = useState(false);
+  const [text, setText] = useState(search || value);
+  const [typed, setTyped] = useState(!!search);
+  const shownValue = useRef(value);          // the box follows `value` when it changes, so a handed-over search stays on opening
   const [rows, setRows] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [on, setOn] = useState(0);
   const asked = useRef(0);
   const box = useRef<HTMLInputElement>(null);
-  useEffect(() => { setText(value); setTyped(false); }, [value]);
+  useEffect(() => { if (shownValue.current === value) return; shownValue.current = value; setText(value); setTyped(false); }, [value]);
 
   useEffect(() => {
     const q = text.trim();

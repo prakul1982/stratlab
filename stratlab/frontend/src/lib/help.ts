@@ -71,8 +71,8 @@ export const HELP = {
   researchThemes: "Type a sector or trend and the AI maps the companies involved and where the margin sits along the chain. A map to explore, not a ranking or a list to buy.",
   research52: "Where today's price sits between the lowest and highest price of the past year. Near the top means it has been strong lately; near the bottom, weak.",
   researchMargins: "How much of each sale is left after each layer of costs: making the product, running the business, then tax and interest.",
-  researchMetrics: "The main numbers, grouped. The dot on each line shows where this company sits in a typical range for its industry: blue is strong, orange is weak. The two ticks mark the edges of normal.",
-  researchEarnings: "Each quarter's earnings per share against what analysts expected. Blue bars beat the estimate, orange bars missed it.",
+  researchMetrics: "The main numbers, grouped. The dark mark on the grey line under each one shows where this company's figure sits on a typical range for its industry; the two ticks mark the edges of that usual range.",
+  researchEarnings: "Each quarter's earnings per share against what analysts expected, as a percentage. Green bars beat the estimate, red bars missed it.",
   researchHolding: "Who owns the shares: the founders or promoters, foreign funds (FIIs), Indian funds (DIIs) and the public. Promoters selling or funds piling in can be worth watching.",
   newsletters: "A short email after the market closes: what moved in India or the US, and what happened at the companies you follow. Weekly sends one summary a week instead. Every issue is also on the News page.",
 };

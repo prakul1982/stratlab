@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { watchSize } from "../lib/resize";
+import { rotationWidth } from "../lib/investUi";
 
 export type Quadrant = "leading" | "weakening" | "lagging" | "improving";
 export interface RotationRow {
@@ -43,7 +44,8 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
   const [hoverId, setHover] = useState<string | null>(null);
   const hover = hoverId ?? focus ?? null;          // the one trail drawn in full; the rest step back
   const phone = width < 560;
-  const W = Math.max(300, width), H = Math.round(Math.min(640, Math.max(360, W * (phone ? 1.1 : 0.6))));
+  // as wide as its card, down to a small phone's (the card there is about 254 px): never wider, so it never overflows
+  const W = rotationWidth(width), H = Math.round(Math.min(640, Math.max(360, W * (phone ? 1.1 : 0.6))));
   const pad = { l: 44, r: 12, t: 24, b: phone ? 34 : 38 };
   const all = rows.flatMap((r) => r.points);
   const span = (k: "x" | "y") => Math.max(1.5, ...all.map((p) => Math.abs(p[k] - 100))) * 1.12;

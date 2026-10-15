@@ -23,6 +23,7 @@ import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
+import { investStrip, withRegion } from "../lib/investUi";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -157,18 +158,20 @@ function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?
 /** Tools the strip and the panels on the Invest home already link to. */
 const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation", "scan", "research", "holdings"];
 
-const INVEST_STRIP: Tool[] = [
-    { to: "/research/screens", icon: <Search size={18} />, title: "Screener", lead: true, line: "Filter companies by plain facts: growth, debt, returns." },
-    { to: "/research/rotation", icon: <Compass size={18} />, title: "Sector rotation", line: "Which sectors lead or lag the market, with their stocks." },
-    { to: "/research/scan?set=nifty50", icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up." },
-    { to: "/research/corporate-actions", icon: <Calendar size={18} />, title: "Dividends", line: "Dividends, bonuses and splits ahead, for your stocks and all." },
-];
+/** The strip's cards; where each opens (on the market picked at the top) is lib/investUi investStrip's. */
+const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
+  screens: { icon: <Search size={18} />, title: "Screener", lead: true, line: "Filter companies by plain facts: growth, debt, returns." },
+  rotation: { icon: <Compass size={18} />, title: "Sector rotation", line: "Which sectors lead or lag the market, with their stocks." },
+  scan: { icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up." },
+  dividends: { icon: <Calendar size={18} />, title: "Dividends", line: "Dividends, bonuses and splits ahead, for your stocks and all." },
+};
 
 export function InvestHome() {
   const nav = useNavigate();
   const [region, setRegion] = useState<Region>(homeRegion);
   const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
-  const tools = INVEST_STRIP;
+  // every card and link opens its page on the market picked here (review 5c)
+  const tools: Tool[] = investStrip(region).map((t) => ({ ...INVEST_STRIP[t.key], to: t.to }));
   return (
     <div className="space-home">
       <Head eyebrow="Invest · your research desk" title="Your research desk">
@@ -221,7 +224,7 @@ function WatchPanel({ region }: { region: Region }) {
   const by = (r: Region) => (items ?? []).filter((w) => w.region === r);
   const regions = ([region] as Region[]).filter((r) => by(r).length);
   return (
-    <Panel title="Your watchlist" right={<Link to="/research/investor" className="link">At a glance →</Link>}>
+    <Panel title="Your watchlist" right={<Link to={withRegion("/research/investor", region)} className="link">At a glance →</Link>}>
       {items === null ? (failed
         ? <p className="small muted" role="alert">Your watchlist couldn't be opened. <button type="button" className="btn quiet sm" onClick={retry}>Try again</button></p>
         : <PanelSkel label="Opening your watchlist" />)
@@ -255,7 +258,7 @@ function ResultsToday({ region }: { region: Region }) {
     return () => { live = false; };
   }, [region]);
   return (
-    <Panel title={region === "US" ? "US results today" : "Results today"} right={<Link to="/research/results" className="link">Calendar →</Link>}>
+    <Panel title={region === "US" ? "US results today" : "Results today"} right={<Link to={withRegion("/research/results", region)} className="link">Calendar →</Link>}>
       {rows === null ? <PanelSkel label="Checking results dates" />
         : rows.today.length ? (
           <div className="k-stack snug">
@@ -293,16 +296,17 @@ function RedFlags({ region }: { region: Region }) {
   // the feed not answering is not "you hold nothing": say which companies couldn't be read, and offer another try (R13S-002)
   const unread = unreadSymbols(data?.problems);
   const retry = <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button>;
-  // red flags are read from India's exchange filings: none exist for US companies, so the card says that instead of showing India's (R9R-008)
+  // this card reads India's exchange filings; US red flags are the Form 8-K items S&P 500 companies file with the SEC, listed
+  // on the filings page's US tab (R9R-008, review 5c: the card said a US company's own page lists them, which it doesn't)
   if (us) {
     return (
-      <Panel title="Red flags" right={<Link to="/invest/holders?region=US" className="link">US 5% holders →</Link>}>
-        <p className="small muted" data-testid="invest-us-redflags">Red-flag filings are read from India's exchange, so there are none to show for US companies. A US company's own page lists its SEC filings.</p>
+      <Panel title="Red flags" right={<Link to="/research/filings?region=US" className="link">US filings →</Link>}>
+        <p className="small muted" data-testid="invest-us-redflags">US red flags are read from the Form 8-K items S&P 500 companies file with the SEC: bankruptcy, delisting, auditor and officer changes. <Link className="link" to="/research/filings?region=US">See them for your watchlist or every company</Link>.</p>
       </Panel>
     );
   }
   return (
-    <Panel title="Red flags in your holdings and watchlist" right={<Link to="/research/filings" className="link">All filings →</Link>}>
+    <Panel title="Red flags in your holdings and watchlist" right={<Link to="/research/filings?region=IN" className="link">All filings →</Link>}>
       {!known ? <PanelSkel label="Checking your plan" />
         : !allowed ? <p className="small muted">Red flags for all your holdings and watchlist are on the Basic plan. Each company's own page shows its red flags on every plan.</p>
         : failed ? <p className="small muted" data-testid="invest-redflags-failed">{unreadLine([])} {retry}</p>

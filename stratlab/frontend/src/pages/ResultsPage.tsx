@@ -137,7 +137,7 @@ export function ResultsPage() {
           </Card>
         );
       })}
-      {data && data.more > 0 && <p className="k-note">And {data.more} more. Find a company by name to narrow the list.</p>}
+      {data && data.more > 0 && <p className="k-note">And {data.more} more.{scope === "all" ? " Find a company by name to narrow the list." : ""}</p>}
       {data && <p className="k-note inv-text">{data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );

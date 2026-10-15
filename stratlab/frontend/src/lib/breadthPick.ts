@@ -29,3 +29,17 @@ export function savePick(group: GroupId, range: string) {
     localStorage.setItem(KEY, JSON.stringify({ group, range, groups: { ...(v.groups ?? {}), [groupRegion(group)]: group } }));
   } catch { /* storage off */ }
 }
+
+const GROUPS: GroupId[] = ["nse_all", "nifty50", "nifty500", "midcap150", "smallcap250", "us_large", "sp500"];
+
+/** Where the breadth page opens: the group the address names (`?group=`, the Invest home card's own group), else the group
+ * last picked for the market it names (`?region=`), else for the reader's own market (`home`). `picked`: the reader (or
+ * the card) chose it, so no other group stands in for it while it has no counts (review 5c: the US tab's "Charts →"
+ * opened India's group). */
+export function breadthStart(p: URLSearchParams, home: "IN" | "US"): { group: GroupId; range: string; picked: boolean; region: "IN" | "US" } {
+  const g = p.get("group") as GroupId | null;
+  if (g && GROUPS.includes(g)) return { ...savedPick(groupRegion(g)), group: g, picked: true, region: groupRegion(g) };
+  const r = p.get("region")?.toUpperCase();
+  const region = r === "US" || r === "IN" ? r : home;
+  return { ...savedPick(region), region };
+}

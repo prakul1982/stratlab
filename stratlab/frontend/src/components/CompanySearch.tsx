@@ -17,15 +17,20 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
   const [rows, setRows] = useState<{ symbol: string; name: string; exchange: string }[] | null>(null);
   const [active, setActive] = useState(0);
   const timer = useRef<number>(undefined);
-  useEffect(() => { setQ(""); setRows(null); }, [region]);
+  // each search is numbered: an answer for an earlier keystroke or the other market is dropped, never shown over a newer one
+  const asked = useRef(0);
+  useEffect(() => { asked.current++; setQ(""); setRows(null); setActive(0); }, [region]);
   useEffect(() => {
     window.clearTimeout(timer.current);
+    const n = ++asked.current;
     if (q.trim().length < 1) { setRows(null); return; }
     timer.current = window.setTimeout(async () => {
-      try { setRows(await researchApi.search(region, q.trim())); setActive(0); } catch (e) { fail(e); }
+      try { const r = await researchApi.search(region, q.trim()); if (n === asked.current) { setRows(r); setActive(0); } }
+      catch (e) { if (n === asked.current) fail(e); }
     }, 250);
   }, [q, region, fail]);
   const pick = (sym: string) => {
+    asked.current++;
     setQ(""); setRows(null);
     if (onPick) onPick(sym); else nav(`/research/${region}/${encodeURIComponent(sym)}`);
   };

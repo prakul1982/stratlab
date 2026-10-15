@@ -36,6 +36,7 @@ import {
   Badge, Card, CardHead, ChartFrame, DataTable, Delta, EmptyState, ErrorState, Field, FormActions, FormGrid, PageHeader, PageNav, Signed, Skeleton, Stat, StatRow, StockPicker,
 } from "../components/kit";
 import { resultDay, type ResultRow } from "./ResultsPage";
+import { pairKey, quotesInBatches } from "../lib/investUi";
 
 export { ResultsPage, resultDay, type ResultRow } from "./ResultsPage";
 export { ScanPage, RotationPage, FilingsPage } from "./ResearchScans";
@@ -67,11 +68,11 @@ export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null;
 }
 
 /** A box that finds a company by name or symbol and opens its page. */
-function OpenCompany({ region, label = "Company", autoFocus }: { region: Region; label?: string; autoFocus?: boolean }) {
+function OpenCompany({ region, label = "Company", autoFocus, query }: { region: Region; label?: string; autoFocus?: boolean; query?: string }) {
   const nav = useNavigate();
   return (
     <Field label={label}>
-      {(id) => <StockPicker id={id} market={region} autoFocus={autoFocus} clearOnPick
+      {(id) => <StockPicker id={id} market={region} autoFocus={autoFocus} clearOnPick search={query}
         placeholder={region === "IN" ? "Search by name or symbol, like HDFC Bank or TITAN" : "Search by name or ticker, like Nvidia or AAPL"}
         onPick={(s, r) => nav(`/research/${r}/${encodeURIComponent(s)}`)} />}
     </Field>
@@ -81,6 +82,9 @@ function OpenCompany({ region, label = "Company", autoFocus }: { region: Region;
 /* ================= Companies (home) ================= */
 export function ResearchHome() {
   const [region, setRegion] = useRegion();
+  // ?q= (Ctrl K's "deep dive …" for a name it couldn't place): the box opens with it typed, its matches listed
+  const [params] = useSearchParams();
+  const q = (params.get("q") ?? "").slice(0, 40);
   const [pulse, setPulse] = useState<{ indices: IndexLevel[]; headlines: NewsItem[]; missing?: string[] } | null>(null);
   useEffect(() => {
     let live = true;
@@ -95,7 +99,7 @@ export function ResearchHome() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
         <CardHead title="Find a company" />
-        <OpenCompany region={region} autoFocus />
+        <OpenCompany key={q} region={region} autoFocus query={q || undefined} />
         <div className="k-row">
           <span className="k-small k-muted">Try</span>
           {STARTER_TICKERS[region].map((s) => <Link key={s} to={`/research/${region}/${s}`} className="btn quiet sm">{s}</Link>)}
@@ -174,14 +178,15 @@ export function CompanyPage() {
     researchApi.company(region, sym, true).then((x) => {
       if (!live) return;
       setC(x);
+      // the results calendar under the page's own symbol (ZOMATO's page is ETERNAL's), not the one in the address
+      api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(x.symbol || sym)}`)
+        .then((r) => live && setResults(r)).catch(() => undefined);      // the calendar is a nice-to-have here
       if (x.lazy?.length) researchApi.companyMore(region, sym).then((m) => live && setC((cur) => (cur && cur.symbol === x.symbol ? withMore(cur, m) : cur)))
-        .catch(() => live && setC((cur) => (cur ? { ...cur, lazy: undefined } : cur)));       // no news this time: the card says so
+        .catch(() => live && setC((cur) => (cur ? { ...cur, lazy: undefined, news_failed: true } : cur)));       // no news this time: the card says so
     }).catch((e) => live && setError({ message: (e as Error).message, missing: (e as ApiError).status === 404 }));
     // what the page shows under the company's name loads alongside it, not after it
     preloadPriceChart();
     if (region === "IN") { void loadSurveillance(); void loadEtfGaps(); void loadFoChanges(); }
-    api<{ next: ResultRow | null; last: ResultRow | null }>(`/research/results/${region}/${encodeURIComponent(sym)}`)
-      .then((x) => live && setResults(x)).catch(() => undefined);      // the calendar is a nice-to-have here
     return () => { live = false; };
   }, [region, sym, fail, tries]);
   const nextDay = results?.next?.date ?? c?.next_earnings?.date ?? null;
@@ -240,7 +245,8 @@ export function CompanyPage() {
             </div>
           </div>
           <div className="k-stack inv-head-price">
-            <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"} />
+            <Change q={c.quote} currency={ccy} closed={c.market_open === false} preOpen={c.phase === "pre_open"} settling={c.phase === "settling"}
+              quoteDay={c.quote_day} today={dayIn(new Date(), marketTz(region)) ?? undefined} />
             <Rail52 q={c.quote} low={c.range52.low} high={c.range52.high} currency={ccy} compact />
             {/* the next results day is a fact about the company: a line with a link, not another button */}
             {nextResults && <Link className="link k-small" to={`/research/results?region=${region}`}>Results on {resultDay(nextResults)}</Link>}
@@ -327,16 +333,16 @@ export function CompanyPage() {
       </div>
 
       {region === "IN" && <Card id="filings"><CardHead title="Filings and red flags"
-        info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls." /><FilingsPanel symbol={sym} /></Card>}
+        info="What the company told the exchange: fund raises (QIP, preferential, rights), pledges, resignations, defaults, regulator action, rating changes, results and calls." /><FilingsPanel symbol={c.symbol} /></Card>}
 
-      {region === "IN" && <BizUpdatesPanel symbol={sym} wrap={wrap("Business updates", "business-updates",
+      {region === "IN" && <BizUpdatesPanel symbol={c.symbol} wrap={wrap("Business updates", "business-updates",
         "Monthly or quarterly numbers the company files between results (sales volumes, deposits and advances, and the like), copied from its own filing with the line and page each comes from.")} />}
 
-      {region === "IN" && <NamedHoldersPanel symbol={sym} wrap={wrap("Named holders", "named-holders",
+      {region === "IN" && <NamedHoldersPanel symbol={c.symbol} wrap={wrap("Named holders", "named-holders",
         "From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%, with the change since the quarter before.")} />}
 
       {region === "IN" && <Card id="deals"><CardHead title="Deals and insider trades"
-        info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client." /><DealsPanel symbol={sym} /></Card>}
+        info="Who bought or sold, from exchange disclosures: promoters', directors' and key staff's own trades and pledges, holders crossing 5% and moving 2% at a time (substantial acquisitions), and bulk and block deals with the named client." /><DealsPanel symbol={c.symbol} /></Card>}
 
       {c.quarters && c.quarters.cols.length > 0 && <Card><CardHead title="Last quarters" /><QuarterTable q={c.quarters} bank={!!c.bank} /></Card>}
 
@@ -347,7 +353,9 @@ export function CompanyPage() {
 
       <div className="k-cols">
         {c.peers.length > 0 && <Card><CardHead title="Similar companies" info="Companies in the same industry. Tap one to open it." /><QuoteGrid region={region} symbols={c.peers} /></Card>}
-        <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} /> : <NewsList items={c.news} />}</Card>
+        <Card id="co-news"><CardHead title="Latest news" />{c.lazy?.length ? <Skeleton label="Loading the latest news" lines={2} />
+          : c.news_failed && !c.news.length ? <p className="k-small k-muted" data-testid="news-failed">The news couldn't be loaded just now. It is read again when you open the page.</p>
+          : <NewsList items={c.news} />}</Card>
       </div>
       <p className="k-note">AI text is written from the numbers above and may contain mistakes. Facts, not advice.</p>
     </div>
@@ -556,24 +564,42 @@ function resultsAge(quarter: string): string {
 
 /* ================= Compare ================= */
 export function ComparePage() {
-  const [region, setRegion] = useRegion();
+  const [region, setRegionState] = useRegion();
   const [params, setParams] = useSearchParams();
   const a = params.get("a") ?? "", b = params.get("b") ?? "";
   const [res, setRes] = useState<{ a: Company; b: Company; ai: CompareAI } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
+  // "Asking…" is the pair's it was pressed for: another pair or market never shows it, and never gets its answer
+  const [asking, setAsking] = useState<string | null>(null);
+  const shownKey = pairKey(region, a, b);
+  const pair = useRef(shownKey);
+  pair.current = shownKey;
+  const today = dayIn(new Date(), marketTz(region)) ?? undefined;
+  const dayText = (d: string) => fmtDate(d, { year: false });
   const setSide = (k: "a" | "b", v: string) => { const p = new URLSearchParams(params); p.set(k, v); p.set("region", region); setParams(p); };
+  // another market's companies aren't this market's: switching clears both boxes
+  const setRegion = (r: Region) => {
+    if (r === region) return;
+    setRegionState(r);
+    const p = new URLSearchParams(window.location.search); p.set("region", r); p.delete("a"); p.delete("b"); setParams(p, { replace: true });
+  };
   useEffect(() => {
-    if (!a || !b) { setRes(null); return; }
+    setAsking(null);
+    if (!a || !b) { setRes(null); setError(null); return; }
     let live = true;
     setRes(null); setError(null);
     researchApi.compare(region, a, b).then((x) => live && setRes(x)).catch((e) => live && setError((e as Error).message));
     return () => { live = false; };
   }, [a, b, region]);
-  // only the AI's part is asked again; the numbers already on the page stay
+  // only the AI's part is asked again; the numbers already on the page stay. The answer is put on the page only while
+  // the same pair is shown (a late answer for an earlier pair is dropped)
   const askAgain = () => {
-    setAsking(true);
-    researchApi.compare(region, a, b, true).then((x) => setRes((r) => (r ? { ...r, ai: x.ai } : x))).catch(() => {}).finally(() => setAsking(false));
+    const key = shownKey;
+    setAsking(key);
+    researchApi.compare(region, a, b, true)
+      .then((x) => { if (pair.current === key) setRes((r) => (r ? { ...r, ai: x.ai } : x)); })
+      .catch(() => {})
+      .finally(() => setAsking((k) => (k === key ? null : k)));
   };
   // each measure under its section ("5Y CAGR" is in Sales growth and in Profit growth): keyed by both, so one never
   // stands in for the other, and each section is labelled
@@ -611,7 +637,7 @@ export function ComparePage() {
               // no comparison is one calm line and one button, like the company page's AI read
               <div className="k-row ai-read-off" role="status" data-testid="compare-ai-off">
                 <span className="k-small k-muted">No AI comparison right now{aiReason(res.ai?.error ?? null)} The numbers below don't depend on it.</span>
-                {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking} onClick={askAgain}>{asking ? "Asking…" : "Ask again"}</button>}
+                {!aiLimited(res.ai?.error ?? null) && <button type="button" className="btn quiet sm" disabled={asking === shownKey} onClick={askAgain}>{asking === shownKey ? "Asking…" : "Ask again"}</button>}
               </div>
             )}
           </Card>
@@ -622,8 +648,8 @@ export function ComparePage() {
                   <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(c.symbol)}`}>Open →</Link>
                   <StarButton region={region} symbol={c.symbol} name={c.name} /></>} />
                 <StatRow>
-                  <Stat label={priceLabel(c).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
-                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c).since} />
+                  <Stat label={priceLabel(c, today, dayText).label ?? "Price"} value={c.quote?.price != null ? price(c.quote.price, c.currency) : "–"}
+                    delta={c.quote?.change_pct != null ? <Delta value={c.quote.change_pct}>{pct(c.quote.change_pct, 2)}</Delta> : undefined} note={priceLabel(c, today, dayText).since || undefined} />
                   <Stat label="Market value" value={bigMoney(c.market_cap, c.currency)} note={c.symbol} />
                 </StatRow>
               </Card>
@@ -661,7 +687,9 @@ export function WatchlistPage() {
     let live = true;
     setQuotes(null);
     if (!mine.length) return;
-    researchApi.quotes(region, mine.map((w) => w.symbol)).then((r) => live && setQuotes(r)).catch(() => live && setQuotes({}));
+    // the server answers 24 symbols a request (each is a price read): a longer list is asked for 24 at a time, in turn,
+    // and each batch's rows fill in as it comes (review 5c: every stock after the 24th showed "–")
+    void quotesInBatches((syms) => researchApi.quotes(region, syms), mine.map((w) => w.symbol), (soFar) => setQuotes(soFar), () => live);
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
@@ -692,12 +720,12 @@ export function WatchlistPage() {
                   {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
               { key: "p", header: "Price", numeric: true, cell: (w) => {
                 const q = quotes?.[w.symbol];
-                if (quotes == null) return "…";
+                if (quotes == null || !(w.symbol in quotes)) return "…";       // its batch hasn't come yet
                 if (q?.price == null) return "–";
                 const at = quoteAt(q.at, marketTz(region));
                 return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
-              { key: "c", header: "Today", numeric: true, cell: (w) => { const x = quotes?.[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
+              { key: "c", header: "Today", numeric: true, cell: (w) => { if (quotes == null || !(w.symbol in quotes)) return "…"; const x = quotes[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w, false).catch(fail)}>Remove</button> },
             ]} />

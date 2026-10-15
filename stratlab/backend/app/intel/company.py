@@ -844,7 +844,8 @@ class Research:
             quote = r["kq"]
         elif r.get("y"):
             y = r["y"]
-            quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume")}
+            # with the time of its last trade: a price from an earlier session is said as that session's, never "now"
+            quote = {k: y.get(k) for k in ("price", "change", "change_pct", "high", "low", "prev_close", "volume", "at")}
             lo52, hi52 = y.get("low52") or lo52, y.get("high52") or hi52
         if r.get("k1y"):
             # the year's range as the public page works it out: the candles of exactly the last 365 days (R12-003: the
@@ -857,7 +858,7 @@ class Research:
             if lo is not None and hi is not None:
                 lo52, hi52 = lo, hi
         if quote is None and s.get("price"):
-            quote = {"price": s["price"]}
+            quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
         g = (scr or {}).get("growth", {})
         gs, gp, gpr = g.get("sales", {}), g.get("profit", {}), g.get("price", {})

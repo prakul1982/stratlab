@@ -59,8 +59,13 @@ test("TCS's key numbers: no scraped strengths and concerns, and a figure's note 
 
 test("the screener starts with the largest companies (R5O-012)", () => {
   const screens = read("src/pages/Screens.tsx");
-  assert.match(screens, /useState\("market_cap"\)/);
-  assert.match(screens, /const \[desc, setDesc\] = useState\(true\)/);
+  // review 5c: the sort is read from the address, and with none there it is the largest market value first
+  assert.match(screens, /const \[sort, setSort\] = useState\(start\.sort\);/);
+  assert.match(screens, /const \[desc, setDesc\] = useState\(start\.desc\);/);
+  const ui = read("src/lib/investUi.ts");
+  assert.match(ui, /export const SCREEN_SORT = "market_cap";/);
+  assert.match(ui, /const sort = \(p\.get\("sort"\) \|\| SCREEN_SORT\)/);
+  assert.match(ui, /return \{ filters, sort, desc: p\.get\("dir"\) !== "asc" \};/);
   assert.doesNotMatch(screens, /the list is alphabetical/);
 });
 

@@ -6,7 +6,7 @@ import { inr, marketTz, money, pct, quoteAt } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { RegionSwitch } from "../components/Research";
 import { RouteSeg, WATCH_VIEWS } from "../components/RouteSeg";
-import { saveRegion, savedRegion, type Region } from "../lib/research";
+import { useRegion } from "../lib/research";
 import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, Stat, StatRow } from "../components/kit";
 
 type Row = {
@@ -25,12 +25,14 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
 }
 
 export function InvestorHomePage() {
-  const { me, fail } = useApp();
+  const { me } = useApp();
   const pro = !!me?.plan_info?.features?.investor_home;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [at, setAt] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
   const [order, setOrder] = useState<"list" | "attention">("attention");
-  const [region, setRegion] = useState<Region>(savedRegion);
+  // ?region= first (the Invest home's "At a glance" link carries the market it shows), else the last one picked
+  const [region, pick] = useRegion();
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
   const us = region === "US";
@@ -38,11 +40,13 @@ export function InvestorHomePage() {
 
   useEffect(() => {
     if (!pro) return;
-    setRows(null); setError(null);
-    api<{ rows: Row[]; as_of?: string | null }>(`/research/investor?region=${region}`).then((x) => { setRows(x.rows); setAt(x.as_of ?? null); })
-      .catch((e) => { setError((e as Error).message); fail(e); });
-  }, [pro, fail, region, tries]);
-  const pick = (r: Region) => { saveRegion(r); setRegion(r); };
+    let live = true;          // a late answer for the market left behind never lands under this one's tab
+    setRows(null); setError(null); setTotal(null);
+    api<{ rows: Row[]; as_of?: string | null; total?: number }>(`/research/investor?region=${region}`)
+      .then((x) => { if (!live) return; setRows(x.rows); setAt(x.as_of ?? null); setTotal(x.total ?? x.rows.length); })
+      .catch((e) => { if (live) setError((e as Error).message); });       // the error card says it; no toast as well
+    return () => { live = false; };
+  }, [pro, region, tries]);
 
   const shown = useMemo(() => (rows && order === "attention" ? [...rows].sort((a, b) => attention(b) - attention(a)) : rows), [rows, order]);
   const s2 = rows?.filter((r) => r.stage === 2).length ?? 0;
@@ -68,7 +72,7 @@ export function InvestorHomePage() {
         <>
           <Card>
             <StatRow label="Your watchlist in numbers">
-              <Stat item label="Companies" value={String(rows.length)} />
+              <Stat item label="Companies" value={total != null && total > rows.length ? `${rows.length} of ${total}` : String(rows.length)} />
               <Stat item label="In Stage 2" value={String(s2)} />
               <Stat item label="Sector leading the market" value={String(leading)} />
               {!us && <Stat item label="With red-flag filings" value={String(flagged)} />}
@@ -77,11 +81,17 @@ export function InvestorHomePage() {
           <div className="k-toolbar">
             <Seg label="Order" value={order} onChange={(v) => setOrder(v as "list" | "attention")} options={[{ value: "attention", label: "Most flags first" }, { value: "list", label: "Watchlist order" }]} />
           </div>
+          {total != null && total > rows.length && (
+            <p className="k-small k-muted" data-testid="glance-showing">Showing {rows.length} of {total} {place} watchlist companies, in watchlist order.{" "}
+              <Link className="link" to={`/research/watchlist?region=${region}`}>See all {total} on your watchlist</Link></p>
+          )}
           {shown!.map((r) => (
             <Card key={r.symbol}>
-              <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>{r.name}</Link>}
-                actions={r.price != null ? <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg, 2)}</Delta>}
-                  {r.price_at && <span className="k-note">{quoteAt(r.price_at, marketTz(region))}</span>}</> : undefined} />
+              {/* the name opens the company page; the deep dive (it counts against the plan) is its own link */}
+              <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>}
+                actions={<>{r.price != null && <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg, 2)}</Delta>}
+                  {r.price_at && <span className="k-note">{quoteAt(r.price_at, marketTz(region))}</span>}</>}
+                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`} aria-label={`Deep dive into ${r.name}`}>Deep dive →</Link></>} />
               <span className="k-note">{r.symbol}</span>
               {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
               <div className="inv-stat-cells">
@@ -89,7 +99,7 @@ export function InvestorHomePage() {
                 <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>
                 {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
                 <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
-                <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`}>Not checked yet</Link>}</Cell>
+                <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : "Not checked yet"}</Cell>
               </div>
               {r.fails.length > 0 && <p className="k-note">Failed checks: {r.fails.join(" · ")}</p>}
             </Card>

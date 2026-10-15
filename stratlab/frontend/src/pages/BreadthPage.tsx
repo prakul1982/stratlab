@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, count, delta, liveSeries, liveTitle, revisionLines, savePick, savedPick, share, shortDay,
+  BROAD_GROUP, breadthApi, breadthStart, count, delta, liveSeries, liveTitle, revisionLines, savePick, share, shortDay,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -33,8 +33,10 @@ const PERIOD_UNITS = [
 
 export function BreadthPage() {
   const { fail } = useApp();
-  // the reader's market opens on its own group (R6O-007: an India reader landed on the S&P 500)
-  const [first] = useState(() => { const region = homeRegion(); return { ...savedPick(region), region }; });
+  // the group or market the address names (the Invest home's card, review 5c), else the reader's market opens on its
+  // own group (R6O-007: an India reader landed on the S&P 500)
+  const [params, setParams] = useSearchParams();
+  const [first] = useState(() => breadthStart(params, homeRegion()));
   const [group, setGroup] = useState<GroupId>(first.group);
   const [period, setPeriod] = useState<string>(first.range);
   const [data, setData] = useState<BreadthView | null>(null);
@@ -73,7 +75,11 @@ export function BreadthPage() {
   const days = periodDays(chosen);
   const coversAll = !!all && days != null && days >= span;
   const pick = (p: string) => { setPeriod(p); savePick(group, p); };
-  const pickGroup = (g: GroupId) => { setGroup(g); savePick(g, period); };
+  const pickGroup = (g: GroupId) => {
+    setGroup(g); savePick(g, period);
+    // the group picked stays in the address, so Back to this page opens it again
+    setParams((p) => { const n = new URLSearchParams(p); n.set("group", g); n.delete("region"); return n; }, { replace: true });
+  };
 
   const help = data?.help ?? {};
   return (

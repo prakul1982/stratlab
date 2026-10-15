@@ -170,18 +170,26 @@ def search(q: str = "", region: str = "IN", profile=Depends(current_profile)):
     return ok(source_call(lambda: hub.search(q, r)))
 
 
-def prices_as_of(c: dict) -> str:
+def prices_as_of(c: dict) -> str | None:
     """When a company page's price is from: the time of the quote's last trade (the exchange's own stamp), never the
-    moment of asking. A quote without one is read as of now."""
+    moment of asking. A quote without one has no "as of": the page says its time is unknown (review 5c: a price from
+    the fundamentals page, hours or days old, was dated "now")."""
     now = datetime.now(timezone.utc)
     at = (c.get("quote") or {}).get("at")
     try:
-        t = datetime.fromisoformat(at) if isinstance(at, str) else None
+        t = datetime.fromisoformat(at.replace("Z", "+00:00")) if isinstance(at, str) else None
     except ValueError:
         t = None
     if t is None:
-        return now.isoformat(timespec="minutes")
+        return None
     return min(t if t.tzinfo else t.replace(tzinfo=IST), now).isoformat(timespec="minutes")
+
+
+def quote_day(region: str, c: dict) -> str | None:
+    """The trading day (in the market's zone) of the page's price, from its last trade's time; None when the quote has no
+    time. With it the page says "today" only of today's price, never of an earlier session's while the market trades."""
+    from .company import session_day
+    return session_day((c.get("quote") or {}).get("at"), region)
 
 
 def market_open(region: str, now: datetime | None = None) -> bool:
@@ -219,7 +227,7 @@ def company(region: str, symbol: str, lean: bool = False, profile=Depends(curren
     r = region_of(region)
     s = symbol_of(symbol, r)
     c = page_figures(r, source_call(lambda: hub.company(r, s, lean=True) if lean else hub.company(r, s)))
-    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c)})
+    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c), "quote_day": quote_day(r, c)})
 
 
 @router.get("/company/{region}/{symbol}/more")
@@ -604,7 +612,8 @@ def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=D
     except HTTPException as e:
         verdict = {"error": (e.detail or {}).get("message") if isinstance(e.detail, dict) else str(e.detail)}
     is_open = market_open(r)
-    return ok({"a": {**ca, "market_open": is_open, "phase": price_phase(r, ca)}, "b": {**cb, "market_open": is_open, "phase": price_phase(r, cb)},
+    return ok({"a": {**ca, "market_open": is_open, "phase": price_phase(r, ca), "quote_day": quote_day(r, ca)},
+               "b": {**cb, "market_open": is_open, "phase": price_phase(r, cb), "quote_day": quote_day(r, cb)},
                "ai": verdict})
 
 

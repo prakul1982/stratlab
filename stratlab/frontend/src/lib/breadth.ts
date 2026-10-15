@@ -2,7 +2,7 @@ import { api } from "./api";
 import type { LiveView } from "./breadthLive";
 import { fmtDate, latestDue, type Pending } from "./format";
 export { liveSeries, liveTitle } from "./breadthLive";
-export { BROAD_GROUP, MARKET_GROUP, groupRegion, savePick, savedPick } from "./breadthPick";
+export { BROAD_GROUP, MARKET_GROUP, breadthStart, groupRegion, savePick, savedPick } from "./breadthPick";
 export type { LiveSeries, LiveView } from "./breadthLive";
 
 /* Market breadth: how many stocks in a group take part in the market's moves. Counts and shares from the server,
