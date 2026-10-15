@@ -161,7 +161,8 @@ export function LegalPage() {
       if (b.email) BUSINESS.email = b.email;
       seen((n) => n + 1);
     }).catch(() => { if (live) setLoaded(true); });
-    return () => { live = false; };
+    const slow = window.setTimeout(() => { if (live) setLoaded(true); }, 3000);   // a slow answer never keeps the page empty
+    return () => { live = false; window.clearTimeout(slow); };
   }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
   const Body = BODY[page.path];
