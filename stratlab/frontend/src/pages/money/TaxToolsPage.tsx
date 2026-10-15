@@ -9,6 +9,8 @@ import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { fyLink, movedYearNote, openFy, rememberFy, savedFy } from "../../lib/fy";
 import { useAskedFy } from "../../lib/useFy";
+import { usSharesNote } from "../../lib/usGains";
+import { b234Note } from "../../lib/advanceTax";
 
 /* /money/tax-tools: dividends and the TDS on them, advance tax by date, and the long-term exemption, built on the tax
  * report and My Holdings. Estimates and arithmetic on the user's own figures. Built from the kit (components/kit). */
@@ -37,7 +39,8 @@ type Instalment = DueDate & {
 };
 type Schedule = {
   fy: number; label: string; tax: number; tds: number; net: number; due: boolean; threshold: number; instalments: Instalment[]; next: number | null; paid: number;
-  interest_234c: number; b234: { applies: boolean; paid: number; ninety_pct: number; short: number; months: number; until: string; interest: number }; steps: string[];
+  interest_234c: number; b234: { applies: boolean; paid: number; ninety_pct: number; short: number; months: number; until: string; interest: number;
+    self_assessment?: number; unpaid?: number; fully_paid?: boolean; to_today?: boolean }; steps: string[];
 };
 type Payment = { d: string; amount: number };
 type Advance = {
@@ -48,7 +51,7 @@ type LtLot = { key: string; bought: string; qty: number; cost: number; price: nu
 type SoonLot = LtLot & { long_from: string; days_left: number; window: number };
 type BelowLot = { key: string; bought: string; qty: number; cost: number; price: number; value: number; loss: number; loss_pct: number | null; days: number; term: "ST" | "LT"; long_from: string | null };
 type Ltcg = {
-  fy: number; label: string; as_of: string; exemption: { limit: number; used: number; left: number; realised_lt_net: number; realised_st_net: number };
+  fy: number; label: string; as_of: string; exemption: { limit: number; used: number; left: number; realised_lt_net: number; realised_st_net: number; realised_us_lt_net?: number; realised_us_st_net?: number };
   open_lt: { lots: number; gains: number; losses: number; with_gain: number }; soon_counts: Record<string, number>; long: LtLot[]; soon: SoonLot[];
   unpriced: number; facts: string[]; locked: boolean; below_cost: { rows: BelowLot[]; unpriced: number; open: number; st: number; lt: number };
   names: Record<string, { symbol: string }>; prices: boolean; trades: number;
@@ -293,6 +296,7 @@ function AdvanceTab() {
               <Stat label="Less TDS" value={inr(s.tds)} note="as you entered it" />
               <Stat label="Advance tax for the year" value={<span aria-label="Advance tax for the year">{s.due ? inr(s.net) : "None due"}</span>} note={s.due ? `${inr(s.paid)} paid so far` : `below ${inr(s.threshold)}`} />
               {s.due && <Stat label="Interest so far (234C)" value={inr(s.interest_234c)} tone={s.interest_234c > 0 ? "down" : undefined} note="on instalments already due" />}
+              {s.b234.applies && <Stat label="Interest (234B)" value={inr(s.b234.interest)} tone="down" note={b234Note(s.b234, inr)} />}
             </StatRow>
             {s.due && <DataTable label="Instalments" columns={cols} rows={s.instalments} rowKey={(r) => String(r.n)} />}
             <ol className="k-list">{s.steps.map((x, i) => <li key={i}>{x}</li>)}</ol>
@@ -305,9 +309,9 @@ function AdvanceTab() {
         <CardHead title="The rules, in plain words" />
         <ul className="k-list">
           <li>15% of the year's tax less TDS by 15 June, 45% by 15 September, 75% by 15 December and all of it by 15 March.</li>
-          <li>Capital gains and dividends that arise after a due date go into the instalments still to come (by 31 March when none is left), without interest.</li>
+          <li>Capital gains and dividends that arise after a due date go into the instalments still to come (by 31 March when none is left), without interest when paid by then.</li>
           <li>Section 234C: 1% a month on each instalment's shortfall, for 3 months (1 month for March). None for June when 12% was paid by then, none for September when 36% was.</li>
-          <li>Section 234B: when advance tax paid by 31 March is under 90% of the tax, 1% a month on the shortfall from 1 April until it is paid.</li>
+          <li>Section 234B: when advance tax paid by 31 March is under 90% of the tax, 1% a month on the shortfall from 1 April until it is paid. A self-assessment payment (one dated after 31 March) stops it on the amount paid.</li>
           <li>From FY 2026-27 the Income-tax Act, 2025 numbers these sections 404 (who pays), 424 (234B) and 425 (234C).</li>
         </ul>
         <ul className="k-list muted">{v.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
@@ -412,12 +416,13 @@ function LtcgTab() {
         <CardHead title={`Long-term exemption, ${v.label}`} />
         <StatRow>
           <Stat label="Used by gains realised" value={<span aria-label="Exemption used">{inr(ex.used)}</span>} note={`of ${inr(ex.limit)} · ${inr(ex.left)} left`} />
-          <Stat label="Long-term gains realised (net)" value={inr(ex.realised_lt_net)} tone={signTone(ex.realised_lt_net)} note={`short-term ${inr(ex.realised_st_net)}`} />
+          <Stat label={ex.realised_us_lt_net != null ? "Long-term gains realised, Indian shares and funds (net)" : "Long-term gains realised (net)"} value={inr(ex.realised_lt_net)} tone={signTone(ex.realised_lt_net)} note={`short-term ${inr(ex.realised_st_net)}`} />
           <Stat label="Open long-term lots" value={v.open_lt.lots} note={`unrealised gains ${inr(v.open_lt.gains)}${v.open_lt.losses < 0 ? ` · losses ${inr(v.open_lt.losses)}` : ""}`} />
           <Stat label="Turning long-term soon" value={v.soon_counts["90"]} note={`${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90`} />
         </StatRow>
         {ex.limit > 0 && <Meter pct={(ex.used / ex.limit) * 100} />}
         <p className="k-small">{inr(ex.left)} of this year's {inr(ex.limit)} exemption is unused. It doesn't carry forward to next year.</p>
+        {ex.realised_us_lt_net != null && <p className="k-small k-muted" data-testid="ltcg-us-apart">{usSharesNote(ex.realised_us_st_net, ex.realised_us_lt_net, inr)} The exemption is for Indian shares and equity funds only.</p>}
         {v.locked && <PlanNote>Each open lot's long-term gain and the lots turning long-term are on the Pro plan.</PlanNote>}
       </Card>
 

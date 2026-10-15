@@ -27,8 +27,11 @@ def _pct(rate: float | None) -> str:
 
 def summary_lines(y: dict) -> list[tuple[str, str]]:
     """The year's numbers as (label, value) pairs, in the order the page shows them."""
-    out = [("Short-term gains", money(y["stcg"]["gains"])), ("Short-term losses", money(y["stcg"]["losses"])),
-           ("Long-term gains", money(y["ltcg"]["gains"])), ("Long-term losses", money(y["ltcg"]["losses"])),
+    ind = ", Indian shares and funds" if y.get("foreign") else ""       # beside the US shares' own lines
+    out = [(f"Short-term gains{ind}", money(y["stcg"]["gains"])), (f"Short-term losses{ind}", money(y["stcg"]["losses"])),
+           (f"Long-term gains{ind}", money(y["ltcg"]["gains"])), (f"Long-term losses{ind}", money(y["ltcg"]["losses"])),
+           *([("US shares: short-term gains (net)", money(y["foreign"]["st"]["net"])),
+              ("US shares: long-term gains (net)", money(y["foreign"]["lt"]["net"]))] if y.get("foreign") else []),
            ("Long-term exemption used", f"{money(y['exemption']['used'])} of {money(y['exemption']['limit'])}")]
     for b in y["buckets"]:
         out.append((f"{b['label']} at {_pct(None if b.get('slab') else b['rate'])}: taxable", f"{money(b['taxable'])} (tax {money(b['tax'])})"))

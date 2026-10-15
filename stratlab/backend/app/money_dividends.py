@@ -19,6 +19,7 @@ import zipfile
 from datetime import date, datetime, timezone
 
 from . import corp_actions, db
+from . import money_fx as fx
 from . import holdings_file as hf
 from .tax_lots import fy_label, fy_of
 
@@ -373,18 +374,37 @@ def estimate(items: list[dict], actions: dict[str, list[dict]], today: date, fal
 
 
 # ---------- the view ----------
-def _inr(r: dict, usd_inr: float | None) -> float | None:
+def _rate(r: dict, usd_inr: float | None, hist: dict | None) -> float | None:
+    """Rupees a dollar for a US dividend: Rule 115's rate (SBI's TT buying rate on the last day of the month before it),
+    as Schedule OS, FSI and Form 67 use (money_us_tax.dividends); today's rate only when that isn't known."""
+    rt = fx.rule115(hist, r["d"]) if hist else None
+    return rt["rate"] if rt else usd_inr
+
+
+def _inr(r: dict, usd_inr: float | None, hist: dict | None = None) -> float | None:
     if r["cur"] == "INR":
         return r["amount"]
-    return r["amount"] * usd_inr if usd_inr else None
+    rate = _rate(r, usd_inr, hist)
+    return r["amount"] * rate if rate else None
 
 
-def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True) -> dict:
-    """One financial year's dividends: by company, Indian ones with the TDS expected, US ones with the 25% withheld."""
+def _hist(*row_lists) -> dict | None:
+    """The stored dollar rates (never fetched here), when any of the rows is in dollars."""
+    if any(r["cur"] == "USD" for rows in row_lists for r in rows):
+        try:
+            return fx.load("USD")
+        except Exception as e:
+            print("dividends: dollar rates:", str(e)[:120])
+    return None
+
+
+def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True, hist: dict | None = None) -> dict:
+    """One financial year's dividends: by company, Indian ones with the TDS expected, US ones with the 25% withheld.
+    US ones in rupees at Rule 115's rate from `hist` (today's `usd_inr` where it isn't known)."""
     by: dict[tuple, dict] = {}
     unpriced = 0
     for r in rows:
-        v = _inr(r, usd_inr)
+        v = _inr(r, usd_inr, hist)
         if v is None:
             unpriced += 1
             continue
@@ -397,7 +417,7 @@ def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True) ->
         if r["cur"] == "USD":
             cur["amount_usd"] += r["amount"]
         if r.get("tds"):
-            cur["tds_file"] = (cur["tds_file"] or 0.0) + (r["tds"] * (usd_inr or 0) if r["cur"] == "USD" else r["tds"])
+            cur["tds_file"] = (cur["tds_file"] or 0.0) + (r["tds"] * (_rate(r, usd_inr, hist) or 0) if r["cur"] == "USD" else r["tds"])
         cur["first"], cur["last"] = min(cur["first"], r["d"]), max(cur["last"], r["d"])
     t = tds_threshold(fy)
     companies = []
@@ -444,8 +464,9 @@ ASSUMPTIONS = [
     "US dividends: 25% US tax withheld, the India-US tax treaty rate for someone who gave their broker a W-8BEN. In "
     "India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the "
     "Indian tax on that income, by filing Form 67 before the return.",
-    "US amounts are in rupees at today's dollar rate. The rule for the credit uses the State Bank of India's TT buying "
-    "rate on the last day of the month before the dividend, so the figure in the return can differ.",
+    "US dividends paid are in rupees at the State Bank of India's TT buying rate on the last day of the month before "
+    "each one (Rule 115), the rate the return uses; today's dollar rate where that rate isn't known yet, and for "
+    "dividends still to come.",
 ]
 EST_ASSUMPTIONS = [
     "Estimated: each dividend the company declared × the shares in My Holdings on its ex-date, worked back from "
@@ -454,9 +475,12 @@ EST_ASSUMPTIONS = [
 ]
 
 
-def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float | None, today: date, full: bool = True) -> dict:
+def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float | None, today: date, full: bool = True,
+         hist: dict | None = None) -> dict:
     """Every year with dividends (and this one): the source used for each, whether it goes into the tax estimate, and
-    the estimate beside the files' figure when both exist."""
+    the estimate beside the files' figure when both exist. US dividends paid are in rupees at Rule 115's rate (`hist`,
+    the stored dollar rates when not given), the ones still to come at today's `usd_inr`."""
+    hist = hist if hist is not None else _hist(stored["rows"], estimated)
     cur_fy = fy_of(today.isoformat())
     own_years = {fy_of(r["d"]) for r in stored["rows"]}
     fys = sorted(own_years | {fy_of(r["d"]) for r in estimated} | {cur_fy, cur_fy - 1}, reverse=True)
@@ -465,14 +489,14 @@ def view(stored: dict, estimated: list[dict], ahead: list[dict], usd_inr: float 
         own, aside = trusted([r for r in stored["rows"] if fy_of(r["d"]) == fy])
         est = [r for r in estimated if fy_of(r["d"]) == fy]
         source = "files" if own else "estimated" if est else "none"
-        y = year(fy, own or est, usd_inr, full)
+        y = year(fy, own or est, usd_inr, full, hist)
         y["source"] = source
         y["ais_set_aside"] = len(aside)
         y["ais_note"] = (f"{len(aside)} AIS dividend line{'s' if len(aside) != 1 else ''} not counted: the same payment"
                          f"{'s are' if len(aside) != 1 else ' is'} in your broker's statement or your CSV.") if aside else None
         y["include"] = stored["include"].get(fy, source == "files") and source != "none" and y["taxed"]
         y["include_saved"] = fy in stored["include"]
-        y["estimate_total"] = round(sum(_inr(r, usd_inr) or 0 for r in est), 2) if est else None
+        y["estimate_total"] = round(sum(_inr(r, usd_inr, hist) or 0 for r in est), 2) if est else None
         years.append(y)
     ahead_rows = sorted(ahead, key=lambda r: r["ex"])
     return {"years": years, "current_fy": cur_fy, "files": stored["files"], "updated_at": stored["updated_at"],
@@ -488,11 +512,12 @@ def for_total(v: dict) -> dict[int, float]:
     return {y["fy"]: y["total"] for y in v["years"] if y["include"] and y["total"] > 0}
 
 
-def events(v: dict, stored: dict, estimated: list[dict], usd_inr: float | None, fy: int) -> list[tuple[str, float]]:
+def events(v: dict, stored: dict, estimated: list[dict], usd_inr: float | None, fy: int, hist: dict | None = None) -> list[tuple[str, float]]:
     """(date, rupees) of each dividend in a year whose total goes into the tax estimate: for the advance tax rule
-    that income arising after a due date is spread over the later instalments."""
+    that income arising after a due date is spread over the later instalments. US ones at Rule 115's rate, as view()."""
     y = next((x for x in v["years"] if x["fy"] == fy), None)
     if not y or not y["include"]:
         return []
     rows = trusted([r for r in stored["rows"] if fy_of(r["d"]) == fy])[0] if y["source"] == "files" else [r for r in estimated if fy_of(r["d"]) == fy]
-    return sorted((r["d"], _inr(r, usd_inr)) for r in rows if _inr(r, usd_inr))
+    hist = hist if hist is not None else _hist(rows)
+    return sorted((r["d"], _inr(r, usd_inr, hist)) for r in rows if _inr(r, usd_inr, hist))

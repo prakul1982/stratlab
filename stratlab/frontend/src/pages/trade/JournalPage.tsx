@@ -540,7 +540,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
     { key: "qty", header: "Qty", numeric: true, cell: (t) => qtyText(t.qty) },
     { key: "px", header: "Entry → exit", numeric: true, cell: (t) => `${t.entry.toLocaleString("en-IN", { maximumFractionDigits: 2 })} → ${t.exit.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` },
     { key: "ch", header: "Charges", numeric: true, cell: (t) => (
-      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}</span>) },
+      <span title={t.charges_from === "file" ? "As your broker listed them" : t.charges_from === "mixed" ? "As your broker listed them where the file had them, else worked out at the published rates" : t.charges_from === "you" ? "As you entered them" : t.charges_from === "none" ? "None entered" : t.charges_from === "replay" ? "Worked out at the published rates when the replay was played" : "Worked out at the published rates"}>{m(t.charges, 2)}</span>) },
   ];
   return (
     <Card label="Trades">
