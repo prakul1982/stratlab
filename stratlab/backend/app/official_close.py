@@ -56,7 +56,7 @@ def stored(day) -> dict[str, float] | None:
     if hit is not None:
         return hit or None
     try:
-        got = db.json_value(db.get_setting(KEY + d), None)
+        got = db.json_value(db.get_setting(KEY + d), {})         # a dict default: json_value keeps only that kind
     except Exception:
         got = None
     rows = {str(k): float(v) for k, v in (got or {}).items() if isinstance(v, (int, float)) and v > 0} if isinstance(got, dict) else {}
@@ -170,35 +170,40 @@ def same_basis(official_close: float | None, candle_close) -> bool:
     return abs(c / b - 1) <= BASIS_SLACK
 
 
-def _ex_dates() -> dict[str, str]:
-    """{symbol: the latest ex-date of a bonus or split in the corporate-actions calendar}, reused for a few minutes."""
+def _ex_dates() -> dict[str, tuple[str, ...]]:
+    """{symbol: the ex-dates of its bonuses and splits in the corporate-actions calendar, oldest first}, reused for a few
+    minutes. The calendar reads two months ahead, so some of these dates are still to come."""
     hit = _mem.get(("exd",))
     if hit is not None:
         return hit
-    got: dict[str, str] = {}
+    got: dict[str, set] = {}
     try:
         from . import corp_actions
         for r in corp_actions.load("IN")["rows"]:
-            if corp_actions.adjusts(r):
-                sym = base_symbol(r.get("symbol"))
-                got[sym] = max(got.get(sym, ""), str(r["ex_date"])[:10])
+            if corp_actions.adjusts(r) and r.get("ex_date"):
+                got.setdefault(base_symbol(r.get("symbol")), set()).add(str(r["ex_date"])[:10])
     except Exception as e:                         # no calendar: the closes are judged by the candle alone
         print("official closes: ex-dates:", str(e)[:120])
-    _mem.set(("exd",), got, EX_FOR)
-    return got
+    out = {s: tuple(sorted(v)) for s, v in got.items()}
+    _mem.set(("exd",), out, EX_FOR)
+    return out
 
 
-def before_ex_date(symbol: str, day) -> bool:
-    """Whether `day` is before a known bonus or split ex-date of the stock: its stored close is the unadjusted traded
-    one, while the broker's candles of such a day are adjusted back, so it is not laid over them."""
-    ex = _ex_dates().get(base_symbol(symbol))
-    return bool(ex) and _day(day) < ex
+def before_ex_date(symbol: str, day, now: datetime | None = None) -> bool:
+    """Whether a bonus or split of the stock has gone ex after `day`, on or before today (India time): `day`'s stored close
+    is the unadjusted traded one, while the broker's candles of such a day are adjusted back, so it is not laid over them.
+    An ex-date still ahead (an announced split) changes nothing yet: every close until then is on today's basis."""
+    d = _day(day)
+    if not d:
+        return False
+    today = (now or datetime.now(timezone.utc)).astimezone(IST).date().isoformat()
+    return any(d < ex <= today for ex in _ex_dates().get(base_symbol(symbol), ()))
 
 
 def official(symbol: str, day, use_quote: bool = True, now: datetime | None = None) -> float | None:
     """The exchange's close of one stock on one day: the bhavcopy's, else (with `use_quote`) a same-day quote's."""
     sym = str(symbol or "").upper()
-    if before_ex_date(sym, day):
+    if before_ex_date(sym, day, now):
         return None
     got = closes(day, now)
     if got and got.get(sym):
@@ -334,7 +339,7 @@ def day_close(symbol: str, day, kind: str = "cas", exchange: str = "NSE", now: d
     except ValueError:
         return None
     sym = base_symbol(symbol) if exchange == "NSE" else str(symbol or "").upper()
-    if exchange == "NSE" and before_ex_date(sym, d):
+    if exchange == "NSE" and before_ex_date(sym, d, now):
         return None                                   # a day before a split or bonus: the file's close is unadjusted
     got = None
     if exchange == "NSE":                             # the exchange's file names NSE's stocks
@@ -376,7 +381,7 @@ def ranges() -> dict | None:
     if hit is not None:
         return hit or None
     try:
-        got = db.json_value(db.get_setting(RANGE_KEY), None)
+        got = db.json_value(db.get_setting(RANGE_KEY), {})
     except Exception:
         got = None
     got = got if isinstance(got, dict) and isinstance(got.get("rows"), dict) else {}
@@ -419,9 +424,19 @@ def fetch_ranges(day, now: datetime | None = None) -> dict | None:
     return ranges()
 
 
-def widen_to_range(bars: list[dict], symbol: str, report: dict | None) -> list[dict]:
+def range_row(symbol: str, report: dict | None, now: datetime | None = None) -> list | None:
+    """One stock's row of a 52-week report ([high, its day, low, its day]), or None. A report of a day before a bonus or
+    split went ex is on the old basis, while the broker's candles are adjusted back: its row is not used for that stock
+    (the next evening's report is on the new basis)."""
+    row = ((report or {}).get("rows") or {}).get(base_symbol(symbol))
+    if not row or before_ex_date(symbol, (report or {}).get("day") or "", now):
+        return None
+    return row
+
+
+def widen_to_range(bars: list[dict], symbol: str, report: dict | None, now: datetime | None = None) -> list[dict]:
     """Daily candles with the exchange's 52-week high and low taken in, on the days the report gives for them."""
-    row = ((report or {}).get("rows") or {}).get(base_symbol(symbol)) if bars else None
+    row = range_row(symbol, report, now) if bars else None
     if not row:
         return bars
     hi, hi_day, lo, lo_day = row[:4]
@@ -443,7 +458,7 @@ def history_close(bars: list[dict], symbol: str, kind: str = "cas", exchange: st
                   now: datetime | None = None) -> list[dict]:
     if exchange == "NSE" and bars:
         try:
-            bars = widen_to_range(bars, symbol, ranges())
+            bars = widen_to_range(bars, symbol, ranges(), now)
         except Exception as e:                    # the candles as they are rather than none
             print("52-week report for candles:", symbol, str(e)[:120])
     return _closes_in(bars, symbol, kind, exchange, now)

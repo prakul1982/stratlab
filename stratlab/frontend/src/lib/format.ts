@@ -91,13 +91,16 @@ export const signClass = (v: number | null | undefined) => (v == null ? "" : v >
 export function qty(v: number, step?: number, market?: string | null): string {
   if (!Number.isFinite(v)) return "–";
   if (v === 0) return "0";
+  // a fractional quantity's sign is the same true minus as a whole one's (grouped), and one that rounds to nothing is "0"
+  const signOf = (s: string) => `${v < 0 && /[1-9]/.test(s) ? "−" : ""}${/[1-9]/.test(s) ? s : "0"}`;
   if (step && step < 1) {
     const dp = Math.min(8, Math.max(0, Math.ceil(-Math.log10(step) - 1e-9)));
-    return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    const s = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    return signOf(s);
   }
   if (Number.isInteger(v)) return grouped(v, 0, market);
-  const s = +v.toFixed(8);                           // fractional quantities are grouped too: 1,234.5, not 1234.5
-  return s.toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: 8 });
+  const s = Math.abs(+v.toFixed(8));                 // fractional quantities are grouped too: 1,234.5, not 1234.5
+  return signOf(s.toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: 8 }));
 }
 
 /** Instrument time zone: India in IST, everything else in UTC unless it says otherwise. */

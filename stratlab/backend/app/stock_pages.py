@@ -653,8 +653,8 @@ def with_week52_report(f: dict | None, report: dict | None, symbol: str | None =
     app from the first request. `report` is official_close.ranges(): {"rows": {symbol: [high, day, low, day]}}."""
     if not f or f.get("region") != "IN":
         return f
-    from .official_close import base_symbol
-    row = ((report or {}).get("rows") or {}).get(base_symbol(symbol or f.get("symbol") or ""))
+    from .official_close import range_row
+    row = range_row(symbol or f.get("symbol") or "", report)        # None for a report on the basis before a split
     if not row:
         return f
     hi, lo = _num(row[0]), _num(row[2])
