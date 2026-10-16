@@ -138,17 +138,19 @@ warmFirstPage(location.pathname);
 
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
 function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
-  const back = note?.back_at ? new Date(note.back_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }) : null;
+  // the day as well as the time, in the reader's own clock (R46-011: "reconnects at 02:30 your time" on a Saturday was Monday's)
+  const at = note?.back_at ? new Date(note.back_at) : null;
+  const back = at ? `${at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).replace(",", "")} at ${at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}` : null;
   const others = "Crypto, the other markets and your own data work as usual.";
   if (note?.closed) {
     const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";
     return (
       <div className="banner">
-        <span>Indian markets are {why}. {back ? `Indian price data reconnects at ${back} your time, so backtests on Indian instruments can run again then.` : "Indian price data reconnects with the next daily login."} {others}</span>
+        <span>Indian markets are {why}. {back ? `Indian price data reconnects on ${back} your time, so backtests on Indian instruments can run again then.` : "Indian price data reconnects with the next daily login."} {others}</span>
       </div>
     );
   }
-  if (back) return <div className="banner"><span>Indian price data reconnects at {back} your time, before the market opens. {others}</span></div>;
+  if (back) return <div className="banner"><span>Indian price data reconnects on {back} your time, before the market opens. {others}</span></div>;
   return (
     <div className="banner">
       <span>Indian market data is offline: today's data login hasn't completed. {others}</span>
