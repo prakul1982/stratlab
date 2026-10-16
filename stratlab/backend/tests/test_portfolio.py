@@ -56,7 +56,9 @@ def test_one_pot_funds_every_position():
     flat = [day("2026-01-05", [100.0] * 8) for _ in range(4)]
     s = S(risk={"capital": 100000, "brokerage": 0, "slippage": 0})
     out = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], s, max_open=4)
-    assert len(out["open_trades"]) == 2 and out["most_open"] == 2
+    # each position is held to its slot's share since R38-003 (Rs1,00,000 over 4 slots: Rs25,000), so all four open;
+    # this expected two Rs50,000 positions and the other two shut out
+    assert len(out["open_trades"]) == 4 and out["most_open"] == 4 and {t["qty"] for t in out["open_trades"]} == {250}
     assert _notional(out) <= 100000
     # with 3x leverage the pot carries all four, up to 3x its cash
     lev = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], S(risk={"capital": 100000, "brokerage": 0, "slippage": 0,
@@ -174,3 +176,28 @@ def test_a_time_exit_on_a_flat_candle_does_not_free_a_slot_at_the_open():
     out = portfolio.run([_dds(k, flat, i) for i, k in enumerate("XAB")], s, max_open=2)
     assert out["most_open"] <= 2
     assert all(t["at_open"] is False for t in out["trades"] if t["why"] == "Time exit")
+
+
+def test_risk_sizing_in_a_group_takes_a_slots_share_not_one_share():
+    # R38-003: NIFTY 50 group, Rs5,00,000, risk 1% a trade at a 2% stop, up to 10 open: 1% of Rs5,00,000 is Rs5,000 over
+    # a Rs8 stop on a Rs400 stock = 625 shares (Rs2,50,000), so the first two positions took the whole pot and the rest
+    # opened with 1 share (BEL, HDFCBANK, TATACONSUM at qty 1). Each position is held to its slot: Rs5,00,000 / 10 =
+    # Rs50,000, that is 125 shares at Rs400
+    flat = [day("2026-01-05", [400.0] * 8) for _ in range(10)]
+    s = S(risk={"capital": 500000, "riskPct": 1, "sl": 2, "tgt": 0, "brokerage": 0, "slippage": 0, "sizing": "risk"})
+    out = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], s, max_open=10)
+    assert len(out["open_trades"]) == 10 and {t["qty"] for t in out["open_trades"]} == {125}
+    assert _notional(out) == 500000
+    # with real charges every position still gets its slot's worth (less what its charges take), never 1 share
+    q = portfolio.run([{**ds(f"S{k}", b), "kind": "in_eq"} for k, b in enumerate(flat)], s, max_open=10)
+    assert len(q["open_trades"]) == 10 and min(t["qty"] for t in q["open_trades"]) >= 120
+
+
+def test_a_position_cut_to_the_pots_free_cash_says_so():
+    # R38-003: a trade sized to the cash left (the pot tied up in the other positions) is marked, so the list can say why
+    flat = [day("2026-01-05", [400.0] * 8) for _ in range(3)]
+    s = S(risk={"capital": 100000, "brokerage": 0, "slippage": 0, "sizing": "capital", "perTrade": 45000})
+    out = portfolio.run([ds(f"S{k}", b) for k, b in enumerate(flat)], s, max_open=3)
+    qty = sorted(t["qty"] for t in out["open_trades"])
+    assert qty == [26, 112, 112]                         # Rs45,000 twice (112 shares), then the Rs10,400 left: 26 shares
+    assert [bool(t.get("cash_short")) for t in sorted(out["open_trades"], key=lambda t: t["qty"])] == [True, False, False]

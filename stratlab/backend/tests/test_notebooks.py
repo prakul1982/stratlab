@@ -394,3 +394,23 @@ def test_unchanged_compares_a_group_and_the_period_as_asked_for():
     capped = {**group, "instrument": {"id": "CRYPTO:BTC-USD"}, "days": 90, "req_days": 1825}      # 5 years asked, 90 days held
     assert research.unchanged([capped], s, "CRYPTO:BTC-USD", 1825, now) == 1
     assert research.unchanged([capped], s, "CRYPTO:BTC-USD", 90, now) is None
+
+
+def test_a_run_whose_figures_contradict_each_other_is_never_summarised():
+    # R38-001: a run saved by an older version that says the account emptied and then lists trades opened after it is
+    # hidden on its own page, yet the notebook list summarised it as "Capital lost (-100.0%)". The summary uses the same
+    # test as the page (verdict.legacy_emptied, the twin of legacyRun.ts's isLegacyEmptied)
+    from app import research
+    from app.engine.verdict import legacy_emptied
+    trade = lambda a, b, why="Stop": {"entry_t": a, "exit_t": b, "why": why, "pnl": -1.0}     # noqa: E731
+    legacy = {"v": 3, "label": "v3", "verdict": {"verdict": "no_edge"}, "strategy": {"risk": {"capital": 500000}},
+              "stats": {"ret": -100.0, "emptied_on": "2022-05-09", "n": 3014},
+              "trades": [trade("2022-05-02", "2022-05-09", "Account emptied"), trade("2022-06-01", "2022-06-03")]}
+    fine = {**legacy, "v": 4, "label": "v4", "trades": legacy["trades"][:1]}
+    assert legacy_emptied(legacy) and not legacy_emptied(fine)
+    # stored before accounts stopped at zero (no emptied_on yet, ret past -100%): read as the page reads it
+    raw = {**legacy, "stats": {"ret": -352.6, "pnl": -1763044.0, "mdd": -352.6}, "series": {"t": ["2022-05-09", "2022-06-03"], "equity": [-1.0, -2.0]}}
+    assert legacy_emptied(raw)
+    s = research.summary([fine, legacy])
+    assert s["last_legacy"] is True and s["last_return"] is None and s["last_verdict"] is None and s["experiments"] == 2
+    assert research.summary([legacy, fine]) == {"experiments": 2, "last_verdict": "no_edge", "last_label": "v4", "last_return": -100.0, "last_legacy": False}

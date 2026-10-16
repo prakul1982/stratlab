@@ -12,3 +12,14 @@ export function isLegacyEmptied(e: Parameters<typeof emptiedDay>[0]): boolean {
   if (!day) return false;
   return (e.trades ?? []).some((t) => t.entry_t.slice(0, 10) > day);
 }
+
+/** The one line every list or comparison of runs shows for such a run in place of its figures (R38-001). */
+export function legacyNote(e: Parameters<typeof emptiedDay>[0]): string {
+  const day = emptiedDay(e);
+  return `Figures not shown: saved by an older version, it says the account emptied${day ? ` on ${day}` : ""} and then lists trades after that day, so its figures contradict each other. A re-run states them.`;
+}
+
+/** Runs split into those that can be charted and compared and those whose figures are not shown. */
+export function splitLegacy<T extends Parameters<typeof emptiedDay>[0]>(runs: T[]): { shown: T[]; legacy: T[] } {
+  return { shown: runs.filter((e) => !isLegacyEmptied(e)), legacy: runs.filter((e) => isLegacyEmptied(e)) };
+}

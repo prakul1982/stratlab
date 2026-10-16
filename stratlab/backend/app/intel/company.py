@@ -177,6 +177,19 @@ def _item(label, value, unit="x", note=None):
     return out
 
 
+TTM_YOY = "Last 12 months vs the 12 before"
+
+
+def _latest_yoy(s: dict, what: str) -> dict:
+    """ "Latest YoY": the latest reported quarter against the same quarter a year before when there are quarterly
+    results, else the latest year against the one before, with the periods it compares (R38-002)."""
+    ly = s.get("latest_yoy") or {"sales": s.get("sales_yoy"), "profit": s.get("profit_yoy")}
+    out = _item("Latest YoY", ly.get(what), "%±", ly.get("of"))
+    if ly.get("of"):
+        out["period"] = ly["of"]
+    return out
+
+
 def _groups(*groups) -> list[dict]:
     out = []
     for title, items in groups:
@@ -910,8 +923,9 @@ class Research:
                                    _item("Operating margin", M.get("operatingMarginTTM"), "%"),
                                    _item("Net margin", M.get("netProfitMarginTTM"), "%", "Last 12 months"),
                                    _item("ROE", M.get("roeTTM"), "%", "Last 12 months"), _item("ROA", M.get("roaTTM"), "%")]),
-                ("Growth", [_item("Revenue YoY", M.get("revenueGrowthTTMYoy"), "%±"),
-                            _item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±"),
+                # the last twelve months against the twelve before, said so on the page and to the AI read (R38-002)
+                ("Growth", [{**_item("Revenue YoY", M.get("revenueGrowthTTMYoy"), "%±", TTM_YOY), "period": TTM_YOY},
+                            {**_item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±", TTM_YOY), "period": TTM_YOY},
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
                             _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
                 ("Financial health", [_item("Current ratio", None if lender else M.get("currentRatioQuarterly")),
@@ -1088,9 +1102,9 @@ class Research:
                                          _item("Net margin", s.get("net_margin"), "%"),
                                          _item("EBITDA margin", None if lender else s.get("opm"), "%"),
                                          _item("Debt", s.get("debt_cr"), "cr", f"as of {s['debt_as_of']}" if s.get("debt_as_of") else None), _item("Total debt / equity", None if lender else s.get("debt_equity"))]),
-                ("Sales growth", [_item("Latest YoY", s.get("sales_yoy"), "%±"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
+                ("Sales growth", [_latest_yoy(s, "sales"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
                                   _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
-                ("Profit growth", [_item("Latest YoY", s.get("profit_yoy"), "%±"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
+                ("Profit growth", [_latest_yoy(s, "profit"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
                                    _item("5Y CAGR", gp.get("5 Years"), "%±"), _item("10Y CAGR", gp.get("10 Years"), "%±")]),
                 ("Stock price CAGR", [_item("1Y", gpr.get("1 Year"), "%±"), _item("3Y", gpr.get("3 Years"), "%±"),
                                       _item("5Y", gpr.get("5 Years"), "%±"), _item("10Y", gpr.get("10 Years"), "%±")]),

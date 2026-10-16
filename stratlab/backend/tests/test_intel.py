@@ -397,3 +397,35 @@ def test_the_build_locks_are_trimmed_without_dropping_one_in_progress():
     assert list(routes._building) == ["running"]
     routes._building.clear()
     held.release()
+
+
+def test_latest_yoy_is_the_latest_quarter_against_a_year_before_when_quarters_exist():
+    # R38-002: TCS's Key numbers showed FY26 vs FY25 (+4.6% sales, +1.3% profit) as "Latest YoY" beside a quarterly table
+    # with Sep 2026 vs Sep 2025 at +11.2% and +14.9%; the AI read then called +4.6% the latest growth
+    from app.intel import ai as A
+    from app.intel.company import _latest_yoy
+    pl = {"cols": ["Mar 2025", "Mar 2026", "TTM"], "rows": {"Sales": [255324.0, 267021.0, 270000.0], "Net Profit": [48797.0, 49454.0, 50000.0]}}
+    qt = {"cols": ["Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026", "Sep 2026"],
+          "rows": {"Sales": [65799.0, 66000.0, 67000.0, 68000.0, 73168.0], "Net Profit": [12075.0, 12100.0, 12200.0, 12500.0, 13874.0]}}
+    s = scr.summary({"pl": pl, "quarters": qt})
+    ly = s["latest_yoy"]
+    assert ly["basis"] == "quarter" and ly["of"] == "Sep 2026 vs Sep 2025"
+    assert round(ly["sales"], 1) == 11.2 and round(ly["profit"], 1) == 14.9
+    assert round(s["sales_yoy"], 1) == 4.6            # the full year's stays the full year's
+    item = _latest_yoy(s, "sales")
+    assert item["label"] == "Latest YoY" and round(item["value"], 1) == 11.2 and item["note"] == "Sep 2026 vs Sep 2025"
+    c = {"symbol": "TCS", "name": "TCS", "region": "IN", "metrics": [{"title": "Sales growth", "items": [item]}]}
+    assert A.company_facts(c)["metrics"] == {"Sales growth: Latest YoY (Sep 2026 vs Sep 2025)": "+11.2%"}
+    # no quarterly results (or no quarter a year before the latest): the full year, labelled as the year
+    s = scr.summary({"pl": pl, "quarters": {"cols": ["Jun 2026", "Sep 2026"], "rows": {"Sales": [1.0, 2.0]}}})
+    assert s["latest_yoy"]["basis"] == "year" and s["latest_yoy"]["of"] == "Year to Mar 2026 vs year to Mar 2025"
+    assert round(_latest_yoy(s, "sales")["value"], 1) == 4.6 and round(scr.summary({"pl": pl})["latest_yoy"]["profit"], 1) == 1.3
+
+
+def test_us_growth_figures_say_which_periods_they_compare(research):
+    # R38-002: the US page's growth is the last twelve months against the twelve before, said so on the page and to the AI
+    c = research.company("US", "AAPL")
+    g = {i["label"]: i for grp in c["metrics"] for i in grp["items"] if grp["title"] == "Growth"}
+    assert g["Revenue YoY"]["note"] == "Last 12 months vs the 12 before"
+    from app.intel import ai as A
+    assert any(k.startswith("Growth: Revenue YoY (Last 12 months") for k in A.company_facts(c)["metrics"])

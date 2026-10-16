@@ -93,3 +93,8 @@ export function dayStat(running: boolean, status: string, today: number | null |
   if (today == null) return { label: "Day's P&L", value: null, text: `None today: the session is ${word}` };
   return { label: `Day's P&L, up to the ${status === "paused" ? "pause" : "stop"}`, value: today + openNet, text: null };
 }
+
+/** Why a group trade's quantity is smaller than its slot: the pot's cash left free when it opened (R38-003). */
+export function qtyNote(t: { cash_short?: boolean }): string | null {
+  return t.cash_short ? "Sized to the cash left free" : null;
+}

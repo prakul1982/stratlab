@@ -52,6 +52,7 @@ class Member:
         self.engine.day_close = day_close_minutes(sess.market)
         self.engine.gate = sess.free_slot
         self.engine.funds = sess.funds       # sized from the shared pot, as in the group backtest
+        self.engine.slots = getattr(sess, "max_open", None)    # each position held to its slot's share, as there (R38-003)
         self.engine.veto = self.filtered
         # India: the member's session timetable (a stock with derivatives closes through the auction)
         self.kind = "cash" if sess.polled else session_kind(sess.mgr.kite, inst)

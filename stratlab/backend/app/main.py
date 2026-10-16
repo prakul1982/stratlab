@@ -1542,6 +1542,7 @@ def read_notebook(nid: str, profile=Depends(current_profile)):
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
     # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
     nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    nb["summary"] = research.summary(nb["experiments"])      # a summary stored before R38-001 is read afresh
     return ok(with_rule_problems(nb))
 
 

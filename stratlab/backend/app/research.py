@@ -288,11 +288,15 @@ def record(result: dict, strategy, label: str, version: int, now: str) -> dict:
 
 
 def summary(experiments: list[dict]) -> dict:
+    from .engine.verdict import legacy_emptied
     last = experiments[-1] if experiments else None
+    # a last run whose figures contradict each other gives no verdict or return to summarise (never "Capital lost", R38-001)
+    legacy = bool(last) and legacy_emptied(last)
     return {"experiments": len(experiments),
-            "last_verdict": last["verdict"]["verdict"] if last else None,
-            "last_label": last["label"] if last else None,
-            "last_return": ((last.get("stats") or {}).get("ret")) if last else None}
+            "last_verdict": (last.get("verdict") or {}).get("verdict") if last and not legacy else None,
+            "last_label": last.get("label") if last else None,
+            "last_return": ((last.get("stats") or {}).get("ret")) if last and not legacy else None,
+            "last_legacy": legacy}
 
 
 def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: int) -> dict:

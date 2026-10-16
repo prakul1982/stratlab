@@ -301,7 +301,28 @@ def summary(p: dict) -> dict:
         net_worth = (reserves_now + (capital_now or 0)) if reserves_now is not None else None
     else:
         net_worth = whole_now             # US filings: one shareholders' equity row
+    # the newest figures against a year earlier: the latest reported quarter against the same quarter a year before, by
+    # its period, when quarterly results exist; else the latest full year against the one before (R38-002: TCS showed
+    # FY26's +4.6% as "Latest YoY" beside a Sep 2026 quarter at +11.2%)
+    grow = lambda now, prev: ((now / prev - 1) * 100) if now is not None and prev is not None and prev > 0 else None    # noqa: E731
+    qt = p.get("quarters") or {}
+    qcols = [str(c).strip() for c in qt.get("cols") or []]
+    qs, qp = _row(qt, "Sales", "Revenue"), _row(qt, "Net Profit")
+    m_now = re.fullmatch(r"([A-Za-z]{3})\s+(\d{4})", qcols[-1]) if qcols else None
+    ago = f"{m_now.group(1)} {int(m_now.group(2)) - 1}" if m_now else None
+    j, i = (qcols.index(ago) if ago in qcols else None), len(qcols) - 1
+    q_sales = grow(cell(qs, i), cell(qs, j)) if j is not None else None
+    q_profit = grow(cell(qp, i), cell(qp, j)) if j is not None else None
+    cols = (pl or {}).get("cols") or []
+    year_name = lambda k: str(cols[k]).strip() if k is not None and k < len(cols) else None       # noqa: E731
+    if q_sales is not None or q_profit is not None:
+        latest_yoy = {"sales": q_sales, "profit": q_profit, "basis": "quarter", "of": f"{qcols[-1]} vs {ago}"}
+    else:
+        y_now, y_prev = year_name(latest), year_name(before)
+        latest_yoy = {"sales": grow(s_now, s_prev), "profit": grow(p_now, p_prev), "basis": "year",
+                      "of": f"Year to {y_now} vs year to {y_prev}" if y_now and y_prev else None}
     return {
+        "latest_yoy": latest_yoy,
         "market_cap_cr": market_cap(num(r.get("Market Cap")), price, equity[-1] if equity else None, face), "price": price,
         "high52": hi_lo[0], "low52": hi_lo[1] if len(hi_lo) > 1 else None,
         "pe": _pe(p, price), "book_value": book, "pb": (price / book) if price and book and book > 0 else None,

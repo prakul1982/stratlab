@@ -1,6 +1,6 @@
 """Groups of instruments to test one strategy on together, and turning them into data.
 
-Preset lists are well-known indices as of 2025. Index members change from time to time; anything
+Preset lists are well-known indices' current members (a list with a known date carries it as "as_of"). Index members change from time to time; anything
 the market no longer lists is skipped and reported, and you can always build your own group."""
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -93,7 +93,9 @@ def members_note(group: dict) -> str | None:
     p = next((p for p in PRESETS[market] if p["id"] == group.get("id")), None)
     if p is None:
         return None
-    return (f"{p['name']} are today's members (as of 2025): earlier years include companies that joined the list later "
+    # the list's own date when it carries one, never a fixed year that goes stale (R38-004: "as of 2025" in Oct 2026)
+    when = f" (the list as of {p['as_of']})" if p.get("as_of") else ""
+    return (f"{p['name']} are today's members{when}: earlier years include companies that joined the list later "
             "and leave out those that left it.")
 
 
