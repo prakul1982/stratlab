@@ -219,7 +219,9 @@ export function HoldingsPage() {
           <UploadButton label="Upload holdings file" busy={busy} accept=".csv,.xlsx,.xls,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ariaLabel="Holdings file" onFiles={pick} />
           <span className="k-note">Excel or CSV, up to {MAX_MB} MB.</span>
         </div>
-        {view?.zerodha
+        {view?.zerodha && rows.length === 0 && zerodhaEmpty(view.zerodha)
+          ? null      // the empty state below already says Zerodha is connected and returned nothing (R35: said twice)
+          : view?.zerodha
           ? <p className="k-note">Zerodha is connected. <Link to="/settings#accounts">Refresh it or connect your statement inbox in Settings</Link>, so this stays up to date without uploads.</p>
           : <p className="k-note">Prefer not to upload each time? <Link to="/settings#accounts">Connect Zerodha or your statement inbox once</Link> and this stays up to date by itself.</p>}
         {result && (

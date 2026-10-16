@@ -72,6 +72,14 @@ export function delta(v: number | null | undefined, unit: "" | "pts" = "", dp = 
   if (r === 0) return "no change";
   return `${r > 0 ? "+" : "−"}${Math.abs(r).toLocaleString("en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp })}${unit ? ` ${unit}` : ""}`;
 }
+/** The thrust days as a list: when they span more than this year, every day carries its year, so "16 Apr 2025, 8 Apr"
+ *  doesn't leave the second one's year to guess (R35). */
+export function thrustDays(days: string[]): string {
+  const year = String(new Date().getFullYear());
+  const withYear = days.some((d) => d.slice(0, 4) !== year);
+  return days.map((d) => (withYear ? fmtDate(d.slice(0, 10), { year: true }) : shortDay(d))).join(", ");
+}
+
 /** A day as "3 Oct" (and the year when it isn't this one). */
 export function shortDay(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
