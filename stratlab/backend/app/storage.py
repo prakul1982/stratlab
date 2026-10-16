@@ -36,8 +36,10 @@ def usage_sql() -> str:
 
 def report() -> dict:
     limit = settings.DB_LIMIT_MB * 1024 * 1024
+    from . import maindb
     out: dict = {"limit": limit, "warn_at": WARN_AT, "market": {"enabled": market_store.store() is not None},
-                 "move": {**db.json_value(db.get_setting(market_store.STATUS_KEY), {}), "running": _moving.locked()}}
+                 "move": {**db.json_value(db.get_setting(market_store.STATUS_KEY), {}), "running": _moving.locked()},
+                 "users": maindb.status()}
     try:
         u = db.usage()
     except Exception as e:

@@ -403,13 +403,32 @@ space** row warns at 80% and fails at 95%, and says what to do.
   the results and surveillance lists, the screens index, fund NAVs, exchange rates, holidays read from the exchange and
   the recorded option chains (`MARKET_PREFIXES` in `market_store.py`). It's read there first, and anything not moved yet
   is still read from Supabase, so nothing is lost. **Move market data now** moves what's already in Supabase (run it
-  again to carry on if it stops). Users' own data and payments stay in Supabase. Supabase hands the space back after
+  again to carry on if it stops). Users' own data and payments stay in Supabase until they're moved too (*Users'
+  data on Railway*, below). Supabase hands the space back after
   `vacuum full public.option_snapshots, public.app_settings;` in its SQL Editor.
 - With the second database, older option chains can be kept longer: raise `OPTION_SNAPSHOT_KEEP_DAYS` (120 by default;
   120 days of all five indices is a few hundred MB).
 - The second database isn't in the nightly backup. Most of it is rebuilt by the server's own jobs; what can't be
   fetched again is the recorded option chains (and the daily chain facts made from them) and the FII/DII cash history,
   which the exchange only publishes for the latest day. Keep that database for as long as you want those.
+
+### Users' data on Railway
+
+Supabase's free plan counts every byte the server reads from it (its *egress*, 5 GB a month), and the server reads
+users' data all day: profiles, paper sessions, notebooks, settings. In October 2026 that went past the limit more
+than twice. Moving users' data to the Railway Postgres (the same one as `MARKET_DATABASE_URL`, in its own `app`
+schema) puts it next to the server on Railway's private network, so none of it counts. Supabase then only checks
+sign-ins.
+
+- **Admin → Data checks → Storage → Move users' data to Railway.** The server saves the running paper sessions,
+  restarts, and before it answers anyone copies every table (profiles, notebooks, paper sessions and orders, usage,
+  settings) in one transaction, checks each table's row count, and marks the move done. The site is away for about a
+  minute. If anything fails, nothing is kept on Railway, the panel shows the error and the server carries on with
+  Supabase; pressing the button again tries again (`app/maindb.py`).
+- After the move, add the repository secret `APP_DB_URL` (Railway → the Postgres → **Connect** → the *public*
+  connection URL) so the nightly backup copies Railway instead of Supabase (below).
+- The way back, in an emergency: set `MAIN_DATABASE=supabase` on the backend. Supabase then serves its copy from the
+  moment of the move; anything written on Railway since isn't in it.
 
 ## Backups
 
@@ -421,10 +440,20 @@ second database; they're named `…-full` and kept 28 days. Each copy has the ap
 `public` schema) and the sign-ins (`auth.dump`: `auth.users` and `auth.identities`; if those can't be copied, the run
 warns and keeps the rest). A run with the secrets missing fails and says which to add.
 
+Once users' data is on Railway (above) and `APP_DB_URL` is set, `app.dump` is copied from Railway instead: the `app`
+schema (users' data) every night, and on full days the `public` schema too (the market data, with the recorded option
+chains and the FII/DII history that can't be fetched again). Supabase is then read only for the sign-ins, so the
+backup no longer counts against its egress. Until the move is done the run keeps copying Supabase, even with
+`APP_DB_URL` set.
+
 Setup, once, in GitHub → Settings → Secrets and variables → Actions → New repository secret:
 
 - `SUPABASE_DB_URL`: Supabase → **Connect** → *Session pooler* connection string, with your database password filled in.
+- `APP_DB_URL` (after the move): Railway → the Postgres → **Connect** → the public connection URL.
 - `BACKUP_PASSPHRASE`: a long random passphrase. Keep it in your password manager: without it a backup can't be opened.
+
+A copy from Railway restores into any Postgres with `pg_restore -d "$NEW_DB_URL" --no-owner --clean --if-exists app.dump`
+(it holds the `app` schema, and `public` on full days); it doesn't refer to `auth.users`.
 
 Restoring (to a new Supabase project, or to check a copy). Download the artifact (a .zip) and use PostgreSQL 17's
 client tools, as the copy is made with `pg_dump` 17:

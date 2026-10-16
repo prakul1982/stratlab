@@ -14,6 +14,15 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    services:
+      # a real Postgres for the tests of the Railway databases (tests/test_maindb.py, tests/test_storage.py)
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: market
+        ports: ["55432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: stratlab/backend

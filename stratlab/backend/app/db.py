@@ -140,14 +140,45 @@ def _http() -> httpx.Client:
     return httpx.Client(http2=False, follow_redirects=True, timeout=JOB_TIMEOUT, transport=Lanes())
 
 
-def sb() -> Client:
-    global _client
+_supabase: Client | None = None
+
+
+def supabase() -> Client:
+    """The Supabase client: sign-ins always, and users' data until it's moved to Railway (app/maindb.py)."""
+    global _supabase
+    if _supabase is None:
+        with _client_lock:
+            if _supabase is None:
+                _supabase = _new_supabase()
+    return _supabase
+
+
+def _new_supabase() -> Client:
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY, options=SyncClientOptions(httpx_client=_http()))
+
+
+def sb():
+    """The main database's client: Supabase's, or (after the move) the same calls over Railway's Postgres
+    (app/pgdb.py), whose `auth` is still Supabase's. With none yet, a new Supabase client from the current settings."""
+    global _client, _supabase
     if _client is None:
         with _client_lock:
             if _client is None:
-                _client = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY,
-                                        options=SyncClientOptions(httpx_client=_http()))
+                _client = _supabase = _new_supabase()
     return _client
+
+
+def use_railway(url: str, client=None, auth_source=None) -> None:
+    """From now on users' data is read and written in Railway's Postgres (app/maindb.py decides, at startup)."""
+    global _client
+    from .pgdb import PgClient
+    _client = client or PgClient(url, auth_source=auth_source or supabase)
+    forget_mirror()
+
+
+def on_railway() -> bool:
+    from .pgdb import PgClient
+    return isinstance(_client, PgClient)
 
 
 def now_iso() -> str:

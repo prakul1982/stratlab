@@ -2,6 +2,7 @@
 fake company, news, exchange and document sources, and a fake AI whose answers can be good, malformed or failing.
 Real network calls are refused, so anything not faked behaves like a source that is down. Used by the stress tests."""
 import json
+import os
 import random
 import sys
 import zlib
@@ -344,6 +345,34 @@ def _no_network(self, request):
     raise httpx.ConnectError("network disabled in tests", request=request)
 
 
+_pg_clients: dict = {}
+
+
+def _on_postgres(fake_db, monkeypatch):
+    """MAIN_DB_TEST_DSN set: users' data in that Postgres (app/pgdb.py, as on Railway after the move) instead of the
+    in-memory fake, one database per test worker, emptied for each test and given the fake's accounts. Sign-ins still
+    go to the fake. Tests that look inside the fake's tables, or make it fail on purpose, don't apply in this mode."""
+    import psycopg
+    from app import pgdb
+    base = os.environ["MAIN_DB_TEST_DSN"]
+    name = "maintest_" + os.environ.get("PYTEST_XDIST_WORKER", "main")
+    url = base.rsplit("/", 1)[0] + "/" + name
+    client = _pg_clients.get(name)
+    if client is None:
+        with psycopg.connect(base, autocommit=True) as c:
+            if not c.execute("select 1 from pg_database where datname = %s", (name,)).fetchone():
+                c.execute(f'create database "{name}"')
+        client = _pg_clients[name] = pgdb.PgClient(url)
+        with client.connection() as c:
+            pass
+    with client.connection() as c:
+        c.execute("truncate " + ", ".join(f"app.{t}" for t in pgdb.TABLES) + " restart identity cascade")
+    client._auth_source = lambda: fake_db
+    for p in fake_db.tables["profiles"]:
+        client.table("profiles").insert(p).execute()
+    return client
+
+
 def build(monkeypatch, real_clock: bool = False) -> dict:
     """Wire the app to fakes. Returns handles the tests use: the client, the fake AI, the fake database."""
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _no_network)
@@ -353,6 +382,8 @@ def build(monkeypatch, real_clock: bool = False) -> dict:
     monkeypatch.setattr(RateLimit, "take", lambda self, max_wait=8.0: True)
     fake_db = FakeSupabase()
     monkeypatch.setattr(db, "_client", fake_db)
+    if os.environ.get("MAIN_DB_TEST_DSN"):
+        monkeypatch.setattr(db, "_client", _on_postgres(fake_db, monkeypatch))
     db._profiles.clear()
     from app import invite_rewards, plans, pricing
     plans.forget_free_basic()                   # free Basic time another test gave
