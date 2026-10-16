@@ -64,3 +64,25 @@ test("R30-013: the scan line names the number of stocks from the first render", 
   assert.equal(scanningText(1), "Scanning 1 stock…");
   assert.equal(scanningText(undefined), "Scanning…");
 });
+
+test("round 39: after about 10 seconds on the start-up text, boot.js says it is taking longer than usual, with a Reload button", () => {
+  const timers = [];
+  const made = [];
+  const el = (tag) => { const e = { tag, children: [], className: "", textContent: "", setAttribute() {}, addEventListener() {}, appendChild(c) { e.children.push(c); } }; made.push(e); return e; };
+  const root = { querySelector: () => ({}), textContent: "x", appendChild: (c) => { root.child = c; } };
+  const win = { addEventListener() {}, location: { reload() {} } };
+  const sandbox = {
+    window: win, document: { getElementById: () => root, createElement: el, documentElement: { dataset: {} } },
+    sessionStorage: { getItem: () => null, setItem() {} }, localStorage: { getItem: () => null, length: 0 },
+    setTimeout: (f, ms) => { timers.push([f, ms]); return 0; }, Date, Number, String, location: win.location,
+  };
+  new Function(...Object.keys(sandbox), read("public/boot.js"))(...Object.values(sandbox));
+  const slow = timers.find(([, ms]) => ms <= 10_000);
+  assert.ok(slow, "a timer of ten seconds or less");
+  assert.ok(timers.some(([, ms]) => ms === 20_000), "and the plain 'couldn't load' card at twenty");
+  slow[0]();
+  const text = made.map((e) => e.textContent).join(" | ");
+  assert.match(text, /Taking longer than usual/);
+  assert.match(text, /Reload/);
+  assert.doesNotMatch(text, /Couldn't load/);
+});

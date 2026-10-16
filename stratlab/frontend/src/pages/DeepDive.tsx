@@ -15,6 +15,7 @@ import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
 import { track } from "../lib/analytics";
+import { CHECK_BADGE, checkCountsLine } from "../lib/checklistText";
 
 type Year = { year: string; sales: number | null; profit: number | null; opm: number | null; capex: number | null;
   capex_pct_sales: number | null; cfo: number | null; cfi: number | null; fcf: number | null; debt: number | null };
@@ -115,13 +116,13 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
   );
 }
 
-export const CHECK: Record<CheckState, [string, string]> = { pass: ["Pass", "pass"], watch: ["Watch", "warn"], fail: ["Fail", "fail"], na: ["No data", "skip"] };
+export const CHECK = CHECK_BADGE;
 
 function ChecklistPanel({ c }: { c: Checklist }) {
   const groups = [...new Set(c.checks.map((x) => x.group))];
   return (
-    <Panel title="Investor checklist" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each rule is written under its check. A screen to help you look closer, not a recommendation.">
-      <p className="k-small"><b>{c.counts.pass} pass</b> · {c.counts.watch} watch · {c.counts.fail} fail{c.counts.na ? ` · ${c.counts.na} without data` : ""}</p>
+    <Panel title="Investor checklist" info="Fixed rules on the reported numbers, the price trend, the filings and the management report card. Each threshold is written under its check, and each line says where the figure sits against it: a fact, not a verdict on the company.">
+      <p className="k-small" data-testid="check-counts">{checkCountsLine(c.counts)}</p>
       {c.industry && c.industry.group !== "general" && (
         <p className="k-note"><b>Rules for: {c.industry.label}{c.industry.path.length ? ` (${c.industry.path.join(" › ")})` : ""}.</b> {c.industry.note}</p>)}
       <div className="checklist">{groups.map((g) => (

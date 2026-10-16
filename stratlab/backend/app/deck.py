@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+from .checklist import counts_line
 from .deepdive import money, scale_for
 
 # Palette: deep navy carries the deck, teal is the one accent, amber marks what went wrong.
@@ -18,7 +19,7 @@ INK, SLATE, MIST, RULE, WHITE, ICE = "111827", "5B6475", "F1F4F8", "DDE3EA", "FF
 W_IN, H_IN = 13.333, 7.5
 M = 0.6                                   # side margin, inches
 DISCLAIMER = "Reported figures and the company's own words. Not investment advice."
-STATE = {"pass": ("Pass", TEAL), "watch": ("Watch", SLATE), "fail": ("Fail", AMBER), "na": ("No data", SLATE),
+STATE = {"pass": ("Meets threshold", TEAL), "watch": ("Between thresholds", SLATE), "fail": ("Outside threshold", AMBER), "na": ("No data", SLATE),
          "met": ("Met", TEAL), "missed": ("Missed", AMBER), "pending": ("Not due yet", SLATE), "unchecked": ("Can't check", SLATE)}
 
 FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
@@ -200,7 +201,7 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
     left = []
     if cl.get("counts"):
         c = cl["counts"]
-        left.append(("Investor checklist", f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail",
+        left.append(("Investor checklist", counts_line(c),
                      [x["label"] for x in cl.get("checks", []) if x["state"] == "fail"][:3]))
     if card.get("rows"):
         checked = card["met"] + card["missed"]
@@ -315,7 +316,7 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         pages = [checks[i:i + per] for i in range(0, len(checks), per)]
         for pg, chunk in enumerate(pages):
             s = Slide("Investor checklist" + (f" ({pg + 1} of {len(pages)})" if len(pages) > 1 else ""),
-                      f"{c['pass']} pass · {c['watch']} watch · {c['fail']} fail" + (f" · rules for: {ind}" if ind and ind != "General" else ""))
+                      counts_line(c) + (f" · rules for: {ind}" if ind and ind != "General" else ""))
             rows, tint = [], {}
             for i, x in enumerate(chunk):
                 label, color = STATE[x["state"]]

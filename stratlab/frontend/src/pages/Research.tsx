@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
+import { writtenAt, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
@@ -444,7 +444,7 @@ export function ThemesPage() {
       {r && (
         <>
           <Card>
-            <CardHead title={r.sector} actions={<><span className="k-note">Written {ago(new Date(r.generated_at * 1000).toISOString())}</span>
+            <CardHead title={r.sector} actions={<><span className="k-note">Written {writtenAt(r.generated_at, marketTz(region))}</span>
               <button className="btn quiet sm" disabled={busy} onClick={() => run(q, true)}>{busy ? "Mapping…" : "Refresh"}</button></>} />
             <p className="k-lede">{r.summary}</p>
             {(r.market_size || r.cagr != null || r.etfs.length > 0) && (
@@ -538,7 +538,7 @@ export function PulsePage() {
       <Card><CardHead title={`${REGION_NAME[region]} index levels`} /><PulseLevels p={levels} /></Card>
       <Card>
         <CardHead title="The mood" info={HELP.researchPulse}
-          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {ago(new Date(ai.generated_at * 1000).toISOString())}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
+          actions={ai?.tone && !aiErr ? <><span className="k-note">Written {writtenAt(ai.generated_at, marketTz(region))}{ai.levels_at ? `, levels of ${asOf(ai.levels_at, { tz: marketTz(region) })}` : ""}</span><button className="btn quiet sm" disabled={busy} onClick={() => loadAI(true)}>{busy ? "Reading…" : "Refresh"}</button></> : undefined} />
         {/* "Written" only beside a read that exists; no read is one calm line and one button, like a company's AI read */}
         {aiErr || (ai && !ai.tone) ? (
           <div className="k-row ai-read-off" role="status">

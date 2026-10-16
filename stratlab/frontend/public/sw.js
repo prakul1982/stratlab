@@ -46,16 +46,30 @@ self.addEventListener("activate", (e) => {
 // pages: always the network first (so updates show at once); the cached shell when offline, and when the server answers with an
 // error (a failed page load would otherwise leave plain error text; the shell starts the app at the address that was asked for)
 const good = (res, type) => res.ok && (res.headers.get("content-type") || "").includes(type);
+
+// The files every page needs before it starts (config.js, theme.js, boot.js): the network first (for at most STATIC_WAIT ms), the
+// last good copy when it fails, is slow or isn't JavaScript. With no copy kept either: one plain network request (what the page
+// would have made without this worker), and only then an ordinary 503 answer. Never Response.error(): Safari reports it as
+// "Response served by service worker is an error" and the page stayed on "Opening…" (round 39).
+const STATIC_WAIT = 8000;
+const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("slow")), ms))]);
+function unavailable() {
+  try { return new Response("", { status: 503, headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } }); }
+  catch { return Response.error(); }
+}
+function staticFile(req, path) {
+  return within(fetch(req), STATIC_WAIT).then((res) => {
+    if (good(res, "javascript")) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(path, copy)).catch(() => undefined); return res; }
+    return caches.match(path).then((hit) => hit || res);
+  }).catch(() => caches.match(path).catch(() => undefined)
+    .then((hit) => hit || fetch(req.url, { cache: "no-store" }).catch(() => unavailable())));
+}
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin && STATIC.includes(url.pathname)) {
-    // network first, the last good copy when it fails or isn't JavaScript
-    e.respondWith(fetch(req).then((res) => {
-      if (good(res, "javascript")) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(url.pathname, copy)).catch(() => undefined); return res; }
-      return caches.match(url.pathname).then((hit) => hit || res);
-    }).catch(() => caches.match(url.pathname).then((hit) => hit || Response.error())));
+    e.respondWith(staticFile(req, url.pathname));
     return;
   }
   if (req.mode !== "navigate") return;

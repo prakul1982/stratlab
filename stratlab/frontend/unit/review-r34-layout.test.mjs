@@ -39,3 +39,20 @@ test("R32-002: the phone launch banner keeps its × on the text's row (beats the
   const base = css.indexOf(".banner { display: flex;");
   assert.ok(base > 0 && /flex-wrap: wrap/.test(css.slice(base, base + 200)));   // the rule it has to beat is still there, so the specificity matters
 });
+
+test("round 39: a long question stops at a clause break, not mid-clause, and the notebook shows the whole idea on hover", () => {
+  const idea = "Buy RELIANCE when the 20-day EMA crosses above the 50-day EMA and the volume is above its average; set a stop loss of 3% and a target of 9% and exit after 30 days";
+  const q = questionFrom(idea, "RELIANCE");
+  assert.equal(q, 'Does "Buy RELIANCE when the 20-day EMA crosses above the 50-day EMA and the volume is above its average…" work?');
+  assert.equal(q.split('"').length - 1, 2);
+  // no clause break in the back half: still a word boundary
+  assert.match(questionFrom("Buy when the price closes above the highest high of the previous twenty sessions on rising volume and falling volatility in every market", null), /^Does ".+ [A-Za-z]+…" work\?$/);
+  const page = readFileSync(new URL("../src/pages/NotebookPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /<span title=\{s\.text && s\.text\.trim\(\) !== nb\.question \? s\.text\.trim\(\) : undefined\} data-testid="nb-question">\{nb\.question\}<\/span>/);
+});
+
+test("round 39: the test period starts at the last run's period, not back at 5 years", () => {
+  const page = readFileSync(new URL("../src/pages/NotebookPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /const lastDays = last && last\.tf === s\.tf && periods\.includes\(last\.days\) \? last\.days : undefined;/);
+  assert.match(page, /const fallbackPeriod = lastDays \?\? \(s\.tf === "1d" \?/);
+});

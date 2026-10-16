@@ -159,3 +159,18 @@ test("R39: on a phone the plan switch's buttons and the footer's policy links ar
   const lp = read("src/pages/Login.tsx");
   for (const re of [/role="tablist"/, /role="tab"/, /role="tabpanel"/, /aria-selected=\{k === i\}/, /<nav aria-label="Sections">/, /<footer className="lp-foot">/]) assert.match(lp, re);
 });
+
+test("round 39: on a phone, chips and small buttons are 44 px to tap; the desktop keeps its density", () => {
+  const css = read("src/styles.css");
+  const at = css.indexOf("round 39: tap heights on a phone");
+  assert.ok(at > 0);
+  const block = css.slice(at);
+  assert.match(block, /@media \(max-width: 640px\) \{/);
+  assert.match(block, /\.k-chip \{ height: 44px; \}/);
+  assert.match(block, /\.btn\.sm, \.k-card-head \.btn\.sm[^{]*\{ min-height: 44px; \}/);
+  assert.match(block, /\.side-toggle \{ width: 44px; height: 44px; \}/);
+  assert.match(block, /\.space-switch button[^{]*\{ height: auto; min-height: 44px; \}/);
+  // the desktop sizes are untouched
+  assert.match(css, /\.k-chip \{ flex: none; height: 32px;/);
+  assert.match(css, /\.side-toggle \{ flex: none; display: grid; place-items: center; width: 26px; height: 26px;/);
+});

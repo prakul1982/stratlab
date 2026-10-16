@@ -2080,3 +2080,18 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   .k-seg button, .k-form > .k-field > .k-seg button, .lp-period .k-seg button { min-height: 44px; }
   .legal-links a, .lp-foot .legal-links a { display: inline-flex; align-items: center; min-height: 44px; padding-block: 12px; box-sizing: border-box; }
 }
+
+/* ---------- round 39: tap heights on a phone ---------- */
+/* On a phone (400 px in the review) the group toggle chips were 26 px and some buttons 28 px: a finger needs 40 to 44. The
+   padding grows, not the type, and only below 640 px, so the desktop keeps its density. */
+@media (max-width: 640px) {
+  .k-chip, .chip, .k-seg button, .ch-seg button, .ch-btn, .ch-legend button, .k-pagenav-a, .lp-demo-tabs button { min-height: 44px; }
+  .k-chip { height: 44px; }
+  .chip { height: 44px; }
+  .btn.sm, .k-card-head .btn.sm, .k-card-head a, .inv-head-price a { min-height: 44px; }
+  .side-toggle { width: 44px; height: 44px; }
+  .side-title, .side-list a, .side-note, .space-switch button, .mkt-btn, .acct-btn, .cond-x, .fs-go { height: auto; min-height: 44px; }
+  .acct-pop [role="menuitem"], .acct-pop [role="menuitemradio"] { height: auto; min-height: 44px; }
+  .earlier > summary, .opt-charge-lines > summary { min-height: 44px; }
+  .k-form > .k-field > .k-seg button { min-height: 44px; }
+}

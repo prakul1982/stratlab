@@ -317,6 +317,13 @@ export function asOf(iso: string | null | undefined, o: { tz?: string; zone?: bo
   return day ? fmtDate(iso, { year: o.year }) : fmtDateTime(d, { tz: o.tz ?? IST, zone: o.zone ?? true, year: o.year });
 }
 
+/** When an AI read was written, as the server stamped it (seconds since 1970): "16 Oct, 14:32 IST". A time, never "just
+ * now": a read kept for hours and served again would say so, and a device clock that runs behind would too (round 39). */
+export function writtenAt(seconds: number | null | undefined, tz?: string): string {
+  if (seconds == null || !Number.isFinite(seconds)) return "";
+  return asOf(new Date(seconds * 1000).toISOString(), { tz, year: false }) ?? "";
+}
+
 /* ---------- Indian rupee formatting (the one place; see DESIGN.md "Numbers") ----------
  * Everything here takes rupees. For a figure already in crore, multiply by CRORE first. Missing or non-finite values
  * give "–". The minus is always the real minus sign (U+2212). */
