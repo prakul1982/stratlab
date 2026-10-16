@@ -263,17 +263,23 @@ def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
         moves = [float(i["change_pct"]) for i in by.values()]
         if (up and all(c < -0.3 for c in moves)) or (down and all(c > 0.3 for c in moves)):
             return True
-        main = by.get(MAIN_INDEX.get(region, ""))
+        # the main index decides only for a story about the whole market: "Stock markets trade lower", "Dalal Street
+        # slips", "Indian shares fall", not "Bank stocks fall" or "Adani shares tumble" (one sector or company)
+        before = title[:m.start(1)]
+        whole = m.group(1).lower() not in ("stocks", "shares") or not before.strip() or bool(
+            re.search(r"\b(?:indian|india's|us|u\.s\.|american|domestic|local|global|world|asian)\s*$", before, re.I))
+        main = by.get(MAIN_INDEX.get(region, "")) if whole else None
         if main is not None and ((up and float(main["change_pct"]) < -0.3) or (down and float(main["change_pct"]) > 0.3)):
             return True
     return False
 
 
 MAIN_INDEX = {"IN": "NIFTY 50", "US": "S&P 500"}
+_OPEN_WORD = r"(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|firm|soft|cautious|subdued|tepid|quiet|steady|gap-?up|gap-?down)"
 # a story about one moment before the close (the open, early trade, the morning): the brief reports the day's close
 _EARLY = re.compile(r"\b(early (?:session|trade|trading|deals|hours)|opening (?:bell|trade|session|deals)|pre-?open(?:ing)?|"
-                    r"mid-?session|morning (?:trade|session|deals)|intraday|(?:set|poised|likely|seen|expected) (?:for|to) "
-                    r"(?:a |an )?(?:\w+ )?(?:open|start)|(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|gap-?up|gap-?down) "
+                    r"mid-?session|morning (?:trade|session|deals)|intraday (?:trade|trading|deals|session)|"
+                    r"(?:set|poised|likely|seen|expected) (?:for|to) (?:a |an )?(?:" + _OPEN_WORD + r" )?(?:open|start)\b(?! to (?:the )?year)|(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|gap-?up|gap-?down) "
                     r"(?:open|opening|start)|opens? (?:higher|lower|flat|in the green|in the red))\b", re.I)
 
 

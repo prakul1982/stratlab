@@ -160,13 +160,19 @@ export function identify(userId: string, o: { plan?: string | null; backtests?: 
   });
 }
 
-/** An error's message with nothing personal in it: addresses, links, ids and long numbers masked, 200 characters at most. */
+/** An error's message with nothing personal in it: addresses, links, ids, tokens, amounts and phone-like numbers, and
+ *  a quoted symbol ('RELIANCE') masked, 200 characters at most. */
 export function cleanError(text: unknown): string {
   return String(text ?? "")
     .replace(/https?:\/\/[^\s"')]+/g, (u) => String(maskUrl(u) ?? ":url"))
     .replace(/[^\s@"'<>]+@[^\s@"'<>]+/g, ":email")
+    .replace(/\bBearer\s+\S+/gi, "Bearer :token")
+    .replace(/\b[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}\b/g, ":token")                 // a JWT
     .replace(/\b[0-9a-f]{8}-[0-9a-f-]{20,}\b|\b[0-9a-f]{16,}\b/gi, ":id")
+    .replace(/\b(?=[\w-]*\d)[\w-]{20,}\b/g, ":token")                         // a long key with digits in it
+    .replace(/\+?\d[\d ,.]{3,}\d/g, (m) => (m.replace(/\D/g, "").length >= 5 ? ":n" : m))   // 12,34,567.89 · 98765 43210
     .replace(/\b\d{6,}\b/g, ":n")
+    .replace(/'[A-Z][A-Z0-9&-]{2,}'/g, "':sym'")
     .slice(0, 200);
 }
 

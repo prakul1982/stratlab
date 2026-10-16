@@ -25,9 +25,10 @@ from .config import settings
 log = logging.getLogger("stratlab")
 
 STATE_KEY = "maindb:state"        # {"state": "pending" | "done" | "failed", "asked_at", "done_at", "copied", "error"}
-# each table, its key to page by, and rows a read (the big JSON rows in small pages); parents before children
-COPY = (("profiles", "id", 500), ("strategies", "id", 50), ("usage_events", "id", 2000), ("live_sessions", "id", 25),
-        ("live_orders", "id", 2000), ("app_settings", "key", 500), ("option_snapshots", "id", 20))
+# each table, its key to page by, and rows a read (the big JSON rows in small pages; never over Supabase's 1000-row cap
+# on one read); parents before children
+COPY = (("profiles", "id", 500), ("strategies", "id", 50), ("usage_events", "id", 1000), ("live_sessions", "id", 25),
+        ("live_orders", "id", 1000), ("app_settings", "key", 500), ("option_snapshots", "id", 20))
 SEQUENCES = ("usage_events", "live_orders", "option_snapshots")
 READ_TRIES, READ_PAUSE = 5, 4.0
 
@@ -185,9 +186,12 @@ def move(src, pg: "pgdb.PgClient") -> dict:
                     with c.cursor() as cur:
                         cur.executemany(sql, [[_value(cols.get(k, ""), r[k]) for k in names] for r in part])
                 n += len(rows)
-                if len(rows) < page:
+                if not rows:                        # a short page isn't the end: the server may cap what one read returns
                     break
                 after = rows[-1][key]
+            want = src.table(table).select(key, count="exact").limit(1).execute().count
+            if want is not None and want != n:
+                raise RuntimeError(f"{table}: Supabase has {want} rows but {n} were read")
             copied[table] = n
         for table in SEQUENCES:
             c.execute(f"select setval(pg_get_serial_sequence('app.{table}', 'id'), coalesce((select max(id) from app.{table}), 0) + 1, false)")
