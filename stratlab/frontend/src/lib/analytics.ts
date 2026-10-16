@@ -160,6 +160,40 @@ export function identify(userId: string, o: { plan?: string | null; backtests?: 
   });
 }
 
+/** An error's message with nothing personal in it: addresses, links, ids and long numbers masked, 200 characters at most. */
+export function cleanError(text: unknown): string {
+  return String(text ?? "")
+    .replace(/https?:\/\/[^\s"')]+/g, (u) => String(maskUrl(u) ?? ":url"))
+    .replace(/[^\s@"'<>]+@[^\s@"'<>]+/g, ":email")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f-]{20,}\b|\b[0-9a-f]{16,}\b/gi, ":id")
+    .replace(/\b\d{6,}\b/g, ":n")
+    .slice(0, 200);
+}
+
+const errorsSeen = new Set<string>();
+
+/** A crash in the browser, to PostHog's error tracking: its type, the cleaned message, how it was caught and the masked
+ *  page. Each distinct error once, and at most 10 a page load; nothing at all without a key. */
+export function trackError(err: unknown, how: "window" | "promise" | "page") {
+  const e = err as { name?: unknown; message?: unknown } | null | undefined;
+  const type = typeof e?.name === "string" && WORD.test(e.name) ? e.name : "Error";
+  const value = cleanError(e && typeof e === "object" && "message" in e ? e.message : err);
+  const key = `${type}:${value}`;
+  if (errorsSeen.has(key) || errorsSeen.size >= 10) return;
+  errorsSeen.add(key);
+  const page = typeof location === "undefined" ? "" : maskPath(location.pathname);
+  withClient((p) => p.capture("$exception", {
+    $exception_list: [{ type, value, mechanism: { handled: how === "page", synthetic: false } }],
+    $exception_type: type, $exception_message: value, $exception_source: how, $pathname: page,
+  }));
+}
+
+// lib/sentry hands crashes over through the window, so it never imports this file; the ones it kept waiting go now
+if (typeof window !== "undefined") {
+  window.__stratlabCrash = (err, how) => trackError(err, how);
+  for (const [err, how] of window.__stratlabCrashes?.splice(0) ?? []) trackError(err, how);
+}
+
 /** Signed out: forget the account, so the next person on this browser starts fresh. */
 export function resetAnalytics() {
   context = {};

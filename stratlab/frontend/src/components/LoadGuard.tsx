@@ -67,6 +67,7 @@ export class LoadGuard extends Component<{ children: ReactNode }, { failed: "loa
   componentDidMount() { if (!this.state.failed && typeof window !== "undefined") window.__stratlabLoadFailed = false; }
   componentDidCatch(error: unknown) {
     if (isLoadError(error)) window.__stratlabRecover?.();
+    else void import("../lib/sentry").then((m) => m.reportCrash(error, "page")).catch(() => undefined);
   }
   // the whole page is this message: it is the page's main landmark (R8O-009: an error shell with no main or heading)
   render() { return this.state.failed === "load" ? <main><LoadFailed /></main> : this.state.failed === "crash" ? <main><PageFailed /></main> : this.props.children; }
@@ -83,7 +84,10 @@ export class PageBoundary extends Component<{ children: ReactNode; at?: string }
   }
   componentDidCatch(error: unknown) {
     if (isLoadError(error)) window.__stratlabRecover?.();
-    else console.error("page failed:", error);
+    else {
+      console.error("page failed:", error);
+      void import("../lib/sentry").then((m) => m.reportCrash(error, "page")).catch(() => undefined);
+    }
   }
   render() {
     if (this.state.failed === "load") return <LoadFailed what="this page" />;
