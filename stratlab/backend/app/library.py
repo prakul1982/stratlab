@@ -7,7 +7,7 @@ notebook and run them fresh. Entries live in app_settings under "lib:<id>" (no e
 import json
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from . import db
 
@@ -86,6 +86,19 @@ def entry(nb: dict, exp: dict, owner: str, author: str, description: str, entry_
 
 
 CHECK_NAME = {"unseen": "unseen years", "nearby": "nearby settings", "shuffle": "bad-luck fall", "sample": "enough trades"}
+
+
+def unseen_word(e: dict) -> str:
+    """"months" when the unseen part (the last 30% of the test) spans under a year, else "years": a 6-month test has no
+    unseen years. An entry with no usable range keeps "years"."""
+    r = e.get("range") or {}
+    try:
+        days = (date.fromisoformat(str(r["to"])[:10]) - date.fromisoformat(str(r["from"])[:10])).days
+    except (KeyError, ValueError, TypeError):
+        return "years"
+    return "months" if days * 0.3 < 365 else "years"
+
+
 MIN_TRADES = 15          # the verdict's own floor: fewer trades than this is "not enough evidence"
 
 
@@ -110,7 +123,7 @@ def reason(e: dict) -> str | None:
         return None
     groups: dict[str, list[str]] = {"pass": [], "fail": [], "skip": []}
     for c in checks:
-        groups[c.get("status") if c.get("status") in groups else "fail"].append(CHECK_NAME[c["id"]])
+        groups[c.get("status") if c.get("status") in groups else "fail"].append(CHECK_NAME[c["id"]].replace("years", unseen_word(e)))
     parts = [f"{label}: {', '.join(groups[k])}" for k, label in (("pass", "Passed"), ("fail", "Failed"), ("skip", "Not run")) if groups[k]]
     return ". ".join(parts) + "."
 
@@ -183,7 +196,7 @@ def label(e: dict) -> str:
     if v == "luck":
         by = {c["id"]: c["status"] for c in checks_of(e)}
         if by.get("unseen") == "fail":
-            return "Lost money on the unseen years"
+            return f"Lost money on the unseen {unseen_word(e)}"
         if by.get("nearby") == "fail":
             return "Failed the nearby-settings check"
     return {"mixed": "Mixed check results", "luck": "Failed a robustness check", "not_enough": "Too few trades",
@@ -221,11 +234,12 @@ def restated(e: dict) -> dict:
         for c in checks_of(e):
             s = c["status"]
             if c["id"] == "unseen":
-                out.append({"pass": "It kept making money on the years it wasn't tuned on"
+                w = unseen_word(e)
+                out.append({"pass": f"It kept making money on the {w} it wasn't tuned on"
                                     + (f" ({_pc(unseen)})." if isinstance(unseen, (int, float)) else "."),
-                            "fail": "It lost money on the years it wasn't tuned on.",
-                            "warn": "No trades happened in the years it wasn't tuned on, so it couldn't be tested there."}
-                           .get(s, "The unseen-years check didn't pass."))
+                            "fail": f"It lost money on the {w} it wasn't tuned on.",
+                            "warn": f"No trades happened in the {w} it wasn't tuned on, so it couldn't be tested there."}
+                           .get(s, f"The unseen-{w} check didn't pass."))
             elif c["id"] == "nearby":
                 out.append({"pass": "Settings near the chosen ones made money too.",
                             "fail": "Most settings near the chosen ones lost money.",

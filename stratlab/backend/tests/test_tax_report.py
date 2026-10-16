@@ -539,6 +539,16 @@ def test_random_files_never_crash_the_reader():
 
 
 # ---------- through the app ----------
+def test_the_report_names_the_newest_trade_date_apart_from_the_upload_time(w):
+    c = w["client"]
+    assert c.get("/tax", headers=PRO).json()["last_trade"] is None
+    for p in sorted(FIX.iterdir()):
+        assert upload(c, p.name).status_code == 200
+    rep = c.get("/tax", headers=PRO).json()
+    newest = max(t["d"] for t in T.load("u-pro")["trades"])
+    assert rep["last_trade"] == newest and rep["last_trade"] != (rep["updated_at"] or "")[:10]
+
+
 def test_every_broker_combined_into_one_report(w):
     c = w["client"]
     for p in sorted(FIX.iterdir()):

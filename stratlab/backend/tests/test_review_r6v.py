@@ -318,6 +318,19 @@ def test_two_of_four_and_a_failed_seed_say_exactly_that():
     assert library.label(luck) == "Lost money on the unseen years"
 
 
+def test_a_short_test_has_unseen_months_not_unseen_years():
+    checks = [{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "skip"}]
+    short = {**SEED, "range": {"from": "2026-04-17", "to": "2026-10-14"}, "verdict": {**SEED["verdict"], "checks": checks}}
+    assert library.unseen_word(short) == "months" and library.unseen_word(SEED) == "years"
+    assert library.unseen_word({**SEED, "range": {"from": "2021-01-01", "to": "2026-10-14"}}) == "years"
+    luck = {**short, "verdict": {**SEED["verdict"], "verdict": "luck", "passed": 1, "total": 3, "checks": [{"id": "unseen", "status": "fail"}]}, "stats": {**SEED["stats"], "unseen": -8.4}}
+    assert library.label(luck) == "Lost money on the unseen months"
+    assert library.label({**luck, "range": None}) == "Lost money on the unseen years"
+    r = library.restated(short)
+    assert "unseen months" in library.reason(short) and "years" not in library.reason(short)
+    assert "the months it wasn't tuned on" in r["fact_summary"] and "unseen years" not in r["fact_summary"]
+
+
 def test_the_public_library_gives_the_card_and_the_page_the_same_words(w):
     e = {**SEED, "official": True, "owner": library.OFFICIAL_OWNER, "strategy": {"entry": [], "exit": []}, "tf": "1d", "market": "US"}
     library.save(e)

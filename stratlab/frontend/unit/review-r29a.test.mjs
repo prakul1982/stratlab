@@ -31,7 +31,8 @@ test("R29A-005: Privacy quotes the Account buttons as they read, with one update
 test("R29A-008: the description's options are paper trading's", () => {
   for (const f of ["src/content/seo.ts", "index.html"]) {
     const s = read(f);
-    assert.match(s, /paper trade them, options too\./, f);
+    assert.match(s, /paper trade them; options are paper trading only\./, f);
+    assert.doesNotMatch(s, /options too/, f);          // read as if options could be backtested
     assert.doesNotMatch(s, /options included/, f);
   }
 });

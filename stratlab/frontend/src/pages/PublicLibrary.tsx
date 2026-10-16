@@ -8,7 +8,7 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { CHECK_RESULT, BehindHold, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
@@ -23,7 +23,7 @@ import "./trade/trade.css";
  * as the app's own backtest gave it. Copying one and re-testing it needs an account, so that button says it goes to Google.
  * Only entries StratLab published itself come from the server (/public/library), never a user's. */
 
-const CHECK_NAME: Record<string, string> = { unseen: "Unseen years", nearby: "Nearby settings", shuffle: "Bad-luck drawdown", sample: "Enough trades" };
+const CHECK_NAME: Record<string, string> = { unseen: "Unseen part", nearby: "Nearby settings", shuffle: "Bad-luck drawdown", sample: "Enough trades" };
 /** What each check asks, so "Not run" and "Passed" mean something to a visitor. */
 const CHECK_SAYS: Record<string, string> = {
   unseen: "Did it make money on the last part of the period, which the rules weren't tuned on?",
@@ -90,8 +90,8 @@ export function PublicLibrary() {
                     {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
-                      {([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], ["Unseen years", sh.unseen]] as [string, number | null][])
-                        .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={tone(n)} />)}
+                      {([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], [unseenLabel(e), sh.unseen]] as [string, number | null][])
+                        .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={k === "After costs" && trails(e) ? undefined : tone(n)} />)}
                     </div>
                     <div className="k-row k-push"><Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${plainTerms(e.name)}`}>Open the verdict and rules</Link></div>
                   </Card>
@@ -142,7 +142,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
           <div className="k-stack">
             <span className="k-eyebrow">{[plainTerms(e.name), whereShown(plainTerms(e.name), where(e), e.group?.name), `${TF_NAME[e.tf] ?? e.tf} candles`].filter(Boolean).join(" · ")}</span>
             {/* the result in the checks' own words, with buy and hold beside it, the same words as the library card (R6V-005) */}
-            <h1 className={`verdict-head pub-head ${e.verdict.verdict}`} data-testid="lib-headline">{e.verdict.fact_headline ?? e.verdict.headline}</h1>
+            <h1 className={`verdict-head pub-head ${headTone(e)}`} data-testid="lib-headline">{e.verdict.fact_headline ?? e.verdict.headline}</h1>
             <p className="k-lede">{e.verdict.fact_summary ?? e.verdict.summary}</p>
             <HoldLine e={e} />
             <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span data-testid="lib-tested">{e.range ? `Tested ${testedRange(e.range)}` : "Tested on past prices"}</span></span>
@@ -150,9 +150,9 @@ export function PublicLibraryEntry({ id }: { id: string }) {
           <Card label="Results">
             <CardHead title="Results after costs" actions={<span className="k-note">{checksOf(e)}</span>} />
             <StatRow label="Results">
-              <Stat item label="Return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={tone(sh.ret)} />
+              <Stat item label="Return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={trails(e) ? undefined : tone(sh.ret)} />
               <Stat item label="Buy and hold" value={sh.buy_hold == null ? "–" : pct(sh.buy_hold)} tone={tone(sh.buy_hold)} />
-              <Stat item label="Unseen years" value={sh.unseen == null ? "–" : pct(sh.unseen)} tone={tone(sh.unseen)} />
+              <Stat item label={unseenLabel(e)} value={sh.unseen == null ? "–" : pct(sh.unseen)} tone={tone(sh.unseen)} />
               <Stat item label="Worst fall" value={sh.mdd == null ? "–" : pct(sh.mdd)} tone={sh.mdd == null ? undefined : "down"} />
               <Stat item label="Trades" value={e.stats.trades == null ? "–" : String(e.stats.trades)} />
             </StatRow>
@@ -160,8 +160,8 @@ export function PublicLibraryEntry({ id }: { id: string }) {
           {!!e.verdict.checks?.length && (
             <section className="pub-checks" aria-label="The four checks">
               {e.verdict.checks.map((c) => (
-                <Card key={c.id} label={CHECK_NAME[c.id] ?? c.id}>
-                  <CardHead level={3} title={CHECK_NAME[c.id] ?? c.id} actions={<Badge tone={c.status === "pass" ? "ok" : c.status === "fail" || c.status === "not_passed" ? "warn" : "plain"}>{CHECK_RESULT[c.status] ?? c.status}</Badge>} />
+                <Card key={c.id} label={c.id === "unseen" ? unseenLabel(e) : CHECK_NAME[c.id] ?? c.id}>
+                  <CardHead level={3} title={c.id === "unseen" ? unseenLabel(e) : CHECK_NAME[c.id] ?? c.id} actions={<Badge tone={c.status === "pass" ? "ok" : c.status === "fail" || c.status === "not_passed" ? "warn" : "plain"}>{CHECK_RESULT[c.status] ?? c.status}</Badge>} />
                   <p className="k-small k-muted">{CHECK_SAYS[c.id]}</p>
                 </Card>
               ))}

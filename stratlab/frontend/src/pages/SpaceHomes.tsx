@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, money, pct, signCls } from "../lib/format";
+import { ago, fmtDate, money, pct, signCls } from "../lib/format";
+import { uploadedLine } from "../lib/journalTax";
 import { homeOf } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
@@ -339,7 +340,7 @@ type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: nu
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
   total?: { available: boolean; total?: number; income?: { business?: number; intraday?: number } }; audit?: string | null };
-type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; prices_at: string | null; trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number };
+type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; last_trade?: string | null; prices_at: string | null; trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number };
 
 
 export function MoneyHome() {
@@ -437,7 +438,8 @@ function TaxSummary() {
             </div>
             {year?.audit && <p className="small">{year.audit}</p>}
             <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
-            <AsOf parts={[["Trades", t.updated_at], ["Prices", t.prices_at]]} />
+            {(t.updated_at || t.last_trade) && <p className="tiny muted as-of" data-testid="tax-uploaded">{uploadedLine(t.updated_at, t.last_trade, (iso) => fmtDate(iso, { tz: "Asia/Kolkata" }))}</p>}
+            <AsOf parts={[["Prices", t.prices_at]]} />
           </div>
         )}
     </Panel>

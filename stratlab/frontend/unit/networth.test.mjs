@@ -44,3 +44,18 @@ test("B2: a partial total reads against the latest snapshot that left out exactl
   assert.deepEqual(netWorthDelta(170, left, h, "2026-10-10"), { change: 20, since: "2026-10-01" });
   assert.deepEqual(netWorthDelta(170, null, h, "2026-10-10"), { change: 70, since: "2026-09-01" });
 });
+
+test("net worth hides Download CSV until there is an entry; the journal says buy/sell plainly", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
+  assert.match(src("pages/money/NetWorthPage.tsx"), /\{!empty && <button type="button" className="btn quiet" onClick=\{download\}>/);
+  assert.match(src("pages/trade/JournalPage.tsx"), /"Buy\/sell not in the file"/);
+  assert.doesNotMatch(src("pages/trade/JournalPage.tsx"), /Side not in the file/);
+});
+
+test("the plans cards use two columns on a tablet, on the landing page and on /plans", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 1000px\) \{[^@]*\.lp-prices \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(css, /@media \(min-width: 601px\) and \(max-width: 1000px\)[^{]*\{[\s\S]*?\.k-plans \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+});

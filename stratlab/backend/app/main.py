@@ -3245,6 +3245,7 @@ def tax_view(profile) -> dict:
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
     return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+            "last_trade": max([t["d"] for t in i["trades"] if isinstance(t.get("d"), str)] + [b["last"] for b in i["business"]], default=None),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},

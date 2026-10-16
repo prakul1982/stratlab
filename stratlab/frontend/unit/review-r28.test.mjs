@@ -32,3 +32,11 @@ test("the journal's date line says it is the journal's own date", () => {
   assert.match(t, /tax report has its own date/);
   assert.equal(journalSavedNote("2026-10-15", null, fmt), "Worked out as of 15/10.");
 });
+
+test("Money home says when the files were uploaded and how far the trades go, not 'Trades as of' the upload time", async () => {
+  const { uploadedLine } = await import("../src/lib/journalTax.ts");
+  const fmt = (iso) => ({ "2026-10-04T09:05:00+00:00": "4 Oct 2026", "2025-06-27": "27 Jun 2025" })[iso];
+  assert.equal(uploadedLine("2026-10-04T09:05:00+00:00", "2025-06-27", fmt), "Uploaded 4 Oct 2026 · trades up to 27 Jun 2025");
+  assert.equal(uploadedLine(null, "2025-06-27", fmt), "Trades up to 27 Jun 2025");
+  assert.equal(uploadedLine("2026-10-04T09:05:00+00:00", null, fmt), "Uploaded 4 Oct 2026");
+});

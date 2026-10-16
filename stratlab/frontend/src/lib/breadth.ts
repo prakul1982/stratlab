@@ -87,6 +87,16 @@ export function shortDay(iso: string): string {
   return fmtDate(iso, { year: d.getFullYear() !== new Date().getFullYear() });
 }
 
+/** The date under each figure of the card while it shows today's count: rose / fell and the share above the 50-day average
+ * are today's, the 52-week highs and lows come with the close and are the last close's, each said with its own day (the
+ * card's heading, "Today, final at 15:30", dated only the first two). Null when the figures share one day. */
+export function cardDates(d: Pick<BreadthView, "today" | "live">): { counts: string; highs: string | null } | null {
+  const live = d.live && (d.live.state === "live" || d.live.state === "final") && d.live.latest ? d.live : null;
+  if (!live) return null;
+  const sameDay = d.today?.day === live.day;
+  return { counts: `Today, ${shortDay(live.day)}`, highs: d.today ? (sameDay ? `Today, ${shortDay(d.today.day)}` : `Close of ${shortDay(d.today.day)}`) : null };
+}
+
 /** What the Invest home's breadth card shows: while the market is open, the newest live count (R7T-010: the card showed
  * the 8 Oct close after 9 Oct's open while the breadth page was live); otherwise the last close's, said so. */
 export function cardFigures(d: Pick<BreadthView, "today" | "live"> & { pending?: Pending }): {
