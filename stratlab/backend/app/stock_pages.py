@@ -1728,7 +1728,7 @@ def _ld(obj) -> str:
 
 
 def _links(region: str, rows: list[tuple[str, str]]) -> str:
-    return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{n} ({s})")}</a>' for s, n in rows) + "</div>"
+    return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{proper_name(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
 def _top(sign_in: str | None = None) -> str:
@@ -1776,10 +1776,12 @@ _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "U
 def proper_name(name: str | None) -> str | None:
     """A company name that arrives in capitals from a filing ("MICROSOFT CORP") in title case ("Microsoft Corp"); acronyms
     (IBM, AT&T, a short run of consonants like CVS) and a name that already has lower case are left as they are; a filing's
-    state suffix ("APPLIED MATERIALS INC /DE", "REALTY /MD/") is dropped."""
+    state suffix ("APPLIED MATERIALS INC /DE", "REALTY /MD/") or a re-registration mark ("COSTCO WHOLESALE CORP /NEW") is
+    dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
     if name:
-        name = re.sub(r"\s*/[A-Za-z]{2}/?$", "", name.strip()) or name
-    if not name or name != name.upper() or not re.search(r"[A-Z]{2}", name):
+        name = re.sub(r"\s*/(?:[A-Za-z]{2}|NEW)/?$", "", name.strip()) or name
+    core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
+    if not name or core != core.upper() or not re.search(r"[A-Z]{2}", core):
         return name
 
     def word(w: str) -> str:
