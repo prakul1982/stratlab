@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -344,7 +344,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Share of stocks in Stage 2" />
         </Box>
         <Box title="Breadth thrust measure" info={help.thrust} h={h} cols={[{ header: "10-day average", get: (i) => fmtPct(h.thrust[i]) }]}
-          note={<span data-testid="breadth-thrusts">{thrusts.length ? `A thrust happened on ${thrusts.map((d) => shortDay(d)).join(", ")}.` : "No thrust in these days."} Dashed lines at 40% and 61.5%.</span>}>
+          note={<span data-testid="breadth-thrusts">{thrusts.length ? `A thrust happened on ${thrustDays(thrusts)}.` : "No thrust in these days."} Dashed lines at 40% and 61.5%.</span>}>
           <LineChart lines={[{ values: h.thrust, color: A, label: "10-day average", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             levels={[{ v: 40, color: "var(--dash)", label: "40%" }, { v: 61.5, color: "var(--dash)", label: "61.5%" }]}
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Breadth thrust measure, with lines at 40% and 61.5%" />
