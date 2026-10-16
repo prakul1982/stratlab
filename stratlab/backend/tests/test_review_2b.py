@@ -52,6 +52,11 @@ def test_net_worth_is_as_of_the_day_of_its_prices_not_the_day_it_is_now():
     assert nw.data_day(rows, date(2026, 10, 6)) == date(2026, 10, 6)               # never after the day asked for
     assert nw.data_day([{"basis": "as entered", "as_of": "2026-10-01"}], date(2026, 10, 8)) == date(2026, 10, 8)
     assert nw.data_day([{"basis": "market price", "as_of": "2026-10-07T22:00:00+00:00"}], date(2026, 10, 9)) == date(2026, 10, 8)    # 03:30 IST next day
+    # R34-006: a coin or gold read just now doesn't move the page's date off the stocks' close
+    mixed = [{"kind": "stocks_in", "basis": "market price", "as_of": "2026-10-15T15:29+05:30"},
+             {"kind": "crypto", "basis": "market price", "as_of": "2026-10-16T03:00+00:00"}]
+    assert nw.data_day(mixed, date(2026, 10, 16)) == date(2026, 10, 15)
+    assert nw.data_day(mixed[1:], date(2026, 10, 16)) == date(2026, 10, 16)        # with only a coin, its own day
 
 
 # ---------- R2B-002: one reading of the prices for every page ----------

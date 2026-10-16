@@ -149,6 +149,7 @@ export function OptionsSession() {
           {s.recenter.enabled && <li>Re-centre every {s.recenter.every} min after a {s.recenter.threshold}-strike move ({s.recenter.roll === "all" ? "every leg" : "sold legs"})</li>}
           <li>{s.sizing.mode === "margin" ? `As much as margin allows on ${inr(s.sizing.capital)}` : `${s.sizing.lots} unit${s.sizing.lots === 1 ? "" : "s"}`}</li>
         </ul>
+        {(s.risk.stopType !== "none" || s.risk.dailyLoss > 0) && <p className="k-small k-muted">A stop or the daily cap is checked on each price update and closes at the next prices the market shows, so a fast move can close past it.</p>}
       </section>
 
       <Card label="Today">

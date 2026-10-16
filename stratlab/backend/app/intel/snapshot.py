@@ -16,12 +16,19 @@ from concurrent.futures import TimeoutError as FutureTimeout
 _bg = ThreadPoolExecutor(max_workers=4, thread_name_prefix="snapshot")
 
 
+STALE_WAIT_MAX = 4.0     # seconds a request holds for the fresh read when its kept copy is too old (never a page's full wait)
+
+
 class Snapshot:
     """{key: the last value read} with the time it was read. `get` answers from memory and starts a background read when the
     copy is older than `fresh_for` seconds (one read per key at a time)."""
 
-    def __init__(self, fresh_for: float, give_up: float = 30.0, clock=time.time, pool: ThreadPoolExecutor | None = None):
+    def __init__(self, fresh_for: float, give_up: float = 30.0, clock=time.time, pool: ThreadPoolExecutor | None = None,
+                 wait_after: float | None = None):
+        """`wait_after`: a kept value older than this many seconds is not answered at once; the request waits (up to its
+        `wait`) for the read behind it, and gets the kept value only if that read isn't back in time. None: always at once."""
         self.fresh_for, self.give_up, self.clock = fresh_for, give_up, clock
+        self.wait_after = wait_after
         self.pool = pool or _bg
         self._lock = threading.Lock()
         self._kept: dict = {}                      # key -> (read at, value)
@@ -65,8 +72,15 @@ class Snapshot:
         if hit and self.clock() - hit[0] < self.fresh_for:
             return hit[1], hit[0]
         f = self._start(key, read)
-        if hit:
+        if hit and (self.wait_after is None or self.clock() - hit[0] < self.wait_after):
             return hit[1], hit[0]
+        if hit:                         # kept, but too old to answer with while a fresh read is a moment away (R32-001)
+            try:
+                value = f.result(timeout=max(0.0, min(wait, STALE_WAIT_MAX)))
+            except Exception:           # not back in time, or failed: the kept copy, as before
+                return hit[1], hit[0]
+            got = self.kept(key)
+            return value, (got[0] if got else self.clock())
         try:
             value = f.result(timeout=max(0.0, wait))
         except FutureTimeout:

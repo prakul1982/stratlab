@@ -291,7 +291,8 @@ def summary(experiments: list[dict]) -> dict:
     last = experiments[-1] if experiments else None
     return {"experiments": len(experiments),
             "last_verdict": last["verdict"]["verdict"] if last else None,
-            "last_label": last["label"] if last else None}
+            "last_label": last["label"] if last else None,
+            "last_return": ((last.get("stats") or {}).get("ret")) if last else None}
 
 
 def run_group(datasets: list[dict], strategy, group: dict, days: int, max_days: int) -> dict:

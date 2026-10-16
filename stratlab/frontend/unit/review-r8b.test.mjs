@@ -15,7 +15,7 @@ globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v
 
 test("R8B-002: the paper overview gives the deepest fall in money and its day, not a percentage alone", () => {
   const src = read("src/components/RiskOverview.tsx");
-  assert.match(src, /deepest_fall\?: \{ pnl: number; pct: number; date: string \} \| null/);
+  assert.match(src, /deepest_fall\?: \{ pnl: number; pct: number; date: string; [^}]*\} \| null/);
   assert.match(src, /money\(c\.deepest_fall\.pnl, c\.currency\)\} from the high point to the low on \$\{day\(c\.deepest_fall\.date\)\}/);
 });
 

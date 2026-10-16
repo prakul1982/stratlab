@@ -188,7 +188,7 @@ def test_worst_day_and_deepest_fall_come_from_the_whole_history_not_the_capped_c
             "account": {"capital": cap, "equity": cap + realised, "realised": realised, "trades": len(trades)}}
     inr = risk.summary([snap], today="2026-10-09")["currencies"][0]
     assert inr["worst_day"] == {"date": "2026-10-05", "pnl": -101891.0}
-    assert inr["deepest_fall"] == {"pnl": -270494.0, "pct": -5.41, "date": "2026-10-09"}
+    assert {k: inr["deepest_fall"][k] for k in ("pnl", "pct", "date")} == {"pnl": -270494.0, "pct": -5.41, "date": "2026-10-09"}
     assert inr["max_drawdown_pct"] == -5.41
     assert inr["today"] == 42608.0                                             # 1,01,817 − 59,209 (the page rounds each)
     assert [p["t"] for p in inr["curve"]][0] == "2026-10-05"                  # the chart spans the whole run

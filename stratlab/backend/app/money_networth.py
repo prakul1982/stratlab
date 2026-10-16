@@ -673,10 +673,12 @@ def _policy(i: dict, at: date) -> dict:
 def data_day(rows: list[dict], at: date) -> date:
     """The day the market prices in the page are from (India's calendar): the latest of their stamps, never after `at`.
     Out of hours that is the last close, not the day it is now. A page with no market-priced row is as of `at`."""
+    # the exchange-priced rows (stocks, funds) date the page: crypto and gold are read at any hour, so their stamp is the
+    # moment of asking, not a close (R34-006: "Prices as of 16 Oct" before the open, on the 15 Oct close)
+    priced = [r for r in rows if r.get("basis") == "market price" and r.get("as_of")]
+    closes = [r for r in priced if r.get("kind") in ("stocks_in", "stocks_us", "mf")]
     days = []
-    for r in rows:
-        if r.get("basis") != "market price" or not r.get("as_of"):
-            continue
+    for r in closes or priced:
         try:
             raw = str(r["as_of"])
             t = datetime.fromisoformat(raw) if "T" in raw and len(raw) > 10 else None

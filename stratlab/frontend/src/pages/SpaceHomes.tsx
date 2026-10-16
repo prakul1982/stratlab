@@ -146,7 +146,7 @@ function NextIdea({ count = 3, hideStart = false }: { count?: number; hideStart?
               <b className="space-recent-name">{n.name}</b>
               <span className="tiny muted">{n.instrument && "symbol" in n.instrument ? `${n.instrument.symbol} · ` : ""}{n.summary?.experiments ?? 0} run{n.summary?.experiments === 1 ? "" : "s"} · {ago(n.updated_at)}</span>
             </span>
-            <VerdictBadge v={n.summary?.last_verdict} />
+            <VerdictBadge v={n.summary?.last_verdict} label={n.summary?.last_verdict === "no_edge" && typeof n.summary.last_return === "number" && n.summary.last_return <= -100 ? "Capital lost" : undefined} />
           </Link>
         ))}
       </div>

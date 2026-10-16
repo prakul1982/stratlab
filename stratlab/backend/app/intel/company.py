@@ -80,6 +80,25 @@ def change_2dp(price, prev, given=None) -> float | None:
     return float(Decimal(repr(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def last_session_move(q: dict | None, bars: list[dict] | None, region: str = "IN", now: datetime | None = None) -> dict | None:
+    """An Indian quote with the last completed session's change when the market hasn't traded today (before the open, a
+    weekend, a holiday): the broker's previous close has already rolled over to that session's close, so its own change
+    reads 0 (R34-001: "0 (0.00%) on the day" at 08:30 IST beside +3.44%). The move is the last stored daily close against
+    the one before it, and `change_day` names the session. While the market trades, or once today's session has its
+    quote, the quote is returned as it is."""
+    if not q or q.get("price") is None or region != "IN" or market_open(region, now):
+        return q
+    today = market_today(region, now)
+    if session_day(q.get("at"), region) == today:
+        return q
+    days = [(str(b.get("t", ""))[:10], b.get("c")) for b in bars or [] if b.get("c") is not None]
+    days = [d for d in days if d[0] < today]
+    if len(days) < 2 or not days[-2][1]:
+        return q
+    (day, last), (_, prev) = days[-1], days[-2]
+    return {**q, "change": last - prev, "change_pct": change_2dp(last, prev), "change_day": day}
+
+
 def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:
     """One index's tile: its level and change with the session they are of. `stale`: the market is open today and this
     quote is still a previous session's, so its change is that session's and is never shown as today's (R7T-003: SENSEX
@@ -559,9 +578,11 @@ class Research:
             return {}
         if region == "IN" and self._kite():
             try:
-                return self.kite.quote(symbols)
+                got = self.kite.quote(symbols)
             except Exception:
-                pass
+                got = None
+            if got is not None:
+                return {s: self._last_session(s, q) for s, q in got.items()} if not market_open(region) else got
         out = {}
 
         def one(sym):
@@ -627,6 +648,18 @@ class Research:
         except Exception:
             return None
         return {"token": tok} if tok else None
+
+    def _last_session(self, sym: str, q: dict | None, bars: list[dict] | None = None) -> dict | None:
+        """The quote with the last session's change while India's market hasn't traded today (see last_session_move)."""
+        if not q or market_open("IN"):
+            return q
+        try:
+            if bars is None:
+                inst = self.kite.equity(sym) or self.kite.by_symbol(sym)
+                bars = self.kite.history(inst["token"], "1d", 15) if inst else None
+            return last_session_move(q, bars)
+        except Exception:
+            return q
 
     def _live_quote(self, region: str, symbol: str) -> dict | None:
         """The quote of a symbol now: an Indian index from the broker's feed, else the page's own quotes."""
@@ -697,6 +730,7 @@ class Research:
 
     # ---------- served from memory (R24-001) ----------
     PULSE_FRESH = 15          # seconds the index levels are served from memory before a read behind the page
+    PULSE_STALE_WAIT = 60     # seconds after which a page waits for the fresh read instead of answering with the kept levels
     NEWS_FRESH = 300          # ...and the headlines
     _levels_snap = None
     _news_snap = None
@@ -704,7 +738,9 @@ class Research:
     def _snaps(self):
         from .snapshot import Snapshot
         if self._levels_snap is None:
-            self._levels_snap = Snapshot(self.PULSE_FRESH, give_up=30)
+            # levels a minute or more old wait for the fresh read: the first look after a quiet spell (the open) gets
+            # this minute's levels, not the ones from the last visit an hour earlier (R32-001: 08:00 levels at 09:20)
+            self._levels_snap = Snapshot(self.PULSE_FRESH, give_up=30, wait_after=self.PULSE_STALE_WAIT)
             self._news_snap = Snapshot(self.NEWS_FRESH, give_up=45)
         return self._levels_snap, self._news_snap
 
@@ -976,7 +1012,7 @@ class Research:
         })
         quote, lo52, hi52 = None, s.get("low52"), s.get("high52")
         if r.get("kq"):
-            quote = r["kq"]
+            quote = self._last_session(sym, r["kq"], r.get("k1y"))
         elif r.get("y"):
             y = r["y"]
             # with the time of its last trade: a price from an earlier session is said as that session's, never "now"
