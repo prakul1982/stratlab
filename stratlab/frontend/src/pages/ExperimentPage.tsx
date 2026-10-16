@@ -456,7 +456,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
 export function ExperimentPage() {
   const { id, v } = useParams();
-  const { nb, problem, reload } = useNotebook(id);
+  const { nb, problem, reload } = useNotebook(id, `Run v${v}`);
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Experiment" /><Card><Skeleton label="Opening experiment" /></Card></div>;
   const e = nb.experiments.find((x) => String(x.v) === v);

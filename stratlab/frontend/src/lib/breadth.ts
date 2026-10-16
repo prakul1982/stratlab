@@ -1,7 +1,7 @@
 import { api } from "./api";
 import type { LiveView } from "./breadthLive";
 import { fmtDate, latestDue, type Pending } from "./format";
-export { breadthChipLabel, liveReadLine, liveNoticeTone, liveSeries, liveTag, liveTitle, sectorColumnLabel } from "./breadthLive";
+export { breadthChipLabel, liveReadLine, liveNoticeTone, liveSeries, liveTag, liveTitle, MOVES_LABEL, MOVES_TITLE, sectorColumnLabel } from "./breadthLive";
 export { BROAD_GROUP, MARKET_GROUP, breadthStart, groupRegion, orderGroups, savePick, savedPick } from "./breadthPick";
 export type { LiveSeries, LiveView } from "./breadthLive";
 

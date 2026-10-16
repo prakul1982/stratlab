@@ -121,10 +121,10 @@ def reason(e: dict) -> str | None:
     checks = [c for c in v.get("checks") or [] if c.get("id") in CHECK_NAME]
     if not checks:
         return None
-    groups: dict[str, list[str]] = {"pass": [], "fail": [], "skip": []}
+    groups: dict[str, list[str]] = {"pass": [], "warn": [], "fail": [], "skip": []}
     for c in checks:
         groups[c.get("status") if c.get("status") in groups else "fail"].append(CHECK_NAME[c["id"]].replace("years", unseen_word(e)))
-    parts = [f"{label}: {', '.join(groups[k])}" for k, label in (("pass", "Passed"), ("fail", "Failed"), ("skip", "Not run")) if groups[k]]
+    parts = [f"{label}: {', '.join(groups[k])}" for k, label in (("pass", "Passed"), ("warn", "Warning"), ("fail", "Failed"), ("skip", "Not run")) if groups[k]]
     return ". ".join(parts) + "."
 
 

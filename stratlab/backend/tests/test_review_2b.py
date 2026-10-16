@@ -85,6 +85,14 @@ def test_a_strategy_that_never_traded_sorts_below_the_rest_and_says_so():
     assert library.public(idle)["ran"] is False
 
 
+def test_a_warning_on_the_card_is_listed_as_a_warning_not_a_failure():
+    # the strategy's own page labels a warned check "Warning"; the card's one line must use the same word
+    checks = [{"id": "unseen", "status": "fail"}, {"id": "nearby", "status": "pass"}, {"id": "shuffle", "status": "warn"}, {"id": "sample", "status": "pass"}]
+    e = {"verdict": {"verdict": "luck", "passed": 2, "total": 4, "checks": checks}, "stats": {"trades": 40, "ret": 12}}
+    assert library.reason(e) == "Passed: nearby settings, enough trades. Warning: bad-luck fall. Failed: unseen years."
+    assert "Failed: unseen years, bad-luck fall" not in library.reason(e)
+
+
 def test_each_card_has_one_line_reason_from_the_verdicts_own_checks():
     checks = [{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "fail"}, {"id": "shuffle", "status": "skip"}, {"id": "sample", "status": "pass"}]
     e = {"verdict": {"verdict": "luck", "passed": 2, "total": 3, "checks": checks}, "stats": {"trades": 40, "ret": 12}}
