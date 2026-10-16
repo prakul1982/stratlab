@@ -177,7 +177,7 @@ def risk_text(spec: dict, group: dict) -> str:
     unit = "coin" if group.get("market") == "CRYPTO" else "stock"
     bits.append(f"at most {risk['maxAlloc']:g}% of the capital in one {unit}, up to {group.get('maxOpen')} at once")
     text = "; ".join(bits)
-    return text[:1].upper() + text[1:] + "."
+    return library.an_before_vowel_number(text[:1].upper() + text[1:] + ".")
 
 
 def publish(slug: str, spec: dict, market: str, preset: dict, rec: dict, group: dict) -> dict:
