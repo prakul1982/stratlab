@@ -627,7 +627,7 @@ const [saveNote, setSaveNote] = useState("");
               {chg != null && <span className={signCls(chg, signedPct(chgPct))}><span className="k" title="Close compared with the previous candle's close">{TF_LABEL[tf]} change:</span> {chg >= 0 ? "▲" : "▼"} {e ? e.priceText(Math.abs(chg), h!.bar.c) : ""} ({signedPct(chgPct)})</span>}
             </>}
           </div>
-          {h && showVolume && h.bar.v > 0 && <div><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
+          {h && showVolume && h.bar.v > 0 && <div className="pc-hide-phone"><span><span className="k">Vol</span>{compact(h.bar.v)}</span></div>}
           {cmp && <div>{sw(th?.ink ?? "currentColor")}<span>{cmp.symbol}</span><span className={signCls(cmpPct, signedPct(cmpPct))}>{signedPct(cmpPct)}</span></div>}
           {e?.studies.map((s) => {
             const i = h?.index ?? -1;
