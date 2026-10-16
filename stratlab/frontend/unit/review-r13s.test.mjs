@@ -148,3 +148,18 @@ test("R26-002: the library's search box and the notes box are 16px on a phone to
   assert.match(block, /@media \(max-width: 640px\), \(pointer: coarse\) \{[^@]*body \.k-search input, body \.k-textarea \{ font-size: 16px; \}/);
   assert.match(read("src/pages/trade/trade.css"), /\.k-search input \{[^}]*font-size: var\(--t-body\)/);   // the 15px it overrides, with less weight than `body .k-search input`
 });
+
+test("round 39: on a phone, chips and small buttons are 44 px to tap; the desktop keeps its density", () => {
+  const css = read("src/styles.css");
+  const at = css.indexOf("round 39: tap heights on a phone");
+  assert.ok(at > 0);
+  const block = css.slice(at);
+  assert.match(block, /@media \(max-width: 640px\) \{/);
+  assert.match(block, /\.k-chip \{ height: 44px; \}/);
+  assert.match(block, /\.btn\.sm, \.k-card-head \.btn\.sm[^{]*\{ min-height: 44px; \}/);
+  assert.match(block, /\.side-toggle \{ width: 44px; height: 44px; \}/);
+  assert.match(block, /\.space-switch button[^{]*\{ height: auto; min-height: 44px; \}/);
+  // the desktop sizes are untouched
+  assert.match(css, /\.k-chip \{ flex: none; height: 32px;/);
+  assert.match(css, /\.side-toggle \{ flex: none; display: grid; place-items: center; width: 26px; height: 26px;/);
+});

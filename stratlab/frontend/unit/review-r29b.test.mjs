@@ -47,7 +47,7 @@ test("R29B-009: a run that says the account emptied and then lists later trades 
   assert.equal(isLegacyEmptied({ stats: { emptied_on: "2022-05-09" }, trades: [trade("2022-05-02", "2022-05-09", "Account emptied")] }), false);
   assert.equal(isLegacyEmptied({ stats: {}, trades: [trade("2022-06-01", "2022-06-03")] }), false);
   assert.equal(emptiedDay({ stats: {}, trades: [trade("2022-05-02", "2022-05-09", "Account emptied")] }), "2022-05-09");
-  assert.match(read("src/pages/ExperimentPage.tsx"), /saved by an older version and needs a re-run/);
+  assert.match(read("src/pages/ExperimentPage.tsx"), /\{legacyNote\(e\)\}/);     // changed on purpose (round 39): the note is the plain-words legacyNote, which still says it was saved by an older version
 });
 
 test("R29B-014: the report card never says a past period hasn't ended; outlook shows when it was said", () => {

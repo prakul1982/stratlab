@@ -321,3 +321,24 @@ test("a library entry's unseen label matches its span, and a result behind buy a
   assert.match(pub, /verdict-head pub-head \$\{headTone\(e\)\}/);
   assert.match(pub, /tone=\{trails\(e\) \? undefined : tone\(sh\.ret\)\}/);
 });
+
+test("round 39: the company page states figures and the checklist reads against a stated threshold, with no pass or fail words", async () => {
+  const { checkCountsLine, CHECK_BADGE } = await import("../src/lib/checklistText.ts");
+  assert.equal(checkCountsLine({ pass: 11, watch: 3, fail: 0, na: 0 }), "11 meet the stated threshold · 3 between the two thresholds · 0 outside the stated threshold");
+  assert.equal(checkCountsLine({ pass: 5, watch: 1, fail: 2, na: 4 }), "5 meet the stated threshold · 1 between the two thresholds · 2 outside the stated threshold · 4 without data");
+  const words = Object.values(CHECK_BADGE).map((b) => b[0]).join(" ");
+  assert.doesNotMatch(words + checkCountsLine({ pass: 1, watch: 1, fail: 1 }), /\b(pass|passed|fail|failed|watch)\b/i);
+  assert.equal(CHECK_BADGE.pass[0], "Meets threshold");
+  assert.equal(CHECK_BADGE.fail[0], "Outside threshold");
+  const deep = read("src/pages/DeepDive.tsx");
+  assert.match(deep, /checkCountsLine\(c\.counts\)/);
+  assert.doesNotMatch(deep, /\{c\.counts\.pass\} pass|a recommendation/);
+  const home = read("src/pages/InvestorHome.tsx");
+  assert.doesNotMatch(home, /\} pass<\/b>|Failed checks/);
+  const research = read("src/components/Research.tsx");
+  assert.doesNotMatch(research, />Strengths<|>Risks</);
+  assert.match(research, /<b className="k-sub">Notable figures<\/b>/);
+  assert.match(research, /\[\.\.\.r\.bull, \.\.\.r\.bear\]/);
+  // the Screens page's claim stays true
+  assert.match(read("src/pages/Screens.tsx"), /Nothing here scores companies/);
+});

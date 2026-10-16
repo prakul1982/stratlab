@@ -21,7 +21,7 @@ test("R38-001: a run whose figures contradict each other is listed with the reas
   const { shown, legacy: hidden } = splitLegacy([legacy, fine]);
   assert.deepEqual(shown.map((e) => e.v), [3]);
   assert.deepEqual(hidden.map((e) => e.v), [2]);
-  assert.match(legacyNote(legacy), /^Figures not shown: saved by an older version.*emptied on 2022-05-09.*contradict each other/);
+  assert.equal(legacyNote(legacy), "This run was saved by an older version, and its numbers don't add up (it shows trades after the money ran out on 9 May 2022), so they're hidden. Run the notebook again for current figures.");   // plain words (round 39)
   // the compare page charts and tabulates only the runs whose figures are shown; the rest are listed with the note
   const cmp = read("src/pages/CompareExperiments.tsx");
   assert.match(cmp, /const \{ shown: exps, legacy \} = splitLegacy\(nb\.experiments\)/);
@@ -49,4 +49,12 @@ test("R38-004: a notebook set to a group has no SIP test link (it pointed at REL
   assert.equal(sipTestLink(reliance, { id: "nifty50", members: [] }), null);
   assert.match(read("src/pages/NotebookPage.tsx"), /sipTestLink\(inst, group\) &&/);
   assert.doesNotMatch(read("src/lib/help.ts"), /as of 2025/);
+});
+
+test("round 39: the hidden-run note is plain words, with the day as people write it", () => {
+  const note = legacyNote(legacy);
+  assert.doesNotMatch(note, /account emptied|re-run states/i);
+  assert.match(note, /^This run was saved by an older version, and its numbers don't add up \(it shows trades after the money ran out on 9 May 2022\), so they're hidden\. Run the notebook again for current figures\.$/);
+  assert.match(legacyNote({ stats: {}, trades: [trade("2022-05-02", "2022-05-09", "Stop"), trade("2022-06-01", "2022-06-03")] }), /^This run was saved by an older version, and its numbers don't add up \(it shows trades after the money ran out\)/);
+  assert.match(read("src/pages/ExperimentPage.tsx"), /\{legacyNote\(e\)\}/);
 });

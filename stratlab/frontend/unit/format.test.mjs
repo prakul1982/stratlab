@@ -73,3 +73,13 @@ test("fmtDateTime and asOf use the same day-first form with a 24-hour clock", ()
   assert.equal(asOf("2026-10-03"), "3 Oct 2026");
   assert.equal(asOf(null), null);
 });
+
+test("round 39: an AI read says the time it was written, never 'just now' (a cached read, or a device clock behind the server's)", async () => {
+  const { writtenAt } = await import("../src/lib/format.ts");
+  const at = Date.UTC(2026, 9, 16, 9, 2) / 1000;            // 14:32 in India
+  assert.equal(writtenAt(at, "Asia/Kolkata"), "16 Oct, 14:32 IST");
+  assert.equal(writtenAt(at), "16 Oct, 14:32 IST");
+  assert.doesNotMatch(writtenAt(Date.now() / 1000, "Asia/Kolkata"), /just now|ago/);
+  assert.equal(writtenAt(null), "");
+  assert.equal(writtenAt(Number.NaN), "");
+});

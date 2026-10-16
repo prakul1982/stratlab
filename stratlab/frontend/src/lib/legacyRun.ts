@@ -13,10 +13,17 @@ export function isLegacyEmptied(e: Parameters<typeof emptiedDay>[0]): boolean {
   return (e.trades ?? []).some((t) => t.entry_t.slice(0, 10) > day);
 }
 
-/** The one line every list or comparison of runs shows for such a run in place of its figures (R38-001). */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2022-05-09" as "9 May 2022"; anything else as it came. */
+function plainDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m && MONTHS[Number(m[2]) - 1] ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : iso;
+}
+
+/** What every list, comparison or run page says for such a run in place of its figures, in plain words (R38-001, round 39). */
 export function legacyNote(e: Parameters<typeof emptiedDay>[0]): string {
   const day = emptiedDay(e);
-  return `Figures not shown: saved by an older version, it says the account emptied${day ? ` on ${day}` : ""} and then lists trades after that day, so its figures contradict each other. A re-run states them.`;
+  return `This run was saved by an older version, and its numbers don't add up (it shows trades after the money ran out${day ? ` on ${plainDay(day)}` : ""}), so they're hidden. Run the notebook again for current figures.`;
 }
 
 /** Runs split into those that can be charted and compared and those whose figures are not shown. */

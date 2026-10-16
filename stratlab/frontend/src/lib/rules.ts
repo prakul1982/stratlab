@@ -452,7 +452,13 @@ export function detectInstrument(t: string): string | null {
 export function questionFrom(text: string, instrument?: string | null): string {
   const clean = text.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
   const first = clean.split(/(?<=[.!?])\s/)[0];
-  const short = first.length > 110 ? first.slice(0, 107).replace(/\s+\S*$/, "").replace(/[\s,;:"'(-]+$/, "") + "…" : first;   // at a word boundary, never mid-word (R34-009)
+  // at a word boundary, never mid-word (R34-009); at a clause break (; or ,) when one falls in the back half, so it doesn't stop
+  // mid-clause ("…volume; set…", round 39). The notebook page shows the whole idea on hover.
+  const head = first.slice(0, 107);
+  const clause = Math.max(head.lastIndexOf(";"), head.lastIndexOf(","));
+  const short = first.length > 110
+    ? (clause >= 50 ? head.slice(0, clause) : head.replace(/\s+\S*$/, "")).replace(/[\s,;:"'(-]+$/, "") + "…"
+    : first;
   const lead = short;                 // in the person's own words and casing (R6O-010: "R test" came back as "r test")
   const named = !instrument || lead.toLowerCase().includes(instrument.toLowerCase().split(/[\s/-]/)[0]);
   return `Does "${lead}" work${named ? "" : ` on ${instrument}`}?`;

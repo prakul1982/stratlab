@@ -145,3 +145,20 @@ test("Settings words its test line from the boxes that are there (R4-020)", () =
   assert.match(s, /ch\.push && "turn on phone notifications"/);
   assert.match(s, /disabled=\{!!testWhy\} title=\{testWhy \?\? undefined\}/);
 });
+
+test("round 39: the stock-lending counts say what they count, and a stage says what it means", async () => {
+  const lending = read("pages/StockLendingPage.tsx");
+  assert.match(lending, /`\$\{r\.summaries\[0\]\.traded_days\} of 30 days`/);
+  assert.match(lending, /`\$\{r\.summaries\[1\]\.traded_days\} of 90 days`/);
+  assert.match(lending, /lowest to highest, a year/);
+  assert.match(lending, /header: "Days with trades", numeric: true, info: "How many of the last 30 days, and of the last 90 days/);
+  const { STAGE_MEANING, stageMeaning, STAGES_EXPLAINED } = await import("../src/lib/stageNote.ts");
+  assert.match(stageMeaning("Stage 1 (basing)"), /^Stage 1 \(basing\): the 150-day average has stopped falling/);
+  assert.match(stageMeaning("Stage 4 · declining"), /below a falling 150-day average/);
+  assert.equal(stageMeaning("Supertrend up"), null);
+  assert.equal(Object.keys(STAGE_MEANING).length, 4);
+  assert.match(STAGES_EXPLAINED, /Stage 2 \(advancing\)[\s\S]*Stage 3 \(topping\)/);
+  assert.match(read("pages/ResearchScans.tsx"), /header: "Stage", info: STAGES_EXPLAINED/);
+  assert.match(read("components/Research.tsx"), /stageMeaning\(i\.text\) && <Info label=/);
+  assert.match(read("charts/price/PriceChart.tsx"), /<span title=\{STAGE_MEANING\[s\.stage\[i\]\]\}>/);
+});

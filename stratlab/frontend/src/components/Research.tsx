@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
-import { ago, fmtDate, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
+import { stageMeaning } from "../lib/stageNote";
+import { ago, writtenAt, fmtDate, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -11,6 +12,7 @@ import {
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
 import { Star } from "./Icons";
+import { Info } from "./ui";
 import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
 import { SurvBadges } from "./Surveillance";
 import { FoBadges } from "./FoBadges";
@@ -297,7 +299,7 @@ function FactRows({ rows }: { rows: FactRow[] }) {
       {rows.map((r) => (
         <div key={r.id} className="fact-row">
           <dt className="k-small"><b>{r.label}</b></dt>
-          <dd className="k-small">{r.items.map((i) => <span key={i.label} className="fact-item"><span className="k-muted">{i.label}</span> <span>{i.text}</span></span>)}</dd>
+          <dd className="k-small">{r.items.map((i) => <span key={i.label} className="fact-item"><span className="k-muted">{i.label}</span> <span>{i.text}</span>{stageMeaning(i.text) && <Info label={`About ${i.text}`}>{stageMeaning(i.text)}</Info>}</span>)}</dd>
         </div>
       ))}
     </dl>
@@ -410,7 +412,7 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
     return () => { shown.current = ""; };         // left the page: its read stops being asked for
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [region, symbol]);
-  const age = r ? ago(new Date(r.generated_at * 1000).toISOString()) : "";
+  const age = r ? writtenAt(r.generated_at, marketTz(region)) : "";
   return (
     <div className="ai-read">
       <Card label="AI read">
@@ -437,10 +439,9 @@ export function AIRead({ region, symbol, onTest }: { region: Region; symbol: str
                   <p className="k-small k-muted">{r.valuation_note}</p>
                 </div>}
               </div>}
-              {(r.bull.length > 0 || r.bear.length > 0) && <div className="inv-two">
-                {r.bull.length > 0 && <div className="k-stack"><b className="k-sub">Strengths</b><ul className="k-list">{r.bull.map((b) => <li key={b}>{b}</li>)}</ul></div>}
-                {r.bear.length > 0 && <div className="k-stack"><b className="k-sub">Risks</b><ul className="k-list">{r.bear.map((b) => <li key={b}>{b}</li>)}</ul></div>}
-              </div>}
+              {/* facts only: one list of figures that stand out, not "strengths" and "risks" (round 39) */}
+              {(r.bull.length > 0 || r.bear.length > 0) && <div className="k-stack" data-testid="notable-figures"><b className="k-sub">Notable figures</b>
+                <ul className="k-list">{[...r.bull, ...r.bear].map((b) => <li key={b}>{b}</li>)}</ul></div>}
               {(r.position || r.watch.length > 0) && (
                 <div className="inv-two">
                   {r.position && <div className="k-stack"><b className="k-sub">Where it sits</b><p className="k-small">{r.position}</p></div>}

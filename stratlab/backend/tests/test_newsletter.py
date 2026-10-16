@@ -861,3 +861,12 @@ def test_one_click_header_only_goes_with_a_tokenised_unsubscribe_link(monkeypatc
     assert sent[-1]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click" and "/unsubscribe?t=" in sent[-1]["List-Unsubscribe"]
     A.send_email("a@example.com", "s", "b", headers=post)             # none of its own: Manage emails, no One-Click
     assert "List-Unsubscribe-Post" not in sent[-1]
+
+
+def test_a_stage_in_the_email_says_what_it_means():
+    """Round 39: "Now Stage 1 (basing)" alone told a reader nothing."""
+    lines = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 3, "stage_before": 2, "stage_changed": True}, "2026-10-01")
+    now = next(x["text"] for x in lines if x["text"].startswith("Now Stage"))
+    assert now.startswith("Now Stage 3 (topping) (the 150-day average has stopped rising") and now.endswith("was Stage 2 (advancing)")
+    still = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 1}, "2026-10-01")
+    assert any(x["text"].startswith("Still Stage 1 (basing) (the 150-day average has stopped falling") for x in still)

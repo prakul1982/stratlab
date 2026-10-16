@@ -19,6 +19,11 @@ FOOTER = "Facts from exchange filings, company documents and market data. Not in
 UNSUBSCRIBE = kit.UNSUBSCRIBE               # the sender fills this in per reader
 REGION_NAME = {"IN": "India", "US": "US"}
 STAGE_NAME = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
+# what the stage means, said once beside the first stage a stock's line names (round 39: "Stage 1 (basing)" alone told a reader nothing)
+STAGE_WHY = {1: "the 150-day average has stopped falling, or the price has climbed above a falling average",
+             2: "the price is above a rising 150-day average",
+             3: "the 150-day average has stopped rising, or the price is below a rising one",
+             4: "the price is below a falling 150-day average"}
 
 # words that turn a fact into advice, a forecast or hype; any of them drops the AI text (and a headline)
 BANNED = [r"\bbuy", r"\bsell", r"\bhold\b", r"\bholding on\b", r"\baccumulat", r"\btarget", r"\boutperform", r"\bunderperform",
@@ -121,9 +126,12 @@ def stock_lines(r: dict, since: str) -> list[dict]:
     if r.get("change_pct") is not None:
         lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} since {_day(r.get('since_day') or since)}", "url": None})
     if r.get("stage_changed"):
-        lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}, was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
+        lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
+                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else "")
+                              + f", was {STAGE_NAME.get(r['stage_before'], 'Stage ' + str(r['stage_before']))}", "url": None})
     elif r.get("stage"):
-        lines.append({"text": f"Still {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}", "url": None})
+        lines.append({"text": f"Still {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
+                              + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else ""), "url": None})
     if r.get("st_s2"):
         lines.append({"text": "Matches the Stage 2 rule with the price above its Supertrend (ST S2)", "url": None})
     for i in r.get("filings") or []:

@@ -467,3 +467,28 @@ def test_the_annual_report_read_carries_the_treasury_count():
     subs = {"cik": 1002242, "filings": {"recent": {"form": ["20-F"], "accessionNumber": ["0001554855-26-000390"], "primaryDocument": ["e-20251231.htm"]}}}
     got = s.ads(subs)
     assert got["treasury"] == 189_083_769 and got["ads"] is True and got["form"] == "20-F"
+
+
+def test_a_holding_change_is_in_percentage_points_not_percent():
+    """Round 39: "FIIs ownership fell by 2.41%" reads as a 2.41% fall of the holding; it is 2.41 percentage points."""
+    assert G.holding_points("FIIs ownership fell by 2.41%.") == "FIIs ownership fell by 2.41 percentage points."
+    assert G.holding_points("The FIIs cut their stake by 1.2 per cent.") == "The FIIs cut their stake by 1.2 percentage points."
+    assert G.holding_points("Promoter holding in the firm rose by 3%.") == "Promoter holding in the firm rose by 3 percentage points."
+    # other changes stay percentages
+    for same in ("Revenue rose by 5%.", "Holding company profit rose by 5%.", "The share price fell by 3%.", "FII holding fell by 2 percentage points."):
+        assert G.holding_points(same) == same
+    out = G.polish_company({"bull": ["FIIs ownership fell by 2.41%."], "bear": [], "watch": [], "ideas": []}, "IN")
+    assert out["bull"] == ["FIIs ownership fell by 2.41 percentage points."]
+
+
+def test_the_about_text_drops_an_older_year_ownership_sentence_when_the_page_has_a_newer_holding():
+    """Round 39: "As of 2024, Tata Sons owned 71.74%" beside a 2026 shareholding table."""
+    from app.intel.company import without_old_stake
+    page = {"as_of": "Sep 2026"}
+    wiki = {"extract": "Tata Motors makes vehicles. As of 2024, Tata Sons owned 71.74% of the company. It is listed in Mumbai.", "url": "x"}
+    got = without_old_stake(wiki, page)
+    assert got["extract"] == "Tata Motors makes vehicles. It is listed in Mumbai." and got["url"] == "x"
+    assert wiki["extract"].count("2024") == 1                       # the stored entry is not changed
+    assert without_old_stake("A. As of 2024, Tata Sons owned 71.74%. B.", page) == "A. B."
+    assert without_old_stake("A. As of 2026, Tata Sons owned 71.74%. B.", page) == "A. As of 2026, Tata Sons owned 71.74%. B."
+    assert without_old_stake("As of 2024, Tata Sons owned 71.74%.", None) == "As of 2024, Tata Sons owned 71.74%."

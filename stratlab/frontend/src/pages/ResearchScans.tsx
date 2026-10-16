@@ -12,6 +12,7 @@ import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
 import { scanningText } from "../lib/scanText";
 import { Info } from "../components/ui";
+import { STAGES_EXPLAINED } from "../lib/stageNote";
 import { unreadLine, unreadSymbols } from "../lib/filingsText";
 import { FilingRow, SummaryLine, type FilingItem, type FilingSummary } from "../components/Filings";
 import { QUADRANTS, QuadrantTag, RotationChart, useAnimate, type Quadrant, type RotationRow } from "../components/Rotation";
@@ -211,7 +212,7 @@ export function ScanPage() {
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "st", header: "Stage", cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
+              { key: "st", header: "Stage", info: STAGES_EXPLAINED, cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
               { key: "sp", header: "Supertrend", cell: (r) => <>{r.st_up ? "Up" : "Down"}<span className="k-sub-line">for {days(r.st_days)}</span></> },
               { key: "sg", header: "Signal", cell: (r) => (r.signal ? <Badge tone={SIGNAL[r.signal][0]} dot={false}>{SIGNAL[r.signal][1]}</Badge> : <span className="k-muted">–</span>) },
             ]} />

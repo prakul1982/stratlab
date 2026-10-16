@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, revisionLines, savePick, share, shortDay, thrustDays,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -95,7 +95,7 @@ export function BreadthPage() {
               <select id={id} className="k-input" aria-label="Group of stocks" value={group} onChange={(e) => pickGroup(e.target.value as GroupId)}>
                 {(["IN", "US"] as const).map((r) => (
                   <optgroup key={r} label={r === "IN" ? "India" : "United States"}>
-                    {(data?.groups ?? []).filter((x) => x.region === r).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    {orderGroups((data?.groups ?? []).filter((x) => x.region === r), r).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                     {!data && r === "IN" && <option value={group}>Loading…</option>}
                   </optgroup>
                 ))}
