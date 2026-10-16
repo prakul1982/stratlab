@@ -1,10 +1,22 @@
 """The investor checklist: fixed, written-down rules run on a company's reported numbers, its price trend, its filings
-and its management report card. Each check says pass, watch or fail with the number behind it.
+and its management report card. Each check says where the number sits against its stated threshold (the states are kept as pass, watch and fail; those
+words are never shown).
 
 These are screening rules the user can read and disagree with, not a view on the stock; the page says so."""
 from . import industry
 from .deepdive import money, part_year
 from .intel.screener import summary
+
+# what each state is called wherever a reader sees it: a fact against a stated threshold, never a verdict (round 39)
+STATE_WORDS = {"pass": "Meets threshold", "watch": "Between thresholds", "fail": "Outside threshold", "na": "No data"}
+
+
+def counts_line(c: dict) -> str:
+    """"11 meet the stated threshold · 3 between the two thresholds · 0 outside the stated threshold"."""
+    na = c.get("na") or 0
+    return (f"{c['pass']} meet the stated threshold · {c['watch']} between the two thresholds · "
+            f"{c['fail']} outside the stated threshold" + (f" · {na} without data" if na else ""))
+
 
 GROUPS = ["Trend", "Growth", "Quality", "Balance sheet", "Cash", "Promoters", "Insiders", "Filings", "Management"]
 
@@ -82,7 +94,7 @@ def evaluate(p: dict, nums: dict, filings_summary: dict | None = None, trend: di
     def add(group, label, state, value, rule, soft=False):
         """`soft`: this industry's normal shape would fail the rule, so a fail shows as watch, saying why."""
         if soft and state == "fail":
-            state, rule = "watch", f"{rule} Shown as watch for {ind['label'].lower()}."
+            state, rule = "watch", f"{rule} Shown as between the two thresholds for {ind['label'].lower()}."
         out.append({"group": group, "label": label, "state": state, "value": value, "rule": rule})
 
     # trend

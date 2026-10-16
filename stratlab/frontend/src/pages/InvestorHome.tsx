@@ -1,4 +1,5 @@
 import { trendBadge } from "../lib/glance";
+import { checkCountsLine } from "../lib/checklistText";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
@@ -98,10 +99,10 @@ export function InvestorHomePage() {
                 <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{trendBadge(r.stage, r.signal) && <> · <Badge tone="plain" dot={false}>{trendBadge(r.stage, r.signal)}</Badge></>}</>}</Cell>
                 <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>
                 {!us && <Cell label="Filings, last 3 months">{r.red == null ? "–" : r.red ? <span>{r.red} red flag{r.red === 1 ? "" : "s"}</span> : "No red flags"}{r.fund_raise ? " · fund raise filed" : ""}</Cell>}
-                <Cell label="Checklist">{r.checks ? <><b>{r.checks.pass} pass</b> · {r.checks.watch} watch · {r.checks.fail} fail</> : "–"}</Cell>
+                <Cell label="Checklist">{r.checks ? checkCountsLine(r.checks) : "–"}</Cell>
                 <Cell label="Management report card">{r.card ? `${r.card.met} of ${r.card.met + r.card.missed} targets met` : "Not checked yet"}</Cell>
               </div>
-              {r.fails.length > 0 && <p className="k-note">Failed checks: {r.fails.join(" · ")}</p>}
+              {r.fails.length > 0 && <p className="k-note">Outside the stated threshold: {r.fails.join(" · ")}</p>}
             </Card>
           ))}
           <p className="k-note inv-text">Checks use fixed rules shown on each company's deep dive. The report card appears once someone has checked that company's past calls. Nothing here is investment advice.</p>

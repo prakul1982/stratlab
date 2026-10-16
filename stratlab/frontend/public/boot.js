@@ -4,7 +4,7 @@
 (function () {
   var KEY = "stratlab.reloaded";
   var WAIT = 60 * 1000;          // a second failure within this time shows the message instead of reloading again
-  var SLOW = 20 * 1000;          // the app has not drawn anything after this long
+  var SLOW = 10 * 1000;          // the app has not drawn anything after this long: say so, with a Reload button (round 39: Safari sat on "Opening…" for 20 s)
 
   function once() {
     try {
@@ -18,26 +18,37 @@
     return true;
   }
 
-  function show(force) {
+  function show(force, slow) {
     var root = document.getElementById("root");
     if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;       // once the app has drawn, its own error screen does this
-    root.textContent = "";
+    // a page whose words are already in the HTML (the policies, the 404): keep them readable and put the notice above them
+    var keep = root.querySelector("[data-readable]");
+    keep = keep && keep.hasAttribute && keep.hasAttribute("data-readable") ? keep : null;
+    if (!keep) root.textContent = "";
     var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
     var box = document.createElement("div");
     box.className = "boot boot-now";
     box.setAttribute("role", "alert");
+    if (slow) box.setAttribute("data-slow", "1");
     main.appendChild(box);
     var h = document.createElement("h1");
-    h.textContent = "Couldn't load StratLab.";
+    h.textContent = slow ? "Taking longer than usual" : "Couldn't load StratLab.";
     var p = document.createElement("p");
-    p.textContent = "A file didn't download, which is usually a dropped connection. Reload to try again.";
+    p.textContent = slow ? "StratLab is still opening. If nothing changes, reload to try again."
+      : "A file didn't download, which is usually a dropped connection. Reload to try again.";
     var b = document.createElement("button");
     b.type = "button";
     b.className = "boot-btn";
     b.textContent = "Reload";
     b.addEventListener("click", function () { location.reload(); });
     box.appendChild(h); box.appendChild(p); box.appendChild(b);
-    root.appendChild(main);
+    if (keep) {
+      if (root.querySelector(".boot-now")) return;
+      box.style.paddingTop = "16px";
+      main.setAttribute("role", "presentation");      // the page's own main stays the main landmark
+      root.insertBefore(main, root.firstChild);
+      if (keep.classList) keep.classList.remove("boot-wait");     // shown now, not after the fade-in delay
+    } else root.appendChild(main);
   }
 
   /** A file failed to load: reload once, else say so. */
@@ -102,6 +113,11 @@
   // the page is still the plain start-up text after a long wait
   setTimeout(function () {
     var root = document.getElementById("root");
-    if (root && root.querySelector("[data-boot]")) show();
+    if (root && root.querySelector("[data-boot]")) show(false, true);
   }, SLOW);
+  // still nothing at twice that: the plain "couldn't load" card in its place
+  setTimeout(function () {
+    var root = document.getElementById("root");
+    if (root && root.querySelector("[data-boot], [data-slow]")) show();
+  }, SLOW * 2);
 })();

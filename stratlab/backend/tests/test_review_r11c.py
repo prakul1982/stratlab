@@ -160,7 +160,7 @@ def test_the_headline_is_facts_like_the_library_card():
     checks = [{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "skip"}, {"id": "shuffle", "status": "pass"},
               {"id": "sample", "status": "pass"}]
     head = V.fact_headline("edge", checks, 250, 55.8, 172.9)
-    assert head == "117.1 points behind buy and hold after costs; passed all 3 checks run."
+    assert head == "117.1 points behind buy and hold after costs; 3 of 4 checks run · all 3 passed."
     for words in V.HEADLINES.values():
         assert not any(x in words for x in ("Likely", "real edge", "Probably", "luck"))
 
@@ -169,7 +169,7 @@ def test_a_verdict_stored_with_a_claim_is_shown_with_its_facts(monkeypatch):
     v = {"verdict": "edge", "headline": "Likely a real edge.", "checks": [{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "skip"},
                                                                          {"id": "shuffle", "status": "pass"}, {"id": "sample", "status": "pass"}]}
     got = V.restated(v, {"n": 250, "ret": 55.8, "buy_hold_ret": 172.9})
-    assert got["headline"] == "117.1 points behind buy and hold after costs; passed all 3 checks run."
+    assert got["headline"] == "117.1 points behind buy and hold after costs; 3 of 4 checks run · all 3 passed."
     assert V.restated({**v, "headline": "Something new."}, {})["headline"] == "Something new."     # only the old claims
     monkeypatch.setattr(public.db, "get_setting", lambda k: json.dumps({"question": "", "verdict": v, "stats": {"n": 250, "ret": 55.8, "buy_hold_ret": 172.9}}))
     assert public.load("NlpCFMRAhSA")["verdict"]["headline"].startswith("117.1 points behind")

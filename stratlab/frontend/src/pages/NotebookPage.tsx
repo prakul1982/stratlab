@@ -218,13 +218,15 @@ function NotebookView() {
   const picked = spanDays(days) ?? Number(days);
   // the first test covers years of prices, as the page promises: 5 years of daily candles (or all there is), a
   // shorter span of intraday ones (R5O-010)
-  const fallbackPeriod = s.tf === "1d" ? [...periods].reverse().find((d) => d <= DEFAULT_DAILY_DAYS) : periods[Math.min(1, periods.length - 1)];
+  const last = (nb.experiments ?? []).slice(-1)[0] as Experiment | undefined;
+  // the test period the last run used, when this notebook still offers it: the next run starts there, not back at 5 years (round 39)
+  const lastDays = last && last.tf === s.tf && periods.includes(last.days) ? last.days : undefined;
+  const fallbackPeriod = lastDays ?? (s.tf === "1d" ? [...periods].reverse().find((d) => d <= DEFAULT_DAILY_DAYS) : periods[Math.min(1, periods.length - 1)]);
   const period = periods.includes(picked) || spanDays(days) != null ? picked : fallbackPeriod ?? 365;
   const periodValue = periods.includes(period) ? String(period) : days;
   const isUpload = inst?.market === "CSV";
   const experiments = [...(nb.experiments || [])].reverse();
   const nextV = ((nb.experiments ?? []).slice(-1)[0]?.v ?? 0) + 1;
-  const last = (nb.experiments ?? []).slice(-1)[0] as Experiment | undefined;
 
   // saving rules saves the rules: the notebook's name is the person's, and only a name the notebook was given (none, or
   // the strategy's own) follows a new strategy name (R11C-001: every rule edit put "TCS SMA Crossover" over the name typed)
@@ -372,7 +374,7 @@ function NotebookView() {
     <div className="nb-grid">
       <div className="k-page">
         <PageHeader eyebrow="Trade · Build and test" title={nb.name}
-          lede={nb.question || "Write the question this notebook should answer."}
+          lede={nb.question ? <span title={s.text && s.text.trim() !== nb.question ? s.text.trim() : undefined} data-testid="nb-question">{nb.question}</span> : "Write the question this notebook should answer."}
           actions={<span className="k-note" aria-live="polite">{saving === "failed"
             ? <button type="button" className="link k-down" data-testid="save-retry" onClick={() => void flush()}>Not saved · Retry</button>
             : saving === "saving" ? "Saving…" : saving === "saved" ? "Saved" : ""}</span>} />

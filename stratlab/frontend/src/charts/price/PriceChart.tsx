@@ -7,6 +7,7 @@ import { TOOL, TOOL_HINT, type Drawing, type DrawingKind } from "./drawings";
 import { DrawRail, DrawSheet, HistoryButtons, SelectionBar, ShortcutsButton } from "./DrawToolbar";
 import { choose, fetchRemote, pushRemote, readLocal, writeLocal, type Layout } from "./drawSync";
 import type { ScaleMode } from "./scales";
+import { STAGE_MEANING } from "../../lib/stageNote";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
 import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
 import { ChipBar } from "../../components/kit/ChipBar";
@@ -638,7 +639,7 @@ const [saveNote, setSaveNote] = useState("");
                   !!s.lines[0].dash || (typeof s.lines[0].color === "number" && s.lines[0].color >= 3))}
                 <span>{s.label}</span>
                 {s.lines.map((l) => <span key={l.name} className="num">{s.lines.length > 1 && <span className="k">{l.name}</span>}{i >= 0 ? fmt(l.values[i]) : "–"}</span>)}
-                {s.stage && i >= 0 && Number.isFinite(s.stage[i]) && <span>{STAGE_NAMES[s.stage[i]]}</span>}
+                {s.stage && i >= 0 && Number.isFinite(s.stage[i]) && <span title={STAGE_MEANING[s.stage[i]]}>{STAGE_NAMES[s.stage[i]]}</span>}
                 {s.hist && i >= 0 && <span><span className="k">Gap</span>{fmt(s.hist[i])}</span>}
                 {own && <button type="button" aria-label={`Settings for ${s.label}`} title="Settings" onClick={() => setEdit(edit === s.config.id ? null : s.config.id)}>⚙</button>}
                 <button type="button" aria-label={`Remove ${s.label}`} title="Remove" onClick={() => removeStudy(s.config.id)}>✕</button>

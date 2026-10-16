@@ -9,6 +9,7 @@ register("data:text/javascript," + encodeURIComponent(`export async function res
 
 const { selfMultipleNote, meaningful } = await import("../src/lib/rules.ts");
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
+const legalSrc = () => read("src/content/legal.ts").replace(/\\"/g, '"');
 
 test("R29C-006: a price against a multiple of the price is said to be never true, with the target or stop that was meant", () => {
   const up = { l: { t: "price" }, op: "gt", r: { t: "price", k: 1.05 } };
@@ -23,7 +24,7 @@ test("R29C-006: a price against a multiple of the price is said to be never true
 });
 
 test("R29C-007: /privacy names Telegram only as offered in Settings", () => {
-  const src = read("src/pages/LegalPage.tsx");
+  const src = legalSrc();
   assert.equal(src.split("\n").filter((l) => l.includes("Telegram")).length, 2);
   assert.match(src, /if Telegram is offered in Settings and you connect it/);
   assert.match(src, /if it is offered in Settings and you connect it/);

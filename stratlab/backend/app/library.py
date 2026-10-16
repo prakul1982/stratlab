@@ -192,7 +192,8 @@ def label(e: dict) -> str:
             return "Passed the checks"
         if passed == len(CHECK_IDS):
             return "Passed all four checks"
-        return f"Passed {passed} of the {len(run)} checks run" if passed < len(run) else f"Passed all {len(run)} checks run"
+        return (f"{len(run)} of {len(CHECK_IDS)} checks run · all {len(run)} passed" if passed == len(run)
+                else f"Passed {passed} of the {len(run)} checks run")
     if v == "luck":
         by = {c["id"]: c["status"] for c in checks_of(e)}
         if by.get("unseen") == "fail":
@@ -221,7 +222,7 @@ def restated(e: dict) -> dict:
     out: list[str] = []
     if hold:
         diff = "" if abs(hold["gap"]) < 0.05 else f", {abs(hold['gap']):.1f} points {'more' if hold['gap'] < 0 else 'less'}"
-        out.append(f"It returned {_pc(hold['ret'])} after costs; buying and holding over the same period returned "
+        out.append(f"It returned {_pc(hold['ret'])} in total over the test, after costs; buying and holding over the same period returned "
                    f"{_pc(hold['hold'])}{diff}.")
     n = st.get("trades")
     kind = v.get("verdict")
@@ -409,11 +410,34 @@ def take_down(experiments: list[dict]):
         remove(e.get("library"))
 
 
+def same_hold(entries: list[dict]) -> list[dict]:
+    """Entries on the same thing (one group or instrument, one candle size) over the same first and last day show the
+    same buy-and-hold figure. Each was run on its own day, and a run's buy-and-hold is worked out from the candles it
+    loaded then, so two strategies on one index over the same dates could differ by a tenth of a point (+67.9% beside
+    +68.0%). The entry whose id sorts first sets the figure for the others; entries with different dates keep their own."""
+    first: dict[tuple, dict] = {}
+    for e in sorted(entries, key=lambda x: str(x.get("id"))):
+        r, h = e.get("range") or {}, (e.get("stats") or {}).get("buy_hold")
+        if not r.get("from") or not r.get("to") or not isinstance(h, (int, float)):
+            continue
+        k = ((e.get("group") or {}).get("id"), (e.get("instrument") or {}).get("id"), e.get("tf"), str(r["from"])[:10], str(r["to"])[:10])
+        first.setdefault(k, e)
+    out = []
+    for e in entries:
+        r = e.get("range") or {}
+        k = ((e.get("group") or {}).get("id"), (e.get("instrument") or {}).get("id"), e.get("tf"), str(r.get("from"))[:10], str(r.get("to"))[:10])
+        ref = first.get(k)
+        if ref is not None and ref is not e and ref["stats"]["buy_hold"] != e["stats"]["buy_hold"]:
+            e = {**e, "stats": {**e["stats"], "buy_hold": ref["stats"]["buy_hold"]}}
+        out.append(e)
+    return out
+
+
 def public_entries() -> list[dict]:
     """StratLab's own visible entries, for the routes that need no sign-in (kept for a minute)."""
     import time
     if time.time() - _official_cache[0] >= OFFICIAL_TTL:
-        _official_cache[:] = [time.time(), [e for e in all_entries(everything=True) if is_public(e)]]
+        _official_cache[:] = [time.time(), same_hold([e for e in all_entries(everything=True) if is_public(e)])]
     return _official_cache[1]
 
 

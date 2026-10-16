@@ -141,3 +141,15 @@ def test_deck_survives_sparse_and_odd_data():
     for build in (deck.build, deck.build_pdf):
         assert build(v)
     assert len(PdfReader(io.BytesIO(deck.build_pdf(v))).pages) == len(Presentation(io.BytesIO(deck.build(v))).slides)
+
+
+def test_the_checklist_reads_against_a_stated_threshold_with_no_pass_or_fail_words():
+    """Round 39: StratLab states facts, so the count line and the deck's results say where a figure sits against its threshold."""
+    assert checklist.counts_line({"pass": 11, "watch": 3, "fail": 0, "na": 0}) == \
+        "11 meet the stated threshold · 3 between the two thresholds · 0 outside the stated threshold"
+    assert checklist.counts_line({"pass": 1, "watch": 0, "fail": 2, "na": 5}).endswith("· 5 without data")
+    assert not {"Pass", "Watch", "Fail"} & set(checklist.STATE_WORDS.values())
+    assert not {"Pass", "Watch", "Fail"} & {label for label, _ in deck.STATE.values()}
+    prs = Presentation(io.BytesIO(deck.build(view_for_deck())))
+    text = " ".join(sh.text_frame.text for s in prs.slides for sh in s.shapes if sh.has_text_frame)
+    assert "meet the stated threshold" in text and " pass · " not in text and " fail" not in text.replace("failed", "")

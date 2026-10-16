@@ -47,7 +47,7 @@ def test_rules_soften_for_the_industry_that_would_always_fail():
     p["balance"]["rows"]["Equity Capital"] = [1] * 6
     p["industry_path"] = ["Utilities", "Power", "Power Generation"]
     grp, c = labels(p)
-    assert grp == "utility" and c["Total debt / equity"]["state"] == "watch" and "Shown as watch for power" in c["Total debt / equity"]["rule"]
+    assert grp == "utility" and c["Total debt / equity"]["state"] == "watch" and "Shown as between the two thresholds for power" in c["Total debt / equity"]["rule"]
     p["industry_path"] = ["Capital Goods", "Industrial Machinery"]
     grp, c = labels(p)
     assert grp == "general" and c["Total debt / equity"]["state"] == "fail"

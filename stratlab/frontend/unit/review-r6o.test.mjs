@@ -121,3 +121,40 @@ test("Rotation's chart is a group with tappable points, not an image holding but
   assert.match(css, /\.k-th-sort \{ min-height: 32px; display: inline-flex; align-items: center; \}/);
   assert.match(css, /\.k-card-head a, \.k-card-head \.btn\.sm, \.inv-head-price a \{ min-height: 32px; \}/);
 });
+
+test("round 39: the breadth picker lists the group the page opens on first, and the card names its group", async () => {
+  const { orderGroups, MARKET_GROUP } = await import("../src/lib/breadthPick.ts");
+  const g = (id) => ({ id });
+  const india = ["nse_all", "nifty50", "nifty500", "midcap150", "smallcap250"].map(g);
+  assert.deepEqual(orderGroups(india, "IN").map((x) => x.id), ["nifty500", "nse_all", "nifty50", "midcap150", "smallcap250"]);
+  assert.equal(orderGroups(india, "IN")[0].id, MARKET_GROUP.IN);             // the first one shown is the one opened
+  assert.deepEqual(orderGroups(["us_large", "sp500"].map(g), "US").map((x) => x.id), ["sp500", "us_large"]);
+  assert.match(read("src/pages/BreadthPage.tsx"), /orderGroups\(\(data\?\.groups \?\? \[\]\)\.filter\(\(x\) => x\.region === r\), r\)/);
+  assert.match(read("src/components/BreadthCard.tsx"), /title=\{d && d !== "error" \? `Market breadth · \$\{d\.group\.name\}` : "Market breadth"\}/);
+});
+
+test("round 39: the service worker never answers a page's start-up files with an error response", async () => {
+  const vm = await import("node:vm");
+  const src = read("public/sw.js");
+  assert.doesNotMatch(src, /hit \|\| Response\.error\(\)/);
+  const handlers = {};
+  const caches = { open: async () => ({ put: async () => undefined, add: async () => undefined }), match: async () => undefined, keys: async () => [], delete: async () => true };
+  class Response { constructor(body, init) { this.body = body; this.status = init.status; this.headers = init.headers; } static error() { return "error"; } }
+  const self = { addEventListener: (t, f) => { handlers[t] = f; }, location: { origin: "https://stratlab.studio" }, skipWaiting() {}, clients: { claim() {} } };
+  // the worker's own fetch fails and nothing is kept: one plain network request, which answers
+  let calls = 0;
+  const fetch = () => { calls += 1; return calls === 1 ? Promise.reject(new Error("Load failed")) : Promise.resolve({ ok: true, status: 200, headers: { get: () => "text/javascript" }, clone() { return this; } }); };
+  vm.runInNewContext(src, { self, caches, fetch, URL, Response, Promise, setTimeout });
+  let answer;
+  handlers.fetch({ request: { method: "GET", url: "https://stratlab.studio/boot.js", mode: "no-cors" }, respondWith: (p) => { answer = p; } });
+  const got = await answer;
+  assert.equal(got.status, 200, "no kept copy: the plain network request answers");
+  assert.equal(calls, 2);
+  // the network is down both times and nothing is kept: an ordinary answer, not Response.error()
+  const down = () => Promise.reject(new Error("Load failed"));
+  vm.runInNewContext(src, { self, caches, fetch: down, URL, Response, Promise, setTimeout });
+  handlers.fetch({ request: { method: "GET", url: "https://stratlab.studio/config.js", mode: "no-cors" }, respondWith: (p) => { answer = p; } });
+  const none = await answer;
+  assert.notEqual(none, "error");
+  assert.equal(none.status, 503);
+});

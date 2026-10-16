@@ -6,19 +6,20 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+const legalSrc = () => read("src/content/legal.ts").replace(/\\"/g, '"');
 
 test("R29A-002: the landing page, All features and the alerts help say phone or email, not Telegram", () => {
   assert.match(read("src/pages/Login.tsx"), /On your phone or by email, including every paper trade\./);
   assert.doesNotMatch(read("src/pages/Login.tsx"), /Telegram/);
   assert.match(read("src/lib/features.ts"), /what: "On your phone or by email for each trade/);
   assert.doesNotMatch(read("src/lib/help.ts"), /alerts: "Get a Telegram/);
-  const legal = read("src/pages/LegalPage.tsx");
+  const legal = legalSrc();
   assert.match(legal, /a Telegram chat ID if Telegram is offered in Settings and you connect it/);
   assert.match(legal, /Telegram delivers them if it is offered in Settings and you connect it/);
 });
 
 test("R29A-005: Privacy quotes the Account buttons as they read, with one updated date", () => {
-  const legal = read("src/pages/LegalPage.tsx"), account = read("src/pages/AccountPage.tsx");
+  const legal = legalSrc(), account = read("src/pages/AccountPage.tsx");
   for (const label of ["Download all my data", "Delete all my data"]) {
     assert.match(legal, new RegExp(`"${label}"`));
     assert.ok(account.includes(label), label);

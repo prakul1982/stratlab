@@ -71,7 +71,7 @@ test("R8O-009: the start-up and error shells have a main landmark and a heading"
   const html = read("index.html");
   assert.match(html, /<html lang="en">/);
   assert.match(html, /<title>[^<]+<\/title>/);
-  assert.match(html, /<div id="root">\s*<main>\s*<div class="boot[^"]*" data-boot>\s*<h1>/);
+  assert.match(html, /<div id="root">\s*(?:<header[^>]*>[\s\S]*?<\/header>\s*)?<main>\s*<div class="boot[^"]*" data-boot>\s*<h1>/);
   assert.match(read("public/boot.js"), /createElement\("main"\)[\s\S]*createElement\("h1"\)/);
   assert.match(read("src/components/LoadGuard.tsx"), /<main><LoadFailed \/><\/main>/);
   // the closing auction's card headings follow the page's h1 (axe heading-order)

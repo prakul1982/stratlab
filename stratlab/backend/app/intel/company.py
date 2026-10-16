@@ -402,6 +402,28 @@ def is_lender(scr: dict | None = None, industry: str | None = None) -> bool:
     return bool(low) and any(w in low for w in US_LENDERS)
 
 
+_OLD_STAKE = re.compile(r"\bas of (?:\w+ )?(\d{4})\b[^.!?]*\b(?:owned|owns|held|holds)\b[^.!?]*\d+(?:\.\d+)?\s?%", re.I)
+
+
+def without_old_stake(about, holding: dict | None):
+    """A company's About text (a string, or an encyclopedia entry with an "extract") without a sentence that quotes who owned
+    what "as of" a year older than the shareholding the page itself shows ("As of 2024, Tata Sons owned 71.74%" beside a
+    2026 table): the page's own, newer figure stands, and a year-old one beside it reads as a contradiction (round 39)."""
+    year = re.search(r"\b(\d{4})\b", str((holding or {}).get("as_of") or ""))
+    if not year or not about:
+        return about
+
+    def clean(text):
+        if not isinstance(text, str):
+            return text
+        kept = [x for x in re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
+                if not ((m := _OLD_STAKE.search(x)) and int(m.group(1)) < int(year.group(1)))]
+        return " ".join(kept)
+    if isinstance(about, dict):
+        return {**about, "extract": clean(about.get("extract"))} if "extract" in about else about
+    return clean(about)
+
+
 def class_move_note(rows: list[dict]) -> str | None:
     """A note when two holder classes moved by about the same amount in opposite directions over the year (ICICIBANK,
     Jun 2026: FIIs -13.0 and Public +14.6 points while a depositary bank, 16.03%, appeared among the named holders):
@@ -1116,7 +1138,7 @@ class Research:
             "earnings": [], "next_earnings": None, "analysts": None, "insider": None, "peers": [],
             # a name search also brings the market's and other companies' headlines: only the ones about this company
             "news": [n for n in (r2.get("news") or []) if company_headline(clean, sym, n.get("headline"))],
-            "about": {"wiki": r2.get("wiki"), "profile": clean_profile((scr or {}).get("about"))},
+            "about": {"wiki": without_old_stake(r2.get("wiki"), holding), "profile": without_old_stake(clean_profile((scr or {}).get("about")), holding)},
             "sources": sources + sources2,
             "links": [{"label": "Screener.in", "kind": "financials", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
                      + ([{"label": "BSE", "kind": "exchange", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),

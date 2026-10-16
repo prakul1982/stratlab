@@ -1,149 +1,38 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CFG } from "../lib/config";
 import { publicGet } from "../lib/http";
 import { Logo } from "../components/Logo";
 import { LEGAL_PAGES } from "../components/LegalLinks";
 import { SkipLink } from "../components/SkipLink";
+import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED, type Business } from "../content/legal";
 
 /** Who runs the site, from config.js, so the policies name the real business without a code change. */
-const BUSINESS = {
-  name: CFG.BUSINESS_NAME || "StratLab",
-  email: CFG.CONTACT_EMAIL || "support@stratlab.studio",
-  billing: CFG.BILLING_EMAIL || "billing@stratlab.studio",
-  privacy: CFG.PRIVACY_EMAIL || "privacy@stratlab.studio",
+const BUSINESS: Business = {
+  name: CFG.BUSINESS_NAME || DEFAULT_BUSINESS.name,
+  email: CFG.CONTACT_EMAIL || DEFAULT_BUSINESS.email,
+  billing: CFG.BILLING_EMAIL || DEFAULT_BUSINESS.billing,
+  privacy: CFG.PRIVACY_EMAIL || DEFAULT_BUSINESS.privacy,
   address: CFG.BUSINESS_ADDRESS || "",
   gstin: CFG.BUSINESS_GSTIN || "",
 };
 
-/** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-const UPDATED: Record<string, string> = { "/terms": "15 October 2026", "/privacy": "15 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
+/** One string of the policy text (content/legal.ts, also written into each page's HTML at build time) as React nodes. */
+const Inline = ({ text }: { text: string }) => (
+  <>{inline(text, BUSINESS).map((t, i) => t.t === "b" ? <b key={i}>{t.s}</b> : t.t === "code" ? <code key={i}>{t.s}</code>
+    : t.t === "mail" ? <a key={i} className="link" href={`mailto:${t.to}`}>{t.s}</a>
+    : t.t === "link" ? <Link key={i} className="link" to={t.to}>{t.s}</Link> : <span key={i}>{t.s}</span>)}</>
+);
 
-const Mail = () => <a className="link" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a>;
-const BillingMail = () => <a className="link" href={`mailto:${BUSINESS.billing}`}>{BUSINESS.billing}</a>;
-const PrivacyMail = () => <a className="link" href={`mailto:${BUSINESS.privacy}`}>{BUSINESS.privacy}</a>;
-
-function Terms() {
+function Policy({ path }: { path: string }) {
   return (
     <>
-      <p>These terms cover your use of StratLab (the website and app at stratlab.studio), run by {BUSINESS.name}. By signing in you agree to them.</p>
-      <h2 className="h3">What StratLab is</h2>
-      <p>StratLab is a research and education tool. You describe trading ideas, test them on past market data, and paper trade them with simulated money. <b>No real orders are ever placed.</b> Nothing on StratLab is investment advice or a recommendation to buy or sell anything, and {BUSINESS.name} is not a SEBI-registered investment adviser or research analyst. Past results, including backtests and paper trading, don't predict future returns. Decisions you make with real money are yours.</p>
-      <h2 className="h3">Your account</h2>
-      <ul>
-        <li>You sign in with a Google account and must be at least 18.</li>
-        <li>Keep your account to yourself. One person, one account: making extra accounts to get around plan limits isn't allowed.</li>
-        <li>You're responsible for what happens under your account.</li>
-      </ul>
-      <h2 className="h3">Plans and payment</h2>
-      <ul>
-        <li>Paid plans are billed only once they are on sale; the Plans page shows whether they are.</li>
-        <li>The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly at the prices on the Plans page when you subscribe: in Indian rupees, or in your own currency where the Plans page says so. When a price is shown in another currency but charged in rupees, your card provider converts it and may add its own fee. {BUSINESS.gstin && "Rupee prices include 18% GST."}</li>
-        <li>Payments are processed by Razorpay. {BUSINESS.name} never sees or stores your card or bank details.</li>
-        <li>A subscription renews automatically at the end of each period until you cancel it. You can cancel any time from the Account page; see <Link className="link" to="/refunds">Cancellation and refunds</Link>.</li>
-        <li>If we change a price, it applies from your next renewal after we've told you, and you can cancel before then.</li>
-      </ul>
-      <h2 className="h3">Fair use</h2>
-      <p>Don't misuse the service: no scraping or automated bulk requests, no attempts to break its security or reach other people's data, no reselling access, and nothing unlawful. Plan limits (experiments, AI builds, paper sessions) apply per account. We may limit or suspend accounts that misuse the service.</p>
-      <h2 className="h3">What you publish</h2>
-      <p>Strategies you publish to the public library, and verdicts you share by link, can be seen by anyone with access. Only publish what you're happy to share. You keep ownership of your ideas and let us display what you publish. We may remove published content that's misleading, abusive or unlawful.</p>
-      <h2 className="h3">Market data and AI</h2>
-      <p>Prices come from brokers and public sources and can be delayed, incomplete or wrong. AI features can make mistakes: check any rules or research the AI writes before relying on them. The service is provided "as is", and features may change.</p>
-      <h2 className="h3">Liability</h2>
-      <p>To the extent the law allows, {BUSINESS.name} isn't liable for trading losses or indirect losses arising from using StratLab, and our total liability to you is limited to what you paid us in the 12 months before the claim.</p>
-      <h2 className="h3">Ending</h2>
-      <p>You can stop using StratLab and cancel at any time. We may end the service or an account with notice, or without notice for misuse. These terms are governed by the laws of India, and courts in India have jurisdiction.</p>
-      <h2 className="h3">Changes</h2>
-      <p>If these terms change in an important way we'll say so in the app before the change applies. Questions: <Mail />.</p>
+      {LEGAL_BLOCKS[path].map((b, i) => "h" in b ? <h2 key={i} className="h3">{b.h}</h2>
+        : "p" in b ? <p key={i} className={b.small ? "small muted" : undefined}><Inline text={b.p} /></p>
+        : <ul key={i}>{b.ul.filter((li) => typeof li === "string" || BUSINESS[li.when]).map((li, j) => <li key={j}><Inline text={typeof li === "string" ? li : li.text} /></li>)}</ul>)}
     </>
   );
 }
-
-function Privacy() {
-  return (
-    <>
-      <p>This policy explains what {BUSINESS.name} collects when you use StratLab, why, and your choices. It is written to meet India's Digital Personal Data Protection Act, 2023.</p>
-      <h2 className="h3">What we collect</h2>
-      <ul>
-        <li><b>Your Google account's email and ID</b>, to sign you in.</li>
-        <li><b>What you create:</b> notebooks, strategies, experiments, paper trading sessions, watchlists and settings.</li>
-        <li><b>Usage counts</b>, such as experiments and AI builds this month, to apply plan limits.</li>
-        <li><b>Alert contacts you choose to add:</b> an email address, each device's notification address if you turn on phone notifications, and a Telegram chat ID if Telegram is offered in Settings and you connect it.</li>
-        <li><b>Billing records:</b> your plan and Razorpay subscription ID. Card, UPI and bank details go to Razorpay only.</li>
-        <li><b>Usage analytics:</b> which pages you open and which features you use (such as running a backtest or saving a screen), and when a page breaks, the error's type and message with any addresses, IDs and long numbers removed; without your holdings, symbols you search or amounts. No screen recordings or typed text. Before you sign in, this is tied only to a random ID made in your browser, not to any account. Once you sign in, it is linked to your account's internal ID, never your email or name. Not collected at all if your browser sends Do Not Track or Global Privacy Control.</li>
-        <li><b>Technical logs:</b> request logs and error reports kept to run and fix the service. Error reports carry no email, IP address or request contents.</li>
-      </ul>
-      <h2 className="h3">How it's used</h2>
-      <p>Only to run StratLab: sign-in, running your tests and paper sessions, sending the alerts you asked for, billing, preventing abuse, and fixing problems. We don't sell your data, and there are no advertising trackers.</p>
-      <h2 className="h3">Who processes it for us</h2>
-      <ul>
-        <li>Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.</li>
-        <li>Razorpay processes payments.</li>
-        <li>AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.</li>
-        <li>Our email provider delivers the alerts you turn on by email, and Telegram delivers them if it is offered in Settings and you connect it. Sentry receives error reports without personal details.</li>
-        <li>PostHog (hosted in the US) receives the usage analytics described above.</li>
-      </ul>
-      <p>Some of these providers store data outside India, under their own security and privacy commitments.</p>
-      <h2 className="h3">Cookies and storage</h2>
-      <p>StratLab sets no cookies itself. It uses your browser's local storage, which stays on your device until you clear it, and session storage, which goes when you close the tab. Nothing is used for advertising.</p>
-      <ul>
-        <li><b>Before you sign in</b>, on your first visit: a preference for light or dark mode and for the currency prices are shown in, a note that the page reloaded once if a file failed to load, and, when usage analytics are on, one entry from PostHog (its name starts with <code>ph_</code>) holding a random anonymous ID and session details. That PostHog entry is not made, and no analytics request is sent, if your browser sends Do Not Track or Global Privacy Control.</li>
-        <li><b>While Google sign-in runs:</b> the page to come back to, and an invite code if you arrived by a friend's link.</li>
-        <li><b>After you sign in:</b> your sign-in session, which the sign-in service refreshes, and a few choices such as which menu is open and whether you have seen the tour.</li>
-        <li><b>To pay:</b> Razorpay's payment window can set its own cookies and storage on its own pages and windows.</li>
-      </ul>
-      <p>You can clear all of this from your browser's settings; you will be signed out and the choices above reset.</p>
-      <h2 className="h3">Keeping and deleting</h2>
-      <p>We keep your data while your account is open. You can delete notebooks and sessions yourself at any time. The Account page has "Download all my data" to get a copy of what we hold, and "Delete all my data" to erase it. Or email <PrivacyMail /> to see what we hold, correct it, or delete your account and its data; we'll act within 30 days. Billing records may be kept longer where tax law requires.</p>
-      <h2 className="h3">Security</h2>
-      <p>Data is sent over HTTPS, access is limited to your own account, and secrets stay on the server. No system is perfectly secure; if a breach affects you, we'll tell you as the law requires.</p>
-      <h2 className="h3">Children</h2>
-      <p>StratLab is for adults (18+). We don't knowingly collect children's data.</p>
-      <h2 className="h3">Contact and grievances</h2>
-      <p>For privacy questions, requests or complaints, email <PrivacyMail />. If you're not satisfied, you can complain to the Data Protection Board of India.</p>
-    </>
-  );
-}
-
-function Refunds() {
-  return (
-    <>
-      <h2 className="h3">Cancelling</h2>
-      <ul>
-        <li>Cancel any time from <b>Account → Plan → Cancel subscription</b>. No questions, no calls.</li>
-        <li>You keep your paid plan until the end of the period you've paid for, then move to the Free plan. You won't be charged again.</li>
-        <li>Your notebooks and results stay; only paid features and limits change.</li>
-      </ul>
-      <h2 className="h3">Refunds</h2>
-      <ul>
-        <li>Because you can use a paid plan straight away and cancel any time before it renews, payments for a period that has started aren't refunded.</li>
-        <li>We refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.</li>
-        <li>To ask for a refund, email <BillingMail /> from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).</li>
-      </ul>
-      <h2 className="h3">Delivery</h2>
-      <p>StratLab is an online service: nothing is shipped. A paid plan is active on your account as soon as the payment goes through, usually within a minute.</p>
-    </>
-  );
-}
-
-function Contact() {
-  return (
-    <>
-      <p>We're happy to help with your account, billing, refunds, privacy requests or anything else.</p>
-      <ul>
-        <li><b>Help and questions:</b> <Mail />. We reply within 2 working days.</li>
-        <li><b>Payments, invoices and refunds:</b> <BillingMail /></li>
-        <li><b>Privacy and your data:</b> <PrivacyMail /></li>
-        <li><b>Business:</b> {BUSINESS.name}</li>
-        {BUSINESS.address && <li><b>Address:</b> {BUSINESS.address}</li>}
-        {BUSINESS.gstin && <li><b>GSTIN:</b> {BUSINESS.gstin}</li>}
-      </ul>
-      <p className="small muted">For billing questions, write to <BillingMail /> with your account's email and the payment date so we can find it quickly.</p>
-    </>
-  );
-}
-
-const BODY: Record<string, () => ReactNode> = { "/terms": Terms, "/privacy": Privacy, "/refunds": Refunds, "/contact": Contact };
 
 /** The public policy pages. They open without signing in, as payment providers and app stores require. */
 export function LegalPage() {
@@ -166,7 +55,6 @@ export function LegalPage() {
     return () => { live = false; window.clearTimeout(slow); };
   }, []);
   const page = LEGAL_PAGES.find((p) => p.path === pathname) ?? LEGAL_PAGES[0];
-  const Body = BODY[page.path];
   return (
     <div className="legal">
       <SkipLink />
@@ -180,8 +68,8 @@ export function LegalPage() {
       <main id="main" tabIndex={-1}>
         <article className="legal-body stack">
           <h1 className="page-title">{page.title}</h1>
-          <p className="small muted">Last updated {UPDATED[page.path]}</p>
-          {loaded ? <Body /> : <p className="small muted" role="status">Loading…</p>}
+          <p className="small muted">Last updated {LEGAL_UPDATED[page.path]}</p>
+          {loaded ? <Policy path={page.path} /> : <p className="small muted" role="status">Loading…</p>}
         </article>
       </main>
     </div>

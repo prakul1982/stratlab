@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGE_ALIASES, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
+import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 
 const attr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 const text = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -39,8 +40,23 @@ export function bootBody({ heading, summary, faq = false }) {
   return `<h1>${text(heading)}</h1>\n${paras}${qa}`;
 }
 
+/** A policy page's whole text as HTML (content/legal.ts, the words the app draws too), so /terms, /privacy, /refunds and
+ * /contact read without JavaScript, and still do when the app's files fail to download. */
+export function legalBody(path, heading) {
+  const tok = (t) => t.t === "b" ? `<b>${text(t.s)}</b>` : t.t === "code" ? `<code>${text(t.s)}</code>`
+    : t.t === "mail" ? `<a href="mailto:${attr(t.to)}">${text(t.s)}</a>` : t.t === "link" ? `<a href="${attr(t.to)}">${text(t.s)}</a>` : text(t.s);
+  const html = (s) => inline(s, DEFAULT_BUSINESS).map(tok).join("");
+  const blocks = LEGAL_BLOCKS[path].map((b) => "h" in b ? `<h2>${text(b.h)}</h2>`
+    : "p" in b ? `<p>${html(b.p)}</p>`
+    : `<ul>\n${b.ul.filter((li) => typeof li === "string" || DEFAULT_BUSINESS[li.when]).map((li) => `<li>${html(typeof li === "string" ? li : li.text)}</li>`).join("\n")}\n</ul>`);
+  return `<h1>${text(heading)}</h1>\n<p>Last updated ${text(LEGAL_UPDATED[path])}</p>\n${blocks.join("\n")}`;
+}
+
+/** The 404 page's way back: the home page, the company pages and the strategy library (plain links, no script needed). */
+export const NOT_FOUND_LINKS = `\n<ul class="boot-links">\n<li><a href="/">Home</a></li>\n<li><a href="/stocks">Company pages</a></li>\n<li><a href="/library">Strategy library</a></li>\n</ul>`;
+
 /** The template (index.html as built) with one page's own tags, and its own heading and words in the plain block. */
-export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false }) {
+export function pageHtml(template, { title, description, canonical, index, jsonld = "", heading, summary, faq = false, body = "", after = "", readable = !!body }) {
   const swap = (re, to) => {
     if (!re.test(template)) throw new Error(`index.html has no ${re}`);
     template = template.replace(re, () => to);
@@ -61,7 +77,8 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
     // the page's one heading and its words, where index.html has the home page's (the app replaces the block when it draws)
     const boot = /(<div class="boot[^"]*" data-boot>\n)<h1>[^<]*<\/h1>\n<p>[^<]*<\/p>/;
     if (!boot.test(template)) throw new Error(`index.html has no ${boot}`);
-    template = template.replace(boot, (_, open) => open + bootBody({ heading, summary: summary?.length ? summary : [description], faq }));
+    template = template.replace(boot, (_, open) => (readable ? open.replace("data-boot>", "data-boot data-readable>") : open)
+      + (body || bootBody({ heading, summary: summary?.length ? summary : [description], faq }) + after));
   }
   return template;
 }
@@ -71,6 +88,7 @@ export function pageFiles(template) {
   const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
+      body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
       faq: p.path === "/faq" })]);
   // /plans (the signed-in Plans page's address) opens the landing page at its prices: same words as /pricing, kept out of
   // search results with that page as the one address (R17-002: it started as the home page's hero and then jumped down)
@@ -78,7 +96,7 @@ export function pageFiles(template) {
   files.push(["plans/index.html", pageHtml(template, { title: pricing.title, description: pricing.description, canonical: null, index: false,
     heading: pricing.heading, summary: pricing.summary })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
-    heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION] })]);
+    heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;
 }
 

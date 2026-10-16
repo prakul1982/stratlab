@@ -10,6 +10,12 @@ const DEFAULT_GROUP: GroupId = "nifty500";
  * it has no counts yet. */
 export const MARKET_GROUP: Record<"IN" | "US", GroupId> = { IN: "nifty500", US: "sp500" };
 export const BROAD_GROUP: Record<"IN" | "US", GroupId> = { IN: "nse_all", US: "us_large" };
+/** The groups of one market in the order the picker lists them: the group the page opens on first, so the first one shown
+ * is the one opened (round 39: the page opened on one group under another's name at the top of the list). */
+export function orderGroups<T extends { id: string }>(groups: T[], region: "IN" | "US"): T[] {
+  const first = MARKET_GROUP[region];
+  return [...groups.filter((g) => g.id === first), ...groups.filter((g) => g.id !== first)];
+}
 export const groupRegion = (g: GroupId): "IN" | "US" => (g === "us_large" || g === "sp500" ? "US" : "IN");
 
 /** The group and range last picked on this device, for a market: the group last picked for that market, else the

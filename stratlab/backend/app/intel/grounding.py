@@ -1248,12 +1248,31 @@ def plain_ok(s: str, lender: bool = False) -> bool:
                 or not moves_agree(s))
 
 
+# A holding's change is a difference between two shares of the company, so it is said in percentage points: "FIIs'
+# ownership fell by 2.41%" reads as a 2.41% fall of the holding itself, not from 24.10% to 21.69% (round 39).
+_HOLD_NOUN = r"(?:shareholding|holding|holdings|stake|ownership)"
+_HOLD_GAP = r"(?:\s+(?!company\b|companies\b|price\b|prices\b|profit\b|sales\b|revenue\b|income\b)[\w'’-]+){0,3}"
+_HOLD_VERB = (r"(?:fell|fall(?:s|en)?|declined?|dropped|drops?|reduced|rose|rises?|risen|increased?|grew|grows?|climbed|jumped|"
+              r"cut|raised|lowered|trimmed|lifted|up|down|changed)")
+_HOLD_MOVE = re.compile(
+    rf"(\b{_HOLD_NOUN}\b{_HOLD_GAP}\s+{_HOLD_VERB}\s+by\s+|\b{_HOLD_VERB}\s+(?:its|their|the|his|her)?\s*{_HOLD_NOUN}\s+by\s+)"
+    r"(\d+(?:\.\d+)?)\s?(?:%|per\s?cent\b|percent\b)(?!\s*points?)", re.I)
+
+
+def holding_points(text):
+    """A holding's change by N% said as N percentage points ("FIIs ownership fell by 2.41%" -> "... by 2.41 percentage
+    points"). A change of a holding is a difference between two shares, never a percentage of the holding."""
+    if not isinstance(text, str):
+        return text
+    return _HOLD_MOVE.sub(lambda m: f"{m.group(1)}{m.group(2)} percentage points", text)
+
+
 def plain_sentences(text, lender: bool = False, region: str = "IN") -> str:
     """The sentences of a stored or fresh read that pass plain_ok, with their numbers written the page's way."""
     if not isinstance(text, str):
         return ""
     keep = [s for s in _SENT.split(" ".join(text.split())) if s and plain_ok(s, lender)]
-    return tidy_numbers(" ".join(keep), region)
+    return tidy_numbers(holding_points(" ".join(keep)), region)
 
 
 # a trading idea's name says what kind of rule it is: a "Mean Reversion Strategy" that enters on a moving-average

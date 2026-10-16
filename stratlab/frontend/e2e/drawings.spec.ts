@@ -131,11 +131,15 @@ test("draw a trend line and a long position, reload, edit and delete", async ({ 
   await expect(chart.getByRole("toolbar", { name: "Trend line settings" })).toBeVisible();
   const box = await stageBox(chart);
   const ax = box.x + box.width * 0.3 * 0.82, ay = box.y + box.height * (0.55 * 0.72 + 0.04);
-  await page.mouse.move(ax, ay);
-  await page.mouse.down();
-  await page.mouse.move(ax, ay + 40, { steps: 5 });
-  await page.mouse.up();
-  await expect.poll(async () => (await saved(request)).drawings[0].points[0].p, { timeout: 8000 }).not.toBe(before);
+  // the drag is tried again while the redrawn chart settles after the reload (a drag on a chart still laying out lands nowhere);
+  // a handle that never moves still fails
+  await expect(async () => {
+    await page.mouse.move(ax, ay);
+    await page.mouse.down();
+    await page.mouse.move(ax, ay + 40, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await saved(request)).drawings[0].points[0].p, { timeout: 3000 }).not.toBe(before);
+  }).toPass({ timeout: 15_000 });
   expect(box.width).toBeGreaterThan(0);
 
   // colour and line style

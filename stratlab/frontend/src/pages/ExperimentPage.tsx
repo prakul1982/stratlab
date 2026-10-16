@@ -1,4 +1,4 @@
-import { isLegacyEmptied, emptiedDay } from "../lib/legacyRun";
+import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
@@ -351,9 +351,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         actions={<ShareMenu nb={nb} e={e} />} />
       {legacy && (
         <Notice tone="warn">
-          <b>This run was saved by an older version and needs a re-run.</b> It was saved before an emptied account stopped trading
-          (it says the account emptied on {fmtDate(emptiedDay(e)!)} and then lists trades after that day), so its figures contradict each other and are not shown.
-          Run the experiment again for figures that hold together.
+          {legacyNote(e)}
         </Notice>
       )}
       {!legacy && st.emptied_on && (

@@ -34,7 +34,8 @@ export const shownStats = (e: LibEntry) => {
   return { ran, ret: ran ? e.stats.ret : null, unseen: ran ? e.stats.unseen : null, mdd: ran ? e.stats.mdd : null, buy_hold: e.stats.buy_hold };
 };
 
-export { CHECK_RESULT, testedRange, whereShown } from "../lib/libraryText";
+import { TOTAL_NOTE } from "../lib/libraryText";
+export { CHECK_RESULT, testedRange, TOTAL_AFTER_COSTS, TOTAL_HOLD, TOTAL_NOTE, whereShown } from "../lib/libraryText";
 
 /** The verdict filter, in the words of the checks rather than a judgement of the strategy (R5O-014). */
 export const VERDICTS: [string, string][] = [["", "Any result"], ...(Object.entries(VERDICT_FACT) as [string, string][])];
@@ -55,7 +56,7 @@ export function HoldLine({ e }: { e: LibEntry }) {
   const gap = Math.abs(h.gap);
   return (
     <p className="k-note lib-hold" data-testid="lib-hold">
-      <Signed value={h.ret} fmt={(v) => pct(v)} /> after costs against <Signed value={h.hold} fmt={(v) => pct(v)} /> for buying and holding:{" "}
+      <Signed value={h.ret} fmt={(v) => pct(v)} /> {TOTAL_NOTE} against <Signed value={h.hold} fmt={(v) => pct(v)} /> total for buying and holding over the same dates:{" "}
       {gap < 0.05 ? "about the same." : <b>{num(gap, 1)} points {h.gap < 0 ? "behind" : "ahead"}.</b>}
     </p>
   );

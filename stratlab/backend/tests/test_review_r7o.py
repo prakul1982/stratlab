@@ -400,6 +400,6 @@ def test_a_strategy_behind_buy_and_hold_leads_with_the_shortfall():
     e = {"verdict": {"verdict": "edge", "headline": "Likely a real edge.", "passed": 3, "total": 3}, "group": {"id": "g"},
          "stats": {"ret": 55.83, "buy_hold": 172.93, "trades": 250, "unseen": 19.05}}
     head = library.restated(e)["fact_headline"]
-    assert head.startswith("117.1 points behind buy and hold after costs") and "passed all 3 checks run" in head
+    assert head.startswith("117.1 points behind buy and hold after costs") and "3 of 4 checks run · all 3 passed" in head
     ahead = {**e, "stats": {**e["stats"], "ret": 200.0}}
-    assert library.restated(ahead)["fact_headline"].startswith("Passed all 3 checks run")
+    assert library.restated(ahead)["fact_headline"].startswith("3 of 4 checks run · all 3 passed")

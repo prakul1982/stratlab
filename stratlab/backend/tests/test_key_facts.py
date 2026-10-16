@@ -51,3 +51,13 @@ def test_banks_have_no_debt_or_margin_lines():
     bank = {**REPORTED, "pl": {"cols": COLS, "rows": {**REPORTED["pl"]["rows"], "Financing Margin %": [1] * 6}}}
     got = rows(K.build({}, bank, None))
     assert "debt" not in got and "EBITDA margin, 5 years" not in got.get("margins", {})
+
+
+def test_a_price_at_its_average_says_so_not_zero_percent_below():
+    """Round 39: "Price vs 200-day average 0.0% below" is the price at the average."""
+    flat = rows(K.build({"metrics": []}, None, bars([100.0] * 260)))
+    assert flat["price"]["Price vs 200-day average"] == "at the 200-day average"
+    assert flat["price"]["Price vs 50-day average"] == "at the 50-day average"
+    # a real gap still reads as one
+    dipped = rows(K.build({"metrics": []}, None, bars([100.0] * 259 + [99.0])))
+    assert dipped["price"]["Price vs 50-day average"].endswith("below")

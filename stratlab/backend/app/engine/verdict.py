@@ -404,7 +404,7 @@ def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False, ope
         return "No checks could be run"
     if passed == 4:
         return "Passed all four checks"
-    return f"Passed all {len(run)} checks run" if passed == len(run) else f"Passed {passed} of the {len(run)} checks run"
+    return f"{len(run)} of 4 checks run · all {len(run)} passed" if passed == len(run) else f"Passed {passed} of the {len(run)} checks run"
 
 
 def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: float | None, none: bool = False,
