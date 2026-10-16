@@ -11,6 +11,8 @@ type Storage = {
   missing?: boolean; sql?: string; error?: string;
   market: { enabled: boolean; total?: number; tables?: Sized[]; error?: string };
   move: { running?: boolean; started_at?: string; finished_at?: string; moved?: { settings: number; snapshots: number }; error?: string | null };
+  users?: { on: "railway" | "supabase"; forced?: boolean; state?: "pending" | "done" | "failed"; asked_at?: string; done_at?: string;
+    failed_at?: string; copied?: Record<string, number>; error?: string | null };
 };
 
 const mb = (n: number) => `${(n / 1024 / 1024).toLocaleString("en-IN", { maximumFractionDigits: n < 10 * 1024 * 1024 ? 1 : 0 })} MB`;
@@ -22,6 +24,8 @@ export function StoragePanel() {
   const [s, setS] = useState<Storage | null>(null);
   const [copied, setCopied] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [askingUsers, setAskingUsers] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [failed, setFailed] = useState(false);
   const load = useCallback(async () => { try { setS(await api<Storage>("/admin/storage")); setFailed(false); } catch (e) { setFailed(true); fail(e); } }, [fail]);
   useEffect(() => { load(); }, [load]);
@@ -33,6 +37,14 @@ export function StoragePanel() {
   const move = async () => {
     setAsking(false);
     try { await api("/admin/storage/move", { method: "POST" }); load(); } catch (e) { fail(e); }
+  };
+  const moveUsers = async () => {
+    setAskingUsers(false);
+    try {
+      await api("/admin/storage/move-users", { method: "POST" });
+      setRestarting(true);
+      window.setTimeout(() => { setRestarting(false); void load(); }, 90000);     // the server is back in about a minute
+    } catch (e) { fail(e); }
   };
   const copy = async () => {
     try { await navigator.clipboard.writeText(s?.sql ?? ""); setCopied(true); } catch { /* the SQL stays shown to copy by hand */ }
@@ -89,6 +101,34 @@ export function StoragePanel() {
             </p>
           )}
         </div>
+      )}
+      {s?.users && s.market.enabled && (
+        <div className="k-stack">
+          <h3 className="adm-sub">Users' data</h3>
+          {s.users.on === "railway" ? (
+            <p className="k-small">On Railway{s.users.done_at && <>, since {ago(s.users.done_at)}</>}. Supabase is used for sign-ins only.</p>
+          ) : (
+            <>
+              <p className={`k-small ${s.users.state === "failed" ? "k-down" : ""}`}>
+                {restarting || s.users.state === "pending" ? "Moving: the server is restarting and copying everything across. Back in about a minute."
+                  : s.users.state === "failed" ? <>The last move stopped and nothing changed: {s.users.error}. Users' data is still on Supabase; pressing the button tries again.</>
+                  : s.users.forced ? <>On Supabase: <code>MAIN_DATABASE=supabase</code> is set on the backend.</>
+                  : "On Supabase, whose free plan counts every read the server makes. Moving it puts it next to the server on Railway; sign-ins stay with Supabase."}
+              </p>
+              {!s.users.forced && (
+                <div className="k-row"><button type="button" className="btn sm" disabled={restarting || s.users.state === "pending"} onClick={() => setAskingUsers(true)}>
+                  {restarting || s.users.state === "pending" ? "Moving…" : "Move users' data to Railway"}</button></div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {askingUsers && (
+        <ConfirmDialog title="Move users' data to Railway?" confirmLabel="Move and restart" danger={false} onConfirm={moveUsers} onClose={() => setAskingUsers(false)}>
+          Profiles, notebooks, paper sessions, settings and usage are copied to Railway's Postgres. The server restarts and
+          copies everything before it answers anyone, so the site is away for about a minute. Running paper sessions are
+          saved first and carry on after. If the copy fails, nothing changes and Supabase stays in use.
+        </ConfirmDialog>
       )}
       {asking && (
         <ConfirmDialog title="Move the market data?" confirmLabel="Move it" danger={false} onConfirm={move} onClose={() => setAsking(false)}>

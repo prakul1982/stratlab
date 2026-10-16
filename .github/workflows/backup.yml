@@ -2,7 +2,10 @@ name: Database backup
 
 # A copy of the main database every night, kept as an encrypted download on this repository's Actions page
 # (7 days; Sunday's copy, which also holds the recorded option chains, 28 days). Restoring: docs/ADMIN.md → Backups.
-# Needs two repository secrets: SUPABASE_DB_URL (Supabase → Connect → Session pooler) and BACKUP_PASSPHRASE.
+# Needs BACKUP_PASSPHRASE and where to copy from:
+#  - APP_DB_URL: Railway's Postgres (its public connection URL), once users' data has moved there (Admin → Storage).
+#    The nightly copy is its `app` schema (users' data); Sunday's also has `public` (the market data and option chains).
+#  - SUPABASE_DB_URL (Supabase → Connect → Session pooler): the sign-ins, and before the move the app's tables too.
 
 on:
   schedule:
@@ -21,33 +24,56 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
+      APP_DB_URL: ${{ secrets.APP_DB_URL }}
       DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
     steps:
       - name: Check the secrets are set
         run: |
-          if [ -z "$DB_URL" ] || [ -z "$PASSPHRASE" ]; then
-            echo "::error::Add the repository secrets SUPABASE_DB_URL and BACKUP_PASSPHRASE (Settings → Secrets and variables → Actions)."
+          if [ -z "$PASSPHRASE" ] || { [ -z "$APP_DB_URL" ] && [ -z "$DB_URL" ]; }; then
+            echo "::error::Add the repository secrets BACKUP_PASSPHRASE and APP_DB_URL (or SUPABASE_DB_URL) (Settings → Secrets and variables → Actions)."
             exit 1
           fi
 
-      - name: Install pg_dump 17
+      - name: Install pg_dump
         run: |
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
-          sudo apt-get install -y -q postgresql-client-17 >/dev/null
+          # the client must be at least the server's version: Railway's may be newer than Supabase's
+          major=17
+          if [ -n "$APP_DB_URL" ]; then
+            sudo apt-get install -y -q postgresql-client-17 >/dev/null
+            v=$(/usr/lib/postgresql/17/bin/psql "$APP_DB_URL" -tAc 'show server_version_num' | cut -c1-2)
+            if [ -n "$v" ] && [ "$v" -gt 17 ]; then major=$v; fi
+          fi
+          sudo apt-get install -y -q "postgresql-client-$major" >/dev/null
+          echo "PG=/usr/lib/postgresql/$major/bin" >> "$GITHUB_ENV"
 
       - name: Copy the database
         run: |
           set -euo pipefail
-          PG=/usr/lib/postgresql/17/bin
           day=$(date -u +%F)
           if [ "$(date -u +%u)" = 7 ] || [ "${{ github.event_name }}" = workflow_dispatch ]; then full=1; else full=0; fi
-          skip=(); [ "$full" = 1 ] || skip=(--exclude-table-data=public.option_snapshots)
           mkdir out
-          # the app's tables, whole: users' data, payments, settings
-          $PG/pg_dump "$DB_URL" -Fc -Z 6 --no-owner --no-privileges -n public "${skip[@]}" -f out/app.dump
+          moved=0
+          if [ -n "$APP_DB_URL" ] && $PG/psql "$APP_DB_URL" -tAc "select value from public.app_settings where key = 'maindb:state'" | grep -q '"done"'; then
+            moved=1
+          elif [ -n "$APP_DB_URL" ] && [ -z "$DB_URL" ]; then
+            echo "::error::Users' data hasn't moved to Railway yet (Admin → Storage), and SUPABASE_DB_URL isn't set to copy it from Supabase."
+            exit 1
+          fi
+          if [ "$moved" = 1 ]; then
+            # users' data on Railway, whole; the market data too on full days
+            schemas=(-n app); [ "$full" = 1 ] && schemas+=(-n public)
+            $PG/pg_dump "$APP_DB_URL" -Fc -Z 6 --no-owner --no-privileges "${schemas[@]}" -f out/app.dump
+          else
+            # before the move: the app's tables in Supabase, whole: users' data, payments, settings
+            skip=(); [ "$full" = 1 ] || skip=(--exclude-table-data=public.option_snapshots)
+            $PG/pg_dump "$DB_URL" -Fc -Z 6 --no-owner --no-privileges -n public "${skip[@]}" -f out/app.dump
+          fi
           # the sign-ins (who has an account), as data to load back into a fresh Supabase project
-          if ! $PG/pg_dump "$DB_URL" -Fc -Z 6 --data-only --no-owner --no-privileges -t auth.users -t auth.identities -f out/auth.dump; then
+          if [ -z "$DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL isn't set, so the sign-ins (auth.users) weren't copied; the app's data was."
+          elif ! $PG/pg_dump "$DB_URL" -Fc -Z 6 --data-only --no-owner --no-privileges -t auth.users -t auth.identities -f out/auth.dump; then
             echo "::warning::The sign-ins (auth.users) couldn't be copied; the app's own tables were."
             rm -f out/auth.dump
           fi

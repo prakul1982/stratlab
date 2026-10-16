@@ -46,7 +46,7 @@ from . import user_data
 from .connect import routes as connect_routes, sync as connect_sync, jobs as connect_jobs, kite_user as connect_kite, redact as connect_redact
 from . import chart_routes
 from . import drawings_routes
-from . import market_store, storage, usage_slots
+from . import maindb, market_store, storage, usage_slots
 from . import official_close
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
@@ -271,6 +271,8 @@ holders_job = shareholders.Job(lambda: filings_feed, notify=lambda p, subject, t
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # first, before anything reads the database: where users' data is (moving it to Railway when Admin asked to)
+    print("startup: users' data is on", maindb.start())
     auto_login.load_last()
     _load_errors()
     try:
@@ -4377,6 +4379,26 @@ def admin_storage_move(_=Depends(admin.admin_profile)):
     if not storage.start_move():
         err(409, "busy", "A move is already running.")
     return {"started": True}
+
+
+@app.post("/admin/storage/move-users")
+def admin_storage_move_users(_=Depends(admin.leader_admin)):
+    """Move users' own data from Supabase to Railway's Postgres: marked wanted, then the server restarts and copies it
+    before answering anything (app/maindb.py). About a minute without the site."""
+    ms = market_store.store()
+    if ms is None:
+        err(400, "no_market_db", "Add a Postgres on Railway and set MARKET_DATABASE_URL on the backend first.")
+    if maindb.forced_supabase():
+        err(400, "forced_supabase", "MAIN_DATABASE=supabase is set on the backend: remove it first.")
+    if db.on_railway():
+        err(409, "already_moved", "Users' data is already on Railway.")
+    maindb.request(ms)
+    try:
+        manager.persist(only_dirty=False)          # every live session's latest state goes across with the rest
+    except Exception as e:
+        print("move users' data: could not save live sessions first:", e)
+    restart_process()
+    return {"restarting": True}
 
 
 @app.delete("/notebooks/{nid}/experiments/{version}")

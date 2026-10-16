@@ -177,9 +177,9 @@ GST invoice.
 ```mermaid
 flowchart LR
     UI["Frontend<br/>Vite + React + TypeScript<br/>(Vercel)"] -- "REST + Supabase JWT" --> API["Backend<br/>FastAPI, one process<br/>(Railway)"]
-    UI -- "Google sign-in" --> SB[("Supabase<br/>Auth + Postgres")]
-    API --> SB
-    API -. "optional" .-> MDB[("Market data Postgres<br/>(Railway)")]
+    UI -- "Google sign-in" --> SB[("Supabase<br/>Auth")]
+    API -- "sign-in check" --> SB
+    API --> MDB[("Postgres on Railway<br/>users' data + market data")]
     API --> MD["Market data<br/>(broker feed for India, public data elsewhere)"]
     API --> CO["Company data<br/>(reported results, exchange filings, SEC filings, company documents)"]
     API --> AI["AI layer<br/>(free providers, measured and ranked)"]
@@ -194,10 +194,11 @@ flowchart LR
 - **Backend** (`stratlab/backend`): **FastAPI** on **Railway**, run as one process, because live paper sessions, the
   tick feed and the scheduled jobs (newsletters, alerts, audits, the daily checks) live in memory. Backtests run in
   worker processes. The backend owns every secret; the browser only talks to it and to Supabase sign-in.
-- **Database and sign-in**: **Supabase** (Postgres + Google OAuth). The schema is in `stratlab/supabase/schema.sql`;
-  per-user settings and job state live in the `app_settings` key-value table. An optional second Postgres
-  (`MARKET_DATABASE_URL`) takes the bulky market-wide data, and a nightly GitHub Action keeps an encrypted copy of the
-  main database ([docs/ADMIN.md](docs/ADMIN.md#backups)).
+- **Database and sign-in**: **Supabase** for Google sign-in. Users' data starts in Supabase's Postgres
+  (`stratlab/supabase/schema.sql`) and moves with one Admin button to a Postgres on **Railway** next to the server
+  (`backend/app/pgdb.py`, `backend/app/maindb.py`), which also holds the bulky market-wide data
+  (`MARKET_DATABASE_URL`). Per-user settings and job state live in the `app_settings` key-value table. A nightly
+  GitHub Action keeps an encrypted copy ([docs/ADMIN.md](docs/ADMIN.md#backups)).
 - The same engine runs backtests, the verdict checks and live paper trading, so a strategy behaves the same everywhere.
 - **AI** goes through one layer (`backend/app/ai_providers.py`) that heals itself: it measures each provider's models
   every few hours, uses the ones that answer correctly and fast, checks every reply, pauses a failing model or provider
