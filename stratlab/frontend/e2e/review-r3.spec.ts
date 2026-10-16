@@ -36,7 +36,8 @@ test("a company page is about its own company, in one unit, and says when its pr
   // out of hours the price is labelled the last close
   const c = await (await request.get(`${API}/research/company/IN/TCS`, { headers: { Authorization: "Bearer admin-token" } })).json();
   const price = page.getByTestId("company-price");
-  if (c.market_open === false) { await expect(price).toContainText("Last close"); await expect(price).toContainText("on the day"); }
+  // closed after today's session: "on the day"; before the open, a weekend or a holiday: the last session's move, dated (R34-001)
+  if (c.market_open === false) { await expect(price).toContainText("Last close"); await expect(price).toContainText(/on the day|on \d{1,2} [A-Z][a-z]{2}/); }
   else { await expect(price).not.toContainText("Last close"); await expect(price).toContainText("today"); }
   expect(errors).toEqual([]);
 });
