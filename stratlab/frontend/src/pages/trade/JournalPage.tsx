@@ -528,7 +528,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
           <b>{t.symbol}</b>
           <button type="button" className="btn quiet sm" onClick={() => onEdit(t)} aria-label={`Journal: ${t.symbol} ${when(t.exit_t)}`}><Pencil size={15} />{Object.keys(t.note).length ? "Edit" : "Note"}</button>
         </div>
-        <span className="k-note">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Side not in the file"} · {t.segment_label}</span>
+        <span className="k-note">{t.side === "long" ? "Long" : t.side === "short" ? "Short" : "Long or short: not in the file"} · {t.segment_label}</span>
         {(t.note.tag || t.src === "practice") && <div className="k-row">
           {t.src === "practice" && <Badge dot={false}>Chart replay</Badge>}
           {t.note.tag && <Badge tone="ok" dot={false}>{t.note.tag}</Badge>}</div>}

@@ -15,7 +15,7 @@ import { VisitorApp } from "./visitor/VisitorApp";
 import { LoadFailed, LoadGuard, Opening, PageBoundary } from "./components/LoadGuard";
 import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
-import { endsAt } from "./lib/offer";
+import { endsAt, endsAtShort } from "./lib/offer";
 import { importWithRetry } from "./lib/lazyRetry";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
@@ -165,7 +165,7 @@ function PromoBanner({ until }: { until: string }) {
   const day = endsAt(until);
   return (
     <div className="banner promo-banner">
-      <span className="promo-text"><b>Launch offer:</b> every Pro feature is free for everyone until {day}.<span className="promo-more"> After that, your plan's limits apply again.</span></span>
+      <span className="promo-text"><b>Launch offer:</b> <span className="promo-full">every Pro feature is free for everyone until {day}.<span className="promo-more"> After that, your plan's limits apply again.</span></span><span className="promo-short">Pro free until {endsAtShort(until)}</span></span>
       <button type="button" className="btn sm quiet promo-got" aria-label="Dismiss" onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); }}>
         <span className="promo-got-text">Got it</span><span className="promo-x" aria-hidden="true">×</span>
       </button>

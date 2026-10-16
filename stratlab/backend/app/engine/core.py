@@ -131,6 +131,8 @@ class Engine:
         self.gate = None          # a portfolio can veto new trades (no free slot, daily cap hit)
         self.veto = None          # live only: checked once the entry rules hold (a wide spread, too cheap to trade)
         self.funds = None         # a group's shared pot: () -> (account value, cash free for a new position)
+        self.slots = None         # a group's most positions at once: each is held to that share of the pot (R38-003)
+        self.cash_short = False   # the open position was cut to the pot's free cash, below its planned size
         self.day_close = None     # live only: (date) -> the minute that day's session closes (an early close), or None
         self.sq = self.t_sq       # the current day's square-off minute
         # a backtest fills a rule's signal at the next candle's open; live sets this off and fills at the latest price
@@ -248,6 +250,7 @@ class Engine:
         self.trades.append({"entry_t": self.entry_t, "exit_t": b["t"], "entry": self.entry, "exit": px,
                             "qty": self.qty, "pnl": pnl, "costs": trade_costs, "side": "short" if d == -1 else "long",
                             "ret": pnl / (self.qty * self.entry) * 100 if self.qty and self.entry else 0.0, "why": why,
+                            **({"cash_short": True} if self.cash_short else {}),
                             "at_open": at_open})
         self.realised_total += pnl
         self.trade_count += 1
@@ -480,6 +483,12 @@ class Engine:
             cap = min(per, max(worth, 0)) * r.leverage       # margin can't exceed what you have
         else:
             cap = max(worth, 0) * r.maxAlloc / 100 * r.leverage
+        if pot and self.slots and not (r.sizing == "capital" and r.perTrade):
+            # a group's position is at most its slot's share of the pot (Rs5,00,000 over 10 slots: Rs50,000), never the
+            # whole pot: risk sizing at 1% over a 2% stop wanted Rs2,50,000 a trade, two filled the pot and the rest
+            # opened with 1 share (R38-003). A stated amount per trade stands as stated
+            cap = min(cap, max(worth, 0) / self.slots * r.leverage)
+        planned = cap
         if pot:
             cap = min(cap, max(pot[1], 0) * r.leverage)     # the pot's other positions tie up part of its cash
         if r.sizing == "capital":
@@ -498,6 +507,7 @@ class Engine:
             self.skipped_size += 1
             return None
         self.dir = d
+        self.cash_short = cap < planned * 0.99          # sized to the cash the pot had left, so the list can say why
         self._slip(q, px, base)
         self.entry_cost = self._pay(open_side, q, px)
         self.cash -= d * q * px + self.entry_cost
@@ -711,7 +721,7 @@ def open_position(eng: Engine, last: float) -> dict:
     pnl = eng.dir * eng.qty * (last - eng.entry) - eng.entry_cost
     return {"entry_t": eng.entry_t, "exit_t": None, "entry": eng.entry, "exit": last, "qty": eng.qty, "pnl": pnl,
             "costs": eng.entry_cost, "ret": pnl / (eng.qty * eng.entry) * 100 if eng.entry else 0.0,
-            "side": "short" if eng.dir == -1 else "long", "why": "Still open"}
+            "side": "short" if eng.dir == -1 else "long", "why": "Still open", **({"cash_short": True} if eng.cash_short else {})}
 
 
 SPLIT = 0.7     # the unseen-data check: the first 70% of the test is "built on", the rest is unseen

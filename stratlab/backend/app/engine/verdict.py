@@ -475,6 +475,24 @@ def restate_verdict(v: dict | None, old_ret: float, ret: float, hold: float | No
     return out
 
 
+def emptied_day(e: dict) -> str | None:
+    """The day a run says its account emptied: its stats' day, else its "Account emptied" trade's exit."""
+    st = e.get("stats") or {}
+    if st.get("emptied_on"):
+        return str(st["emptied_on"])[:10]
+    t = next((x for x in e.get("trades") or [] if str(x.get("why") or "").lower().startswith("account emptied")), None)
+    return str(t["exit_t"])[:10] if t and t.get("exit_t") else None
+
+
+def legacy_emptied(e: dict) -> bool:
+    """A run saved before accounts stopped at zero that says the account emptied and then lists trades opened after that
+    day: its figures contradict each other and no list or comparison shows them (R29B-009, R38-001). The twin of the
+    page's isLegacyEmptied (frontend/src/lib/legacyRun.ts); a stored run is read as the page reads it (restated first)."""
+    e = restate_empty(e)
+    day = emptied_day(e)
+    return bool(day) and any(str(t.get("entry_t") or "")[:10] > day for t in e.get("trades") or [])
+
+
 def restate_empty(e: dict) -> dict:
     """An experiment stored before accounts stopped at zero (R13S-001, R18-008: a notebook still showed -352.6% and "In
     your pocket" -Rs17,63,044 on Rs5,00,000) with its account held to what it had: the return at -100%, the loss at the

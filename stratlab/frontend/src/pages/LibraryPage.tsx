@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { BehindHold, checksOf, HoldLine, Rules, shownStats, testedRange, VERDICTS, type LibEntry } from "../components/LibraryBits";
+import { BehindHold, checksOf, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, type LibEntry } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
@@ -90,9 +90,9 @@ export function LibraryPage() {
   const tableCols: Column<LibEntry>[] = [
     { key: "name", header: "Strategy", rowHeader: true, wrap: true, cell: (e) => <><b>{plainTerms(e.name)}</b><span className="k-sub-line">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} · by {e.author}</span></> },
     { key: "verdict", header: "Checks", wrap: true, cell: (e) => <><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-sub-line">{checksOf(e)}</span><BehindHold e={e} />{e.reason && <span className="k-sub-line">{e.reason}</span>}</> },
-    { key: "ret", header: "After costs", numeric: true, cell: (e) => signedPct(shownStats(e).ret) },
+    { key: "ret", header: "After costs", numeric: true, cell: (e) => trails(e) && shownStats(e).ret != null ? pct(shownStats(e).ret as number) : signedPct(shownStats(e).ret) },
     { key: "bh", header: "Buy and hold", numeric: true, cell: (e) => signedPct(e.stats.buy_hold) },
-    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
+    { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => signedPct(shownStats(e).unseen) },
     { key: "mdd", header: "Worst fall", numeric: true, cell: (e) => signedPct(shownStats(e).mdd) },
     { key: "copy", header: "", action: true, cell: (e) => <button type="button" className="btn quiet sm" disabled={busy === e.id} onClick={() => copy(e)} aria-label={`Copy and re-test ${plainTerms(e.name)}`}>{busy === e.id ? "Copying…" : "Copy"}</button> },
   ];
@@ -139,11 +139,11 @@ export function LibraryPage() {
                   {(() => {
                     const eyebrow = <span className="k-eyebrow">{e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>;
                     const sh = shownStats(e);
-                    const stats = ([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], ["Unseen years", sh.unseen], ["Worst fall", sh.mdd]] as [string, number | null][])
+                    const stats = ([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], [unseenLabel(e), sh.unseen], ["Worst fall", sh.mdd]] as [string, number | null][])
                       .filter(([k]) => !phone || k !== "Buy and hold");
                     const miniStats = (list: [string, number | null][]) => (
                       <div className="k-mini-stats">
-                        {list.map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={n == null || n === 0 ? undefined : n > 0 ? "up" : "down"} />)}
+                        {list.map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={n == null || n === 0 || (k === "After costs" && trails(e)) ? undefined : n > 0 ? "up" : "down"} />)}
                       </div>);
                     return (
                       <>

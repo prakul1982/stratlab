@@ -68,6 +68,7 @@ export interface Trade {
   costs?: number; ret: number; why: string; side?: "long" | "short"; symbol?: string;
   part?: "built" | "unseen";      // which part of the unseen-data check it counts in (the part it was opened in)
   spans_split?: boolean;          // opened in the built part and closed in the unseen one
+  cash_short?: boolean;           // a group trade sized to the cash the pot had left free (R38-003)
 }
 export interface GroupMember { id?: string; symbol: string }
 export interface Group { id: string; name: string; market: string; maxOpen: number; members: GroupMember[] }
@@ -106,7 +107,8 @@ export interface Basket {
   status: "pass" | "warn" | "fail"; headline: string; market: string; days: number; tested: number; profitable: number;
   beat_buy_hold: number; median_ret: number | null; rows: BasketRow[];
 }
-export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null; /** the last run's return in %, to say "Capital lost" at the −100% floor */ last_return?: number | null }
+export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null; /** the last run's return in %, to say "Capital lost" at the −100% floor */ last_return?: number | null;
+  /** the last run was saved by an older version and its figures contradict each other, so none are shown (R38-001) */ last_legacy?: boolean }
 export interface NotebookItem {
   id: string; name: string; question: string | null; instrument: Instrument | { id: string } | null;
   summary: NotebookSummary | null; updated_at: string; tf?: Tf | null; pinned?: boolean;

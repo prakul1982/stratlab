@@ -32,3 +32,9 @@ export function journalVsTax(fno: boolean): string[] {
  * report's "updated" date is when its own files last changed, so the two can differ for the same import (R28-013). */
 export const journalSavedNote = (asOf: string, updatedAt: string | null, fmt: (iso: string) => string): string =>
   `Worked out as of ${fmt(asOf)}${updatedAt ? ` · journal last changed ${fmt(updatedAt)} (the tax report has its own date, from its last file)` : ""}.`;
+
+/** Money home's line for the tax files: when they were uploaded, and how far the trades in them go. The upload time says
+ * nothing about the trades' dates ("Trades as of 4 Oct 2026" over trades that end on 27 Jun 2025). */
+export const uploadedLine = (uploadedAt: string | null | undefined, lastTrade: string | null | undefined, fmt: (iso: string) => string): string =>
+  [uploadedAt ? `Uploaded ${fmt(uploadedAt)}` : "", lastTrade ? `trades up to ${fmt(lastTrade)}` : ""].filter(Boolean).join(" · ")
+    .replace(/^trades/, "Trades");

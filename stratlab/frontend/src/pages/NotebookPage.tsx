@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -18,6 +19,7 @@ import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
 import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Signed, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
+import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
 import { usePlansAction, usePlansToast } from "../components/PlanInterest";
@@ -33,6 +35,7 @@ const PERIODS: Record<Tf, number[]> = {
 export function useNotebook(id: string | undefined) {
   const { fail, refreshNotebooks } = useApp();
   const [nb, setNb] = useState<Notebook | null>(null);
+  useDocTitle(nb?.name);          // the notebook's own name in the tab, not "Notebooks"
   // why there's no notebook to show: none at this address (deleted, mistyped, another account's), or it couldn't be read
   const [problem, setProblem] = useState<"missing" | "error" | null>(null);
   // "failed": the last save didn't reach the server; its edits wait for Retry (or the next save)
@@ -358,10 +361,11 @@ function NotebookView() {
 
   const cols: Column<Experiment>[] = [
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
-    { key: "ret", header: "Overall", numeric: true, cell: (e) => <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
-    { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
-    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
-    { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
+    // a run whose figures contradict each other says so in its row, never "Capital lost" (R38-001)
+    { key: "ret", header: "Overall", numeric: true, cell: (e) => isLegacyEmptied(e) ? "Not shown" : <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
+    { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)}{isLegacyEmptied(e) ? "" : ` · ${e.stats.n} trade${e.stats.n === 1 ? "" : "s"}`}</span>{isLegacyEmptied(e) && <span className="k-sub-line">{legacyNote(e)}</span>}</> },
+    { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => { if (isLegacyEmptied(e)) return "–"; const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
+    { key: "verdict", header: "Verdict", cell: (e) => isLegacyEmptied(e) ? "Not shown" : <VerdictBadge v={e.verdict.verdict} /> },
   ];
 
   return (
@@ -403,7 +407,7 @@ function NotebookView() {
               </span>
               <span className="market-btn-cta">{inst || group ? "Change" : "Choose"}<span aria-hidden="true"> →</span></span>
             </Link>
-            {sipTestLink(inst) && <Link className="btn quiet sm" to={sipTestLink(inst)!}>Test as a SIP</Link>}
+            {sipTestLink(inst, group) && <Link className="btn quiet sm" to={sipTestLink(inst, group)!}>Test as a SIP</Link>}
           </div>
         </Card>
 

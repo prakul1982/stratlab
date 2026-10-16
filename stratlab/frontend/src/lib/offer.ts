@@ -21,6 +21,11 @@ export function endsAt(iso: string): string {
   return `${day} at ${time} IST`;
 }
 
+/** The same instant for a phone's one-line banner, without the weekday: "22 Oct, 5:20 pm IST". */
+export function endsAtShort(iso: string): string {
+  return endsAt(iso).replace(/^\w{3} /, "").replace(" at ", ", ");
+}
+
 /** The launch offer's end, while it runs. */
 export function promoUntil(o: Offer | null | undefined, now = Date.now()): string | null {
   const until = o?.mode === "promo" ? o.promo_until : null;

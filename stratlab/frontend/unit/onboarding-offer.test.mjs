@@ -182,3 +182,15 @@ test("the offer's end is said in India time, from the stored instant", () => {
   assert.equal(offer.endsAt("2026-10-22T11:50:59+00:00"), "Thu 22 Oct at 5:20 pm IST");
   assert.equal(offer.endsAt("2026-11-02T18:30:00+00:00"), "Tue 3 Nov at 12:00 am IST");
 });
+
+test("the launch-offer banner is one short line on a phone, with its end date and close button", async () => {
+  const { endsAtShort, endsAt } = await import("../src/lib/offer.ts");
+  assert.equal(endsAtShort("2026-10-22T11:50:00Z"), "22 Oct, 5:20 pm IST");
+  assert.ok(endsAtShort("2026-10-22T11:50:00Z").length < endsAt("2026-10-22T11:50:00Z").length);
+  const main = fs.readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
+  assert.match(main, /className="promo-short">Pro free until \{endsAtShort\(until\)\}/);
+  assert.match(main, /aria-label="Dismiss"/);
+  const css = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.promo-banner \.promo-more, \.promo-banner \.promo-full \{ display: none; \}/);
+  assert.ok(css.indexOf(".promo-banner .promo-short { display: none; }") < css.indexOf(".promo-banner .promo-short { display: inline; }"), "the phone rule wins");
+});

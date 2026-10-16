@@ -92,11 +92,13 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
 .promo-banner { background: var(--blue-soft, var(--paper-2)); }
+.promo-banner .promo-short { display: none; }
 /* a phone: one short sentence, the second left to the Plans page; it wraps rather than cutting off the end date (R31-018) */
 @media (max-width: 640px) { /* .banner.promo-banner: the general .banner rule further down sets flex-wrap: wrap, which beat a one-class rule (R32-002) */
-  .banner.promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
+  .banner.promo-banner { flex-wrap: nowrap; padding: 4px 8px 4px 12px; margin-bottom: 12px; font-size: 13px; }
   .banner.promo-banner .promo-text { flex: 1 1 auto; min-width: 0; }
-  .promo-banner .promo-more { display: none; }
+  .promo-banner .promo-more, .promo-banner .promo-full { display: none; }
+  .promo-banner .promo-short { display: inline; }
   /* the dismiss control is an icon on the same row as the text, a 40 px target (R30-009) */
   .promo-banner .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
   .promo-banner .promo-got-text { display: none; }
@@ -675,13 +677,15 @@ td.num, .num { font-family: var(--sans); }
 .lp-price > .btn { min-height: 44px; }
 @media (max-width: 1000px) {
   .lp-hero-grid, .lp-split { grid-template-columns: minmax(0, 1fr); }
-  .lp-prices { grid-template-columns: minmax(0, 1fr); max-width: 560px; }
+  .lp-prices { grid-template-columns: repeat(2, minmax(0, 1fr)); }     /* a tablet: two columns, the third card across both (one narrow left column left the right empty) */
+  .lp-prices > .lp-price:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .lp-steps, .lp-checks, .lp-tools, .lp-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lp-nav nav { display: none; }
   .lp-nav > .btn { margin-left: auto; }
 }
 @media (max-width: 600px) {
   .lp-steps, .lp-checks, .lp-tools, .lp-markets { grid-template-columns: minmax(0, 1fr); }
+  .lp-prices { grid-template-columns: minmax(0, 1fr); max-width: 560px; margin-inline: auto; }
   .lp-price { padding: 20px 18px; }
   
   
@@ -1827,6 +1831,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 /* plans */
 .k-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); align-items: stretch; }
 .k-plan.pro { border: 2px solid var(--ink); }
+@media (min-width: 601px) and (max-width: 1000px) { /* a tablet: two columns, the last plan across both, never one narrow column */
+  .k-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .k-plans > .k-plan:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .k-plan-price { font-family: var(--serif); font-size: 44px; letter-spacing: -.02em; line-height: 1.1; }
 .k-plan-price span { font-family: var(--sans); font-size: var(--t-label); color: var(--muted); letter-spacing: 0; }
 .k-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); flex: 1; font-size: var(--t-label); }

@@ -1,6 +1,5 @@
 import { num, pct } from "../lib/format";
 import { opSay, refName } from "../lib/rules";
-import { CHECK_NAMES, checksLine, LOST_CHECKS, lostMoney } from "../lib/tradeUi";
 import type { Cond, Strategy, VerdictKind } from "../lib/types";
 import { VERDICT_FACT } from "./ui";
 import { Signed } from "./kit/Signed";
@@ -40,9 +39,7 @@ export { CHECK_RESULT, testedRange, whereShown } from "../lib/libraryText";
 /** The verdict filter, in the words of the checks rather than a judgement of the strategy (R5O-014). */
 export const VERDICTS: [string, string][] = [["", "Any result"], ...(Object.entries(VERDICT_FACT) as [string, string][])];
 
-/** "3 of 4 checks passed · nearby settings not run": which check didn't run, by name. */
-export const checksOf = (e: LibEntry) => lostMoney(e.verdict.verdict, e.stats.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total,
-  (e.verdict.checks ?? []).filter((c) => c.status === "skip").map((c) => CHECK_NAMES[c.id] ?? c.id));
+export { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
 
 /** The return beside buy and hold, as the notebook's verdict says it (R5O-014). */
 /** A plain badge beside the checks badge when the strategy trails buy and hold, so "Passed" never reads as "beat the market". */

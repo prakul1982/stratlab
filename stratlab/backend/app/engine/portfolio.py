@@ -69,6 +69,7 @@ def run(datasets: list[dict], strategy, max_open: int, t_from: str | None = None
     for b in books:
         b["eng"].gate = free_slot
         b["eng"].funds = funds
+        b["eng"].slots = max_open
 
     equity, hold, times = [], [], []
     episodes: list[list] = []        # stretches with any position open: [index before, last index] in [capital, *equity]

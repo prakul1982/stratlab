@@ -1542,6 +1542,7 @@ def read_notebook(nid: str, profile=Depends(current_profile)):
     # an experiment stored with a claim for a headline ("Likely a real edge.") shows its facts instead (R11C-009)
     # ...and one saved before an account stopped at zero shows its account held to what it had (R18-008: -352.6%)
     nb["experiments"] = [{**e, "verdict": verdict_restated(e.get("verdict"), e.get("stats"))} for e in map(restate_empty, nb.get("experiments") or [])]
+    nb["summary"] = research.summary(nb["experiments"])      # a summary stored before R38-001 is read afresh
     return ok(with_rule_problems(nb))
 
 
@@ -3244,6 +3245,7 @@ def tax_view(profile) -> dict:
         y["us"] = {**usr["years"][y["fy"]], "allowed": usr["allowed"], "plan": usr.get("plan")} if y["fy"] in usr["years"] else None
     return {**rep, "us_trades": usr["count"], "mf": {"allowed": mf["allowed"], "count": len(mf["rows"]),
                           "plan": PLANS[FEATURE_PLAN["mf_gains"]]["name"]}, "files": i["data"]["files"], "updated_at": i["data"]["updated_at"], "trades": len(i["trades"]),
+            "last_trade": max([t["d"] for t in i["trades"] if isinstance(t.get("d"), str)] + [b["last"] for b in i["business"]], default=None),
             "business_lines": int(sum(b["trades"] for b in i["business"])),
             "prices": i["live"], "prices_at": _prices_at([q for q in i["quotes"].values() if q]) if i["live"] else None,
             "fmv": {k: {"value": i["fmv"].get(k), "source": i["fmv_src"].get(k)} for k in i["pre"]},

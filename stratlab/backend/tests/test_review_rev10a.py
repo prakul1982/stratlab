@@ -241,3 +241,17 @@ def test_evaluate_walkforward_and_snapshot_pass_base_min(monkeypatch):
     monkeypatch.setattr(live, "Ctx", Rec)
     s.snapshot()
     assert seen == [core.TF_MIN[s.tf]]
+
+
+def test_members_note_carries_no_stale_year():
+    # R38-004: in Oct 2026 the verdict said "NIFTY 50 stocks are today's members (as of 2025)": the year was written into
+    # the sentence, not taken from the list. A list with a date says that date; one without gives no year
+    from app import universes
+    note = universes.members_note({"id": "nifty50", "market": "IN"})
+    assert "2025" not in note and "today's members:" in note
+    p = next(p for p in universes.PRESETS["IN"] if p["id"] == "nifty50")
+    p["as_of"] = "Sep 2026"
+    try:
+        assert "today's members (the list as of Sep 2026):" in universes.members_note({"id": "nifty50", "market": "IN"})
+    finally:
+        p.pop("as_of")

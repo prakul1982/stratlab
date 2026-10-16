@@ -54,9 +54,9 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       ] },
       { id: "practise", label: "Practise", blurb: "Trade with fake money on live prices or on past candles. Nothing here sends a real order.", pages: [
         page("/paper", "Paper trading", "pulse", "paper trading live forward test sessions running fake money simulate practice demo risk exposure all sessions",
-          { line: "Run a notebook's rules live on real prices with fake money, until you stop them.", blurb: "Run rules live on real prices with fake money. Every session keeps its orders, its open position and its running result.", also: /^\/paper\/.*$/ }),
+          { line: "Run a notebook's rules live on real prices with fake money, until you stop them.", blurb: "Run rules live on real prices with fake money. Every session keeps its orders, its open position and its running result.", also: /^\/(paper|options\/s)\/.*$/ }),
         page("/options", "Options builder", "layers", "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o greeks delta gamma theta vega iv payoff what if",
-          { line: "Build straddles, strangles, condors or any legs and paper trade them at the live bid and ask.", blurb: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask, with Greeks and a what-if payoff.", also: /^\/options\/s\/.*$/ }),
+          { line: "Build straddles, strangles, condors or any legs and paper trade them at the live bid and ask.", blurb: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask, with Greeks and a what-if payoff." }),
         page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { isNew: true, flag: "chart_replay" }),
       ] },
       { id: "fo-desk", label: "F&O desk", blurb: "What the futures and options market is doing: who holds what, what is changing, what is coming.", pages: [

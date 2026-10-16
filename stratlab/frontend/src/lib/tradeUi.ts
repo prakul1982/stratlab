@@ -29,8 +29,38 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
 export const LOST_CHECKS = "Checks not applicable: lost money after costs";
 export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && ret != null && ret <= 0;
 
+/** "months" when the unseen part (the last 30% of the test range) spans under a year, else "years": a 6-month test has no
+ * unseen years. Without a range, "years". */
+export function unseenWord(range?: { from: string; to: string } | null): "months" | "years" {
+  const days = range ? (Date.parse(range.to.slice(0, 10)) - Date.parse(range.from.slice(0, 10))) / 86_400_000 : NaN;
+  return days * 0.3 < 365 ? "months" : "years";
+}
+
 /** The checks' plain names, for "nearby settings not run". */
 export const CHECK_NAMES: Record<string, string> = { unseen: "unseen years", nearby: "nearby settings", shuffle: "bad-luck fall", sample: "enough trades" };
+
+/** The parts of a library entry its verdict's words are worked out from. */
+type Held = { range: { from: string; to: string } | null; stats: { ret: number | null }; vs_hold?: { gap: number } | null;
+  verdict: { verdict: string; passed: number; total: number; checks?: { id: string; status: string }[] } };
+
+/** The unseen figure's name, by the span it covers: "Unseen months" on a 6-month test, "Unseen years" on a long one. */
+export const unseenLabel = (e: { range: { from: string; to: string } | null }) => `Unseen ${unseenWord(e.range)}`;
+
+/** The checks' count, in the words of the verdict's label ("Passed all 3 checks run · nearby settings not run"), so the
+ * list, the card and the page's headline count the same way. */
+export function checksOf(e: Held): string {
+  if (lostMoney(e.verdict.verdict, e.stats.ret)) return LOST_CHECKS;
+  const notRun = (e.verdict.checks ?? []).filter((c) => c.status === "skip").map((c) => (CHECK_NAMES[c.id] ?? c.id).replace("years", unseenWord(e.range)));
+  const run = e.verdict.total, passed = e.verdict.passed;
+  if (!notRun.length || notRun.length !== CHECKS - run) return checksLine(passed, run, notRun);
+  return `${passed >= run ? `Passed all ${run}` : `Passed ${passed} of the ${run}`} checks run · ${notRun.join(" and ")} not run`;
+}
+
+/** Whether the rules trail buy and hold: a result behind it is not shown as a win. */
+export const trails = (e: Held) => !!e.vs_hold && e.vs_hold.gap <= -0.05;
+
+/** The headline's colour class: a verdict that trails buy and hold is not blue. */
+export const headTone = (e: Held) => (trails(e) && e.verdict.verdict === "edge" ? "mixed" : e.verdict.verdict);
 
 export const checkTone =(s: CheckStatus | "pass" | "warn" | "fail" | "skip"): "ok" | "warn" | "plain" => (s === "pass" ? "ok" : s === "fail" ? "warn" : "plain");
 
@@ -92,4 +122,9 @@ export function dayStat(running: boolean, status: string, today: number | null |
   const word = status === "paused" ? "paused" : "stopped";
   if (today == null) return { label: "Day's P&L", value: null, text: `None today: the session is ${word}` };
   return { label: `Day's P&L, up to the ${status === "paused" ? "pause" : "stop"}`, value: today + openNet, text: null };
+}
+
+/** Why a group trade's quantity is smaller than its slot: the pot's cash left free when it opened (R38-003). */
+export function qtyNote(t: { cash_short?: boolean }): string | null {
+  return t.cash_short ? "Sized to the cash left free" : null;
 }

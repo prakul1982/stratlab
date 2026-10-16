@@ -76,7 +76,8 @@ def company_facts(c: dict) -> dict:
     # each figure under its group's name: India's "3Y CAGR" is in both Sales growth and Profit growth, and one
     # flat label kept only the profit one (R6O-001)
     # each figure as the page writes it ("0.9%", "2.56"), never the raw 2.55977229601518 the model then copies (R7O-001)
-    metrics = {f"{g['title']}: {i['label']}": grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
+    # a figure that compares two periods names them, as the page's note does ("Latest YoY (Sep 2026 vs Sep 2025)", R38-002)
+    metrics = {f"{g['title']}: {i['label']}" + (f" ({i['period']})" if i.get("period") else ""): grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
                for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
              "currency": c.get("currency"), "industry": c.get("industry"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c) or ("Market cap unavailable" if c.get("cap_note") else None),

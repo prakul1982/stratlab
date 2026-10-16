@@ -6,6 +6,7 @@ import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
 import { checksLine } from "../lib/tradeUi";
+import { legacyNote, splitLegacy } from "../lib/legacyRun";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
@@ -20,15 +21,23 @@ export function CompareExperiments() {
   const { nb, problem, reload } = useNotebook(id);
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
-  const exps = nb.experiments;
+  // a run whose figures contradict each other is never charted or compared: it is listed with the reason (R38-001)
+  const { shown: exps, legacy } = splitLegacy(nb.experiments);
+  const notShown = legacy.length > 0 && (
+    <Card label="Runs not compared">
+      <CardHead level={3} title="Runs not compared" />
+      <ul className="k-list">{legacy.map((e) => <li key={e.v}><Link to={`/n/${nb.id}/e/${e.v}`} className="link">v{e.v} · {e.label}</Link>: {legacyNote(e)}</li>)}</ul>
+    </Card>
+  );
   const va = Number(params.get("a")), vb = Number(params.get("b"));
   const a = exps.find((e) => e.v === va) ?? exps[exps.length - 2], b = exps.find((e) => e.v === vb) ?? exps[exps.length - 1];
   if (!a || !b) return (
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       <EmptyState title="Nothing to compare yet" action={{ label: exps.length ? "Change the rules and run again" : "Run the first test", to: `/n/${nb.id}` }}>
-        Comparing needs two runs of this notebook. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}
+        Comparing needs two runs of this notebook{legacy.length ? " whose figures are shown" : ""}. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}
       </EmptyState>
+      {notShown}
     </div>
   );
   const pick = (k: "a" | "b", v: number) => { const p = new URLSearchParams(params); p.set(k, String(v)); nav(`?${p}`, { replace: true }); };
@@ -47,6 +56,7 @@ export function CompareExperiments() {
       <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       {pickers}
       <Notice tone="warn" role="status">Pick two different runs: v{a.v} is on both sides.</Notice>
+      {notShown}
     </div>
   );
 
@@ -116,6 +126,7 @@ export function CompareExperiments() {
         <CardHead level={3} title="The numbers" info="Bold marks the larger of the two on each line. A higher backtest figure is not proof: the verdict's honesty checks are what test for luck." infoLabel="About the numbers" />
         <DataTable label="Compared numbers" columns={cols} rows={lines} rowKey={(l) => l.label} />
       </Card>
+      {notShown}
     </div>
   );
 }

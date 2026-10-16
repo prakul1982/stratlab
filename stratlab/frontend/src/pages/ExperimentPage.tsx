@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, tradeListFacts, upDown } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, qtyNote, tradeListFacts, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -326,7 +326,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
     { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Spans the split: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
     { key: "close", header: intraday ? "Closed (candle)" : "Closed", cell: (t) => (t.exit_t ? at(t.exit_t) : "Still open") },
     ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
-    { key: "qty", header: "Qty", numeric: true, cell: (t) => qty(t.qty, step, e.instrument.market) },
+    { key: "qty", header: "Qty", numeric: true, cell: (t) => <>{qty(t.qty, step, e.instrument.market)}{qtyNote(t) && <span className="k-sub-line">{qtyNote(t)}</span>}</> },
     { key: "in", header: "In", numeric: true, cell: (t) => price(t.entry, cur, dp) },
     { key: "out", header: "Out", numeric: true, cell: (t) => price(t.exit, cur, dp) },
     { key: "pnl", header: "P&L", numeric: true, cell: (t) => <span className={upDown(t.pnl)}>{money(t.pnl, cur)}</span> },
