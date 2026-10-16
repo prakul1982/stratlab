@@ -321,8 +321,17 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = own_weekday(re.sub(r"\s+", " ", text)[:700], f)
+    text = two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f))
     return text if grounded(text, f) and not robotic(text) else None
+
+
+_ONE_DP = re.compile(r"(?<![\d.,])(\d{1,3}(?:,\d{2,3})+)\.(\d)(?![\d%])")
+
+
+def two_decimals(text: str) -> str:
+    """A price the model wrote with one decimal ("jumped 8.48% to 1,790.0") with two, as every other price in the brief
+    and on the site (R35); percentages and plain numbers stay as written."""
+    return _ONE_DP.sub(lambda m: f"{m.group(1)}.{m.group(2)}0", text or "")
 
 
 def summary(f: dict) -> dict:
