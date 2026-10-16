@@ -448,7 +448,8 @@ def holders_listing(symbol: str = "", form: str = "", page: int = 1, size: int =
     today = today or datetime.now(ZoneInfo("America/New_York")).date()
     sym = "".join(ch for ch in (symbol or "").upper() if ch.isalnum() or ch in "-.")[:12].replace(".", "-")
     rows = holds.between("US", today - timedelta(days=us_holders.LOOKBACK_DAYS), today)
-    rows = [i for i in rows if (not sym or i["symbol"] == sym) and (form not in ("13D", "13G") or i["kind"] == form)]
+    rows = [i for i in rows if (not sym or i["symbol"] == sym) and (form not in ("13D", "13G") or i["kind"] == form)
+            and not us_holders.about_itself(i)]
     rows.sort(key=lambda i: (i["at"], i["symbol"], i["id"]), reverse=True)
     size = max(1, min(int(size or PAGE), MAX_PAGE))
     pages = max(1, -(-len(rows) // size))

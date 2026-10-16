@@ -89,7 +89,7 @@ export function NotFound({ signedIn }: { signedIn: boolean }) {
         <>
           <div className="gate-actions">
             <button type="button" className="btn" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}>Search StratLab</button>
-            <Link className="btn quiet" to="/">Go to your home</Link>
+            <Link className="btn quiet" to="/">Go to My space</Link>
           </div>
           <div className="gate-links" aria-label="Places to go">
             <LinkCard to="/trade" title="Trade">Test trading ideas and paper trade them.</LinkCard>

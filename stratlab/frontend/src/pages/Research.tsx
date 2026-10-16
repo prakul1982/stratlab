@@ -51,6 +51,16 @@ function useTestOnStratLab() {
 
 /** The day's index levels: a figure for each, with its change (today's only when it is today's, R7T-003) and where it sits
  * against its 52-week high. */
+
+/** The day a quote's change is of when it isn't today in the market's time zone: the server's `change_day`, else the
+ *  quote's own session day. Null for today's. */
+function sessionOf(q: { change_day?: string | null; at?: string | null } | null | undefined, tz: string): string | null {
+  if (!q) return null;
+  if (q.change_day) return q.change_day;
+  const d = q.at ? dayIn(q.at, tz) : null, today = dayIn(new Date(), tz);
+  return d && today && d < today ? d : null;
+}
+
 export function IndexStrip({ indices, missing }: { indices: IndexLevel[] | null; missing?: string[] }) {
   if (!indices) return <Skeleton label="Loading the market" lines={2} />;
   if (!indices.length) return <EmptyState title="Index levels are unavailable right now">They come back on their own; this page checks again when you open it.</EmptyState>;
@@ -760,9 +770,11 @@ export function WatchlistPage() {
                 return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
               // out of hours the change is the last completed session's, and says its day (R41A): "Today" only of today's
-              { key: "c", header: Object.values(quotes ?? {}).some((q) => q?.change_day) ? "Last session" : "Today", numeric: true, cell: (w) => {
+              // a quote from an earlier day in the market's own time zone (a US quote on a Saturday) is that session's
+              // too, though the server needn't say so: its change is already the session's (R42-004: "Today" over Friday)
+              { key: "c", header: Object.values(quotes ?? {}).some((q) => sessionOf(q, marketTz(region))) ? "Last session" : "Today", numeric: true, cell: (w) => {
                 if (quotes == null || !(w.symbol in quotes)) return "…";
-                const x = quotes[w.symbol]?.change_pct, d = quotes[w.symbol]?.change_day;
+                const x = quotes[w.symbol]?.change_pct, d = sessionOf(quotes[w.symbol], marketTz(region));
                 return x == null ? "–" : <><Delta value={x}>{pct(x, 2)}</Delta>{d && <span className="k-sub-line" data-testid="watch-change-day">{fmtDate(d, { weekday: true, year: false })}</span>}</>;
               } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },

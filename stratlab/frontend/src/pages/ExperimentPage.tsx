@@ -131,7 +131,7 @@ function BasketInner({ nb, e }: { nb: Notebook; e: Experiment }) {
 }
 
 const yearSpan = (a: string, b: string) => (a === b ? a : `${a}–${b}`);
-const tradeCount = (n: number) => `${n} trade${n === 1 ? "" : "s"}`;
+const tradeCount = (n: number) => `${n.toLocaleString("en-IN")} trade${n === 1 ? "" : "s"}`;
 /** "5 trades", or "5 trades + 1 still open": the open trade is counted the same way everywhere on the page. */
 const withOpen = (n: number, open: number) => `${tradeCount(n)}${open ? ` + ${open} still open` : ""}`;
 
