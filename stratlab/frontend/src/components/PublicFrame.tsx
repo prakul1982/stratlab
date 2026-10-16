@@ -7,7 +7,7 @@ import { signedInHere, signIn, warmSignIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
 
 /** The landing page's sections and Plans, for the phone Menu (the company pages carry the same links). */
-export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest", "Invest"], ["/#money", "Money"], ["/pricing", "Plans"], ["/stocks", "Companies"]];
+export const PUBLIC_MENU: [string, string][] = [["/#trade", "Trade"], ["/#invest", "Invest"], ["/#money", "Money"], ["/#alerts", "Alerts"], ["/pricing", "Plans"], ["/#faq", "FAQ"], ["/stocks", "Companies"]];
 
 /** For someone already signed in: a plain link (a whole page load, so the app starts, not the visitor's landing page). */
 export const OpenApp = ({ className = "btn outline sm" }: { className?: string }) => <a className={className} href="/">Open StratLab</a>;

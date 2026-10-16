@@ -237,12 +237,14 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
         {!plansOnly && <>
         <nav aria-label="Sections">
           {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
+          <a href="/stocks">Companies</a>
         </nav>
         {/* on a phone the section links fold into a small menu (the row above hides there) */}
         <details className="lp-menu" ref={menu}>
           <summary>Menu</summary>
           <nav aria-label="Sections (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
             {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
+            <a href="/stocks">Companies</a>
           </nav>
         </details>
         </>}

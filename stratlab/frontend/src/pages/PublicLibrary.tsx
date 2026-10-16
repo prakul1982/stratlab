@@ -34,6 +34,11 @@ const CHECK_SAYS: Record<string, string> = {
 const MARKETS: [string, string][] = [["", "Every market"], ["IN", "India"], ["US", "United States"]];
 const NOTE = "Tested by StratLab on past prices, for research and paper trading. A verdict describes the past, not what comes next, and nothing here is investment advice.";
 
+/** How a group was tested, so the totals can be read (R43B-004): one pot of capital, buy and hold in equal parts, and
+ *  the group as it is today. */
+export const GROUP_BASIS = "Every stock in the group was tested as one pot of capital. Buy and hold puts an equal share into each stock at the start. "
+  + "The group is its members today, so companies that left it during the period aren't in the test; that flatters both figures.";
+
 const where = (e: LibEntry) => e.group ? groupLabel(e.group.name, e.group.members?.length) : e.instrument?.symbol ?? e.market;
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? "up" as const : "down" as const);
 
@@ -156,6 +161,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
               <Stat item label="Worst fall" value={sh.mdd == null ? "–" : pct(sh.mdd)} tone={sh.mdd == null ? undefined : "down"} />
               <Stat item label="Trades" value={e.stats.trades == null ? "–" : String(e.stats.trades)} />
             </StatRow>
+            {e.group && <p className="k-small k-muted" data-testid="lib-group-basis">{GROUP_BASIS}</p>}
           </Card>
           {!!e.verdict.checks?.length && (
             <section className="pub-checks" aria-label="The four checks">

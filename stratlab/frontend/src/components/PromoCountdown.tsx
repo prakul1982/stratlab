@@ -28,7 +28,7 @@ export function PromoCountdown({ plansLink = true }: { plansLink?: boolean }) {
   const day = endsAt(until);
   return (
     <Notice className="promo-countdown" role="status" action={plansLink ? { label: "See plans", to: "/plans" } : undefined}>
-      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).
+      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}). After that, each plan has its own limits again.
     </Notice>
   );
 }

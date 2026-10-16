@@ -1742,9 +1742,10 @@ def _top(sign_in: str | None = None) -> str:
     signs in with Google and comes back to it."""
     site = settings.PUBLIC_SITE_URL
     sign_in = sign_in or f"{site}/mine"
-    links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money")))
-    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="/stocks">Companies</a>'
-    return (f'<a class="skip" href="#main">Skip to the page</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
+    # the landing page's own sections, in its order, then company search (R43B-007: the two menus differed)
+    links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money"), ("alerts", "Alerts")))
+    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="/stocks">Companies</a>'
+    return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
             f'<a class="btn ghost" href="{e(sign_in)}">Sign in</a></header>')
@@ -1968,8 +1969,10 @@ def _notes(f: dict) -> list[str]:
     if gap:
         pe, implied, profit = gap
         out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
-                   f'company\'s shareholders. Market cap divided by the net profit for the last 12 months in the table '
-                   f'(₹{_amount(f, profit)} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}.</p>')
+                   f'company\'s shareholders. Market cap divided by the net profit for the last 12 months shown above '
+                   f'(₹{_amount(f, profit)} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}. '
+                   "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "
+                   'the table below.</p>')
     if behind(f):
         out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
                    "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
