@@ -300,7 +300,7 @@ function WatchCard() {
   }, [items]);
   return (
     <Card testId="mine-watch">
-      <CardHead title="Your watchlist today" actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
+      <CardHead title={movers?.some((m) => m.q.change_day) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
         : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (
@@ -314,6 +314,7 @@ function WatchCard() {
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
+                {m.q.change_day && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(m.q.change_day, { weekday: true, year: false })}</span>}
               </li>
             ))}
           </ul>

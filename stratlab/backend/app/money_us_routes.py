@@ -16,6 +16,7 @@ from . import holdings, holdings_file, money_fx as fx, money_us_tax as us
 from .money_mf import add_months
 from .auth import current_profile
 from .kite_service import IST
+from .last_session import on_or_before
 from .plans import FEATURE_PLAN, PLANS, allows
 from .tax_lots import fy_label, fy_of
 
@@ -273,7 +274,7 @@ def view(profile, fy: int | None = None, cy: int | None = None) -> dict:
         years.append(out)
     fa = fa_build(cy, trades, h, hist, divs_all, known) if full and trades else None
     sbi_days = sorted(hist["sbi"])
-    return {"as_of": t.isoformat(), "fy": fy, "cy": cy, "cys": list(range(t.year - 1, t.year - 6, -1)), "locked": not full,
+    return {"as_of": on_or_before("IN", t).isoformat(), "fy": fy, "cy": cy, "cys": list(range(t.year - 1, t.year - 6, -1)), "locked": not full,
             "plan": PLANS[FEATURE_PLAN["us_tax"]]["name"],
             "trades": sorted(({**x, "id": x.get("id") or ""} for x in trades), key=lambda x: (x["d"], x["sym"]), reverse=True),
             "files": data["files"], "gaps": gaps, "short": {k: round(v, 6) for k, v in m["short"].items()}, "open_lots": open_lots,

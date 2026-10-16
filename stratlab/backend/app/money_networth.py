@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from . import db, leader, run_marks
 from . import holdings
 from .holdings import pct_split  # noqa: F401  (largest-remainder shares, shared with My Holdings)
+from .last_session import on_or_before
 from .email_kit import fmt_date as _day, inr as _inr  # the app's own number and date styles
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -687,7 +688,9 @@ def data_day(rows: list[dict], at: date) -> date:
             d = None
         if d:
             days.append(d)
-    return min(max(days), at) if days else at
+    # a weekend or a holiday has no session: the date is the last trading day's, as everywhere else (R41A)
+    cap = on_or_before("IN", at)
+    return min(max(days), at, cap) if days else cap
 
 
 def rate_day(at: str | None, now: datetime | None = None) -> str:

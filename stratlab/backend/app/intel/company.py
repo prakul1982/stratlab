@@ -81,22 +81,24 @@ def change_2dp(price, prev, given=None) -> float | None:
 
 
 def last_session_move(q: dict | None, bars: list[dict] | None, region: str = "IN", now: datetime | None = None) -> dict | None:
-    """An Indian quote with the last completed session's change when the market hasn't traded today (before the open, a
-    weekend, a holiday): the broker's previous close has already rolled over to that session's close, so its own change
-    reads 0 (R34-001: "0 (0.00%) on the day" at 08:30 IST beside +3.44%). The move is the last stored daily close against
-    the one before it, and `change_day` names the session. While the market trades, or once today's session has its
-    quote, the quote is returned as it is."""
+    """An Indian quote with the last completed session's close and change when the market hasn't traded today (before the
+    open, a weekend, a holiday): the broker's previous close has already rolled over to that session's close, so its own
+    change reads 0 (R34-001: "0 (0.00%) on the day" at 08:30 IST beside +3.44%). The move is the latest completed
+    session's close against the one before it (see last_session.move): from the stored daily candles, with the quote's
+    close appended when the candles end before the quote's session, so the price, the change, the percent and `change_day`
+    are always of one pair of closes (R41A: a candle copy that ended on 15 Oct gave 16 Oct's price 15 Oct's change). While
+    the market trades, or once today's session has its quote, the quote is returned as it is."""
     if not q or q.get("price") is None or region != "IN" or market_open(region, now):
         return q
     today = market_today(region, now)
     if session_day(q.get("at"), region) == today:
         return q
-    days = [(str(b.get("t", ""))[:10], b.get("c")) for b in bars or [] if b.get("c") is not None]
-    days = [d for d in days if d[0] < today]
-    if len(days) < 2 or not days[-2][1]:
+    from .. import last_session
+    m = last_session.move(bars, q, region, now)
+    if m is None:
         return q
-    (day, last), (_, prev) = days[-1], days[-2]
-    return {**q, "change": last - prev, "change_pct": change_2dp(last, prev), "change_day": day}
+    return {**q, "price": m["close"], "prev_close": m["prev_close"], "change": m["change"], "change_pct": m["change_pct"],
+            "change_day": m["day"]}
 
 
 def index_level(name: str, q: dict, region: str, now: datetime | None = None) -> dict:

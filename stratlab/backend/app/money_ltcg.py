@@ -9,6 +9,16 @@ from datetime import date
 
 from . import tax_lots as T
 
+
+def session_day(today) -> str:
+    """The date the prices on a page are as of: today on a trading day, else the last trading session's (R41A: a weekend's
+    "Prices as of 17 Oct" named a day with no prices)."""
+    from .last_session import on_or_before
+    try:
+        return on_or_before("IN", date.fromisoformat(str(today)[:10])).isoformat()
+    except ValueError:
+        return str(today)
+
 WINDOWS = (30, 60, 90)
 MAX_ROWS = 200
 FACTS = [
@@ -74,7 +84,7 @@ def tracker(c: dict, quotes: dict[str, dict], today: str, full: bool = True) -> 
     gains = [r["gain"] for r in long_rows if r["gain"] > 0]
     losses = [r["gain"] for r in long_rows if r["gain"] < 0]
     ex = y["exemption"]
-    return {"fy": fy, "label": y["label"], "as_of": today,
+    return {"fy": fy, "label": y["label"], "as_of": session_day(today),
             "exemption": {"limit": ex["limit"], "used": ex["used"], "left": ex["left"],
                           "realised_lt_net": y["ltcg"]["net"], "realised_st_net": y["stcg"]["net"],
                           # US shares apart: the exemption is for Indian shares and equity funds only

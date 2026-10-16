@@ -353,7 +353,18 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
             "percentile": percentile(value, past),
             "stored": {"days": len(every), "first": every[0][0] if every else None, "last": every[-1][0] if every else None},
             "nifty_iv": nifty_iv(options_data, now) if options_data is not None else {"today": None, "series": []},
-            "note": NOTE, "today": today.isoformat()}
+            "note": NOTE, "today": today.isoformat(), "session": session_now(now)}
+
+
+def session_now(now: datetime) -> str:
+    """The trading session a reading now belongs to (India's calendar): today once the market has opened on a trading day,
+    else the latest trading day before it. A quote of that day is current; the panel says "Last session" of it on a
+    weekend or holiday instead of "Not updated today" (R41A)."""
+    from . import stock_pages
+    try:
+        return stock_pages.session_day("IN", now).isoformat()
+    except Exception:
+        return now.date().isoformat()
 
 
 def history_view(rng: str, now: datetime | None = None) -> dict:

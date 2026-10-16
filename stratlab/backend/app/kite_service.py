@@ -16,7 +16,7 @@ from kiteconnect import KiteConnect, KiteTicker
 from kiteconnect.exceptions import TokenException
 
 from .config import settings
-from . import db, name_search
+from . import db, last_session, name_search
 
 IST = ZoneInfo("Asia/Kolkata")
 # our timeframe -> (kite interval, max days per request, candles per trading day)
@@ -578,8 +578,14 @@ class KiteService:
         if open_at and open_at <= time.time() and hit and hit[0] < out_at and hit[1] \
                 and str(hit[1][-1]["t"])[:10] == now.date().isoformat():
             ttl = min(ttl, 60)
+        # candles that end before the market's latest completed session are a stale copy, never served as current: they
+        # are read again once a minute has passed (R41A: after a restart at 00:01 IST the broker's history ended on
+        # Thursday's candle, kept for six hours as if it were Friday's, so "last close" and its change disagreed)
+        market = self._market_of(token)
+        lagging = market is not None and last_session.behind(hit[1] if hit else None, market, now)
         if hit and time.time() - hit[0] < ttl and not (tf == "1d" and hit[0] < out_at <= time.time()) \
-                and not (open_at and hit[0] < open_at <= time.time()):      # read before today's open: no today bar
+                and not (open_at and hit[0] < open_at <= time.time()) \
+                and not (lagging and time.time() - hit[0] >= self.BEHIND_RETRY):      # read before today's open: no today bar
             return self._official_days(token, tf, self._with_tail(token, tf, hit[1], continuous=continuous))
         start = now - timedelta(days=days)
         out, frm = [], start
@@ -600,12 +606,56 @@ class KiteService:
             if b["t"] not in seen:
                 seen.add(b["t"]); dedup.append(b)
         dedup = self._with_tail(token, tf, dedup, note=True, continuous=continuous)
+        if market is not None and tf == "1d":
+            dedup = self._with_latest_session(token, dedup, now)
         if not store:
             return self._official_days(token, tf, dedup)
         self._cache[key] = (time.time(), dedup)
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))
         return self._official_days(token, tf, dedup)
+
+    BEHIND_RETRY = 60.0       # seconds a copy of candles that lacks the market's latest completed session is reused
+
+    def _market_of(self, token) -> str | None:
+        """"IN" for a token that trades on the stock exchanges (a stock, an ETF, an index: NSE or BSE), else None. The
+        candles of futures and of commodity or currency contracts follow their own sessions."""
+        try:
+            inst = self._by_token.get(int(token))
+            if inst is not None:
+                return "IN" if inst.get("exchange") in ("NSE", "BSE") and inst.get("type") in ("EQ", "INDEX", None, "") else None
+            return "IN" if any(int(t) == int(token) for t in self.__dict__.get("_index_tokens", {}).values()) else None
+        except (TypeError, ValueError):
+            return None
+
+    def _quote_key(self, token) -> str | None:
+        inst = self._by_token.get(int(token))
+        if inst is not None:
+            return f"{inst['exchange']}:{inst['symbol']}"
+        return next((k for k, t in self.__dict__.get("_index_tokens", {}).items() if int(t) == int(token)), None)
+
+    def _with_latest_session(self, token, bars: list[dict], now: datetime) -> list[dict]:
+        """Daily candles that end before the market's latest completed session, with that session's candle from the
+        broker's quote (its day's open, high, low and last price, which after the close is the close) when the quote is
+        of that session; the answer given otherwise. The candles' own copy may be behind for a while after midnight."""
+        if not last_session.behind(bars, "IN", now):
+            return bars
+        key = self._quote_key(token)
+        if not key:
+            return bars
+        try:
+            self._throttle()
+            v = (self.kite.quote([key]) or {}).get(key) or {}
+        except Exception as e:
+            print("latest session from the quote:", key, str(e)[:120])
+            return bars
+        ohlc = v.get("ohlc") or {}
+        at = v.get("last_trade_time") or v.get("timestamp")
+        if hasattr(at, "tzinfo") and at.tzinfo is None:
+            at = at.replace(tzinfo=IST)
+        q = {"price": v.get("last_price"), "open": ohlc.get("open"), "high": ohlc.get("high"), "low": ohlc.get("low"),
+             "volume": v.get("volume"), "at": at.isoformat() if hasattr(at, "isoformat") else None}
+        return last_session.with_quote_close(bars, q, "IN", now)
 
     WIDER_DAYS = (370, 400)      # a company page's year of daily candles (broker / its fallback source)
 

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { ago, fmtDate, money, pct, signCls } from "../lib/format";
+import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
 import { homeOf } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
@@ -336,7 +336,7 @@ function RedFlags({ region }: { region: Region }) {
 
 /* ---------- Money: what you own ---------- */
 type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number;
-  no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[] };
+  no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[]; session?: string | null };
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
   total?: { available: boolean; total?: number; income?: { business?: number; intraday?: number } }; audit?: string | null };
@@ -392,7 +392,8 @@ function HoldingsSummary() {
                 return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
               <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
                 note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
-              {h.totals.day != null && <Fig label="Today" tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
+              {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
+              {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? `Last session (${fmtDate(h.totals.session, { weekday: true, year: false })})` : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
               {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
                 note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>

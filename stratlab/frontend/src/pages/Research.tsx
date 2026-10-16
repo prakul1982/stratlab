@@ -759,7 +759,12 @@ export function WatchlistPage() {
                 const at = quoteAt(q.at, marketTz(region));
                 return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
-              { key: "c", header: "Today", numeric: true, cell: (w) => { if (quotes == null || !(w.symbol in quotes)) return "…"; const x = quotes[w.symbol]?.change_pct; return x == null ? "–" : <Delta value={x}>{pct(x, 2)}</Delta>; } },
+              // out of hours the change is the last completed session's, and says its day (R41A): "Today" only of today's
+              { key: "c", header: Object.values(quotes ?? {}).some((q) => q?.change_day) ? "Last session" : "Today", numeric: true, cell: (w) => {
+                if (quotes == null || !(w.symbol in quotes)) return "…";
+                const x = quotes[w.symbol]?.change_pct, d = quotes[w.symbol]?.change_day;
+                return x == null ? "–" : <><Delta value={x}>{pct(x, 2)}</Delta>{d && <span className="k-sub-line" data-testid="watch-change-day">{fmtDate(d, { weekday: true, year: false })}</span>}</>;
+              } },
               { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w, false).catch(fail)}>Remove</button> },
             ]} />

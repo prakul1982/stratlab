@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query
 
 from . import money_networth as nw, rbi_rates, tax_lots, tax_total
+from .last_session import on_or_before
 from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows
 from .responses import err, ok
@@ -188,7 +189,7 @@ def view(profile: dict, slab: float | None, own: bool) -> dict:
             "small_savings": {"quarter": ss["quarter"], "from": ss["from"], "to": ss["to"], "notified": ss["notified"],
                               "source": ss["source"], "rows": small},
             "bonds": bonds, "deposits": deposits(profile["id"], t, at), "tax_text": TAX_TEXT, "notes": NOTES,
-            "disclaimer": DISCLAIMER, "as_of": at.isoformat(), "rbi_source": rbi_rates.SOURCE}
+            "disclaimer": DISCLAIMER, "as_of": on_or_before("IN", at).isoformat(), "rbi_source": rbi_rates.SOURCE}
 
 
 router = APIRouter(prefix="/money/rates", tags=["money"])

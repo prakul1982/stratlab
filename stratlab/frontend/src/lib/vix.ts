@@ -10,6 +10,8 @@ export type Vix = {
   percentile: VixPercentile; stored: { days: number; first: string | null; last: string | null };
   nifty_iv: { today: { iv: number; strike?: number | null; as_of: string; source: "live" | "recorded"; at_close?: boolean } | null; series: { day: string; iv: number }[] };
   note: string; today: string;
+  /** the trading session a reading now belongs to: today once the market has opened, else the last trading day (a weekend's is Friday's) */
+  session?: string;
 };
 
 export const vixNum = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(2));
@@ -22,23 +24,29 @@ export function vixChange(q: VixQuote | null): string | null {
 }
 
 /** How fresh the panel's figures are, and the words its titles use: a quote or a line from an earlier day (in India's
- * date) is never called today's. `asOf` is "5 Oct, 12:04 IST"; `stale` is true when the quote is from before today. With no
- * quote at all, the value is a stored close (`value_day`): `stamp` names its day ("Close on Fri 9 Oct") and it is stale too.
+ * date) is never called today's. `asOf` is "5 Oct, 12:04 IST"; `stale` is true when the quote is from before the market's
+ * current session (the market has traded since: "Not updated today"). On a weekend or holiday, or before the open, the
+ * latest session's quote is not a fault: `lastSession` names it ("Last session (Fri 16 Oct)") and the titles carry its day
+ * (R41A). With no quote at all, the value is a stored close (`value_day`): `stamp` names its day ("Close on Fri 9 Oct").
  * `stamp` is the line the panel's head shows, null when nothing is dated. */
-export function vixFreshness(v: Pick<Vix, "quote" | "intraday" | "today"> & { value_day?: string | null }) {
+export function vixFreshness(v: Pick<Vix, "quote" | "intraday" | "today"> & { value_day?: string | null; session?: string }) {
   const closeDay = !v.quote && v.value_day ? v.value_day : null;
   const quoteDay = closeDay ?? dayIn(v.quote?.as_of, IST);
   const lineDay = v.intraday.length ? dayIn(v.intraday[v.intraday.length - 1].t, IST) : null;
   const name = (d: string) => fmtDate(d, { weekday: true, year: false });
-  const stale = !!quoteDay && quoteDay !== v.today;
-  const lineStale = !!lineDay && lineDay !== v.today;
+  const session = v.session ?? v.today;               // without the server's session, today's
+  const stale = !!quoteDay && quoteDay < session;
+  const lineStale = !!lineDay && lineDay < session;
+  // the market is shut today (or has not opened yet) and the quote is the latest session's: said as that, not as a fault
+  const shut = !stale && !!quoteDay && quoteDay !== v.today ? quoteDay : null;
   const at = asOf(v.quote?.as_of, { tz: IST, year: false });
   return {
     stale, lineStale, quoteDay, lineDay,
+    lastSession: shut ? `Last session (${name(shut)})` : null,
     asOf: at,
     stamp: closeDay ? `Close on ${name(closeDay)}` : at ? `As of ${at}` : null,
-    rangeLabel: stale && quoteDay ? `Range on ${name(quoteDay)}` : "Today's range",
-    lineTitle: lineStale && lineDay ? name(lineDay) : "Today",
+    rangeLabel: (stale || shut) && quoteDay ? `Range on ${name(quoteDay)}` : "Today's range",
+    lineTitle: lineDay && lineDay !== v.today ? name(lineDay) : "Today",
   };
 }
 
