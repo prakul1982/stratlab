@@ -30,3 +30,12 @@ def test_us_names_keep_how_companies_write_them():
     assert sp.proper_name("ASML HOLDING NV") == "ASML Holding NV"
     assert sp.proper_name("AMAZON COM INC") == "Amazon.com Inc"
     assert sp.proper_name("MICROSOFT CORP") == "Microsoft Corp"
+
+
+def test_r45a_015_an_before_a_vowel_sounding_number_and_no_repeated_after_costs():
+    from app import library
+    assert library.an_before_vowel_number("A 8% stop loss; at most 10% of the capital") == "An 8% stop loss; at most 10% of the capital"
+    assert library.an_before_vowel_number("a 12% stop") == "a 12% stop"
+    e = {"verdict": {"verdict": "no_edge"}, "stats": {"ret": -10.0, "buy_hold": 40.0, "trades": 40}}
+    head = library.restated(e)["headline"] if "headline" in library.restated(e) else library.restated(e).get("fact_headline")
+    assert head.count("after costs") == 1 and head.startswith("Lost money after costs, 50.0 points behind")

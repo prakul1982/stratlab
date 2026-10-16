@@ -90,7 +90,7 @@ def price_trend(bars: list[dict], page_1y: float | None = None) -> dict | None:
         avg = sum(closes[-n:]) / n
         d = (last / avg - 1) * 100
         if abs(d) < 0.05:                 # would read "0.0% below": it is at the average (round 39)
-            return f"at the {n}-day average"
+            return "level with it"         # beside its own label ("Price vs 200-day average"), not said twice (R45A-015)
         return f"{_pct(abs(d))} {'above' if d >= 0 else 'below'}"
     ago = _year_ago(bars)
     s = stage(pd.Series(closes), 150, 20).iloc[-1]

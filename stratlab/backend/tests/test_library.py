@@ -80,7 +80,8 @@ def test_reports_hide_an_entry_until_the_owner_of_the_site_reviews_it(api, store
 
     as_user("user-1")                                                # the author still sees it, marked hidden
     mine = api.get(f"/library/{e['id']}").json()
-    assert mine["hidden"] and "reports" not in mine and "r1" not in str(mine)
+    # no reporter is named: "r1" as a value anywhere, not as letters inside the entry's random id
+    assert mine["hidden"] and "reports" not in mine and "'r1'" not in repr(mine)
     api.post(f"/notebooks/{nb['id']}/experiments/1/library", json={"description": "clean now"})   # re-publishing doesn't clear it
     as_user("r9")
     assert api.get("/library").json()["total"] == 0

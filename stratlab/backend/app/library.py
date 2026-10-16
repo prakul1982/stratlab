@@ -218,7 +218,8 @@ def restated(e: dict) -> dict:
         if hold["gap"] <= -1:
             # behind buy and hold: the shortfall leads, before any check it passed (R6V-005: "Passed all 3 checks run"
             # above "+55.8% vs +172.9%, 117.1 points behind")
-            head = f"{abs(hold['gap']):.1f} points behind buy and hold after costs; {lab[:1].lower() + lab[1:]}"
+            head = (f"Lost money after costs, {abs(hold['gap']):.1f} points behind buy and hold" if lab == "Lost money after costs"
+                    else f"{abs(hold['gap']):.1f} points behind buy and hold after costs; {lab[:1].lower() + lab[1:]}")
     out: list[str] = []
     if hold:
         diff = "" if abs(hold["gap"]) < 0.05 else f", {abs(hold['gap']):.1f} points {'more' if hold['gap'] < 0 else 'less'}"
@@ -265,6 +266,14 @@ def restated(e: dict) -> dict:
     return v
 
 
+_A_NUMBER = re.compile(r"\b([Aa]) (?=(?:8|11|18|8\d|8\d\d)(?:[.,]\d+)?\s?(?:%|-))")
+
+
+def an_before_vowel_number(text: str) -> str:
+    """"An 8% stop loss", not "A 8%" (R45A-015): a number said with a vowel sound (8, 11, 18, 80s) takes "an"."""
+    return _A_NUMBER.sub(lambda m: "An " if m.group(1) == "A" else "an ", text)
+
+
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
     st = e.get("stats") or {}
@@ -272,6 +281,8 @@ def public(e: dict, viewer: str | None = None) -> dict:
         e = {**e, "stats": {**st, "ret": max(st["ret"], -100.0) if isinstance(st.get("ret"), (int, float)) else st.get("ret"),
                             "mdd": max(st["mdd"], -100.0) if isinstance(st.get("mdd"), (int, float)) else st.get("mdd")}}
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
+    if isinstance(out.get("description"), str):
+        out["description"] = an_before_vowel_number(out["description"])
     out["ran"], out["reason"], out["vs_hold"] = ran(e), reason(e), versus_hold(e)
     out["verdict"] = restated(e)
     out["mine"] = bool(viewer and e.get("owner") == viewer)

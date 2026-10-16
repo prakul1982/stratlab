@@ -83,12 +83,17 @@ export function pageHtml(template, { title, description, canonical, index, jsonl
   return template;
 }
 
+/** The library's strategies as plain links, under its opening words, so a crawler that runs no script finds each one
+ * (R45B-006: the served /library page named none of them). */
+export const LIBRARY_LINKS = `\n<ul class="boot-links">\n${LIBRARY_SEEDS.map(([id, name]) => `<li><a href="/library/${id}">${text(name)}</a></li>`).join("\n")}\n</ul>`;
+
 /** Every file to write, as [path under dist, html]. The home page replaces index.html itself. */
 export function pageFiles(template) {
   const files = PAGES.map((p) => [p.path === "/" ? "index.html" : `${p.path.slice(1)}/index.html`,
     pageHtml(template, { title: p.title, description: p.description, canonical: p.index ? absolute(p.canonical ?? p.path) : null, index: p.index,
       jsonld: p.path === "/" ? homeJsonLd() : p.path === "/faq" ? faqJsonLd() : "", heading: p.heading, summary: p.summary,
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
+      after: p.path === "/library" ? LIBRARY_LINKS : "",
       faq: p.path === "/faq" })]);
   // /plans (the signed-in Plans page's address) opens the landing page at its prices: same words as /pricing, kept out of
   // search results with that page as the one address (R17-002: it started as the home page's hero and then jumped down)

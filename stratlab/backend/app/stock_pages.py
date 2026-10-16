@@ -1667,7 +1667,7 @@ h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}.m
 .stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
 .note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2)}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
-details.how summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-weight:600}details.how li{margin:6px 0}
+details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}details.how li{margin:6px 0}
 .tbl{overflow-x:auto;direction:rtl;scroll-snap-type:x proximity;scroll-padding-left:124px}.tbl table{direction:ltr}
 .tbl th:not(:first-child),.tbl td:not(:first-child){scroll-snap-align:end}
 table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
