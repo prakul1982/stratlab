@@ -32,7 +32,7 @@ def items_from_subs(subs: dict, symbol: str, company: str | None, today: date, d
     cut = (today - timedelta(days=days)).isoformat()
     out = []
     for form, at, acc, doc in zip(forms, dates, accs, docs):
-        if form not in FORMS or not at or at < cut or not acc:
+        if form not in FORMS or not at or at < cut or not acc or filed_by(acc) == cik:
             continue
         kind, amend = FORMS[form]
         folder = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}"
@@ -40,6 +40,31 @@ def items_from_subs(subs: dict, symbol: str, company: str | None, today: date, d
                     "amendment": amend, "label": filing_label(kind, amend), "url": f"{folder}/{doc}" if doc else folder + "/",
                     "holder": None, "pct": None, "shares": None, "read": False})
     return out
+
+
+def filed_by(acc: str) -> int | None:
+    """The CIK an accession number was filed under (its first ten digits: the filer or its agent)."""
+    digits = re.sub(r"\D", "", acc or "")
+    return int(digits[:10]) if len(digits) >= 10 else None
+
+
+_SUFFIX = re.compile(r"\b(?:the|inc|incorporated|corp|corporation|co|company|ltd|plc|holdings?|group|n\.?a|llc|lp)\b\.?", re.I)
+
+
+def _core(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _SUFFIX.sub(" ", (name or "").lower()))
+
+
+def about_itself(item: dict) -> bool:
+    """A filing the company made as a holder of someone else's shares, not one about the company. The SEC's filing list
+    for a company also carries the 13D/13G filings it files itself (R43A-004: JPMorgan's list showed its own stakes in
+    other companies as holders of JPM, one also under CPAY): filed under the company's own CIK, or naming the company as
+    the reporting person."""
+    m = re.search(r"/edgar/data/(\d+)/(\d{18})", item.get("url") or "")
+    if m and int(m.group(1)) == filed_by(m.group(2)):
+        return True
+    holder, company = _core(item.get("holder") or ""), _core(item.get("company") or "")
+    return bool(holder and company and holder == company)
 
 
 def _flat(text: str) -> str:

@@ -130,6 +130,8 @@ def other_subs(cik: int) -> dict:
     day = lambda n: (date.today() - timedelta(days=n)).isoformat()
     rows = []                                                     # (form, filed, accession, document, items)
     acc = lambda k: f"{cik:010d}-26-{k:06d}"
+    # a 13D/13G is filed under its holder's number (or its filing agent's), never the company's own (R43A-004)
+    held = lambda k: f"{102909 + cik % 7:010d}-26-{(cik * 10 + k) % 1000000:06d}"
     if cik % 5 == 0:
         rows.append(("8-K", day(3 + cik % 30), acc(1), "a8-k.htm", "4.01,9.01"))
     if cik % 7 == 0:
@@ -139,9 +141,9 @@ def other_subs(cik: int) -> dict:
     if cik % 31 == 0:
         rows.append(("8-K", day(2 + cik % 50), acc(4), "d8-k.htm", "3.01"))
     if cik % 11 == 0:
-        rows.append(("SCHEDULE 13G/A", day(2 + cik % 60), acc(5), "xslSCHEDULE_13G_X02/primary_doc.xml", ""))
+        rows.append(("SCHEDULE 13G/A", day(2 + cik % 60), held(5), "xslSCHEDULE_13G_X02/primary_doc.xml", ""))
     if cik % 53 == 0:
-        rows.append(("SC 13D", day(4 + cik % 80), acc(6), "d13.htm", ""))
+        rows.append(("SC 13D", day(4 + cik % 80), held(6), "d13.htm", ""))
     rows.append(("8-K", day(30), acc(7), "e8-k.htm", "2.02,9.01"))        # an earnings release: not flagged
     rows.sort(key=lambda x: x[1], reverse=True)
     cols = list(zip(*rows))

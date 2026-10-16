@@ -429,3 +429,14 @@ def test_us_growth_figures_say_which_periods_they_compare(research):
     assert g["Revenue YoY"]["note"] == "Last 12 months vs the 12 before"
     from app.intel import ai as A
     assert any(k.startswith("Growth: Revenue YoY (Last 12 months") for k in A.company_facts(c)["metrics"])
+
+
+def test_market_headlines_leave_out_stories_that_arent_about_markets_or_business(research, monkeypatch):
+    """R43A-006: "NBA tightens betting rules" and "Norwegian teen jailed" were listed under Market headlines."""
+    wire = [{"headline": h, "url": f"https://example.com/{i}", "source": "Wire", "datetime": 1790000000 - i}
+            for i, h in enumerate(["NBA tightens betting rules after probe", "Norwegian teen jailed for 20 years",
+                                   "Yemen's besieged Taiz runs short of water", "Nvidia unveils new data centre chips",
+                                   "Wall Street falls as tech stocks slide"])]
+    monkeypatch.setattr(research.finnhub, "market_news", lambda *a, **k: wire)
+    assert [h["headline"] for h in research.headlines("US")] == ["Nvidia unveils new data centre chips",
+                                                                  "Wall Street falls as tech stocks slide"]

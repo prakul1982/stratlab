@@ -14,7 +14,7 @@ export function NoAccess({ what, email }: { what: string; email?: string | null 
       <PageHeader eyebrow="No access" title="You don't have access to this page"
         lede={`${what} ${/s$/.test(what) ? "are" : "is"} only for StratLab's team.${email ? ` You're signed in as ${email}.` : ""}`} />
       <div className="gate-actions">
-        <Link className="btn" to="/">Go to your home</Link>
+        <Link className="btn" to="/">Go to My space</Link>
         <Link className="btn quiet" to="/contact">Contact us</Link>
       </div>
     </div>

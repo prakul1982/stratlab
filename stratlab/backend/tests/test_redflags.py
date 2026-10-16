@@ -480,3 +480,21 @@ def test_a_weekend_filing_day_is_read(mem):
     feed = FakeNSE({date(2026, 10, 3): [flag("ABC", "2026-10-03T18:00")]})        # a Saturday
     out = R.Runner(lambda: {"in": feed}, sleep=lambda s: None, pause=0).run("IN", TODAY)
     assert out["ok"] and out["new"] == 1 and date(2026, 10, 3) in feed.days and date(2026, 10, 4) in feed.days
+
+
+# ---------- R43A-004: a company's own 13G filings about other companies aren't its holders ----------
+def test_a_filing_the_company_made_itself_is_not_one_of_its_holders():
+    own = [("SCHEDULE 13G/A", "2026-10-15", "0000019617-26-000501", "primary_doc.xml", ""),    # JPMorgan, filing as a holder
+           ("SCHEDULE 13G/A", "2026-10-14", "0000102909-26-000630", "primary_doc.xml", "")]    # someone else, about JPMorgan
+    got = U.items_from_subs(subs(19617, own), "JPM", "JPMorgan Chase & Co", TODAY)
+    assert [i["id"] for i in got] == ["JPM|0000102909-26-000630"]
+
+
+def test_a_stored_row_about_itself_is_left_out_of_the_listing():
+    url = "https://www.sec.gov/Archives/edgar/data/19617/000001961726000501/primary_doc.xml"
+    assert U.about_itself({"url": url, "holder": "JPMORGAN CHASE & CO.", "company": "JPMorgan Chase & Co"})
+    assert U.about_itself({"url": "https://www.sec.gov/Archives/edgar/data/895421/000110465926000001/a.xml",
+                           "holder": "MORGAN STANLEY", "company": "Morgan Stanley"})
+    assert not U.about_itself({"url": "https://www.sec.gov/Archives/edgar/data/19617/000010290926000630/a.xml",
+                               "holder": "Vanguard Group Inc", "company": "JPMorgan Chase & Co"})
+    assert not U.about_itself({"url": "", "holder": None, "company": "JPMorgan Chase & Co"})

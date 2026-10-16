@@ -195,6 +195,7 @@ def other_region(region: str, title: str) -> bool:
 # not a market story whatever market word it carries (R7O-005: "'I'm getting fed up': voters line up before dawn as
 # early voting begins in Ohio")
 OFF_TOPIC = re.compile(r"\b(voters?|early voting|ballots?|polling (station|booth)s?|campaign trail|spy chief|arrested|murder|"
+                       r"jailed|sentenced|nba|nfl|flotilla|besieged|"
                        r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football|"
                        r"cramer|things to watch|what to watch|endowments?)\b", re.I)
 _MON = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}

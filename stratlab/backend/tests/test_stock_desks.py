@@ -527,3 +527,61 @@ def test_no_advice_or_provider_names_in_what_the_pages_say(w):
         assert not PROVIDERS.search(text), path
         words = " ".join(v for v in re.findall(r'"([^"]{25,})"', text))
         assert not ADVICE.search(words), (path, ADVICE.search(words))
+
+
+# ---------- R43A-003: a gap since the newest stored day is filled, and a day given up on is asked again daily ----------
+class _Store:
+    def __init__(self, days, state=None):
+        self._days, self._state, self.put = list(days), dict(state or {}), []
+
+    def days(self):
+        return self._days
+
+    def state(self):
+        return self._state
+
+    def set_state(self, **kw):
+        self._state.update(kw)
+
+    def put_many(self, rows):
+        self.put += rows
+        self._days = sorted(set(self._days) | {r[0] for r in rows})
+
+
+class _Desk(X.Desk):
+    name, what, ready_at, lag = "gap", "margin trading disclosure", "19:30", 1
+
+    def __init__(self, store, published):
+        self.store, self.published, self.asked = store, published, []
+
+    def read(self, files, day):
+        self.asked.append(day.isoformat())
+        return ({"A": [1, 2, 3]}, {}) if day.isoformat() in self.published else None
+
+
+def test_a_gap_since_the_newest_stored_day_is_read_and_the_page_says_how_many_days_are_missing(monkeypatch):
+    now = datetime(2026, 10, 16, 20, 0, tzinfo=X.IST)                    # 15 Oct's disclosure is out (lag 1)
+    desk = _Desk(_Store(["2026-09-30"]), published=set())
+    st = X.status(desk, now)
+    assert st["status"] == "pending" and st["missing"] == 10        # 1-15 Oct's trading days (2 Oct a holiday)
+    assert "30 Sep 2026" in st["reason"] and "10 trading days since" in st["reason"] and "15 Oct 2026" in st["reason"]
+    runner = X.Runner([desk], lambda: None)
+    monkeypatch.setattr(runner, "_files", lambda: object())
+    monkeypatch.setattr(runner, "alert", lambda *a, **k: None)
+    desk.published = {"2026-10-01", "2026-10-15"}
+    res = runner.catch_up(desk, now)
+    assert res["2026-10-01"] == "ok" and res["2026-10-15"] == "ok"   # 1 Oct is 15 days back: the gap, not the 10-day window
+    assert X.status(desk, now)["status"] == "ok" and desk.store.state()["tries"]["2026-10-14"] == 1     # the days between: tried
+
+
+def test_a_day_taken_as_unpublished_is_asked_again_once_a_day(monkeypatch):
+    day1 = datetime(2026, 10, 16, 20, 0, tzinfo=X.IST)
+    desk = _Desk(_Store(["2026-10-13"], {"tries": {"2026-10-14": 3}, "tried_on": {"2026-10-14": "2026-10-16"}}), published=set())
+    runner = X.Runner([desk], lambda: None)
+    monkeypatch.setattr(runner, "_files", lambda: object())
+    monkeypatch.setattr(runner, "alert", lambda *a, **k: None)
+    runner.catch_up(desk, day1)
+    assert "2026-10-14" not in desk.asked                             # given up on today already
+    desk.published = {"2026-10-14"}
+    runner.catch_up(desk, datetime(2026, 10, 17, 20, 0, tzinfo=X.IST))  # the next day: asked again, and read
+    assert "2026-10-14" in desk.asked and "2026-10-14" in desk.store.days()

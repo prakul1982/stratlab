@@ -33,6 +33,8 @@ ARCHIVE = "https://nsearchives.nseindia.com"
 CASH_BHAV = ARCHIVE + "/content/cm/BhavCopy_NSE_CM_0_0_0_{ymd}_F_0000.csv.zip"
 CATCH_UP_DAYS = 10            # recent trading days a missed run looks back over
 CATCH_UP_TRIES = 3            # times a recent day is asked for before it's taken as not published
+RETRY_DAYS = 10               # after that, asked once a day this many more times (a refusal can look like a missing file)
+GAP_DAYS = 45                 # how far back a run looks for days missing since the newest stored one
 BACKFILL_STEP = 6             # past days one archive walk reads, so a run never hammers the exchange
 MISS_RUN = 6                  # trading days in a row the archive hasn't got: it's turning us away, not missing them
 RETRY_MINUTES = 20
@@ -376,8 +378,30 @@ def status(desk, now: datetime | None = None) -> dict:
                          f"and catches up within {RETRY_MINUTES} minutes when a run was missed.")
     else:
         out["status"] = "pending"
-        out["reason"] = f"The exchange hasn't published {day_words(exp.isoformat() if exp else None)}'s {desk.what} yet."
+        missing = missing_days(have, exp) if exp else 0
+        out["missing"] = missing
+        if missing > 1:
+            # more than the one day still to come: the stored figures are older than they look (R43A-003: "Data up to
+            # 30 Sep" beside "hasn't published 15 Oct's … yet", with 1 to 14 Oct missing too)
+            out["reason"] = (f"The figures are from {day_words(have)}: the {desk.what} for the {missing} trading days since, up to "
+                             f"{day_words(exp.isoformat())}, hasn't been read yet. StratLab keeps trying each evening.")
+        else:
+            out["reason"] = f"The exchange hasn't published {day_words(exp.isoformat() if exp else None)}'s {desk.what} yet."
     return out
+
+
+def missing_days(have: str, exp: date) -> int:
+    """How many trading days after `have` up to and including `exp` aren't stored."""
+    try:
+        d = date.fromisoformat(str(have)[:10])
+    except ValueError:
+        return 0
+    n = 0
+    while d < exp and n < 400:
+        d += timedelta(days=1)
+        if trading(d):
+            n += 1
+    return n
 
 
 def mine(uid: str, limit: int = 120) -> tuple[list[str], list[str]]:
@@ -457,21 +481,35 @@ class Runner:
             return {}
         st = desk.store.state()
         tries = dict(st.get("tries") or {})
-        have = set(desk.store.days())
+        tried_on = dict(st.get("tried_on") or {})
+        today = now.astimezone(IST).date().isoformat()
+        days = desk.store.days()
+        have = set(days)
         res: dict = {}
         files = None
         d = exp
+        # back to the newest stored day when that is older than the usual window, so a gap is filled (R43A-003: margin
+        # funding stopped at 30 Sep while 1 to 14 Oct were published), at most GAP_DAYS back
         stop = exp - timedelta(days=CATCH_UP_DAYS)
+        if days:
+            try:
+                stop = max(min(stop, date.fromisoformat(days[-1])), exp - timedelta(days=GAP_DAYS))
+            except ValueError:
+                pass
         self.running = True
         try:
             while d > stop:
                 key = d.isoformat()
-                if trading(d) and key not in have and tries.get(key, 0) < CATCH_UP_TRIES:
+                # a day taken as not published after CATCH_UP_TRIES is asked again once a day, up to RETRY_DAYS times: a
+                # refusal that looks like a missing file (a page in place of the file) mustn't lose the day for good
+                due = tries.get(key, 0) < CATCH_UP_TRIES or (tried_on.get(key, "") < today and tries.get(key, 0) < CATCH_UP_TRIES + RETRY_DAYS)
+                if trading(d) and key not in have and due:
                     files = files or self._files()
                     r = self.read_day(desk, files, d)
                     res[key] = r
                     if r == "missing":
                         tries[key] = tries.get(key, 0) + 1
+                        tried_on[key] = today
                     elif r != "ok":
                         break                           # busy or refusing: the next run tries again
                 d -= timedelta(days=1)
@@ -479,9 +517,10 @@ class Runner:
             self.running = False
         stamp = now.astimezone(IST).isoformat(timespec="minutes")
         bad = next((r for r in res.values() if r not in ("ok", "missing")), None)
-        cut = stop.isoformat()
+        cut = (exp - timedelta(days=GAP_DAYS)).isoformat()
         desk.store.set_state(checked=stamp if res else st.get("checked"), error=bad if res else st.get("error"),
-                             tries={k: v for k, v in tries.items() if k > cut})
+                             tries={k: v for k, v in tries.items() if k > cut},
+                             tried_on={k: v for k, v in tried_on.items() if k > cut})
         try:
             n = self.alert(desk, exp, now, fresh=res.get(exp.isoformat()) == "ok")
             if n:

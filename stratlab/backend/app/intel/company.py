@@ -848,15 +848,25 @@ class Research:
     def headlines(self, region: str, focus: str = "") -> list[dict]:
         """The market's headlines for Pulse and the briefs: stories only, never a site's own title or a third party's
         buying worded as advice ("We're buying the dip in a stock…", R7O-005)."""
+        from ..newsletter.content import MARKET_WORDS, OFF_TOPIC
+
+        def ok(title, market_words: bool) -> bool:
+            # stories about markets and business only (R43A-006: "NBA tightens betting rules", "Norwegian teen jailed"
+            # under Market headlines): none of the briefs' off-topic words; a general web search's result must also name
+            # the market (the financial wire's own stories, a company's news among them, don't have to); a focus
+            # search keeps what its own words found
+            if not title or not plain_headline(title) or (not focus and OFF_TOPIC.search(title)):
+                return False
+            return bool(focus) or not market_words or bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title))
         if region == "US" and self.finnhub.ready() and not focus:
             try:
                 return [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
                          "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                        for n in self.finnhub.market_news()[:20] if n.get("headline") and plain_headline(n["headline"])][:14]
+                        for n in self.finnhub.market_news()[:60] if ok(n.get("headline"), False)][:14]
             except SourceError:
                 pass
         q = (focus + " " if focus else "") + ("Nifty Sensex India stock market" if region == "IN" else "US stock market")
-        return [h for h in self.news.search(q, region, limit=20) if plain_headline(h.get("headline"))][:14]
+        return [h for h in self.news.search(q, region, limit=40) if ok(h.get("headline"), True)][:14]
 
     # ---------- company profiles ----------
     LAZY = ("news", "about")       # what a lean company page leaves for its second request (see company_more)

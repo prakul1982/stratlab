@@ -90,7 +90,7 @@ export function PublicLibrary() {
                       <CardHead title={plainTerms(e.name)} level={2} />
                       <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>by {e.author}</span></span>
                     </div>
-                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} /><span className="k-note">{checksOf(e)}</span><BehindHold e={e} />{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                    <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                     <HoldLine e={e} />
                     {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
