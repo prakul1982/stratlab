@@ -347,6 +347,14 @@ def stored_stocks(day: str, got: dict) -> list[dict]:
     return out
 
 
+def _later(a, b) -> bool:
+    """Whether ISO moment `a` is after `b`, whatever offsets they are written in; False when either can't be read."""
+    try:
+        return datetime.fromisoformat(str(a)) > datetime.fromisoformat(str(b))
+    except (TypeError, ValueError):
+        return False
+
+
 def view(profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     local = now.astimezone(IST)
@@ -375,7 +383,9 @@ def view(profile: dict, now: datetime | None = None) -> dict:
     nxt = next_window(local, trading, phase)
     as_of = live.get("as_of") if not from_stored else None
     # final prices shown: the stamp is the time of the read that held them, not the list's last stamp from the auction (R28-010)
-    if as_of and fresh and phase == "closed" and any(v.get("final_out") for v in stocks) and (live.get("read") or "") > as_of:
+    # (compared as moments: the read is stored in UTC and the exchange's stamp in IST, and as text "…T10:05+00:00" sorts
+    # before "…T15:28+05:30" though it is later; R35: the final prices showed "as of 15:28")
+    if as_of and fresh and phase == "closed" and any(v.get("final_out") for v in stocks) and _later(live.get("read"), as_of):
         as_of = live["read"]
     return {"phase": phase, "today": today.isoformat(), "trading_day": trading, "timetable": S.describe(today),
             "day": shown_day, "fresh": fresh, "read": live.get("read"), "as_of": as_of,

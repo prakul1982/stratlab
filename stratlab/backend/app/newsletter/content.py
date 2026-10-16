@@ -251,7 +251,9 @@ def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
             actual = abs(p - p / (1 + ch / 100))
             if abs(n - actual) > max(60.0, 0.35 * actual):
                 return True
-    # the market as a whole: "India's stock market is sinking" in a brief where every index rose (6 Oct 2026, +0.98%)
+    # the market as a whole: "India's stock market is sinking" in a brief where every index rose (6 Oct 2026, +0.98%),
+    # or where the main index rose clearly though another was flat (R35: "Stock markets trade lower…" over NIFTY 50 +0.65%,
+    # NIFTY BANK +0.06%)
     m = re.search(r"\b(stock markets?|markets?|stocks|shares|equities|dalal street|wall street)\b[^,;:|]{0,30}?\b(?:" + _UP + "|" + _DOWN + r")\b",
                   title, re.I)
     if m and by:
@@ -261,7 +263,24 @@ def contradicts(title: str, region: str, indices: list[dict] | None) -> bool:
         moves = [float(i["change_pct"]) for i in by.values()]
         if (up and all(c < -0.3 for c in moves)) or (down and all(c > 0.3 for c in moves)):
             return True
+        main = by.get(MAIN_INDEX.get(region, ""))
+        if main is not None and ((up and float(main["change_pct"]) < -0.3) or (down and float(main["change_pct"]) > 0.3)):
+            return True
     return False
+
+
+MAIN_INDEX = {"IN": "NIFTY 50", "US": "S&P 500"}
+# a story about one moment before the close (the open, early trade, the morning): the brief reports the day's close
+_EARLY = re.compile(r"\b(early (?:session|trade|trading|deals|hours)|opening (?:bell|trade|session|deals)|pre-?open(?:ing)?|"
+                    r"mid-?session|morning (?:trade|session|deals)|intraday|(?:set|poised|likely|seen|expected) (?:for|to) "
+                    r"(?:a |an )?(?:\w+ )?(?:open|start)|(?:mixed|flat|higher|lower|positive|negative|muted|weak|strong|gap-?up|gap-?down) "
+                    r"(?:open|opening|start)|opens? (?:higher|lower|flat|in the green|in the red))\b", re.I)
+
+
+def early_story(title: str) -> bool:
+    """A headline about the open or early trade (R35: 'India Set for Mixed Open', 'markets trade lower during early
+    session' in the evening's brief, hours older than the close it reports)."""
+    return bool(_EARLY.search(title or ""))
 
 
 def headline_ok(region: str, title: str, frm: str | None = None, to: str | None = None, indices: list[dict] | None = None) -> bool:
@@ -277,6 +296,8 @@ def headline_ok(region: str, title: str, frm: str | None = None, to: str | None 
         year = int(to[:4])
         if any(not (frm <= d <= to) for d in title_dates(title, year)):
             return False
+    if indices and early_story(title):       # a daily brief reports the close (a weekly one passes no indices)
+        return False
     return not contradicts(title, region, indices)
 
 

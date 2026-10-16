@@ -99,6 +99,17 @@ def test_closing_auction_stamp_is_the_read_that_holds_the_final_prices(w, monkey
     assert during["as_of"] == "2026-10-15T15:28:00+05:30"
 
 
+def test_the_final_prices_stamp_holds_when_the_read_is_stored_in_utc(w, monkeypatch):
+    """R35: the server stores its read time in UTC; compared as text with the exchange's IST stamp it looked earlier, so
+    the final prices kept 'as of 15:28'."""
+    stock = dict(zip(CA.FIELDS, [100.0, 95.0, 105.0, 101.0, 10, 102.0, 50, 0, 0, 0, 0, 0, 0, 0, 0]))
+    row = {"read": "2026-10-15T10:06:10+00:00", "day": "2026-10-15", "as_of": "2026-10-15T15:28:00+05:30", "status": "ok",
+           "message": None, "eligible": ["ABC"], "stocks": {"ABC": stock}, "indices": {}, "start": {}}
+    monkeypatch.setattr(CA, "load_live", lambda: row)
+    v = CA.view({"id": "u", "_plan": "pro"}, datetime(2026, 10, 15, 15, 40, tzinfo=IST))
+    assert v["stocks"][0]["final_out"] and v["as_of"] == "2026-10-15T10:06:10+00:00"
+
+
 # ---------- R28-011 ----------
 LIST = {"timestamp": "15-Oct-2026 15:30:00",
         "data": [{"index": "INDIA VIX", "last": 14.2, "previousClose": 14.63, "open": 14.63, "high": 14.9, "low": 13.9}]}
