@@ -730,6 +730,7 @@ class Research:
 
     # ---------- served from memory (R24-001) ----------
     PULSE_FRESH = 15          # seconds the index levels are served from memory before a read behind the page
+    PULSE_STALE_WAIT = 60     # seconds after which a page waits for the fresh read instead of answering with the kept levels
     NEWS_FRESH = 300          # ...and the headlines
     _levels_snap = None
     _news_snap = None
@@ -737,7 +738,9 @@ class Research:
     def _snaps(self):
         from .snapshot import Snapshot
         if self._levels_snap is None:
-            self._levels_snap = Snapshot(self.PULSE_FRESH, give_up=30)
+            # levels a minute or more old wait for the fresh read: the first look after a quiet spell (the open) gets
+            # this minute's levels, not the ones from the last visit an hour earlier (R32-001: 08:00 levels at 09:20)
+            self._levels_snap = Snapshot(self.PULSE_FRESH, give_up=30, wait_after=self.PULSE_STALE_WAIT)
             self._news_snap = Snapshot(self.NEWS_FRESH, give_up=45)
         return self._levels_snap, self._news_snap
 

@@ -418,3 +418,29 @@ def test_the_kept_platform_check_names_its_build(monkeypatch):
         assert pc.TIMEOUTS["Scans"] > pc.SCAN_BUDGET > pc.TIMEOUT
     finally:
         w["close"]()
+
+
+# ---------- R32-001: the first look after a quiet spell waits for this minute's levels ----------
+def test_a_snapshot_older_than_wait_after_waits_for_the_fresh_read_and_falls_back_when_it_is_slow():
+    clock = [1000.0]
+    s = Snapshot(fresh_for=15, wait_after=60, clock=lambda: clock[0])
+    s.put("k", "08:00 levels", at=1000.0 - 80 * 60)              # last read 80 minutes ago (before the open)
+    value, at = s.get("k", lambda: "09:20 levels", wait=6)
+    assert value == "09:20 levels"                              # waited for the fresh read instead of the old copy
+    s.put("k", "kept", at=clock[0] - 30)                         # 30 s old: under wait_after, answered at once
+    assert s.get("k", lambda: "newer", wait=6)[0] == "kept"
+    time.sleep(0.1)                                             # the read it started behind the page lands first
+    assert s.kept("k")[1] == "newer"
+    gate = threading.Event()
+
+    def slow():
+        gate.wait(10)
+        return "late"
+    s.put("k", "old", at=clock[0] - 120)
+    started = time.monotonic()
+    try:
+        assert s.get("k", slow, wait=12)[0] == "old"               # not back within STALE_WAIT_MAX: the kept copy
+        assert time.monotonic() - started < 6
+    finally:
+        gate.set()
+    assert Snapshot(fresh_for=15).wait_after is None                # other snapshots still answer at once

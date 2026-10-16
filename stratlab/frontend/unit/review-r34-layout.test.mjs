@@ -31,3 +31,11 @@ test("R34-009: a long question is cut at a word and its quote stays closed", () 
   assert.ok(idea.startsWith(q.slice(6, q.indexOf("…"))), q);
   assert.equal(q.split('"').length - 1, 2);
 });
+
+test("R32-002: the phone launch banner keeps its × on the text's row (beats the general .banner wrap rule)", () => {
+  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+  const phone = css.slice(css.indexOf("@media (max-width: 640px) { /* .banner.promo-banner"));
+  assert.match(phone, /\.banner\.promo-banner \{ flex-wrap: nowrap;/);
+  const base = css.indexOf(".banner { display: flex;");
+  assert.ok(base > 0 && /flex-wrap: wrap/.test(css.slice(base, base + 200)));   // the rule it has to beat is still there, so the specificity matters
+});

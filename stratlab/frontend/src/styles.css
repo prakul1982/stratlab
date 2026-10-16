@@ -93,9 +93,9 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
 .promo-banner { background: var(--blue-soft, var(--paper-2)); }
 /* a phone: one short sentence, the second left to the Plans page; it wraps rather than cutting off the end date (R31-018) */
-@media (max-width: 640px) {
-  .promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
-  .promo-banner .promo-text { min-width: 0; }
+@media (max-width: 640px) { /* .banner.promo-banner: the general .banner rule further down sets flex-wrap: wrap, which beat a one-class rule (R32-002) */
+  .banner.promo-banner { flex-wrap: nowrap; padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; }
+  .banner.promo-banner .promo-text { flex: 1 1 auto; min-width: 0; }
   .promo-banner .promo-more { display: none; }
   /* the dismiss control is an icon on the same row as the text, a 40 px target (R30-009) */
   .promo-banner .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
