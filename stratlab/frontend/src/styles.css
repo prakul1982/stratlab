@@ -2085,7 +2085,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 /* On a phone (400 px in the review) the group toggle chips were 26 px and some buttons 28 px: a finger needs 40 to 44. The
    padding grows, not the type, and only below 640 px, so the desktop keeps its density. */
 @media (max-width: 640px) {
-  .k-chip, .chip, .k-seg button, .ch-seg button, .ch-btn, .ch-legend button, .k-pagenav-a, .lp-demo-tabs button { min-height: 44px; }
+  .k-chip, .chip, .k-seg button, .k-pagenav-a, .lp-demo-tabs button { min-height: 44px; }   /* not the chart's own controls: its legend sits over the drawing area, where taller buttons catch the taps meant for the chart */
   .k-chip { height: 44px; }
   .chip { height: 44px; }
   .btn.sm, .k-card-head .btn.sm, .k-card-head a, .inv-head-price a { min-height: 44px; }
