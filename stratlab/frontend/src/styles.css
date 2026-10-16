@@ -2090,7 +2090,7 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   .chip { height: 44px; }
   .btn.sm, .k-card-head .btn.sm, .k-card-head a, .inv-head-price a { min-height: 44px; }
   .side-toggle { width: 44px; height: 44px; }
-  .side-title, .side-list a, .side-note, .space-switch button, .mkt-btn, .acct-btn, .cond-x, .fs-go { height: auto; min-height: 44px; }
+  .side-title, .side-list a, .side-note, .space-switch button, .acct-btn, .cond-x, .fs-go { height: auto; min-height: 44px; }   /* the markets line stays 36 px: the drawer footer keeps to 100 px */
   .acct-pop [role="menuitem"], .acct-pop [role="menuitemradio"] { height: auto; min-height: 44px; }
   .earlier > summary, .opt-charge-lines > summary { min-height: 44px; }
   .k-form > .k-field > .k-seg button { min-height: 44px; }
