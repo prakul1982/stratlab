@@ -9,7 +9,8 @@ export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
-  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null }
+  high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null;
+  /** the session the change is of, when the market hasn't traded today (the last completed one) */ change_day?: string | null }
 export interface SourceStatus { source: string; ok: boolean; error: string | null; /** what the source was for ("prices", "news"), said without its name */ what?: string[] }
 export interface SeriesPoint { y: string; v: number }
 

@@ -106,7 +106,7 @@ export interface Basket {
   status: "pass" | "warn" | "fail"; headline: string; market: string; days: number; tested: number; profitable: number;
   beat_buy_hold: number; median_ret: number | null; rows: BasketRow[];
 }
-export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null }
+export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null; /** the last run's return in %, to say "Capital lost" at the −100% floor */ last_return?: number | null }
 export interface NotebookItem {
   id: string; name: string; question: string | null; instrument: Instrument | { id: string } | null;
   summary: NotebookSummary | null; updated_at: string; tf?: Tf | null; pinned?: boolean;

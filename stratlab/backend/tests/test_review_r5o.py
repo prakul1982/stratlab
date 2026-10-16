@@ -469,7 +469,7 @@ def test_turnover_past_the_audit_limit_is_said_as_a_fact():
     from app import tax_total as T
     import re
     got = T.audit_fact(2025, 39.7e7, True)                       # the owner's FY 2025-26 F&O turnover, Rs39.7 crore
-    assert got == "Turnover of ₹39.7 crore is above ₹10 crore, the higher limit in section 44AB: a tax audit applies."
+    assert got == "Turnover of ₹39.7 crore is above ₹10 crore, the higher limit in section 44AB: a tax audit usually applies (the ₹10 crore limit holds only when cash receipts and payments are 5% or less); check with your CA."
     assert got in T.filing_facts(2025, 39.7e7, True)
     mid = T.audit_fact(2025, 4.2e7, True)
     assert mid.startswith("Turnover of ₹4.2 crore is above ₹1 crore") and "₹10 crore" in mid

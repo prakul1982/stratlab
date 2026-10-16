@@ -81,7 +81,7 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signed(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {since}
+          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signed(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> {closed && q.change_day ? `on ${fmtDate(q.change_day, { year: false })}` : since}
         </span>
       )}
     </div>

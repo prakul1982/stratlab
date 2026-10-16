@@ -86,7 +86,7 @@ function holdText(t: Trade) {
   return t.hold_days === 0 ? "Same day" : `${t.hold_days} day${t.hold_days === 1 ? "" : "s"}`;
 }
 
-const VIEWS: [string, string][] = [["weekday", "Day of week"], ["hour", "Time of day"], ["tag", "Setup"], ["instrument", "Instrument"], ["hold", "Holding time"],
+const VIEWS: [string, string][] = [["weekday", "Day of week (entry day)"], ["hour", "Time of day"], ["tag", "Setup"], ["instrument", "Instrument"], ["hold", "Holding time"],
   ["segment", "Segment"], ["side", "Long or short"], ["mistake", "Mistakes"], ["emotion", "Feelings"]];
 const SEGMENT_ORDER = ["eq_delivery", "eq_intraday", "fut", "opt", "com", "cur"];
 

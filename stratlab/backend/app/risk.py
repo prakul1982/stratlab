@@ -142,12 +142,11 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             pct = e / peak - 1 if peak else 0.0
             if pct < 0 and (fall is None or pct < fall["pct"]):
                 fall = {"pct": pct, "pnl": round(e - peak, 2), "date": t[:10], "t": t, "level": round(e - cap, 2)}
-        # the chart draws the low too: one reached between two day closes (a stop loss that the close recovered) is a point
-        # on the line, so the summary's figure and date are what the line shows (R31-010)
-        line = [(d, v) for d, v in combined]
-        if fall and not fall["t"].endswith(END):
-            # a day's close is the end of its day, so the low sits before the close of the day it was reached
-            line = sorted(line + [(fall["t"], fall["level"])], key=lambda p: p[0] if "T" in p[0] else p[0] + END)
+        # the chart line is the day closes; a low reached between two closes is said in the summary as intraday, with its time
+        # (R34-002: a point for it on the line read as a recovery the day after)
+        line = combined
+        intraday = bool(fall) and not fall["t"].endswith(END)
+        close = dict(combined).get(fall["date"]) if intraday and fall["date"] < today else None
         worst = min(moves, key=lambda m: m[1]) if moves else None
         best = max(moves, key=lambda m: m[1]) if moves else None
         rows = [r for r, *_ in items]
@@ -158,7 +157,8 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "worst_day": {"date": worst[0], "pnl": worst[1]} if worst and worst[1] < 0 else None,
             "best_day": {"date": best[0], "pnl": best[1]} if best and best[1] > 0 else None,
             "max_drawdown_pct": round(fall["pct"] * 100, 2) if fall else 0.0,
-            "deepest_fall": {"pnl": fall["pnl"], "pct": round(fall["pct"] * 100, 2), "date": fall["date"]} if fall else None,
+            "deepest_fall": {"pnl": fall["pnl"], "pct": round(fall["pct"] * 100, 2), "date": fall["date"],
+                             **({"intraday": True, "at": fall["t"][11:16], "day_close": round(close, 2) if close is not None else None} if intraday else {})} if fall else None,
             "curve": [{"t": d, "pnl": round(v, 2)} for d, v in line][-180:],
         })
     currencies.sort(key=lambda c: -c["capital"])
