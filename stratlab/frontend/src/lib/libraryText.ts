@@ -12,3 +12,8 @@ export const testedRange = (r: { from: string; to: string } | null | undefined) 
 /** A check's result in words: "Passed", "Warning", "Failed", "Didn't pass" (an older entry that kept only how many
  * passed), "Not run". */
 export const CHECK_RESULT: Record<string, string> = { pass: "Passed", warn: "Warning", fail: "Failed", not_passed: "Didn't pass", skip: "Not run" };
+
+/** The library's return figures are each the total over the whole test period, not a yearly rate. */
+export const TOTAL_AFTER_COSTS = "Total after costs";
+export const TOTAL_HOLD = "Total buy and hold";
+export const TOTAL_NOTE = "total over the test, after costs";

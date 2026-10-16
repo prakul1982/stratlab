@@ -69,7 +69,8 @@ test("the library and policy pages have their own h1 and words in the raw HTML, 
   // the noscript note is a paragraph, and the page's own words show with scripts off
   assert.match(template, /<noscript>\s*<div class="boot"[^>]*>\s*<p><b>StratLab needs JavaScript\.<\/b><\/p>/);
   assert.doesNotMatch(template, /\[data-boot\] \{ display: none; \}/);
-  for (const html of Object.values(files)) assert.doesNotMatch(html, /recommend|buy now|should buy|Yahoo|Finnhub|Screener/i);
+  // changed on purpose (R39): the Terms' full text is in its HTML now and says "not ... a recommendation to buy or sell"
+  for (const [file, html] of Object.entries(files)) assert.doesNotMatch(html, file === "terms/index.html" ? /buy now|should buy|Yahoo|Finnhub|Screener/i : /recommend|buy now|should buy|Yahoo|Finnhub|Screener/i);
 });
 
 test("/faq carries the FAQ's structured data and every question as text; the home page keeps its own (R7V-008)", () => {

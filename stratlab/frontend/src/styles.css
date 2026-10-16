@@ -2073,3 +2073,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 }
 /* R13S-013: the scrolling list of a group's members can be reached with the keyboard, and shows where it is */
 .chip-row:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+
+/* R39: on a phone (touch or not) the plan switch's buttons and the footer's policy links are at least 44px to tap, made with
+   padding and height, not a larger font; placed last so the 32px and 40px rules above can't win */
+@media (max-width: 640px) {
+  .k-seg button, .k-form > .k-field > .k-seg button, .lp-period .k-seg button { min-height: 44px; }
+  .legal-links a, .lp-foot .legal-links a { display: inline-flex; align-items: center; min-height: 44px; padding-block: 12px; box-sizing: border-box; }
+}

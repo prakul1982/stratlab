@@ -314,10 +314,22 @@ test("a library entry's unseen label matches its span, and a result behind buy a
   assert.equal(trails(e), true);
   assert.equal(headTone(e), "mixed");
   assert.equal(headTone({ ...e, vs_hold: { gap: 4 } }), "edge");
-  assert.equal(checksOf(e), "Passed all 3 checks run · nearby settings not run");        // the page headline's own count
-  assert.equal(checksOf({ ...e, verdict: { ...e.verdict, passed: 2 } }), "Passed 2 of the 3 checks run · nearby settings not run");
+  assert.equal(checksOf(e), "3 of 4 checks run · all 3 passed · nearby settings not run");        // the page headline's own count
+  assert.equal(checksOf({ ...e, verdict: { ...e.verdict, passed: 2 } }), "3 of 4 checks run · 2 passed · nearby settings not run");
   const pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
   assert.doesNotMatch(pub + lib, /"Unseen years"/);
   assert.match(pub, /verdict-head pub-head \$\{headTone\(e\)\}/);
   assert.match(pub, /tone=\{trails\(e\) \? undefined : tone\(sh\.ret\)\}/);
+});
+
+test("R39: library return figures say they are the total over the test, not per year", async () => {
+  const { TOTAL_AFTER_COSTS, TOTAL_HOLD, TOTAL_NOTE } = await import("../src/lib/libraryText.ts");
+  assert.equal(TOTAL_NOTE, "total over the test, after costs");
+  assert.deepEqual([TOTAL_AFTER_COSTS, TOTAL_HOLD], ["Total after costs", "Total buy and hold"]);
+  const bits = read("src/components/LibraryBits.tsx"), pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
+  assert.match(bits, /\{TOTAL_NOTE\} against[^]*total for buying and holding over the same dates/);
+  assert.match(pub, /\[\[TOTAL_AFTER_COSTS, sh\.ret\], \[TOTAL_HOLD, sh\.buy_hold\]/);
+  assert.match(pub, /label="Total buy and hold"/);
+  assert.match(lib, /header: TOTAL_AFTER_COSTS/);
+  assert.match(lib, /header: TOTAL_HOLD/);
 });

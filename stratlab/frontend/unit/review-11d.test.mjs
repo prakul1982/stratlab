@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+const legalSrc = () => read("src/content/legal.ts").replace(/\\"/g, '"');
 
 // runs sw.js with a fake network and cache; returns what a page load at `path` is answered with
 async function load(path, { status, body = "<html>x</html>", throws = false, shell = true }) {
@@ -51,13 +52,13 @@ test("the browser bar colour follows the app's dark paper colour", () => {
 });
 
 test("the privacy page names the Account page controls, and the terms don't promise billing that isn't open", () => {
-  const legal = read("src/pages/LegalPage.tsx");
-  assert.match(legal, /"Download all my data" to get a copy[^]*"Delete all my data"[^]*PrivacyMail/);
+  const legal = legalSrc();
+  assert.match(legal, /"Download all my data" to get a copy[^]*"Delete all my data"[^]*mail:privacy/);
   assert.match(legal, /Paid plans are billed only once they are on sale; the Plans page shows whether they are\./);
 });
 
 test("the legal pages' last-updated dates agree across the page, seo.ts and the sitemap", () => {
-  const legal = read("src/pages/LegalPage.tsx"), seo = read("src/content/seo.ts"), py = readFileSync(new URL("../../backend/app/site_pages.py", import.meta.url), "utf8");
+  const legal = legalSrc(), seo = read("src/content/seo.ts"), py = readFileSync(new URL("../../backend/app/site_pages.py", import.meta.url), "utf8");
   const months = { January: "01", February: "02", March: "03", April: "04", May: "05", June: "06", July: "07", August: "08", September: "09", October: "10", November: "11", December: "12" };
   for (const [path, d, m, y] of [...legal.matchAll(/"(\/\w+)": "(\d+) (\w+) (\d+)"/g)].map((x) => [x[1], x[2], x[3], x[4]])) {
     const iso = `${y}-${months[m]}-${d.padStart(2, "0")}`;

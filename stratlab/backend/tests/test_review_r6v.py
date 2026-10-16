@@ -302,11 +302,11 @@ SEED = {"id": "seed-supertrend-us", "name": "Supertrend flip · 20 of the larges
 def test_a_stored_seed_is_restated_from_its_own_checks():
     v = library.restated(SEED)
     assert [c["status"] for c in v["checks"]] == ["pass", "skip", "pass", "pass"]           # nearby: never run on a group
-    assert v["label"] == "Passed all 3 checks run"
+    assert v["label"] == "3 of 4 checks run · all 3 passed"
     # round 7 (R6V-005 leftover): a strategy behind buy and hold leads with the shortfall, then the checks it passed
-    assert v["fact_headline"] == "117.1 points behind buy and hold after costs; passed all 3 checks run."
+    assert v["fact_headline"] == "117.1 points behind buy and hold after costs; 3 of 4 checks run · all 3 passed."
     assert "doesn't depend on one exact" not in v["fact_summary"] and "nearby-settings check wasn't run" in v["fact_summary"]
-    assert v["fact_summary"].startswith("It returned +55.8% after costs; buying and holding over the same period returned +172.9%, 117.1 points more.")
+    assert v["fact_summary"].startswith("It returned +55.8% in total over the test, after costs; buying and holding over the same period returned +172.9%, 117.1 points more.")
     assert not re.search(r"\b(buy now|should|recommend)\b", v["fact_summary"], re.I)
 
 
@@ -337,7 +337,7 @@ def test_the_public_library_gives_the_card_and_the_page_the_same_words(w):
     c = w["client"]
     card = next(x for x in c.get("/public/library").json()["entries"] if x["id"] == SEED["id"])
     page = c.get(f"/public/library/{SEED['id']}").json()
-    assert card["verdict"]["label"] == page["verdict"]["label"] == "Passed all 3 checks run"
+    assert card["verdict"]["label"] == page["verdict"]["label"] == "3 of 4 checks run · all 3 passed"
     assert page["verdict"]["fact_headline"].startswith("117.1 points behind buy and hold") and len(page["verdict"]["checks"]) == 4
 
 
@@ -415,3 +415,12 @@ def test_the_sitemap_lists_only_library_pages_the_build_writes(monkeypatch):
     seed = library_seed.entry_id(*next((slug, s["groups"][0][1]) for slug, s in library_seed.STRATEGIES.items()))
     monkeypatch.setattr(library, "public_entries", lambda: [{"id": seed, "published_at": "2026-10-01"}, {"id": "seed-unbuilt", "published_at": "2026-10-01"}])
     assert site_pages.library_pages() == [(f"/library/{seed}", "2026-10-01")]
+
+
+def test_same_index_same_dates_shows_one_buy_and_hold_figure():
+    rng = {"from": "2021-10-18T00:00:00", "to": "2026-10-14T00:00:00"}
+    a = {**SEED, "id": "seed-a-in", "group": {"id": "nifty50"}, "tf": "1d", "range": rng, "stats": {**SEED["stats"], "buy_hold": 67.94}}
+    b = {**SEED, "id": "seed-b-in", "group": {"id": "nifty50"}, "tf": "1d", "range": rng, "stats": {**SEED["stats"], "buy_hold": 67.96}}
+    other = {**b, "id": "seed-c-in", "range": {"from": "2021-10-19T00:00:00", "to": rng["to"]}, "stats": {**SEED["stats"], "buy_hold": 66.0}}
+    got = {e["id"]: e["stats"]["buy_hold"] for e in library.same_hold([b, a, other])}
+    assert got == {"seed-a-in": 67.94, "seed-b-in": 67.94, "seed-c-in": 66.0}      # different dates keep their own figure

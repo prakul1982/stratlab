@@ -21,7 +21,10 @@
   function show(force) {
     var root = document.getElementById("root");
     if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;       // once the app has drawn, its own error screen does this
-    root.textContent = "";
+    // a page whose words are already in the HTML (the policies, the 404): keep them readable and put the notice above them
+    var keep = root.querySelector("[data-readable]");
+    keep = keep && keep.hasAttribute && keep.hasAttribute("data-readable") ? keep : null;
+    if (!keep) root.textContent = "";
     var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
     var box = document.createElement("div");
     box.className = "boot boot-now";
@@ -37,7 +40,13 @@
     b.textContent = "Reload";
     b.addEventListener("click", function () { location.reload(); });
     box.appendChild(h); box.appendChild(p); box.appendChild(b);
-    root.appendChild(main);
+    if (keep) {
+      if (root.querySelector(".boot-now")) return;
+      box.style.paddingTop = "16px";
+      main.setAttribute("role", "presentation");      // the page's own main stays the main landmark
+      root.insertBefore(main, root.firstChild);
+      if (keep.classList) keep.classList.remove("boot-wait");     // shown now, not after the fade-in delay
+    } else root.appendChild(main);
   }
 
   /** A file failed to load: reload once, else say so. */

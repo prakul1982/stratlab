@@ -141,7 +141,7 @@ test("each page's own HTML is written at build time, with structured data on the
 test("the plain page in index.html: a noscript message, a start-up fallback with the page's words, and the boot guard first", () => {
   const html = read("index.html");
   assert.match(html, /<noscript>[\s\S]*needs JavaScript[\s\S]*<\/noscript>/);
-  assert.match(html, /<div id="root">\s*<main>\s*<div class="boot[^"]*" data-boot>[\s\S]*Facts, not tips/);   // in a main landmark (R8O-009)
+  assert.match(html, /<div id="root">\s*(?:<header[^>]*>[\s\S]*?<\/header>\s*)?<main>\s*<div class="boot[^"]*" data-boot>[\s\S]*Facts, not tips/);   // in a main landmark (R8O-009)
   assert.ok(html.indexOf('src="/boot.js"') < html.indexOf('src="/config.js"') && html.indexOf('src="/config.js"') < html.indexOf('src="/src/entry.tsx"'));
   assert.match(html, /<link rel="canonical" href="https:\/\/stratlab\.studio\/">/);
 });
@@ -312,11 +312,11 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
 });
 
 test("the Privacy page lists every AI provider the code can use, says what the browser keeps before sign-in, and no longer says 'such as'", () => {
-  const page = read("src/pages/LegalPage.tsx");
+  const page = read("src/pages/LegalPage.tsx"), text = read("src/content/legal.ts");
   const catalog = backend("app/ai_catalog.py");
   const names = [...catalog.matchAll(/^\s+Provider\("([a-z0-9]+)", "([^"]+)"/gm)].map((m) => m[2]);
   assert.ok(names.length >= 11, `${names.length} providers read`);
-  const privacy = page.slice(page.indexOf("function Privacy"), page.indexOf("function Refunds"));
+  const privacy = text.slice(text.indexOf('"/privacy": ['), text.indexOf('"/refunds": [')).replace(/\\"/g, '"');
   for (const name of names.map((n) => n.replace(/ \(.*\)$/, ""))) assert.ok(privacy.includes(name), `${name} is in the catalog but not in the policy`);
   assert.match(privacy, new RegExp(`any of these ${({ 11: "eleven", 12: "twelve" })[names.length] ?? names.length}`));
   assert.doesNotMatch(privacy, /such as Groq/);
@@ -357,4 +357,36 @@ test("the sample pages don't carry what the review found: the reload message, on
   assert.doesNotMatch(css.split("\n").find((l, i, all) => /@keyframes lp-in/.test(l) && all.slice(0, i).some((x) => /round 5/.test(x))), /opacity/, "the demo card is never dim");
   assert.doesNotMatch(css, /\.lp-hero \.lp-demo \{ display: none; \}/, "the demo shows on a phone");
   assert.match(css, /\.lp-menu > summary \{ min-height: 40px/);
+});
+
+test("R39: each policy page's whole text is in its own HTML, from the one source the app draws, and a load failure keeps it", async () => {
+  const { LEGAL_BLOCKS } = await import("../src/content/legal.ts");
+  const { pageFiles } = await import("../scripts/seoPages.mjs");
+  const files = Object.fromEntries(pageFiles(read("index.html")));
+  for (const [path, blocks] of Object.entries(LEGAL_BLOCKS)) {
+    const html = files[`${path.slice(1)}/index.html`];
+    assert.match(html, /<div class="boot[^"]*" data-boot data-readable>/, path);
+    for (const b of blocks) if ("h" in b) assert.ok(html.includes(`<h2>${b.h}</h2>`), `${path}: ${b.h}`);
+  }
+  const terms = files["terms/index.html"];
+  assert.match(terms, /<h2>Liability<\/h2>/);
+  assert.match(terms, /limited to what you paid us in the 12 months/);
+  assert.match(terms, /<a href="mailto:support@stratlab\.studio">support@stratlab\.studio<\/a>/);
+  assert.match(files["privacy/index.html"], /<h2>Cookies and storage<\/h2>/);
+  assert.match(files["contact/index.html"], /billing@stratlab\.studio/);
+  assert.doesNotMatch(terms, /\{(name|email)\}|\*\*/);          // no mark left unread
+  assert.match(read("src/pages/LegalPage.tsx"), /content\/legal/);
+  // boot.js: the "Couldn't load" card goes above the words, never in place of them
+  assert.match(read("public/boot.js"), /querySelector\("\[data-readable\]"\)[\s\S]*if \(!keep\) root\.textContent = ""/);
+});
+
+test("R39: the 404 page and the start-up shell have the site's look inline: a logo home, and links to Home, the companies and the library", () => {
+  const html = read("index.html");
+  assert.match(html, /<header class="boot-head"><a href="\/"[^>]*><img src="\/favicon\.svg"/);
+  assert.match(html, /\.boot-head \{/);
+  const nf = Object.fromEntries(pageFiles(html))["404.html"];
+  assert.match(nf, /<h1>Page not found<\/h1>/);
+  for (const [href, label] of [["/", "Home"], ["/stocks", "Company pages"], ["/library", "Strategy library"]]) assert.ok(nf.includes(`<li><a href="${href}">${label}</a></li>`), href);
+  assert.match(nf, /<style>[\s\S]*\.boot-links a \{[^}]*padding/);        // inline CSS, not the bundle's
+  assert.doesNotMatch(nf, /<link rel="stylesheet"/);
 });

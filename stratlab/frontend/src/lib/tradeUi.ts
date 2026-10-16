@@ -46,14 +46,14 @@ type Held = { range: { from: string; to: string } | null; stats: { ret: number |
 /** The unseen figure's name, by the span it covers: "Unseen months" on a 6-month test, "Unseen years" on a long one. */
 export const unseenLabel = (e: { range: { from: string; to: string } | null }) => `Unseen ${unseenWord(e.range)}`;
 
-/** The checks' count, in the words of the verdict's label ("Passed all 3 checks run · nearby settings not run"), so the
+/** The checks' count, in the words of the verdict's label ("3 of 4 checks run · all 3 passed · nearby settings not run"), so the
  * list, the card and the page's headline count the same way. */
 export function checksOf(e: Held): string {
   if (lostMoney(e.verdict.verdict, e.stats.ret)) return LOST_CHECKS;
   const notRun = (e.verdict.checks ?? []).filter((c) => c.status === "skip").map((c) => (CHECK_NAMES[c.id] ?? c.id).replace("years", unseenWord(e.range)));
   const run = e.verdict.total, passed = e.verdict.passed;
   if (!notRun.length || notRun.length !== CHECKS - run) return checksLine(passed, run, notRun);
-  return `${passed >= run ? `Passed all ${run}` : `Passed ${passed} of the ${run}`} checks run · ${notRun.join(" and ")} not run`;
+  return `${run} of ${CHECKS} checks run · ${passed >= run ? `all ${run} passed` : `${passed} passed`} · ${notRun.join(" and ")} not run`;
 }
 
 /** Whether the rules trail buy and hold: a result behind it is not shown as a win. */

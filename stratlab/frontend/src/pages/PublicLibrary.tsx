@@ -8,7 +8,7 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { CHECK_RESULT, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
@@ -90,8 +90,8 @@ export function PublicLibrary() {
                     {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
-                      {([["After costs", sh.ret], ["Buy and hold", sh.buy_hold], [unseenLabel(e), sh.unseen]] as [string, number | null][])
-                        .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={k === "After costs" && trails(e) ? undefined : tone(n)} />)}
+                      {([[TOTAL_AFTER_COSTS, sh.ret], [TOTAL_HOLD, sh.buy_hold], [unseenLabel(e), sh.unseen]] as [string, number | null][])
+                        .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={k === TOTAL_AFTER_COSTS && trails(e) ? undefined : tone(n)} />)}
                     </div>
                     <div className="k-row k-push"><Link className="btn sm" to={`/library/${encodeURIComponent(e.id)}`} aria-label={`Open the verdict and rules of ${plainTerms(e.name)}`}>Open the verdict and rules</Link></div>
                   </Card>
@@ -148,10 +148,10 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span data-testid="lib-tested">{e.range ? `Tested ${testedRange(e.range)}` : "Tested on past prices"}</span></span>
           </div>
           <Card label="Results">
-            <CardHead title="Results after costs" actions={<span className="k-note">{checksOf(e)}</span>} />
+            <CardHead title="Results after costs, total over the test" actions={<span className="k-note">{checksOf(e)}</span>} />
             <StatRow label="Results">
-              <Stat item label="Return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={trails(e) ? undefined : tone(sh.ret)} />
-              <Stat item label="Buy and hold" value={sh.buy_hold == null ? "–" : pct(sh.buy_hold)} tone={tone(sh.buy_hold)} />
+              <Stat item label="Total return after costs" value={sh.ret == null ? "–" : pct(sh.ret)} tone={trails(e) ? undefined : tone(sh.ret)} />
+              <Stat item label="Total buy and hold" value={sh.buy_hold == null ? "–" : pct(sh.buy_hold)} tone={tone(sh.buy_hold)} />
               <Stat item label={unseenLabel(e)} value={sh.unseen == null ? "–" : pct(sh.unseen)} tone={tone(sh.unseen)} />
               <Stat item label="Worst fall" value={sh.mdd == null ? "–" : pct(sh.mdd)} tone={sh.mdd == null ? undefined : "down"} />
               <Stat item label="Trades" value={e.stats.trades == null ? "–" : String(e.stats.trades)} />

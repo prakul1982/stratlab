@@ -32,7 +32,7 @@ test("the comment on /about does not say search engines list /features", () => {
 
 test("the legal pages wait for the seller's details instead of showing the fallback first", () => {
   const src = read("src/pages/LegalPage.tsx");
-  assert.match(src, /loaded \? <Body \/>/);
+  assert.match(src, /loaded \? <Policy path=\{page\.path\} \/>/);
   assert.match(src, /setLoaded\(true\)/);
   assert.match(src, /catch\(\(\) => \{ if \(live\) setLoaded\(true\)/);
 });
