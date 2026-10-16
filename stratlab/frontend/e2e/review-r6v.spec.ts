@@ -44,7 +44,7 @@ test("a library strategy states its checks, buy and hold, its dates and its univ
   expect(eyebrow.toLowerCase().split("20 of the largest us companies").length - 1, eyebrow).toBe(1);
   // all four checks, each with its result in words; the one not run on a group says so
   const checks = page.getByRole("region", { name: "The four checks" }).or(page.locator("section.pub-checks"));
-  await expect(checks.locator("h3")).toHaveText(["Unseen years", "Nearby settings", "Bad-luck drawdown", "Enough trades"]);
+  await expect(checks.locator("h3")).toHaveText([/^Unseen (years|months)$/, "Nearby settings", "Bad-luck drawdown", "Enough trades"]);   // months on a test under ~3 years (R38)
   await expect(checks.locator(".k-card", { hasText: "Nearby settings" })).toContainText("Not run");
   // the library card for the same strategy: the same label as the page's headline starts with
   await page.goto("/library");

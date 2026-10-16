@@ -124,7 +124,7 @@ test("the Invest home's breadth card shows the live count after the open (R7T-01
   await expect(card).toHaveAttribute("data-live", "1", { timeout: 30_000 });
   await expect(card.getByTestId("breadth-card-when")).toHaveText("Live as of 09:30 IST");
   await expect(card).toContainText("317 / 176");
-  await expect(card).toContainText("Last close, 8 Oct");            // the year's highs and lows stay the close's, said so
+  await expect(card).toContainText("Close of 8 Oct");            // the year's highs and lows stay the close's, said so (R38: each figure names its day)
   expect(errors).toEqual([]);
 });
 

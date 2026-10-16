@@ -49,7 +49,7 @@ test("net worth hides Download CSV until there is an entry; the journal says buy
   const { readFileSync } = await import("node:fs");
   const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8");
   assert.match(src("pages/money/NetWorthPage.tsx"), /\{!empty && <button type="button" className="btn quiet" onClick=\{download\}>/);
-  assert.match(src("pages/trade/JournalPage.tsx"), /"Buy\/sell not in the file"/);
+  assert.match(src("pages/trade/JournalPage.tsx"), /"Long or short: not in the file"/);
   assert.doesNotMatch(src("pages/trade/JournalPage.tsx"), /Side not in the file/);
 });
 
