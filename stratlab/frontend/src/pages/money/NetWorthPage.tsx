@@ -526,7 +526,7 @@ export function NetWorthPage() {
               Your entries are stored with your account only and never shared.
             </p>
             <div className="k-row">
-              <button type="button" className="btn quiet" onClick={download}><Download size={16} />Download CSV</button>
+              {!empty && <button type="button" className="btn quiet" onClick={download}><Download size={16} />Download CSV</button>}
               {!empty && <button type="button" className="btn danger" onClick={removeAll}><Trash size={16} />Delete my net worth data</button>}
             </div>
           </section>

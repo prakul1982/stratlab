@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -33,6 +34,7 @@ const PERIODS: Record<Tf, number[]> = {
 export function useNotebook(id: string | undefined) {
   const { fail, refreshNotebooks } = useApp();
   const [nb, setNb] = useState<Notebook | null>(null);
+  useDocTitle(nb?.name);          // the notebook's own name in the tab, not "Notebooks"
   // why there's no notebook to show: none at this address (deleted, mistyped, another account's), or it couldn't be read
   const [problem, setProblem] = useState<"missing" | "error" | null>(null);
   // "failed": the last save didn't reach the server; its edits wait for Retry (or the next save)
@@ -360,7 +362,7 @@ function NotebookView() {
     { key: "v", header: "Run", rowHeader: true, cell: (e) => <Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>v{e.v}</b></Link> },
     { key: "ret", header: "Overall", numeric: true, cell: (e) => <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
     { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)} · {e.stats.n} trade{e.stats.n === 1 ? "" : "s"}</span></> },
-    { key: "unseen", header: "Unseen years", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
+    { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => { const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
     { key: "verdict", header: "Verdict", cell: (e) => <VerdictBadge v={e.verdict.verdict} /> },
   ];
 

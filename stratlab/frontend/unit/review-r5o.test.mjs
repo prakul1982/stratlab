@@ -302,3 +302,22 @@ test("the theme map says a company without a checked ticker isn't listed, not 'p
   assert.match(r, /\{co\.name\} \(not listed\)/);
   assert.doesNotMatch(r, /\(private\)/);
 });
+
+test("a library entry's unseen label matches its span, and a result behind buy and hold is not blue or green", async () => {
+  const { unseenWord, unseenLabel, checksOf, headTone, trails } = await import("../src/lib/tradeUi.ts");
+  assert.equal(unseenWord({ from: "2026-04-17", to: "2026-10-14" }), "months");
+  assert.equal(unseenWord({ from: "2021-01-01", to: "2026-10-14" }), "years");
+  assert.equal(unseenLabel({ range: { from: "2026-04-17", to: "2026-10-14" } }), "Unseen months");
+  assert.equal(unseenLabel({ range: null }), "Unseen years");
+  const e = { range: { from: "2021-01-01", to: "2026-10-14" }, stats: { ret: 55.8 }, vs_hold: { gap: -108.5 },
+    verdict: { verdict: "edge", passed: 3, total: 3, checks: [{ id: "unseen", status: "pass" }, { id: "nearby", status: "skip" }] } };
+  assert.equal(trails(e), true);
+  assert.equal(headTone(e), "mixed");
+  assert.equal(headTone({ ...e, vs_hold: { gap: 4 } }), "edge");
+  assert.equal(checksOf(e), "Passed all 3 checks run · nearby settings not run");        // the page headline's own count
+  assert.equal(checksOf({ ...e, verdict: { ...e.verdict, passed: 2 } }), "Passed 2 of the 3 checks run · nearby settings not run");
+  const pub = read("src/pages/PublicLibrary.tsx"), lib = read("src/pages/LibraryPage.tsx");
+  assert.doesNotMatch(pub + lib, /"Unseen years"/);
+  assert.match(pub, /verdict-head pub-head \$\{headTone\(e\)\}/);
+  assert.match(pub, /tone=\{trails\(e\) \? undefined : tone\(sh\.ret\)\}/);
+});

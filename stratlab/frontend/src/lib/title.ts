@@ -15,6 +15,11 @@ const OWN: Record<string, string> = {
   "/trade": "Trade home", "/invest": "Invest home", "/money": "Money home", "/research/compare": "Compare", "/help": "Help",
 };
 
+/** The Admin sections' names (pages/admin/AdminContext.tsx SECTIONS), by the path after /admin/. */
+export const ADMIN_SECTIONS: Record<string, string> = {
+  users: "Users and growth", money: "Money", data: "Data and jobs", quality: "Quality", system: "System", emails: "Email previews",
+};
+
 /** "Page · StratLab" (or the brand's line alone when the page has no name). */
 export const withBrand = (name?: string | null) => (name ? `${name} · ${BRAND}` : DEFAULT_TITLE);
 
@@ -22,7 +27,7 @@ export const withBrand = (name?: string | null) => (name ? `${name} · ${BRAND}`
 export function titleFor(path: string): string {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
   if (OWN[p]) return withBrand(OWN[p]);
-  if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Admin");
+  if (p === "/admin" || p.startsWith("/admin/")) return withBrand(`Admin · ${ADMIN_SECTIONS[p.split("/")[2]] ?? "Overview"}`);
   const company = p.match(/^\/research\/(IN|US)\/([^/]+)(\/deep)?$/);
   if (company) {
     // the company's name from the first frame when it has been opened before (R8O-009: "POLYCAB · StratLab" until the

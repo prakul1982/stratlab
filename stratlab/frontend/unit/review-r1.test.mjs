@@ -15,7 +15,9 @@ test("every page has its own tab title (R1-010)", () => {
   assert.equal(titleFor("/research/US/AAPL/deep"), "AAPL deep dive · StratLab");
   assert.equal(titleFor("/n/abc/e/2"), "Notebooks · StratLab");
   assert.equal(titleFor("/trade/g/practise"), "Practise · Trade · StratLab");
-  assert.equal(titleFor("/admin/users"), "Admin · StratLab");
+  assert.equal(titleFor("/admin/users"), "Admin · Users and growth · StratLab");
+  assert.equal(titleFor("/admin"), "Admin · Overview · StratLab");
+  assert.equal(titleFor("/admin/emails"), "Admin · Email previews · StratLab");
   assert.equal(titleFor("/settings"), "Settings · StratLab");
   assert.equal(titleFor("/nowhere"), DEFAULT_TITLE);
   assert.equal(withBrand("RELIANCE ₹1,408"), "RELIANCE ₹1,408 · StratLab");
@@ -106,4 +108,13 @@ test("the menu follows the address, not the last space used (R1-011)", () => {
   assert.equal(menuView("/holdings", "mine", true), "mine");      // a page pinned to Mine keeps Mine's menu
   assert.equal(menuView("/holdings", "mine", false), "money");
   assert.equal(menuView("/", "invest"), "invest");               // the front door goes on to the space showing
+});
+
+test("a notebook's tab takes its name, and a running options session is Paper trading", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { locate } = await import("../src/lib/nav.ts");
+  assert.match(readFileSync(new URL("../src/pages/NotebookPage.tsx", import.meta.url), "utf8"), /useDocTitle\(nb\?\.name\)/);
+  assert.equal(titleFor("/options/s/abc123"), "Paper trading · StratLab");
+  assert.equal(locate("/options/s/abc123").page.label, "Paper trading");
+  assert.equal(titleFor("/options"), "Options builder · StratLab");
 });

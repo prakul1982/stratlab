@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BROAD_GROUP, breadthApi, cardFigures, count, savedPick, share, shortDay, type BreadthView } from "../lib/breadth";
+import { BROAD_GROUP, breadthApi, cardDates, cardFigures, count, savedPick, share, type BreadthView } from "../lib/breadth";
 import { homeRegion } from "../lib/homeMarket";
 import { Panel } from "./Research";
 import { AsOf, PanelSkel } from "./ui";
@@ -22,6 +22,7 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
       .then(setD).catch(() => setD("error"));
   }, [region]);
   const f = d && d !== "error" ? cardFigures(d) : null;
+  const dates = d && d !== "error" ? cardDates(d) : null;
   // the page opens on the group this card shows (or, before it has loaded, on this market), not the reader's own market
   const page = d && d !== "error" ? `/invest/breadth?group=${encodeURIComponent(d.group.id)}` : `/invest/breadth?region=${region}`;
   return (
@@ -33,11 +34,11 @@ export function BreadthCard({ region: picked }: { region?: "IN" | "US" }) {
           <div className="k-stack" data-testid="breadth-card" data-live={f.live ? "1" : "0"}>
             <span className="eyebrow">{d.group.name} · <span data-testid="breadth-card-when">{f.when}</span> {f.live && !f.final && <Badge tone="live">Live</Badge>}</span>
             <div className="k-stats">
-              <Stat label="Rose / fell" value={`${count(f.adv)} / ${count(f.dec)}`} />
-              <Stat label="Above 50-day average" value={share(f.pct50)} />
+              <Stat label="Rose / fell" value={`${count(f.adv)} / ${count(f.dec)}`} note={dates?.counts} />
+              <Stat label="Above 50-day average" value={share(f.pct50)} note={dates?.counts} />
               {/* the live count has no new highs and lows: those stay the last close's, said so */}
               {f.live
-                ? (d.today ? <Stat label="52-week highs / lows" value={`${count(d.today.highs.value)} / ${count(d.today.lows.value)}`} note={`Last close, ${shortDay(d.today.day)}`} /> : null)
+                ? (d.today ? <Stat label="52-week highs / lows" value={`${count(d.today.highs.value)} / ${count(d.today.lows.value)}`} note={dates?.highs} /> : null)
                 : <Stat label="52-week highs / lows" value={`${count(f.highs)} / ${count(f.lows)}`} />}
             </div>
             {!f.live && <AsOf parts={[["Prices", d.as_of]]} tz={marketTz(d.group.region)} />}
