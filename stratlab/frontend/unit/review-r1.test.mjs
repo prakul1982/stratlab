@@ -113,7 +113,7 @@ test("the menu follows the address, not the last space used (R1-011)", () => {
 test("a notebook's tab takes its name, and a running options session is Paper trading", async () => {
   const { readFileSync } = await import("node:fs");
   const { locate } = await import("../src/lib/nav.ts");
-  assert.match(readFileSync(new URL("../src/pages/NotebookPage.tsx", import.meta.url), "utf8"), /useDocTitle\(nb\?\.name\)/);
+  assert.match(readFileSync(new URL("../src/pages/NotebookPage.tsx", import.meta.url), "utf8"), /useDocTitle\(notebookTitle\(nb\?\.name, page\)\)/);
   assert.equal(titleFor("/options/s/abc123"), "Paper trading · StratLab");
   assert.equal(locate("/options/s/abc123").page.label, "Paper trading");
   assert.equal(titleFor("/options"), "Options builder · StratLab");

@@ -50,7 +50,7 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
   const errors = await signIn(page, u, "/");
   await expect(page).toHaveURL(/\/mine$/, { timeout: 30_000 });
   const home = page.getByTestId("mine-home");
-  await expect(home.getByRole("heading", { level: 1 })).toContainText(/^Good (morning|afternoon|evening)/);
+  await expect(home.getByRole("heading", { level: 1 })).toContainText(/^(Good (morning|afternoon|evening)|Hello)/);
   // the date is India's (the test browser runs in UTC, which the page treats as no real zone), so it is right after midnight IST too
   const ist = (o: Intl.DateTimeFormatOptions) => new Date().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
   await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}$`));
@@ -202,7 +202,7 @@ test("my space: greets by first name, writes the dollar rate without a rupee sig
   await page.getByRole("button", { name: /All of it/ }).click({ timeout: 2000 }).catch(() => undefined);
   await page.goto("/mine");
   const home = page.getByTestId("mine-home");
-  await expect(home.getByRole("heading", { level: 1 })).toHaveText(/^Good (morning|afternoon|evening), Owner$/);
+  await expect(home.getByRole("heading", { level: 1 })).toHaveText(/^(Good (morning|afternoon|evening)|Hello), Owner$/);
   await expect(page.locator(".k-skel-box")).toHaveCount(0, { timeout: 30_000 });
   // USD/INR is a rate, not an amount of rupees; gold says what it is priced in
   const fx = page.locator('.mine-mkt[data-market="usdinr"]');

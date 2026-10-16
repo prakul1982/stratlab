@@ -1621,7 +1621,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   await expect(today.getByText(/vs \d+ \w+/).first()).toBeVisible();                     // the change against the day before
   const charts = page.getByTestId("breadth-charts");
   await expect(charts.getByRole("heading", { name: "Advance/decline line" })).toBeVisible();
-  for (const name of ["Share above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% and down 4%",
+  for (const name of ["Share above the 50- and 200-day averages", "New 52-week highs and lows", "McClellan oscillator", "Stocks up 4% or more and down 4% or more, each day",
     "Sectors: share above the 50-day average", "Breadth thrust measure", "TRIN"]) await expect(charts.getByRole("heading", { name })).toBeVisible();
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();

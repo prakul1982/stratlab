@@ -15,6 +15,8 @@ export function hourIn(zone: string, now: Date = new Date()): number {
   return Number.isFinite(h) ? h % 24 : now.getHours();
 }
 
+/** 05:00 to 11:59 morning, 12:00 to 16:59 afternoon, 17:00 to 21:59 evening; the small hours (22:00 to 04:59) just "Hello",
+ * never "Good morning" at 00:20. */
 export function greetingAt(hour: number): string {
-  return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  return hour >= 5 && hour < 12 ? "Good morning" : hour >= 12 && hour < 17 ? "Good afternoon" : hour >= 17 && hour < 22 ? "Good evening" : "Hello";
 }

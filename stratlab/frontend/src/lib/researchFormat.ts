@@ -127,6 +127,10 @@ export function resultsFiled(day: string | null | undefined, latestQuarter: stri
   return gap >= 0 && gap <= 75;
 }
 
+/** The name a "Who owns it" row goes by. The filing's "Promoters" row is the whole promoter group (every promoter entity
+ * together), so it is not read as the figure of the one largest holder in the named holders table beside it. */
+export const holderRowName = (label: string): string => (/^promoters?$/i.test(label.trim()) ? "Promoter group total" : label);
+
 /** How many whole months old a quarter's figures are, when a newer quarter's should be out by now (companies file
  * results within 45 days of a quarter's end, 60 for the year's last; shareholding within 21): `lagDays` after the end
  * of a later quarter has passed. null when the figures are the latest that can be out, or the label can't be read. */

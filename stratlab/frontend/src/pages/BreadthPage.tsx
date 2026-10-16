@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
+  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -223,7 +223,7 @@ function Headline({ t, help, lastClose, pending, revised }: { t: Today; help: Re
         <Stat label={lab("Above 50-day average", help.ma)} value={share(t.pct50.value)} delta={pts("pct50")} note={`20-day: ${share(t.pct20.value)}`} />
         <Stat label={lab("Above 200-day average", help.ma)} value={share(t.pct200.value)} delta={pts("pct200")} />
         <Stat label={lab("52-week highs / lows", help.highs_lows)} value={<><span className="k-up">{count(t.highs.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.lows.value)}</span></>} note={pair("highs", "lows")} />
-        <Stat label={lab("Up 4% / down 4%", help.moves)} value={<><span className="k-up">{count(t.up4.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.down4.value)}</span></>} note={pair("up4", "down4")} />
+        <Stat label={lab(MOVES_LABEL, help.moves)} value={<><span className="k-up">{count(t.up4.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.down4.value)}</span></>} note={pair("up4", "down4")} />
         <Stat label={lab("In Stage 2", help.stage2)} value={share(t.stage2.value)} delta={pts("stage2")} />
         <Stat label={lab("McClellan oscillator", help.mcclellan)} value={t.mcclellan.value == null ? "–" : fmt1(t.mcclellan.value)}
           delta={chg(t.mcclellan.change, "", 1)} note={t.summation.value == null ? undefined : `Summation ${fmt1(t.summation.value)}`} />
@@ -335,7 +335,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
           <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan summation index" />
         </Box>
-        <Box title="Stocks up 4% and down 4%" info={help.moves} h={h} cols={[{ header: "Up 4%+", get: (i) => count(h.up4[i]) }, { header: "Down 4%+", get: (i) => count(h.down4[i]) }]} none={flatZero(h.up4, h.down4)} note={`Last ${last}`}>
+        <Box title={MOVES_TITLE} info={help.moves} h={h} cols={[{ header: "Up 4%+", get: (i) => count(h.up4[i]) }, { header: "Down 4%+", get: (i) => count(h.down4[i]) }]} none={flatZero(h.up4, h.down4)} note={`Last ${last}`}>
           <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="up 4%+" downLabel="down 4%+" upName="Up 4% or more" downName="Down 4% or more" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="Stocks up 4% or more (up) and down 4% or more (down) each day" />
         </Box>

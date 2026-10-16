@@ -6,7 +6,7 @@ import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
 import { checksLine } from "../lib/tradeUi";
-import { legacyNote, splitLegacy } from "../lib/legacyRun";
+import { compareGap, legacyNote, splitLegacy } from "../lib/legacyRun";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
@@ -18,7 +18,7 @@ export function CompareExperiments() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const nav = useNavigate();
-  const { nb, problem, reload } = useNotebook(id);
+  const { nb, problem, reload } = useNotebook(id, "Compare runs");
   if (!nb && problem) return <NotebookProblem problem={problem} retry={reload} />;
   if (!nb) return <div className="k-page"><PageHeader eyebrow="Trade · Build and test" title="Compare experiments" /><Card><Skeleton label="Opening the notebook" /></Card></div>;
   // a run whose figures contradict each other is never charted or compared: it is listed with the reason (R38-001)
@@ -35,7 +35,7 @@ export function CompareExperiments() {
     <div className="k-page">
       <PageHeader eyebrow="Trade · Build and test" title="Compare experiments" lede={<Link to={`/n/${nb.id}`} className="link">← {nb.name}</Link>} />
       <EmptyState title="Nothing to compare yet" action={{ label: exps.length ? "Change the rules and run again" : "Run the first test", to: `/n/${nb.id}` }}>
-        Comparing needs two runs of this notebook{legacy.length ? " whose figures are shown" : ""}. {exps.length ? "It has one so far: change one thing and run it again." : "It has none yet."}
+        {compareGap(exps.length, legacy.length)}
       </EmptyState>
       {notShown}
     </div>

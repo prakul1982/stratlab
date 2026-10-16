@@ -1686,6 +1686,7 @@ form.find{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}form.find input,form
 form.find input{flex:1;min-width:200px}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
 footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
+@media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
 @media (max-width:640px){input,select,textarea,form.find input,form.find select{font-size:16px}}
 """
 
@@ -1823,7 +1824,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
         return _page(_head(title, desc, canonical, robots="noindex,follow"), app, body + _cta(symbol, test, deep))
     if f.get("not_company"):
         return _not_company_page(region, symbol, str(f["not_company"]))
-    desc = description(f)
+    desc = description({**f, "name": name})          # the tidied name, as in the title and the h1 (a filing's capitals stay out of the snippet)
     as_of = as_of_text(f)
     if _num(f.get("price")) is not None and is_close(f) and behind(f):
         # "Last price, 8 Oct" above: the line under it says what that price is, never "Prices are closing prices" (R13-006)
