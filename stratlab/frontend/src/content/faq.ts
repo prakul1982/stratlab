@@ -12,7 +12,7 @@ export const FAQ: Faq[] = [
   { q: "Do I need to know how to code?",
     a: ["No. You describe the idea in plain words. If something is missing, like when to sell, StratLab asks. You can also tap any rule to change it."] },
   { q: "Why not just look at the backtest return?",
-    a: ["Because almost any idea can be tuned to look great on past prices. The four checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. That's the difference between an edge and a coincidence."] },
+    a: ["Because almost any idea can be tuned to look great on past prices. The four checks ask whether it would have worked on data it never saw, with slightly different settings, and with worse luck. They can't prove a strategy will work, but a result that fails them was most likely luck."] },
   { q: "Who can see my money data?",
     a: ["Only you. Your holdings, funds, net worth, trades and tax figures are kept per account, never shown to anyone else, and each page deletes its data in one step. A mutual fund statement and its password are read once and not stored."] },
   { q: "Does StratLab file my tax return?",
