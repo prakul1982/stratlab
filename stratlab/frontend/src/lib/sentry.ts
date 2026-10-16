@@ -17,11 +17,17 @@ function load(): Promise<Sentry | null> {
 
 const NOISE = /ResizeObserver loop|AbortError|Failed to fetch|Load failed|NetworkError|dynamically imported module|importing a module script|loading chunk/i;
 
-/** A crash, to PostHog's error tracking (lib/analytics, loaded only when something breaks; nothing without its key).
- *  Dropped connections and failed downloads aren't the page's bugs and are left out. */
-export function reportCrash(err: unknown, how: "window" | "promise" | "page") {
+type How = "window" | "promise" | "page";
+declare global { interface Window { __stratlabCrash?: (err: unknown, how: How) => void; __stratlabCrashes?: [unknown, How][] } }
+
+/** A crash, to PostHog's error tracking. lib/analytics takes it once it has loaded (it sets window.__stratlabCrash);
+ *  until then up to 10 wait in window.__stratlabCrashes. Nothing is imported from here, so no page downloads a file
+ *  more for it. Dropped connections and failed downloads aren't the page's bugs and are left out. */
+export function reportCrash(err: unknown, how: How) {
   if (NOISE.test(`${(err as Error)?.name ?? ""} ${(err as Error)?.message ?? err}`)) return;
-  void import("./analytics").then((a) => a.trackError(err, how)).catch(() => undefined);
+  if (window.__stratlabCrash) { window.__stratlabCrash(err, how); return; }
+  const waiting = (window.__stratlabCrashes ??= []);
+  if (waiting.length < 10) waiting.push([err, how]);
 }
 
 let listening = false;

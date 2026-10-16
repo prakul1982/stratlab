@@ -188,6 +188,12 @@ export function trackError(err: unknown, how: "window" | "promise" | "page") {
   }));
 }
 
+// lib/sentry hands crashes over through the window, so it never imports this file; the ones it kept waiting go now
+if (typeof window !== "undefined") {
+  window.__stratlabCrash = (err, how) => trackError(err, how);
+  for (const [err, how] of window.__stratlabCrashes?.splice(0) ?? []) trackError(err, how);
+}
+
 /** Signed out: forget the account, so the next person on this browser starts fresh. */
 export function resetAnalytics() {
   context = {};
