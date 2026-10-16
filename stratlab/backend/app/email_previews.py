@@ -212,7 +212,7 @@ def _result() -> tuple[str, str, str]:
 
 def _scan() -> tuple[str, str, str]:
     text = "3 stocks in NIFTY 50 newly match your Stage 2 scan: TCS, INFY, LT.\nFacts from the scan you set, not advice."
-    return _alerts_email("StratLab: 3 new matches on your scan", text, "/research", "Scan alert", "You get this because you turned on scan alerts on StratLab.")
+    return _alerts_email("StratLab: 3 new matches on your scan", text, "/research/scan", "Scan alert", "You get this because you turned on scan alerts on StratLab.")
 
 
 def _admin() -> tuple[str, str, str]:

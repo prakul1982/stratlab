@@ -170,15 +170,16 @@ export function fmtDate(v: DateInput, o: DateOpts = {}): string {
 }
 
 /** The day after the close whose numbers aren't stored yet, as the server says it ({day, due}). */
-export type Pending = { day: string; due: string | null; during?: boolean } | null | undefined;
+export type Pending = { day: string; due: string | null; during?: boolean; failed?: boolean } | null | undefined;
 
 /** Numbers stored once a day, on the evening of a session they don't hold yet: "Latest: 8 Oct · 9 Oct due about
  * 18:30 IST", never "Today's numbers · 8 Oct" (R8B-008). While that session is still trading (`during`, a group with no
- * live view): "Latest close 8 Oct · today's count comes after 5:45 PM ET" (R9R-007). Null when the stored day is the newest. */
+ * live view): "Latest close 8 Oct · today's count comes after 5:55 PM ET" (R9R-007). Null when the stored day is the newest. */
 export function latestDue(have: string | null | undefined, pending: Pending): string | null {
   if (!have || !pending?.day || have.slice(0, 10) >= pending.day) return null;
   const d = (iso: string) => fmtDate(iso.slice(0, 10), { year: false });
   if (pending.during) return `Latest close ${d(have)} · today's count comes after ${pending.due ?? "the close"}`;
+  if (pending.failed) return `Latest: ${d(have)} · the ${d(pending.day)} update didn't finish; it is tried again automatically`;
   return `Latest: ${d(have)} · ${d(pending.day)} due${pending.due ? ` about ${pending.due}` : " this evening"}`;
 }
 

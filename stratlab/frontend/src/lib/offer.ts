@@ -89,7 +89,7 @@ export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, u
     title: where === "landing" ? "Free to start. Pay when you need more." : "Plans",
     lede: where === "landing"
       ? "Every market and every space is on the Free plan. Paid plans raise the limits and add the scans, alerts, live tools, history and the deeper tax tools. Cancel any time."
-      : "Cancel any time; your plan stays active until the paid period ends.",
+      : "Paid plans: cancel any time; the plan stays active until the paid period ends.",
   };
   // the offer couldn't be read (the server didn't answer): the same cards, with what is on them and no promise about what is on sale
   return { title: "Plans", lede: "Every market and every space is on the Free plan. Paid plans raise the limits and add the deeper tools. Today's offer couldn't be loaded, so reload the page to see what is on sale." };

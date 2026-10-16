@@ -89,6 +89,15 @@ def due_label(region: str) -> str | None:
     h, m = divmod(t, 60)
     return f"{h % 12 or 12}:{m:02d} {'PM' if h >= 12 else 'AM'} ET"
 
+def update_failed(region: str, pending: dict | None, stat: dict | None = None) -> bool:
+    """The newest run for a market failed and its prices are older than the day the page says is due: the page then says
+    the update didn't finish instead of "due about 5:55 PM ET" long after that time."""
+    if not pending or pending.get("during"):
+        return False
+    st = (stat if stat is not None else status()).get(region) or {}
+    return bool(st.get("last_error") and str(st.get("as_of") or "")[:10] < str(pending.get("day") or ""))
+
+
 # what each number means, in plain words: the page's (i) next to each figure and chart
 HELP = {
     "ad": "Advances are stocks that closed higher than the day before; declines closed lower. The ratio is advances "
@@ -255,6 +264,13 @@ def revisions(old: dict[str, list], new: dict[str, list], through: str | None) -
             continue
         out.append({"day": d, "before": before, "after": after})
     return out
+
+
+def _rev_key(r: dict) -> tuple:
+    """A revision's identity, to drop a stored one a new run repeats: its day and its new counts. The counts are a dict,
+    which a set can't hold, so they go in as sorted pairs (15 Oct: the US run stopped on "unhashable type: 'dict'")."""
+    after = r.get("after")
+    return (r.get("day"), tuple(sorted(after.items())) if isinstance(after, dict) else after)
 
 
 def merge(old: dict[str, list], new: dict[str, list], keep_from: str | None) -> dict[str, list]:
@@ -549,7 +565,8 @@ class Runner:
             for d, r in rows.items():   # an index close the stored day didn't have yet
                 if r[-1] is None and d in index:
                     r[-1] = index[d]
-            kept = [r for r in load_revised(g) if (r["day"], r.get("after")) not in {(c["day"], c["after"]) for c in changed}]
+            fresh_keys = {_rev_key(c) for c in changed}
+            kept = [r for r in load_revised(g) if _rev_key(r) not in fresh_keys]
             save_hist(g, rows, (kept + changed) if (kept or changed) else None)
             db.set_setting(SECTOR_KEY + g, json.dumps(sectors_of(tally, g)))
             out[g] = {"days": len(rows), "stocks": tally.stocks.get(g, 0), "members": len(who[g]),

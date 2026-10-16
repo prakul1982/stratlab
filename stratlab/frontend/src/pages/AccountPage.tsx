@@ -13,7 +13,7 @@ import { InvoicesCard } from "../components/InvoicesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, monthlyUse, planLabel, planRow, planRun, signedInWith } from "../lib/account";
+import { aiBuildsUse, confirmMatches, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 
 const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
@@ -75,7 +75,7 @@ export function AccountPage() {
     // the daily cap on fresh AI reads, said plainly with today's count (R8O-002); a company's read already written today
     // and the market mood never count
     ...(u.ai_reads_today != null ? [["Fresh AI reads today", aiReadsUse(u.ai_reads_today, u.ai_reads_limit ?? null, u.ai_reads_cap_for ?? null, u.ai_reads_plan_limit)] as [string, string]] : []),
-    ["Paper sessions running", `${me.live_running} of ${me.live_limit}`],
+    ["Paper sessions running", sessionsRunning(me)],
   ];
 
   return (
