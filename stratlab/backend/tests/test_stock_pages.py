@@ -171,3 +171,13 @@ def test_a_company_page_has_twitter_title_and_description_matching_og(w):
 def test_the_being_prepared_page_has_twitter_tags():
     t = stock_pages.busy_page("IN", "TCS")
     assert 'name="twitter:title"' in t and 'name="twitter:description"' in t
+
+
+def test_a_symbol_typed_without_its_market_goes_to_its_page(w):
+    """R35: /stocks/RELIANCE was a 404; it goes to the company's page, India first, then the US."""
+    c = w["client"]
+    r = c.get("/stocks/RELIANCE", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/stocks/in/RELIANCE"
+    r = c.get("/stocks/AAPL", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/stocks/us/AAPL"
+    assert c.get("/stocks/NOPEXYZ").status_code == 404

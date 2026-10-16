@@ -451,7 +451,8 @@ function Pricing() {
   // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
   const gst = pricing?.invoice?.gst === true;
   const small = finePrint(offer, { currency: local ? currency : "INR", inRupees: local?.charged_in === "INR", inRupeesYear: local?.yearly_charged_in === "INR",
-    year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") }, gst });
+    year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") },
+    chargedYear: { basic: rupees("basic", true), pro: rupees("pro", true) }, gst });
   const showYear = !!(offer?.yearly && offer.payments);
   return (
     <section id="pricing" className="lp-sec" aria-busy={loading}>

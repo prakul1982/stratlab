@@ -160,6 +160,8 @@ export function viewingPlansNote(plan: string): string {
  * `charged` is the rupee price a card is charged while the currency isn't charged itself (`inRupees`). */
 export function finePrint(o: Offer | null | undefined, x: {
   currency: string; inRupees: boolean; inRupeesYear: boolean; year?: { basic: string; pro: string } | null; charged?: { basic: string; pro: string } | null;
+  /** the rupee price of a year, when a year is charged in rupees though shown in another currency */
+  chargedYear?: { basic: string; pro: string } | null;
   /** invoices carry GST (the seller's GSTIN is set); without it nothing here speaks of GST (R7M-001). Taken as true when not given. */
   gst?: boolean;
 }): string[] {
@@ -173,7 +175,11 @@ export function finePrint(o: Offer | null | undefined, x: {
   } else if (buy && x.inRupees && x.charged) {
     out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month${gst ? " including GST" : ""}, and your bank converts it, so the amount in ${x.currency} can differ.`);
   }
-  if (buy && o?.yearly && x.year) out.push(`Paying yearly: Basic ${x.year.basic}, Pro ${x.year.pro}${x.inRupeesYear && !inr ? ", charged in rupees" : ""}.`);
+  if (buy && o?.yearly && x.year) {
+    const rupeesYear = x.inRupeesYear && !inr;
+    out.push(`Paying yearly: Basic ${x.year.basic}, Pro ${x.year.pro}${!rupeesYear ? "" : x.chargedYear
+      ? `, charged in rupees: ${x.chargedYear.basic} (Basic) or ${x.chargedYear.pro} (Pro) a year` : ", charged in rupees"}.`);
+  }
   if (buy) out.push("Paid plans renew each month or year until you cancel, which you can do any time from Account.");
   return out;
 }

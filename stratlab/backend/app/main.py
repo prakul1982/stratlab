@@ -4003,6 +4003,12 @@ def stock_index(q: str = "", m: str = ""):
 def stock_region_index(region: str, q: str = ""):
     r = stock_pages.REGIONS.get(region.lower())
     if not r:
+        # /stocks/RELIANCE: a symbol typed without its market goes to its page, India first (R35)
+        for key in ("in", "us"):
+            reg = stock_pages.REGIONS.get(key)
+            hit = stock_pages.find(reg, region) if reg else None
+            if hit:
+                return RedirectResponse(stock_pages.path(reg, hit[0]), status_code=301)
         return HTMLResponse(stock_pages.not_found(None, region), status_code=404)
     if region != region.lower():
         return RedirectResponse(f"/stocks/{region.lower()}", status_code=301)

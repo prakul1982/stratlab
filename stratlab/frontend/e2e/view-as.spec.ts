@@ -55,7 +55,8 @@ test("view as: a locked page under Free, unlocked under Pro, banner on every pag
 
   // View as Free (the user menu): the page reloads as Free and shows its lock, with the banner above it
   await pickInMenu(page, phone, "Free");
-  await expect(banner(page)).toContainText("Viewing as Free. Your real plan is unchanged.", { timeout: 30_000 });
+  await expect(banner(page)).toContainText("Viewing as Free, with that plan's own limits", { timeout: 30_000 });
+  await expect(banner(page)).toContainText("Your real plan is unchanged.");
   await expect(banner(page).getByRole("button", { name: "Turn off" })).toBeVisible();
   await expect(lock(page).first()).toBeVisible({ timeout: 30_000 });
   await expect(lock(page).first()).toContainText("Basic");
@@ -88,7 +89,8 @@ test("view as: a locked page under Free, unlocked under Pro, banner on every pag
 
   // View as Pro (Admin's control): the same page is unlocked, the banner says Pro
   await card.getByRole("radio", { name: "Pro" }).click();
-  await expect(banner(page)).toContainText("Viewing as Pro. Your real plan is unchanged.", { timeout: 30_000 });
+  await expect(banner(page)).toContainText("Viewing as Pro, with that plan's own limits", { timeout: 30_000 });
+  await expect(banner(page)).toContainText("Your real plan is unchanged.");
   await expect(page.getByRole("region", { name: "View as a plan" }).getByRole("radio", { name: "Pro" })).toBeChecked();
   await openScan(page);
   await expect(lock(page)).toHaveCount(0);
