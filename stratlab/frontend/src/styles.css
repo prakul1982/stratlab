@@ -1116,6 +1116,7 @@ a.explore-card, a.explore-card:hover { text-decoration: none; color: var(--ink);
 /* a session's rules in one wrapped line, so the page is one column with no empty gutter beside it */
 .rules-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding: 14px 18px; }
 .rules-strip ul { display: flex; flex-wrap: wrap; gap: 4px 0; list-style: none; margin: 0; padding: 0; font-size: 14px; color: var(--ink-2); }
+.rules-strip > p { flex-basis: 100%; margin: 0; }
 .rules-strip li:not(:last-child)::after { content: "·"; margin: 0 10px; color: var(--muted); }
 @media (max-width: 640px) { .rules-strip ul { flex-direction: column; } .rules-strip li::after { display: none; } }
 /* closed trades, one line each: when, why and the amounts, the P&L at the end; tapping one opens its orders under it */

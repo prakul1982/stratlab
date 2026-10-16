@@ -216,7 +216,7 @@ function Headline({ t, help, lastClose, pending, revised }: { t: Today; help: Re
   };
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={latestDue(t.day, pending) ?? (lastClose ? `Last close · ${shortDay(t.day)}` : `Today's numbers · ${shortDay(t.day)}`)} />
+      <CardHead title={latestDue(t.day, pending) ?? (lastClose ? `Last close · ${shortDay(t.day)}` : `Latest numbers · ${shortDay(t.day)}`)} />
       <StatRow>
         <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />

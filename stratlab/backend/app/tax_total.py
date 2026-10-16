@@ -517,7 +517,8 @@ def audit_fact(fy: int, turnover: float, has_business: bool) -> str | None:
         return None
     high = 10 * CRORE if fy >= 2020 else 5 * CRORE if fy == 2019 else CRORE
     if turnover > high:
-        return f"Turnover of {_crore(turnover)} is above {_crore(high)}, the higher limit in section 44AB: a tax audit applies."
+        return (f"Turnover of {_crore(turnover)} is above {_crore(high)}, the higher limit in section 44AB: a tax audit usually applies "
+                f"(the {_crore(high)} limit holds only when cash receipts and payments are 5% or less); check with your CA.")
     return (f"Turnover of {_crore(turnover)} is above ₹1 crore: section 44AB requires a tax audit unless cash receipts "
             f"and cash payments were each no more than 5% of the total, when the limit is {_crore(high)}.")
 
