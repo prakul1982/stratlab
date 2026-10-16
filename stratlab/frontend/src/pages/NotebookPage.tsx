@@ -404,7 +404,9 @@ function NotebookView() {
             <Link to={`/n/${nb.id}/market`} className={`market-btn${inst || group ? "" : " empty"}`}>
               <span className="k-eyebrow">{inst || group ? "Testing on" : "Not chosen yet"}</span>
               <span className="market-btn-main">
-                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}</>
+                {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}
+                  {/* the plan's cap on a group, said before a run is refused for it (R44-003) */}
+                  {me?.plan_info.group_size != null && group.members.length > me.plan_info.group_size && <span className="k-small" data-testid="group-over-cap"> · Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} instruments in a group: pick fewer to run it</span>}</>
                   : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
                   : "Pick a market and instrument"}
               </span>
@@ -461,7 +463,7 @@ function NotebookView() {
             </FormActions>
           </FormGrid>
           <p className="k-note">
-            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} experiments left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}
+            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}
             {runCopy(group?.members.length ?? 0, running, elapsed)}
             {outOfRuns && <> <Link className="link" to="/plans">Plans</Link></>}
           </p>
