@@ -5,11 +5,11 @@ const initials = (s: Suggestion) => s.symbol.replace(/[^A-Za-z0-9]/g, "").slice(
 
 /** The one box for typing a stock. It suggests listed companies as you type (the same list as the rest of the app): a
  * logo-initials tile, the symbol, the name and the exchange. Up and down move, Enter picks, Esc closes. Picking, or
- * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region)`.
+ * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region, name)` (the name only when picked from the list).
  * `value` is the symbol the page is showing now; the box shows it until you type. Give it an `id` (a Field does) so
  * its label points at it. */
 export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search }: {
-  value?: string; onPick: (symbol: string, region: "IN" | "US") => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
+  value?: string; onPick: (symbol: string, region: "IN" | "US", name?: string) => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
   /** Text to open with as if typed: its matches are looked up and listed (a search handed over in the address). */
   search?: string;
   /** Called with the text as it is typed, for a form that accepts an exact symbol typed without picking. */
@@ -45,7 +45,7 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
     asked.current++;
     setOpen(false); setRows([]); setTyped(false);
     setText(clearOnPick ? "" : s.id);
-    onPick(s.id, s.market);
+    onPick(s.id, s.market, s.name || undefined);
   };
   const exact = () => {
     const s = text.trim().toUpperCase();
