@@ -30,3 +30,12 @@ export function legacyNote(e: Parameters<typeof emptiedDay>[0]): string {
 export function splitLegacy<T extends Parameters<typeof emptiedDay>[0]>(runs: T[]): { shown: T[]; legacy: T[] } {
   return { shown: runs.filter((e) => !isLegacyEmptied(e)), legacy: runs.filter((e) => isLegacyEmptied(e)) };
 }
+
+/** Why the compare page has nothing to compare, counting the runs whose figures are hidden apart from those that can be
+ * compared ("2 experiments" in the list is one run to compare and one hidden, not "one so far"). */
+export function compareGap(shown: number, hidden: number): string {
+  const lead = `Comparing needs two runs of this notebook${hidden ? " whose figures are shown" : ""}. `;
+  const why = hidden === 1 ? "1 is hidden because its figures don't add up" : `${hidden} are hidden because their figures don't add up`;
+  if (shown === 1) return lead + (hidden ? `One run can be compared; ${hidden === 1 ? "1 more is" : `${hidden} more are`} hidden because ${hidden === 1 ? "its" : "their"} figures don't add up. Change one thing and run it again.` : "It has one so far: change one thing and run it again.");
+  return lead + (hidden ? `No run can be compared yet; ${why}. Run the notebook again for current figures.` : "It has none yet.");
+}

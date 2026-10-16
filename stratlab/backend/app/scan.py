@@ -109,7 +109,10 @@ def _bars(registry, iid: str) -> list[dict]:
             bars = prov.history(inst, "1d", DAYS)
     else:
         bars = prov.history(inst, "1d", DAYS)
-    _cache.set(iid, (time.time(), bars), 900)
+    # candles that end before the market's latest completed session are a stale copy: kept a minute, not a quarter of an hour
+    # (R41A: a restart's first scan kept Thursday's last candle as Friday's close for the whole 15 minutes)
+    from . import last_session
+    _cache.set(iid, (time.time(), bars), 60 if market in ("IN", "US") and last_session.behind(bars, market) else 900)
     return bars
 
 

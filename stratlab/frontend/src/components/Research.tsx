@@ -6,7 +6,7 @@ import { aiLimited, aiReason } from "../lib/aiReason";
 import { stageMeaning } from "../lib/stageNote";
 import { ago, writtenAt, fmtDate, marketTz, num, pct, price, safeHref, signCls, signed } from "../lib/format";
 import {
-  SETTLING, bandPosition, metricText, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
+  SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -370,7 +370,7 @@ export function Shareholding({ s }: { s: NonNullable<Company["shareholding"]> })
   return (
     <BarList label="Who owns it" footnote={`As of ${s.as_of}${holdersAge(s.as_of)}. The change is over the last year.${s.note ? ` ${s.note}` : ""}`}
       rows={s.rows.map((r) => ({
-        key: r.label, name: r.label, pct: Math.min(100, r.value),
+        key: r.label, name: holderRowName(r.label), pct: Math.min(100, r.value),
         value: <>{r.value.toFixed(1)}%{r.change != null && Math.abs(r.change) >= 0.05 && <span className="k-note"> <Signed value={r.change}>{r.change > 0 ? "+" : "−"}{Math.abs(r.change).toFixed(1)}</Signed></span>}</>,
       }))} />
   );

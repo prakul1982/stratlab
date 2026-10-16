@@ -382,8 +382,11 @@ def _r(v, dp=2):
 
 def session_day(q: dict, market: str) -> str | None:
     """The day (in the market's own zone) of the session a quote's price and change are from, or None when the quote
-    carries no trade time."""
+    carries no trade time. A quote whose change was worked out for the last completed session (`change_day`, set while the
+    market hasn't traded today) is of that session, whatever its last trade's time says (R41A)."""
     from zoneinfo import ZoneInfo
+    if q.get("change_day"):
+        return str(q["change_day"])[:10]
     at = q.get("at")
     try:
         t = datetime.fromisoformat(at) if isinstance(at, str) else None

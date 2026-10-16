@@ -12,10 +12,15 @@ interface Cur {
   worst_day: { date: string; pnl: number } | null; best_day: { date: string; pnl: number } | null; max_drawdown_pct: number;
   deepest_fall?: { pnl: number; pct: number; date: string; intraday?: boolean; at?: string; day_close?: number | null } | null;
   curve: { t: string; pnl: number }[];
+  /** the market's latest trading day, and that session's result when today is not a trading day (a weekend, a holiday) */
+  session?: string; session_pnl?: number | null;
 }
-interface Row { id: string; name: string; kind: string; currency: string; open_value: number; today: number; pnl: number; capital: number }
+interface Row { id: string; name: string; kind: string; currency: string; open_value: number; today: number; pnl: number; capital: number; session_pnl?: number | null }
 const KIND: Record<string, string> = { single: "Rules", group: "Group", options: "Options", signal: "Signals" };
 const day = (d: string) => fmtDate(d, { year: false });
+/** What the day figure is called: "Today" on a trading day, "Last session (Fri 16 Oct)" when today has no session, so a
+ * weekend's zero is not read as an empty day (R41A). */
+const dayLabel = (c: Pick<Cur, "session" | "session_pnl">) => (c.session && c.session_pnl != null ? `Last session (${fmtDate(c.session, { weekday: true, year: false })})` : "Today");
 const tone = (n: number | null) => (n == null || n === 0 ? undefined : n > 0 ? ("up" as const) : ("down" as const));
 
 /** Every running paper session together: what's at stake now, today, overall, the worst day and the deepest fall. */
@@ -38,7 +43,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
           { key: "kind", header: "Kind", cell: (r) => KIND[r.kind] ?? r.kind },
           { key: "open", header: "Open value", numeric: true, cell: (r) => money(r.open_value, r.currency) },
           { key: "share", header: "Share", numeric: true, cell: (r) => (c.open_value ? `${Math.round((r.open_value / c.open_value) * 100)}%` : "–") },
-          { key: "today", header: "Today", numeric: true, cell: (r) => <span className={upDown(r.today)}>{money(r.today, r.currency)}</span> },
+          { key: "today", header: dayLabel(c), numeric: true, cell: (r) => { const v = c.session_pnl != null ? r.session_pnl ?? 0 : r.today; return <span className={upDown(v)}>{money(v, r.currency)}</span>; } },
           { key: "pnl", header: "Since the start", numeric: true, cell: (r) => <span className={upDown(r.pnl)}>{money(r.pnl, r.currency)}</span> },
         ];
         return (
@@ -47,7 +52,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               info="Every running paper session added up, per currency (rupees and dollars are never mixed). Open value is what the open positions are worth now at the latest prices. The worst day and the deepest fall are for all of them together, which is what you'd feel if this were one account." infoLabel="About all running sessions" />
             <StatRow label={`Totals in ${c.currency}`}>
               <Stat item label="Open value" value={c.open_value ? money(c.open_value, c.currency) : "No open positions"} note={c.open_value && c.capital ? `${Math.round((c.open_value / c.capital) * 100)}% of ${money(c.capital, c.currency)}` : undefined} />
-              <Stat item label="Today" value={money(c.today, c.currency)} tone={tone(c.today)} />
+              <Stat item label={dayLabel(c)} value={money(c.session_pnl ?? c.today, c.currency)} tone={tone(c.session_pnl ?? c.today)} />
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "None yet"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : undefined} />
               <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`}

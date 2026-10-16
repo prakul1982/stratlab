@@ -23,6 +23,10 @@ export const ADMIN_SECTIONS: Record<string, string> = {
 /** "Page · StratLab" (or the brand's line alone when the page has no name). */
 export const withBrand = (name?: string | null) => (name ? `${name} · ${BRAND}` : DEFAULT_TITLE);
 
+/** A notebook's tab titles: the notebook itself is "<notebook>", one of its runs "Run v2 · <notebook>" and the compare
+ * page "Compare runs · <notebook>", so a notebook and its run pages never share a title. */
+export const notebookTitle = (name: string | null | undefined, page?: string | null) => (name ? (page ? `${page} · ${name}` : name) : null);
+
 /** The title an address gets before the page adds anything of its own. */
 export function titleFor(path: string): string {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");

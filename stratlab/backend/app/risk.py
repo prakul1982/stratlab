@@ -104,6 +104,17 @@ def _carry(series: dict[str, float] | list[tuple[str, float]], at: str, seed: fl
     return got
 
 
+def session_of(currency: str, today: str) -> str:
+    """The latest trading day on or before `today` in the calendar of the market a currency stands for (dollars: the US,
+    anything else: India's); `today` itself when it trades or the calendar can't say."""
+    from datetime import date
+    from .last_session import on_or_before
+    try:
+        return on_or_before("US" if currency == "USD" else "IN", date.fromisoformat(today)).isoformat()
+    except ValueError:
+        return today
+
+
 def summary(snaps: list[dict], today: str | None = None) -> dict:
     today = today or ist_date().isoformat()
     sessions, by_cur = [], {}
@@ -114,10 +125,16 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
         closes, points, complete = _series(s, cap, eq, today)
         before = [v for d, v in sorted(closes.items()) if d < today]
         start_of_day = cap + before[-1] if before else cap
-        row = {"id": s["id"], "name": s.get("name"), "kind": s.get("kind") or "single", "currency": _currency(s),
+        cur = _currency(s)
+        session = session_of(cur, today)
+        # the latest session's result, for a day the market doesn't trade (a weekend, a holiday): "today" is then a day with
+        # no session, not an empty one, and the page names the session instead (R41A: "Today ₹0" on a Saturday)
+        s_before = [v for d, v in sorted(closes.items()) if d < session]
+        session_pnl = round(_carry(closes, session, 0.0) - (s_before[-1] if s_before else 0.0), 2) if session < today else None
+        row = {"id": s["id"], "name": s.get("name"), "kind": s.get("kind") or "single", "currency": cur,
                "market": (s.get("instrument") or {}).get("market"), "capital": cap, "equity": round(eq, 2),
                "pnl": round(eq - cap, 2), "today": round(eq - start_of_day, 2), "open_value": round(open_value(s), 2),
-               "trades": acct.get("trades", 0)}
+               "trades": acct.get("trades", 0), "session": session, "session_pnl": session_pnl}
         sessions.append(row)
         # before its history starts a session counts at its capital when that history is whole, else at its first value
         seed_day = 0.0 if complete else (sorted(closes.items())[0][1] if closes else 0.0)
@@ -154,6 +171,8 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "currency": cur, "sessions": len(rows), "capital": round(cap, 2),
             "equity": round(sum(r["equity"] for r in rows), 2), "pnl": round(sum(r["pnl"] for r in rows), 2),
             "today": round(sum(r["today"] for r in rows), 2), "open_value": round(sum(r["open_value"] for r in rows), 2),
+            "session": rows[0]["session"] if rows else today,
+            "session_pnl": round(sum(r["session_pnl"] or 0 for r in rows), 2) if rows and rows[0]["session_pnl"] is not None else None,
             "worst_day": {"date": worst[0], "pnl": worst[1]} if worst and worst[1] < 0 else None,
             "best_day": {"date": best[0], "pnl": best[1]} if best and best[1] > 0 else None,
             "max_drawdown_pct": round(fall["pct"] * 100, 2) if fall else 0.0,

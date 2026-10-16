@@ -37,8 +37,11 @@ def test_a_weekend_shows_the_last_sessions_change():
 
 
 @time_machine.travel(datetime(2026, 10, 16, 3, 0, tzinfo=UTC), tick=False)
-def test_without_two_stored_closes_the_quote_stands():
-    assert C.last_session_move(QUOTE, BARS[:1]) is QUOTE
+def test_without_two_closes_the_quote_stands():
+    assert C.last_session_move(QUOTE, []) is QUOTE
+    # one stored close and the quote's own session make two (R41A): the quote's close is appended to the candles
+    q = C.last_session_move(QUOTE, BARS[:1])
+    assert q["change_day"] == "2026-10-15" and q["prev_close"] == 1174.60 and q["change_pct"] == 3.44
 
 
 @time_machine.travel(datetime(2026, 10, 16, 3, 0, tzinfo=UTC), tick=False)

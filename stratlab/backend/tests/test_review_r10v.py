@@ -517,6 +517,28 @@ def test_a_company_pages_description_is_at_most_160_characters():
     assert len(huge) <= 160 and huge.endswith("…")
 
 
+def test_a_us_company_is_named_the_same_in_title_description_og_tags_and_json_ld():
+    f = facts_page("Mar 2026", name="NVIDIA CORP", symbol="NVDA")
+    page = stock_pages.render(f, "US", "NVDA", None)
+    assert "NVIDIA CORP" not in page and page.count("NVIDIA Corp") >= 6
+    assert "<title>NVIDIA Corp (NVDA) share price" in page
+    assert re.search(r'<meta name="description" content="NVIDIA Corp \(NVDA\)', page)
+    assert re.search(r'<meta property="og:description" content="NVIDIA Corp \(NVDA\)', page)
+    assert re.search(r'<meta property="og:title" content="NVIDIA Corp \(NVDA\)', page)
+    assert '"name": "NVIDIA Corp"' in page
+    # an Indian name stays as it is listed
+    indian = stock_pages.render(facts_page("Mar 2026", region="IN", name="ITC Ltd", symbol="ITC", foreign=False), "IN", "ITC", None)
+    assert re.search(r'<meta name="description" content="ITC Ltd \(ITC\)', indian) and "Itc Ltd" not in indian
+
+
+def test_policy_links_and_email_links_are_44_px_tall_on_phones():
+    style = stock_pages.STYLE
+    phone = style[style.rindex("@media (max-width:640px){footer.site nav a"):]
+    assert "footer.site nav a{padding:12px 0;min-height:44px}" in phone
+    assert ".links a{min-height:44px}" in phone
+    assert 'a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}' in phone
+
+
 def test_a_page_kept_out_of_search_results_names_no_canonical_address(monkeypatch):
     nf = stock_pages.not_found("IN", "NOSUCHTICKER")
     assert 'content="noindex,follow"' in nf and 'rel="canonical"' not in nf and 'property="og:url"' not in nf

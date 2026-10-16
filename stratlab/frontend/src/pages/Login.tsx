@@ -410,6 +410,7 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
           <div className="k-stack">
             <p className="k-small">{way === "signup" ? "StratLab accounts are made with Google: there's no password to set up and no card to add." : "StratLab signs in with your Google account."} Signing in only reads your name and email from Google.</p>
             <div className="k-row">{cta()}</div>
+            <p className="k-small k-muted">By continuing you agree to the <Link className="link" to="/terms">Terms</Link> and <Link className="link" to="/privacy">Privacy policy</Link>.</p>
           </div>
         </Dialog>
       )}

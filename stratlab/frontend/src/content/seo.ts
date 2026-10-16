@@ -46,7 +46,7 @@ export const PAGES: PageMeta[] = [
     summary: ["Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up.",
       "Each strategy's page has the rules that were tested, the return after costs beside buy and hold, and the result of each check. A verdict describes the past, not what comes next, and nothing here is investment advice."] },
   { path: "/terms", title: "Terms · StratLab",
-    description: "The terms for using StratLab: what it is, accounts, plans and payment, fair use, what you publish, market data and AI, and liability.", index: true, updated: "2026-10-15",
+    description: "The terms for using StratLab: what it is, accounts, plans and payment, fair use, what you publish, market data and AI, and liability.", index: true, updated: "2026-10-16",
     heading: "Terms of service",
     summary: ["These terms cover your use of StratLab, the website and app at stratlab.studio. StratLab is a research and education tool: you test trading ideas on past market data and paper trade them with simulated money. No real orders are ever placed, and nothing on StratLab is investment advice.",
       "The terms cover your account, plans and payment, fair use, what you publish, market data and AI, liability, ending and changes."] },

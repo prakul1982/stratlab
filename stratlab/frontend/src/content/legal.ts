@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "15 October 2026", "/privacy": "15 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "15 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -55,7 +55,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     { h: "Plans and payment" },
     { ul: [
       "Paid plans are billed only once they are on sale; the Plans page shows whether they are.",
-      "The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly at the prices on the Plans page when you subscribe: in Indian rupees, or in your own currency where the Plans page says so. When a price is shown in another currency but charged in rupees, your card provider converts it and may add its own fee. {gstin?Rupee prices include 18% GST.}",
+      "The Free plan costs nothing. Basic and Pro are subscriptions billed monthly or yearly at the prices on the Plans page when you subscribe: in Indian rupees for now, and in another currency only where the Plans page says so. When a price is shown in another currency but charged in rupees, your card provider converts it and may add its own fee. {gstin?Rupee prices include 18% GST.}",
       "Payments are processed by Razorpay. {name} never sees or stores your card or bank details.",
       "A subscription renews automatically at the end of each period until you cancel it. You can cancel any time from the Account page; see [Cancellation and refunds](/refunds).",
       "If we change a price, it applies from your next renewal after we've told you, and you can cancel before then.",

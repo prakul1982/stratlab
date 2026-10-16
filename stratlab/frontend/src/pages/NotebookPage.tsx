@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDocTitle } from "../lib/title";
+import { notebookTitle, useDocTitle } from "../lib/title";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
@@ -32,10 +32,11 @@ const PERIODS: Record<Tf, number[]> = {
   "1d": [182, 365, 730, 1095, 1825, 3650], "1h": [30, 90, 180, 365, 730], "15m": [30, 60, 90, 180, 365], "5m": [15, 30, 60, 120],
 };
 
-export function useNotebook(id: string | undefined) {
+/** `page` names a sub-page of the notebook for the tab ("Run v2", "Compare runs"); the notebook's own page has none. */
+export function useNotebook(id: string | undefined, page?: string) {
   const { fail, refreshNotebooks } = useApp();
   const [nb, setNb] = useState<Notebook | null>(null);
-  useDocTitle(nb?.name);          // the notebook's own name in the tab, not "Notebooks"
+  useDocTitle(notebookTitle(nb?.name, page));          // the notebook's own name in the tab, not "Notebooks"; a run or the compare page says which
   // why there's no notebook to show: none at this address (deleted, mistyped, another account's), or it couldn't be read
   const [problem, setProblem] = useState<"missing" | "error" | null>(null);
   // "failed": the last save didn't reach the server; its edits wait for Retry (or the next save)
