@@ -165,6 +165,10 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
       {c.id === "shuffle" && d && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
       {c.id === "sample" && d && <div className="k-big">{d.trades}</div>}
       <p className="k-small k-muted">{c.detail}</p>
+      {/* why a bad-luck drawdown is a warning, for a run saved before its own words said so (R45A-002) */}
+      {c.id === "shuffle" && c.status === "warn" && d && !String(c.detail ?? "").includes("worse order") && (
+        <p className="k-small k-muted" data-testid="shuffle-why">A warning because at least 5 of 100 reshuffles fell more than one and a half times as far as yours: with the same trades in a worse order, the fall could have been much deeper.</p>
+      )}
       {c.id === "sample" && <span className="k-note">Under 15 trades, luck dominates. 30 or more is a fair sample.</span>}
       {c.id === "shuffle" && d && <span className="k-note">{d.by === "days"
         ? `From ${d.runs.toLocaleString("en-IN")} reshuffles of the group's day-by-day changes in value (its trades overlap, so their order can't be shuffled)${cur ? ", after costs" : ""}.`
