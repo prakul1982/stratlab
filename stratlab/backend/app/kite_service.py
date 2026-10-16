@@ -568,6 +568,8 @@ class KiteService:
             continuous = inst.get("type") == "FUT" and tf == "1d"
         key = (token, tf, days, continuous)
         hit = self._cache.get(key)
+        if hit is None and tf == "1d":
+            hit = self._wider_copy(token, tf, days, continuous, now)
         own = self.session_close.get(int(token))
         out_at = self._close_out(now) if not own else self._close_out_at(now, own)
         open_at = self._open_at(token, now) if tf == "1d" else None
@@ -604,6 +606,23 @@ class KiteService:
         if len(self._cache) > 300:
             self._cache.pop(next(iter(self._cache)))
         return self._official_days(token, tf, dedup)
+
+    WIDER_DAYS = (370, 400)      # a company page's year of daily candles (broker / its fallback source)
+
+    def _wider_copy(self, token, tf: str, days: int, continuous: bool, now: datetime) -> tuple | None:
+        """A stored answer for a longer window of the same candles, cut to this one's start, as (stored at, candles); None
+        when there is none. A company page reads 370 days and its chart 365: the chart takes the page's copy instead of
+        asking the broker again. The cut is the one the broker makes (a daily candle is dated at midnight, so the one
+        dated on the start day is before the start)."""
+        best = None
+        for d in self.WIDER_DAYS:                      # the windows pages read, widest first of the ones that cover this
+            v = self._cache.get((token, tf, d, continuous)) if d > days else None
+            if v is not None and (best is None or v[0] > best[0]):
+                best = v
+        if best is None:
+            return None
+        cut = (now - timedelta(days=days)).date().isoformat()
+        return best[0], [b for b in best[1] if str(b["t"])[:10] > cut]
 
     TAIL = 200        # candles kept per token and timeframe: a day and more of 5-minute candles
     TAIL_FOR = 12 * 3600   # ...and for how long they count
