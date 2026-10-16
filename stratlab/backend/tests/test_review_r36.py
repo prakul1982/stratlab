@@ -14,3 +14,8 @@ def test_the_company_lists_use_the_tidy_name():
     html = stock_pages._links("us", [("COST", "COSTCO WHOLESALE CORP /NEW"), ("NVDA", "NVIDIA CORP"), ("XYZ", "XYZ")])
     assert "Costco Wholesale Corp (COST)" in html and "NVIDIA Corp (NVDA)" in html
     assert "/NEW" not in html and ">XYZ<" in html
+
+
+def test_indian_names_keep_their_acronyms():
+    html = stock_pages._links("in", [("ITC", "ITC LTD"), ("ICICIBANK", "ICICI Bank Ltd")])
+    assert "ITC LTD (ITC)" in html and "ICICI Bank Ltd (ICICIBANK)" in html

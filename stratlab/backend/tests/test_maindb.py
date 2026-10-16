@@ -352,3 +352,21 @@ def test_admin_asks_for_the_move_and_restarts(monkeypatch):
     assert asked[-1][0] == maindb.STATE_KEY and asked[-1][1]["state"] == "pending" and restarted == [True]
     monkeypatch.setenv("MAIN_DATABASE", "supabase")
     assert c.post("/admin/storage/move-users", headers=headers("admin-token")).status_code == 400
+
+
+@needs_pg
+def test_a_server_that_caps_one_read_still_has_every_row_copied(monkeypatch):
+    """Supabase returns at most 1000 rows a read: a short page isn't the end of the table (code review, 16 Oct)."""
+    from tests import fake_db
+    _wipe()
+    src = _source()
+    src.tables["usage_events"] = [{"id": i, "user_id": "u-pro", "kind": "ai", "created_at": "2026-10-03T00:00:00+00:00"}
+                                  for i in range(1000, 3500)]   # four digits: the fake sorts as text
+    real_limit = fake_db.Query.limit
+    monkeypatch.setattr(fake_db.Query, "limit", lambda self, n: real_limit(self, min(n, 700)))
+    client = pgdb.PgClient(PG, auth_source=lambda: src)
+    try:
+        assert maindb.move(src, client)["usage_events"] == 2500
+        assert client.table("usage_events").select("id", count="exact").execute().count == 2500
+    finally:
+        client.close()

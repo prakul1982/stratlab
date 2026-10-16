@@ -375,6 +375,9 @@ class PgClient:
                 size, wait, ms = ((REQUEST_POOL, REQUEST_WAIT, REQUEST_STATEMENT_MS) if lane == "request"
                                   else (JOB_POOL, JOB_WAIT, JOB_STATEMENT_MS))
                 p = ConnectionPool(self.url, min_size=1, max_size=size, timeout=wait, open=True, name=f"main-{lane}",
+                                   # a connection cut while idle (a database restart) is replaced when handed out, not
+                                   # failed on the next write
+                                   check=ConnectionPool.check_connection, max_idle=300, max_lifetime=1800,
                                    kwargs={"autocommit": True, "options": f"-c statement_timeout={ms} -c timezone=UTC"})
                 if not self._ready:
                     with p.connection() as c:

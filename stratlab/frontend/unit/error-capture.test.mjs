@@ -16,6 +16,15 @@ test("an error message loses emails, ids, long numbers and link details", () => 
   assert.ok(!out.includes("secret") && out.includes("https://x.example"));
 });
 
+test("tokens, keys, amounts, phone-like numbers and a quoted symbol are masked; ordinary words stay", () => {
+  const cases = ["Bearer eyJhbGciOiJIUzI1NiIs.eyJzdWIiOiIxMjM0NTY3.SflKxwRJSMeKKF2QT4fw", "key sk_live_AbCdEfGhIjKlMnOp1234",
+    "Aadhaar 1234 5678 9012", "call +91 98765 43210", "Holding value 12,34,567.89 invalid", "Holding 1,234,567 bad"];
+  for (const c of cases) assert.ok(!/\d{4}|eyJ|AbCdEf/.test(cleanError(c)), `${c} -> ${cleanError(c)}`);
+  assert.equal(cleanError("Cannot read properties of undefined (reading 'RELIANCE')"),
+    "Cannot read properties of undefined (reading ':sym')");
+  assert.equal(cleanError("TypeError: x.map is not a function at line 42"), "TypeError: x.map is not a function at line 42");
+});
+
 test("a message is cut to 200 characters, and anything that isn't text reads as text", () => {
   assert.equal(cleanError("x".repeat(500)).length, 200);
   assert.equal(cleanError(undefined), "");

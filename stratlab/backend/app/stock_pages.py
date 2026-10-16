@@ -1365,7 +1365,8 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
     if cap is None:
         cap = next((_num(r.get("market_cap")) for r in sized if r.get("symbol") == symbol), None)
     rows = _fresh_rows([r for r in sized if r.get("symbol") != symbol])
-    name = lambda r: str(proper_name(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"]))        # noqa: E731
+    tidy = proper_name if region == "US" else (lambda n: n)
+    name = lambda r: str(tidy(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"]))        # noqa: E731
     out: list[dict] = []
     same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()]
     large = bool(cap and cap >= LARGE_CAP.get(region, float("inf")))
@@ -1728,7 +1729,10 @@ def _ld(obj) -> str:
 
 
 def _links(region: str, rows: list[tuple[str, str]]) -> str:
-    return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{proper_name(n)} ({s})")}</a>' for s, n in rows) + "</div>"
+    # US names come from filings in capitals ("COSTCO WHOLESALE CORP /NEW"); Indian ones are kept as listed ("ITC Ltd",
+    # whose acronyms title case would spoil)
+    tidy = proper_name if region.lower() == "us" else (lambda n: n)
+    return '<div class="links">' + "".join(f'<a href="{e(path(region, s))}">{e(n if n == s else f"{tidy(n)} ({s})")}</a>' for s, n in rows) + "</div>"
 
 
 def _top(sign_in: str | None = None) -> str:
@@ -1770,7 +1774,10 @@ def _find_form(region: str | None, q: str = "") -> str:
 
 
 _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "US", "UK", "LLC", "LP", "NV", "SA", "AG", "SE", "ETF",
-               "REIT", "ADR", "II", "III", "IV", "NVIDIA"}
+               "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
+# words title case gets wrong, as the companies write them
+_SPELLED = {"JPMORGAN": "JPMorgan", "PAYPAL": "PayPal", "MCDONALDS": "McDonalds", "EBAY": "eBay", "BLACKROCK": "BlackRock",
+            "FEDEX": "FedEx", "MASTERCARD": "Mastercard", "SALESFORCE": "Salesforce", "SERVICENOW": "ServiceNow"}
 
 
 def proper_name(name: str | None) -> str | None:
@@ -1786,19 +1793,23 @@ def proper_name(name: str | None) -> str | None:
 
     def word(w: str) -> str:
         core = re.sub(r"[^A-Za-z&]", "", w)
+        if core in _SPELLED:
+            return w.replace(core, _SPELLED[core])
         if core in ("LTD", "CO", "INC", "CORP"):
             return w[:1] + w[1:].lower()
         if core in _KEEP_UPPER or (len(core) <= 4 and not re.search(r"[AEIOUY]", core)) or re.search(r"[A-Za-z]&[A-Za-z]", w):
             return w
         return "-".join(x[:1] + x[1:].lower() for x in w.split("-"))
-    return " ".join(word(w) for w in name.split(" "))
+    return re.sub(r"\bAmazon Com\b", "Amazon.com", " ".join(word(w) for w in name.split(" ")))
 
 
 def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     """The page. `f` is None when the sources had nothing on a listed company: a short page, kept out of the index."""
     site = settings.PUBLIC_SITE_URL
     canonical = site + path(region, symbol)
-    name = proper_name((f or {}).get("name") or name or symbol)
+    name = (f or {}).get("name") or name or symbol
+    if region == "US":                    # filings' capitals; Indian names are kept as listed ("ITC Ltd", not "Itc Ltd")
+        name = proper_name(name)
     market = "US" if region == "US" else "IN"
     app = f"{site}/research/{market}/{quote(symbol, safe='')}"
     deep = app + "/deep"
