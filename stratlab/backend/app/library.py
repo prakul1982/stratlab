@@ -117,7 +117,7 @@ def reason(e: dict) -> str | None:
     if n is not None and n < MIN_TRADES:
         return "No trades in this period, so nothing was tested." if n == 0 else f"Only {n} trade{'s' if n != 1 else ''} in this period, too few to tell skill from luck."
     if v.get("verdict") == "no_edge" and (st.get("ret") or 0) <= 0:
-        return "Lost money after costs over the period, so there was no edge to test."
+        return "Lost money after costs over the period, so the checks weren't run: there was no gain to test."
     checks = [c for c in v.get("checks") or [] if c.get("id") in CHECK_NAME]
     if not checks:
         return None
@@ -226,10 +226,14 @@ def restated(e: dict) -> dict:
                    f"{_pc(hold['hold'])}{diff}.")
     n = st.get("trades")
     kind = v.get("verdict")
+    if hold and hold["gap"] <= -1 and kind == "edge":
+        # passed checks beside a big shortfall: what a pass means, so it isn't read as beating the market (R43B-003)
+        out.append(f"The checks test whether the result holds up (on the unseen {unseen_word(e)}, nearby settings and shuffled trades); "
+                   "they don't compare it with buying and holding.")
     if kind == "not_enough" or (isinstance(n, int) and n < MIN_TRADES):
         out.append(reason(e) or "Too few trades to tell skill from luck.")
     elif kind == "no_edge":
-        out.append("It lost money after costs over the period, so there was no edge to test.")
+        out.append("It lost money after costs over the period, so the checks weren't run: there was no gain to test.")
     else:
         unseen = st.get("unseen")
         for c in checks_of(e):

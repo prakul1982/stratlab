@@ -2095,3 +2095,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   .earlier > summary, .opt-charge-lines > summary { min-height: 44px; }
   .k-form > .k-field > .k-seg button { min-height: 44px; }
 }
+
+/* R43B-012: the landing page's and public pages' own controls on a phone, at least 44px to tap: the menu button and its
+   links, Sign in, the "more tools" toggles and the idea button */
+@media (max-width: 640px) {
+  .lp-menu > summary, .lp-nav .lp-menu nav a, .lp-more > summary, .pub-menu > summary, .pub-nav .pub-menu nav a { min-height: 44px; }
+  .lp-nav .btn.sm, .pub-nav .btn.sm, .btn.sm.lp-idea-btn { height: auto; min-height: 44px; }
+}

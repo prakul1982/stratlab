@@ -1,5 +1,3 @@
-# SEO-tool and scraper crawlers bring no visitors and walk all ~12,000 company pages (Vercel's monthly request
-# allowance): they're asked to stay out. Search engines are welcome.
 User-agent: AhrefsBot
 User-agent: SemrushBot
 User-agent: MJ12bot
