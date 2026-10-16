@@ -61,10 +61,16 @@ jobs:
             echo "::error::Users' data hasn't moved to Railway yet (Admin → Storage), and SUPABASE_DB_URL isn't set to copy it from Supabase."
             exit 1
           fi
+          if [ "$moved" = 0 ] && [ -n "$DB_URL" ] && $PG/psql "$DB_URL" -tAc "select value from public.app_settings where key = 'maindb:state'" | grep -q '"done"'; then
+            moved=2                 # moved, but Railway isn't reachable from here: its own volume backups hold the data
+          fi
           if [ "$moved" = 1 ]; then
             # users' data on Railway, whole; the market data too on full days
             schemas=(-n app); [ "$full" = 1 ] && schemas+=(-n public)
             $PG/pg_dump "$APP_DB_URL" -Fc -Z 6 --no-owner --no-privileges "${schemas[@]}" -f out/app.dump
+          elif [ "$moved" = 2 ]; then
+            # Supabase's tables are the copy from before the move: not worth keeping (nor its egress); only the sign-ins
+            echo "::notice::Users' data is on Railway (Railway → Postgres → Backups keeps it); this copy has the sign-ins only."
           else
             # before the move: the app's tables in Supabase, whole: users' data, payments, settings
             skip=(); [ "$full" = 1 ] || skip=(--exclude-table-data=public.option_snapshots)
@@ -76,6 +82,10 @@ jobs:
           elif ! $PG/pg_dump "$DB_URL" -Fc -Z 6 --data-only --no-owner --no-privileges -t auth.users -t auth.identities -f out/auth.dump; then
             echo "::warning::The sign-ins (auth.users) couldn't be copied; the app's own tables were."
             rm -f out/auth.dump
+          fi
+          if [ -z "$(ls out)" ]; then
+            echo "::error::Nothing was copied."
+            exit 1
           fi
           tar -C out -cf - . | gpg --batch --yes --pinentry-mode loopback --passphrase "$PASSPHRASE" \
             --symmetric --cipher-algo AES256 -o "stratlab-db-$day.tar.gpg"
