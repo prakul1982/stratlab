@@ -48,6 +48,10 @@ test("payments on: plans can be bought, cancelled any time, yearly in the visito
   const usd = offer.finePrint(paid, { currency: "USD", inRupees: true, inRupeesYear: true, year: { basic: "$80", pro: "$200" }, charged: { basic: "₹699", pro: "₹1,999" } });
   assert.ok(usd.some((l) => l.startsWith("Paid in rupees for now: a card is charged ₹699 (Basic) or ₹1,999 (Pro) a month")));
   assert.ok(usd.includes("Paying yearly: Basic $80, Pro $200, charged in rupees."));
+  const usdYear = offer.finePrint(paid, { currency: "USD", inRupees: true, inRupeesYear: true, year: { basic: "$80", pro: "$200" },
+    charged: { basic: "₹699", pro: "₹1,999" }, chargedYear: { basic: "₹6,999", pro: "₹19,999" } });
+  assert.ok(usdYear.includes("Paying yearly: Basic $80, Pro $200, charged in rupees: ₹6,999 (Basic) or ₹19,999 (Pro) a year."),
+    "the year's rupee charge is named, not only the month's (R35)");
   assert.ok(!usd.join(" ").includes("about"), "no converted prices: the admin table's $8 and $20");
   const inr = offer.finePrint(paid, { currency: "INR", inRupees: false, inRupeesYear: false, year: { basic: "₹6,999", pro: "₹19,999" } });
   assert.deepEqual(inr.slice(0, 2), ["Rupee prices include 18% GST, and every payment gets a GST invoice.", "Paying yearly: Basic ₹6,999, Pro ₹19,999."]);

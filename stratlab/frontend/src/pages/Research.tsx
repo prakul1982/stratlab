@@ -727,9 +727,9 @@ export function WatchlistPage() {
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
-  const add = (symbol: string, r: Region) => {
+  const add = (symbol: string, r: Region, name?: string) => {
     if (has(r, symbol)) { notify(watchNote(symbol, true, false)); return; }
-    toggle({ region: r, symbol, name: null }, true).then((changed) => notify(watchNote(symbol, true, changed))).catch(fail);
+    toggle({ region: r, symbol, name: name?.slice(0, 120) ?? null }, true).then((changed) => notify(watchNote(symbol, true, changed))).catch(fail);
   };
   return (
     <div className="k-page">

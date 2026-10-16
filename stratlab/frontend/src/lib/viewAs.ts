@@ -54,7 +54,7 @@ export function viewAsHeaders(s: Store | null = store()): Record<string, string>
 
 /** The banner's sentence, shown on every page while it is on. The "Turn off" button follows it. */
 export function viewAsBanner(plan: ViewAs): string {
-  return `Viewing as ${VIEW_AS_NAME[plan]}. Your real plan is unchanged.`;
+  return `Viewing as ${VIEW_AS_NAME[plan]}, with that plan's own limits (a launch offer that lifts them for everyone isn't shown here). Your real plan is unchanged.`;
 }
 
 /** What a choice sets: a plan, or null for Off. */

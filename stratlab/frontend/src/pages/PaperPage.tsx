@@ -268,7 +268,7 @@ export function PaperPage() {
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
       : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false, zone: true })}`
-        : viewedFreeKeepsSessions(me) ? "Free trial ended · viewing as Free keeps your sessions running; a real Free plan stops them"
+        : viewedFreeKeepsSessions(me) ? "Viewing as Free: your sessions keep running here; on a real Free plan they stop when the free trial ends"
           : "Free trial ended · sessions are stopped; upgrade to keep paper trading";
   }
 

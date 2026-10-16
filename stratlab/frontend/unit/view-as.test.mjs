@@ -74,9 +74,9 @@ test("with storage off it still works until the page closes, and nothing throws"
 });
 
 test("the banner says which plan, that the real plan is unchanged, and offers Turn off", () => {
-  assert.equal(v.viewAsBanner("free"), "Viewing as Free. Your real plan is unchanged.");
-  assert.equal(v.viewAsBanner("basic"), "Viewing as Basic. Your real plan is unchanged.");
-  assert.equal(v.viewAsBanner("pro"), "Viewing as Pro. Your real plan is unchanged.");
+  assert.equal(v.viewAsBanner("free"), "Viewing as Free, with that plan's own limits (a launch offer that lifts them for everyone isn't shown here). Your real plan is unchanged.");
+  assert.equal(v.viewAsBanner("basic"), "Viewing as Basic, with that plan's own limits (a launch offer that lifts them for everyone isn't shown here). Your real plan is unchanged.");
+  assert.equal(v.viewAsBanner("pro"), "Viewing as Pro, with that plan's own limits (a launch offer that lifts them for everyone isn't shown here). Your real plan is unchanged.");
   const banner = src("components/ViewAs.tsx");
   assert.match(banner, /label: "Turn off"/);
   assert.match(banner, /setViewAs\(null\)/);
