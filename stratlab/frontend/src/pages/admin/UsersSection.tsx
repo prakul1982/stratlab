@@ -159,7 +159,7 @@ export function UsersSection() {
           <EmptyState title="No users match">{plan === "all" ? "Try part of an email address." : `No ${PLAN_NAME[plan]} users${q ? " with that in their email" : ""}.`}</EmptyState>
         ) : (
           <>
-            <DataTable label="Users" rows={users.slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} />
+            <DataTable label="Users" rows={users.slice((at - 1) * PAGE, at * PAGE)} rowKey={(u) => u.id} columns={cols} stack />
             <Pager page={at} pages={pages} total={users.length} noun={users.length === 1 ? "user" : "users"} onPage={setPage} />
             {users.length >= 200 && <p className="k-small k-muted">The newest 200 are listed. Search by email to find others.</p>}
           </>

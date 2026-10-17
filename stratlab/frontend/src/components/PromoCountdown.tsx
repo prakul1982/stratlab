@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Notice } from "./kit";
 import { useApp } from "../lib/app";
 import { endsAt } from "../lib/offer";
@@ -13,22 +14,27 @@ function timeLeft(ms: number): string {
   return unit(Math.max(1, m), "minute");
 }
 
-/** While the launch offer runs: how long is left, on Home and Plans. Gone by itself when it ends. */
+/** While the launch offer runs: how long is left, on Home and Plans. Gone by itself when it ends. On Home it can be put
+ * away like the site-wide note (the same key: putting either away hides both), R45A-010; Plans always shows it. */
 export function PromoCountdown({ plansLink = true }: { plansLink?: boolean }) {
   const { me } = useApp();
   const until = me?.promo?.until;
   const [now, setNow] = useState(() => Date.now());
+  const key = until ? `stratlab.promo.seen.${until.slice(0, 10)}` : "";
+  const [hidden, setHidden] = useState(() => { try { return !!key && localStorage.getItem(key) === "1"; } catch { return false; } });
   useEffect(() => {
     if (!until) return;
     const t = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(t);
   }, [until]);
   const end = until ? new Date(until).getTime() : NaN;
-  if (!until || !Number.isFinite(end) || end <= now) return null;
+  if (!until || !Number.isFinite(end) || end <= now || (plansLink && hidden)) return null;
   const day = endsAt(until);
+  const hide = () => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); };
   return (
-    <Notice className="promo-countdown" role="status" action={plansLink ? { label: "See plans", to: "/plans" } : undefined}>
-      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}). After that, each plan has its own limits again.
+    <Notice className="promo-countdown" role="status"
+      actions={plansLink ? <><Link className="btn sm" to="/plans">See plans</Link><button type="button" className="btn sm quiet" onClick={hide}>Got it</button></> : undefined}>
+      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}). After that, your plan's limits apply again.
     </Notice>
   );
 }

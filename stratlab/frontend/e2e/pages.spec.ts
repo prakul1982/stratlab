@@ -283,6 +283,8 @@ test("the launch offer counts down on Home and Plans", async ({ page }, info) =>
   await expect(page.getByText("Launch offer:")).toHaveCount(1);              // the countdown replaces the site-wide note here
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
+  await page.locator(".promo-countdown").getByRole("button", { name: "Got it" }).click();      // put away on Home (R45A-010)
+  await expect(page.locator(".promo-countdown")).toHaveCount(0);
   errors = await open(page, "/plans", "Launch offer:");
   await expect(page.locator(".promo-countdown")).toContainText("2 days 5 hours");
   await sane(page, errors);
