@@ -231,6 +231,11 @@ def test_deals_endpoint(w):
     assert c.get("/research/deals/" + "A" * 40, headers=headers("free-token")).status_code == 400
     w["faults"]["exchange"].mode = "down"
     main.filings_feed.nse.cache.clear()
+    # the exchange down: the answer kept from a moment ago still serves (R46-004)...
+    assert c.get("/research/deals/RELIANCE", headers=headers("free-token")).json()["count"] == 7
+    from app import swr
+    swr.clear()
+    # ...and with nothing kept, it's an error, not an empty list
     assert c.get("/research/deals/RELIANCE", headers=headers("free-token")).status_code in (502, 503)
 
 

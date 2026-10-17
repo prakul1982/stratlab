@@ -833,8 +833,10 @@ def feed_items(feed, sym: str, days: int = LOOKBACK_DAYS) -> list[dict]:
 
 
 def _items(sym: str) -> tuple[list[dict], list[str]]:
+    from . import swr
     try:
-        return feed_items(_wire["feed"](), sym), []
+        # the last list at once, read again behind it after an hour (R46-004: 3 to 9 s each time the cache ran out)
+        return swr.get(("biz", sym), lambda: feed_items(_wire["feed"](), sym)), []
     except SourceError as e:
         return [], [str(e)]
 

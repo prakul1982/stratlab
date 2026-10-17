@@ -146,6 +146,8 @@ test("Zerodha is open to the owner: log in, read holdings, refresh; and an EPF p
   const main = page.locator("main");
   const z = main.locator("#zerodha");
   await expect(z.getByTestId("kite-line")).toHaveText(/^Connected · last read today \d\d:\d\d IST/, { timeout: 30_000 });
+  // and when Zerodha ends that login by itself (R46-001)
+  await expect(z.getByTestId("kite-line")).toContainText(/ · this login ends (at|on) (\d{1,2} \w{3}, )?06:00 IST$/);
   await z.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("Read 1 holdings.")).toBeVisible();
   await sane(page, errors, phone);

@@ -481,7 +481,7 @@ def _provider_view(name: str, now: float) -> dict:
             "free": p.free, "terms": p.terms, "note": p.note, "variables": [p.key_env, *p.extra_env], "model_variable": p.model_env,
             "state": state, "state_text": named(st, text), "answering": answering, "result": result, "paused_models": paused_models,
             "quota": {"limited": bool(st.quota and (cooling or all_closed)) or result == "quota", "reset_at": reset_at,
-                      "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens")} or None,
+                      "remaining": {k: v for k, v in st.remaining.items() if k in ("requests", "tokens", "requests_reset", "tokens_reset")} or None,
                       "remaining_at": st.remaining.get("at")},
             "last_ok": st.last_ok, "last_error": named(st, st.last_error), "last_used_model": st.model,
             "pinned": pin_admin or pin_env or None, "pinned_by": "admin" if pin_admin else "railway" if pin_env else None,

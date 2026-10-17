@@ -206,7 +206,7 @@ test("Holdings says Zerodha is connected and returned nothing, and the Zerodha c
   await page.route(`${API}/connect`, async (r) => {
     const res = await r.fetch();
     const j = await res.json();
-    await r.fulfill({ response: res, json: { ...j, kite: { ...j.kite, available: true, configured: true, connected: true, live: true, expired: false, count: 0, refreshed_label: "yesterday 23:00" } } });
+    await r.fulfill({ response: res, json: { ...j, kite: { ...j.kite, available: true, configured: true, connected: true, live: true, expired: false, count: 0, refreshed_label: "yesterday 23:00", ends_at: null } } });
   });
   errors = errors.concat(await open(page, "/settings#accounts", load(297)));
   await expect(page.getByTestId("kite-line")).toHaveText("Connected · last read yesterday 23:00 IST · 0 holdings", { timeout: 30_000 });

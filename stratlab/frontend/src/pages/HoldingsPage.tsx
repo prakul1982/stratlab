@@ -208,8 +208,8 @@ export function HoldingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Your stocks, at today's prices" asOf={view?.prices_at} asOfLabel="Prices as of"
-        lede="Your broker's holdings file, valued at today's prices: each stock's value, gain or loss, and your sector mix."
+      <PageHeader eyebrow="Money · What you own" title="Your stocks, at the latest prices" asOf={view?.prices_at} asOfLabel="Prices as of"
+        lede="Your broker's holdings file, valued at the latest prices (the last close when the market is shut): each stock's value, gain or loss, and your sector mix."
         info="Facts, not advice. Only you can see your holdings." infoLabel="About your holdings" />
 
       <Card>

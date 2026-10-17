@@ -78,7 +78,7 @@ from .intel.sec import SEC
 from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
-from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, restart_process
+from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, login_time as auto_login_time, restart_process
 from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
@@ -91,6 +91,7 @@ from . import plan_interest
 from . import email_kit
 from . import mail_pages
 from . import leader
+from . import swr
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -856,6 +857,14 @@ def data_note() -> dict | None:
     closed = "weekend" if today.weekday() >= 5 else "holiday" if trading_calendar.is_holiday("IN", today) else None
     back = auto_login.next_login(now)
     return {"closed": closed, "back_at": back.isoformat() if back else None}
+
+
+def next_auto_login() -> str | None:
+    """The next automatic data login (India time): today's if it hasn't run yet, else tomorrow's."""
+    if not auto_login_configured():
+        return None
+    now = datetime.now(IST)
+    return (auto_login.next_login(now) or auto_login_time(now + timedelta(days=1))).isoformat(timespec="minutes")
 
 
 PREF_KEYS = ("level", "focus", "space")
@@ -2072,7 +2081,8 @@ def deals_company(symbol: str, profile=Depends(current_profile)):
     insiders' trades and pledges, substantial acquisitions, bulk and block deals. Facts as filed."""
     sym = research_routes.symbol_of(symbol)
     try:
-        out = deals.report(filings_feed, sym)
+        # the last answer at once, read again behind it after an hour (R46-004: 4 to 8 s each time the cache ran out)
+        out = swr.get(("deals", sym), lambda: deals.report(filings_feed, sym))
     except SourceError as e:
         inst = _quiet(kite.equity, sym) if kite.ready() else None
         if not inst or inst.get("exchange") == "NSE":
@@ -5080,6 +5090,8 @@ def server_status() -> dict:
             "options_users": len({getattr(s, "user_id", None) for s in live if getattr(s, "kind", None) == "options"}),
             "subscribed_tokens": len(hub.listeners), "auto_login": auto_login.last,
             "auto_login_configured": auto_login_configured(),
+            # when the next automatic login runs, so a cancelled login says when it comes back (R46-001)
+            "auto_login_next": next_auto_login(),
             "billing_enabled": billing.enabled(), "ai": ai_health(),
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,

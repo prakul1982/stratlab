@@ -42,7 +42,10 @@ NOTE = ("Price is the last traded price on the exchange. The NAV is the fund hou
         "holds, published each evening for that day. A gap compares a price and a NAV of the same day: the day's official "
         "closing price on the exchange against that day's NAV. A gap is left out when that close and the latest price are "
         "too far apart to both be right. Through the day, before that day's NAV is out, the gap shown is the last close's "
-        "against its NAV, so the day's market move is never read as a gap. Figures as of the times shown.")
+        "against its NAV, so the day's market move is never read as a gap. A gap of more than a few percent usually means "
+        "few units trade, or the fund has stopped making new units: an overseas fund at the overseas investment limit "
+        "can trade 40% or more above its NAV for months (R45A-016). One beyond 50% is left out as a mismatched NAV. "
+        "Figures as of the times shown.")
 # said only when a source gave a real indicative NAV (the exchange's list gives none)
 INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
              "the holdings' prices; a gap to it is shown too.")

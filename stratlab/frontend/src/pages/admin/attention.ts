@@ -1,5 +1,5 @@
 import type { HealthState } from "../../components/kit";
-import { ago, dateOnly } from "../../lib/format";
+import { IST, ago, dateOnly, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
 import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
@@ -108,9 +108,14 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
   out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready ? "ok" : "bad", to: "/admin/data",
     detail: sv.kite_invalid ? sv.kite_invalid : sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline." });
   out.push(feedTile(sv));
+  // a login that worked but was cancelled by Zerodha since is not "OK" beside the broker's Problem (R46-001)
+  const undone = !!sv.kite_invalid && sv.auto_login.ok === true;
+  const next = sv.auto_login_next ? ` Next automatic login: ${quoteAt(sv.auto_login_next, IST)}.` : "";
   out.push({ key: "auto", label: "Automatic daily login", to: "/admin/data",
-    state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : sv.auto_login.ok ? "ok" : "warn",
-    detail: !sv.auto_login_configured ? "Off" : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`,
+    state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : undone ? "warn" : sv.auto_login.ok ? "ok" : "warn",
+    detail: !sv.auto_login_configured ? "Off"
+      : undone ? `Logged in${sv.auto_login.at ? ` ${ago(sv.auto_login.at)}` : ""}, but Zerodha has cancelled that login since.${next}`
+      : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}${sv.auto_login.ok === false ? next : ""}`,
     fix: !sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : undefined });
   out.push(aiTile(sv.ai));
   if (sv.admin_alerts) {
@@ -186,7 +191,9 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   const waiting = (jobs ?? []).filter((j) => j.state === "warn" && j.schedule !== "Off" && !holidaysDown(j));
   if (waiting.length) out.push({ text: `${plural(waiting.length, "data feed")} on Check: ${waiting.map((j) => `${j.name} (${jobDetail(j).toLowerCase()})`).join(", ")}.`,
     to: "/admin/data", label: "Data and jobs", bad: false });
-  if (s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
+  // said once: when the holidays job's line above already speaks for them, not again here (R45A-017)
+  const holidaysSaid = out.some((o) => o.text.startsWith("Exchange holidays"));
+  if (!holidaysSaid && s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });

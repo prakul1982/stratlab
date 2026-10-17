@@ -26,6 +26,16 @@ def fresh_rate_limit():
 
 
 @pytest.fixture(autouse=True)
+def fresh_kept_answers():
+    """The answers kept to serve at once (app/swr.py: deals, business updates) start empty in every test: one test's fake
+    feed must not answer for the next."""
+    swr = sys.modules.get("app.swr")
+    if swr is not None:
+        swr.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def no_official_close_reads():
     """The official-close store (app/official_close.py) never reads the exchange's file or the broker from a test: a
     test that wants it sets its own sources. Its memory doesn't carry over from one test to the next."""
