@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "15 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "18 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -91,7 +91,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     { ul: [
       "Supabase (database and sign-in), Railway (server) and Vercel (website) host the service.",
       "Razorpay processes payments.",
-      "AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures.",
+      "AI providers receive the text you type into AI features, like an idea to turn into rules, but not your email. StratLab can send it to any of these eleven: Anthropic, Cerebras, Cloudflare Workers AI, Google Gemini, Groq, Hugging Face, Mistral, NVIDIA API catalog, OpenRouter, SambaNova and Z.ai. Which one answers a given request varies, and only those with a key set up on the server are used. Z.ai is a China-based service. Mistral and Google Gemini also read the public company filings that are scanned pictures. Some of these services are used on their free plans, whose terms let the provider keep what is sent and use it to improve or train their models (Google Gemini's free tier and Mistral's free plan say so): don't type anything into an AI feature that you wouldn't want a provider to keep.",
       "Our email provider delivers the alerts you turn on by email, and Telegram delivers them if it is offered in Settings and you connect it. Sentry receives error reports without personal details.",
       "PostHog (hosted in the US) receives the usage analytics described above.",
     ] },

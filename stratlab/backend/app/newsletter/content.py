@@ -197,7 +197,10 @@ def other_region(region: str, title: str) -> bool:
 OFF_TOPIC = re.compile(r"\b(voters?|early voting|ballots?|polling (station|booth)s?|campaign trail|spy chief|arrested|murder|"
                        r"jailed|sentenced|nba|nfl|flotilla|besieged|"
                        r"kids|teens?|hollywood|celebrit\w*|weddings?|recipes?|horoscope|cricket|football|"
-                       r"cramer|things to watch|what to watch|endowments?)\b", re.I)
+                       r"cramer|things to watch|what to watch|endowments?|"
+                       # R47-007: human-interest and political jabs ("'Everyone laughed' when he started a pumpkin farm", "Trump
+                       # mocks popularity of the name …")
+                       r"everyone laughed|side hustle|pumpkins?|farm(ers?)? brings? in|mocks?|mocked|mocking)\b", re.I)
 _MON = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
 _TITLE_DATE = re.compile(r"\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?"
                          r"|(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?)(?![\d,])", re.I)
