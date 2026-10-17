@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 from .. import admin, db, mail_tokens
 from ..config import settings
-from ..kite_service import IST, token_valid, today_ist
+from ..kite_service import CANCELLED_KEY, IST, login_ends, token_mark, token_valid, today_ist
 from . import state, sync, vault
 
 STATE_PREFIX = "u1."
@@ -198,7 +198,21 @@ def shared_token(box: dict) -> str | None:
         return None
     from .. import db
     tok, day = db.get_setting("kite_access_token"), db.get_setting("kite_token_day")
-    return tok if tok and token_valid(day) else None
+    if not tok or not token_valid(day) or db.get_setting(CANCELLED_KEY) == token_mark(tok):
+        return None                      # none today, or Zerodha has cancelled it (R46-001)
+    return tok
+
+
+def _live_token(box: dict) -> str | None:
+    """The token a read would use now: the user's own of today, else the shared data login's; None when neither lives or
+    Zerodha has refused it (a read that got "token invalid" marks it `dead`)."""
+    own = vault.unseal(box.get("token")) if token_valid(box.get("day")) else None
+    tok = own or shared_token(box)
+    if not tok:
+        return None
+    mark = token_mark(tok)
+    # a linked copy of the data login's token is the same token: refused there means refused here
+    return None if mark == box.get("dead") or (box.get("shared") and mark == db.get_setting(CANCELLED_KEY)) else tok
 
 
 def refresh(uid: str) -> dict:
@@ -222,7 +236,7 @@ def refresh(uid: str) -> dict:
         positions = (kite.positions() or {}).get("net") or []
     except Exception as e:
         if type(e).__name__ == "TokenException":
-            state.update(uid, "kite", status="expired")
+            state.update(uid, "kite", status="expired", dead=token_mark(token))
             raise KiteConnectError("Today's Zerodha login has ended. Log in again.", expired=True) from None
         state.update(uid, "kite", status="error", detail="Zerodha didn't answer. Try again in a few minutes.")
         raise KiteConnectError("Zerodha didn't answer. Try again in a few minutes.") from None
@@ -238,8 +252,10 @@ def refresh(uid: str) -> dict:
 
 def status(uid: str, profile: dict) -> dict:
     box = state.section(uid, "kite")
-    live = bool(box.get("token")) and (token_valid(box.get("day")) or bool(shared_token(box)))
+    live = bool(box.get("token")) and bool(_live_token(box))
     return {"available": allowed(profile), "configured": configured(), "connected": bool(box.get("token")), "live": live,
+            # when Zerodha ends this login by itself, so the card can say it (R46-001: no renewal time anywhere)
+            "ends_at": login_ends().isoformat(timespec="minutes") if live else None,
             "expired": bool(box.get("token")) and not live, "refreshed_at": box.get("refreshed_at"), "count": box.get("count"),
             "detail": box.get("detail"), "kite_user": box.get("kite_user")}
 

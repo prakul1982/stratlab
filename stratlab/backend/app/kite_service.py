@@ -94,6 +94,22 @@ def ist_date():
 RESET_HOUR = 6        # Zerodha expires every token at about 6 am India time the next morning
 
 
+CANCELLED_KEY = "kite_token_cancelled"      # the mark (token_mark) of a data-login token Zerodha has refused, for every container
+
+
+def token_mark(tok: str | None) -> str:
+    """A short fingerprint of an access token, to note which one was refused without storing it twice."""
+    import hashlib
+    return hashlib.sha256(str(tok or "").encode()).hexdigest()[:16] if tok else ""
+
+
+def login_ends(now: datetime | None = None) -> datetime:
+    """When Zerodha ends a token that is live now: the next 6 am in India."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    end = now.replace(hour=RESET_HOUR, minute=0, second=0, microsecond=0)
+    return end if now < end else end + timedelta(days=1)
+
+
 def token_valid(token_day: str | None, now: datetime | None = None) -> bool:
     """Today's token, or yesterday's until the 6 am reset (so the app doesn't go offline at midnight)."""
     now = (now or datetime.now(IST)).astimezone(IST)
@@ -176,6 +192,8 @@ class KiteService:
         tok, day = db.get_setting("kite_access_token"), db.get_setting("kite_token_day")
         if tok and token_valid(day):
             self._set_token(tok, day)
+            if db.get_setting(CANCELLED_KEY) == token_mark(tok):
+                self.invalid_reason = self._cancelled_words()    # refused before this restart: still refused
 
     def _set_token(self, tok: str, day: str):
         self.access_token, self.token_day = tok, day
@@ -190,6 +208,13 @@ class KiteService:
             if not self.ready():
                 return
             self.invalid_reason = self._cancelled_words()
+            refused = self.access_token
+        try:
+            # the other containers and My Holdings' shared login (connect/kite_user.py) see it too: their copy of the token
+            # is the same one, refused the same way (R46-001: Settings said "Connected" all day after it was cancelled)
+            db.set_setting(CANCELLED_KEY, token_mark(refused))
+        except Exception as x:
+            print("could not note the cancelled token:", x)
         print("Kite token rejected:", e)
         if self.on_invalid:
             try:

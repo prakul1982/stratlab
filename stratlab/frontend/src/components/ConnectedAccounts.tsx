@@ -13,7 +13,7 @@ type Last = { at: string; status: string; kind: string | null; via: string; deta
 type Conn = {
   storage_ready: boolean;
   inbox: { ready: boolean; address: string | null; has_password: boolean; last: Last | null; forwarding_code: { code: string; at: string } | null; created_at: string | null };
-  kite: { available: boolean; connected: boolean; live: boolean; expired: boolean; refreshed_at: string | null; refreshed_label: string | null; count: number | null; detail: string | null };
+  kite: { available: boolean; connected: boolean; live: boolean; expired: boolean; refreshed_at: string | null; refreshed_label: string | null; count: number | null; detail: string | null; ends_at?: string | null };
   ibkr: { connected: boolean; synced_at: string | null; status: string | null; detail: string | null; positions: number | null; trades: number | null; expires: string | null };
   docs: Record<"epf" | "nps" | "ais", Record<string, unknown> | null>;
 };

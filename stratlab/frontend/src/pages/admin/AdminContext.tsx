@@ -22,6 +22,8 @@ export interface Overview {
     /** how many people's options sessions those are (Admin counts every user's) */
     options_users?: number;
     auto_login: { at: string | null; ok: boolean | null; message: string }; auto_login_configured: boolean;
+    /** the next automatic data login (India time), when it is set up */
+    auto_login_next?: string | null;
     recent_errors?: ServerError[];
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
     server_started_at?: string | null;

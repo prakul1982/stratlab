@@ -12,11 +12,14 @@ export function zerodhaEmpty(z: ZerodhaRead | null | undefined, now: Date = new 
   return at ? `Zerodha is connected; it returned 0 holdings at ${at}.` : null;
 }
 
-/** The Zerodha card's status line. `label` is the server's "today 09:12" / "yesterday 23:00" in India time. */
-export function zerodhaLine(k: { live: boolean; refreshed_label: string | null; count: number | null }): string {
+/** The Zerodha card's status line. `label` is the server's "today 09:12" / "yesterday 23:00" in India time; `ends_at` is
+ * when Zerodha ends the live login by itself (R46-001: the card never said). */
+export function zerodhaLine(k: { live: boolean; refreshed_label: string | null; count: number | null; ends_at?: string | null },
+                            now: Date = new Date()): string {
   const read = k.refreshed_label ? `last read ${k.refreshed_label} IST` : "not read yet";
   const holdings = k.count != null ? ` · ${k.count} holding${k.count === 1 ? "" : "s"}` : "";
+  const ends = k.ends_at ? quoteAt(k.ends_at, IST, now) : "";
   return k.live
-    ? `Connected · ${read}${holdings}`
+    ? `Connected · ${read}${holdings}${ends ? ` · this login ends ${ends.includes(",") ? "on " : "at "}${ends}` : ""}`
     : `Today's login has ended · ${read} · log in again to read your holdings`;
 }
