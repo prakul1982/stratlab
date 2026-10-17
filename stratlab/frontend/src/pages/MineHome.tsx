@@ -238,7 +238,7 @@ function MarketsCard({ later }: { later: boolean }) {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
-                    {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g</span>}
+                    {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g at the dollar rate, before Indian duty and GST</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
                       {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t))); return w && <span className="k-note" data-testid="mine-mkt-when"> {w}</span>; })()}</span>

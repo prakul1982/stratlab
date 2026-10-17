@@ -311,7 +311,10 @@ def check_shuffle(trades: list[dict], capital: float, who: str = "Your backtest"
                   f"{fall_text(p95)}, 35% or more.")
     elif p95 > max(1.5 * yours, 5):
         status = "warn"
-        detail = f"{who} fell {fall_text(yours)} at worst; in 95 of 100 reshuffles the fall was up to {fall_text(p95)}."
+        # why it's a warning, said: the order the trades came in was kinder than most orders of them (R45A-002: "yours
+        # −14.1%" beside "up to 21.8%" read as fine)
+        detail = (f"{who} fell {fall_text(yours)} at worst; in 95 of 100 reshuffles the fall was up to {fall_text(p95)}, more "
+                  f"than one and a half times as deep: with the same {what} in a worse order, the fall could have been much deeper.")
     else:
         status = "pass"
         detail = f"In 95 of 100 reshuffles the fall was up to {fall_text(p95)}, close to {whose} {fall_text(yours)}."

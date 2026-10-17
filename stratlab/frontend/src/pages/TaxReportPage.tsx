@@ -379,7 +379,7 @@ export function TaxReportPage() {
               <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
               {y.rows.length > 30 && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
               {y.count > y.rows.length && <p className="k-note">The CSV download has all {y.count} lines.</p>}
-              <p className="k-note">Cost includes brokerage and charges from your files; sale is after them. STT isn't deductible, so it isn't included.</p>
+              <p className="k-note">Cost includes brokerage and charges from your files; sale is after them. STT isn't deductible, so it isn't included. Each figure is rounded to the rupee and the gain is worked out from the exact amounts, so a line or a total can differ by ₹1 from subtracting the rounded figures.</p>
             </Card>
           )}
 
