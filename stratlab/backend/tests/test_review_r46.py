@@ -70,3 +70,31 @@ def test_a_cancelled_data_login_is_noted_for_every_container_and_kept_after_a_re
     again = KiteService()                                   # a restart: the same token is still refused
     again.load_saved_token()
     assert not again.ready() and again.invalid_reason
+
+
+def test_a_kept_answer_comes_at_once_and_is_read_again_behind_it():
+    import threading
+    from app import swr
+    swr.clear()
+    reads, done = [], threading.Event()
+
+    def read():
+        reads.append(1)
+        if len(reads) > 1:
+            done.set()
+        return len(reads)
+    assert swr.get("k", read, now=1000) == 1                      # nothing kept: read now
+    assert swr.get("k", read, fresh=3600, now=1000 + 60) == 1     # young: kept, no read
+    t = __import__("time").time()
+    assert swr.get("k", read, fresh=0, keep=86400, now=t + 10) == 1   # old: the kept one at once, read behind it
+    assert done.wait(5) and swr.get("k", read, fresh=3600, now=__import__("time").time()) == 2
+
+
+def test_a_failed_read_behind_keeps_the_old_answer():
+    import time
+    from app import swr
+    swr.clear()
+    assert swr.get("x", lambda: "old") == "old"
+    swr.get("x", lambda: (_ for _ in ()).throw(RuntimeError("down")), fresh=0)
+    time.sleep(0.2)
+    assert swr.get("x", lambda: "new") == "old"

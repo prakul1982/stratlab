@@ -91,6 +91,7 @@ from . import plan_interest
 from . import email_kit
 from . import mail_pages
 from . import leader
+from . import swr
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
 from . import results as results_calendar
@@ -2080,7 +2081,8 @@ def deals_company(symbol: str, profile=Depends(current_profile)):
     insiders' trades and pledges, substantial acquisitions, bulk and block deals. Facts as filed."""
     sym = research_routes.symbol_of(symbol)
     try:
-        out = deals.report(filings_feed, sym)
+        # the last answer at once, read again behind it after an hour (R46-004: 4 to 8 s each time the cache ran out)
+        out = swr.get(("deals", sym), lambda: deals.report(filings_feed, sym))
     except SourceError as e:
         inst = _quiet(kite.equity, sym) if kite.ready() else None
         if not inst or inst.get("exchange") == "NSE":
