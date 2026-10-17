@@ -157,6 +157,9 @@ def results_status(c: dict, today) -> dict | None:
     return out or None
 
 
+# a "what to watch" line about results already out ("Jun 2026 (Q1 FY2027) results filed on 2026-06") is not ahead (R47-005)
+PAST_WATCH = re.compile(r"\b(were|was|already|been|are)\s+(filed|reported|released|out)\b|\bresults filed\b|\bon \d{4}-\d{2}\b(?!-)", re.I)
+
 READ_CHECKS = 8          # the checks a company read went through (stored with it; a kept read gets them again as it is served)
 
 SCORE_FIELDS = ("scores", "composite", "valuation", "rating", "grade")   # never sent, even from an old stored read
@@ -187,7 +190,9 @@ to test ("Enter long when …" or "Enter short when …"), never as an instructi
 that are in the FACTS, copied as they are (a growth rate, yield or return is the FACTS' own figure, never your own
 sum); label Indian fiscal quarters as the FACTS' fiscal_now does. Describe the present with latest_fiscal_year and the
 results status in "results": a year or quarter the FACTS report is never "estimated", "upcoming" or "due". "watch"
-lists only dates ahead that the FACTS give; with none, say the next results date isn't announced yet.
+lists only dates ahead that the FACTS give, never results already filed and never a month written as a date (R47-005:
+"results filed on 2026-06"); with none, say the next results date isn't announced yet. No "only", "just", "merely",
+"mere" or "a mere" before a figure: that judges it ("dividend yield is only 0.5%"); state the figure.
 Compare a figure only with another figure in the FACTS: never with its history, its usual range, its peers, the sector
 or the market, which the FACTS don't give. Never say a kind of strategy "can be effective" or "works": an idea's "why"
 states the fact about the stock it is built on, as a fact: never what a figure "suggests", "signals" or "indicates",
@@ -213,7 +218,7 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
             "valuation_note": str(r.get("valuation_note") or "")[:300],
             # no revenue split: the model's guess isn't sourced (AAPL read "iPhone 100%, Services 0%, Mac 0%")
             "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": [],
-            "position": str(r.get("position") or "")[:500], "watch": _clip(r.get("watch"), 4), "ideas": ideas[:3]}
+            "position": str(r.get("position") or "")[:500], "watch": [w for w in _clip(r.get("watch"), 4) if not PAST_WATCH.search(str(w))], "ideas": ideas[:3]}
     # checked in code against the facts it was given: no advice or forecast, no number that isn't in them, the
     # right fiscal-quarter labels, ideas worded as rules to test (R5O-027)
     out = grounding.ground_company(read, facts, c.get("region") or "IN", ist_date())

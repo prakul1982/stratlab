@@ -21,8 +21,9 @@ _BREAKDOWN = re.compile(r"\s*(?:\[\d{1,3}\]\s*)?\b(?:Revenue|Business|Segment(?:
 
 
 # a section heading pasted into the running text ("... retail Architecture Reliance Industries Limited holds ..."): the
-# heading word sits between a sentence that never ended and the capitalised start of the next (R31-015)
-_HEADING = re.compile(r"(?<=[a-z0-9\)])(?<![Tt]he)(?<![Oo]ur)\s+(?:Architecture|Overview|Background|Operations|Strategy|Segments|Highlights)\s+(?=[A-Z][a-z])")
+# heading word sits between a sentence that never ended and the capitalised start of the next (R31-015), or right after a
+# sentence that did ("... in the conglomerate. Architecture Reliance Industries Limited holds ...", R47-006)
+_HEADING = re.compile(r"(?<=[a-z0-9\)\.])(?<![Tt]he)(?<![Oo]ur)\s+(?:Architecture|Overview|Background|Operations|Strategy|Segments|Highlights)\s+(?=[A-Z][a-z])")
 
 
 def clean_profile(text: str | None) -> str | None:
@@ -33,6 +34,7 @@ def clean_profile(text: str | None) -> str | None:
     t = _BREAKDOWN.sub("", str(text))
     t = _CITE.sub("", t)
     t = _HEADING.sub(". ", t)
+    t = re.sub(r"\.\s*\.\s", ". ", t)          # a heading after a full stop leaves one, not two
     t = re.sub(r"\s+", " ", t).strip(" :;,-")
     return t or None
 

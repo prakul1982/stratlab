@@ -8,7 +8,7 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { CHECK_RESULT, TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, CHECKS_NOT_HOLD, TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksBeyond, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
@@ -90,8 +90,9 @@ export function PublicLibrary() {
                       <CardHead title={plainTerms(e.name)} level={2} />
                       <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>by {e.author}</span></span>
                     </div>
-                    <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} /><span className="k-note">{checksOf(e)}</span>{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
+                    <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                     <HoldLine e={e} />
+                    {e.verdict.verdict === "edge" && trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
                     {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                     {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                     <div className="k-mini-stats">
