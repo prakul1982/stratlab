@@ -627,9 +627,23 @@ def check_features(profile, strategy: Strategy, inst: dict | None):
                 "Stochastic, Donchian and more). Basic unlocks all of them.")
 
 
+def offline_when(message: str) -> str:
+    """An offline answer that says when Indian data comes back: the next automatic data login, in India time (R48-002/003:
+    "offline right now. Try again soon." on a Saturday night, when it comes back on Monday morning)."""
+    try:
+        nxt = next_auto_login()
+    except Exception:
+        nxt = None
+    if not nxt or "comes back" in message:
+        return message
+    at = datetime.fromisoformat(nxt)
+    day = "today" if at.date() == datetime.now(IST).date() else f"on {at:%a} {at.day} {at:%b}"
+    return f"{message.rstrip('.').replace(' Try again soon', '').replace(' right now', '')}. Indian market data comes back with the daily data login, {day} at {at:%H:%M} IST."
+
+
 @app.exception_handler(KiteNotReady)
 def _kite_not_ready(request, exc):
-    return JSONResponse(status_code=503, content={"detail": {"code": "data_offline", "message": public_text(str(exc))}})
+    return JSONResponse(status_code=503, content={"detail": {"code": "data_offline", "message": public_text(offline_when(str(exc)))}})
 
 
 @app.exception_handler(research.ResearchError)

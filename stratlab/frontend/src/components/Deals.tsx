@@ -66,7 +66,7 @@ export function DealsPanel({ symbol }: { symbol: string }) {
       <Seg label="Which disclosures" value={show} onChange={(v) => { setShow(v); setMore(false); }} options={SHOW.map(([id, label]) => ({ value: id, label }))} />
       {rows.length === 0 ? <EmptyState title="Nothing disclosed">None disclosed in the last year.</EmptyState> : (
         <div className="deals-table">
-          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d) => d.id} sticky={list.length > 14}
+          <DataTable label={`${symbol} deals and insider trades`} rows={list} rowKey={(d) => d.id} stack sticky={list.length > 14}
             columns={[
               { key: "who", header: "Who", rowHeader: true, wrap: true, cell: (d) => <><span className="deal-who">{d.who}</span>{d.relation && <span className="k-sub-line">{RELATION[d.relation]}</span>}</> },
               { key: "side", header: "Bought or sold", cell: (d) => <Badge tone="plain" dot={false}>{SIDE[d.side] ?? d.side}</Badge> },

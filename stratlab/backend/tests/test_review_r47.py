@@ -31,3 +31,23 @@ def test_results_already_out_are_not_something_to_watch():
     for t in ("The next results date isn't announced yet", "Results on 2026-11-02 for the Sep 2026 quarter",
               "Board meeting on 2026-10-24 to consider results"):
         assert not PAST_WATCH.search(t), t
+
+
+def test_round_48_headlines_in_other_words_are_left_out_too():
+    for t in ("TSMC Says AI Chip Demand Is Still Far Above What It Can Supply. That's Why I'd Buy Nvidia Stock.",
+              "Nvidia (NVDA) Trades Far Below Its Usual Multiple, Is Customer Debt the Real Risk?",
+              "Jio IPO: How Rs1,000 invested in Reliance in 1977 grew to over Rs 50 lakh",
+              "TCS share price rebounds 14% from September low: Can the rally extend further?",
+              "Nifty soars 2.8% this week: What lies ahead for Dalal Street? - Experts decode 5 triggers, key levels for next week",
+              "Why is stock market up today? Sensex, Nifty rise; Top 3 reasons explained",
+              "Wall Street's fear gauge is ripping. Traders see it going even higher"):
+        assert not plain_headline(t), t
+    for t in ("Bulls Return To Dalal Street! Stock Markets Rise as Sensex, Nifty Skyrocket", "Nvidia to invest $5 billion in Intel",
+              "Investors pulled $2 billion from equity funds", "Can Fin Homes Q2 profit rises 12%"):
+        assert plain_headline(t), t
+
+
+def test_a_subsidiary_ceasing_is_not_an_officer_resigning():
+    from app.intel.filings import classify
+    assert classify("Other Restructuring", "Cessation of Abraham & Thakore Private Limited as subsidiary of the Company")[0] != "kmp_resign"
+    assert classify("Cessation", "Cessation of Mr. A Kumar as Independent Director")[0] == "kmp_resign"

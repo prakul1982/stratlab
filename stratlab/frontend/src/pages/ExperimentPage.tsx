@@ -197,7 +197,7 @@ function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
       <CardHead title={`${g.name}: one by one`} info={HELP.group} infoLabel="About the group"
         actions={<span className="k-note">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>} />
       {g.skipped.length > 0 && <p className="k-note">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
-      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id}
+      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id} stack
         foot={Math.abs(missing) >= 0.5
           ? { sym: "Still open at the end, not in the rows above", pnl: <span className={upDown(missing)}>{money(missing, cur)}</span> }
           : { sym: "Total", pnl: <span className={upDown(sum)}>{money(sum, cur)}</span> }} />

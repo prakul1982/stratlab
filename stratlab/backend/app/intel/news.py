@@ -126,7 +126,16 @@ ADVICE_TITLE = re.compile(
     # Remain Bullish"), a sum invested sold as a bet ("$10,000 Invested in Apple Could Be Worth This Much by 2031") and
     # a panel's views on whether to own it ("… aid the bounce back? Experts' views")
     r"|\b(we're|we are|i'm|i am)\s+(downgrading|upgrading)\b|\breasons? to (remain |stay |be |get |turn )?(bullish|bearish|buy|sell|own|hold)\b"
-    r"|\binvested in\b[^.]{0,60}\b(could|would|will|may|might) be worth\b|\bcould be worth this much\b|\bexperts?'? (views?|take)\b", re.I)
+    r"|\binvested in\b[^.]{0,60}\b(could|would|will|may|might) be worth\b|\bcould be worth this much\b|\bexperts?'? (views?|take)\b"
+    # R48-001/008: the same kinds in other words: someone's own buy ("That's Why I'd Buy Nvidia Stock"), a sum invested
+    # grown ("How Rs1,000 invested in Reliance in 1977 grew to over Rs 50 lakh"), a question on where a price goes next
+    # ("Can the rally extend further?", "What lies ahead for Dalal Street?", "Traders see it going even higher"), experts
+    # reading the next move ("Experts decode 5 triggers, key levels for next week") and listicles of reasons
+    r"|\b(i'd|i would|i will|i'll|why i)\s+(buy|sell|own|hold|add|avoid|load up)\b|\binvested in\b[^.]{0,60}\b(grew|grows|turned|became|would have|is now)\b"
+    r"|\bcan (the|this|its|it)\b[^?]{0,30}\b(rally|rebound|recovery|run|gains?|uptrend|surge|momentum)\b[^?]{0,30}\b(extend|continue|last|sustain|go on)\b"
+    r"|\bwhat lies ahead\b|\bexperts? decode\b|\bkey levels\b|\btriggers? (for|to watch)\b|\btop \d+ reasons\b"
+    r"|\b(traders?|analysts?|investors?) see (it|them|stocks?|shares?|the market|prices?) (going|heading|rising|falling)\b"
+    r"|\bis [^?]{0,60}\bthe real risk\?", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

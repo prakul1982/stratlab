@@ -152,9 +152,9 @@ function Stocks({ v }: { v: CasView }) {
       </p>
       {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
         <>
-          <DataTable label="F&O stocks in the closing auction" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={attrs} />
+          <DataTable label="F&O stocks in the closing auction" columns={cols} rows={shown} rowKey={(r) => r.symbol} rowAttrs={attrs} stack phonePage={30} />
           <Earlier key={q.trim() ? "find" : "all"} label="More stocks" count={rest.length} open={!!q.trim()}>
-            <DataTable label="More F&O stocks in the closing auction" columns={cols} rows={rest} rowKey={(r) => r.symbol} rowAttrs={attrs} />
+            <DataTable label="More F&O stocks in the closing auction" columns={cols} rows={rest} rowKey={(r) => r.symbol} rowAttrs={attrs} stack />
           </Earlier>
         </>
       )}

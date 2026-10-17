@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { groupLabel, plainTerms } from "../lib/plainTerms";
 import { pct, TF_NAME } from "../lib/format";
-import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, type LibEntry, checksBeyond } from "../components/LibraryBits";
+import { TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, type LibEntry, checksBeyond, CHECKS_NOT_HOLD } from "../components/LibraryBits";
 import { Search } from "../components/Icons";
 import { VerdictBadge } from "../components/ui";
 import { Badge, Card, CardHead, ConfirmDialog, DataTable, Disclosure, EmptyState, ErrorState, PageHeader, Seg, Select, Skeleton, Stat, type Column } from "../components/kit";
@@ -154,6 +154,7 @@ export function LibraryPage() {
                         </div>
                         <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         <HoldLine e={e} />
+                        {e.verdict.verdict === "edge" && trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
                         {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}

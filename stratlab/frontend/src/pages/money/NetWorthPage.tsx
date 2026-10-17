@@ -51,7 +51,7 @@ type F = {
   /** asked only for a floating-rate loan */ floating?: boolean;
 };
 const isFloating = (form: Record<string, string>) => !!form.benchmark && form.benchmark !== "fixed";
-const NAME: F = { k: "name", label: "Name", type: "text", optional: true, hint: "Anything you will recognise" };
+const NAME: F = { k: "name", label: "Name", type: "text", optional: true, hint: "e.g. HDFC savings" };
 const AS_OF: F = { k: "as_of", label: "Value as of", type: "date", optional: true };
 const RATE: F = { k: "rate", label: "Interest rate", type: "rate" };
 /** What each kind of entry asks for. */
