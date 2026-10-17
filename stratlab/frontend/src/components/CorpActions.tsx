@@ -68,9 +68,9 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
         <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
       <div className="k-stack">
-        <span className="k-eyebrow">Coming up</span>
+        <span className="k-eyebrow">Coming up: dividends and splits</span>
         {data.ahead.length ? <div className="inv-rows">{data.ahead.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} />)}</div>
-          : <span className="k-small k-muted">{data.ahead_known ? "Nothing announced with an ex-date ahead." : "Dates ahead aren't available for US companies yet; past ones are below."}</span>}
+          : <span className="k-small k-muted">{data.ahead_known ? "Nothing announced with an ex-date ahead." : "Dividend and split dates ahead aren't available for US companies yet (the results date is at the top of the page); past ones are below."}</span>}
       </div>
       <div className="k-stack">
         <span className="k-eyebrow">Past three years</span>

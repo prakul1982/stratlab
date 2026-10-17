@@ -254,7 +254,10 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
       )}
       <span className="k-small k-muted">Free limit: {p.free}{p.note ? ` ${p.note}` : ""}</span>
       <span className="k-small k-muted">
-        {p.ranked_at ? `Measured ${ago(iso(p.ranked_at))}${p.discovered != null ? `: ${p.discovered} models listed${skipped ? `, left out ${skipped}` : ""}` : ""}.` : "Not measured yet: its known-good models are used until then."}
+        {p.ranked_at && p.discovered === 0
+          // a measure that listed nothing measured nothing: not "Measured" beside a provider never checked (R47-019)
+          ? `Tried ${ago(iso(p.ranked_at))}, but the provider listed no models: its known-good models are used until a test answers.`
+          : p.ranked_at ? `Measured ${ago(iso(p.ranked_at))}${p.discovered != null ? `: ${p.discovered} models listed${skipped ? `, left out ${skipped}` : ""}` : ""}.` : "Not measured yet: its known-good models are used until then."}
         {p.rank_error ? <> <Said text={p.rank_error} />.</> : ""}
       </span>
       {p.pinned && (

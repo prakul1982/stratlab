@@ -100,7 +100,8 @@ type ResultRow = { symbol: string; region: Region; date: string; purpose?: strin
 type ResultsView = { today: string; weeks: { rows: ResultRow[] }[] };
 
 const CAT_TAG: Record<string, string> = { tax: "Tax", holdings: "Your stocks", money: "Money", custom: "Yours", market: "Market" };
-const KINDS: EvKind[] = ["rbi", "india", "us", "budget", "index"];
+// exchange holidays too: the nearest market date that matters to anyone with a running paper session (R47-012)
+const KINDS: EvKind[] = ["holiday", "rbi", "india", "us", "budget", "index"];
 
 /** The dates ahead from every calendar the app has: the money calendar (tax, your stocks' results and dividends, your own
  * dates), the market events (RBI, data releases, the Fed, index changes) and results for your watchlist. null while loading. */

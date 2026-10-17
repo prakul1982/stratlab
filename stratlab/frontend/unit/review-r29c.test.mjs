@@ -28,5 +28,5 @@ test("R29C-007: /privacy names Telegram only as offered in Settings", () => {
   assert.equal(src.split("\n").filter((l) => l.includes("Telegram")).length, 2);
   assert.match(src, /if Telegram is offered in Settings and you connect it/);
   assert.match(src, /if it is offered in Settings and you connect it/);
-  assert.match(src, /"\/privacy": "15 October 2026"/);
+  assert.match(src, /"\/privacy": "18 October 2026"/);
 });

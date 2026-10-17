@@ -162,7 +162,8 @@ NOT_CHAT = re.compile(
     r"guard|moderation|safety|shield|prompt-?guard|"                    # safety classifiers, not answerers
     r"rerank|retriev|ocr|\bbge-|\be5-|\bgte-|nomic|minilm|colbert|"      # search and document tools (embedders)
     r"compound|search|deep-?research|"                                 # agent systems with their own tools and quotas
-    r"realtime|-live\b|computer-use|robotics", re.I)
+    r"realtime|-live\b|computer-use|robotics|"
+    r"lyria|music|antigravity|nano-banana|genie", re.I)                  # music, coding-agent and world models (R47-019)
 
 # Specialists that write poor English prose or JSON for our jobs.
 SPECIALIST = re.compile(
