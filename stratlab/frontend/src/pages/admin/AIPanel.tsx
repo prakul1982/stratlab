@@ -20,7 +20,7 @@ type Provider = {
   name: string; label: string; configured: boolean; missing: string[]; key_url: string; free: string; terms: "ok" | "prototype" | "paid";
   note: string; variables: string[]; model_variable: string; state: "ok" | "warn" | "fail" | "off" | "idle"; state_text: string;
   result?: string | null;
-  quota: { limited: boolean; reset_at: number | null; remaining: { requests?: number; tokens?: number } | null; remaining_at: number | null };
+  quota: { limited: boolean; reset_at: number | null; remaining: { requests?: number; tokens?: number; requests_reset?: number; tokens_reset?: number } | null; remaining_at: number | null };
   last_ok: number | null; last_error: string | null; last_used_model: string | null; pinned: string | null; pinned_by: "admin" | "railway" | null;
   ranked_at: number | null; rank_error: string | null; discovered: number | null; skipped: Record<string, number>; probing: boolean;
   models: Model[]; blocked: string[]; blocked_info?: Record<string, { by?: string | null; at?: number | null }>;
@@ -229,6 +229,10 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
   const word = p.state === "idle" && p.ranked_at ? "Measured" : stateWord;
   const skipped = Object.entries(p.skipped || {}).map(([why, n]) => `${n} ${SKIPPED[why] ?? why}`).join(", ");
   const left = p.quota.remaining;
+  // how soon that allowance fills again: a per-minute token allowance "nearly gone" is full again a minute later, so the
+  // count alone read as a provider running out while its light said OK (R46-005)
+  const refill = (sec?: number) => sec == null ? "" : sec < 90 ? ` (a per-minute allowance, full again within ${Math.max(1, Math.round(sec))} s)`
+    : sec < 5400 ? ` (full again within ${Math.round(sec / 60)} min)` : ` (full again within ${Math.round(sec / 3600)} h)`;
   return (
     <div className="ai-provider" aria-label={p.label}>
       <div className="k-spread">
@@ -245,7 +249,7 @@ function ProviderBlock({ p, test, busy, rerank, pin, block }: {
       {test && <span className="k-small" role="status">Test: {test.ok ? `answered with ${test.model} in ${(test.ms / 1000).toFixed(1)} s` : <Said text={test.error} />}</span>}
       {p.quota.limited && p.quota.reset_at && <span className="k-small">Free quota resets {until(p.quota.reset_at)}.</span>}
       {left && (left.requests != null || left.tokens != null) && (
-        <span className="k-small k-muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens`].filter(Boolean).join(", ")}
+        <span className="k-small k-muted">Left this period: {[left.requests != null && `${left.requests.toLocaleString("en-IN")} requests${refill(left.requests_reset)}`, left.tokens != null && `${left.tokens.toLocaleString("en-IN")} tokens${refill(left.tokens_reset)}`].filter(Boolean).join(", ")}
           {p.quota.remaining_at ? ` (as of ${ago(iso(p.quota.remaining_at))})` : ""}</span>
       )}
       <span className="k-small k-muted">Free limit: {p.free}{p.note ? ` ${p.note}` : ""}</span>

@@ -366,7 +366,8 @@ def test_when_the_provider_says_nothing_is_left_it_is_not_asked_until_the_reset(
     with pytest.raises(P.AIBusy):
         P.complete("s", "another question", transport=t)
     assert len(seen) == 1
-    assert next(p for p in P.admin_view()["providers"] if p["name"] == "mistral")["quota"]["remaining"] == {"requests": 0}
+    left = next(p for p in P.admin_view()["providers"] if p["name"] == "mistral")["quota"]["remaining"]
+    assert left["requests"] == 0 and 290 < left["requests_reset"] <= 300      # with when it fills again (R46-005)
 
 
 def test_a_short_rate_limit_is_waited_out_instead_of_failing(monkeypatch):
