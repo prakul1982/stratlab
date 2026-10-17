@@ -32,7 +32,7 @@ DAY_KEY = "etfnav:day:"            # etfnav:day:<YYYY-MM-DD> = {symbol: [close, 
 KEEP_DAYS = 30                     # trading days of history kept
 FILL_DAYS = 5                      # days back whose missing NAVs are still looked for
 IST = timezone(timedelta(hours=5, minutes=30))
-MAX_GAP = 30.0                     # a bigger gap means a mismatched NAV (another plan, a split), not a real one (R45A-016: 48% shown)
+MAX_GAP = 50.0                     # a bigger gap means a mismatched NAV (another plan, a split), not a real one
 DOUBT_MOVE = 2.0                   # %: a close this far from the latest price, while the latest price sits near the NAV, is doubted
 LIVE_EVERY = 240                   # seconds between reads of the exchange's list while the market is open
 RETRY = 1800                       # with nothing stored, wait this long between tries outside market hours
@@ -43,8 +43,9 @@ NOTE = ("Price is the last traded price on the exchange. The NAV is the fund hou
         "closing price on the exchange against that day's NAV. A gap is left out when that close and the latest price are "
         "too far apart to both be right. Through the day, before that day's NAV is out, the gap shown is the last close's "
         "against its NAV, so the day's market move is never read as a gap. A gap of more than a few percent usually means "
-        "few units trade, or the fund's market makers aren't quoting near the NAV (a fund that has paused new units sees "
-        "this too); one beyond 30% is left out as a mismatched NAV. Figures as of the times shown.")
+        "few units trade, or the fund has stopped making new units: an overseas fund at the overseas investment limit "
+        "can trade 40% or more above its NAV for months (R45A-016). One beyond 50% is left out as a mismatched NAV. "
+        "Figures as of the times shown.")
 # said only when a source gave a real indicative NAV (the exchange's list gives none)
 INAV_NOTE = (" The indicative NAV (iNAV) is the estimate of what one unit holds, worked out through market hours from "
              "the holdings' prices; a gap to it is shown too.")

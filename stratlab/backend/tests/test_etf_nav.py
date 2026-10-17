@@ -47,7 +47,7 @@ def test_gap_maths():
     assert E.gap("1,000.00", "1000") == 0.0
     assert E.gap(100, None) is None and E.gap(None, 100) is None and E.gap(0, 100) is None and E.gap(-5, 100) is None
     assert E.gap(100, 40) is None                    # 150% away: a NAV for another unit, not a real gap
-    assert E.gap(148, 100) is None and E.gap(129, 100) == 29.0      # 48% is left out too (R45A-016)
+    assert E.gap(148, 100) == 48.0                    # an overseas fund that can't make new units: a real premium (R45A-016)
     assert E.gap(True, 100) is None and E.gap("-", 100) is None and E.gap(float("nan"), 100) is None
 
 
