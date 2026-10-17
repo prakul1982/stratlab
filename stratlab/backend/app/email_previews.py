@@ -136,7 +136,7 @@ def _my_stocks() -> tuple[str, str, str]:
     since = (day - timedelta(days=1)).isoformat()
     facts = {"kind": "my_stocks", "uid": "sample", "day": day.isoformat(), "weekly": False, "since": since,
              "stocks": [
-                 {"symbol": "TATAMOTORS", "region": "IN", "price": 925.4, "change_pct": 3.4, "stage": 2, "stage_before": 1, "stage_changed": True,
+                 {"symbol": "TMPV", "region": "IN", "price": 925.4, "change_pct": 3.4, "stage": 2, "stage_before": 1, "stage_changed": True,
                   "filings": [{"severity": "amber", "label": "Order win", "subject": "Wins a bus order", "url": "https://example.com/f1"}],
                   "headlines": [{"headline": "Monthly sales update filed at 4:12 pm", "url": "https://example.com/n1"}]},
                  {"symbol": "HDFCBANK", "region": "IN", "price": 1612.0, "change_pct": -1.1, "stage": 2,
@@ -176,10 +176,10 @@ def _events() -> tuple[str, str, str]:
 
 def _fo() -> tuple[str, str, str]:
     text = ("Changes to the exchange's F&O contracts for stocks on your watchlist or in your paper sessions:\n"
-            "- TATAMOTORS: lot size changes from 1,425 to 1,500 from the November series\n"
+            "- TMPV: lot size changes from 1,425 to 1,500 from the November series\n"
             "- PNB: added to the ban list\n\n"
             "From the exchange's contract file and circulars. Facts, not advice.")
-    return _alerts_email("StratLab: F&O contract changes for TATAMOTORS, PNB", text, "/trade/fo-changes", "F&O changes",
+    return _alerts_email("StratLab: F&O contract changes for TMPV, PNB", text, "/trade/fo-changes", "F&O changes",
                          "You get this because you turned on F&O change alerts on StratLab.")
 
 
