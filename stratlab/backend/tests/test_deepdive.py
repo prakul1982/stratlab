@@ -544,7 +544,7 @@ def test_a_read_saved_before_the_advice_filter_loses_its_advice_wording(monkeypa
 
 
 def test_plans_said_long_ago_are_not_told_as_current(monkeypatch):
-    """R53-004: a plan from a call a year and a half or more ago is not "under way" today, and its outlook is no outlook."""
+    """R53-004, R54-014: a plan or outlook from a call a year and a half or more ago is not shown as one today."""
     from datetime import date
     labels = {"S1": {"title": "Q2 FY24 call", "at": "2023-10-28", "url": "u", "kind": "transcript"},
               "S2": {"title": "Q1 FY27 deck", "at": "2026-08-12", "url": "u", "kind": "presentation"}}
@@ -554,7 +554,7 @@ def test_plans_said_long_ago_are_not_told_as_current(monkeypatch):
          "outlook": [{"statement": "Expects margins to improve", "quote": "x", "source": "S1"},
                      {"statement": "Expects 20% growth", "quote": "y", "source": "S2"}]}
     p = deepdive.clean_plans(d, labels, today=date(2026, 10, 18))
-    assert [(c["what"], c["status"]) for c in p["capex"]] == [("5G rollout", "unclear"), ("New plant", "under way"), ("Old plant", "done")]
+    assert [(c["what"], c["status"]) for c in p["capex"]] == [("New plant", "under way")]      # R54-014: old ones go
     assert [o["statement"] for o in p["outlook"]] == ["Expects 20% growth"]
     # a read stored before the rule is shown the same way
     stored = {"plans": {"capex": [{"what": "5G rollout", "status": "under way", "source": labels["S1"]},
@@ -563,5 +563,5 @@ def test_plans_said_long_ago_are_not_told_as_current(monkeypatch):
                                     {"statement": "Expects 20% growth", "source": labels["S2"]}]}}
     monkeypatch.setattr(deepdive, "ist_now", lambda: __import__("datetime").datetime(2026, 10, 18, 12, 0))
     t = deepdive.tidy(stored)["plans"]
-    assert [c["status"] for c in t["capex"]] == ["unclear", "under way"]
+    assert [c["what"] for c in t["capex"]] == ["New plant"]
     assert [o["statement"] for o in t["outlook"]] == ["Expects 20% growth"]

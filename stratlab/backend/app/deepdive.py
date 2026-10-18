@@ -484,15 +484,13 @@ def clean_plans(d: dict, labels: dict, texts: dict | None = None, today: date | 
     capex = []
     day = today or ist_now().date()
     # a plan or outlook said more than a year and a half ago is not told as current: "5G rollout … under way" from a
-    # 28 Oct 2023 call, read in Oct 2026, is a past statement (R53-004). An old plan stays, its status "unclear" (the
-    # page gives its date); an old outlook goes.
+    # 28 Oct 2023 call, read in Oct 2026, is a past statement (R53-004), and an "unclear" one from then is history,
+    # not a plan (R54-014). Both go.
     def old(label):
         return _too_old(label, day)
     for c in (d.get("capex") or [])[:8]:
-        if isinstance(c, dict) and str(c.get("what") or "").strip() and _real(c, texts):
+        if isinstance(c, dict) and str(c.get("what") or "").strip() and _real(c, texts) and not old(src(c.get("source"))):
             status = str(c.get("status") or "unclear").lower()
-            if old(src(c.get("source"))) and status == "under way":
-                status = "unclear"
             capex.append({"what": str(c["what"])[:200], "amount": _with_unit(c.get("amount")), "size": _with_unit(c.get("size")),
                           "timeline": (str(c["timeline"])[:80] if c.get("timeline") else None),
                           "status": status if status in ("planned", "under way", "done", "unclear") else "unclear",
@@ -815,8 +813,7 @@ def tidy(reads: dict) -> dict:
         # a read saved before the age rule, or one that has aged since, is told as a new read would be (R53-004)
         day = ist_now().date()
         if isinstance(p.get("capex"), list):
-            p["capex"] = [{**c, "status": "unclear"} if isinstance(c, dict) and c.get("status") == "under way"
-                          and _too_old(c.get("source"), day) else c for c in p["capex"]]
+            p["capex"] = [c for c in p["capex"] if not (isinstance(c, dict) and _too_old(c.get("source"), day))]
         if isinstance(p.get("outlook"), list):
             p["outlook"] = [o for o in p["outlook"] if not (isinstance(o, dict) and _too_old(o.get("source"), day))]
     return reads

@@ -1495,12 +1495,24 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
             continue
         if hardcodes_price(i.get("text")) or not idea_uses_what_it_names(i.get("title"), i.get("text")):
             continue                  # R10O-005: a typed-in price level, or an indicator in the name that the rule doesn't use
+        if uses_fundamentals(i.get("text")):
+            continue                  # R54-003: a rule on a quarterly figure (an EMA of EBITDA margin) can't be backtested
         why = plain_caption(str(i.get("why") or ""), lender, region)
         if classes and mentions_class_move(why, classes):
             why = ""
         ideas.append({**i, "why": app_dates(why, today)})
     out["ideas"] = ideas
     return out
+
+
+# figures a company reports once a quarter or a year: a backtest runs on daily prices and volume, so a rule built on
+# one of them has no series to test (R54-003: "the 20-day EMA of EBITDA margin")
+_FUNDAMENTAL = re.compile(r"\b(ebitda|margins?|eps|earnings per share|revenues?|sales growth|net profit|p/?e( ratio)?|"
+                          r"price[- ]to[- ](earnings|book)|book value|roe|roce|debt|dividend yield|cash flow)\b", re.I)
+
+
+def uses_fundamentals(text) -> bool:
+    return bool(_FUNDAMENTAL.search(str(text or "")))
 
 
 def class_move(shareholding) -> dict | None:

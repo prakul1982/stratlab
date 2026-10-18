@@ -13,6 +13,8 @@ export interface GreekModel {
   expiry: string; spot: number; forward: number; basis: number; forward_from: "parity" | "spot"; atm: number | null;
   t: number; days: number; rate: number; atm_iv: number | null;
   as_of: string | null;      // when the newest price it rests on was struck (null: none came with a time)
+  /** what the at-the-money IV was solved from: the bid-ask middles, or the last trades when there is no live bid and ask */
+  quoted?: "mid" | "last";
   fresh?: boolean;           // that price was under two minutes old when the model was made
   exchange?: string; tick?: number;   // the contract's exchange, and its price step (0.0025 for a currency option)
 }

@@ -356,3 +356,13 @@ def test_the_screens_answer_carries_the_stale_stocks(monkeypatch):
     out = screens.run("US", {}, index=index)
     assert out["as_of"] == "2026-10-08" and out["as_of_newest"] == "2026-10-08"
     assert [s["symbol"] for s in out["stale"]] == ["XYZ"]
+
+
+def test_a_rule_template_on_a_reported_figure_is_left_out():
+    """R54-003: "the 20-day EMA of EBITDA margin" has no daily series to test; price and volume rules stay."""
+    ideas = [{"title": "Trend following with EMA crossover", "text": "Enter long when the 20-day EMA of EBITDA margin (using reported 17.0%) "
+              "crosses above the 50-day EMA, exit when it crosses back below, 4% stop loss", "why": "x"},
+             {"title": "Trend following with EMA crossover", "text": "Enter long when the 20-day EMA crosses above the 50-day EMA, "
+              "exit when it crosses back below, 10% take profit, 5% stop loss", "why": "y"}]
+    out = G.polish_company({"summary": "", "ideas": ideas}, "IN", False)
+    assert [i["why"] for i in out["ideas"]] == ["y"]

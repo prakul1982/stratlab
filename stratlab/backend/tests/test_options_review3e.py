@@ -186,3 +186,20 @@ def test_stale_prices_are_priced_with_the_time_left_when_they_were_struck():
     assert live["fresh"] is True and live["t"] < struck["t"]
     # an expiry that has passed is still no model, however old the prices
     assert G.model(25000, "2026-10-09", 25000, _q(160.0, "2026-10-08T15:29:58"), _q(150.0, "2026-10-08T15:29:58"), sun) is None
+
+
+def test_prices_read_after_the_close_are_timed_from_the_close():
+    """R54-001: a chain read at 17:35 after a 15:30 close is timed from 15:30, by the builder and by Positioning."""
+    from app import positioning as P2
+    fri = "2026-10-16T17:35:00"
+    sun = datetime(2026, 10, 18, 12, 0, tzinfo=IST)
+    late = G.model(23146.15, "2026-10-19", 23150, _q(120.0, fri), _q(125.0, fri), sun, spot_ts=fri)
+    at_close = G.model(23146.15, "2026-10-19", 23150, _q(120.0, "2026-10-16T15:30:00"), _q(125.0, "2026-10-16T15:30:00"), sun)
+    assert late["t"] == at_close["t"] and abs(late["days"] - 3.0) < 1e-6
+    assert late["quoted"] == "mid"
+    assert G.model(23146.15, "2026-10-19", 23150, {"ltp": 120.0, "ts": fri}, _q(125.0, fri), sun)["quoted"] == "last"
+    rows = [[23150, None, None, 120.0, 0, None, None, 125.0, 0]]
+    got = P2.atm_iv(rows, 23146.15, "2026-10-19", datetime(2026, 10, 16, 15, 41, tzinfo=IST))
+    assert got["days"] == 3.0
+    assert G.struck_at(datetime(2026, 10, 16, 11, 0, tzinfo=IST)) == datetime(2026, 10, 16, 11, 0, tzinfo=IST)
+    assert G.struck_at(datetime(2026, 10, 16, 23, 0, tzinfo=IST), "MCX").hour == 23

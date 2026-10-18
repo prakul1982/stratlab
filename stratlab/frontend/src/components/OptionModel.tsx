@@ -54,8 +54,8 @@ export function ModelInputs({ m, extra }: { m: GreekModel; extra?: string }) {
   return (
     <p className="k-note model-inputs" data-testid="model-inputs">
       Model estimates, not prices: Black-76 on the forward {fwd}
-      {m.forward_from === "parity" ? ` (from put-call parity at ${pts(m.atm ?? m.spot, m.tick)})` : " (the spot: the at-the-money pair had no prices)"}, IV from each
-      option's bid-ask middle{m.atm_iv ? ` (at the money ${pctIv(m.atm_iv)})` : ""}, {dayWord(m.days)} to the {shortDate(m.expiry)} expiry{m.fresh === false && m.as_of ? " from when these prices were struck (as Positioning counts it)" : ""}, rate {+(m.rate * 100).toFixed(2)}%{stamp ? `, ${stamp}` : ""}.
+      {m.forward_from === "parity" ? ` (from put-call parity at ${pts(m.atm ?? m.spot, m.tick)}${m.quoted === "last" ? " on their last trades, which can be from before the closing level was set" : ""})` : " (the spot: the at-the-money pair had no prices)"}, IV from each
+      option's {m.quoted === "last" ? "last traded price (no live bid and ask)" : "bid-ask middle"}{m.atm_iv ? ` (at the money ${pctIv(m.atm_iv)})` : ""}, {dayWord(m.days)} to the {shortDate(m.expiry)} expiry{m.fresh === false && m.as_of ? (m.exchange === "MCX" || m.exchange === "CDS" ? " from when these prices were struck" : " from the close these prices were struck at, as Positioning counts it") : ""}, rate {+(m.rate * 100).toFixed(2)}%{stamp ? `, ${stamp}` : ""}.
       {extra ? ` ${extra}` : ""} Delta and gamma per point of the underlying, theta per calendar day, vega per 1 vol point. Real prices can differ.
     </p>
   );

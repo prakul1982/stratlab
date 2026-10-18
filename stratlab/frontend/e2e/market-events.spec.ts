@@ -85,6 +85,8 @@ test("Market events: the dated list, filters, reminders, the Money calendar and 
   const change = page.getByTestId("ev-index-change").first();
   await expect(change.getByRole("rowheader", { name: "Nifty 100" })).toBeVisible();
   await expect(change.getByRole("link", { name: "RELIANCE" })).toBeVisible();
+  // a name's comma wraps with it, so no line starts with one (R54-011)
+  await expect(change.locator(".nowrap", { has: page.getByRole("link", { name: "RELIANCE" }) })).toHaveText(/^RELIANCE,?$/);
   await sane(page, errors);
 
   // reminders (Basic) and the Money calendar
