@@ -903,7 +903,7 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
         if d and frm <= d <= to:
             monthly.add(d)
             out.append(_ev("expiry", d, "Monthly F&O expiry", "The month's index and stock futures and options expire (NIFTY, BANKNIFTY "
-                           "and the stocks)" + (", as listed." if mine else ". The date is the exchange's rule: the last Tuesday, a "
+                           "and the stocks)" + (_listed_day(d, "last Tuesday of the month") if mine else ". The date is the exchange's rule: the last Tuesday, a "
                                                 "day earlier when that is a holiday."), eid=_id("exp-m", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
@@ -923,10 +923,26 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
             d += timedelta(days=7)
     for d in sorted(weekly):
         if frm <= d <= to and d not in monthly:
-            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (", as listed." if got else
+            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (_listed_day(d, "Tuesday") if got else
                            " (the exchange's rule: Tuesdays, a day earlier on a holiday)."), eid=_id("exp-w", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
     return out
+
+
+def _listed_day(d: date, usual: str) -> str:
+    """Why an expiry falls on the day the exchange lists: its usual Tuesday, or the Tuesday it was moved from and why.
+    "as listed" alone told a reader nothing (R53-009)."""
+    if d.weekday() == 1:
+        return f" (the {usual})." if usual != "Tuesday" else " (they expire on Tuesdays)."
+    from .data.calendar import is_trading_day
+    tue = d + timedelta(days=(1 - d.weekday()) % 7)
+    try:
+        shut = not is_trading_day("IN", tue)
+    except Exception:
+        shut = False
+    when = f"{tue.day} {tue:%b}"
+    return (f", a {d:%A} this time: Tuesday {when} is a market holiday." if shut
+            else f", a {d:%A} this time, the exchange's listed date (usually the {usual}).")
 
 
 def holiday_events(today: date, frm: date | None = None, to: date | None = None) -> list[dict]:

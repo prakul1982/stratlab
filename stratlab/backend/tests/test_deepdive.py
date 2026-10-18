@@ -541,3 +541,27 @@ def test_a_read_saved_before_the_advice_filter_loses_its_advice_wording(monkeypa
     assert b["segments"] == [{"name": "BFSI", "share_pct": 31, "what": "Banking software."}]
     assert b["drivers"] == ["Large multi-year contracts"] and b["strengths"] == ["Deep client ties"]
     assert b["risks"] == ["Visa rules could pressure margins"]
+
+
+def test_plans_said_long_ago_are_not_told_as_current(monkeypatch):
+    """R53-004: a plan from a call a year and a half or more ago is not "under way" today, and its outlook is no outlook."""
+    from datetime import date
+    labels = {"S1": {"title": "Q2 FY24 call", "at": "2023-10-28", "url": "u", "kind": "transcript"},
+              "S2": {"title": "Q1 FY27 deck", "at": "2026-08-12", "url": "u", "kind": "presentation"}}
+    d = {"capex": [{"what": "5G rollout", "status": "under way", "source": "S1"},
+                   {"what": "New plant", "status": "under way", "source": "S2"},
+                   {"what": "Old plant", "status": "done", "source": "S1"}],
+         "outlook": [{"statement": "Expects margins to improve", "quote": "x", "source": "S1"},
+                     {"statement": "Expects 20% growth", "quote": "y", "source": "S2"}]}
+    p = deepdive.clean_plans(d, labels, today=date(2026, 10, 18))
+    assert [(c["what"], c["status"]) for c in p["capex"]] == [("5G rollout", "unclear"), ("New plant", "under way"), ("Old plant", "done")]
+    assert [o["statement"] for o in p["outlook"]] == ["Expects 20% growth"]
+    # a read stored before the rule is shown the same way
+    stored = {"plans": {"capex": [{"what": "5G rollout", "status": "under way", "source": labels["S1"]},
+                                  {"what": "New plant", "status": "under way", "source": labels["S2"]}],
+                        "outlook": [{"statement": "Expects margins to improve", "source": labels["S1"]},
+                                    {"statement": "Expects 20% growth", "source": labels["S2"]}]}}
+    monkeypatch.setattr(deepdive, "ist_now", lambda: __import__("datetime").datetime(2026, 10, 18, 12, 0))
+    t = deepdive.tidy(stored)["plans"]
+    assert [c["status"] for c in t["capex"]] == ["unclear", "under way"]
+    assert [o["statement"] for o in t["outlook"]] == ["Expects 20% growth"]

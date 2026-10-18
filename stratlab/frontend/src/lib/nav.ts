@@ -55,7 +55,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "practise", label: "Practise", blurb: "Trade with fake money on live prices or on past candles. Nothing here sends a real order.", pages: [
         page("/paper", "Paper trading", "pulse", "paper trading live forward test sessions running fake money simulate practice demo risk exposure all sessions",
           { line: "Run a notebook's rules live on real prices with fake money, until you stop them.", blurb: "Run rules live on real prices with fake money. Every session keeps its orders, its open position and its running result.", also: /^\/(paper|options\/s)\/.*$/ }),
-        page("/options", "Options builder", "layers", "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o greeks delta gamma theta vega iv payoff what if",
+        page("/options", "Options builder", "layers", "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o greeks delta gamma theta vega iv payoff what if expiry expiries",
           { line: "Build straddles, strangles, condors or any legs and paper trade them at the live bid and ask.", blurb: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask, with Greeks and a what-if payoff." }),
         page("/trade/replay", "Chart replay", "lens", "chart replay practise past candles bar replay manual trading practice journal", { isNew: true, flag: "chart_replay" }),
       ] },
@@ -64,7 +64,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
           { also: /^\/trade\/positioning\/stocks$/ }),
         page("/trade/fo-changes", "F&O changes", "calendar", "f&o changes lot size lot revisions entering leaving fno list ban expiry day contract exchange circular"),
         page("/trade/closing-auction", "Closing auction", "pulse", "closing auction 15:15 15:35 reference price indicative price settlement expiry day", { isNew: true }),
-        page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiries holidays results dates", { isNew: true }),
+        page("/trade/events", "Market events", "calendar", "market events calendar rbi policy fed data releases budget index changes expiry expiries weekly monthly f&o expiry holidays results dates", { isNew: true }),
       ] },
       { id: "my-trades", label: "My trades", blurb: "Your real trades, looked at honestly.", pages: [
         page("/trade/journal", "Trade journal", "book", "trade journal round trips tradebook import pnl charges notes real trades review mistakes win rate"),

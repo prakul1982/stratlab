@@ -226,3 +226,23 @@ test("Forward test explains itself in one plain line, and the old Signal forward
   await expect(page.getByText("Signal forward test")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("Back lands where the page was left, and a new page opens at its top (R53-003)", async ({ page }) => {
+  const errors = await open(page, "/features");
+  const features = page.getByTestId("features-page");
+  await expect(features.getByRole("heading", { name: "All features", level: 1 })).toBeVisible({ timeout: 30_000 });
+  const last = ALL_PAGES[ALL_PAGES.length - 1];
+  const section = features.getByRole("region", { name: `${NAV[last.space].label}: ${last.group.label}` });
+  const link = section.getByRole("link").first();
+  await link.scrollIntoViewIfNeeded();
+  const left = await page.evaluate(() => window.scrollY);
+  expect(left).toBeGreaterThan(300);
+  await link.click();                                                     // straight after scrolling: still kept
+  await expect(page).not.toHaveURL(/\/features$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(5);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/features$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 6_000 }).toBeGreaterThan(left - 5);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(left + 5);
+  expect(errors).toEqual([]);
+});

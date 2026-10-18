@@ -63,7 +63,7 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   if (!shown.length) return null;
   const names = (list: [string, string][]) => list.length
     ? list.map(([sym, name], j) => <span key={sym}>{j ? ", " : ""}<Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link></span>)
-    : <span className="k-muted">None</span>;
+    : <span className="k-muted"><span aria-hidden="true">–</span><span className="sr-only">none</span></span>;   // a dash, not the word (R53-009)
   const cols: Column<IndexChange["sections"][number]>[] = [
     { key: "index", header: "Index", rowHeader: true, cell: (s) => s.index },
     // long lists wrap, and on a phone each index is a card, so "Coming out" is never off the side (R50-006)
