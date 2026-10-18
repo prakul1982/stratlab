@@ -238,6 +238,20 @@ def test_the_rotation_page_has_no_tied_sectors(w):
     assert len({(r["x"], r["y"]) for r in rows}) == len(rows)
 
 
+def test_the_rotation_keeps_its_last_answer_while_the_data_is_offline(w, monkeypatch):
+    # R61-001: on a night with the broker's data offline the page said "couldn't be worked out", with a "Try again" that
+    # can't work before the morning login; it shows the last rotation it worked out instead, marked as kept
+    main._results.clear()                     # worked out afresh, as after a restart: that answer is the one kept
+    live = w["client"].get("/research/rotation?region=IN", headers=H).json()
+    monkeypatch.setattr(main.markets.provider("IN"), "ready", lambda: False)
+    kept = w["client"].get("/research/rotation?region=IN", headers=H)
+    assert kept.status_code == 200
+    body = kept.json()
+    assert body["kept"] is True and body["rows"] == live["rows"] and body["as_of"] == live["as_of"]
+    # a person's own list isn't kept for everyone: offline, it is offline
+    assert w["client"].get("/research/rotation?region=IN&set=watchlist", headers=H).status_code in (400, 503)
+
+
 def test_the_screeners_52_week_high_is_the_company_pages(w):
     """"vs 52-week high" is the price over the 52-week high the company page shows, minus 1, rounded the same way (R4-103)."""
     c = w["client"]

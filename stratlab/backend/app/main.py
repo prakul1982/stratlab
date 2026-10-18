@@ -1930,10 +1930,17 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
     region = "US" if region.upper() == "US" else "IN"
     interval = "daily" if interval == "daily" else "weekly"
     prov = markets.provider(region)
-    if prov is None or not prov.ready():
-        raise KiteNotReady("Market data for this market is offline right now.")
     set = set[:60]
     index_sets = rotation.index_sets(region)
+    # the shared sets (indices, a sector's stocks) keep their last answer: while the broker's data is offline (nights,
+    # weekends) the page shows it, dated by its own candles, instead of "couldn't be worked out" (R61-001)
+    shared = set in index_sets or set.startswith("sector:")
+    last_key = f"rotation:last:{region}:{set}:{interval}:{tail}"
+    if prov is None or not prov.ready():
+        kept = db.json_value(db.get_setting(last_key), {}) if shared else {}
+        if isinstance(kept, dict) and kept.get("rows"):
+            return ok({**kept, "skipped": [public_text(x) for x in kept.get("skipped") or []], "kept": True})
+        raise KiteNotReady("Market data for this market is offline right now.")
     if set in index_sets:
         members, name = None, index_sets[set]["name"]
     elif set.startswith("sector:"):
@@ -1950,6 +1957,11 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
         except LookupError as e:
             err(404 if set.startswith("sector:") else 503, "no_benchmark", str(e))
         _results.set(key, out, 600)
+        if shared:
+            try:
+                db.set_setting(last_key, json.dumps({"name": name, "market": region, **out}, default=str))
+            except Exception as e:                # a page that worked isn't failed for want of a copy
+                print("rotation copy not kept:", e)
     out = dict(out)
     out["skipped"] = [public_text(x) for x in out["skipped"]]
     return ok({"name": name, "market": region, **out})

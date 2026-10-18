@@ -15,9 +15,12 @@ import { Seg } from "../components/kit/Seg";
 import { Dialog } from "../components/kit/Dialog";
 import { publicGet } from "../lib/http";
 import { plainTerms } from "../lib/plainTerms";
-import { checksLine, LOST_CHECKS, lostMoney } from "../lib/tradeUi";
+import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
 
+/** A landing card's checks line, unless its headline already gives the count (R61-007). */
+const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
+  e.verdict.fact_headline ?? e.verdict.headline);
 const PlanCompare = lazy(() => import("../components/PlanCompare").then((m) => ({ default: m.PlanCompare })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
@@ -673,7 +676,8 @@ function LibraryExamples() {
                 <span className="eyebrow">{e.group ? e.group.name : e.instrument?.symbol ?? e.market}</span>
                 <b className="serif">{plainTerms(e.name)}</b>
                 <span className="small">{e.verdict.fact_headline ?? e.verdict.headline}</span>
-                <span className="small muted">{lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total)}</span>
+                {/* the count once: most headlines already end with it */}
+                {cardChecks(e) && <span className="small muted">{cardChecks(e)}</span>}
                 <span className="small lp-space-go">Open the verdict and rules →</span>
               </Link>
             ))}

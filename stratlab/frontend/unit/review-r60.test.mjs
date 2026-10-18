@@ -23,7 +23,7 @@ test("R60-002: the checks line counts as the library does, everywhere", async ()
 test("R60-007: on a phone the homes' countdown is one line with a ×, still named Got it", () => {
   const src = read("src/components/PromoCountdown.tsx");
   assert.match(src, /aria-label="Got it"/);
-  assert.match(src, /<span className="promo-short">Pro free for \{timeLeft\(end - now\)\} more<\/span>/);
+  assert.match(src, /<span className="promo-short">Pro free for \{timeLeft\(end - now\)\}<\/span>/);
   assert.match(read("src/styles.css"), /\.k-notice\.promo-countdown \{ flex-wrap: nowrap;/);
 });
 

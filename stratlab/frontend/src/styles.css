@@ -112,6 +112,7 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .promo-countdown .promo-short, .promo-countdown .promo-x { display: none; }
 @media (max-width: 640px) {   /* one line, like the site-wide note: time left and a × (R60-007) */
   .k-notice.promo-countdown { flex-wrap: nowrap; padding: 4px 8px 4px 12px; }
+  .k-notice.promo-countdown > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* one line on a 390px iPhone too (R61-005) */
   .promo-countdown .promo-full, .promo-countdown .promo-plans, .promo-countdown .promo-got-text { display: none; }
   .promo-countdown .promo-short, .promo-countdown .promo-x { display: inline; }
   .promo-countdown .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
