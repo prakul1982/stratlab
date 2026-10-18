@@ -5113,6 +5113,21 @@ def rules_watch_summary() -> dict:
             "pending": [x["name"] for x in st["sources"] if x["pending"]]}
 
 
+def audit_mismatches() -> dict:
+    """{region: companies with a number that disagrees with its source} from the whole-market audit, for Overview
+    (R50-008: 48 mismatches, 44 of them prices, shown only on Quality)."""
+    out = {}
+    for region in ("IN", "US"):
+        try:
+            rows = market_for(region).status().get("rows") or []
+        except Exception:
+            continue
+        n = sum(1 for r in rows if any(i.get("level") == "mismatch" for i in r.get("issues") or []))
+        if n:
+            out[region] = n
+    return out
+
+
 def server_status() -> dict:
     current = dict(manager.sessions)
     try:
@@ -5134,7 +5149,7 @@ def server_status() -> dict:
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
-            "rules_watch": rules_watch_summary(),
+            "rules_watch": rules_watch_summary(), "audit_mismatches": audit_mismatches(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 

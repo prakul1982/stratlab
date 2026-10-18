@@ -57,3 +57,15 @@ def test_sources_unread_for_days_are_named_for_overview(monkeypatch):
         {"name": "NSE circulars", "fails": 0, "error": None, "pending": {"why": "new circular"}}]})
     got = main.rules_watch_summary()
     assert [x["name"] for x in got["failing"]] == ["PPF rate"] and got["pending"] == ["NSE circulars"]
+
+
+def test_overview_counts_the_audits_mismatches(monkeypatch):
+    class M:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def status(self):
+            return {"rows": self.rows}
+    rows = {"IN": [{"issues": [{"level": "mismatch"}, {"level": "gap"}]}, {"issues": [{"level": "gap"}]}], "US": []}
+    monkeypatch.setattr(main, "market_for", lambda r: M(rows[r]))
+    assert main.audit_mismatches() == {"IN": 1}
