@@ -274,7 +274,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
               // an amendment can report a stake that has fallen to 5% or below: that is the holder saying it is out (or nearly),
               // not a wrong figure on a page about 5% holders (R50-005)
               { key: "p", header: "Share of the class", numeric: true, cell: (r) => (r.pct == null ? "–"
-                : <>{`${r.pct.toFixed(2)}%`}{r.pct <= 5 && <span className="k-sub-line">at or below 5%: the stake has fallen under the filing level</span>}</>) },
+                : <>{`${r.pct.toFixed(2)}%`}{r.pct <= 5 && r.amendment && <span className="k-sub-line">at or below 5%: the stake has fallen under the filing level</span>}</>) },
               { key: "f", header: "Filing", wrap: true, cell: (r) => <>{r.label}<span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span></> },
             ]} />
           <Pager page={data.page} pages={data.pages} total={data.total} noun="filings" onPage={(n) => setParam({ page: n > 1 ? String(n) : null }, true)} />

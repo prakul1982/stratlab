@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { riskForCurrency } from "../lib/rules";
 import type { GroupMember, Instrument, Market, Notebook } from "../lib/types";
+import { LIMITS } from "../lib/plans";
 import { parseCsv, saveUpload, type Candle } from "../lib/upload";
 import { InstrumentSearch } from "../components/InstrumentSearch";
 import { SurvBadges } from "../components/Surveillance";
@@ -35,11 +36,11 @@ function localHours(m: Market): string {
 
 const STATUS: Record<Market["status"], string> = { live: "Live", offline: "Offline", soon: "Coming soon" };
 
-type Preset = { id: string; name: string; market: string; symbols: string[]; count: number };
+type Preset = { id: string; name: string; market: string; symbols: string[]; count: number; as_of?: string };
 
 /** Test on a group of instruments: a ready-made list, or your own picks. */
 function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onDone: () => void }) {
-  const { fail, notify, refreshNotebooks } = useApp();
+  const { fail, notify, refreshNotebooks, me } = useApp();
   const [presets, setPresets] = useState<Preset[]>([]);
   const current = nb.group && nb.group.market === market.id ? nb.group : null;
   const [pick, setPick] = useState<string | null>(current ? current.id : null);
@@ -87,6 +88,8 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
       )}
       {members.length > 0 && (
         <>
+          {/* a ready-made list says how current it is: the index's members after its latest announced change (R51-004) */}
+          {preset?.as_of && <p className="k-note" data-testid="group-as-of">The index's members as of {preset.as_of}, after its latest announced change.</p>}
           <div className="chip-row" role="group" aria-label={`The ${members.length} ${noun} in this group`} tabIndex={0}>
             {members.map((m) => (
               <span key={m.id ?? m.symbol} className="pill">{m.symbol}{market.id === "IN" && <> <SurvBadges region="IN" symbol={m.symbol} plain /></>}{pick === "custom" &&
@@ -101,6 +104,12 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
               <button type="submit" className="btn" disabled={busy}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
             </FormActions>
           </FormGrid>
+          {/* the plan's cap said here, before the press, with the plan that goes higher (R51-003: a 50-stock NIFTY group on
+              Free said nothing until "Test on these 50 stocks" was refused) */}
+          {me?.plan_info.group_size != null && members.length > me.plan_info.group_size && (
+            <p className="k-note" data-testid="group-cap-note">Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} {noun} in a group, so this one
+              needs {members.length <= LIMITS.basic.group_size ? `Basic (up to ${LIMITS.basic.group_size})` : `Pro (up to ${LIMITS.pro.group_size})`}, or a smaller group of your own.
+              {" "}<Link className="link" to="/plans">See plans</Link></p>)}
           <p className="k-note">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
         </>
       )}

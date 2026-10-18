@@ -205,6 +205,10 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   if (rw?.failing.length) out.push({ text: `Rate and rule sources unread: ${rw.failing.map((f) => `${f.name} (${f.fails} runs in a row)`).join(", ")}.`,
     to: "/admin/quality", label: "Quality", bad: false });
   if (rw?.pending.length) out.push({ text: `Rate and rule sources changed, waiting for a look: ${rw.pending.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
+  // the whole-market audit's companies with a number that disagrees with its source (R50-008)
+  const mm = sv.audit_mismatches ?? {};
+  const mmText = (["IN", "US"] as const).filter((r) => mm[r]).map((r) => `${mm[r]} in ${r === "IN" ? "India" : "the US"}`);
+  if (mmText.length) out.push({ text: `The whole-market audit has companies whose numbers disagree with their source: ${mmText.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });

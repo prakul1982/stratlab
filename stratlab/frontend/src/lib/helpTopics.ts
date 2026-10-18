@@ -13,7 +13,7 @@ const TOPICS: [keyof typeof HELP, string, string][] = [
   ["verdict", "The verdict", "verdict edge luck real result"],
   ["strength", "Checks passed", "strength checks passed honesty"],
   ["basket", "Does it work on similar stocks?", "similar stocks instruments peers basket robustness"],
-  ["pe", "P/E (price to earnings)", "pe p/e p e ratio price to earnings earnings multiple valuation"],
+  ["pe", "P/E ratio (price to earnings)", "pe ratio p/e ratio pe p/e price to earnings earnings multiple valuation"],
   ["sharpe", "Sharpe ratio", "sharpe ratio risk adjusted return volatility"],
   ["profitFactor", "Profit factor", "profit factor winners losers"],
   ["worstFall", "Worst fall (maximum drawdown)", "drawdown max maximum dd worst fall peak trough"],

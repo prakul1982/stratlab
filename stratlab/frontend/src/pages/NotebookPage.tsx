@@ -23,6 +23,7 @@ import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
 import { usePlansAction, usePlansToast } from "../components/PlanInterest";
+import { LIMITS } from "../lib/plans";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
  * (components/kit); the two-column layout with the lab notes beside it stays. */
@@ -406,7 +407,7 @@ function NotebookView() {
               <span className="market-btn-main">
                 {group ? <>{group.name}<span className="muted"> · {group.members.length} {group.market === "CRYPTO" ? "coins" : "stocks"}, up to {group.maxOpen} at once · {market?.name ?? group.market} · {TF_NAME[s.tf]} candles</span>{group.maxOpen < group.members.length && <span className="muted k-small"> · when more signal at once than there are free slots, the members listed first take them</span>}
                   {/* the plan's cap on a group, said before a run is refused for it (R44-003) */}
-                  {me?.plan_info.group_size != null && group.members.length > me.plan_info.group_size && <span className="k-small" data-testid="group-over-cap"> · Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} instruments in a group: pick fewer to run it</span>}</>
+                  {me?.plan_info.group_size != null && group.members.length > me.plan_info.group_size && <span className="k-small" data-testid="group-over-cap"> · Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} instruments in a group: pick fewer, or {group.members.length <= LIMITS.basic.group_size ? `Basic tests up to ${LIMITS.basic.group_size}` : `Pro tests up to ${LIMITS.pro.group_size}`}</span>}</>
                   : inst ? <>{inst.symbol}<span className="muted">{marketName(inst, markets) ? ` · ${marketName(inst, markets)}` : ""}{currency ? ` · ${currency}` : ""} · {TF_NAME[s.tf]} candles</span></>
                   : "Pick a market and instrument"}
               </span>
