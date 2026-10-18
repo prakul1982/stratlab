@@ -399,8 +399,8 @@ function CheckCard({ c }: { c: Check }) {
         {c.id === "sample" && d && <div className="j-big">{d.trades}</div>}
         {c.id === "luck" && d && <Halves a={d.earlier} b={d.later} an={d.earlier_n} bn={d.later_n} />}
         {c.id === "shuffle" && d && d.unit === "pct" && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
-        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-mono k-small">Yours {m(-d.yours)} · 95% of reshuffles above {m(-d.p95)} · worst {m(-d.worst)}</p>}
-        {c.id === "costs" && d && <p className="k-mono k-small">Gross <Signed value={d.gross}>{signed(d.gross)}</Signed> · charges {m(d.charges)} · doubled <Signed value={d.doubled}>{signed(d.doubled)}</Signed></p>}
+        {c.id === "shuffle" && d && d.unit === "rupees" && <p className="k-mono k-small">Yours <span className="nowrap">{m(-d.yours)}</span> · 95% of reshuffles above <span className="nowrap">{m(-d.p95)}</span> · worst <span className="nowrap">{m(-d.worst)}</span></p>}
+        {c.id === "costs" && d && <p className="k-mono k-small">Gross <span className="nowrap"><Signed value={d.gross}>{signed(d.gross)}</Signed></span> · charges <span className="nowrap">{m(d.charges)}</span> · doubled <span className="nowrap"><Signed value={d.doubled}>{signed(d.doubled)}</Signed></span></p>}
         <p className="k-small k-muted">{c.detail}</p>
         {c.id === "shuffle" && d?.unit === "rupees" && <span className="k-note">Enter your trading capital (Capital and brokerage) to see this as a %.</span>}
       </Card>

@@ -28,12 +28,14 @@ export function RulesPanel() {
   };
   if (!r) return <Card label="Rates and rules">{failed ? <ErrorState title="The rates and rules couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }} /> : <Skeleton label="Loading the rates and rules" />}</Card>;
   const label = Object.fromEntries(r.areas.map((a) => [a.area, a.label]));
+  // an area whose official source hasn't been read for three mornings or more can't be called OK (R56-006)
+  const unread = new Set(r.watch.sources.filter((s) => s.error && s.fails >= 3).map((s) => s.area));
   const areas: Column<Area>[] = [
     { key: "a", header: "Area", rowHeader: true, cell: (a) => a.label },
     { key: "r", header: "Last reviewed", cell: (a) => <>{dateOnly(a.reviewed)} <span className="k-muted">({a.days} days)</span></> },
     { key: "n", header: "Next known change", wrap: true, cell: (a) => (a.next ? <>{dateOnly(a.next.date)} <span className="k-muted">· {a.next.what}</span></> : "–") },
     { key: "s", header: "Status", wrap: true, cell: (a) => (
-      <span className="k-stack"><Light state={a.due ? "warn" : "ok"} word={a.due ? "Review" : "OK"} />
+      <span className="k-stack"><Light state={a.due || unread.has(a.area) ? "warn" : "ok"} word={a.due ? "Review" : unread.has(a.area) ? "Source unread" : "OK"} />
         {a.passed.length > 0 && <span className="k-note k-muted">since: {a.passed.map((p) => p.what).join("; ")}</span>}</span>) },
   ];
   const rules: Column<Rule>[] = [
