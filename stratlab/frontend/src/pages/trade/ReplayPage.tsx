@@ -76,7 +76,7 @@ function Setup({ ov, onStart }: { ov: Overview; onStart: (s: Session) => void })
       <CardHead title="New replay" />
       <div className="k-stack">
         <FieldGroup label="Candle size" info={`Smaller candles go back only a few months (5-minute about four), daily candles years. ${CANDLE_LIMITS}`} infoLabel="About candle sizes">
-          <ChipBar label="Candle size" value={tf} onChange={setTf} options={sizes.map((c) => ({ value: c.value, label: TF_NAME[c.value] ?? c.label }))}
+          <ChipBar wrap label="Candle size" value={tf} onChange={setTf} options={sizes.map((c) => ({ value: c.value, label: TF_NAME[c.value] ?? c.label }))}
             custom={{ storageKey: `stratlab.chips.replay.${me?.id ?? "anon"}`, units: CANDLE_UNITS, defaultUnit: "min", validate: candleCheck(ov.tfs) }} />
         </FieldGroup>
         <div className="k-row">

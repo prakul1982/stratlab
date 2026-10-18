@@ -199,7 +199,7 @@ test("Holdings says Zerodha is connected and returned nothing, and the Zerodha c
     rows: [], allocation: [], totals: { value: 0, invested: 0, pnl: null, pnl_pct: null, day: null, day_pct: null, count: 0, priced: 0 }, source: null,
     updated_at: null, prices: true, limit: 50, facts_max: 40, zerodha: { live: true, count: 0, read_at: new Date(Date.now() - 600_000).toISOString() } } }));
   let errors = await open(page, "/holdings", load(297));
-  const empty = page.getByText(/^Zerodha is connected; it returned 0 holdings at (\d{1,2} \w{3}, )?\d\d:\d\d IST\./);
+  const empty = page.getByText(/^Zerodha is connected; it returned 0 holdings (today )?at (\d{1,2} \w{3}, )?\d\d:\d\d IST\./);
   await expect(empty).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("main")).not.toContainText("No holdings yet");
   await expect(page.locator("main")).not.toContainText("Connect Zerodha or your statement inbox once");

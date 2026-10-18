@@ -172,6 +172,16 @@ def all_company_filings(mp):
     main.corp_job.start_universe({}, wait=True)
     mp.setattr(main.redflags_job, "start", lambda: None)
     mp.setattr(main.corp_job, "start", lambda: None)
+    # with the job off, India's calendar is read again once its date turns over, as the morning run would: a run that
+    # starts before midnight in India would otherwise keep yesterday's "going ex today" bonus all night
+    day, stored = [corp_actions.local_today("IN")], corp_actions.load
+
+    def load(region: str) -> dict:
+        if region == "IN" and corp_actions.local_today("IN") != day[0]:
+            day[0] = corp_actions.local_today("IN")
+            corp_actions.refresh("IN", main.corp_job.sources(), today=day[0])
+        return stored(region)
+    mp.setattr(corp_actions, "load", load)
 
 
 def holders_and_updates(mp):

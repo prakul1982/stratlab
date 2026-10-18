@@ -25,8 +25,8 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
   return `${passed} of ${CHECKS} checks passed${which}`;
 }
 
-/** A strategy that lost money after costs has nothing for the checks to test: no pass count is headlined for it (R16-006). */
-export const LOST_CHECKS = "Checks not run: it lost money after costs";
+/** A strategy that lost money after costs: no pass count is headlined for it (R16-006); its checks are shown for reference. */
+export const LOST_CHECKS = "Lost money after costs · the checks, for reference";   // the same words as the share card (R58-009): the checks did run
 export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && ret != null && ret <= 0;
 
 /** "months" when the unseen part (the last 30% of the test range) spans under a year, else "years": a 6-month test has no

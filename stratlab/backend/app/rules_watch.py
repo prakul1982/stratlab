@@ -207,15 +207,18 @@ def state() -> dict:
         s = have.get(src["id"]) or {}
         out.append({"id": src["id"], "name": src["name"], "area": src["area"], "url": src["url"], "where": src["where"],
                     "checked": s.get("checked"), "value": s.get("value"), "shown": s.get("shown"),
-                    "expected": s.get("expected"), "error": s.get("error"), "fails": int(s.get("fails") or 0),
+                    "expected": s.get("expected"), "error": _plain_error(s.get("error")), "fails": int(s.get("fails") or 0),
                     "pending": _once(s.get("pending")), "alerted": s.get("alerted"), "seen": s.get("seen") or []})
     return {"sources": out, "last_run": got.get("last_run")}
 
 
-def _plain_error(e: Exception) -> str:
+def _plain_error(e) -> str | None:
     """A source's failure in words: "[SSL: CERTIFICATE_VERIFY_FAILED] …" says the site's certificate couldn't be checked
-    (R57-014); anything else as it came."""
-    text = (str(getattr(e, "message", None) or e) or e.__class__.__name__)
+    (R57-014); anything else as it came. Takes the exception, or an error already stored (R58-002: one saved before this
+    showed raw until the next morning's read)."""
+    if e is None:
+        return None
+    text = e if isinstance(e, str) else (str(getattr(e, "message", None) or e) or e.__class__.__name__)
     if "CERTIFICATE_VERIFY_FAILED" in text or "SSLCertVerificationError" in text:
         return "The site's security certificate couldn't be checked, so the page wasn't read."
     return text[:200]

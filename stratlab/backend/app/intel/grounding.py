@@ -330,6 +330,28 @@ def range_claims_ok(s: str, indices: list[dict]) -> bool:
         return any(hi and p >= hi * 0.995 for p, _, hi in lv)
     if _NEAR_HIGH.search(s):
         return any(hi and p >= hi * 0.97 for p, _, hi in lv)
+    return half_claim_ok(s, indices)
+
+
+_UPPER = re.compile(r"\b(upper|top) (half|end|part)\b", re.I)
+_LOWER = re.compile(r"\b(lower|bottom) (half|end|part)\b", re.I)
+
+
+def half_claim_ok(s: str, indices: list[dict]) -> bool:
+    """"In the upper half of their 52-week ranges" holds only when each index it speaks of sits above the middle of its
+    range (R58-001: NIFTY 4.36% above its low and 12.24% below its high is about a quarter of the way up, the lower half).
+    The indices the sentence names, else every one given."""
+    up, down = _UPPER.search(s), _LOWER.search(s)
+    if not up and not down:
+        return True
+    named = [i for i in indices if i.get("name") and re.search(r"\b" + re.escape(str(i["name"]).split()[0]) + r"\b", s, re.I)]
+    for i in named or indices:
+        p, lo, hi = i.get("price"), i.get("low52"), i.get("high52")
+        if not (p and lo and hi and hi > lo):
+            continue
+        where = (p - lo) / (hi - lo)
+        if (up and where < 0.5) or (down and where > 0.5):
+            return False
     return True
 
 

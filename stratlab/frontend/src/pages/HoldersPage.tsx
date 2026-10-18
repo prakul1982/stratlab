@@ -117,7 +117,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
             <CardHead title="Search a holder" />
             <FormGrid label="Search a holder" onSubmit={search}>
               <Field label="Holder's name" wide>
-                {(id) => <Suggest id={id} value={q} placeholder="A holder's name, e.g. a fund or a person" load={holderNames}
+                {(id) => <Suggest id={id} value={q} placeholder="A fund or a person" load={holderNames}
                   onText={setText} onPick={(s) => { setText(s.label); go(s.label); }} />}
               </Field>
               <FormActions>
