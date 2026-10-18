@@ -9,6 +9,8 @@ import { absolute, GATE_ALIASES, GATE_DESCRIPTION, GATE_DESCRIPTIONS, NOT_FOUND_
 export type Seo = { description: string; canonical: string | null; index: boolean; title?: string };
 export type SeoKind = "public" | "gate" | "notfound" | "verdict" | "account";
 
+const ACCOUNT_DESCRIPTION = "StratLab: test trading ideas honestly, research Indian and US companies, and keep your money in one place.";
+
 const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/");
 
 /** What to tell search engines about an address. `kind` says what the page is when the table doesn't know it. */
@@ -21,7 +23,8 @@ export function seoFor(path: string, kind: SeoKind = "public", over: Partial<Seo
     ? { description: alias.description, canonical: null, index: false }
     : known
     ? { description: known.description, canonical: known.index ? absolute(known.canonical ?? known.path) : null, index: known.index }
-    : { description: kind === "notfound" ? NOT_FOUND_DESCRIPTION : kind === "verdict" ? VERDICT_DESCRIPTION : gate ?? GATE_DESCRIPTION,
+    // a signed-in page is never in search results; its description is the app's, not the gate's "Sign in to …" (R51-010)
+    : { description: kind === "notfound" ? NOT_FOUND_DESCRIPTION : kind === "verdict" ? VERDICT_DESCRIPTION : kind === "account" ? ACCOUNT_DESCRIPTION : gate ?? GATE_DESCRIPTION,
       canonical: null, index: false };
   const out = { ...base, ...over };
   return out.index ? out : { ...out, canonical: null };      // a page kept out of search results names no canonical address (R10V-005)

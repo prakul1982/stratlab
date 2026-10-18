@@ -39,3 +39,10 @@ test("at the day's limit the search box shows the server's message, not 'isn't a
   assert.match(searchAiNotice({}), /isn't available/);
   assert.match(searchAiNotice({ limit: false, message: msg }), /isn't available/);
 });
+
+test("R51-002: a question about the P/E ratio finds its explanation first, however it is spelt", () => {
+  for (const q of ["what is pe ratio", "pe ratio", "what is p/e", "P/E ratio"]) {
+    assert.equal(matchHelp(q, 3, true)[0]?.key, "pe", q);
+  }
+  assert.equal(matchHelp("sharpe ratio", 3, true)[0]?.key, "sharpe");
+});

@@ -283,6 +283,18 @@ def _topics_backed(s: str, support: str) -> bool:
     return True
 
 
+def whole_sentences(text: str | None, cap: int) -> str:
+    """At most `cap` characters, ending at the end of a sentence: never a read that stops mid-sentence, cut by a length
+    cap or by the model running out of room (R51-005: "…while TCS uses Sep 2026" with no ending)."""
+    t = " ".join(str(text or "").split())
+    if len(t) > cap:
+        t = t[:cap]
+    if t and t[-1] not in ".!?\"'\u201d)":
+        ends = [m.end() for m in re.finditer(r"[.!?][\"'\u201d)]?(?=\s|$)", t)]
+        t = t[:ends[-1]] if ends else ""
+    return t.strip()
+
+
 def keep_sentences(text: str, pool: list[float], check=None) -> str:
     """The sentences of `text` that carry no advice or forecast, whose every number is in the facts, and that pass
     `check` (a claim test of the caller's). The rest are dropped, not rewritten."""

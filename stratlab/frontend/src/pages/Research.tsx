@@ -708,7 +708,7 @@ export function ComparePage() {
             {sections.map((sec) => (
               <div key={sec.title} className="k-stack">
                 <span className="k-eyebrow">{sec.title}</span>
-                <DataTable label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
+                <DataTable stack label={`${sec.title} for both companies`} rows={sec.labels} rowKey={(l) => l}
                   columns={[{ key: "m", header: "Measure", rowHeader: true, cell: (l) => l },
                     { key: "a", header: res.a.symbol, numeric: true, cell: (l) => show(ra[key(sec.title, l)], res.a) },
                     { key: "b", header: res.b.symbol, numeric: true, cell: (l) => show(rb[key(sec.title, l)], res.b) }]} />

@@ -396,9 +396,9 @@ period, never a fiscal year, and when the two companies' periods differ, say so.
     def keep(t):
         return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s)),
                                          lender, a.get("region") or "IN")
-    verdict = keep(verdict)
+    verdict = grounding.whole_sentences(keep(verdict), 700)
     if not verdict:
         raise AIError("The AI's comparison didn't hold up against the two companies' numbers. Press Refresh to try again.")
     none = {"composite": None, "valuation": None}             # no scores or cheap/rich labels: that's advice
-    return {"verdict": verdict[:700], "winner": "SPLIT",
+    return {"verdict": verdict, "winner": "SPLIT",
             "differences": [x for x in (keep(d) for d in _clip(r.get("differences"), 4)) if x], "a": dict(none), "b": dict(none)}
