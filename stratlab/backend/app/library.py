@@ -192,8 +192,7 @@ def label(e: dict) -> str:
             return "Passed the checks"
         if passed == len(CHECK_IDS):
             return "Passed all four checks"
-        return (f"{len(run)} of {len(CHECK_IDS)} checks run · all {len(run)} passed" if passed == len(run)
-                else f"Passed {passed} of the {len(run)} checks run")
+        return f"{len(run)} of {len(CHECK_IDS)} checks run · {'all ' if passed == len(run) else ''}{passed} passed"   # one wording (R59-011)
     if v == "luck":
         by = {c["id"]: c["status"] for c in checks_of(e)}
         if by.get("unseen") == "fail":

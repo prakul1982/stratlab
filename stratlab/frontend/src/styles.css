@@ -108,6 +108,8 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
   .promo-banner .promo-got-text { display: none; }
 }
 @media (min-width: 641px) { .promo-banner .promo-x { display: none; } }
+/* the homes' countdown is as short as the banner on a phone: its time left and Got it, no second sentence (R59-012) */
+@media (max-width: 640px) { .promo-countdown .promo-more, .promo-countdown .promo-plans { display: none; } }
 
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: var(--ctl-sm); padding: 0 12px; font-size: 14px; }
@@ -2041,6 +2043,9 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-chiprow { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .k-chiprow > .k-chipbar { flex: 1 1 auto; }
 .k-chiprow > .k-chip.add { flex: none; }
+/* a row that wraps keeps "+ Custom" level with its first line, not floating between two (R59-007) */
+.k-chiprow.wrap { align-items: flex-start; }
+.k-chiprow.wrap > .k-chip.add { margin-top: 2px; }
 /* every tap target on a phone is at least 32px: the ticks, the features list, short links in text */
 @media (max-width: 640px) {
   input[type=checkbox], input[type=radio],

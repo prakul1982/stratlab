@@ -210,7 +210,7 @@ test("R5C-008: Ctrl K's deep dive and compare look in every market and use the c
   // /research?q= opens with the name typed in the search box, its matches listed
   const page = read("src/pages/Research.tsx");
   assert.match(page, /const q = \(params\.get\("q"\) \?\? ""\)\.slice\(0, 40\);/);
-  assert.match(page, /<OpenCompany key=\{q\} region=\{region\} autoFocus query=\{q \|\| undefined\} \/>/);
+  assert.match(page, /<OpenCompany key=\{q\} region=\{region\} autoFocus=\{typingFirst\(\)\} query=\{q \|\| undefined\} \/>/);
   const picker = read("src/components/kit/StockPicker.tsx");
   assert.match(picker, /const \[text, setText\] = useState\(search \|\| value\);\n  const \[typed, setTyped\] = useState\(!!search\);/);
 });

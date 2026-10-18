@@ -312,7 +312,7 @@ def test_a_stored_seed_is_restated_from_its_own_checks():
 
 def test_two_of_four_and_a_failed_seed_say_exactly_that():
     two = {**SEED, "verdict": {**SEED["verdict"], "passed": 2, "total": 3}, "stats": {**SEED["stats"], "unseen": 4.0, "trades": 138}}
-    assert library.label(two) == "Passed 2 of the 3 checks run"
+    assert library.label(two) == "3 of 4 checks run · 2 passed"
     assert [c["status"] for c in library.restated(two)["checks"]] == ["pass", "skip", "warn", "pass"]
     luck = {**SEED, "verdict": {**SEED["verdict"], "verdict": "luck", "passed": 1, "total": 3}, "stats": {**SEED["stats"], "unseen": -2.2}}
     assert library.label(luck) == "Lost money on the unseen years"

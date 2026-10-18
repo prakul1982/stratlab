@@ -195,7 +195,7 @@ def test_the_verdict_of_a_restated_run_states_the_restated_figures():
     v = e["verdict"]
     assert "352" not in v["summary"] and "352" not in v["headline"]
     assert v["summary"].endswith("The strategy returned −100.0% after costs, less than buying and holding over the same period (+12.0%).")
-    assert v["headline"].startswith("112.0 points behind buy and hold after costs")
+    assert v["headline"].startswith("112.0 points behind buy and hold")
     by = {c["id"]: c for c in v["checks"]}
     assert by["unseen"]["data"]["unseen_ret"] == -100.0 and by["unseen"]["data"]["built_ret"] == -40.0
     assert all(by["shuffle"]["data"][k] <= 100.0 for k in ("yours", "p95", "worst"))

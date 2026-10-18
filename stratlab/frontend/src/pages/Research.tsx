@@ -28,6 +28,7 @@ import { BizUpdatesPanel } from "../components/BizUpdates";
 import { NamedHoldersPanel } from "../components/NamedHolders";
 import { SurvBadges } from "../components/Surveillance";
 import { EtfGapBadge, EtfGapDetailView } from "../components/EtfGap";
+import { typingFirst } from "../lib/typingFirst";
 import { FoBadges } from "../components/FoBadges";
 import { IndexBadges } from "../components/IndexBadges";
 import { FilingsPanel } from "../components/Filings";
@@ -144,7 +145,7 @@ export function ResearchHome() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>
       <Card>
         <CardHead title="Find a company" />
-        <OpenCompany key={q} region={region} autoFocus query={q || undefined} />
+        <OpenCompany key={q} region={region} autoFocus={typingFirst()} query={q || undefined} />
         <div className="k-row">
           <span className="k-small k-muted">Try</span>
           {STARTER_TICKERS[region].map((s) => <Link key={s} to={`/research/${region}/${s}`} className="btn quiet sm">{s}</Link>)}
@@ -192,7 +193,7 @@ function NoSuchCompany({ region, sym, eyebrow }: { region: Region; sym: string; 
             {near.map((s) => <Link key={`${s.market}:${s.id}`} className="btn quiet sm" to={`/research/${s.market}/${encodeURIComponent(s.id)}`} title={s.name}>{s.symbol}</Link>)}
           </div>
         )}
-        <OpenCompany region={region} label="Look up a company" autoFocus />
+        <OpenCompany region={region} label="Look up a company" autoFocus={typingFirst()} />
       </Card>
     </div>
   );

@@ -18,6 +18,7 @@ import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
+import { typingFirst } from "../lib/typingFirst";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
 import { CompanySearch } from "../components/CompanySearch";
@@ -187,7 +188,7 @@ export function InvestHome() {
       <Card className="space-next" label="Jump to a company">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
         {/* not on a touch screen: focusing it there raises the keyboard over the page (R58-014) */}
-        <CompanySearch region={region} autoFocus={!(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)} />
+        <CompanySearch region={region} autoFocus={typingFirst()} />
         <div className="k-row">
           <span className="k-small k-muted">Popular:</span>
           {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
