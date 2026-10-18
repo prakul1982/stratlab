@@ -70,7 +70,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`, `Paper trade ${L.pro.live_limit} strategies at a time`,
     "Indian F&O stocks and indices in notebooks and backtests, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
-    "Export rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
+    "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };
@@ -84,7 +84,7 @@ export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in 
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
   ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
   ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O in notebooks and backtests"], ["options_signal", "Options entered on your own rules' signals"],
-  ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export rules and trades"],
+  ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export a notebook's rules and trades"],
   ["networth", "Net worth: unlimited entries and the monthly history"],
   ["mf_gains", "Mutual funds: every scheme, and capital gains by year"],
   ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],

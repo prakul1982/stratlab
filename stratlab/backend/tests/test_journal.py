@@ -267,7 +267,7 @@ def test_too_few_trades_says_a_win_rate_could_be_luck():
     luck = next(c for c in v["checks"] if c["id"] == "luck")
     assert "With 23 trades, a 61% win rate could easily be luck" in luck["detail"]
     # the headline states what the checks found, never "Probably luck." (R11C-009)
-    assert v["verdict"] in ("mixed", "luck") and v["headline"].startswith("Passed ") and "checks run" in v["headline"]
+    assert v["verdict"] in ("mixed", "luck") and " checks run · " in v["headline"] and v["headline"].endswith(" passed.")
     small = J.verdict(ts[:10])
     assert small["verdict"] == "not_enough" and small["summary"].startswith("Only 10 closed trades here.")
     assert next(c for c in small["checks"] if c["id"] == "sample")["detail"] == "Too few trades to tell skill from luck."

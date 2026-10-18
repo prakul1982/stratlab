@@ -61,7 +61,7 @@ CARD_WORDS = {
     "investor_home": "Watchlist at a glance", "networth": "net worth entry", "mf_gains": "fund capital gains",
     "dividends": "dividends with TDS", "money_reminders": "money reminders", "breadth": "market breadth charts",
     "positioning": "positioning history", "journal": "full trade journal", "fno": "Indian F&O",
-    "options_signal": "your own rules' signals", "fast_entries": "faster entries", "export": "Export rules",
+    "options_signal": "your own rules' signals", "fast_entries": "faster entries", "export": "Export a notebook's rules",
     "tax_tools": "Advance tax amounts", "itr_export": "ITR-ready", "us_tax": "US stocks in Indian tax",
     "mf_costs": "fund costs in rupees",
     "etf_gaps": "ETF gap alerts",

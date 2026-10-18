@@ -40,7 +40,7 @@ def test_checks_have_expected_shapes():
     assert 0 < unseen["split_index"] < len(bars) - 250
     # the headline is the facts, how it did against buy and hold and what the checks found, not "Likely a real edge." (R11C-009)
     assert v["headline"] == V.fact_headline(v["verdict"], v["checks"], len(base["trades"]), base["stats"]["ret"], base["stats"]["buy_hold_ret"])
-    assert "buy and hold after costs; " in v["headline"] and v["headline"].endswith(".")
+    assert "after costs" in v["headline"] and v["headline"].count("after costs") == 1 and v["headline"].endswith(".")
     assert 1 <= len(v["suggestions"]) <= 4
 
 

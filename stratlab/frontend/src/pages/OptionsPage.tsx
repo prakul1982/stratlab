@@ -643,7 +643,8 @@ export function OptionsPage() {
           <FormActions>
             <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
             <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk))} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
-            {!canStart && <span className="k-note">Paper trading at set times is on the Basic plan. Price it now works on every plan.</span>}
+            {/* the Free plan's trial is for strategies: the lock says so, not just "Basic" (R59-005) */}
+            {!canStart && <span className="k-note">Paper trading options is on the Basic plan; the Free plan's 5-market-day trial is for a notebook's strategy, not options. Price it now works on every plan. <Link className="link" to="/plans">Plans</Link></span>}
             {/* greyed out with no reason beside them read as broken (R48-004) */}
             {offline && <span className="k-note" data-testid="opt-offline-why">Pricing and paper trading need live option quotes, which are offline now (the note at the top says until when). The last recorded chain is on <Link to="/trade/positioning">Positioning</Link>.</span>}
             {canStart && ruleMode && !signalOk && <span className="k-note">Entering on a notebook's rules is on the Pro plan; at a set time works on yours. <Link className="link" to="/plans">Plans</Link></span>}

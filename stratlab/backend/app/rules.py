@@ -4,7 +4,7 @@ it was checked against and the day.
 The values themselves stay next to the code that uses them (engine/costs.py, tax_total.py and the rest); the register
 reads them from there, so it can't drift from what the app actually uses. What it adds is when each area was last
 reviewed against the official sources (REVIEWED), and the days in the year when a rule is known to change (1 April,
-the quarterly small-savings rates, the SEC's fiscal year, FINRA's 1 January), so Admin → Data checks can say when a
+the quarterly small-savings rates, the SEC's fiscal year, FINRA's 1 January), so Admin → Quality can say when a
 review is due: more than STALE_DAYS since the last one, or a known change day passed since.
 
 Reviewing: check each rule of an area against its source, change any value that moved (in its own module, with a

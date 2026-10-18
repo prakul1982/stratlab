@@ -50,7 +50,7 @@ export const CHECKS_NOT_HOLD = "The checks test whether the result holds up, not
 export function checksBeyond(line: string, label: string | null | undefined): string {
   if (!label) return line;
   if (line.startsWith(label)) return line.slice(label.length).replace(/^\s*·\s*/, "");
-  // a badge that already gives the count ("Passed 2 of the 3 checks run") beside "3 of 4 checks run · 2 passed · nearby
+  // a badge that already gives the count ("3 of 4 checks run · 2 passed") beside "3 of 4 checks run · 2 passed · nearby
   // settings not run": only what it doesn't say is left (R48-005)
   if (/\bpassed\b/i.test(label)) {
     const m = /^\d+ of \d+ checks run · (?:all )?\d+ passed(?: · (.*))?$/.exec(line);

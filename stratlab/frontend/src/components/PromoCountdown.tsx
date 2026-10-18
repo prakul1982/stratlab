@@ -33,8 +33,8 @@ export function PromoCountdown({ plansLink = true }: { plansLink?: boolean }) {
   const hide = () => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); };
   return (
     <Notice className="promo-countdown" role="status"
-      actions={plansLink ? <><Link className="btn sm" to="/plans">See plans</Link><button type="button" className="btn sm quiet" onClick={hide}>Got it</button></> : undefined}>
-      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}). After that, your plan's limits apply again.
+      actions={plansLink ? <><Link className="btn sm promo-plans" to="/plans">See plans</Link><button type="button" className="btn sm quiet" onClick={hide}>Got it</button></> : undefined}>
+      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).<span className="promo-more"> After that, your plan's limits apply again.</span>
     </Notice>
   );
 }

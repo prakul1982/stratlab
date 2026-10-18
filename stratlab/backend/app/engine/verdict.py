@@ -407,7 +407,8 @@ def fact_label(verdict: str, checks: list[dict], n: int, none: bool = False, ope
         return "No checks could be run"
     if passed == 4:
         return "Passed all four checks"
-    return f"{len(run)} of 4 checks run · all {len(run)} passed" if passed == len(run) else f"Passed {passed} of the {len(run)} checks run"
+    # one wording for every count, as the library card and the checks line say it (R59-011)
+    return f"{len(run)} of 4 checks run · {'all ' if passed == len(run) else ''}{passed} passed"
 
 
 def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: float | None, none: bool = False,
@@ -420,11 +421,12 @@ def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: fl
         return lab + "."
     gap = ret - hold
     low = lab[:1].lower() + lab[1:]
+    costs = "" if "after costs" in low else " after costs"     # "…; lost money after costs." says it once (R59-008)
     if gap <= -1:
-        return f"{abs(gap):.1f} points behind buy and hold after costs; {low}."
+        return f"{abs(gap):.1f} points behind buy and hold{costs}; {low}."
     if gap >= 1:
-        return f"{gap:.1f} points ahead of buy and hold after costs; {low}."
-    return f"Within a point of buy and hold after costs; {low}."
+        return f"{gap:.1f} points ahead of buy and hold{costs}; {low}."
+    return f"Within a point of buy and hold{costs}; {low}."
 
 
 # the headlines verdicts were stored with before they stated facts: shown again, they are worded from the verdict's own

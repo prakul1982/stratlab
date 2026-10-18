@@ -1,6 +1,6 @@
 """The daily rules watch: the official sources that publish a rate or rule in a form a program can read, fetched once
 a day and compared with what StratLab uses (rules.py lists them all). A change is emailed to the admins and shown in
-Admin → Data checks until an admin marks it seen. Nothing is ever applied by itself: a changed rate is changed in the
+Admin → Quality → Rates and rules until an admin marks it seen. Nothing is ever applied by itself: a changed rate is changed in the
 code, with a test, by a person.
 
 Sources:
@@ -300,8 +300,12 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
         if src["id"] == "nse_circulars":
             first = not s["seen"]            # the first run only learns what is there
             # once each: the exchange's list can carry one circular twice (R52-009: "5 changes", 3 circulars)
+            # by id and by day and subject: copies of one circular can carry ids made from different date fields, and
+            # the alert listed one circular four times under "5 rate or rule changes" (R59-002)
             seen_now: set = set()
-            new = [c for c in value if c["id"] not in set(s["seen"]) and not (c["id"] in seen_now or seen_now.add(c["id"]))]
+            key = lambda c: (str(c.get("date")), " ".join(str(c.get("subject")).lower().split()))
+            new = [c for c in value if c["id"] not in set(s["seen"])
+                   and not (c["id"] in seen_now or key(c) in seen_now or seen_now.update((c["id"], key(c))))]
             if new and not first:
                 s["pending"] = _once({"at": now.isoformat(timespec="minutes"), "why": "new circular",
                                       "items": (((s["pending"] or {}).get("items") or []) + new)[-20:]})
@@ -338,7 +342,7 @@ def alert_text(lines: list[str]) -> tuple[str, str]:
     n = len(lines)
     return (f"StratLab: {n} rate or rule change{'s' if n > 1 else ''} at the source",
             "Today's rules watch found:\n" + "\n".join(lines) + "\n\nNothing in StratLab changes by itself. Check the source, "
-            "update the value in the code (with a test) if it applies, and mark it seen in Admin → Data checks.")
+            "update the value in the code (with a test) if it applies, and mark it seen in Admin → Quality → Rates and rules.")
 
 
 class Job:
