@@ -48,8 +48,15 @@ export const CHECKS_NOT_HOLD = "The checks test whether the result holds up, not
 
 /** The checks line under the badge, without what the badge already says ("3 of 4 checks run · all 3 passed" twice, R47-016). */
 export function checksBeyond(line: string, label: string | null | undefined): string {
-  if (!label || !line.startsWith(label)) return line;
-  return line.slice(label.length).replace(/^\s*·\s*/, "");
+  if (!label) return line;
+  if (line.startsWith(label)) return line.slice(label.length).replace(/^\s*·\s*/, "");
+  // a badge that already gives the count ("Passed 2 of the 3 checks run") beside "3 of 4 checks run · 2 passed · nearby
+  // settings not run": only what it doesn't say is left (R48-005)
+  if (/\bpassed\b/i.test(label)) {
+    const m = /^\d+ of \d+ checks run · (?:all )?\d+ passed(?: · (.*))?$/.exec(line);
+    if (m) return m[1] ?? "";
+  }
+  return line;
 }
 
 export { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";

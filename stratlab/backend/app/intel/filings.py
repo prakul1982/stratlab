@@ -64,7 +64,10 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("regulator", "Regulator or tax action", "red", [r"\bsebi\b.{0,40}(order|penalt|show cause|adjudicat)", r"show[- ]cause", r"search (and|&) seizure",
                                                    r"income tax (search|survey)", r"enforcement directorate", r"\bpenalty\b"]),
     ("rating_down", "Credit rating downgraded", "red", [r"downgrad", r"rating .{0,30}(revised|placed) .{0,30}(negative|watch)"]),
-    ("kmp_resign", "Director or key officer resigned", "amber", [r"resignation", r"resigned", r"cessation"]),
+    # a cessation of a person, not of a subsidiary, joint venture or other company (R48-007: "Cessation of Abraham & Thakore
+    # Private Limited as subsidiary of the Company" read as a resignation)
+    ("kmp_resign", "Director or key officer resigned", "amber", [r"resignation", r"resigned",
+                                                                 r"cessation(?![^.|]{0,120}\b(subsidiar\w*|joint venture|associate (company|entity)|private limited|pvt\.? ltd|limited|llp)\b)"]),
     # a new borrowing: the filing raises or approves debt, not one that only names bonds (R6O-002)
     ("ncd", "Debt raise (NCDs or bonds)", "amber", [
         r"\b(issu\w*|rais\w*|approv\w*|offer\w*|placement|borrow\w*)\b.{0,80}\b(ncds?|non[- ]convertible debentures?|debentures?|bonds?|commercial papers?)\b",

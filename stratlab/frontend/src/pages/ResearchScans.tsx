@@ -68,6 +68,9 @@ export function ScanPage() {
   };
   const [out, setOut] = useState<ScanOut | PresetOut | null>(null);
   const [busy, setBusy] = useState(false);
+  // why the last scan didn't run, kept on the page until the next one (R48-002: "market data offline" showed for three
+  // seconds and the page went back to its prompt, as if the button did nothing)
+  const [scanErr, setScanErr] = useState<string | null>(null);
   const [only, setOnly] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
   const scans = sets?.scans?.length ? sets.scans : [FIRST_SCAN];
@@ -93,10 +96,15 @@ export function ScanPage() {
     e?.preventDefault();
     const n = ++seq.current;
     setBusy(true);
+    setScanErr(null);
     try {
       const r = await api<ScanOut | PresetOut>("/research/scan", { method: "POST", body: { region, set: setId, scan: scan.id } });
       if (n === seq.current) setOut(r);
-    } catch (err) { if (n === seq.current) fail(err); } finally { if (n === seq.current) setBusy(false); }
+    } catch (err) {
+      if (n === seq.current) {
+        if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); } else fail(err);
+      }
+    } finally { if (n === seq.current) setBusy(false); }
   };
   const toggleAlerts = async () => {
     if (!sets) return;
@@ -159,7 +167,8 @@ export function ScanPage() {
       </Card>
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
-      {!out && !busy && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
+      {scanErr && !busy && <ErrorState title="The scan didn't run" action={{ label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
+      {!out && !busy && !scanErr && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
       {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
         <Card>

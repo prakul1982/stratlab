@@ -82,7 +82,7 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
   ];
   return (
     <div data-testid="part-table" data-segment={seg}>
-      <DataTable label={`${what[0].toUpperCase()}${what.slice(1)} by participant, in contracts`} columns={columns} rows={rows} rowKey={(r) => r.id}
+      <DataTable label={`${what[0].toUpperCase()}${what.slice(1)} by participant, in contracts`} columns={columns} rows={rows} rowKey={(r) => r.id} stack
         rowAttrs={(r) => ({ "data-participant": r.id })} />
     </div>
   );

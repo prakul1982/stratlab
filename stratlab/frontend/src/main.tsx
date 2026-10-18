@@ -138,22 +138,26 @@ warmFirstPage(location.pathname);
 
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
 function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
-  // the day as well as the time, in the reader's own clock (R46-011: "reconnects at 02:30 your time" on a Saturday was Monday's)
+  // the day and the time in India, where the login happens, and in the reader's own clock when that is another zone
+  // (R46-011: "02:30 your time" on a Saturday was Monday's; R48-003: "your time" was UTC and never said IST)
   const at = note?.back_at ? new Date(note.back_at) : null;
-  const back = at ? `${at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).replace(",", "")} at ${at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}` : null;
-  const others = "Crypto, the other markets and your own data work as usual.";
+  const fmt = (tz?: string) => at ? `${at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: tz }).replace(",", "")}, ${at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz })}` : "";
+  const local = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
+  const inIndia = local === "Asia/Kolkata" || local === "Asia/Calcutta";
+  const back = at ? `${fmt("Asia/Kolkata")} IST${inIndia ? "" : ` (${fmt()} your time)`}` : null;
+  const others = <span className="banner-more"> Crypto, the other markets and your own data work as usual.</span>;
   if (note?.closed) {
     const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";
     return (
       <div className="banner">
-        <span>Indian markets are {why}. {back ? `Indian price data reconnects on ${back} your time, so backtests on Indian instruments can run again then.` : "Indian price data reconnects with the next daily login."} {others}</span>
+        <span>Indian markets are {why}. {back ? `Indian price data reconnects on ${back}.` : "Indian price data reconnects with the next daily login."}{others}</span>
       </div>
     );
   }
-  if (back) return <div className="banner"><span>Indian price data reconnects on {back} your time, before the market opens. {others}</span></div>;
+  if (back) return <div className="banner"><span>Indian price data reconnects on {back}, before the market opens.{others}</span></div>;
   return (
     <div className="banner">
-      <span>Indian market data is offline: today's data login hasn't completed. {others}</span>
+      <span>Indian market data is offline: today's data login hasn't completed.{others}</span>
       <Link to="/settings#check" className="btn sm quiet">Run a connection check</Link>
     </div>
   );
