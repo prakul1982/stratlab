@@ -347,7 +347,7 @@ export function TaxReportPage() {
           <Card>
             <CardHead title={`How ${y.label} adds up`} />
             {y.buckets.length === 0 ? <EmptyState title={`No gains or losses in ${y.label}`}>No capital gains or losses were realised in {y.label}.</EmptyState>
-              : <DataTable label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
+              : <DataTable stack label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
             {y.steps.length > 0 && <ul className="k-list">{y.steps.map((s, i) => <li key={i}>{s}</li>)}</ul>}
             {y.exempt_old != null && <p className="k-note">Long-term results on sales before 1 April 2018 ({inr(y.exempt_old)}) were exempt under the old section 10(38), so they aren't counted.</p>}
             {y.gf_missing > 0 && <p className="k-small"><b>{y.gf_missing} sale{y.gf_missing === 1 ? "" : "s"}</b> of shares held on 31 Jan 2018 used the actual cost, because their 31 Jan 2018 price isn't known. Grandfathering could lower that gain; enter the price below.</p>}
@@ -390,7 +390,7 @@ export function TaxReportPage() {
             {rep.below_cost.rows.length === 0 ? <EmptyState title="No open lot below its cost">{rep.below_cost.open ? "No open lot is below its cost at today's price." : "Your files leave no shares open."}</EmptyState> : (
               <>
                 <p className="k-small">Below cost now: <b className="k-down">{inr(rep.below_cost.st)}</b> on short-term lots and <b className="k-down">{inr(rep.below_cost.lt)}</b> on long-term lots.</p>
-                <DataTable label="Open lots below cost" columns={lotCols} rows={rep.below_cost.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
+                <DataTable stack label="Open lots below cost" columns={lotCols} rows={rep.below_cost.rows.map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} />
               </>
             )}
             {rep.below_cost.unpriced > 0 && <p className="k-note">{rep.below_cost.unpriced} open lot{rep.below_cost.unpriced === 1 ? " has" : "s have"} no price today{rep.prices ? " (not a listed company we could match)" : " (live prices are offline right now)"}.</p>}
@@ -590,12 +590,12 @@ function BusinessCard({ y }: { y: Year }) {
     <Card>
       <CardHead title="F&O, commodity and currency" infoLabel="How F&O is taxed"
         info="Futures and options on shares and indices, and exchange-traded commodity and currency derivatives, are non-speculative business income, taxed at your slab rate. The charges in your files (brokerage, exchange charges, GST, stamp duty, STT and CTT) are business expenses and come off the result." />
-      <DataTable label="F&O by segment" columns={segCols} rows={b.segments} rowKey={(s) => s.seg}
+      <DataTable stack label="F&O by segment" columns={segCols} rows={b.segments} rowKey={(s) => s.seg}
         foot={b.segments.length > 1 ? { seg: "Total", trades: b.trades.toLocaleString("en-IN"), pnl: inr(b.pnl), charges: inr(b.charges), net: inr(b.net), turnover: inr(b.turnover) } : undefined} />
       <p className="k-note">Turnover is the total of profits and losses, trade by trade ({inr(b.turnover)}). Netted per contract first, as broker summaries often show it, it is {inr(b.turnover_contract)}. Your files' lines aren't kept, only these totals.</p>
       {top.length > 0 && (
         <>
-          <DataTable label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, 8)} rowKey={(u) => String(u.i)} />
+          <DataTable stack label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, 8)} rowKey={(u) => String(u.i)} />
           {top.length > 8 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {top.length}</button>}
         </>
       )}

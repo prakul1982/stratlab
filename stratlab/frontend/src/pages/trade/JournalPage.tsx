@@ -425,7 +425,7 @@ function BreakdownTable({ rows, label }: { rows: Row[]; label: string }) {
     { key: "wr", header: "Win rate", numeric: true, cell: (r) => `${r.win_rate}%` },
     { key: "avg", header: "Avg", numeric: true, cell: (r) => <span className={upDown(r.avg)}>{signed(r.avg)}</span> },
   ];
-  return <DataTable label={`P&L by ${label.toLowerCase()}`} columns={cols} rows={rows} rowKey={(r) => r.key}
+  return <DataTable stack label={`P&L by ${label.toLowerCase()}`} columns={cols} rows={rows} rowKey={(r) => r.key}
     rowAttrs={(r) => ({ title: `${r.label ?? r.key}: ${r.n} trades, ${signed(r.net)} after ${m(r.charges)} of charges` })} />;
 }
 
@@ -546,7 +546,7 @@ function Trades({ j, onEdit }: { j: Journal; onEdit: (t: Trade) => void }) {
     <Card label="Trades">
       <CardHead title="Trades" actions={
         <label className="k-search j-search"><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol or setup" aria-label="Find a symbol or setup" /></label>} />
-      <DataTable label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
+      <DataTable stack label="Trades" columns={cols} rows={rows.slice(0, shown)} rowKey={(t) => t.id} empty="No trade matches that." />
       {rows.length > shown && <div className="k-center"><button type="button" className="btn quiet sm" onClick={() => setShown((n) => n + 100)}>Show more ({rows.length - shown} left)</button></div>}
       {j.overlap > 0 && <p className="k-note">{j.overlap} tax P&amp;L line{j.overlap === 1 ? " is" : "s are"} left out: your tradebook has the same trades, with their times.</p>}
       {j.count > j.trades.length && <p className="k-note">The latest {j.trades.length.toLocaleString("en-IN")} trades are listed; the stats count all {j.count.toLocaleString("en-IN")}.</p>}
@@ -569,7 +569,7 @@ function TaxTotals({ rows }: { rows: TaxTotal[] }) {
   return (
     <Card label="From your tax report">
       <CardHead title="From your tax report" info="Your tax report keeps F&O, commodity and currency as totals for each financial year, not trade by trade, so they can't be paired into round trips here. They are shown as they are in the report, and are not counted in the stats above. Upload the tax P&L's trade-by-trade files to count them." infoLabel="About these totals" />
-      <DataTable label="Totals from your tax report" columns={cols} rows={rows} rowKey={(r) => `${r.fy}-${r.seg}`} />
+      <DataTable stack label="Totals from your tax report" columns={cols} rows={rows} rowKey={(r) => `${r.fy}-${r.seg}`} />
       <p className="k-note">Totals per year as in your <Link className="link" to="/tax-report">tax report</Link>.</p>
     </Card>
   );

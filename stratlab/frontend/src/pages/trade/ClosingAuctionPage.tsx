@@ -192,9 +192,9 @@ function History({ v }: { v: CasView }) {
       ) : (
         <>
           <p className="k-note">Each day: the final prices against the reference prices (VWAP of 15:00–15:15).</p>
-          <DataTable label="Past auctions" columns={cols} rows={recent} rowKey={(d) => d.day} rowAttrs={attrs} />
+          <DataTable stack label="Past auctions" columns={cols} rows={recent} rowKey={(d) => d.day} rowAttrs={attrs} />
           <Earlier label="Earlier auctions" count={older.length}>
-            <DataTable label="Earlier auctions" columns={cols} rows={older} rowKey={(d) => d.day} rowAttrs={attrs} />
+            <DataTable stack label="Earlier auctions" columns={cols} rows={older} rowKey={(d) => d.day} rowAttrs={attrs} />
           </Earlier>
         </>
       )}

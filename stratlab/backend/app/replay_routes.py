@@ -122,7 +122,7 @@ def start(req: StartReq, profile=Depends(current_profile)):
 
 def R_POOL() -> list[str]:
     """NIFTY 50 stocks: liquid, with long histories, for a random replay."""
-    return next(p["symbols"] for p in universes.PRESETS["IN"] if p["id"] == "nifty50")
+    return universes.symbols("IN", "nifty50")
 
 
 def _session(profile, rid: str) -> dict:

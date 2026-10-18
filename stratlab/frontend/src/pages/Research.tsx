@@ -654,7 +654,11 @@ export function ComparePage() {
     .map((t) => ({ title: t, labels: Array.from(new Set(groups.filter((g) => g.title === t).flatMap((g) => g.items.map((i) => i.label)))) }));
   const ra = res ? rows(res.a) : {}, rb = res ? rows(res.b) : {};
   // each figure as its company page writes it (₹3.7 lakh cr, 0.44, 9.7%), never a bare number without its unit
-  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m ? metricText(m, c.currency) : "–");
+  // a figure that compares two periods names them under it ("Jun 2026 vs Jun 2025"): the two companies' latest quarters
+  // can differ, and a bare "Latest YoY" read as one period for both (R50-003)
+  const show = (m: Company["metrics"][number]["items"][number] | undefined, c: Company) => (m
+    ? <>{metricText(m, c.currency)}{(m as { period?: string }).period && <span className="k-sub-line">{(m as { period?: string }).period}</span>}</>
+    : "–");
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/compare")} title="Two companies, side by side" lede="Pick two companies to line up their numbers, with an AI summary of where they differ." />

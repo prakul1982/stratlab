@@ -44,6 +44,7 @@ export const HELP = {
   worstFall: "The biggest fall from a high point to a low point in your account during the test, day by day (maximum drawdown). The bad-luck drawdown check measures falls the same way.",
   winRate: "The share of closed trades that made money. A low win rate is fine if the winners are much bigger than the losers.",
   profitFactor: "Money made on winning trades for every ₹1 lost on losing trades. Above 1 means the winners outweigh the losers.",
+  pe: "Price to earnings: the share price divided by earnings per share over the last four reported quarters. A loss has no P/E. Each company page shows it under Key numbers.",
   sharpe: "Return compared with how bumpy the ride was. Above 1, the return outweighed the swings; below 0.5, the gains came with a lot of swings.",
   avgTrade: "The average profit or loss per closed trade, after costs.",
   trades: "Every trade the rules made, newest first. P&L and Return are both after costs; Return is the P&L as a share of what the trade put in. A trade still open at the end is valued at the last close, after its entry costs. \"Why it closed\" shows whether the stop loss, the target or your sell rule closed it.",

@@ -380,6 +380,8 @@ def compare(a: dict, b: dict, ai) -> dict:
 Return ONLY this JSON:
 {{"verdict": "2-3 sentences on how the two differ, grounded in the numbers, without saying which to own",
  "differences": ["3 short, specific contrasts in numbers"]}}
+A "Latest YoY" figure compares the period in its brackets with the same period a year before (often a quarter): name that
+period, never a fiscal year, and when the two companies' periods differ, say so.
 {RULES}"""
     r = _ask(system, {"A": company_facts(a), "B": company_facts(b)}, ai, 1500)
     verdict = str(r.get("verdict") or "").strip() if isinstance(r, dict) else ""

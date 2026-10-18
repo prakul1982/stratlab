@@ -199,6 +199,12 @@ export function attention(ov: Overview | null, reported: Reported | null, jobs: 
   // said once: when the holidays job's line above already speaks for them, not again here (R45A-017)
   const holidaysSaid = out.some((o) => o.text.startsWith("Exchange holidays"));
   if (!holidaysSaid && s.cal && s.cal.state !== "ok" && (sv.calendar?.days_left ?? 0) < 60) out.push({ text: `Exchange holidays are only known for ${sv.calendar!.days_left} more days.`, to: "/admin/data", label: "Data and jobs", bad: false });
+  // official rate and rule sources: one unread for days, or a change waiting for a look, is named here, not only on
+  // Quality (R50-008: three sources unread for 16 days, Overview silent)
+  const rw = sv.rules_watch;
+  if (rw?.failing.length) out.push({ text: `Rate and rule sources unread: ${rw.failing.map((f) => `${f.name} (${f.fails} runs in a row)`).join(", ")}.`,
+    to: "/admin/quality", label: "Quality", bad: false });
+  if (rw?.pending.length) out.push({ text: `Rate and rule sources changed, waiting for a look: ${rw.pending.join(", ")}.`, to: "/admin/quality", label: "Quality", bad: false });
   const invoice = invoiceWarning(sv.invoice_seller);
   if (invoice) out.push({ text: invoice, to: "/admin/money", label: "Money", bad: sv.billing_enabled });
   if (!sv.billing_enabled) out.push({ text: "Payments aren't connected, so paid plans show \"Coming soon\".", to: "/admin/money", label: "Money", bad: false });

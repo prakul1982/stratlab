@@ -675,6 +675,7 @@ _SUBJECT = [("eps", re.compile(r"\b(eps|earnings per share)\b", re.I)),
             ("revenue", re.compile(r"\b(revenue|revenues|sales|turnover|top[- ]line)\b", re.I)),
             ("profit", re.compile(r"\b(net profit|net income|profit|profits|earnings|bottom[- ]line|pat)\b", re.I)),
             ("price", re.compile(r"\b(share price|stock price|price|shares|stock|return)\b", re.I))]
+_MOVE = re.compile(r"\b(?:(rose|grew|increased|climbed|improved|expanded|jumped)|(fell|declined|dropped|decreased|shrank|slipped|contracted))\b", re.I)
 _LATEST = re.compile(r"\b(latest|most recent|last reported|last full|last fiscal|this) (fiscal )?year\b|\bin the latest year\b", re.I)
 _AHEAD = re.compile(r"\b(estimat\w*|upcoming|due|expected|projected|forecast\w*|scheduled|will (report|announce|release|be)|ahead|next|to be (reported|announced|released)|later (today|this))\b", re.I)
 _RESULTS = re.compile(r"\b(results?|earnings|report(s|ed|ing)?|release)\b", re.I)
@@ -885,7 +886,24 @@ class PageFacts:
 
     # --- the checks ---
     def check(self, s: str) -> bool:
-        return not JUDGE.search(s) and self._periods_ok(s) and self._dates_ok(s) and self._money_ok(s) and self._percents_ok(s)
+        return (not JUDGE.search(s) and self._periods_ok(s) and self._dates_ok(s) and self._money_ok(s) and self._percents_ok(s)
+                and self._moves_ok(s))
+
+    def _moves_ok(self, s: str) -> bool:
+        """A rise or fall between two named years is the yearly table's: "Net income fell from FY24 to FY25" beside a
+        table where it rose from 93.74B to 112.01B is dropped (R50-001), and so is a growth told as a quarter's when
+        the sentence names a whole year for it."""
+        ys = self.years_in(s)
+        way = _MOVE.search(s)
+        if len(ys) != 2 or ys[0] == ys[1] or not way:
+            return True
+        kind = next((k for k, rx in _SUBJECT if k in self.series and rx.search(s)), None)
+        rows = self.series.get(kind) if kind else None
+        if not rows or ys[0] not in rows or ys[1] not in rows:
+            return True
+        a, b = (rows[ys[0]], rows[ys[1]]) if ys[0] < ys[1] else (rows[ys[1]], rows[ys[0]])
+        up = way.group(1) is not None
+        return (b > a) == up or a == b
 
     def check_watch(self, s: str) -> bool:
         """A thing ahead: no reported figure ("actual EPS 2.84") and no period already reported."""
@@ -1130,7 +1148,9 @@ def tidy_numbers(text, region: str = "IN"):
         return f"{_grouped(v, 0, True)}{m.group(2)}"
     t = _UNIT_NUM.sub(bare, t)
     # a fall already says the direction: "has fallen -17.0%" reads as a double negative (R49-013), "fell 17.0%"
-    return _FALL_SIGN.sub(lambda m: m.group(1) + " ", t)
+    t = _FALL_SIGN.sub(lambda m: m.group(1) + " ", t)
+    # a negative percentage with the page's own minus sign, not a hyphen (R50-011: "-17.0%" beside "−13.4%")
+    return re.sub(r"(?<![\w.,%)\-\u2212])[-\u2013](?=\d[\d.,]*\s?%)", "\u2212", t)
 
 
 _FALL_SIGN = re.compile(r"\b(fallen|fell|falls|falling|dropped|drops|declined|declines|slipped|slid|lost|down|lower|decreased)\s+[-\u2212](?=\d)", re.I)

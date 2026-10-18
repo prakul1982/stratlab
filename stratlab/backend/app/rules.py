@@ -34,12 +34,12 @@ STALE_DAYS = 90
 KNOWN_DAYS = [
     (1, 1, "interest_rates", "small-savings rates (PPF) for January to March"),
     (1, 1, "trading_costs", "FINRA's trading activity fee changes on 1 January"),
-    (1, 1, "market_rules", "NSE's half-yearly index lot size review takes effect around now"),
+    (1, 1, "market_rules", "NSE's half-yearly index lot size review takes effect"),
     (4, 1, "tax", "a new financial year: the Finance Act's changes take effect"),
     (4, 1, "trading_costs", "Budget changes to STT and stamp duty take effect on 1 April"),
     (4, 1, "interest_rates", "small-savings rates for April to June, and the EPF rate for the year just ended"),
     (7, 1, "interest_rates", "small-savings rates (PPF) for July to September"),
-    (7, 1, "market_rules", "NSE's half-yearly index lot size review takes effect around now"),
+    (7, 1, "market_rules", "NSE's half-yearly index lot size review takes effect"),
     (10, 1, "interest_rates", "small-savings rates (PPF) for October to December"),
     (10, 1, "trading_costs", "the SEC's fiscal year starts; its fee rate is reset for the year"),
 ]

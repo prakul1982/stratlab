@@ -28,7 +28,8 @@ export interface Overview {
     /** when this server started (India time, like each error's "at"), so errors kept from before it are told apart */
     server_started_at?: string | null;
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
-    calendar?: CalendarStatus; invoice_seller?: InvoiceSeller; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
+    calendar?: CalendarStatus; invoice_seller?: InvoiceSeller;
+    rules_watch?: { failing: { name: string; fails: number; error: string | null }[]; pending: string[] }; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
     /** which build the server is (R24-009; older servers don't send it) */
     build?: ServerBuild;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
