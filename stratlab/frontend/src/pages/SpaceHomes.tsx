@@ -51,7 +51,7 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
 
 /** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
  * same height); left out, the card's foot says where it goes instead. */
-type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
+type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; plain?: boolean; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
 
 /** Four tools in one row of equal cards (two by two when the column is narrow). The lead tool is marked by its
  * border and tint, not its size. Every card has the same three lines, so the row never jumps when a status loads. */
@@ -63,7 +63,7 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
           <span className="space-card-title">{t.icon}<b>{t.title}</b></span>
           <span className="small muted space-card-line">{t.line}</span>
           {t.status === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span>
-            : <span className={`small space-card-foot${t.status ? " live" : ""}`} data-testid={t.testId}>{t.status || t.go || "Open →"}</span>}
+            : <span className={`small space-card-foot${t.status && !t.plain ? " live" : ""}`} data-testid={t.testId}>{t.status || t.go || "Open →"}</span>}
         </Link>
       ))}
     </nav>
@@ -101,7 +101,10 @@ export function TradeHome() {
       // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
       status: journal === null ? null : journal !== "none" && journal.count
         // the amount's minus stays with its number on a narrow card (R57-003)
-        ? <>{plural(journal.count, "closed trade")} · <span className="nowrap">{money(journal.net, "INR")}</span> net after charges</> : "" },
+        // one span: the footer is a flex box, and loose pieces wrapped as "net / after / charge / s" (R58-003)
+        ? <span>{plural(journal.count, "closed trade")} · <span className="nowrap">{money(journal.net, "INR")}</span> net after charges</span> : "",
+      // a net loss isn't shown with the green "live" dot
+      plain: journal !== null && journal !== "none" && journal.net < 0 },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
   ];
   return (
@@ -183,7 +186,8 @@ export function InvestHome() {
       <Top />
       <Card className="space-next" label="Jump to a company">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
-        <CompanySearch region={region} autoFocus />
+        {/* not on a touch screen: focusing it there raises the keyboard over the page (R58-014) */}
+        <CompanySearch region={region} autoFocus={!(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)} />
         <div className="k-row">
           <span className="k-small k-muted">Popular:</span>
           {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}

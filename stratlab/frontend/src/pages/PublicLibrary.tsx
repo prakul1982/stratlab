@@ -183,7 +183,7 @@ export function PublicLibraryEntry({ id }: { id: string }) {
             <CardHead title="Test it yourself" />
             {/* signed in, the signed-out "needs a free account" line was wrong and there was nothing to copy with (R57-007) */}
             {signedInHere()
-              ? <><p className="k-small k-muted">Copy these rules into your own notebook from the library in StratLab (Copy, beside the strategy), then run them on your market and dates.</p>
+              ? <><p className="k-small k-muted">Copy these rules into your own notebook from the library in StratLab ("Copy and re-test", beside the strategy), then run them on your market and dates.</p>
                 <div className="k-row"><a className="btn" href="/library">Open the library in StratLab</a></div></>
               : <><p className="k-small k-muted">Copy these rules into your own notebook and run them on your market and dates. Copying needs a free account; signing in only reads your name and email from Google.</p>
                 <div className="k-row"><GoogleCopy /><Link className="btn quiet" to="/library">All StratLab strategies</Link></div></>}

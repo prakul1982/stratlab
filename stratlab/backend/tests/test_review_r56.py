@@ -19,3 +19,14 @@ def test_a_certificate_failure_is_said_in_words():
     msg = RW._plain_error(ssl.SSLCertVerificationError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"))
     assert "CERTIFICATE" not in msg and "certificate" in msg
     assert RW._plain_error(ValueError("No fee rate found on the page.")) == "No fee rate found on the page."
+
+
+def test_a_half_of_the_range_claim_must_match_the_levels():
+    """R58-001: "upper half of their 52-week ranges" for indices about a quarter of the way up is dropped."""
+    from app.intel import grounding as G
+    idx = [{"name": "NIFTY 50", "price": 25000.0, "low52": 23955.6, "high52": 28486.8, "change_pct": 0.65},
+           {"name": "SENSEX", "price": 82000.0, "low52": 78228.0, "high52": 94545.0, "change_pct": 0.6}]
+    facts = G.market_facts(idx)
+    assert not G.range_claims_ok("Both broad indices remain in the upper half of their 52-week ranges.", facts)
+    assert G.range_claims_ok("Both indices sit in the lower half of their 52-week ranges.", facts)
+    assert G.range_claims_ok("NIFTY 50 closed at 25,000, up 0.65%.", facts)

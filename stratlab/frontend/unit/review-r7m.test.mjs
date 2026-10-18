@@ -106,7 +106,7 @@ test("System: Loading, not the all-clear, while the status comes (R7M-007)", () 
 test("Zerodha connected with nothing: Holdings says so with the time, and the card drops 'tap to refresh tomorrow' (R7M-009)", async () => {
   const { zerodhaEmpty, zerodhaLine } = await import("../src/lib/zerodha.ts");
   const now = new Date("2026-10-09T01:00:00+00:00");                                 // 06:30 IST
-  assert.equal(zerodhaEmpty({ count: 0, read_at: "2026-10-09T00:41:00+00:00" }, now), "Zerodha is connected; it returned 0 holdings at 06:11 IST.");
+  assert.equal(zerodhaEmpty({ count: 0, read_at: "2026-10-09T00:41:00+00:00" }, now), "Zerodha is connected; it returned 0 holdings today at 06:11 IST.");
   assert.equal(zerodhaEmpty({ count: 0, read_at: "2026-10-08T09:59:00+00:00" }, now), "Zerodha is connected; it returned 0 holdings at 8 Oct, 15:29 IST.");
   assert.equal(zerodhaEmpty({ count: 3, read_at: "2026-10-09T00:41:00+00:00" }, now), null);
   assert.equal(zerodhaEmpty(null, now), null);

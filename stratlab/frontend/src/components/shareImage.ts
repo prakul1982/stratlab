@@ -1,5 +1,5 @@
 import { checksRun } from "../lib/shareText";
-import { lostMoney, unseenWord } from "../lib/tradeUi";
+import { LOST_CHECKS, lostMoney, unseenWord } from "../lib/tradeUi";
 import { asDate, monthShort, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
@@ -179,7 +179,7 @@ export async function renderCard(d: CardData, theme: "light" | "dark" = "light")
   // the four checks
   g.fillStyle = c.muted; g.font = "500 13px 'IBM Plex Mono', monospace";
   // a run that lost money still shows its checks below, so the caption never says they weren't run (R57-002)
-  g.fillText(d.lost ? "LOST MONEY AFTER COSTS · THE CHECKS, FOR REFERENCE" : `${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
+  g.fillText(d.lost ? LOST_CHECKS.toUpperCase() : `${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
   let bx = PAD;
   const badge: Record<CheckStatus, [string, string, string]> = {
     pass: [c.blueSoft, c.blue, "Passed"], fail: [c.orangeSoft, c.orange, "Failed"], warn: [c.chip, c.ink2, "Warning"], skip: [c.chip, c.muted, "Skipped"],

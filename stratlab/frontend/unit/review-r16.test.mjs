@@ -30,5 +30,5 @@ test("R16-006: a strategy that lost money has no pass count headlined", () => {
   assert.ok(lostMoney("no_edge", -3.2));
   assert.ok(!lostMoney("no_edge", 4));
   assert.ok(!lostMoney("edge", -3));
-  assert.match(LOST_CHECKS, /lost money after costs/);
+  assert.match(LOST_CHECKS, /lost money after costs/i);
 });
