@@ -211,9 +211,9 @@ def test_preset_group_backtest_notes_todays_members():
            "kind": "in_eq"} for s in ("TCS", "INFY")]
     got = research.run_group(ds, st, {"id": "nifty50", "name": "NIFTY 50 stocks", "market": "IN"}, 365, 3650)
     note = members_note({"id": "nifty50", "market": "IN"})
-    assert note and "today's members" in note and note in got["verdict"]["notes"]
+    assert note and "members on the day this test ran" in note and note in got["verdict"]["notes"]      # R52-001 wording
     custom = research.run_group(ds, st, {"id": "custom", "name": "Mine", "market": "IN"}, 365, 3650)
-    assert not any("today's members" in n for n in custom["verdict"].get("notes") or [])
+    assert not any("members on the day this test ran" in n for n in custom["verdict"].get("notes") or [])
 
 
 def test_evaluate_walkforward_and_snapshot_pass_base_min(monkeypatch):
@@ -248,10 +248,10 @@ def test_members_note_carries_no_stale_year():
     # the sentence, not taken from the list. A list with a date says that date; one without gives no year
     from app import universes
     note = universes.members_note({"id": "nifty50", "market": "IN"})
-    assert "2025" not in note and "today's members:" in note
+    assert "2025" not in note and "on the day this test ran:" in note
     p = next(p for p in universes.PRESETS["IN"] if p["id"] == "nifty50")
     p["as_of"] = "Sep 2026"
     try:
-        assert "today's members (the list as of Sep 2026):" in universes.members_note({"id": "nifty50", "market": "IN"})
+        assert "on the day this test ran (the list as of Sep 2026):" in universes.members_note({"id": "nifty50", "market": "IN"})
     finally:
         p.pop("as_of")

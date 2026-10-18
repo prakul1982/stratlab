@@ -432,8 +432,22 @@ def fact_headline(verdict: str, checks: list[dict], n: int, ret: float, hold: fl
 OLD_HEADLINES = {"Likely a real edge.", "Mixed evidence.", "Probably luck.", "Not enough evidence.", "No edge here."}
 
 
+_OLD_MEMBERS = re.compile(r"\bare today's members(?: \(as of \d{4}\))?(?: \(the list as of [^)]*\))?")
+
+
+def _members_then(v: dict) -> dict:
+    """A stored group run's note said its stocks "are today's members (as of 2025)": true only on the day it ran. Read later
+    it says they were the list's members when the test ran (R52-001)."""
+    fix = lambda t: _OLD_MEMBERS.sub("were the list's members when this test ran", t) if isinstance(t, str) else t   # noqa: E731
+    if not any(isinstance(t, str) and _OLD_MEMBERS.search(t) for t in [v.get("summary"), *(v.get("notes") or [])]):
+        return v
+    return {**v, "summary": fix(v.get("summary")), "notes": [fix(n) for n in v.get("notes") or []]}
+
+
 def restated(v: dict | None, stats: dict | None) -> dict | None:
     """A stored verdict with a claim for a headline ("Likely a real edge.") given its facts instead; any other as it is."""
+    if isinstance(v, dict):
+        v = _members_then(v)
     if not isinstance(v, dict) or v.get("headline") not in OLD_HEADLINES:
         return v
     st = stats or {}

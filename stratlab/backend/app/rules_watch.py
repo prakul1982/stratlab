@@ -272,11 +272,14 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
         s["error"], s["fails"] = None, 0
         if src["id"] == "nse_circulars":
             first = not s["seen"]            # the first run only learns what is there
-            new = [c for c in value if c["id"] not in set(s["seen"])]
+            # once each: the exchange's list can carry one circular twice (R52-009: "5 changes", 3 circulars)
+            seen_now: set = set()
+            new = [c for c in value if c["id"] not in set(s["seen"]) and not (c["id"] in seen_now or seen_now.add(c["id"]))]
             if new and not first:
                 s["pending"] = {"at": now.isoformat(timespec="minutes"), "why": "new circular",
                                 "items": (((s["pending"] or {}).get("items") or []) + new)[-20:]}
-                lines += [f"- NSE circular {c['date']}: {c['subject']}" + (f" ({c['url']})" if c["url"] else "") for c in new[:10]]
+                # the address after a dash, not in brackets: the email turns it into a link, which left a stray "(" (R52-009)
+                lines += [f"- NSE circular {c['date']}: {c['subject']}" + (f" — {c['url']}" if c["url"] else "") for c in new[:10]]
             s["seen"] = (s["seen"] + [c["id"] for c in new])[-MAX_SEEN:] or ["-"]
             s["value"], s["shown"] = len(value), f"{len(value)} matching circulars in the last {CIRCULAR_DAYS} days"
             continue
