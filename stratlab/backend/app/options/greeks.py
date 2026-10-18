@@ -180,7 +180,17 @@ def model(spot: float | None, expiry: str, atm: float | None, call: dict | None,
     when it was asked for: null without a time on any of them. `fresh` is whether that is within FRESH_SECONDS of `at`."""
     if not spot or spot <= 0:
         return None
-    t = years_to(expiry, at, exchange)
+    from .data import FRESH_SECONDS
+    struck = [x for x in (quote_time(spot_ts), *(quote_time(q.get("ts")) for q in (call, put) if q)) if x]
+    as_of = max(struck) if struck else None
+    now = at if at.tzinfo else at.replace(tzinfo=IST)
+    fresh = bool(as_of) and abs(now - as_of).total_seconds() <= FRESH_SECONDS
+    # prices struck at an earlier close are priced with the time left when they were struck: Friday's close read on Sunday
+    # with Sunday's time left gave 17.9% where Positioning, timed from the close, gave 10.62% for the same strike (R53-001)
+    priced_at = as_of if as_of and not fresh and as_of < now else at
+    if years_to(expiry, at, exchange) <= 0:
+        return None
+    t = years_to(expiry, priced_at, exchange)
     if t <= 0:
         return None
     c, p = mid(call), mid(put)
@@ -190,14 +200,11 @@ def model(spot: float | None, expiry: str, atm: float | None, call: dict | None,
         f, src = spot, "spot"
     ivs = [v for v in (implied_vol(c, f, atm, t, "CE", r) if c and atm else None,
                        implied_vol(p, f, atm, t, "PE", r) if p and atm else None) if v]
-    from .data import FRESH_SECONDS
     from .engine import tick_for
-    struck = [x for x in (quote_time(spot_ts), *(quote_time(q.get("ts")) for q in (call, put) if q)) if x]
-    as_of = max(struck) if struck else None
     return {"expiry": expiry, "spot": spot, "forward": round(f, 4), "basis": f / spot, "forward_from": src, "atm": atm,
             "t": t, "days": round(t * 365, 4), "rate": r, "atm_iv": sum(ivs) / len(ivs) if ivs else None,
             "as_of": as_of.isoformat(timespec="seconds") if as_of else None,
-            "fresh": bool(as_of) and abs((at if at.tzinfo else at.replace(tzinfo=IST)) - as_of).total_seconds() <= FRESH_SECONDS,
+            "fresh": fresh,
             "exchange": exchange, "tick": tick_for(exchange)}
 
 

@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
+import { useScrollMemory } from "../lib/scrollMemory";
 import { NAV, groupPath, locate, locateGroup, type NavPage } from "../lib/nav";
 import { MINE_HOME, MINE_NAME, SPACE_IDS, SPACES, homeOf, menuView, spaceOf, type SpaceView } from "../lib/spaces";
 import { titleFor } from "../lib/title";
@@ -34,6 +35,7 @@ const MINE_LINKS = ["/news"];
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
 export function Shell({ children }: { children: ReactNode }) {
+  useScrollMemory();
   const { notebooks, markets, me, focus, space: saved, setSpace } = useApp();
   const [open, setOpen] = useState(false);
   const [openGroups, setOpenGroups] = usePersisted<Record<string, boolean>>(`${OPEN_KEY}.${me?.id ?? "guest"}`, NO_GROUPS);

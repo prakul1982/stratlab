@@ -263,6 +263,13 @@ def test_expiries_and_holidays_from_what_the_app_keeps(w):
     evs = M.expiry_events(TODAY, listed, TODAY, date(2026, 10, 31))
     assert [e["date"] for e in evs if e["title"] == "Monthly F&O expiry"] == ["2026-10-26"]
     assert [e["date"] for e in evs if e["title"] == "NIFTY weekly expiry"] == ["2026-10-06", "2026-10-13"]
+    # a listed date says why it is that day, never just "as listed" (R53-009)
+    detail = {e["date"]: e["detail"] for e in evs}
+    assert "as listed" not in json.dumps(detail)
+    assert detail["2026-10-06"].endswith("(they expire on Tuesdays).")
+    assert "a Monday this time" in detail["2026-10-26"] and "last Tuesday of the month" in detail["2026-10-26"]
+    moved = M.expiry_events(TODAY, lambda ex, name: ["2026-11-23"], date(2026, 11, 1), date(2026, 11, 30))
+    assert "a Monday this time: Tuesday 24 Nov is a market holiday." in [e for e in moved if e["date"] == "2026-11-23"][0]["detail"]
     hol = M.holiday_events(TODAY, date(2026, 9, 25), date(2026, 10, 3))
     assert [e["date"] for e in hol] == ["2026-10-02"] and "Gandhi Jayanti" in hol[0]["title"]
 

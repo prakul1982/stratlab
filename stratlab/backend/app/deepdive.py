@@ -463,6 +463,9 @@ def period_passed(text: str, said_on: date | None, today: date) -> bool:
     return bool(ends) and all(e is not None and e < today for e in ends)
 
 
+OLD_SAYING_DAYS = 548          # about a year and a half
+
+
 def _said_on(label) -> date | None:
     try:
         return date.fromisoformat(str((label or {}).get("at") or "")[:10])
@@ -470,13 +473,26 @@ def _said_on(label) -> date | None:
         return None
 
 
+def _too_old(label, day: date) -> bool:
+    said = _said_on(label)
+    return bool(said) and (day - said).days > OLD_SAYING_DAYS
+
+
 def clean_plans(d: dict, labels: dict, texts: dict | None = None, today: date | None = None) -> dict:
     def src(v):
         return labels.get(str(v or "").strip().upper())
     capex = []
+    day = today or ist_now().date()
+    # a plan or outlook said more than a year and a half ago is not told as current: "5G rollout … under way" from a
+    # 28 Oct 2023 call, read in Oct 2026, is a past statement (R53-004). An old plan stays, its status "unclear" (the
+    # page gives its date); an old outlook goes.
+    def old(label):
+        return _too_old(label, day)
     for c in (d.get("capex") or [])[:8]:
         if isinstance(c, dict) and str(c.get("what") or "").strip() and _real(c, texts):
             status = str(c.get("status") or "unclear").lower()
+            if old(src(c.get("source"))) and status == "under way":
+                status = "unclear"
             capex.append({"what": str(c["what"])[:200], "amount": _with_unit(c.get("amount")), "size": _with_unit(c.get("size")),
                           "timeline": (str(c["timeline"])[:80] if c.get("timeline") else None),
                           "status": status if status in ("planned", "under way", "done", "unclear") else "unclear",
@@ -488,6 +504,8 @@ def clean_plans(d: dict, labels: dict, texts: dict | None = None, today: date | 
             continue                       # a result already reported, not an outlook
         if isinstance(o, dict) and period_passed(said, _said_on(src(o.get("source"))), today or ist_now().date()):
             continue                       # its stated period has ended: not an outlook any more (R29C-005)
+        if isinstance(o, dict) and old(src(o.get("source"))):
+            continue                       # said so long ago it is no longer an outlook (R53-004)
         if isinstance(o, dict) and str(o.get("statement") or "").strip() and _real(o, texts):
             outlook.append({"statement": str(o["statement"])[:240], "quote": str(o.get("quote") or "")[:300], "source": src(o.get("source"))})
     return {"capex": capex, "outlook": outlook}
@@ -793,6 +811,14 @@ def tidy(reads: dict) -> dict:
     if isinstance(p, dict) and isinstance(p.get("capex"), list):
         p["capex"] = [{**c, "amount": in_billions(c.get("amount")), "size": in_billions(c.get("size"))}
                       if isinstance(c, dict) else c for c in p["capex"]]
+    if isinstance(p, dict):
+        # a read saved before the age rule, or one that has aged since, is told as a new read would be (R53-004)
+        day = ist_now().date()
+        if isinstance(p.get("capex"), list):
+            p["capex"] = [{**c, "status": "unclear"} if isinstance(c, dict) and c.get("status") == "under way"
+                          and _too_old(c.get("source"), day) else c for c in p["capex"]]
+        if isinstance(p.get("outlook"), list):
+            p["outlook"] = [o for o in p["outlook"] if not (isinstance(o, dict) and _too_old(o.get("source"), day))]
     return reads
 
 

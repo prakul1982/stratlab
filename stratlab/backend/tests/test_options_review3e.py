@@ -170,3 +170,19 @@ def test_each_listed_expiry_has_its_own_lot(monkeypatch):
 def test_bse_derivatives_keep_the_derivatives_close_nothing_in_the_repo_says_otherwise():
     """Nothing in the repo documents a different close for BSE's futures and options (BFO): sessions.fo_close applies to both."""
     assert opt_data.expiry_time("BFO", date(2026, 10, 14)) == opt_data.expiry_time("NFO", date(2026, 10, 14)) == "15:40"
+
+
+def test_stale_prices_are_priced_with_the_time_left_when_they_were_struck():
+    """R53-001: Friday's close read on Sunday is priced from Friday's close, as Positioning counts it, not with Sunday's
+    shorter time left (which made the same at-the-money price read as a much higher IV)."""
+    fri = "2026-10-09T15:29:58"
+    sun = datetime(2026, 10, 11, 12, 0, tzinfo=IST)
+    stale = G.model(25000, "2026-10-13", 25000, _q(160.0, fri), _q(150.0, fri), sun)
+    struck = G.model(25000, "2026-10-13", 25000, _q(160.0, fri), _q(150.0, fri), datetime(2026, 10, 9, 15, 29, 58, tzinfo=IST))
+    assert stale["fresh"] is False and stale["t"] == struck["t"] and stale["atm_iv"] == struck["atm_iv"]
+    # fresh prices keep the asking time
+    live = G.model(25000, "2026-10-13", 25000, _q(160.0, "2026-10-12T10:41:30"), _q(150.0, "2026-10-12T10:41:30"),
+                   datetime(2026, 10, 12, 10, 42, tzinfo=IST))
+    assert live["fresh"] is True and live["t"] < struck["t"]
+    # an expiry that has passed is still no model, however old the prices
+    assert G.model(25000, "2026-10-09", 25000, _q(160.0, "2026-10-08T15:29:58"), _q(150.0, "2026-10-08T15:29:58"), sun) is None

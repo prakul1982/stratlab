@@ -36,7 +36,7 @@ export const FEATURES: Feature[] = [
   { id: "group", title: "Test on a whole group", what: "Run one set of rules on NIFTY 50, F&O stocks, US mega caps, big coins or your own list.", to: "@market",
     words: "group basket portfolio universe scanner momentum nifty 50 many stocks list", home: true, goal: "test" },
   { id: "options", title: "Paper trade options", what: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask.", to: "/options",
-    words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o", home: true, goal: "trade" },
+    words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o expiry expiries", home: true, goal: "trade" },
   { id: "options_greeks", title: "Option Greeks and what-if", what: "IV, delta, gamma, theta and vega for every strike and your position, the payoff today, and sliders for spot, IV and days.",
     to: "/options", words: "greeks delta gamma theta vega iv implied volatility what if whatif slider payoff today t+0 before expiry roll adjust black",
     level: "advanced", goal: "trade" },
