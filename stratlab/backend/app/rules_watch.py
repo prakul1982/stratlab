@@ -212,6 +212,15 @@ def state() -> dict:
     return {"sources": out, "last_run": got.get("last_run")}
 
 
+def _plain_error(e: Exception) -> str:
+    """A source's failure in words: "[SSL: CERTIFICATE_VERIFY_FAILED] …" says the site's certificate couldn't be checked
+    (R57-014); anything else as it came."""
+    text = (str(getattr(e, "message", None) or e) or e.__class__.__name__)
+    if "CERTIFICATE_VERIFY_FAILED" in text or "SSLCertVerificationError" in text:
+        return "The site's security certificate couldn't be checked, so the page wasn't read."
+    return text[:200]
+
+
 def _once(pending):
     """A change waiting for a look with each circular in it once: a list stored before the exchange's repeats were
     dropped named one circular four times (R56-007)."""
@@ -281,7 +290,7 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
         try:
             value = src["read"](fetch.get(src, today))
         except Exception as e:
-            s["error"] = (str(getattr(e, "message", None) or e) or e.__class__.__name__)[:200]
+            s["error"] = _plain_error(e)
             s["fails"] += 1
             continue
         s["error"], s["fails"] = None, 0
@@ -296,7 +305,9 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
                 # the address after a dash, not in brackets: the email turns it into a link, which left a stray "(" (R52-009)
                 lines += [f"- NSE circular {c['date']}: {c['subject']}" + (f" — {c['url']}" if c["url"] else "") for c in new[:10]]
             s["seen"] = (s["seen"] + [c["id"] for c in new])[-MAX_SEEN:] or ["-"]
-            s["value"], s["shown"] = len(value), f"{len(value)} matching circulars in the last {CIRCULAR_DAYS} days"
+            # each circular once: the exchange's list repeats some, and "5 matching" sat over a list of 2 (R57-014)
+            n = len({(c.get("date"), " ".join(str(c.get("subject")).lower().split())) for c in value})
+            s["value"], s["shown"] = n, f"{n} matching circular{'' if n == 1 else 's'} in the last {CIRCULAR_DAYS} days"
             continue
         expected = src["expected"](today) if src["expected"] else None
         fp = hashlib.sha1(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]

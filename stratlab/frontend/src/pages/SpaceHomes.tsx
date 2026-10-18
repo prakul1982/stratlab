@@ -51,7 +51,7 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
 
 /** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
  * same height); left out, the card's foot says where it goes instead. */
-type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: string | null; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
+type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
 
 /** Four tools in one row of equal cards (two by two when the column is narrow). The lead tool is marked by its
  * border and tint, not its size. Every card has the same three lines, so the row never jumps when a status loads. */
@@ -99,7 +99,9 @@ export function TradeHome() {
       // the journal and the tax report are two uploads of different trades: F&O lines kept in the tax report as totals are not round trips here (R10O carry-over of R7M-013)
       ...(journal !== null && journal !== "none" && journal.count ? { line: "Your real trades as round trips, after charges. F&O lines in your tax report are kept there as totals, not counted here." } : {}),
       // the figure named: the trades' total after charges, not a per-trade expectancy (R7O-012: "11 closed trades · ₹3")
-      status: journal === null ? null : journal !== "none" && journal.count ? `${plural(journal.count, "closed trade")} · ${money(journal.net, "INR")} net after charges` : "" },
+      status: journal === null ? null : journal !== "none" && journal.count
+        // the amount's minus stays with its number on a narrow card (R57-003)
+        ? <>{plural(journal.count, "closed trade")} · <span className="nowrap">{money(journal.net, "INR")}</span> net after charges</> : "" },
     { to: "/library", icon: <Library size={18} />, title: "Strategy library", line: "Published rules, each with the result of its checks." },
   ];
   return (
