@@ -93,13 +93,15 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 .btn.outline:hover { background: var(--card); color: var(--ink); filter: none; }
 .btn.quiet { background: var(--card); border-color: var(--line-2); color: var(--ink); font-weight: 500; }
 .btn.quiet:hover { border-color: var(--ink); color: var(--ink); filter: none; }
-.promo-banner { background: var(--blue-soft, var(--paper-2)); }
+/* two classes, so the general .banner rule further down (warning orange) doesn't win: the offer looks the same as the
+   Home card's, not like an alert (R57-008) */
+.banner.promo-banner { background: var(--paper-2); color: var(--ink); border: 1px solid var(--line); }
 .promo-banner .promo-short { display: none; }
 /* a phone: one short sentence, the second left to the Plans page; it wraps rather than cutting off the end date (R31-018) */
 @media (max-width: 640px) { /* .banner.promo-banner: the general .banner rule further down sets flex-wrap: wrap, which beat a one-class rule (R32-002) */
   .banner.promo-banner { flex-wrap: nowrap; padding: 4px 8px 4px 12px; margin-bottom: 12px; font-size: 13px; }
   .banner.promo-banner .promo-text { flex: 1 1 auto; min-width: 0; }
-  .promo-banner .promo-more, .promo-banner .promo-full { display: none; }
+  .promo-banner .promo-more, .promo-banner .promo-full, .promo-banner .promo-plans { display: none; }
   .promo-banner .promo-short { display: inline; }
   /* the dismiss control is an icon on the same row as the text, a 40 px target (R30-009) */
   .promo-banner .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
@@ -1763,7 +1765,11 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
   .mine-slot[data-card="networth"], .mine-slot[data-card="pnl"], .mine-slot[data-card="paper"] { grid-column: span 12; }
 }
 @media (max-width: 700px) { .mine-slot[data-card] { grid-column: span 12; } }
-.mine-markets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); }
+/* the six markets in rows that divide evenly (6, 3 or 2 across): auto-fit left five in a row and Gold alone and squeezed
+   below it on an iPad in landscape (R57-010) */
+.mine-markets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+@media (min-width: 1360px) { .mine-markets { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mine-markets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .mine-mkt { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: 12px; }
 .mine-mkt-v { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
 .mine-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

@@ -191,6 +191,7 @@ test("the launch-offer banner is one short line on a phone, with its end date an
   assert.match(main, /className="promo-short">Pro free until \{endsAtShort\(until\)\}/);
   assert.match(main, /aria-label="Dismiss"/);
   const css = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.promo-banner \.promo-more, \.promo-banner \.promo-full \{ display: none; \}/);
+  // the phone line also drops "See plans" (R57-008), so the banner stays one short line
+  assert.match(css, /\.promo-banner \.promo-more, \.promo-banner \.promo-full, \.promo-banner \.promo-plans \{ display: none; \}/);
   assert.ok(css.indexOf(".promo-banner .promo-short { display: none; }") < css.indexOf(".promo-banner .promo-short { display: inline; }"), "the phone rule wins");
 });

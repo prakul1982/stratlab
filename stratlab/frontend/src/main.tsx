@@ -172,9 +172,10 @@ function PromoBanner({ until }: { until: string }) {
   return (
     <div className="banner promo-banner">
       <span className="promo-text"><b>Launch offer:</b> <span className="promo-full">every Pro feature is free for everyone until {day}.<span className="promo-more"> After that, your plan's limits apply again.</span></span><span className="promo-short">Pro free until {endsAtShort(until)}</span></span>
+      <span className="k-row promo-actions"><Link className="btn sm promo-plans" to="/plans">See plans</Link>
       <button type="button" className="btn sm quiet promo-got" aria-label="Dismiss" onClick={() => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); }}>
         <span className="promo-got-text">Got it</span><span className="promo-x" aria-hidden="true">×</span>
-      </button>
+      </button></span>
     </div>
   );
 }

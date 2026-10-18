@@ -1,5 +1,5 @@
 import { checksRun } from "../lib/shareText";
-import { LOST_CHECKS, lostMoney } from "../lib/tradeUi";
+import { lostMoney, unseenWord } from "../lib/tradeUi";
 import { asDate, monthShort, pct } from "../lib/format";
 import { MARK_RATIO, markSvg } from "../lib/brand";
 import type { CheckStatus, Experiment, Notebook } from "../lib/types";
@@ -24,6 +24,7 @@ export interface CardData {
   checks: { title: string; status: CheckStatus }[];
   passed: number; total: number;
   lost?: boolean;          // lost money after costs: no pass count in the headline
+  unseen?: "months" | "years";   // what the shaded part of the chart covers
   stats: [string, string][];
   equity: (number | null)[]; hold: (number | null)[]; split: number | null;
 }
@@ -53,7 +54,7 @@ export function cardFromExperiment(nb: Notebook, e: Experiment): CardData {
     tone: v.verdict === "edge" ? "blue" : v.verdict === "luck" || v.verdict === "no_edge" ? "orange" : "ink",
     reason: v.summary || nb.question || "",
     checks: v.checks.map((c) => ({ title: SHORT[c.id] ?? c.title, status: c.status })),
-    passed: v.passed, total: checksRun(v), lost: lostMoney(v.verdict, s.ret),
+    passed: v.passed, total: checksRun(v), lost: lostMoney(v.verdict, s.ret), unseen: unseenWord(e.range),
     stats,
     equity: e.series?.equity ?? [], hold: e.series?.buy_hold ?? [], split: e.series?.split ?? null,
   };
@@ -106,7 +107,8 @@ function chart(g: CanvasRenderingContext2D, c: Theme, d: CardData, x: number, y:
   if (d.split != null && d.split > 0 && d.split < n) {
     g.fillStyle = c.shade; g.fillRect(X(d.split), py - 8, px + pw - X(d.split), ph + 16);
     g.fillStyle = c.muted; g.font = "500 12px 'IBM Plex Mono', monospace"; g.textAlign = "right";
-    g.fillText("SHADED: UNSEEN YEARS", x + w - 20, y + 26); g.textAlign = "left";
+    // "months" on a test whose unseen part is under a year (R57-002)
+    g.fillText(`SHADED: UNSEEN ${(d.unseen ?? "years").toUpperCase()}`, x + w - 20, y + 26); g.textAlign = "left";
   }
   const line = (series: (number | null)[], color: string, width: number, dash: number[]) => {
     g.strokeStyle = color; g.lineWidth = width; g.setLineDash(dash); g.beginPath();
@@ -149,20 +151,35 @@ export async function renderCard(d: CardData, theme: "light" | "dark" = "light")
   g.fillStyle = c.muted; g.font = "500 14px 'IBM Plex Mono', monospace";
   g.fillText(fit(g, d.context, left), PAD, 142);
   const tone = d.tone === "blue" ? c.blue : d.tone === "orange" ? c.orange : c.ink;
-  let size = 84;
-  g.font = `400 ${size}px Fraunces, Georgia, serif`;
-  while (g.measureText(d.headline).width > left && size > 48) { size -= 4; g.font = `400 ${size}px Fraunces, Georgia, serif`; }
-  g.fillStyle = tone; g.fillText(d.headline, PAD - 3, 142 + 16 + size);
+  // the headline on one line while it fits at 56px or more, else on two lines: a long one ("5.3 points behind buy and
+  // hold after costs; lost money after costs.") ran on one line under the chart and was cut off (R57-001)
+  const font = (n: number) => `400 ${n}px Fraunces, Georgia, serif`;
+  let size = 84, heads = [d.headline];
+  g.font = font(size);
+  while (g.measureText(d.headline).width > left && size > 56) { size -= 4; g.font = font(size); }
+  if (g.measureText(d.headline).width > left) {
+    for (size = 56; size >= 32; size -= 4) {
+      g.font = font(size);
+      heads = wrap(g, d.headline, left, 2);
+      if (!heads[heads.length - 1].endsWith("…")) break;
+    }
+  }
+  const lineH = Math.round(size * 1.08);
+  g.fillStyle = tone;
+  heads.forEach((ln, i) => g.fillText(ln, PAD - 3, 142 + 16 + size + i * lineH));
   g.fillStyle = c.ink2; g.font = "400 22px Fraunces, Georgia, serif";
-  const ry = 142 + 16 + size + 44;
-  wrap(g, d.reason, left, 3).forEach((ln, i) => g.fillText(ln, PAD, ry + i * 30));
+  const ry = 142 + 16 + size + (heads.length - 1) * lineH + 44;
+  // the reason fills what is left above the checks' caption (at 418), at most three lines
+  const room = Math.max(0, Math.min(3, Math.floor((418 - 22 - ry) / 30) + 1));
+  wrap(g, d.reason, left, room).slice(0, room).forEach((ln, i) => g.fillText(ln, PAD, ry + i * 30));
 
   // the equity chart, right column
   chart(g, c, d, PAD + left + 36, 104, W - PAD - (PAD + left + 36), 270);
 
   // the four checks
   g.fillStyle = c.muted; g.font = "500 13px 'IBM Plex Mono', monospace";
-  g.fillText(d.lost ? LOST_CHECKS.toUpperCase() : `${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
+  // a run that lost money still shows its checks below, so the caption never says they weren't run (R57-002)
+  g.fillText(d.lost ? "LOST MONEY AFTER COSTS · THE CHECKS, FOR REFERENCE" : `${d.total} HONESTY CHECKS · ${d.passed} PASSED`, PAD, 418);
   let bx = PAD;
   const badge: Record<CheckStatus, [string, string, string]> = {
     pass: [c.blueSoft, c.blue, "Passed"], fail: [c.orangeSoft, c.orange, "Failed"], warn: [c.chip, c.ink2, "Warning"], skip: [c.chip, c.muted, "Skipped"],

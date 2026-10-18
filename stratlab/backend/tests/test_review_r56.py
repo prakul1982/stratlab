@@ -11,3 +11,11 @@ def test_a_pending_change_names_each_circular_once():
     got = RW._once(pending)
     assert [i["date"] for i in got["items"]] == ["October 16, 2026", "October 15, 2026"]
     assert RW._once(None) is None
+
+
+def test_a_certificate_failure_is_said_in_words():
+    """R57-014: an unread source's error is a sentence, not "[SSL: CERTIFICATE_VERIFY_FAILED] …"."""
+    import ssl
+    msg = RW._plain_error(ssl.SSLCertVerificationError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"))
+    assert "CERTIFICATE" not in msg and "certificate" in msg
+    assert RW._plain_error(ValueError("No fee rate found on the page.")) == "No fee rate found on the page."

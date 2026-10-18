@@ -54,7 +54,8 @@ export function EtfGapsPage() {
         {" "}<Badge tone="plain" dot={false}>{r.fund_label}</Badge>
         <span className="k-sub-line">{r.name}</span></>) },
     // the price with its day, so it is never read against the close the gap uses (R6O-018)
-    { key: "px", header: "Price", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{fmtDate(dayIn(r.price_at) ?? r.price_at, { year: false })}</span>}</> },
+    // the last trade, which can differ from the exchange's official close the gap uses (R57-005: 317.46 against a 316.61 close)
+    { key: "px", header: "Last trade", numeric: true, cell: (r) => <>{price(r.price, "INR")}{r.price_at && <span className="k-sub-line">{fmtDate(dayIn(r.price_at) ?? r.price_at, { year: false })}</span>}</> },
     ...(hasInav ? [
       { key: "inav", header: "iNAV", numeric: true, cell: (r: EtfGap) => (r.inav == null ? "–" : price(r.inav, "INR")) },
       { key: "ig", header: "Gap to iNAV", numeric: true, cell: (r: EtfGap) => gapShort(r.inav_gap) }] : []),
@@ -73,7 +74,7 @@ export function EtfGapsPage() {
     <div className="k-page etf-gaps">
       <PageHeader eyebrow={eyebrowOf("/invest/etf-gaps")} title="ETF price against NAV" asOf={data?.as_of} asOfLabel="Prices as of"
         info={data ? <>{data.nav_as_of ? `NAVs of ${asOf(data.nav_as_of)}. ` : ""}{data.count} ETFs. {data.note}</> : undefined} infoLabel="What the numbers are"
-        lede="How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Through the day the gap is the last close's, as the new NAV comes out each evening. Facts with their dates, not a view on any fund." />
+        lede="How far each ETF's close is from what one unit holds: that day's published NAV, as a percent above or below. Through the day the gap is the last close's, as the new NAV comes out each evening. The last trade can differ from the official close, which the exchange works out from the session's final trades. Facts with their dates, not a view on any fund." />
 
       {pick && <EtfGapDetailView key={pick} symbol={pick} />}
 
