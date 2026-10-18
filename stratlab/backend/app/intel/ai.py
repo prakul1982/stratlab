@@ -191,8 +191,8 @@ to test ("Enter long when …" or "Enter short when …"), never as an instructi
 that are in the FACTS, copied as they are (a growth rate, yield or return is the FACTS' own figure, never your own
 sum); label Indian fiscal quarters as the FACTS' fiscal_now does. Describe the present with latest_fiscal_year and the
 results status in "results": a year or quarter the FACTS report is never "estimated", "upcoming" or "due". "watch"
-lists only dates ahead that the FACTS give, never results already filed and never a month written as a date (R47-005:
-"results filed on 2026-06"); with none, say the next results date isn't announced yet. No "only", "just", "merely",
+lists only dates ahead that the FACTS give, never results already filed and never a month written as a date
+(not "results filed on 2026-06"), never a quarter's end; with none, say the next results date isn't announced yet. No "only", "just", "merely",
 "mere" or "a mere" before a figure: that judges it ("dividend yield is only 0.5%"); state the figure.
 Compare a figure only with another figure in the FACTS: never with its history, its usual range, its peers, the sector
 or the market, which the FACTS don't give. Never say a kind of strategy "can be effective" or "works": an idea's "why"

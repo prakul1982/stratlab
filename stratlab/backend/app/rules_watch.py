@@ -208,8 +208,23 @@ def state() -> dict:
         out.append({"id": src["id"], "name": src["name"], "area": src["area"], "url": src["url"], "where": src["where"],
                     "checked": s.get("checked"), "value": s.get("value"), "shown": s.get("shown"),
                     "expected": s.get("expected"), "error": s.get("error"), "fails": int(s.get("fails") or 0),
-                    "pending": s.get("pending"), "alerted": s.get("alerted"), "seen": s.get("seen") or []})
+                    "pending": _once(s.get("pending")), "alerted": s.get("alerted"), "seen": s.get("seen") or []})
     return {"sources": out, "last_run": got.get("last_run")}
+
+
+def _once(pending):
+    """A change waiting for a look with each circular in it once: a list stored before the exchange's repeats were
+    dropped named one circular four times (R56-007)."""
+    if not isinstance(pending, dict) or not isinstance(pending.get("items"), list):
+        return pending
+    seen, items = set(), []
+    for c in pending["items"]:
+        # by day and subject: the four copies may carry ids made from different date fields
+        key = (str(c.get("date")), " ".join(str(c.get("subject")).lower().split())) if isinstance(c, dict) else repr(c)
+        if key not in seen:
+            seen.add(key)
+            items.append(c)
+    return {**pending, "items": items}
 
 
 def _save(st: dict):
@@ -276,8 +291,8 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
             seen_now: set = set()
             new = [c for c in value if c["id"] not in set(s["seen"]) and not (c["id"] in seen_now or seen_now.add(c["id"]))]
             if new and not first:
-                s["pending"] = {"at": now.isoformat(timespec="minutes"), "why": "new circular",
-                                "items": (((s["pending"] or {}).get("items") or []) + new)[-20:]}
+                s["pending"] = _once({"at": now.isoformat(timespec="minutes"), "why": "new circular",
+                                      "items": (((s["pending"] or {}).get("items") or []) + new)[-20:]})
                 # the address after a dash, not in brackets: the email turns it into a link, which left a stray "(" (R52-009)
                 lines += [f"- NSE circular {c['date']}: {c['subject']}" + (f" — {c['url']}" if c["url"] else "") for c in new[:10]]
             s["seen"] = (s["seen"] + [c["id"] for c in new])[-MAX_SEEN:] or ["-"]
