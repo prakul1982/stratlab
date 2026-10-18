@@ -166,7 +166,7 @@ const TERMS: Record<string, string> = {
   "Net margin": "Profit after everything, as a share of sales.",
   "Debt / equity": "Borrowings divided by the shareholders' money in the business.",
   "Total debt / equity": "All borrowings, short and long term, divided by the shareholders' money in the business.",
-  "Long-term debt / equity": "Borrowings due after more than a year, divided by the shareholders' money in the business.",
+  "Long-term debt / equity": "Borrowings due after more than a year, divided by the shareholders' money in the business, from the latest quarter's balance sheet. A yearly debt to equity from the annual report can differ: it is of another date, and can count debt and equity differently.",
   "Latest YoY": "The latest reported quarter against the same quarter a year before; without quarterly results, the latest year against the year before. The note under it names the two periods.",
   "3Y CAGR": "Compound annual growth rate: the steady yearly growth that gets from the start to the end of the period.",
 };

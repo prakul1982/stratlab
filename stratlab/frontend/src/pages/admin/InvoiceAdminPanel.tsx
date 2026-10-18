@@ -52,7 +52,7 @@ export function InvoiceAdminPanel() {
           <FormGrid label="Who the invoices are from" onSubmit={(e) => { e.preventDefault(); save(); }}>
             {text("legal_name", "Legal name")}
             {text("address", "Address")}
-            <Field label="State">{(id) => <Select id={id} value={s.state} onChange={(v) => setS({ ...s, state: v })} options={[{ value: "", label: "Choose…" }, ...Object.entries(states).map(([c, n]) => ({ value: c, label: n }))]} />}</Field>
+            <Field label="State">{(id) => <Select id={id} value={s.state} onChange={(v) => setS({ ...s, state: v })} options={[{ value: "", label: "Choose…" }, ...Object.entries(states).sort((a, b) => a[1].localeCompare(b[1])).map(([c, n]) => ({ value: c, label: n }))]} />}</Field>
             {text("gstin", "GSTIN", "Leave empty if not registered for GST.")}
             {text("pan", "PAN")}
             {text("lut_arn", "LUT ARN", "From the Letter of Undertaking filed on the GST portal each year, to export without paying IGST.")}

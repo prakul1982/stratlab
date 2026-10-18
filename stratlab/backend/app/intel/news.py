@@ -135,7 +135,11 @@ ADVICE_TITLE = re.compile(
     r"|\bcan (the|this|its|it)\b[^?]{0,30}\b(rally|rebound|recovery|run|gains?|uptrend|surge|momentum)\b[^?]{0,30}\b(extend|continue|last|sustain|go on)\b"
     r"|\bwhat lies ahead\b|\bexperts? decode\b|\bkey levels\b|\btriggers? (for|to watch)\b|\btop \d+ reasons\b"
     r"|\b(traders?|analysts?|investors?) see (it|them|stocks?|shares?|the market|prices?) (going|heading|rising|falling)\b"
-    r"|\bis [^?]{0,60}\bthe real risk\?", re.I)
+    r"|\bis [^?]{0,60}\bthe real risk\?"
+    # R49-001: listicles of reasons in any count ("5 reasons why the stock market is rising today", "Three Reasons Why
+    # Markets Are Rising", "Key Reasons Behind IT Rally") and a pick between stocks ("BYD or Tesla: Which Is a Better Stock?")
+    r"|\b(\d+|two|three|four|five|six|seven|eight|nine|ten|key|main|big) reasons? (why|behind|for)\b"
+    r"|\bwhich (is|one is|looks)( a| the)? (better|best|smarter|cheaper) (stock|buy|bet|investment|pick|share)\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"

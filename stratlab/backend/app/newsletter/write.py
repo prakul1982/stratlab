@@ -542,8 +542,11 @@ def render(issue: dict) -> tuple[str, str]:
                 k = frozen.index(it.get("url")) if frozen is not None and it.get("url") in frozen else n
                 # the story's own address where an aggregator's redirect carries it; a redirect that doesn't is no link at
                 # all, as it opens a blank page (R30-006): the headline stays plain text
-                it = {**it, "url": _headline_link(it.get("url"))}
-                if kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # a long address: the short one in both parts
+                own = _headline_link(it.get("url"))
+                # an aggregator's address that names no story opens the brief on the site, where its "Source" link
+                # works, so every headline in the email can be opened (R49-003: India's were all plain text)
+                it = {**it, "url": own or (view if it.get("url") else None)}
+                if own and kit.safe_url(it.get("url")) and not kit.plain_url(it.get("url")):      # a long address: the short one in both parts
                     it = {**it, "url": kit.site(link_path(issue["id"], k))}
                 n += 1
             rows.append(_row(it))

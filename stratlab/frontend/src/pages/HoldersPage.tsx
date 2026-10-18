@@ -178,7 +178,7 @@ function IndiaHolders({ toolbar }: { toolbar: React.ReactNode }) {
                       {hold.new > 0 && <> · new in {hold.new}</>}{hold.dropped > 0 && <> · no longer listed in {hold.dropped}</>}</span>
                     {hold.dropped > 0 && <Seg label="Which companies" value={show} onChange={setShow} options={SHOW} />}
                   </div>
-                  <DataTable label="Companies where the holder is named" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
+                  <DataTable stack label="Companies where the holder is named" rows={rows} rowKey={(r) => r.symbol} sticky={rows.length > 14} rowAttrs={(r) => ({ "data-company": r.symbol })}
                     columns={[
                       { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
                         <><Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}`}><b>{r.symbol}</b></Link>
@@ -262,7 +262,7 @@ function UsHolders({ toolbar }: { toolbar: React.ReactNode }) {
         <Card>
           <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"}${symbol ? ` for ${symbol}` : " across companies"}`}
             actions={data.updated_at ? <span className="k-small k-muted">Read {asOf(data.updated_at, { tz: ET })}</span> : undefined} />
-          <DataTable label="13D and 13G filings, newest first" rows={data.items} rowKey={(r) => r.id} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
+          <DataTable stack label="13D and 13G filings, newest first" rows={data.items} rowKey={(r) => r.id} empty={symbol ? `No 13D or 13G filing found for ${symbol} in the last 13 months.` : "No filings stored yet."}
             columns={[
               { key: "d", header: "Filed", cell: (r) => asOf(r.at, { tz: ET }) ?? "–" },
               { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (

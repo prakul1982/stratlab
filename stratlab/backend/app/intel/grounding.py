@@ -1128,7 +1128,12 @@ def tidy_numbers(text, region: str = "IN"):
         except ValueError:
             return m.group(0)
         return f"{_grouped(v, 0, True)}{m.group(2)}"
-    return _UNIT_NUM.sub(bare, t)
+    t = _UNIT_NUM.sub(bare, t)
+    # a fall already says the direction: "has fallen -17.0%" reads as a double negative (R49-013), "fell 17.0%"
+    return _FALL_SIGN.sub(lambda m: m.group(1) + " ", t)
+
+
+_FALL_SIGN = re.compile(r"\b(fallen|fell|falls|falling|dropped|drops|declined|declines|slipped|slid|lost|down|lower|decreased)\s+[-\u2212](?=\d)", re.I)
 
 
 # filler that states nothing ("debt is not explicitly stated, but its financial health can be affected by various market

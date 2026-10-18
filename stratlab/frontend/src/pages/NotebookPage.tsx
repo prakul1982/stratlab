@@ -469,7 +469,7 @@ function NotebookView() {
           </p>
           {experiments.length === 0
             ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>
-            : <DataTable label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}
+            : <DataTable stack label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}
         </Card>
       </div>
 

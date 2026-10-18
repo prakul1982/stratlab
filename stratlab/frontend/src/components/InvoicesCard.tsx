@@ -59,7 +59,7 @@ export function InvoicesCard() {
           <Field label="Address" value={b.address ?? ""} maxLength={300} onChange={(e) => setB({ ...b, address: e.target.value })} />
           <Field label="Country">{(id) => <Select id={id} value={b.country || "IN"} onChange={(v) => setB(v === "IN" ? { ...b, country: v } : { ...b, country: v, state: "", gstin: "" })} options={COUNTRIES} />}</Field>
           {india && <Field label="State">{(id) => <Select id={id} value={b.state ?? ""} onChange={(v) => setB({ ...b, state: v })}
-            options={[{ value: "", label: "Choose…" }, ...Object.entries(states).map(([c, n]) => ({ value: c, label: n }))]} />}</Field>}
+            options={[{ value: "", label: "Choose…" }, ...Object.entries(states).sort((a, b) => a[1].localeCompare(b[1])).map(([c, n]) => ({ value: c, label: n }))]} />}</Field>}
           {india && <Field label="GSTIN" optional info="For businesses, to claim input tax credit." value={b.gstin ?? ""} maxLength={15} onChange={(e) => setB({ ...b, gstin: e.target.value.toUpperCase() })} />}
           <FormActions><button type="submit" className="btn">Save</button><span className="k-note">Used on invoices for future payments.</span></FormActions>
         </FormGrid>
