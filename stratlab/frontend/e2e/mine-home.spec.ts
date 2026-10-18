@@ -67,7 +67,7 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
 
   // the markets strip: the six names, each with a level or a plain "not available"; never a made-up number
   const strip = page.getByTestId("mine-markets");
-  await expect(strip.locator(".mine-mkt")).toHaveText(["NIFTY 50", "SENSEX", "BANK NIFTY", "S&P 500", "USD/INR", "Gold"].map((n) => new RegExp(`^${n.replace("/", "\\/")}`)));
+  await expect(strip.locator(".mine-mkt")).toHaveText(["NIFTY 50", "SENSEX", "NIFTY BANK", "S&P 500", "USD/INR", "Gold"].map((n) => new RegExp(`^${n.replace("/", "\\/")}`)));
   await expect(strip.locator(".k-skel")).toHaveCount(0, { timeout: 30_000 });
   // coming up: dated rows from the calendars (the tax dates are the law's own), each with its day
   const coming = page.getByTestId("mine-coming");

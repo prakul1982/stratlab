@@ -214,7 +214,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview"]) {
+    "2 company deep dives and 1 slide deck a month", "Indian F&O stocks and indices in notebooks and backtests, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);
@@ -226,7 +226,7 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   await expect(row("Trades the journal keeps")).toHaveText(["Trades the journal keeps", "50", "Unlimited", "Unlimited"]);
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
-  await expect(row("Indian F&O")).toHaveText(["Indian F&O", "–", "–", "✓"]);
+  await expect(row("Indian F&O in notebooks and backtests")).toHaveText(["Indian F&O in notebooks and backtests", "–", "–", "✓"]);   // Basic's options paper trading is its own row (R54-008)
   await expect(row("Red flags on every company page")).toHaveText(["Red flags on every company page", "✓", "✓", "✓"]);
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);

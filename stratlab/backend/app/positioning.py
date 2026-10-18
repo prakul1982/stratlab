@@ -31,7 +31,7 @@ from . import db
 from .intel.net import SourceError, TTLCache, num
 from .data.expiries import cycle as expiry_cycle, fits as expiry_fits
 from .newsletter import job as news_job
-from .options.greeks import black76, implied_vol, years_to  # noqa: F401  (Black's formula lives with the Greeks)
+from .options.greeks import black76, implied_vol, struck_at, years_to  # noqa: F401  (Black's formula lives with the Greeks)
 
 IST = ZoneInfo("Asia/Kolkata")
 UNDERLYINGS = (("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("NFO", "FINNIFTY"), ("NFO", "MIDCPNIFTY"), ("BFO", "SENSEX"))
@@ -405,7 +405,7 @@ def atm_iv(rows: list[list], spot: float | None, expiry: str, at: datetime) -> d
     rate, averaged. Prices are the bid-ask middle, else the last trade. None when the prices can't give one."""
     if spot is None or not rows:
         return None
-    t = years_to(expiry, at)
+    t = years_to(expiry, struck_at(at))       # a chain read after the close is timed from the close (R54-001)
     if t <= 0:
         return None
     r = min((r for r in rows if _at(r, 0) is not None), key=lambda r: abs(r[0] - spot), default=None)

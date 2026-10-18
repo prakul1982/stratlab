@@ -106,6 +106,21 @@ def years_to(expiry: str, at: datetime, exchange: str = "NFO") -> float:
     return (end - at).total_seconds() / (365 * 86400)
 
 
+def struck_at(t: datetime, exchange: str = "NFO") -> datetime:
+    """When a price stamped `t` stands for: the day's close (settlement time) when the stamp is after it, else `t`. A
+    chain read at 17:35 after a 15:30 close holds the close's prices, so time to expiry is counted from 15:30 by the
+    Options builder and Positioning alike (R54-001). MCX and currency sessions keep their stamp."""
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=IST)
+    if exchange not in ("NFO", "BFO"):
+        return t
+    try:
+        close = datetime.combine(t.astimezone(IST).date(), sessions.settle_at(t.astimezone(IST).date()), IST)
+    except Exception:
+        return t
+    return min(t, close)
+
+
 def parity_forward(k: float, call: float, put: float, t: float, r: float = RATE) -> float:
     """The forward put-call parity gives at strike k: call − put = discount × (forward − strike)."""
     return k + math.exp(r * t) * (call - put)
@@ -187,7 +202,7 @@ def model(spot: float | None, expiry: str, atm: float | None, call: dict | None,
     fresh = bool(as_of) and abs(now - as_of).total_seconds() <= FRESH_SECONDS
     # prices struck at an earlier close are priced with the time left when they were struck: Friday's close read on Sunday
     # with Sunday's time left gave 17.9% where Positioning, timed from the close, gave 10.62% for the same strike (R53-001)
-    priced_at = as_of if as_of and not fresh and as_of < now else at
+    priced_at = struck_at(as_of, exchange) if as_of and not fresh and as_of < now else at
     if years_to(expiry, at, exchange) <= 0:
         return None
     t = years_to(expiry, priced_at, exchange)
@@ -205,6 +220,8 @@ def model(spot: float | None, expiry: str, atm: float | None, call: dict | None,
             "t": t, "days": round(t * 365, 4), "rate": r, "atm_iv": sum(ivs) / len(ivs) if ivs else None,
             "as_of": as_of.isoformat(timespec="seconds") if as_of else None,
             "fresh": fresh,
+            # what the at-the-money IV was solved from: both options' bid-ask middles, else their last trades (R54-002)
+            "quoted": "mid" if all(q and q.get("bid") and q.get("ask") for q in (call, put)) else "last",
             "exchange": exchange, "tick": tick_for(exchange)}
 
 

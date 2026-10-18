@@ -183,6 +183,9 @@ function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
   // a position still open at the end is in its stock's P&L, valued at the last close and marked, so the column adds up to
   // the total (R11C-014); an older experiment that left it out says how much is missing in the last line
   const sum = g.members.reduce((n, m) => n + m.pnl, 0);
+  // members that never traded are one line, not a row each: 50 cards of "0 trades ₹0" on a phone (R54-017)
+  const traded = g.members.filter((m) => m.trades > 0 || m.open || m.pnl !== 0);
+  const quiet = g.members.filter((m) => !traded.includes(m));
   const missing = Math.round((e.stats.pnl - sum) * 100) / 100;
   const cols: Column<(typeof g.members)[number]>[] = [
     { key: "sym", header: "Symbol", rowHeader: true, cell: (m) => <b>{m.symbol}</b> },
@@ -197,7 +200,8 @@ function GroupMembers({ e, cur }: { e: Experiment; cur: string }) {
       <CardHead title={`${g.name}: one by one`} info={HELP.group} infoLabel="About the group"
         actions={<span className="k-note">Up to {g.max_open} positions at once · most at once: {g.most_open}</span>} />
       {g.skipped.length > 0 && <p className="k-note">Left out ({g.skipped.length}): {g.skipped.slice(0, 6).join(" · ")}{g.skipped.length > 6 ? " …" : ""}</p>}
-      <DataTable label="Group members" columns={cols} rows={g.members} rowKey={(m) => m.id} stack
+      {quiet.length > 0 && <p className="k-note" data-testid="group-no-trades">No trades ({quiet.length}): {quiet.map((m) => m.symbol).join(" · ")}</p>}
+      <DataTable label="Group members" columns={cols} rows={traded} rowKey={(m) => m.id} stack
         foot={Math.abs(missing) >= 0.5
           ? { sym: "Still open at the end, not in the rows above", pnl: <span className={upDown(missing)}>{money(missing, cur)}</span> }
           : { sym: "Total", pnl: <span className={upDown(sum)}>{money(sum, cur)}</span> }} />

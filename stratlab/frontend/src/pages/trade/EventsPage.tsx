@@ -62,7 +62,8 @@ function IndexChanges({ rows }: { rows: IndexChange[] }) {
   const shown = rows.filter((c) => c.sections.length);
   if (!shown.length) return null;
   const names = (list: [string, string][]) => list.length
-    ? list.map(([sym, name], j) => <span key={sym}>{j ? ", " : ""}<Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link></span>)
+    // each comma stays with the name before it, so a wrapped line never starts with one (R54-011)
+    ? list.map(([sym, name], j) => <span key={sym}><span className="nowrap"><Link className="link tap" to={`/research/IN/${encodeURIComponent(sym)}`} title={name}>{sym}</Link>{j < list.length - 1 ? "," : ""}</span>{j < list.length - 1 ? " " : ""}</span>)
     : <span className="k-muted"><span aria-hidden="true">–</span><span className="sr-only">none</span></span>;   // a dash, not the word (R53-009)
   const cols: Column<IndexChange["sections"][number]>[] = [
     { key: "index", header: "Index", rowHeader: true, cell: (s) => s.index },

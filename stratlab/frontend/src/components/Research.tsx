@@ -280,7 +280,7 @@ export function EarningsBars({ rows: raw }: { rows: Company["earnings"] }) {
                 <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />
                 {r.surprise_pct != null && <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />}
               </svg>
-              <span className="tbar-year">{r.period.slice(0, 7)}</span>
+              <span className="tbar-year">{/^\d{4}-\d{2}/.test(r.period) ? new Date(`${r.period.slice(0, 7)}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }) : r.period.slice(0, 7)}</span>{/* "Sep 2025", as the page writes months (R54-010) */}
               <span className="k-note tbar-sub">{num(r.actual, 2)}<br />vs {num(r.estimate, 2)}</span>
             </div>
           );

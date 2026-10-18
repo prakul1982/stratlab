@@ -6,7 +6,7 @@ carries a `sources` list saying which ones answered, so the page can show what's
 missing instead of breaking."""
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
 
 from .. import name_search
@@ -29,6 +29,15 @@ KITE_INDEX = {"^NSEI": "NSE:NIFTY 50", "^BSESN": "BSE:SENSEX", "^NSEBANK": "NSE:
 _pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="intel")
 # the index levels' reads have their own: with company pages filling the pool above, an index missed LEVELS_WITHIN (R11E)
 _index_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="indices")
+
+
+def _long_day(v):
+    """An ISO date as the page writes dates ("12 Dec 1980"), else as given (R54-010: "Listed since 1980-12-12")."""
+    try:
+        d = date.fromisoformat(str(v)[:10])
+    except (TypeError, ValueError):
+        return v
+    return f"{d.day} {d:%b %Y}"
 
 
 def market_open(region: str, now: datetime | None = None) -> bool:
@@ -934,7 +943,7 @@ class Research:
             "currency": one["currency"], "reporting_currency": one["reporting_currency"],
             "logo": p.get("logo") or None, "website": p.get("weburl") or None,
             "facts": [{"label": k, "value": v} for k, v in (("Industry", p.get("finnhubIndustry")), ("Country", p.get("country")),
-                                                            ("Listed since", p.get("ipo")), ("Exchange", one["exchange"]),
+                                                            ("Listed since", _long_day(p.get("ipo"))), ("Exchange", one["exchange"]),
                                                             ("Results reported in", one["reporting_currency"] if one["foreign"] else None)) if v],
             "industry": p.get("finnhubIndustry"), "bank": lender,
             "market_cap": one["market_cap"],

@@ -181,7 +181,8 @@ No scores, ratings or grades of any kind: no 0-100 numbers, letter grades or sta
 "poor", "healthy" or "excellent" labels on the business, its growth, its price trend or its balance sheet. State the
 numbers instead, e.g. "operating margin has been 18-22% for five years" or "debt is 0.4 times equity".
 "ideas" are exactly 3 trading ideas a trader could backtest on THIS stock, suited to how it behaves
-(trend, mean reversion, breakout...). Each "text" must use only {PRO if pro else BASICS}, a timeframe
+(trend, mean reversion, breakout...), built on its daily prices and volume: never on a reported figure (a margin, EPS,
+revenue, profit, P/E, debt), which changes once a quarter. Each "text" must use only {PRO if pro else BASICS}, a timeframe
 (daily candles unless intraday clearly suits it) and a stop loss, e.g.
 "Enter long when the 20-day EMA crosses above the 50-day EMA, exit when it crosses back below, 5% stop loss". A rule is made of indicators, moving averages, highs and lows over a number of days, and
 percentages: never a price level typed into it (not "above 8255", not the current price, which stops being current
