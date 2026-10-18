@@ -535,7 +535,12 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
         return (range_claims_ok(s, facts) and magnitude_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
                 and flow_claim_ok(s, nets) and cause_backed(s, titles))
     res = dict(out)
-    res["tone"] = keep_sentences(out.get("tone"), pool, claim) or template_tone(indices)
+    tone = keep_sentences(out.get("tone"), pool, claim)
+    # a read with no figure at all ("the broad market closed higher, anchored by gains…") says nothing a reader can check:
+    # the levels and the day's moves go first, from the numbers themselves (R48-008)
+    if tone and not re.search(r"\d", tone):
+        tone = f"{template_tone(indices)} {tone}".strip()
+    res["tone"] = tone or template_tone(indices)
     named = lambda x: bool(x) and str(x).lower() in support          # noqa: E731
     res["hot"] = [{**h, "why": keep_sentences(h.get("why"), pool, claim)} for h in out.get("hot") or []
                   if named(h.get("name")) or named(h.get("ticker"))]

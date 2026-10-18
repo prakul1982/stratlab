@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { supabase } from "../lib/api";
 import { useApp } from "../lib/app";
 import { signOutHere } from "../lib/signout";
 import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
+import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
 import { Close, Compass, Download, Layers, LogOut, Pencil, Share, Shield, Updown, User, Wallet } from "./Icons";
 
@@ -21,6 +22,9 @@ function usePop() {
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  // a new page shuts it, so it isn't left floating over the sidebar there (R48-016)
+  const { pathname } = useLocation();
+  useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
     if (!open) return;
     // the first thing to act on gets focus, so the keyboard carries on inside
@@ -43,11 +47,11 @@ function usePop() {
 }
 
 /** What a market is doing, in a few words: "Closes in 3h", "Opens in 1d 4h", "Holiday · opens in 2d". */
-function when(m: Market) {
+function when(m: Market, now: number) {
   const st = marketState(m);
   if (st.always) return { st, text: "Open 24/7" };
   if (st.offline) return { st, text: "Data offline" };
-  const mins = st.change ? (st.change.getTime() - Date.now()) / 60000 : null;
+  const mins = st.change ? (st.change.getTime() - now) / 60000 : null;
   if (st.open) return { st, text: mins === null ? "Open" : `Closes in ${inWords(mins)}` };
   const opens = mins === null ? "Closed" : `Opens in ${inWords(mins)}`;
   return { st, text: st.closedFor === "holiday" ? `Holiday · ${opens.toLowerCase()}` : opens };
@@ -57,9 +61,10 @@ function when(m: Market) {
 export function MarketsNow({ markets }: { markets: Market[] }) {
   const { open, setOpen, btn, panel } = usePop();
   const id = useId();
+  const now = useMinute();
   const live = markets.filter((m) => m.status !== "soon" && m.id !== "CSV");
   if (!live.length) return null;
-  const rows = live.map((m) => ({ m, ...when(m) }));
+  const rows = live.map((m) => ({ m, ...when(m, now) }));
   const openCount = rows.filter((r) => r.st.open).length;
   // India leads (the dot is India's), so the line agrees with "Indian markets open in …" on My space (R1-070)
   const india = rows.find((r) => r.m.id === "IN");

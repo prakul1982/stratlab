@@ -4622,8 +4622,8 @@ def clear_stopped_live(profile=Depends(current_profile)):
 # ---------- options (live paper trading only) ----------
 def options_ready():
     if not options_data.ready():
-        err(503, "data_offline", "Option quotes come from the live feed, which is offline until today's data login completes. "
-            "Try again after the market data comes back.")
+        # when it comes back, in India time, as every other offline answer says (R48-004)
+        err(503, "data_offline", offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."))
 
 
 @app.get("/options/underlyings")

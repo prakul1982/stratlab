@@ -6,6 +6,7 @@ import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact }
 import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, usTodayNote } from "../lib/marketHours";
+import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
@@ -44,13 +45,14 @@ export function MineHome() {
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   const shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
+  const now = useMinute();
   // one line: when the market opens or closes, then the next two dates from the calendars
   const lede = useMemo(() => {
     const parts: string[] = [];
     const m = markets.find((x) => x.id === "IN");
     const st = m && m.status !== "soon" ? marketState(m) : null;
     if (st && !st.offline) {
-      const mins = st.change ? (st.change.getTime() - Date.now()) / 60000 : null;
+      const mins = st.change ? (st.change.getTime() - now) / 60000 : null;
       if (st.open && mins !== null) parts.push(`Indian markets close in ${inWords(mins)}.`);
       else if (st.closedFor) parts.push(`Indian markets are closed ${st.closedFor === "weekend" ? "for the weekend" : "today for a holiday"}${mins !== null ? `, and open in ${inWords(mins)}` : ""}.`);
       else if (mins !== null) parts.push(`Indian markets open in ${inWords(mins)}.`);
@@ -60,7 +62,7 @@ export function MineHome() {
       parts.push(`Next up: ${a.title} on ${evWhen(a)}${b ? `, then ${b.title} on ${evWhen(b)}` : ""}.`);
     } else if (coming) parts.push("Nothing dated is coming up yet.");
     return parts.join(" ") || "Your money, the markets and what is coming up, in one place.";
-  }, [markets, coming]);
+  }, [markets, coming, now]);
 
   const change = (next: Layout) => setRaw(next);
   const cardFor = (id: CardId) => ({
@@ -268,7 +270,8 @@ function ComingCard({ rows }: { rows: Up[] | null }) {
                 <li key={u.key} className="mine-tl-i">
                   <span className="dt"><b>{d.d}</b>{d.m}</span>
                   <span className="body">{u.to ? <Link to={u.to}><b>{u.title}</b></Link> : <b>{u.title}</b>}{u.detail && <span className="k-stat-d">{u.detail}</span>}</span>
-                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{u.tone === "warn" ? u.tag : d.w}</Badge>
+                  {/* every row gives its weekday; a tax date keeps its colour (and says so to a screen reader) (R48-011) */}
+                  <Badge tone={u.tone === "warn" ? "warn" : "plain"} dot={false}>{d.w}{u.tone === "warn" && <span className="sr-only"> · {u.tag} date</span>}</Badge>
                 </li>
               );
             })}

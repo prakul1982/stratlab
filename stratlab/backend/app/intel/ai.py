@@ -333,7 +333,7 @@ figures, in rupees crore, with their date), with their direction exactly as the 
 Return ONLY this JSON:
 Give a reason for a move only when a headline reports that reason as having happened; never infer one (earnings,
 data, rates) from a headline that previews it or from the moves themselves.
-{{"tone": "3-4 sentences on how the market moved today, citing the live levels, and what the headlines report",
+{{"tone": "3-4 sentences on how the market moved today, giving every index in the FACTS with its level and its change in percent, and what the headlines report",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
  "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION" | ""}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
