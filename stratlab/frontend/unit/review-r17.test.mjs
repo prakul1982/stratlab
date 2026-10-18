@@ -20,7 +20,7 @@ test("R17-003: the Billed switch's field spans two columns", () => {
 });
 
 test("R17-004: a count past the limit reads as the limit", () => {
-  assert.equal(countOf(8, 2), "2 of 2 (limit reached)");        // R22-001 moved "limit reached" into brackets, one form for Account and the pages
+  assert.equal(countOf(8, 2), "2 of 2 (limit reached; 8 used)");        // R22-001 moved "limit reached" into brackets; R48-013 keeps the real count
   assert.equal(countOf(2, 2), "2 of 2 (limit reached)");
   assert.equal(countOf(1, 2), "1 of 2");
   assert.match(read("src/pages/NotebookPage.tsx"), /disabled=\{running \|\| outOfRuns\}/);

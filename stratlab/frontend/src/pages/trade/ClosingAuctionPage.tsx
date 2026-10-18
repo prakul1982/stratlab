@@ -147,7 +147,10 @@ function Stocks({ v }: { v: CasView }) {
       <CardHead title={`F&O stocks${v.stocks.length ? ` (${v.stocks.length})` : ""}`} infoLabel="What the numbers are" info={v.note}
         actions={<label className="k-search cas-search"><Search size={16} /><input type="search" aria-label="Find a stock" placeholder="Find a stock" value={q} onChange={(e) => setQ(e.target.value)} /></label>} />
       <p className="k-note">
-        {v.as_of ? `As of ${asOf(v.as_of)}` : v.read && !v.from_stored ? `Read at ${time(v.read)}` : ""}{v.day && !v.fresh ? `${v.as_of || v.read ? " · " : ""}the auction of ${asOf(v.day)}` : ""}
+        {/* once the auction is over the prices are the day's close: the exchange's stamp from before matching ended (15:28)
+            would say final prices were struck before the auction finished (R48-009), so the day is given instead */}
+        {final && v.day ? `Final prices from the auction of ${asOf(v.day)}`
+          : <>{v.as_of ? `As of ${asOf(v.as_of)}` : v.read && !v.from_stored ? `Read at ${time(v.read)}` : ""}{v.day && !v.fresh ? `${v.as_of || v.read ? " · " : ""}the auction of ${asOf(v.day)}` : ""}</>}
         {" "}· the widest gap first
       </p>
       {!rows.length ? <EmptyState title={v.stocks.length ? "No stock matches that." : "No auction recorded yet"}>{v.stocks.length ? "Try another symbol." : "Each trading day's auction shows here once it has run."}</EmptyState> : (
@@ -226,7 +229,7 @@ export function ClosingAuctionPage() {
 
   return (
     <div className="k-page cas-page">
-      <PageHeader eyebrow="Trade · F&O desk" title="Closing auction" asOf={v?.as_of ?? v?.day}
+      <PageHeader eyebrow="Trade · F&O desk" title="Closing auction" asOf={v && (v.phase === "closed" || v.from_stored || !v.fresh) && v.day ? v.day : v?.as_of ?? v?.day}
         lede="Since 3 Aug 2026, stocks with futures and options close through an auction from 15:15 to 15:35. Each stock's reference price, its indicative price through the auction and its final price, which is the official close. Facts, not advice." />
       {error ? <ErrorState title="The closing auction couldn't be read" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>{error}</ErrorState>
         : !v ? <Card><Skeleton label="Reading the closing auction" /></Card> : (

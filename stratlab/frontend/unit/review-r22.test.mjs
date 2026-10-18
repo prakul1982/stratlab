@@ -19,10 +19,10 @@ const { plainError } = await import("../src/pages/admin/attention.ts");
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
 
 test("R22-001: Account's usage rows never show a count past the limit", () => {
-  assert.equal(monthlyUse(16, 10), "10 of 10 (limit reached)");
-  assert.equal(monthlyUse(9, 2, 2, "early access", "Free"), "2 of 2 (limit reached)");
+  assert.equal(monthlyUse(16, 10), "10 of 10 (limit reached; 16 used)");
+  assert.equal(monthlyUse(9, 2, 2, "early access", "Free"), "2 of 2 (limit reached; 9 used)");
   assert.equal(monthlyUse(3, 10), "3 of 10");
-  assert.equal(aiBuildsUse(15, 10), "10 of 10 (limit reached)");
+  assert.equal(aiBuildsUse(15, 10), "10 of 10 (limit reached; 15 used)");
   assert.match(read("src/lib/account.ts"), /if \(limit != null\) return countOf\(used, limit\);/);
 });
 
@@ -30,7 +30,7 @@ test("R22-002: the deep dive's limit line is a sentence", () => {
   assert.equal(deepDiveLimitLine(2, 2, 1, 1),
     "Companies opened this month: 2 of 2 (limit reached). Decks: 1 of 1 (limit reached). Opening a company again this month doesn't count.");
   assert.equal(deepDiveLimitLine(10, 15, 7, 5),
-    "Companies opened this month: 10 of 15. Decks: 5 of 5 (limit reached). Opening a company again this month doesn't count.");
+    "Companies opened this month: 10 of 15. Decks: 5 of 5 (limit reached; 7 used). Opening a company again this month doesn't count.");
   assert.equal(deepDiveLimitLine(1, 2, 0, null), "Companies opened this month: 1 of 2. Opening a company again this month doesn't count.");
   assert.match(read("src/pages/DeepDive.tsx"), /deepDiveLimitLine\(/);
 });

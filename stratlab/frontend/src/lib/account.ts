@@ -54,10 +54,12 @@ export function monthlyUse(used: number, limit: number | null | undefined, planL
   return `${used} (unlimited)`;
 }
 
-/** "2 of 2 (limit reached)" once the count is at the limit: a count past it (the owner's own use, viewed as a smaller plan)
- * reads as the limit, never "8 of 2" (R17-004, R22-001). The one form Account and the deep dive both use. */
+/** "2 of 2 (limit reached)" once the count is at the limit. A count past it (the owner's own use, viewed as a smaller plan)
+ * never reads "8 of 2" (R17-004, R22-001), and still gives the real count: "2 of 2 (limit reached; 8 used)" (R48-013).
+ * The one form Account and the deep dive both use. */
 export function countOf(used: number, limit: number): string {
-  return used >= limit ? `${limit} of ${limit} (limit reached)` : `${used} of ${limit}`;
+  if (used > limit) return `${limit} of ${limit} (limit reached; ${used} used)`;
+  return used === limit ? `${limit} of ${limit} (limit reached)` : `${used} of ${limit}`;
 }
 
 /** The deep dive's line under its buttons: "Companies opened this month: 2 of 2 (limit reached). Decks: 1 of 1 (limit
