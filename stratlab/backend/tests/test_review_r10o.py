@@ -366,3 +366,22 @@ def test_a_rule_template_on_a_reported_figure_is_left_out():
               "exit when it crosses back below, 10% take profit, 5% stop loss", "why": "y"}]
     out = G.polish_company({"summary": "", "ideas": ideas}, "IN", False)
     assert [i["why"] for i in out["ideas"]] == ["y"]
+
+
+def test_a_watch_line_about_a_day_already_gone_is_left_out():
+    """R55-002: "Tue, 30 Jun latest quarter end (results status upcoming)" in October is not something to watch."""
+    from datetime import date
+    read = {"summary": "", "watch": ["Tue, 30 Jun latest quarter end (results status upcoming)", "2026-11-02 next earnings release",
+                                     "Results on 2 Nov 2026"]}
+    out = G.polish_company(read, "US", False, today=date(2026, 10, 18))
+    assert len(out["watch"]) == 2 and not any("30 Jun" in w for w in out["watch"])
+    assert G.past_watch("2026-06-30 results", date(2026, 10, 18)) and not G.past_watch("2026-11-02 results", date(2026, 10, 18))
+    assert not G.past_watch("Results on Thu, 15 Jan", date(2026, 10, 18))           # next January's
+
+
+def test_a_figure_labelled_by_size_is_left_to_the_reader():
+    """R55-010: "Dividend yield 0.3% is low" and "Debt … remains sizable" judge the figure; a holding's change is in points."""
+    assert G.plain_sentences("Dividend yield 0.3% is low. Net margin is 8.2%.") == "Net margin is 8.2%."
+    assert G.plain_sentences("Debt of ₹4.03 lakh crore remains sizable.") == ""
+    assert G.plain_sentences("FIIs ownership decreased by 2.02%.") == "FIIs ownership decreased by 2.02 percentage points."
+    assert G.plain_sentences("Promoter stake is higher than a year ago at 50.3%.") != ""     # a comparison, not a label

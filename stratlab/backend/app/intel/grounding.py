@@ -1287,14 +1287,22 @@ def plain_ok(s: str, lender: bool = False) -> bool:
     figure the page doesn't show, for a bank or lender no EBITDA or operating margin, and no direction word that its
     own numbers contradict."""
     return not (FILLER.search(s) or EFFECTIVE.search(s) or UNSOURCED.search(s) or (lender and LENDER_WORDS.search(s))
-                or not moves_agree(s))
+                or SIZED.search(s) or not moves_agree(s))
+
+
+# a figure labelled by size, which is the reader's call ("Dividend yield 0.3% is low", "Debt of ₹4.03 lakh crore remains
+# sizable", R55-010): the page states the number
+SIZED = re.compile(r"\b(is|are|remains?|stays?|looks?|seems?|appears?|was|were)\s+(still\s+|relatively\s+|quite\s+|very\s+|rather\s+)?"
+                   r"(low|high|sizable|sizeable|large|elevated|significant|substantial|small|thin|meagre|meager|hefty|considerable|"
+                   r"modest|limited|minimal|negligible|manageable|comfortable|moderate)\b(?!\s+(than|as|in|at|for|of|on)\b)", re.I)
 
 
 # A holding's change is a difference between two shares of the company, so it is said in percentage points: "FIIs'
 # ownership fell by 2.41%" reads as a 2.41% fall of the holding itself, not from 24.10% to 21.69% (round 39).
 _HOLD_NOUN = r"(?:shareholding|holding|holdings|stake|ownership)"
 _HOLD_GAP = r"(?:\s+(?!company\b|companies\b|price\b|prices\b|profit\b|sales\b|revenue\b|income\b)[\w'’-]+){0,3}"
-_HOLD_VERB = (r"(?:fell|fall(?:s|en)?|declined?|dropped|drops?|reduced|rose|rises?|risen|increased?|grew|grows?|climbed|jumped|"
+_HOLD_VERB = (r"(?:fell|fall(?:s|en)?|declin(?:e|es|ed)|decreas(?:e|es|ed)|dropped|drops?|reduced|rose|rises?|risen|increas(?:e|es|ed)|grew|grows?|climbed|jumped|"
+              r"slipped|dipped|shrank|"
               r"cut|raised|lowered|trimmed|lifted|up|down|changed)")
 _HOLD_MOVE = re.compile(
     rf"(\b{_HOLD_NOUN}\b{_HOLD_GAP}\s+{_HOLD_VERB}\s+by\s+|\b{_HOLD_VERB}\s+(?:its|their|the|his|her)?\s*{_HOLD_NOUN}\s+by\s+)"
@@ -1450,6 +1458,38 @@ def plain_caption(text, lender: bool = False, region: str = "IN") -> str:
     return " ".join(s for s in _SENT.split(kept) if s and not PREDICTS.search(s))
 
 
+_MON_NUM = {m: i + 1 for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+_WRITTEN_DAY = re.compile(r"\b(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\w*(?:,? (\d{4}))?\b", re.I)
+
+
+def past_watch(text: str, today=None) -> bool:
+    """A "what to watch" line about a day already gone ("2026-06-30", or as a stored read writes it, "Tue, 30 Jun"),
+    or a quarter's end, which is a past date by the time its results are known (R55-002)."""
+    from datetime import date as _date
+    today = today or _date.today()
+    if re.search(r"\bquarter[- ]end\b|\bquarter ended\b", text, re.I):
+        return True
+    days = []
+    for y, m, d in re.findall(r"\b(\d{4})-(\d{2})-(\d{2})\b", text):
+        days.append((int(y), int(m), int(d)))
+    for d, mon, y in _WRITTEN_DAY.findall(text):
+        try:
+            day = _date(int(y) if y else today.year, _MON_NUM[mon[:3].lower()], int(d))
+        except ValueError:
+            continue
+        # a day written without its year is this year's, unless that is more than half a year gone ("15 Jan" in October
+        # is next January's)
+        if day < today and (y or (today - day).days <= 183):
+            return True
+    for y, m, d in days:
+        try:
+            if _date(y, m, d) < today:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def polish_company(read: dict, region: str = "IN", lender: bool = False, today=None) -> dict:
     """The checks every company read gets, fresh or stored, at no cost: numbers the page's way, no filler, no
     "can be effective", no comparison the page can't show, no EBITDA for a lender, and only trading ideas whose rule
@@ -1482,6 +1522,8 @@ def polish_company(read: dict, region: str = "IN", lender: bool = False, today=N
     for k in ("bull", "bear", "watch"):
         items = []
         for i in read.get(k) or []:
+            if k == "watch" and past_watch(str(i), today):
+                continue          # R55-002: "Tue, 30 Jun latest quarter end" is behind the reader, not something to watch
             x = plain_sentences(str(i), lender, region)
             # a strength or a risk is never a reclassification of holders: left out (the page explains it)
             x = " ".join(s for s in _SENT.split(x) if s and not (classes and mentions_class_move(s, classes))

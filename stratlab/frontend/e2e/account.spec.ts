@@ -125,8 +125,8 @@ test("account: a plan the owner gave says so, with nothing to renew or cancel; t
   const errors = await signIn(page, request, u, "/account", null);          // a session that doesn't say how they signed in
   const main = page.locator("main");
   const plan = main.locator("#plan");
-  await expect(plan.getByText("Given by the owner")).toBeVisible({ timeout: 30_000 });
-  await expect(plan.locator(".k-rows > div", { hasText: "Given by the owner" })).toContainText("No end date");
+  await expect(plan.getByText("Given by StratLab")).toBeVisible({ timeout: 30_000 });
+  await expect(plan.locator(".k-rows > div", { hasText: "Given by StratLab" })).toContainText("No end date");
   await expect(plan).not.toContainText(/Renews on|Ends on|2099/);
   await expect(main.getByRole("button", { name: "Cancel subscription" })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Compare plans" })).toHaveAttribute("href", "/plans");

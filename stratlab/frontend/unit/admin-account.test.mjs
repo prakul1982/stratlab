@@ -120,8 +120,8 @@ test("Account: how you signed in never shows a dash", () => {
 test("Account: a plan the owner gave has no renewal and nothing to cancel", () => {
   const me = (billing, paid = "pro") => ({ plan: paid, paid_plan: paid, billing: { subscribed_plan: paid, status: "active", renews_or_ends: null, cancel_at_period_end: false, ...billing } });
   assert.equal(planRun(me({ given_by_owner: true })), "given");
-  assert.deepEqual(planRow(me({ given_by_owner: true })), ["Given by the owner", "No end date"]);
-  assert.deepEqual(planRow(me({ given_by_owner: true, renews_or_ends: "2026-12-01T00:00:00Z" })), ["Given by the owner", "Until 1 Dec 2026"]);
+  assert.deepEqual(planRow(me({ given_by_owner: true })), ["Given by StratLab", "No end date"]);
+  assert.deepEqual(planRow(me({ given_by_owner: true, renews_or_ends: "2026-12-01T00:00:00Z" })), ["Given by StratLab", "Until 1 Dec 2026"]);
   assert.equal(planRun(me({ renews_or_ends: "2026-11-05T00:00:00Z" })), "renews");
   assert.deepEqual(planRow(me({ renews_or_ends: "2026-11-05T00:00:00Z" })), ["Renews on", "5 Nov 2026"]);
   assert.deepEqual(planRow(me({ renews_or_ends: "2026-11-05T00:00:00Z", cancel_at_period_end: true })), ["Ends on", "5 Nov 2026"]);

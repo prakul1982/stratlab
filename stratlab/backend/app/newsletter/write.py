@@ -6,7 +6,7 @@ only restate the facts, and a word filter drops it if it slips, in favour of a p
 import hashlib
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from .. import email_kit as kit
 from ..ai_providers import AIError, complete, extract_json
@@ -506,6 +506,16 @@ def house_numbers(text: str | None, indices: list[dict] | None) -> str | None:
     return re.sub(r"(^|[\s(:;,])-(?=\d)", "\\1\u2212", out)
 
 
+def _week_end(day: str) -> str:
+    """The last trading day a weekend issue's numbers run to: Saturday's or Sunday's issue is the week to Friday's close
+    ("Week to Sat 17 Oct" over figures as of the 16 Oct close read as a contradiction, R55-007), as the page says."""
+    try:
+        d = date.fromisoformat(str(day)[:10])
+    except ValueError:
+        return day
+    return (d - timedelta(days={5: 1, 6: 2}.get(d.weekday(), 0))).isoformat()
+
+
 def render(issue: dict) -> tuple[str, str]:
     """(html, text) for one issue, in the shared email design. The footer carries the {unsubscribe_url} placeholder
     for the sender."""
@@ -513,7 +523,7 @@ def render(issue: dict) -> tuple[str, str]:
     view = kit.news_url(issue["id"]) if issue.get("id") else None
     kind = issue.get("kind") or ("my_stocks" if str(issue.get("id", "")).startswith("my_stocks") else "market")
     weekly = bool(issue.get("weekly"))
-    day = (f"Week to {_day(issue['day'])}" if weekly else _day(issue["day"])) if issue.get("day") else ""
+    day = (f"Week to {_day(_week_end(issue['day']))}" if weekly else _day(issue["day"])) if issue.get("day") else ""
     region = issue.get("region")
     label = issue.get("label") or (TYPE_LABEL.get(kind, "Newsletter") + (DOT + REGION_NAME[region] if region in REGION_NAME else ""))
     title = issue.get("title") or issue["subject"]

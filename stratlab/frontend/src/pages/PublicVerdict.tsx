@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { publicGet, type ApiError } from "../lib/http";
-import { asDate, money, pct, TF_NAME } from "../lib/format";
+import { asDate, money, monthShort, pct, TF_NAME } from "../lib/format";
 import { upDown, checkTone } from "../lib/tradeUi";
 import type { CheckStatus, Stats, VerdictKind } from "../lib/types";
 import { XYChart } from "../components/Charts";
@@ -27,7 +27,7 @@ interface Snapshot {
 }
 type Member = NonNullable<Snapshot["group"]>["members"][number];
 
-const d = (iso: string) => asDate(iso).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+const d = (iso: string) => { const t = asDate(iso); return `${monthShort(t)} ${t.getFullYear()}`; };
 
 /** A verdict someone shared: readable without an account, with no rules and no owner details. */
 export function PublicVerdict({ token }: { token: string }) {
