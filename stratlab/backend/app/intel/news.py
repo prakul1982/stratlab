@@ -139,10 +139,15 @@ ADVICE_TITLE = re.compile(
     # R49-001: listicles of reasons in any count ("5 reasons why the stock market is rising today", "Three Reasons Why
     # Markets Are Rising", "Key Reasons Behind IT Rally") and a pick between stocks ("BYD or Tesla: Which Is a Better Stock?")
     r"|\b(\d+|two|three|four|five|six|seven|eight|nine|ten|key|main|big) reasons? (why|behind|for)\b"
-    r"|\bwhich (is|one is|looks)( a| the)? (better|best|smarter|cheaper) (stock|buy|bet|investment|pick|share)\b", re.I)
+    r"|\bwhich (is|one is|looks)( a| the)? (better|best|smarter|cheaper) (stock|buy|bet|investment|pick|share)\b"
+    # a screen's list sold as picks ("TCS among 5 stocks showing RSI trending up")
+    r"|\b\d+ stocks (showing|with|flashing|giving|signalling|signaling)\b", re.I)
 # a website's own name for itself, not a story ("NSE - National Stock Exchange of India Ltd: Live Share/Stock Market
 # News & Updates, Quotes- Nseindia.com")
 SITE_TITLE = re.compile(r"\b(live share|stock market news & updates|quotes?\s*-\s*\w+\.(com|in))\b|\.(com|in|org|net)\s*$"
+                        # a quote page's or live blog's own title (R50-010: "TCS Share Price Today & Chart", "Share Market
+                        # Live, Share Market Today: Latest Share Market News … on The Economic Times")
+                        r"|\bshare price today\b|\bprice today\s*(&|and)\s*chart\b|\bshare market live\b|\blatest share market news\b"
                         r"|^\s*(nse|bse)\s*-\s*(national|bombay) stock exchange\b|\bofficial (website|site)\b|\bhome\s*page\b", re.I)
 
 

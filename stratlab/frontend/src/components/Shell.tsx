@@ -191,7 +191,8 @@ export function Shell({ children }: { children: ReactNode }) {
           return path === main.to ? null : <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button>;
         })()}
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
-          <Sparkle size={16} /><span>Ask or do anything</span><kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+          <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
+          {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}
         </button>
       </div>
       <nav ref={sideScroll} className="side-groups" aria-label="Main" data-fade={fade}>

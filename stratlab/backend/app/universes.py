@@ -90,7 +90,7 @@ def members_note(group: dict) -> str | None:
     market = (group.get("market") or "IN").upper()
     if market not in ("IN", "US"):
         return None
-    p = next((p for p in PRESETS[market] if p["id"] == group.get("id")), None)
+    p = next((current(p) for p in PRESETS[market] if p["id"] == group.get("id")), None)
     if p is None:
         return None
     # the list's own date when it carries one, never a fixed year that goes stale (R38-004: "as of 2025" in Oct 2026)
@@ -99,8 +99,47 @@ def members_note(group: dict) -> str | None:
             "and leave out those that left it.")
 
 
+# a ready-made group that follows an index: the index provider's announced changes are applied once they take effect,
+# so the group is the index's members today (R50-004: BSE in and WIPRO out of the NIFTY 50 from 30 Sep, still WIPRO here)
+FOLLOWS = {"nifty50": "Nifty 50", "banknifty": "Nifty Bank"}
+
+
+def current(p: dict, today=None) -> dict:
+    """A preset with the announced index changes that have taken effect applied, and as_of the latest one's date."""
+    index = FOLLOWS.get(p.get("id"))
+    if not index:
+        return p
+    try:
+        from . import market_events
+        from datetime import date
+        day = (today or market_events.ist_now().date()).isoformat()
+        changes = sorted((c for c in market_events.index_changes() if c.get("effective") and str(c["effective"])[:10] <= day),
+                         key=lambda c: str(c["effective"])[:10])
+    except Exception as e:                      # no stored changes (tests, a fresh database): the list as written
+        print("index changes unavailable for", p.get("id"), str(e)[:80])
+        return p
+    syms, when = list(p["symbols"]), None
+    for c in changes:
+        for sec in c.get("sections") or []:
+            if sec.get("index") != index:
+                continue
+            out = {x[0] for x in sec.get("out") or []}
+            syms = [x for x in syms if x not in out] + [x[0] for x in sec.get("in") or [] if x[0] not in syms]
+            when = str(c["effective"])[:10]
+    if when is None:
+        return p
+    d = date.fromisoformat(when)
+    return {**p, "symbols": syms, "as_of": f"{d.day} {d:%b %Y}"}
+
+
+def symbols(market: str, pid: str) -> list[str]:
+    """A ready-made group's members today."""
+    p = next(p for p in PRESETS[market] if p["id"] == pid)
+    return list(current(p)["symbols"])
+
+
 def presets(market: str) -> list[dict]:
-    return [{**p, "market": market, "count": len(p["symbols"])} for p in PRESETS.get(market, [])]
+    return [{**q, "market": market, "count": len(q["symbols"])} for q in (current(p) for p in PRESETS.get(market, []))]
 
 
 def resolve(registry, market: str, members: list[dict]) -> tuple[list[str], list[str]]:

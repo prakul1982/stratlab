@@ -30,7 +30,8 @@ test("a percentage that isn't zero never reads as 0.0% (R3-005)", () => {
 test("compare writes each figure with its unit, as the company page does (R3-004)", () => {
   assert.equal(metricText({ label: "Debt", value: 369575, unit: "cr" }, "INR"), "₹3.7 lakh cr");
   const page = read("pages/Research.tsx");
-  assert.match(page, /const show = \([^)]*\) => \(m \? metricText\(m, c\.currency\) : "–"\)/);
+  // each figure through metricText, with the periods it compares under it (R50-003)
+  assert.match(page, /const show = \([^)]*\) => \(m\s*\?\s*<>\{metricText\(m, c\.currency\)\}/);
   assert.match(page, /No AI comparison right now/, "no AI comparison is said, not left out");
 });
 

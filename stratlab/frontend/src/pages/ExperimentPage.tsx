@@ -437,9 +437,12 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
       <Card label="Every trade">
         <CardHead title="Every trade" info={HELP.trades} infoLabel="About the trades"
           actions={<span className="k-note" data-testid="trades-caption">{list.caption} · P&L and Return after costs</span>} />
-        <DataTable label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period."
+        <DataTable stack label="Every trade" columns={tradeCols} rows={allTrades} rowKey={(t) => `${t.symbol ?? ""}${t.entry_t}${t.exit_t ?? ""}${t.qty}`} empty="No trades in this period."
           foot={list.hidden ? { [tradeCols[0].key]: `${list.hidden.toLocaleString("en-IN")} earlier closed trade${list.hidden === 1 ? "" : "s"}, not listed`, pnl: <span className={upDown(list.hiddenPnl)}>{money(list.hiddenPnl, cur)}</span> } : undefined} />
         {list.hidden > 0 && <p className="k-note" data-testid="trades-reconcile">Only the newest {closed.toLocaleString("en-IN")} closed trades are kept as rows{e.trades_trimmed ? " (an older experiment keeps fewer, to save space)" : ""}. The rows and the line for the {list.hidden.toLocaleString("en-IN")} not listed add up to the total P&L, {money(list.total, cur)}.</p>}
+        {/* a few shares and a flat charge per order: the return can go the other way from the price (R50-015: 2 ITC shares
+            up 4.5% shown at −4.97%) */}
+        {allTrades.some((t) => Math.abs(t.qty) <= 5) && <p className="k-note" data-testid="trades-small-qty">On a trade of a few shares, the charges per order can be larger than the price move, so its return after costs can go the other way from the price.</p>}
         {intraday && allTrades.length > 0 && <p className="k-note">Each time is the candle the order filled in: a rule's order fills at the candle's close, the end of the span; a stop or a target fills inside it.</p>}
       </Card>
 

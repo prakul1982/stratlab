@@ -402,7 +402,7 @@ def members(group: str, index_members=None, all_equities=None) -> list[str]:
     if kept:
         return kept
     if group == "nifty50":
-        return list(universes.PRESETS["IN"][0]["symbols"])
+        return universes.symbols("IN", "nifty50")
     return []
 
 

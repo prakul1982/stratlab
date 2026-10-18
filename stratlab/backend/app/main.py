@@ -157,7 +157,7 @@ def warm_caches():
              ("instruments", lambda: kite.ready() and kite.search("RELIANCE", False, 1)),
              ("option contracts", lambda: options_data.ready() and options_data.underlyings()),
              ("market list", lambda: markets.markets()),
-             ("scan IN", lambda: markets.provider("IN").ready() and scan.run(markets, "IN", [{"symbol": x} for x in universes.PRESETS["IN"][0]["symbols"]])),
+             ("scan IN", lambda: markets.provider("IN").ready() and scan.run(markets, "IN", [{"symbol": x} for x in universes.symbols("IN", "nifty50")])),
              ("rotation IN", lambda: markets.provider("IN").ready() and rotation.run(markets, "IN", "sectors", None, "weekly", 5)),
              ("scan US", lambda: scan.run(markets, "US", [{"symbol": x} for x in universes.PRESETS["US"][0]["symbols"]])),
              ("rotation US", lambda: rotation.run(markets, "US", "sectors", None, "weekly", 5))]
@@ -5102,6 +5102,17 @@ def running_now(sessions: dict, stopped: set | None = None) -> list:
     return list(by_id.values())
 
 
+def rules_watch_summary() -> dict:
+    """The official rate and rule sources Overview should name: each one unread three runs or more in a row, and each
+    change waiting for a look (R50-008: three sources unread for 16 days and an NSE circular, none on Overview)."""
+    try:
+        st = rules_watch.state()
+    except Exception:
+        return {"failing": [], "pending": []}
+    return {"failing": [{"name": x["name"], "fails": x["fails"], "error": x["error"]} for x in st["sources"] if x["fails"] >= 3],
+            "pending": [x["name"] for x in st["sources"] if x["pending"]]}
+
+
 def server_status() -> dict:
     current = dict(manager.sessions)
     try:
@@ -5123,6 +5134,7 @@ def server_status() -> dict:
             "research": {"finnhub": bool(settings.FINNHUB_API_KEY)},
             "promo_until": (promo_until().isoformat() if promo_active() else None), "option_recorder": recorder.status, "recent_errors": [{**e, "error": connect_redact.redact_ids(e.get("error"))} for e in reversed(RECENT_ERRORS)], "server_started_at": SERVER_STARTED_AT,
             "calendar": calendar_status(), "invoice_seller": invoices.readiness(), "build": build_info.info(),
+            "rules_watch": rules_watch_summary(),
             "admin_alerts": {"email_ready": alerts.email_ready(), "via": alerts.email_service(), "to": sorted(admin.admin_emails())}}
 
 
