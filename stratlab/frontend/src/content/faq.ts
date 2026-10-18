@@ -21,7 +21,7 @@ export const FAQ: Faq[] = [
     a: ["No. Backtesting options needs real past prices for every strike, and StratLab doesn't fill the gap with a pricing model. It records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history.",
       "What you can do today is paper trade options: live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. The Greeks and the payoff before expiry are model estimates, labelled with their inputs."] },
   { q: "How do invite rewards work?",
-    a: ["You and a friend can each get a free month of Basic. Your invite link is in Account.",
+    a: ["You and a friend can each get a free month of Basic. Your invite link is on the Invite friends page, in the account menu (or at stratlab.studio/invite).",
       "Your friend: joins with your link and uses StratLab on 3 different days in their first 14 days. They then get a free month of Basic.",
       "You: a free month of Basic when such a friend becomes active, for your first 2 friends in any 12 months. Another free month when a friend you invited pays for a plan (their first payment, within 90 days of joining), again for your first 2 paying friends in 12 months. After that, each further paying friend gives you 8 days free, up to 8 times in 12 months.",
       "If you already pay for a plan, your free time is saved and starts when your paid plan ends."] },

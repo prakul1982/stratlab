@@ -109,7 +109,13 @@ h1.eyebrow { font-weight: 400; }     /* a landing address's own heading (/pricin
 }
 @media (min-width: 641px) { .promo-banner .promo-x { display: none; } }
 /* the homes' countdown is as short as the banner on a phone: its time left and Got it, no second sentence (R59-012) */
-@media (max-width: 640px) { .promo-countdown .promo-more, .promo-countdown .promo-plans { display: none; } }
+.promo-countdown .promo-short, .promo-countdown .promo-x { display: none; }
+@media (max-width: 640px) {   /* one line, like the site-wide note: time left and a × (R60-007) */
+  .k-notice.promo-countdown { flex-wrap: nowrap; padding: 4px 8px 4px 12px; }
+  .promo-countdown .promo-full, .promo-countdown .promo-plans, .promo-countdown .promo-got-text { display: none; }
+  .promo-countdown .promo-short, .promo-countdown .promo-x { display: inline; }
+  .promo-countdown .promo-got { flex: none; min-width: 40px; min-height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+}
 
 .btn.danger { background: transparent; border-color: var(--line-2); color: var(--orange-ink); }
 .btn.sm { min-height: var(--ctl-sm); padding: 0 12px; font-size: 14px; }

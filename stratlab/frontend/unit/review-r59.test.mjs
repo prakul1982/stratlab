@@ -38,7 +38,7 @@ test("R59-007: a chip row that wraps keeps + Custom level with its first line", 
 
 test("R59-012: on a phone the homes' countdown is as short as the banner", () => {
   const css = read("src/styles.css");
-  assert.match(css, /@media \(max-width: 640px\) \{ \.promo-countdown \.promo-more, \.promo-countdown \.promo-plans \{ display: none; \} \}/);
+  assert.match(css, /\.promo-countdown \.promo-full, \.promo-countdown \.promo-plans, \.promo-countdown \.promo-got-text \{ display: none; \}/);
   const src = read("src/components/PromoCountdown.tsx");
   assert.match(src, /<span className="promo-more"> After that, your plan's limits apply again\.<\/span>/);
   assert.match(src, /className="btn sm promo-plans"/);
