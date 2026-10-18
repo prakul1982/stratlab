@@ -193,5 +193,7 @@ export function atmIvLabel(atm: number | null | undefined, fmt: (v: number) => s
 export const VIX_IV_LABEL = "NIFTY ATM IV, StratLab model";
 /** The VIX card's note under its ATM IV: the strike, then where the chain came from and when. */
 export function vixIvNote(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string): string {
-  return strikeAt ? `At the ${fmt(strikeAt)} strike · ${chain}` : chain;
+  // the nearest expiry's IV, beside India VIX's 30-day measure: they differ by design, most when the expiry is days away (R52-014)
+  const base = strikeAt ? `At the ${fmt(strikeAt)} strike · ${chain}` : chain;
+  return `${base} · the nearest expiry's IV; India VIX measures the next 30 days, so the two differ, most near expiry`;
 }

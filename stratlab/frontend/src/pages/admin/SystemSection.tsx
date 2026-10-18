@@ -29,12 +29,15 @@ export function SystemSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [filing, setFiling] = useState<FilingCheck | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
   const run = async (key: string, fn: () => Promise<void>) => { setBusy(key); try { await fn(); } catch (e) { fail(e); } finally { setBusy(null); } };
   const sv = ov?.server;
   const co = service(ov, "co"), mail = service(ov, "mail");     // the same lights and words as Overview's
   const testEmail = () => run("mail", async () => {
     const r = await api<{ sent_to: string }>("/admin/alerts/test", { method: "POST" });
-    notify(`Test email sent to ${r.sent_to}. Check your inbox (and spam).`);
+    // said on the card too, not only in a toast that can go before it's read (R52-005)
+    const msg = `Test email sent to ${r.sent_to} at ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check your inbox (and spam).`;
+    notify(msg); setSent(msg);
   });
   const reviewLink = () => run("review", async () => {
     const r = await api<{ sent_to: string }>("/admin/review-link", { method: "POST" });
@@ -42,7 +45,8 @@ export function SystemSection() {
   });
   const sendWeekly = () => run("weekly", async () => {
     const r = await api<{ subject: string; reached: number }>("/admin/weekly/test", { method: "POST" });
-    notify(r.reached ? `"${r.subject}" sent. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.");
+    const msg = r.reached ? `"${r.subject}" sent at ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check your inbox (and spam).` : "The summary couldn't reach you: set up email or a phone in Account.";
+    notify(msg); setSent(msg);
   });
   const checkFilings = () => run("filings", async () => { setFiling(await api<FilingCheck>("/admin/filings/check", { method: "POST" })); });
   const saveFixture = () => run("fixture", async () => {
@@ -81,6 +85,7 @@ export function SystemSection() {
                 {sv.admin_alerts.email_ready && <button type="button" className="btn quiet sm" disabled={busy === "review"} onClick={reviewLink} title="A one-time link that signs the automated reviewer in as you, sent to your own address">{busy === "review" ? "Sending…" : "Email a reviewer sign-in link"}</button>}
                 <button type="button" className="btn quiet sm" disabled={busy === "weekly"} onClick={sendWeekly} title="The summary that goes out every Monday at 9:00 IST">{busy === "weekly" ? "Sending…" : `Send this week's summary now to ${sv.admin_alerts.to.length ? `${sv.admin_alerts.to.length} admin address${sv.admin_alerts.to.length === 1 ? "" : "es"}` : "all admins"}`}</button>
               </>} />}
+            {sent && <p className="k-small k-muted" role="status" data-testid="alert-sent">{sent}</p>}
             <StatusRow state={!filing ? "warn" : filing.ok ? "ok" : "bad"} word={filing ? undefined : "Not checked"} label={`Exchange filings${filing ? ` (${filing.symbol})` : ""}`}
               detail={!filing ? "Press the button to ask the exchange for a company's filings." : filing.ok
                 ? `${filing.count} filings in the last year. Latest: ${(filing.latest ?? []).map((l) => `${l.at.slice(0, 10)} ${l.label}`).join("; ") || "none"}`

@@ -297,6 +297,11 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
     // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
     if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");
+    // a term an explanation is written for, typed as its words ("pe ratio", "max drawdown"), opens that explanation, not a
+    // feature that only shares letters with it (R52-004: "pe ratio" led with Paper trading)
+    const term = text.toLowerCase().trim();
+    const named = matchHelp(text, 1, true)[0];
+    if (!exactFeature && named && ` ${named.title.toLowerCase()} ${named.words} `.includes(` ${term} `)) first("Help");
     // a question gets an explanation already written first only when it clearly matches; else the AI's answer is first (R31-001)
     const lead = code ? null : firstForQuestion(asks(text) || /\?\s*$/.test(text), matchHelp(text, 1, true).length);
     if (lead === "help") first("Help");

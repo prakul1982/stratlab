@@ -125,8 +125,12 @@ export function useComingUp(limit = 6, enabled = true): Up[] | null {
           detail: [e.detail, e.amount != null ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });
       }
       // when the money calendar already carries the market events (its own switch), they are not listed twice
+      // the nearest weekly expiry within a week too (R52-013: Monday's NIFTY expiry missing from "Next up"); later weeklies
+      // come every week and would crowd the list
+      const weekEnd = addDaysIso(today, 7);
+      const weekly = ev?.events.find((e) => e.kind === "expiry" && /weekly/i.test(e.title) && e.date >= today && e.date <= weekEnd);
       if (ev && !money?.market_on) for (const e of ev.events) {
-        if (e.date < today || e.date > end || !KINDS.includes(e.kind)) continue;
+        if (e.date < today || e.date > end || !(KINDS.includes(e.kind) || e === weekly)) continue;
         out.push({ key: `${e.date}|market|${e.title.toLowerCase()}`, date: e.date, title: e.title, detail: e.detail, to: "/trade/events", tag: "Market", tone: "plain" });
       }
       for (const v of [inRes, usRes]) for (const w of v?.weeks ?? []) for (const r of w.rows) {

@@ -95,7 +95,8 @@ def members_note(group: dict) -> str | None:
         return None
     # the list's own date when it carries one, never a fixed year that goes stale (R38-004: "as of 2025" in Oct 2026)
     when = f" (the list as of {p['as_of']})" if p.get("as_of") else ""
-    return (f"{p['name']} are today's members{when}: earlier years include companies that joined the list later "
+    # the members on the day of the run, which a run read later still says truly (R52-001: "today's members" months on)
+    return (f"{p['name']} are the list's members on the day this test ran{when}: earlier years include companies that joined the list later "
             "and leave out those that left it.")
 
 

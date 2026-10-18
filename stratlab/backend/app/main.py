@@ -1453,6 +1453,11 @@ def run_group_test(profile, strategy: Strategy, group: dict, req, version: int) 
     prov = markets.provider(market)
     if prov is None or not prov.ready():
         err(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
+    # a ready-made group is run on the index's members today, not the copy saved when it was picked (R52-001: a NIFTY
+    # 50 run on 16 Oct still had WIPRO, out of the index since 30 Sep, and no BSE)
+    preset = next((p for p in universes.presets(market) if p["id"] == group.get("id")), None)
+    if preset:
+        group = {**group, "members": [{"symbol": x} for x in preset["symbols"]]}
     check_group_size(profile, len(group.get("members") or []))
     with backtest_slot(profile) as limit:
         ids, missing = universes.resolve(markets, market, group.get("members") or [])
