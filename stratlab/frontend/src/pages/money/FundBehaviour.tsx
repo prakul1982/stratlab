@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import { asOf as asOfText, dateOnly, inr, pctPlain, signed, signedInrCompact } from "../../lib/format";
+import { asOf as asOfText, dateOnly, inr, monthLong, pctPlain, signed, signedInrCompact } from "../../lib/format";
 import { Info } from "../../components/ui";
 import { Earlier } from "../../components/Earlier";
 import { Card, CardHead, DataTable, Disclosure, EmptyState, PlanNote, Signed, Stat, StatRow, type Column } from "../../components/kit";
@@ -28,7 +28,7 @@ const rate = (v: number | null | undefined) => (v == null ? "–" : pctPlain(v *
 const pts = (v: number | null | undefined) => <Signed value={v}>{v == null ? "–" : `${signed(v, 1)} pts`}</Signed>;
 const rupees = (v: number | null | undefined) => <Signed value={v}>{signedInrCompact(v)}</Signed>;
 const rateNode = (v: number | null | undefined) => <Signed value={v}>{rate(v)}</Signed>;
-const month = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+const month = (m: string) => monthLong(m);
 const span = (days: number | null | undefined) => (days == null ? "–" : days >= 365 ? `${(days / 365).toFixed(1)} years` : `${days} days`);
 
 export function FundBehaviour({ version }: { version: string }) {

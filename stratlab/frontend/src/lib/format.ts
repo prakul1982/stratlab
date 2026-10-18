@@ -429,8 +429,18 @@ export function signTone(v: number | null | undefined): "up" | "down" | undefine
 export function monthYear(iso: string | null | undefined): string {
   if (!iso) return "–";
   const d = asDate(iso);
-  return Number.isNaN(d.getTime()) ? "–" : d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  return Number.isNaN(d.getTime()) ? "–" : `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
 }
+
+/** A month and year as the app writes them, "Sep 2025" ("Sept" is the browser's British spelling, R55-011); from a
+ * "YYYY-MM" or "YYYY-MM-DD" calendar date, read as written. */
+export function monthLong(ym: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})/.exec(ym ?? "");
+  return m && +m[2] >= 1 && +m[2] <= 12 ? `${MONTHS[+m[2] - 1]} ${m[1]}` : (ym ?? "–");
+}
+
+/** A month's short name, "Sep", for a Date's month. */
+export const monthShort = (d: Date) => MONTHS[d.getMonth()];
 
 /** The colour class for a signed figure: `k-up` (green) above zero, `k-down` (red) below it, "" for zero or a missing
  * value. Pass the text the figure is shown as, and one that rounds to nothing ("0.0%", "+0") stays plain, so the colour
@@ -479,4 +489,22 @@ export function sourceWords(source: string): string {
   if (source === "Zerodha Kite") return "your Zerodha login";
   if (source === "Interactive Brokers") return "your Interactive Brokers account";
   return `your ${source} file`;
+}
+
+/** Long words with soft hyphens where a syllable may end (after a vowel, before a consonant, four letters in from each
+ * end), so a narrow cell breaks "Telecommunica-tion" with a hyphen: CSS hyphens need a dictionary not every browser has
+ * (R55-001: "Telecommunicatio / n" on a phone). Short words and the text itself are unchanged. */
+export function softHyphens(text: string, longer = 12): string {
+  const vowel = (c: string) => "aeiouy".includes(c.toLowerCase());
+  return text.replace(/[A-Za-z]+/g, (w) => {
+    if (w.length <= longer) return w;
+    let out = "";
+    for (let i = 0; i < w.length; i++) {
+      // no lookbehind in the pattern: older Safari can't parse one, and the whole app would fail to load
+      if (i >= 4 && w.length - i >= 4
+        && ((vowel(w[i - 1]) && !vowel(w[i]) && w[i] !== w[i + 1]) || (!vowel(w[i - 1]) && w[i - 1] === w[i]))) out += "\u00ad";   // "com-mu", not "co-mmu"
+      out += w[i];
+    }
+    return out;
+  });
 }

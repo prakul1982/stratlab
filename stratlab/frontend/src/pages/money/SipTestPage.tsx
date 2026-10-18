@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { dateOnly, inr, money, pct, pctPlain, signed } from "../../lib/format";
+import { dateOnly, inr, money, monthLong, pct, pctPlain, signed } from "../../lib/format";
 import type { Instrument, Market } from "../../lib/types";
 import { InstrumentSearch } from "../../components/InstrumentSearch";
 import { LineChart } from "../../components/Charts";
@@ -45,7 +45,7 @@ const signedPts = (v: number | null | undefined) => (v == null ? "–" : `${sign
 /** A return in the kit's colours (green above zero, red below). */
 const rateNode = (v: number | null | undefined) => <Signed value={v}>{rate(v)}</Signed>;
 const ptsNode = (v: number | null | undefined) => <Signed value={v}>{signedPts(v)}</Signed>;
-const month = (m: string) => new Date(`${m.slice(0, 7)}-01T00:00:00`).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+const month = (m: string) => monthLong(m);
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const span = (days: number) => (days >= 365 ? `${(days / 365).toFixed(1)} years` : days >= 60 ? `${Math.round(days / 30)} months` : `${days} days`);
 const FREQ = [{ value: "monthly", label: "Every month" }, { value: "weekly", label: "Every week" }, { value: "daily", label: "Every trading day" }];

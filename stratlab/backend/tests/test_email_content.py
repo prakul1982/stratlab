@@ -79,7 +79,7 @@ def test_the_weekly_brief_is_its_own_issue_not_a_copy_of_the_daily(built):
     assert "on the day" not in weekly["text"] and "below its high" not in weekly["text"]
     bank = next(ln for ln in weekly["text"].splitlines() if ln.startswith("- NIFTY BANK"))
     assert bank.endswith("over the week")
-    assert re.search(r"Week to Sat \d{1,2} [A-Z][a-z]{2}", weekly["text"])                  # the digest goes on Saturday
+    assert re.search(r"Week to Fri \d{1,2} [A-Z][a-z]{2}", weekly["text"])        # sent on Saturday, to Friday's close (R55-007)
 
 
 def test_the_us_brief_has_us_news(built):

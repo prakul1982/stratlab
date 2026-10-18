@@ -8,7 +8,7 @@ import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
-import { fmtDate } from "../lib/format";
+import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
 import { useAfterPaint } from "../lib/defer";
@@ -30,7 +30,7 @@ const LAYOUT_KEY = "stratlab.mine.cards";
 const zone = () => { let z: string | undefined; try { z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* old browser */ } return greetingZone(savedRegion(), z); };
 const greeting = () => greetingAt(hourIn(zone()));
 const dateLine = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: zone() }).replace(/^(\w+) /, "$1, ");
-const dayNum = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d); return { d: t.getDate(), m: t.toLocaleDateString("en-GB", { month: "short" }), w: t.toLocaleDateString("en-GB", { weekday: "short" }) }; };
+const dayNum = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d); return { d: t.getDate(), m: monthShort(t), w: t.toLocaleDateString("en-GB", { weekday: "short" }) }; };
 
 export function MineHome() {
   const { setSpace, session, markets } = useApp();

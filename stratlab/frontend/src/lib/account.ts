@@ -79,7 +79,7 @@ export function aiBuildsUse(used: number, limit: number | null | undefined, perD
 export function planRow(me: Pick<Me, "plan" | "paid_plan" | "billing" | "view_as">): [string, string] | null {
   const run = planRun(me), end = me.billing.renews_or_ends;
   if (run === "free" || run === "viewing") return null;
-  if (run === "given") return ["Given by the owner", end ? `Until ${dateOnly(end)}` : "No end date"];
+  if (run === "given") return ["Given by StratLab", end ? `Until ${dateOnly(end)}` : "No end date"];
   if (!end) return null;
   return [run === "cancelled" ? "Ends on" : "Renews on", dateOnly(end)];
 }
