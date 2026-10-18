@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AccountWait } from "../components/AccountWait";
-import { Card, CardHead, ConfirmDialog, DataTable, Field, FieldGroup, FormGrid, Notice, PageHeader, Select, Seg, type Column } from "../components/kit";
+import { Card, ConfirmDialog, Field, FieldGroup, FormGrid, Notice, PageHeader, Select, Seg } from "../components/kit";
 import { Link } from "react-router-dom";
 import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
@@ -8,44 +8,12 @@ import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
 import { aboutMoney, approx, chargedLine, money, rupeesNote, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
+import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
 import { track } from "../lib/analytics";
-import { EVERYONE, FEATURES, FLAGS, LIMITS, NUMBERS, PRICE, unlimitedLabel, WHO, type Limits, type PlanId } from "../lib/plans";
+import { FEATURES, LIMITS, PRICE, WHO, type Limits, type PlanId } from "../lib/plans";
 import { readViewAs } from "../lib/viewAs";
 import { canBuy, chargeAboutNote, checkoutDescription, finePrint, paymentWindowLine, pricingIntro, rupeeCharge, switchEndsNote, viewingPlansNote, YEARLY_LABEL, yearlySaving } from "../lib/offer";
-
-/** Every limit and feature side by side, from the server's plans when signed in. */
-function Compare({ plans }: { plans?: Record<string, Partial<Limits>> }) {
-  const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
-  const num = (p: PlanId, k: keyof Limits) => {
-    const v = lim(p)[k] as number | null;
-    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v}, for 5 market days` : v.toLocaleString("en-IN");
-  };
-  const ids: PlanId[] = ["free", "basic", "pro"];
-  const names = { free: "Free", basic: "Basic", pro: "Pro" };
-  type Row = { id: string; label: string; cell: (p: PlanId) => string };
-  const groups: { id: string; title: string; rows: Row[] }[] = [
-    { id: "limits", title: "How much", rows: NUMBERS.map(([k, label]) => ({ id: String(k), label, cell: (p: PlanId) => num(p, k) })) },
-    { id: "paid", title: "What each plan adds", rows: FLAGS.map(([f, label]) => ({ id: String(f), label, cell: (p: PlanId) => (lim(p).features.includes(f) ? "✓" : "–") })) },
-    { id: "all", title: "On every plan", rows: EVERYONE.map((label) => ({ id: label, label, cell: () => "✓" })) },
-  ];
-  const columns = (first: string): Column<Row>[] => [
-    { key: "label", header: first, wrap: true, cell: (r) => r.label },
-    ...ids.map((p) => ({ key: p, header: names[p], numeric: true, cell: (r: Row) => r.cell(p) })),
-  ];
-  // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
-  return (
-    <Card id="compare">
-      <CardHead title="Side by side" />
-      {groups.map((g) => (
-        <div key={g.id} className="k-stack" data-plans-group={g.id}>
-          <h3 className="k-sub">{g.title}</h3>
-          <DataTable label={`Plans side by side: ${g.title.toLowerCase()}`} columns={columns(g.title)} rows={g.rows} rowKey={(r) => r.id} pinHead />
-        </div>
-      ))}
-    </Card>
-  );
-}
 
 const planName = (p: PlanId) => ({ free: "Free", basic: "Basic", pro: "Pro" }[p]);
 
@@ -204,7 +172,7 @@ export function PlansPage() {
       </div>
       {anyRupees && billing && <Notice>{rupeesNote(currency, priceOf("basic", period).about && priceOf("pro", period).about
         ? { basic: priceOf("basic", period).about as string, pro: priceOf("pro", period).about as string } : null)}</Notice>}
-      <Compare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
+      <PlanCompare plans={me?.plans as Record<string, Partial<Limits>> | undefined} />
       {me && paid !== "free" && me.billing.renews_or_ends && (
         <p className="k-small k-muted">{me.billing.cancel_at_period_end ? "Ends" : "Renews"} on {dateOnly(me.billing.renews_or_ends)}.</p>
       )}

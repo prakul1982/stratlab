@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { aboutMoney, approx, money, usePricing } from "../lib/currency";
 import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
@@ -17,6 +17,8 @@ import { publicGet } from "../lib/http";
 import { plainTerms } from "../lib/plainTerms";
 import { checksLine, LOST_CHECKS, lostMoney } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
+
+const PlanCompare = lazy(() => import("../components/PlanCompare").then((m) => ({ default: m.PlanCompare })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in
@@ -383,6 +385,8 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       </>}
 
       <Pricing />
+      {/* signed out, the plans page has the same side-by-side tables as signed in, loaded only here (R60-012) */}
+      {plansOnly && <section className="lp-sec lp-compare"><div className="lp-wrap"><Suspense fallback={null}><PlanCompare /></Suspense></div></section>}
 
       {!plansOnly && <>
       <section id="faq" className="lp-sec lp-alt">

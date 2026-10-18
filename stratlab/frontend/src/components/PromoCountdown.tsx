@@ -33,8 +33,11 @@ export function PromoCountdown({ plansLink = true }: { plansLink?: boolean }) {
   const hide = () => { try { localStorage.setItem(key, "1"); } catch { /* storage off */ } setHidden(true); };
   return (
     <Notice className="promo-countdown" role="status"
-      actions={plansLink ? <><Link className="btn sm promo-plans" to="/plans">See plans</Link><button type="button" className="btn sm quiet" onClick={hide}>Got it</button></> : undefined}>
-      <b>Launch offer:</b> every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).<span className="promo-more"> After that, your plan's limits apply again.</span>
+      actions={plansLink ? <><Link className="btn sm promo-plans" to="/plans">See plans</Link>
+        {/* on a phone the button is a ×, as on the site-wide note; its name stays "Got it" (R60-007) */}
+        <button type="button" className="btn sm quiet promo-got" aria-label="Got it" onClick={hide}><span className="promo-got-text">Got it</span><span className="promo-x" aria-hidden="true">×</span></button></> : undefined}>
+      <b>Launch offer:</b> <span className="promo-full">every Pro feature is free for <b className="promo-left">{timeLeft(end - now)}</b> more (until {day}).<span className="promo-more"> After that, your plan's limits apply again.</span></span>
+      <span className="promo-short">Pro free for {timeLeft(end - now)} more</span>
     </Notice>
   );
 }

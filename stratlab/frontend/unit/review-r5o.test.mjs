@@ -167,8 +167,8 @@ test("notebook defaults invent nothing, and the sell question stays (R5O-010)", 
 
 test("library cards: facts about the checks, buy and hold beside the return, which check didn't run (R5O-014)", async () => {
   const { checksLine } = await import("../src/lib/tradeUi.ts");
-  assert.equal(checksLine(3, 3, ["nearby settings"]), "3 of 4 checks passed · nearby settings not run");
-  assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
+  assert.equal(checksLine(3, 3, ["nearby settings"]), "3 of 4 checks run · all 3 passed · nearby settings not run");
+  assert.equal(checksLine(3, 3), "3 of 4 checks run · all 3 passed");
   const lib = read("src/pages/LibraryPage.tsx");
   // the facts wording, with the server's own label for the entry when it has one (R6V-005: the card and the page agree)
   assert.match(lib, /<VerdictBadge v=\{e\.verdict\.verdict\} facts label=\{e\.verdict\.label\} tone=\{headTone\(e\)\} \/>/);

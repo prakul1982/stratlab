@@ -16,13 +16,15 @@ export const upDown = (v: number | null | undefined): string => signCls(v);
 /** Every verdict runs the same four checks (unseen data, nearby settings, bad-luck drawdown, enough trades). */
 export const CHECKS = 4;
 
-/** "3 of 4 checks passed · 1 not run": counted out of the same four everywhere (a check can be skipped, say nearby
- * settings on a group of stocks, but it is still one of the four). `run` is how many weren't skipped. */
+/** "3 of 4 checks run · all 3 passed", "4 of 4 checks run · 2 passed": counted out of the same four everywhere (a check can be
+ * skipped, say nearby settings on a group of stocks, but it is still one of the four), in the library's words (R60-002: a
+ * card read "3 of 4 checks run · all 3 passed" over "3 of 4 checks passed · 1 not run"). `run` is how many weren't skipped. */
 export function checksLine(passed: number, run: number, notRun?: string[]): string {
+  if (run <= 0) return "No checks could be run";
   const skipped = Math.max(0, CHECKS - run);
   // with the names of the checks that didn't run, say which (R5O-014: "1 not run" alone left people guessing)
-  const which = notRun?.length === skipped && skipped ? ` · ${notRun.join(" and ")} not run` : skipped ? ` · ${skipped} not run` : "";
-  return `${passed} of ${CHECKS} checks passed${which}`;
+  const which = notRun?.length === skipped && skipped ? ` · ${notRun.join(" and ")} not run` : "";
+  return `${run} of ${CHECKS} checks run · ${passed >= run ? `all ${run} passed` : `${passed} passed`}${which}`;
 }
 
 /** A strategy that lost money after costs: no pass count is headlined for it (R16-006); its checks are shown for reference. */
@@ -52,8 +54,7 @@ export function checksOf(e: Held): string {
   if (lostMoney(e.verdict.verdict, e.stats.ret)) return LOST_CHECKS;
   const notRun = (e.verdict.checks ?? []).filter((c) => c.status === "skip").map((c) => (CHECK_NAMES[c.id] ?? c.id).replace("years", unseenWord(e.range)));
   const run = e.verdict.total, passed = e.verdict.passed;
-  if (!notRun.length || notRun.length !== CHECKS - run) return checksLine(passed, run, notRun);
-  return `${run} of ${CHECKS} checks run · ${passed >= run ? `all ${run} passed` : `${passed} passed`} · ${notRun.join(" and ")} not run`;
+  return checksLine(passed, run, notRun);
 }
 
 /** Whether the rules trail buy and hold: a result behind it is not shown as a win. */

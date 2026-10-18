@@ -414,9 +414,12 @@ export function NetWorthPage() {
       </span>) },
   ];
 
+  // "Prices as of" only over market prices: with none on the page the server dates it today, and "Prices as of 19 Oct" stood
+  // before that day's open (R60-008)
+  const priced = !!view?.assets.some((r) => r.basis === "market price" && r.value);
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={view?.as_of} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · What you own" title="Net worth" asOf={priced ? view?.as_of : undefined} asOfLabel="Prices as of"
         lede="What you own minus what you owe: your stocks from My Holdings and mutual funds from your statement (both added on their own), plus the deposits, provident funds, gold, property and loans you add here."
         info="Each value shows how it's worked out and the date it's as of. Arithmetic on what you enter, not advice. Only you can see it, and you can delete it at any time." infoLabel="How this is worked out" />
 

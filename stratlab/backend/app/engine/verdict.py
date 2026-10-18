@@ -446,10 +446,27 @@ def _members_then(v: dict) -> dict:
     return {**v, "summary": fix(v.get("summary")), "notes": [fix(n) for n in v.get("notes") or []]}
 
 
+_PASSED_OF = re.compile(r"\b([Pp])assed (\d) of the (\d) checks run")
+
+
+def _tidy_headline(h):
+    """A headline stored before R59 in today's words: "after costs" said once ("…behind buy and hold after costs; lost money
+    after costs." read twice, R60-001), and the checks count as the library and the checks line give it ("Passed 2 of the 3
+    checks run" → "3 of 4 checks run · 2 passed", R60-002)."""
+    if not isinstance(h, str):
+        return h
+    if h.count("after costs") > 1:
+        h = h.replace(" after costs; ", "; ", 1)
+    return _PASSED_OF.sub(lambda m: f"{m.group(3)} of 4 checks run · {m.group(2)} passed", h)
+
+
 def restated(v: dict | None, stats: dict | None) -> dict | None:
-    """A stored verdict with a claim for a headline ("Likely a real edge.") given its facts instead; any other as it is."""
+    """A stored verdict with a claim for a headline ("Likely a real edge.") given its facts instead; any other as it is,
+    with its headline in today's words."""
     if isinstance(v, dict):
         v = _members_then(v)
+        if _tidy_headline(v.get("headline")) != v.get("headline"):
+            v = {**v, "headline": _tidy_headline(v.get("headline"))}
     if not isinstance(v, dict) or v.get("headline") not in OLD_HEADLINES:
         return v
     st = stats or {}

@@ -120,7 +120,8 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
     state: !sv.auto_login_configured ? "warn" : sv.auto_login.ok === false ? "bad" : undone ? "warn" : sv.auto_login.ok ? "ok" : "warn",
     detail: !sv.auto_login_configured ? "Off"
       : undone ? `Logged in${sv.auto_login.at ? ` ${ago(sv.auto_login.at)}` : ""}, but Zerodha has cancelled that login since.${next}`
-      : `${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}${sv.auto_login.ok === false ? next : ""}`,
+      // the next run is said every time, as every other job's is (R60-010)
+      : `${`${sv.auto_login.message}${sv.auto_login.at ? ` (${ago(sv.auto_login.at)})` : ""}`.replace(/\.$/, "")}${next ? `.${next}` : ""}`,
     fix: !sv.auto_login_configured ? "Off. Log in by hand each morning, or set the automatic login variables (setup guide, step 2)." : undefined });
   out.push(aiTile(sv.ai));
   if (sv.admin_alerts) {

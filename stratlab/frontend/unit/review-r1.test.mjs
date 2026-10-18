@@ -44,8 +44,8 @@ test("the Money pages open on one financial year (R1-006)", async () => {
 
 test("checks are counted out of four everywhere (R1-020)", async () => {
   const { checksLine } = await import("../src/lib/tradeUi.ts");
-  assert.equal(checksLine(2, 4), "2 of 4 checks passed");
-  assert.equal(checksLine(3, 3), "3 of 4 checks passed · 1 not run");
+  assert.equal(checksLine(2, 4), "4 of 4 checks run · 2 passed");
+  assert.equal(checksLine(3, 3), "3 of 4 checks run · all 3 passed");
 });
 
 test("a date is typed and read day first (R1-016)", async () => {
