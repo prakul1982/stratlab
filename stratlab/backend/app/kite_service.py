@@ -255,7 +255,9 @@ class KiteService:
 
     def _require(self):
         if self.invalid_reason:
-            raise KiteNotReady("Indian market data is offline: the broker login was cancelled. The admin needs to log in again.")
+            # when it comes back is added where the answer is sent (main.offline_when): every morning's reset ends the
+            # login, and the automatic login brings it back with no one doing anything (R49-008)
+            raise KiteNotReady("Indian market data is offline: the broker login has ended.")
         if not self.ready():
             raise KiteNotReady("Market data is offline. The admin needs to complete today's data login.")
 

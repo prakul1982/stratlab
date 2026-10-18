@@ -63,7 +63,32 @@ def load(iid: str) -> dict | None:
     parts = parse_id(iid)
     if not parts:
         return None
-    return db.json_value(db.get_setting(_key(*parts)), {}) or None
+    issue = db.json_value(db.get_setting(_key(*parts)), {}) or None
+    return _plain_heads(issue) if issue else None
+
+
+def _stored(iid: str) -> dict | None:
+    """An issue exactly as stored, for the one-off repairs that rewrite what is stored."""
+    parts = parse_id(iid)
+    return (db.json_value(db.get_setting(_key(*parts)), {}) or None) if parts else None
+
+
+def _plain_heads(issue: dict) -> dict:
+    """A stored issue's Headlines by today's rules: a brief kept from before a headline rule was added shows (and
+    re-sends) none of the stories that rule leaves out (R49-001: "Traders see it going even higher" on a brief stored the
+    day before)."""
+    from ..intel.news import plain_headline
+    secs = issue.get("sections")
+    if not isinstance(secs, list) or not any(isinstance(s, dict) and s.get("title") == "Headlines" for s in secs):
+        return issue
+    out = []
+    for s in secs:
+        if isinstance(s, dict) and s.get("title") == "Headlines":
+            s = {**s, "items": [i for i in s.get("items") or [] if isinstance(i, dict) and plain_headline(i.get("text"))]}
+            if not s["items"]:
+                continue
+        out.append(s)
+    return {**issue, "sections": out}
 
 
 def ids(kind: str, scope: str) -> list[str]:
@@ -168,7 +193,7 @@ def repair_index_moves(region: str, days: int = 60) -> int:
     from datetime import timedelta
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
     for iid in ids("market", region):
-        issue = load(iid)
+        issue = _stored(iid)
         if not issue or issue.get("weekly") or issue.get("day", "") < cutoff:
             continue
         day = date.fromisoformat(issue["day"])
@@ -214,7 +239,7 @@ def repair_briefs(region: str, days: int = 60, shifts=None) -> int:
     shifts = shifts or content.rotation_shifts
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
     for iid in ids("market", region):
-        issue = load(iid)
+        issue = _stored(iid)
         if not issue or issue.get("day", "") < cutoff:
             continue
         before = json.dumps(issue, sort_keys=True)
@@ -263,7 +288,7 @@ def repair_headlines(region: str, days: int = 60) -> int:
     Sector rotation section's count. Returns how many issues changed."""
     from datetime import timedelta
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
-    issues = sorted((x for x in (load(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
+    issues = sorted((x for x in (_stored(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
                     key=lambda x: (x.get("day", ""), bool(x.get("weekly"))))
     seen: set[str] = set()
     for issue in issues:
@@ -328,7 +353,7 @@ def repair_r7(region: str, days: int = 60) -> int:
     weekly one names none. Returns how many issues changed."""
     from datetime import timedelta
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
-    issues = sorted((x for x in (load(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
+    issues = sorted((x for x in (_stored(i) for i in ids("market", region)) if x and x.get("day", "") >= cutoff),
                     key=lambda x: (x.get("day", ""), bool(x.get("weekly"))))
     carried: list[tuple[str, set[str]]] = []          # (day, titles) of the briefs before, the weekly ones too
     for issue in issues:
@@ -387,7 +412,7 @@ def repair_facts_line(region: str, days: int = 60) -> int:
     from ..intel.news import plain_headline
     fixed, cutoff = 0, (date.today() - timedelta(days=days)).isoformat()
     for iid in ids("market", region):
-        issue = load(iid)
+        issue = _stored(iid)
         if not issue or issue.get("day", "") < cutoff:
             continue
         before = json.dumps(issue, sort_keys=True)
@@ -422,7 +447,7 @@ def repair_us_stamp() -> int:
     "8 Oct 2026, 16:34 ET" (R7M-002): the stored email written again with New York's time. Returns how many changed."""
     fixed = 0
     for iid in ids("market", "US"):
-        issue = load(iid)
+        issue = _stored(iid)
         if not issue or not _IST_STAMP.search(issue.get("text") or ""):
             continue
         issue["html"], issue["text"] = write.render(issue)

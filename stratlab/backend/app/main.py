@@ -221,7 +221,20 @@ def _filing_alert_ok(profile: dict) -> bool:
 filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
-kite.on_invalid = lambda msg: auto_login.alert_once("kite-token-cancelled:" + (kite.token_day or ""), "StratLab: " + msg)
+def _kite_cancelled(msg: str) -> None:
+    """Zerodha refused the data login's token. Before today's automatic login that is its daily reset ending yesterday's
+    login: no alert, and the reason says the login comes by itself (R49-008: three "press Run the automatic login now"
+    emails in two days, each followed by the automatic login a few hours later). Any other time it is worth an email."""
+    now = datetime.now(IST)
+    due = auto_login.next_login(now)
+    if due is not None and due.date() == now.date():
+        kite.invalid_reason = (f"Zerodha ended the data login at {now:%H:%M} IST (its daily reset). The automatic login at "
+                               f"{due:%H:%M} IST logs in again; nothing to do.")
+        return
+    auto_login.alert_once("kite-token-cancelled:" + (kite.token_day or ""), "StratLab: " + msg)
+
+
+kite.on_invalid = _kite_cancelled
 newsletter_job = news.Job("newsletters")      # its status is kept for Admin → Data and jobs
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
@@ -3501,7 +3514,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 @app.get("/library")
 def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", official: bool = False, profile=Depends(current_profile)):
-    shown = [e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)]
+    shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)])
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
             "reasons": library.REASONS}

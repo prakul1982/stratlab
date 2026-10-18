@@ -429,9 +429,11 @@ def same_hold(entries: list[dict]) -> list[dict]:
     """Entries on the same thing (one group or instrument, one candle size) over the same first and last day show the
     same buy-and-hold figure. Each was run on its own day, and a run's buy-and-hold is worked out from the candles it
     loaded then, so two strategies on one index over the same dates could differ by a tenth of a point (+67.9% beside
-    +68.0%). The entry whose id sorts first sets the figure for the others; entries with different dates keep their own."""
+    +68.0%). StratLab's own entry whose id sorts first sets the figure for the others (an official one first, so the
+    signed-out library and the signed-in one, which also lists readers' entries, pick the same one: R49-009 showed +68.0%
+    signed out beside +67.9% signed in); entries with different dates keep their own."""
     first: dict[tuple, dict] = {}
-    for e in sorted(entries, key=lambda x: str(x.get("id"))):
+    for e in sorted(entries, key=lambda x: (not x.get("official"), str(x.get("id")))):
         r, h = e.get("range") or {}, (e.get("stats") or {}).get("buy_hold")
         if not r.get("from") or not r.get("to") or not isinstance(h, (int, float)):
             continue

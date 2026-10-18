@@ -141,7 +141,11 @@ export function EventsPage() {
     const [y, m, d] = v.today.split("-").map(Number);
     const end = new Date(y, m - 1, d + 7);
     const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-    return v.events.filter((e) => e.date >= v.today && e.date < endIso && !(e.kind === "expiry" && e.title.includes("weekly")));
+    // weekly expiries come every week, so only the nearest one is listed: tomorrow's NIFTY weekly expiry is the date an F&O
+    // reader most needs, and leaving every weekly out dropped it (R49-007)
+    const ahead = v.events.filter((e) => e.date >= v.today && e.date < endIso);
+    const weekly = ahead.find((e) => e.kind === "expiry" && e.title.includes("weekly"));
+    return ahead.filter((e) => !(e.kind === "expiry" && e.title.includes("weekly")) || e === weekly);
   }, [v]);
 
   const save = async (p: Partial<EvPrefs>) => {

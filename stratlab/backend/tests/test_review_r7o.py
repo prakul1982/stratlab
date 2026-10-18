@@ -319,7 +319,7 @@ def test_stored_briefs_are_checked_again_once(mem, monkeypatch):
                           {"title": "Headlines", "items": [{"text": "We're adding to our position in a hard-hit stock before important catalysts arrive"},
                                                            {"text": "Treasury yields are 'really, really high,' but can come down soon"}]}]}
     monkeypatch.setattr(news_job, "ids", lambda kind, region: ["market.US.2026-10-08"] if region == "US" else [])
-    monkeypatch.setattr(news_job, "load", lambda iid: json.loads(json.dumps(issue)))
+    monkeypatch.setattr(news_job, "_stored", lambda iid: json.loads(json.dumps(issue)))      # repairs read the issue as stored
     saved = {}
     monkeypatch.setattr(news_job, "parse_id", lambda iid: ("market", "US", "2026-10-08"))
     monkeypatch.setattr(news_job, "_key", lambda *a: "k")

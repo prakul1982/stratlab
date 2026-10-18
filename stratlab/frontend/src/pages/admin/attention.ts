@@ -1,5 +1,5 @@
 import type { HealthState } from "../../components/kit";
-import { IST, ago, dateOnly, quoteAt } from "../../lib/format";
+import { IST, ago, dateOnly, istToday, quoteAt } from "../../lib/format";
 import { aiCountText } from "../../lib/connection";
 import type { AIRow, InvoiceSeller, JobRow, Overview, Reported } from "./AdminContext";
 
@@ -105,8 +105,13 @@ export function services(ov: Overview | null, jobs: JobRow[] | null = null): Ser
   if (!ov) return [];
   const sv = ov.server;
   const out: Service[] = [];
-  out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready ? "ok" : "bad", to: "/admin/data",
-    detail: sv.kite_invalid ? sv.kite_invalid : sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}` : "Not logged in today, so Indian prices and paper trading are offline." });
+  // before today's automatic login the data is offline every morning (Zerodha's own reset ends yesterday's login): that is
+  // a wait, not a Problem to fix (R49-008: "Problem … Not logged in today" at 06:48, logged in by itself at 08:03)
+  const dueToday = !sv.kite_ready && !!sv.auto_login_next && sv.auto_login_next.slice(0, 10) === istToday() && sv.auto_login.ok !== false;
+  out.push({ key: "kite", label: "Broker data (India)", state: sv.kite_ready ? "ok" : dueToday ? "warn" : "bad", to: "/admin/data",
+    detail: sv.kite_ready ? `Logged in${sv.kite_token_day ? ` for ${dateOnly(sv.kite_token_day)}` : ""}`
+      : dueToday ? `Not logged in yet today. The automatic login at ${quoteAt(sv.auto_login_next!, IST)} logs in again; nothing to do.`
+      : sv.kite_invalid ? sv.kite_invalid : "Not logged in today, so Indian prices and paper trading are offline." });
   out.push(feedTile(sv));
   // a login that worked but was cancelled by Zerodha since is not "OK" beside the broker's Problem (R46-001)
   const undone = !!sv.kite_invalid && sv.auto_login.ok === true;

@@ -154,7 +154,7 @@ export function LibraryPage() {
                         </div>
                         <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                         <HoldLine e={e} />
-                        {e.verdict.verdict === "edge" && trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
+                        {trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
                         {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
                         {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
                         {/* two lines of the description; the rest is a tap away in its title, so a card isn't a wall of text */}

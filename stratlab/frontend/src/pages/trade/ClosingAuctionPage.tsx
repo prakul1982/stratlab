@@ -114,7 +114,7 @@ function Indices({ v }: { v: CasView }) {
   return (
     <Card label="Indices">
       <CardHead title="Indices" />
-      <DataTable label="Indices during the auction" columns={cols} rows={v.indices} rowKey={(i) => i.name} rowAttrs={(i) => ({ "data-cas-index": i.name })} />
+      <DataTable stack label="Indices during the auction" columns={cols} rows={v.indices} rowKey={(i) => i.name} rowAttrs={(i) => ({ "data-cas-index": i.name })} />
       <p className="k-note">An index isn't auctioned. Through the auction its value uses the constituents' last continuous prices, and the
         indicative close their indicative prices; the close comes from their final prices.</p>
     </Card>
