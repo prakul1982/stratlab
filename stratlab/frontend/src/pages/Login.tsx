@@ -590,6 +590,10 @@ function HeroDemo() {
           </div>
         ))}
       </div>
+      {/* the examples change on their own every 6 s: a plain way to stop that, not only hovering or picking one (R68-007, WCAG 2.2.2) */}
+      <button type="button" className="lp-demo-pause" onClick={() => setAuto((a) => !a)}>
+        {auto ? "Pause the examples" : "Play the examples"}
+      </button>
     </div>
   );
 }

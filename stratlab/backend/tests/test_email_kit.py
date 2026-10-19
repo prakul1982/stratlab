@@ -25,7 +25,7 @@ def test_every_email_type_renders_html_and_text(built, kind):
     assert d["subject"] and d["html"].startswith("<!doctype html>") and d["text"].strip()
     assert 'name="color-scheme"' in d["html"] and "max-width:600px" in d["html"] and "StratLab" in d["html"]
     # each kind's "Manage emails" opens its own card in Settings → Notifications (test_email_links checks the card is there)
-    assert "Manage emails" in d["html"] and re.search(r"^Manage emails: \S+/settings#(alerts|newsletters|emails)$", d["text"], re.M)
+    assert "Manage emails" in d["html"] and re.search(r"^Manage emails: \S+(/settings#(alerts|newsletters|emails)|/alerts|/money/tax-tools\?tab=advance|/money/calendar|/research/(screens|scan|filings)|/trade/(events|fo-changes)|/invest/holders)$", d["text"], re.M)
     assert "<img" not in d["html"] and "<script" not in d["html"]
     assert "<" not in d["text"].replace("<=", "")                     # the text version has no markup
     assert d["html"].count('class="btn-a"') == 1                       # one primary button

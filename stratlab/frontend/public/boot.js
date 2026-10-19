@@ -18,13 +18,21 @@
     return true;
   }
 
+  var said = null;                // the notice this script put up, if any: { main, slow }
+
   function show(force, slow) {
     var root = document.getElementById("root");
     if (!root || (!force && !root.querySelector("[data-boot], .boot"))) return;       // once the app has drawn, its own error screen does this
+    if (said && (slow || !said.slow)) return;                                        // said once is enough
+    if (said && said.main.parentNode) said.main.parentNode.removeChild(said.main);    // "taking longer" gives way to "couldn't load"
+    // the app has started drawing into the page: its elements are its own to change, so the notice goes above the page
+    // instead (R68-004: emptying them under the app crashed it, "NotFoundError", and two error messages stacked)
+    var owned = Object.keys(root).some(function (k) { return k.indexOf("__reactContainer") === 0; });
+    if (owned && root.querySelector('[role="alert"]')) return;                        // the app already says what went wrong
     // a page whose words are already in the HTML (the policies, the 404): keep them readable and put the notice above them
     var keep = root.querySelector("[data-readable]");
     keep = keep && keep.hasAttribute && keep.hasAttribute("data-readable") ? keep : null;
-    if (!keep) root.textContent = "";
+    if (!keep && !owned) root.textContent = "";
     var main = document.createElement("main");         // the page's main landmark while it is the only thing on it
     var box = document.createElement("div");
     box.className = "boot boot-now";
@@ -42,8 +50,12 @@
     b.textContent = "Reload";
     b.addEventListener("click", function () { location.reload(); });
     box.appendChild(h); box.appendChild(p); box.appendChild(b);
-    if (keep) {
-      if (root.querySelector(".boot-now")) return;
+    said = { main: main, slow: !!slow };
+    if (owned) {
+      box.style.paddingTop = "16px";
+      main.setAttribute("role", "presentation");
+      root.parentNode.insertBefore(main, root);
+    } else if (keep) {
       box.style.paddingTop = "16px";
       main.setAttribute("role", "presentation");      // the page's own main stays the main landmark
       root.insertBefore(main, root.firstChild);
@@ -98,7 +110,8 @@
     var t = e && e.target;
     if (!t || t === window || !t.tagName) return;
     var url = String(t.src || t.href || "");
-    if (/\/assets\//.test(url) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) recover();
+    // config.js too: without it the app can send no request (R68-004: its 502 showed "StratLab ran into a problem")
+    if ((/\/assets\//.test(url) || /\/config\.js(\?|$)/.test(url)) && (t.tagName === "SCRIPT" || t.tagName === "LINK")) recover();
   }, true);
 
   // the built stylesheet downloaded but did not apply (src/styles.css sets --css-ok on :root): the app would show as plain,

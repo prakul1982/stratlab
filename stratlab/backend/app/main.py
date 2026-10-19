@@ -1137,7 +1137,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         money_advance_tax.set_remind(uid, False)
     if act and what == alerts.ALERT_EMAILS:
         alerts.set_alert_emails(uid, False)
-    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS):
+    if act and what == "daily_report":
+        change_prefs(uid, lambda cur: {**cur, "daily_report": False})
+    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS, "daily_report"):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 
@@ -4585,11 +4587,16 @@ def live_overview(profile=Depends(current_profile)):
 
 @app.get("/live/sessions")
 def list_live(profile=Depends(current_profile)):
-    running = {s.id for s in manager.user_running(profile["id"])}
+    live = manager.user_running(profile["id"])
+    running = {s.id for s in live}
+    # a session done for the day at its daily loss cap says so on the list too, not only on its own page (R70-005)
+    capped = {s.id for s in live if getattr(getattr(s, "engine", None), "halted", False) is True}
     rows = db.user_sessions(profile["id"])
     for r in rows:
         if r["status"] == "running" and r["id"] not in running and leader.leading():
             r["status"] = "paused"   # server restarted and the session could not reattach yet (another container: it runs there)
+        if r["id"] in capped:
+            r["cap_hit"] = True
     return rows
 
 

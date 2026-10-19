@@ -194,6 +194,8 @@ export interface LiveSnapshot {
 export interface LiveRow {
   id: string; name: string; instrument: Instrument; status: "running" | "stopped" | "paused";
   started_at: string; stopped_at: string | null; stop_reason: string | null;
+  /** done for the day at its daily loss cap (a running session only) */
+  cap_hit?: boolean;
 }
 
 // ---------- options ----------

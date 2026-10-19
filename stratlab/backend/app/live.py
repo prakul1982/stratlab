@@ -855,7 +855,7 @@ class LiveManager:
             self._enforce_plans(sessions)
             try:
                 self.reporter.run(sessions, can_alert=report_on, market_name=market_name,
-                                  send=lambda p, subj, body: notify(p, subj, body, background=False))
+                                  send=lambda p, subj, body: notify(p, subj, body, background=False, unsub="daily_report"))
             except Exception as e:
                 print("daily reports failed:", e)
                 report(e, where="daily report")

@@ -444,7 +444,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
             <NumTok title="Cooldown (candles)" value={sess.cooldown} step={1} max={500} missing="no candles" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
               onChange={(v) => setSess({ cooldown: Math.round(v) })} hint="After a trade closes, skip this many candles before entering again." />{" "}after each trade, and stop for the day after losing{" "}
             <NumTok title="Daily loss cap (% of capital)" value={sess.dailyLossPct} max={100} missing="any amount" suffix="%"
-              onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until tomorrow." />.
+              onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until the next market day." />.
             <Info label="Intraday session rules">{HELP.session}</Info>
           </p>
         )}

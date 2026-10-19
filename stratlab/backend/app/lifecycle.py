@@ -319,14 +319,14 @@ def build(kind: str, profile: dict, ctx: dict | None = None) -> tuple[str, str, 
             first = "A friend you invited has subscribed to StratLab, so you get a free month of the Basic plan."
         elif how == "extra":
             first = (f"A friend you invited has subscribed to StratLab, so you get {ctx.get('days') or 8} extra days "
-                     "of the Basic plan (25% off a month, as free time).")
+                     "of the Basic plan.")
         else:
             first = ("A friend you invited is now using StratLab, so you and your friend each get a free month of the "
                      "Basic plan.")
         rule = ("How it works: a friend who joins with your link and uses StratLab on 3 different days in their first "
                 "2 weeks gets a month of Basic free. You get a free month for each of your first 2 friends who do "
                 "this each year, and for each of your first 2 friends who subscribe. After that, every friend who "
-                "subscribes gives you 25% off a month (about a week extra).")
+                "subscribes adds 8 days, up to 8 times in a year.")
         until = ctx.get("until")
         if ctx.get("banked") and not until:
             when = ("You're on a paid plan, so the free time is kept for you: it starts if your account moves to the "

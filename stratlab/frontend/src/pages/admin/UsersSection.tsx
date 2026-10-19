@@ -169,8 +169,9 @@ export function UsersSection() {
       <InviteRewards onChanged={() => loadUsers(q, plan)} />
 
       <Card label="Launch offer">
-        <CardHead title="Launch offer" actions={until ? <Badge tone="ok">On</Badge> : <Badge>Off</Badge>} />
-        {until ? (
+        {/* nothing until the overview is read: "Off … Start now" flashed for 2 s while the offer was on (R70-009) */}
+        <CardHead title="Launch offer" actions={!ov ? undefined : until ? <Badge tone="ok">On</Badge> : <Badge>Off</Badge>} />
+        {!ov ? <Skeleton label="Reading the launch offer" lines={2} /> : until ? (
           <div className="k-spread">
             <span>Every user has every Pro feature free until <b>{endsAt(until)}</b>. Then plans apply again by themselves.</span>
             <button type="button" className="btn quiet sm danger" onClick={() => setPromo("end")}>End now</button>

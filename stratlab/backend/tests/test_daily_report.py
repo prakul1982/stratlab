@@ -103,7 +103,7 @@ def test_report_sent_once_with_the_days_numbers():
                               send=lambda p, subj, body: sent.append((subj, body)))
     assert run(utc(2026, 9, 24, 10, 15)) == [("u1", "IN")]          # only India is due, and u2 has alerts off
     subj, body = sent[0]
-    assert subj == "StratLab daily report: India"
+    assert subj == "StratLab daily report: India, Thu 24 Sep"          # the day in the subject (R69-006)
     assert "2 trades closed (1 won), +₹200" in body and "1 open, +₹120 on paper" in body      # ₹, as the app writes it
     assert "Since start: +₹500 (+5.0%)" in body
     assert run(utc(2026, 9, 24, 10, 20)) == []                     # not twice

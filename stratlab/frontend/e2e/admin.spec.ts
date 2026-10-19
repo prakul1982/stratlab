@@ -245,10 +245,10 @@ test("admin: Overview, Data and jobs and System tell a service's state in the sa
   await shot(page, "admin-system-after", info);
 });
 
-test("admin emails: 25 kinds listed, each shown in a frame with no scripts at a desktop or a phone width, or as text", async ({ page }, info) => {
+test("admin emails: 28 kinds listed, each shown in a frame with no scripts at a desktop or a phone width, or as text", async ({ page }, info) => {
   const errors = await open(page, "/admin/emails", "Confirm your email");
   const list = page.getByRole("list", { name: "Emails" });
-  await expect(list.getByRole("listitem")).toHaveCount(25, { timeout: 30_000 });
+  await expect(list.getByRole("listitem")).toHaveCount(28, { timeout: 30_000 });
   await shot(page, "admin-emails", info);
   await list.getByRole("link", { name: /Market brief, India \(daily\)/ }).click();
   await expect(page).toHaveURL(/\/admin\/emails\/market_in$/);
