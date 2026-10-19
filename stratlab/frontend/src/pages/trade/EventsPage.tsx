@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { asOf, safeHref } from "../../lib/format";
-import { evDay, evWhen, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
+import { evDay, evWhen, happened, istHm, loadEvents, type EvKind, type EvPrefs, type EventsView, type IndexChange, type MarketEvent } from "../../lib/marketEvents";
 import { Info } from "../../components/ui";
 import { Calendar, type CalEvent, Card, CardHead, CheckField, ChipBar, ChipSet, type Column, DataTable, DateField, Disclosure, EmptyState, ErrorState, Field, FormGrid, PageHeader, Select, Skeleton } from "../../components/kit";
 import "./trade.css";
@@ -145,7 +145,9 @@ export function EventsPage() {
     const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
     // weekly expiries come every week, so only the nearest one is listed: tomorrow's NIFTY weekly expiry is the date an F&O
     // reader most needs, and leaving every weekly out dropped it (R49-007)
-    const ahead = v.events.filter((e) => e.date >= v.today && e.date < endIso);
+    // today's events whose time has passed are gone from the week, unless a published figure is the reason to look (R70-001)
+    const nowHm = istHm();
+    const ahead = v.events.filter((e) => e.date >= v.today && e.date < endIso && (!happened(e, v.today, nowHm) || !!e.figure));
     // the nearest one of each index's: NIFTY's and SENSEX's (R64-008: Thursday's SENSEX weekly was left out)
     const isWeekly = (e: (typeof ahead)[number]) => e.kind === "expiry" && e.title.includes("weekly");
     const firsts = new Set<(typeof ahead)[number]>();

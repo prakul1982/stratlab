@@ -380,6 +380,37 @@ def magnitude_ok(s: str, indices: list[dict]) -> bool:
     return any(m >= 10 for m in moves)
 
 
+_POINTS = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(?:-|\s)?points?\b", re.I)
+_INDEX_WORDS = re.compile(r"\b(nifty|sensex|s&p|nasdaq|dow|index|indices|benchmark)\b", re.I)
+_VIX_PCT = re.compile(r"\bvix\b[^.]*?\d[\d,]*(?:\.\d+)?\s*%|\d[\d,]*(?:\.\d+)?\s*%[^.]*?\bvix\b", re.I)
+
+
+def index_moves_ok(s: str, indices: list[dict]) -> bool:
+    """A day's move in points, or the VIX's move in percent, agrees with the levels the page shows, not with a headline
+    written during the day (R70-002: "the India VIX jumped 6% … the Sensex and Nifty fell over 900 points" beside a VIX
+    up 4.48% and a NIFTY down 257 points). A points figure must be one index's change within 2%; a VIX percentage needs
+    the VIX among the levels given."""
+    moves = []
+    for i in indices:
+        p, c = i.get("price"), i.get("change_pct")
+        if p and c is not None and c > -100:
+            moves.append(abs(p - p / (1 + c / 100)))
+    # points of an index, not of a share price ("the stock rose 30 points" is a headline's to give)
+    for m in (_POINTS.finditer(s) if _INDEX_WORDS.search(s) else ()):
+        try:
+            v = float(m.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if not any(abs(v - x) <= max(2.0, x * 0.02) for x in moves):
+            return False
+    if _VIX_PCT.search(s):
+        vix = [abs(i["change_pct"]) for i in indices if "vix" in str(i.get("name") or "").lower() and i.get("change_pct") is not None]
+        nums = [float(x.replace(",", "")) for x in re.findall(r"(\d[\d,]*(?:\.\d+)?)\s*%", s)]
+        if not vix or not any(abs(n - v) <= 0.06 for n in nums for v in vix):
+            return False
+    return True
+
+
 def session_headlines(headlines: list[dict], day) -> list[dict]:
     """The headlines dated on `day` or later; an older story is not today's news (R28-004: a 14 Oct line in the 15 Oct
     read). A headline with no date is kept."""
@@ -566,7 +597,7 @@ def ground_pulse(out: dict, indices: list[dict], headlines: list[dict], sectors:
     titles = [str(h.get("headline") or "") for h in headlines]
 
     def claim(s):
-        return (range_claims_ok(s, facts) and magnitude_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
+        return (range_claims_ok(s, facts) and magnitude_ok(s, facts) and index_moves_ok(s, facts) and direction_ok(s, facts) and _topics_backed(s, support) and sector_claims_ok(s, sectors)
                 and flow_claim_ok(s, nets) and cause_backed(s, titles))
     res = dict(out)
     tone = keep_sentences(out.get("tone"), pool, claim)

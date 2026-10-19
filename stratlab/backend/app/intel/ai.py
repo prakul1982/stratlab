@@ -371,7 +371,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     out = grounding.closed_words(out) if closed else out
     if before_close:                 # the model's own wording is not trusted with it
         out = {**out, "tone": re.sub(r"\bclosed at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
-    tidy = lambda t: grounding.tidy_numbers(t, region)          # noqa: E731  (numbers the page's way, R7O-001)
+    # numbers the page's way (R7O-001), and a day as the app writes it (R70-010: "as of 2026‑10‑16")
+    tidy = lambda t: grounding.app_dates(grounding.tidy_numbers(t, region))          # noqa: E731
     return {**out, "tone": tidy(out.get("tone")),
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
 

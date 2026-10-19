@@ -228,6 +228,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+          {r.cap_hit && <Badge tone="warn">Loss cap hit today</Badge>}
         </button>
       ))}
     </div>

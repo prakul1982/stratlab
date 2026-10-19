@@ -4587,11 +4587,16 @@ def live_overview(profile=Depends(current_profile)):
 
 @app.get("/live/sessions")
 def list_live(profile=Depends(current_profile)):
-    running = {s.id for s in manager.user_running(profile["id"])}
+    live = manager.user_running(profile["id"])
+    running = {s.id for s in live}
+    # a session done for the day at its daily loss cap says so on the list too, not only on its own page (R70-005)
+    capped = {s.id for s in live if getattr(getattr(s, "engine", None), "halted", False) is True}
     rows = db.user_sessions(profile["id"])
     for r in rows:
         if r["status"] == "running" and r["id"] not in running and leader.leading():
             r["status"] = "paused"   # server restarted and the session could not reattach yet (another container: it runs there)
+        if r["id"] in capped:
+            r["cap_hit"] = True
     return rows
 
 

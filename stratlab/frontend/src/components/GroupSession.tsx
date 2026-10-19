@@ -78,7 +78,7 @@ export function GroupSession({ snap, onStop, onDelete }: { snap: GroupSnapshot; 
       {!running && a.open > 0 && <Notice className="stopped-open">{a.open === 1 ? "1 position was" : `${a.open} positions were`} open at the stop and stay open, each valued at its last price before the stop. Nothing more is traded.</Notice>}
       {snap.notice && <Notice tone="warn">{snap.notice}</Notice>}
       {a.emptied_on && <Notice tone="warn"><b>Account emptied on {fmtDate(a.emptied_on)}.</b> The account reached zero, so every position was closed and nothing opens again; the loss stops at −100%.</Notice>}
-      {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until tomorrow.</Notice>}
+      {running && a.halted && <Notice tone="warn">The group's daily loss cap was hit: everything was closed and nothing new opens until the next market day.</Notice>}
       {snap.skipped.length > 0 && <p className="k-note">Left out (not enough live history): {snap.skipped.join(" · ")}</p>}
       {on.length > 0 && <p className="k-note">On: {on.join(" · ")}.{skipped.length ? ` Entries skipped: ${skipped.join(", ")}.` : ""}</p>}
       <Card label="The account">
