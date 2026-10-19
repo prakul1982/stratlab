@@ -159,7 +159,7 @@ def test_the_vix_card_the_chain_panel_the_pcr_table_and_the_history_agree(monkey
     monkeypatch.setattr(P, "live_chains", lambda od, names, choice: {n: closed for n in names})
     monkeypatch.setattr(P, "recorded_before", lambda n, e, d: None)
     monkeypatch.setattr(P, "chain_coverage", lambda n: {"days": 1, "first": "2026-10-08", "last": "2026-10-08"})
-    monkeypatch.setattr(P, "chain_series", lambda n, since=None: [])
+    monkeypatch.setattr(P, "chain_series", lambda n, since=None, **_: [])
     day = P.summarise_day("NIFTY", date(2026, 10, 8))["x"]["2026-10-13"]           # what the history keeps for 8 Oct
     panel = P.chain_view(None, "NIFTY", "current", now=PRE_OPEN)
     table = P.pcr_table(None, now=PRE_OPEN, names=("NIFTY",))[0]

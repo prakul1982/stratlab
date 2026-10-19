@@ -29,8 +29,15 @@ export function pcrStrikes(r: Pick<PcrRow, "strikes_counted" | "strikes_window" 
  * the last close, not live chains read just then). */
 export function pcrNote(rows: PcrRow[]): string {
   // a recording older than the close (the recorder missed that day) is named with its own time, never called "the last close"
-  const older = rows.filter((r) => r.source === "recorded" && !r.at_close && r.as_of)
-    .map((r) => `${r.name} shows StratLab's newest recording, from ${fmtDateTime(r.as_of!, { tz: IST, zone: true, weekday: true, year: false })}.`);
+  // one sentence for every index on a recording (R63-005: the same line five times over, one per index), naming the
+  // span of their times when they differ
+  const rec = rows.filter((r) => r.source === "recorded" && !r.at_close && r.as_of);
+  const when = (iso: string) => fmtDateTime(iso, { tz: IST, zone: true, weekday: true, year: false });
+  const names = rec.map((r) => r.name);                     // in the table's order; the times run earliest to latest
+  const times = rec.map((r) => r.as_of!).sort((a, b) => Date.parse(a) - Date.parse(b));
+  const span = rec.length ? (when(times[0]) === when(times[times.length - 1]) ? when(times[0]) : `${when(times[0])} to ${when(times[times.length - 1])}`) : "";
+  const older = !rec.length ? [] : rec.length === 1 ? [`${names[0]} shows StratLab's newest recording, from ${span}.`]
+    : [`${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} show StratLab's newest recordings, from ${span}.`];
   const dated = older.length ? `${older.join(" ")} ` : "";
   if (rows.some((r) => r.at_close)) return `The market is shut, so ${older.length ? "the other indices show" : "each index shows"} StratLab's recording of its last close. ${dated}Live chains are read while the market trades, at most once a minute.`;
   return `${older.length ? dated : rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
@@ -192,8 +199,10 @@ export function atmIvLabel(atm: number | null | undefined, fmt: (v: number) => s
 }
 export const VIX_IV_LABEL = "NIFTY ATM IV, StratLab model";
 /** The VIX card's note under its ATM IV: the strike, then where the chain came from and when. */
-export function vixIvNote(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string): string {
+export function vixIvNote(strikeAt: number | null | undefined, chain: string, fmt: (v: number) => string, rolled = false): string {
   // the nearest expiry's IV, beside India VIX's 30-day measure: they differ by design, most when the expiry is days away (R52-014)
   const base = strikeAt ? `At the ${fmt(strikeAt)} strike · ${chain}` : chain;
+  // on an expiry day the expiring options' last hours aren't read (R63-001: 34.41% beside a VIX of 14.73)
+  if (rolled) return `${base} · the next expiry's IV, as today's options expire today; India VIX measures the next 30 days, so the two differ`;
   return `${base} · the nearest expiry's IV; India VIX measures the next 30 days, so the two differ, most near expiry`;
 }

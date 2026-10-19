@@ -51,8 +51,8 @@ LIST_PATH, LIST_PAGE = "/api/allIndices", "https://www.nseindia.com/market-data/
 GRAPH_PATH = "/api/NextApi/apiClient"
 NAME = "INDIA VIX"
 NOTE = ("India VIX is the exchange's published volatility index, worked out from NIFTY option prices. Values as of the "
-        "times shown. NIFTY ATM IV is StratLab's own model estimate from the nearest expiry's option prices. Facts, not "
-        "advice.")
+        "times shown. NIFTY ATM IV is StratLab's own model estimate from the nearest expiry's option prices (the next expiry's "
+        "on an expiry day). Facts, not advice.")
 
 _cache = TTLCache(max_items=50)
 _lock = threading.Lock()
@@ -326,14 +326,21 @@ def nifty_iv(options_data, now: datetime) -> dict:
         # the chain panel's own reading and sum (positioning.chain_now): one ATM IV for one chain, at the chain's own time
         # (R7T-005: 14.40% here against 13.3% in the chain panel for the same 8 Oct close)
         got, _, stats = positioning.chain_now(options_data, "NIFTY", "current", now)
+        rolled = False
+        # on an expiry day the expiring options' model IV runs away in their last hours (R63-001: 34.41% beside a VIX of
+        # 14.73 at 09:33 on 19 Oct), so the card reads the next expiry, as India VIX itself does near expiry
+        if got and str(got.get("expiry") or "")[:10] == now.astimezone(IST).date().isoformat():
+            nxt = positioning.chain_now(options_data, "NIFTY", "next", now)
+            if nxt[0] and nxt[2] and nxt[2].get("atm_iv") is not None:
+                (got, _, stats), rolled = nxt, True
         if got and stats and stats.get("atm_iv") is not None:
             # the strike it is at, so the VIX card and the chain panel name the same figure the same way (R24-005)
             today = {"iv": stats["atm_iv"], "strike": stats.get("atm"), "as_of": got["taken_at"], "source": got["source"],
-                     "at_close": bool(got.get("at_close"))}
+                     "at_close": bool(got.get("at_close")), "expiry": str(got.get("expiry") or "")[:10] or None, "rolled": rolled}
     except Exception as e:
         print("india vix: nifty iv", str(e)[:120])
     since = (now.date() - timedelta(days=YEAR_DAYS)).isoformat()
-    series = [{"day": p["day"], "iv": p["atm_iv"]} for p in positioning.chain_series("NIFTY", since) if p.get("atm_iv") is not None]
+    series = [{"day": p["day"], "iv": p["atm_iv"]} for p in positioning.chain_series("NIFTY", since, roll_expiry_day=True) if p.get("atm_iv") is not None]
     return {"today": today, "series": series}
 
 

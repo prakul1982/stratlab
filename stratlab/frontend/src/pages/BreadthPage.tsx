@@ -103,8 +103,9 @@ export function BreadthPage() {
             )}
           </Field>
           {data && !data.locked && all && (
-            <FieldGroup label="Time range" wide>
-              <ChipBar label="Time range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
+            // named for what it moves: the history charts, not the live card under it (R63-008)
+            <FieldGroup label="History charts' range" wide>
+              <ChipBar label="History charts' range" options={presets} value={chosen} onChange={pick} custom={{ storageKey: "stratlab.breadth.periods", units: PERIOD_UNITS, defaultUnit: "months" }} />
             </FieldGroup>
           )}
         </FormGrid>

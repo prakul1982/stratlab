@@ -194,7 +194,7 @@ export function MarginFundingPage() {
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/invest/margin-funding")} title="Margin funding"
-        lede="How much of the market is bought with money brokers lend under the margin trading facility (MTF), and what your own position costs."
+        lede="How much of the market is bought with money brokers lend under the margin trading facility (MTF), and what your own position costs. The exchange publishes each trading day's figures on the next trading day, so before that day's figures come out, the newest day shown is two trading days back."
         asOf={p?.status.as_of} info={p ? <>{p.note} Source: {p.source}.</> : undefined} infoLabel="Where the numbers come from" />
       {error ? <ErrorState title="The margin funding numbers couldn't be read" action={{ label: "Try again", onClick: load }}>{error}</ErrorState>
         : !p ? <Card><Skeleton label="Reading the margin trading disclosure" /></Card> : (

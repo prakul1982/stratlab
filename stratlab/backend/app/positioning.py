@@ -696,15 +696,22 @@ def store_chain_day(name: str, day: str, summary: dict):
         _save(key, keep)
 
 
-def chain_series(name: str, since: str | None = None) -> list[dict]:
+def chain_series(name: str, since: str | None = None, roll_expiry_day: bool = False) -> list[dict]:
     """The front expiry's facts on each recorded day: day, expiry, PCR (near the money, by OI and volume), max pain,
-    ATM IV, spot."""
+    ATM IV, spot. With roll_expiry_day, a day that is the front expiry's own expiry day takes the next expiry recorded
+    that day instead (the India VIX card's IV line, R63-001: an expiring chain's model IV in its last hours read 34% beside
+    a VIX of 14.7)."""
     out = []
     for d, s in sorted(chain_history(name).items()):
         if since and d < since or not isinstance(s, dict):
             continue
-        st = (s.get("x") or {}).get(s.get("front") or "") or {}
-        out.append({"day": d, "expiry": s.get("front"), "pcr_oi": st.get("pcr_near"), "pcr_vol": st.get("pcr_near_vol"),
+        x = s.get("x") or {}
+        front = s.get("front") or ""
+        if roll_expiry_day and front[:10] == d:
+            later = sorted(e for e in x if str(e)[:10] > d)
+            front = later[0] if later else front
+        st = x.get(front) or {}
+        out.append({"day": d, "expiry": front or None, "pcr_oi": st.get("pcr_near"), "pcr_vol": st.get("pcr_near_vol"),
                     "max_pain": st.get("max_pain"), "atm_iv": st.get("atm_iv"), "spot": st.get("spot")})
     return out
 

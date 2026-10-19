@@ -405,7 +405,13 @@ def test_chain_view_live_with_change_and_iv_stats(w):
     # one clock for both views (a live chain's IV moves with the time to expiry), set mid-session so that on an expiry
     # day the current series hasn't closed yet: after 15:30 there is no time left and no IV to work out
     now = P.ist_now().replace(hour=11, minute=0, second=0, microsecond=0)
-    v = P.chain_view(main.options_data, "NIFTY", "current", full=True, now=now)
+    pick = "current"
+    v = P.chain_view(main.options_data, "NIFTY", pick, full=True, now=now)
+    # on an expiry day the expiring chain has no IV percentile by design (its last day isn't comparable with the recorded
+    # front expiry's), so the test reads the next expiry that day: it failed every expiry-day morning
+    if v["expiry"] == now.date().isoformat():
+        pick = "next"
+        v = P.chain_view(main.options_data, "NIFTY", pick, full=True, now=now)
     assert v["source"] == "live" and v["spot"] and v["rows"] and v["max_pain"] and v["atm_iv"]
     assert v["top"]["call"]["strike"] > v["spot"] > v["top"]["put"]["strike"]
     assert v["iv"]["days"] >= P.IV_MIN_DAYS and v["iv"]["percentile"] is not None
@@ -417,7 +423,7 @@ def test_chain_view_live_with_change_and_iv_stats(w):
         # shares, so the day before's open interest is its shares over its lot
         assert v["unit"] == "lots" and v["lot"]
         assert row["call_chg"] == row["call_oi"] - round(was[4] / (prev.get("lot") or v["lot"]))
-    free = P.chain_view(main.options_data, "NIFTY", "current", full=False, now=now)
+    free = P.chain_view(main.options_data, "NIFTY", pick, full=False, now=now)
     assert free["iv"] is None and free["atm_iv"] == v["atm_iv"]
 
 
@@ -443,6 +449,8 @@ def test_api_today_is_for_everyone_history_is_basic(w, paid):
         assert d["participants"]["oi"] and d["cash"]["fii"] and [r["name"] for r in d["pcr"]] == list(P.NAMES)
         assert d["full"] == (token == "basic-token") and d["plan_needed"] == "Basic"
         ch = c.get("/trade/positioning/chain", params={"name": "NIFTY"}, headers=headers(token)).json()
+        if ch.get("expiry") == P.ist_now().date().isoformat():          # an expiry day: its chain has no IV percentile by design
+            ch = c.get("/trade/positioning/chain", params={"name": "NIFTY", "expiry": "next"}, headers=headers(token)).json()
         assert ch["rows"] and (ch["iv"] is None) == (token == "free-token")
     r = c.get("/trade/positioning/history", params={"kind": "participants"}, headers=headers("free-token"))
     assert r.status_code == 402 and "Basic" in r.json()["detail"]["message"]

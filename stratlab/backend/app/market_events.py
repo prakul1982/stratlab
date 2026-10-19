@@ -907,41 +907,68 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
                                                 "day earlier when that is a holiday."), eid=_id("exp-m", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-    weekly = {_day(d) for d in got} - {None}
-    if not weekly:                                       # the rule: every Tuesday, the trading day before on a holiday
-        d = frm + timedelta(days=(1 - frm.weekday()) % 7)
-        while d <= to:
-            e = d
-            for _ in range(5):
-                try:
-                    if is_trading_day("IN", e):
-                        break
-                except Exception:
-                    break
-                e -= timedelta(days=1)
-            weekly.add(e)
-            d += timedelta(days=7)
+    # the listed contracts are today's and later, so the days already past come from the rule (R63-006: only the week's
+    # and the month's expiries carried a dot; 6 and 13 Oct had none)
+    weekly = {d for d in _rule_weekly(frm, to, 1) if d < today} | ({_day(d) for d in got} - {None}) if got else set(_rule_weekly(frm, to, 1))
     for d in sorted(weekly):
         if frm <= d <= to and d not in monthly:
-            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (_listed_day(d, "Tuesday") if got else
+            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (_listed_day(d, "Tuesday") if got and d >= today else
                            " (the exchange's rule: Tuesdays, a day earlier on a holiday)."), eid=_id("exp-w", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
+    # BSE's SENSEX options expire on Thursdays (R63-006: Positioning listed the 22 Oct SENSEX weekly; the calendar didn't)
+    try:
+        bse = [d for d in (listed("BFO", "SENSEX") if listed else []) if isinstance(d, str)]
+    except Exception:
+        bse = []
+    sensex = {d for d in _rule_weekly(frm, to, 3) if d < today} | ({_day(d) for d in bse} - {None}) if bse else set(_rule_weekly(frm, to, 3))
+    last_of_month: dict[str, date] = {}
+    for d in sensex:
+        k = d.isoformat()[:7]
+        last_of_month[k] = max(last_of_month.get(k, d), d)
+    for d in sorted(sensex):
+        if frm <= d <= to:
+            month_end = last_of_month.get(d.isoformat()[:7]) == d and (d + timedelta(days=7)).month != d.month
+            kind = "monthly" if month_end else "weekly"
+            usual = "last Thursday of the month" if month_end else "Thursday"
+            out.append(_ev("expiry", d, f"SENSEX {kind} expiry", f"SENSEX's {kind} options expire on BSE"
+                           + (_listed_day(d, usual, weekday=3) if bse and d >= today else " (the exchange's rule: Thursdays, a day earlier on a holiday)."),
+                           eid=_id("exp-sx", d), time_ist="15:30", status="released" if d < today else "scheduled"))
     return out
 
 
-def _listed_day(d: date, usual: str) -> str:
-    """Why an expiry falls on the day the exchange lists: its usual Tuesday, or the Tuesday it was moved from and why.
-    "as listed" alone told a reader nothing (R53-009)."""
-    if d.weekday() == 1:
-        return f" (the {usual})." if usual != "Tuesday" else " (they expire on Tuesdays)."
+def _rule_weekly(frm: date, to: date, weekday: int) -> list[date]:
+    """The exchange's rule for weekly expiries: every `weekday` (Tuesday 1 for NSE, Thursday 3 for BSE), the trading day
+    before when that is a holiday."""
     from .data.calendar import is_trading_day
-    tue = d + timedelta(days=(1 - d.weekday()) % 7)
+    out, d = [], frm + timedelta(days=(weekday - frm.weekday()) % 7)
+    while d <= to:
+        e = d
+        for _ in range(5):
+            try:
+                if is_trading_day("IN", e):
+                    break
+            except Exception:
+                break
+            e -= timedelta(days=1)
+        out.append(e)
+        d += timedelta(days=7)
+    return out
+
+
+def _listed_day(d: date, usual: str, weekday: int = 1) -> str:
+    """Why an expiry falls on the day the exchange lists: its usual Tuesday (Thursday for BSE), or the day it was moved
+    from and why. "as listed" alone told a reader nothing (R53-009)."""
+    name = "Tuesday" if weekday == 1 else "Thursday"
+    if d.weekday() == weekday:
+        return f" (the {usual})." if usual != name else f" (they expire on {name}s)."
+    from .data.calendar import is_trading_day
+    tue = d + timedelta(days=(weekday - d.weekday()) % 7)
     try:
         shut = not is_trading_day("IN", tue)
     except Exception:
         shut = False
     when = f"{tue.day} {tue:%b}"
-    return (f", a {d:%A} this time: Tuesday {when} is a market holiday." if shut
+    return (f", a {d:%A} this time: {name} {when} is a market holiday." if shut
             else f", a {d:%A} this time, the exchange's listed date (usually the {usual}).")
 
 

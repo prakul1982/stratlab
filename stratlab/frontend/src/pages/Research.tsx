@@ -19,6 +19,7 @@ import { loadSurveillance } from "../lib/surveillance";
 import { loadEtfGaps } from "../lib/etfGaps";
 import { loadFoChanges } from "../lib/foChanges";
 import { AlertButton } from "../components/AlertForm";
+import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
 import { suggestions, type Suggestion } from "../components/CompanyCombobox";
@@ -113,6 +114,10 @@ function usePulse(region: Region) {
     load();
     return () => { live = false; clearTimeout(late); if (next) clearTimeout(next); };
   }, [region, again]);
+  // the levels again each minute while they're live, in place: a failed read keeps the ones shown
+  useLiveRefresh(!!data?.indices.some((i) => i.live), () => {
+    researchApi.pulse(region).then((d) => { if (!d.pending && d.indices.length) setData((cur) => (cur ? d : cur)); }).catch(() => undefined);
+  });
   return { data, error, slow, state: pulseLoad({ data, error, slow }), retry: () => setAgain((n) => n + 1) };
 }
 
@@ -216,6 +221,15 @@ export function CompanyPage() {
   // the name and the symbol, then the price (R8O-009); the name is kept for the next first frame (lib/title titleFor)
   useDocTitle(c ? `${c.name || c.symbol}${c.name && c.name.toUpperCase() !== c.symbol ? ` (${c.symbol})` : ""}${c.quote?.price != null ? ` ${price(c.quote.price, c.currency || (region === "IN" ? "INR" : "USD"))}` : ""}` : null);
   useEffect(() => { if (c) rememberName(region, c.symbol, c.name); }, [c, region]);
+  // the price and the day's change again each minute while the market trades; the rest of the page stays as read
+  useLiveRefresh(!!c?.market_open && (c.quote?.at == null || liveQuote(c.quote.at)), () => {
+    const s0 = c?.symbol;
+    if (!s0) return;
+    researchApi.quotes(region, [s0]).then((q) => {
+      const x = q[s0];
+      if (x?.price != null) setC((cur) => (cur && cur.symbol === s0 ? { ...cur, quote: { ...cur.quote, ...x }, as_of: x.at ?? cur.as_of } : cur));
+    }).catch(() => undefined);
+  });
   useEffect(() => {
     let live = true;
     setC(null); setError(null); setResults(null);
@@ -742,6 +756,11 @@ export function WatchlistPage() {
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [region, key]);
+  // read again each minute while the prices are live, each row kept until its new price comes
+  useLiveRefresh(!!quotes && Object.values(quotes).some((q) => liveQuote(q?.at)), () => {
+    void quotesInBatches((syms) => researchApi.quotes(region, syms), mine.map((w) => w.symbol),
+      (soFar) => setQuotes((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(soFar).filter(([, q]) => q?.price != null)) })), () => true);
+  });
   const add = (symbol: string, r: Region, name?: string) => {
     if (has(r, symbol)) { notify(watchNote(symbol, true, false)); return; }
     toggle({ region: r, symbol, name: name?.slice(0, 120) ?? null }, true).then((changed) => notify(watchNote(symbol, true, changed))).catch(fail);
@@ -765,8 +784,10 @@ export function WatchlistPage() {
           <DataTable label="Your watchlist" rows={mine} rowKey={(w) => `${w.region}:${w.symbol}`}
             columns={[
               { key: "s", header: "Company", rowHeader: true, wrap: true, cell: (w) => (
+                // the flags sit under the name, not in a column of their own, so a phone fits the row and its Remove (R63-003)
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
-                  {w.name && <span className="k-sub-line">{w.name}</span>}</>) },
+                  {w.name && <span className="k-sub-line">{w.name}</span>}
+                  <span className="k-sub-line"><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></span></>) },
               { key: "p", header: "Price", numeric: true, cell: (w) => {
                 const q = quotes?.[w.symbol];
                 if (quotes == null || !(w.symbol in quotes)) return "…";       // its batch hasn't come yet
@@ -782,7 +803,6 @@ export function WatchlistPage() {
                 const x = quotes[w.symbol]?.change_pct, d = sessionOf(quotes[w.symbol], marketTz(region));
                 return x == null ? "–" : <><Delta value={x}>{pct(x, 2)}</Delta>{d && <span className="k-sub-line" data-testid="watch-change-day">{fmtDate(d, { weekday: true, year: false })}</span>}</>;
               } },
-              { key: "b", header: "Flags", cell: (w) => <><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></> },
               { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w, false).catch(fail)}>Remove</button> },
             ]} />
         </Card>
