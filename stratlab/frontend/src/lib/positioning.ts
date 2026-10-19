@@ -182,6 +182,13 @@ export function chainWords(c: { source?: string | null; at_close?: boolean; as_o
   return "live chain";
 }
 
+/** The chain's words with its time, naming the time once: an aging live chain's words already carry it (R65-005: "Chain at
+ * 12:29 IST, 19 Oct, 12:29 IST"). */
+export function chainWithTime(c: { source?: string | null; at_close?: boolean; as_of?: string | null }, time: string | null | undefined, now: number = Date.now()): string {
+  const words = chainWords(c, now);
+  return / at \d/.test(words) || !time ? words : `${words}, ${time}`;
+}
+
 /** The status line for one of the exchange's daily numbers. */
 export function statusLine(s: PartStatus, what: string): string {
   if (s.status === "none") return `No ${what} stored yet. ${s.reason ?? "The exchange publishes them each trading evening, usually between 18:30 and 20:00 IST."}`;

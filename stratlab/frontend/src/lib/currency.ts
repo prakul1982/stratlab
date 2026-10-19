@@ -37,8 +37,13 @@ export function usePricing() {
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   useEffect(() => {
     let live = true;
-    publicGet<Pricing>("/pricing").then((r) => { if (live) { setP(r); setStatus("ready"); } }).catch(() => { if (live) { setP(null); setStatus("failed"); } });
-    return () => { live = false; };
+    // asked again twice before "couldn't be loaded" (R65-002: one failed read during a deploy left the landing page saying
+    // today's offer couldn't be loaded)
+    let timer = 0;
+    const read = (left: number) => publicGet<Pricing>("/pricing").then((r) => { if (live) { setP(r); setStatus("ready"); } })
+      .catch(() => { if (!live) return; if (left > 0) timer = window.setTimeout(() => read(left - 1), left === 2 ? 1500 : 4000); else { setP(null); setStatus("failed"); } });
+    void read(2);
+    return () => { live = false; window.clearTimeout(timer); };
   }, []);
   const auto = p ? p.countries[country() ?? ""] ?? (country() ? "USD" : "INR") : "INR";
   const chosen = p && code && p.currencies[code] ? code : auto;

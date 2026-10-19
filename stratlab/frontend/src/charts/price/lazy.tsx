@@ -41,7 +41,8 @@ const kept = new Map<string, { at: number; got: Promise<Answer> }>();
 export function companyLoader(region: string, symbol: string, reading?: QuoteReading | null): Loader {
   return (tf: BaseTf, o) => {
     const url = `/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`;
-    if (o.before) return api<Answer>(url);
+    // the older candles a scrolled-back chart asks for are kept too: each minute's new price draws the chart again, and it
+    // asked for them again each time (R65-001)
     const hit = kept.get(url);
     let got = hit && Date.now() - hit.at < CHART_KEEP_MS ? hit.got : undefined;
     if (!got) {
@@ -50,7 +51,7 @@ export function companyLoader(region: string, symbol: string, reading?: QuoteRea
       got.catch(() => kept.delete(url));
       if (kept.size > 40) kept.delete(kept.keys().next().value!);
     }
-    return got.then((a) => ({ ...a, candles: settleLast(a.candles ?? [], reading) }));
+    return o.before ? got : got.then((a) => ({ ...a, candles: settleLast(a.candles ?? [], reading) }));
   };
 }
 

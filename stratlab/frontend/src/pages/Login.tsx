@@ -441,7 +441,7 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
  * every case: while the prices are coming the cards are drawn with their amounts held back (so nothing flashes rupees and
  * then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
 function Pricing() {
-  const { pricing, currency, status } = usePricing();
+  const { pricing, currency, pick, status } = usePricing();
   const loading = status === "loading";
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
@@ -478,6 +478,15 @@ function Pricing() {
             <Seg label="Billing period" value={period} onChange={(v) => setPeriod(v as "month" | "year")}
               options={[{ value: "month", label: "Monthly" }, { value: "year", label: YEARLY_LABEL }]} />
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
+          {/* the currency, as the signed-in Plans page offers it (R65-004: an Indian visitor whose browser says en-US saw only
+              dollars, with no way to pick rupees) */}
+          {pricing && !loading && (
+            <label className="small muted lp-currency">Prices in{" "}
+              <select className="k-input" value={currency} onChange={(e) => pick(e.target.value)} aria-label="Prices in">
+                {Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)}
+              </select>
+            </label>
+          )}
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
