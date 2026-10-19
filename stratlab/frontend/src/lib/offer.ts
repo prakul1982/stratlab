@@ -21,6 +21,21 @@ export function endsAt(iso: string): string {
   return `${day} at ${time} IST`;
 }
 
+/** The same instant in the visitor's own time zone, when that isn't India's: "Thu 22 Oct, 12:50 pm your time" (R68-009: a US
+ * or UK visitor had to convert IST themselves). Null in India, or when the browser's zone can't be read. */
+export function endsLocal(iso: string, tz?: string): string | null {
+  try {
+    const zone = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!zone || zone === IST || zone === "Asia/Calcutta") return null;
+    const d = new Date(iso);
+    const day = d.toLocaleDateString("en-GB", { timeZone: zone, weekday: "short", day: "numeric", month: "short" }).replace(",", "").replace(/\bSept\b/, "Sep");
+    const time = d.toLocaleTimeString("en-GB", { timeZone: zone, hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s?([ap]m)/i, (_, m) => ` ${m.toLowerCase()}`);
+    return `${day}, ${time} your time`;
+  } catch {
+    return null;
+  }
+}
+
 /** The same instant for a phone's one-line banner, without the weekday: "22 Oct, 5:20 pm IST". */
 export function endsAtShort(iso: string): string {
   return endsAt(iso).replace(/^\w{3} /, "").replace(" at ", ", ");
@@ -74,16 +89,18 @@ export function listing(items: string[]): string {
 
 /** The heading and the line under it for the pricing section (landing) and the Plans page. Each plan gets exactly
  * what its card lists, payments on or not; only the launch offer opens everything (the owner's decision, 7 Oct). */
-export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, unknown>, where: "landing" | "app", email = EARLY_ACCESS_EMAIL): { title: string; lede: string } {
+export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, unknown>, where: "landing" | "app", email = EARLY_ACCESS_EMAIL, tz?: string): { title: string; lede: string } {
   const mode = offerMode(o);
   if (mode === "promo") {
-    const day = endsAt(o!.promo_until!);
+    const day = endsAt(o!.promo_until!), local = endsLocal(o!.promo_until!, tz);
     return {
       title: where === "landing" ? `Every Pro feature, free until ${day}.` : "Plans",
       // the Plans page shows the countdown box with the end, so its line doesn't state the offer a second time
-      lede: (where === "landing" ? `Launch offer: every Pro feature is free for everyone until ${day}. After that, each plan gets what its card lists.`
+      lede: (where === "landing" ? `Launch offer: every Pro feature is free for everyone until ${day}${local ? ` (${local})` : ""}. After that, each plan gets what its card lists.`
         : "When the launch offer ends, each plan gets what its card lists.")
-        + (o!.payments ? "" : ` Paid plans aren't on sale yet; ask us at ${email} for early access.`),
+        // whether a plan's button sells something now, said outright (R68-009: "Continue with Google to get Pro" during a free offer)
+        + (o!.payments ? " Basic and Pro are on sale now too, for anyone who wants their plan in place when the offer ends."
+          : ` Paid plans aren't on sale yet; ask us at ${email} for early access.`),
     };
   }
   if (mode === "early") return {

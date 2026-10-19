@@ -377,7 +377,7 @@ test("R39: each policy page's whole text is in its own HTML, from the one source
   assert.doesNotMatch(terms, /\{(name|email)\}|\*\*/);          // no mark left unread
   assert.match(read("src/pages/LegalPage.tsx"), /content\/legal/);
   // boot.js: the "Couldn't load" card goes above the words, never in place of them
-  assert.match(read("public/boot.js"), /querySelector\("\[data-readable\]"\)[\s\S]*if \(!keep\) root\.textContent = ""/);
+  assert.match(read("public/boot.js"), /querySelector\("\[data-readable\]"\)[\s\S]*if \(!keep && !owned\) root\.textContent = ""/);
 });
 
 test("R39: the 404 page and the start-up shell have the site's look inline: a logo home, and links to Home, the companies and the library", () => {
