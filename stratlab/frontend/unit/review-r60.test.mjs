@@ -37,7 +37,7 @@ test("R60-008/010/005: Net worth dates prices only over market prices; the next 
 
 test("R60-012: the visitor's plans page loads the side-by-side tables without the account code", () => {
   const login = read("src/pages/Login.tsx");
-  assert.match(login, /lazy\(\(\) => import\("\.\.\/components\/PlanCompare"\)/);
+  assert.match(login, /lazy\(\(\) => (?:importWithRetry\(\(\) => )?import\("\.\.\/components\/PlanCompare"\)/);
   assert.match(login, /\{plansOnly && <section className="lp-sec lp-compare">/);
   const cmp = read("src/components/PlanCompare.tsx");
   assert.ok(!/from "\.\/kit"/.test(cmp) && !/lib\/(app|api)"/.test(cmp), "PlanCompare must not pull the kit index or the account code");

@@ -17,11 +17,13 @@ import { publicGet } from "../lib/http";
 import { plainTerms } from "../lib/plainTerms";
 import { checksLine, LOST_CHECKS, lostMoney, underHeadline } from "../lib/tradeUi";
 import type { LibEntry } from "../components/LibraryBits";
+import { importWithRetry } from "../lib/lazyRetry";
 
 /** A landing card's checks line, unless its headline already gives the count (R61-007). */
 const cardChecks = (e: LibEntry) => underHeadline(lostMoney(e.verdict.verdict, e.stats?.ret) ? LOST_CHECKS : checksLine(e.verdict.passed, e.verdict.total),
   e.verdict.fact_headline ?? e.verdict.headline);
-const PlanCompare = lazy(() => import("../components/PlanCompare").then((m) => ({ default: m.PlanCompare })));
+// asked for again when its download fails, like every other lazy piece (R64-005: a 502 on a chunk just after a deploy)
+const PlanCompare = lazy(() => importWithRetry(() => import("../components/PlanCompare")).then((m) => ({ default: m.PlanCompare })));
 
 /* The public landing page: what StratLab does, in its three spaces (Trade, the strategy lab it began as, first; then
  * Invest and Money), the alerts across them, the plans, and one way in (Google sign-in). Every button that signs in

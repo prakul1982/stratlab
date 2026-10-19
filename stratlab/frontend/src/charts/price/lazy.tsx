@@ -32,9 +32,26 @@ export function PriceChart(props: PriceChartProps) {
 type Answer = { candles: RawCandle[]; more?: boolean; currency?: string };
 
 /** Candles of a company on the research pages (India or the US). With `reading`, the newest candle is the page's own price. */
+/** A company's candles as last read, kept a few minutes: the page reads its price again each minute while the market
+ * trades (lib/liveRefresh), and each new price settles the newest candle on these instead of reading the whole year again
+ * (R64-003: the 1-year hourly chart was downloaded every minute). Read again after CHART_KEEP_MS, so the candles' volume
+ * moves on too. */
+const CHART_KEEP_MS = 5 * 60_000;
+const kept = new Map<string, { at: number; got: Promise<Answer> }>();
 export function companyLoader(region: string, symbol: string, reading?: QuoteReading | null): Loader {
-  return (tf: BaseTf, o) => api<Answer>(`/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`)
-    .then((a) => (o.before ? a : { ...a, candles: settleLast(a.candles ?? [], reading) }));
+  return (tf: BaseTf, o) => {
+    const url = `/research/chart/${region}/${encodeURIComponent(symbol)}?tf=${tf}&range=${(o.range ?? "1y").toLowerCase()}${o.before ? `&before=${encodeURIComponent(o.before)}` : ""}`;
+    if (o.before) return api<Answer>(url);
+    const hit = kept.get(url);
+    let got = hit && Date.now() - hit.at < CHART_KEEP_MS ? hit.got : undefined;
+    if (!got) {
+      got = api<Answer>(url);
+      kept.set(url, { at: Date.now(), got });
+      got.catch(() => kept.delete(url));
+      if (kept.size > 40) kept.delete(kept.keys().next().value!);
+    }
+    return got.then((a) => ({ ...a, candles: settleLast(a.candles ?? [], reading) }));
+  };
 }
 
 /** Candles of any instrument the app trades on (notebooks, backtests, paper trading). */

@@ -237,9 +237,10 @@ export function TaxReportPage() {
     { key: "why", header: "Why", wrap: true, cell: (u) => <span className="k-muted">{u.reason}</span> },
   ];
 
+  // today's prices only value open lots: with none open, nothing here is at today's price, so no "Prices as of" (R64-010)
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Money · Tax" title="Capital gains on your shares" asOf={rep?.prices_at} asOfLabel="Prices as of"
+      <PageHeader eyebrow="Money · Tax" title="Capital gains on your shares" asOf={rep?.below_cost.open ? rep.prices_at : undefined} asOfLabel="Prices as of"
         lede="Your tradebooks from every broker, matched first in, first out: short- and long-term gains for each financial year, with the exemption and set-off."
         info="Add F&O and your other income for the year's total tax. Only you can see your trades." infoLabel="About the tax report" />
       <Notice label="Estimate only"><b>Estimate only.</b> {rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."}</Notice>

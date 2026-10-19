@@ -1321,7 +1321,10 @@ SIZED = re.compile(r"\b(is|are|remains?|stays?|looks?|seems?|appears?|was|were)\
 
 # A holding's change is a difference between two shares of the company, so it is said in percentage points: "FIIs'
 # ownership fell by 2.41%" reads as a 2.41% fall of the holding itself, not from 24.10% to 21.69% (round 39).
-_HOLD_NOUN = r"(?:shareholding|holding|holdings|stake|ownership)"
+# "share of FIIs" and "FIIs' share" too (R64-009: "Share of FIIs fell by 2.41% to 9.07%"), never a bare "share", which is
+# often the share price
+_HOLD_NOUN = (r"(?:shareholding|holding|holdings|stake|ownership|share(?=\s+of\b)|"
+              r"(?:FII|FPI|DII|promoter|public|retail|institutional|foreign|mutual\s+fund)s?['’]?\s+share)")
 _HOLD_GAP = r"(?:\s+(?!company\b|companies\b|price\b|prices\b|profit\b|sales\b|revenue\b|income\b)[\w'’-]+){0,3}"
 _HOLD_VERB = (r"(?:fell|fall(?:s|en)?|declin(?:e|es|ed)|decreas(?:e|es|ed)|dropped|drops?|reduced|rose|rises?|risen|increas(?:e|es|ed)|grew|grows?|climbed|jumped|"
               r"slipped|dipped|shrank|"
