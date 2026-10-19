@@ -94,6 +94,15 @@ export function marketState(m: Market, now = new Date()): MarketState {
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };
 }
 
+/** Minutes since the market closed today (null when it hasn't traded today or is still open): how long its closing
+ * prints have had to settle. */
+export function minutesSinceClose(m: Market, now = new Date()): number | null {
+  if (!m.hours?.open || !m.hours?.close || m.id === "FX" || m.id === "CRYPTO") return null;
+  const w = wall(now, m.tz), c = hm(m.hours.close);
+  const traded = w.wd >= 1 && w.wd <= 5 && !new Set(m.holidays ?? []).has(w.iso(0));
+  return traded && w.min >= c ? w.min - c : null;
+}
+
 /** The market whose hours an options session keeps: its exchange's own. NFO and BFO trade with India's futures and
  * options close (`fo_close`, 15:40 since 3 Aug 2026), MCX and CDS have their own markets; the server sends each market's
  * hours as of today (MCX closes at 23:55 while US daylight saving is off), so none is written down here. */
