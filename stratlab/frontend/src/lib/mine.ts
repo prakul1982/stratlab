@@ -41,10 +41,12 @@ const TILE_TZ: Record<string, string> = { IN: "Asia/Kolkata", US: "America/New_Y
 
 /** "on 8 Oct" when a tile's last close is a session before today in its market (R7T-003: SENSEX showed 8 Oct's −1.44% as the
  * day's move after 9 Oct's open); null when it is today's. */
-export function tileWhen(day: string | null | undefined, today: string, fmt: (iso: string) => string, closed = false): string | null {
+export function tileWhen(day: string | null | undefined, today: string, fmt: (iso: string) => string, closed = false, market = false): string | null {
   // a session that has closed says its day too, today's included, as the tiles beside it do (R13-007: India's tiles said
   // "on 9 Oct" after their close while the S&P 500's, closed too, had no date)
-  return day && (day < today || closed) ? `on ${fmt(day)}` : null;
+  if (day && (day < today || closed)) return `on ${fmt(day)}`;
+  // a market's index trading now says so, beside India's "on 19 Oct" (R71-003: "S&P 500 7,698 ▲ +0.51%" with no time)
+  return day && market && day === today ? "today, live" : null;
 }
 
 /** The market a tile's day is of, for whether its session has closed: the region of a research index; none for a pair or a
