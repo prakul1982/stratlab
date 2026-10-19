@@ -24,3 +24,9 @@ test("R71-003: a market's index trading now says 'today, live' beside India's 'o
 test("R71-006: a live price shows the close its move is from", () => {
   assert.match(read("src/components/Research.tsx"), /data-testid="price-prev">Previous close \{price\(q\.price - q\.change, currency\)\}/);
 });
+
+test("R71-004: the Invest home's US tab lists the US's own coming events", () => {
+  const src = read("src/pages/SpaceHomes.tsx");
+  assert.match(src, /\(region !== "US" \|\| e\.kind === "us"\)/);
+  assert.match(src, /<NextEvents region=\{region\} \/>/);
+});
