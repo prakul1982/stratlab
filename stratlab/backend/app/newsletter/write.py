@@ -115,6 +115,12 @@ def market_sections(f: dict) -> list[dict]:
         out.append({"title": f"Newly in Stage 2, Supertrend not up ({scan['group']})", "items": [
             _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]))
             for r in scan["stage2"]]})
+    shut = [c for c in f.get("closures") or [] if c.get("day")]
+    reopen = next((c["next_open"] for c in f.get("closures") or [] if c.get("next_open")), None)
+    if shut and reopen:
+        days = " and ".join(_day(c["day"]) + (f" ({c['name']})" if c.get("name") else "") for c in shut)
+        out.append({"title": "Market holiday", "items": [_item(f"The {REGION_NAME[region]} market is closed on {days}. "
+                                                               f"The next session is {_day(reopen)}.")]})
     heads = [h for h in f.get("headlines") or [] if not banned(h["headline"])]
     if heads:
         out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source")) for h in heads]})
@@ -564,7 +570,10 @@ def render(issue: dict) -> tuple[str, str]:
     when = close_stamp({**issue, "kind": kind}) or as_of(issue.get("at"), region)
     if when:
         blocks.append(kit.note(f"Prices and numbers as of {when}"))
-    name = {"market_in": "India briefs", "market_us": "US briefs", "my_stocks": "My stocks"}[unsubscribe_type({**issue, "kind": kind, "region": region})]
+    # the link says what the page it opens asks about, in the words of the line above it (R67-009: "India briefs" in the
+    # email, "the India market email" on the page)
+    from ..alerts import NEWSLETTER_NAMES
+    name = NEWSLETTER_NAMES[unsubscribe_type({**issue, "kind": kind, "region": region})]
     what = "My stocks email" if kind == "my_stocks" else f"{REGION_NAME.get(region, '')} market brief".strip()
     footer = kit.Footer(
         why=f"You get this {'weekly' if weekly else 'daily'} because you chose the {what} in StratLab.",

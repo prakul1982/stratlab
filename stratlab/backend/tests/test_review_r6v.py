@@ -397,7 +397,7 @@ def test_email_links_use_the_public_site_which_forwards_them_to_the_api(monkeypa
 
 def test_a_preview_unsubscribe_link_is_the_signed_out_page_not_settings(w):
     d = email_previews.describe("market_in", True)
-    link = re.search(r"Unsubscribe from India briefs: (\S+)", d["text"]).group(1)
+    link = re.search(r"Unsubscribe from the India market brief: (\S+)", d["text"]).group(1)
     assert "/unsubscribe?t=" + email_kit.PREVIEW_TOKEN in link and "settings" not in link
     r = w["client"].get("/unsubscribe", params={"t": email_kit.PREVIEW_TOKEN})
     assert r.status_code == 200 and "nothing was changed" in r.text and "sign-in" in r.text

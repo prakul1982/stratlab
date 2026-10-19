@@ -415,7 +415,7 @@ def button(label: str, url: str) -> Block:
 class Footer:
     why: str                                          # "You get this because you chose the daily India brief."
     frequency: tuple[str, str] | None = None          # ("Switch to weekly", path): the newsletters' frequency
-    unsubscribe: str | None = None                    # "Unsubscribe from India briefs": the one-click link for this type
+    unsubscribe: str | None = None                    # "Unsubscribe from the India market brief": the one-click link for this type
     transactional: str | None = None                  # why it can't be turned off ("about your account")
     legal: str | None = None                          # the facts-not-advice line
     manage: str = MANAGE_ALERTS                       # the Settings card "Manage emails" opens

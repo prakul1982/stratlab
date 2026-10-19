@@ -47,7 +47,7 @@ test("R8B-008: yesterday's numbers on the evening of today say when today's are 
   assert.equal(cardFigures({ today, live: null, pending }).when, "Latest: 8 Oct · 9 Oct due about 18:30 IST");
   assert.equal(cardFigures({ today, live: null }).when, "Last close, 8 Oct");
   const breadth = read("src/pages/BreadthPage.tsx");
-  assert.match(breadth, /title=\{latestDue\(t\.day, pending\) \?\? \(lastClose/);
+  assert.match(breadth, /title=\{latestDue\(t\.day, pending\) \?\? dailyTitle\(/);
   assert.match(read("src/pages/Screens.tsx"), /data-testid="screens-pending"/);
 });
 

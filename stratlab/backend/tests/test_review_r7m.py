@@ -139,7 +139,7 @@ def test_the_unsubscribe_page_has_the_sites_look_and_points_at_settings(w):
     c = w["client"]
     t = mail_tokens.make("u-pro", "unsubscribe", "market_in")
     r = c.get("/unsubscribe", params={"t": t})
-    assert r.status_code == 200 and "Unsubscribe from the India market email?" in r.text and "<form method=post" in r.text
+    assert r.status_code == 200 and "Unsubscribe from the India market brief?" in r.text and "<form method=post" in r.text
     for look in ("<style>", 'class="brand"', "--paper:#F5F1E8", "prefers-color-scheme:dark", '"Fraunces"', 'class="btn"', "noindex"):
         assert look in r.text, look
     assert "/settings#notifications" in r.text and "/account" not in r.text      # the real path, not "Account"

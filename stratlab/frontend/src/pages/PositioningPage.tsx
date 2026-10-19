@@ -280,7 +280,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <Stat label="Max-pain strike" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
-              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}${expiringToday(c) ? EXPIRING_IV : ""}`} />
+              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}${!expiringToday(c) ? "" : c.atm_iv == null ? EXPIRED_IV : EXPIRING_IV}`} />
               <IvFig c={c} full={full} plan={plan} />
             </StatRow>
             <div className="k-spread">
@@ -298,7 +298,8 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <DataTable label={`${name} open interest, change and volume by strike, in ${unit}`} columns={rowCols} rows={[...c.rows].reverse()} rowKey={(r) => String(r.strike)}
                 rowAttrs={(r): Record<string, string> => (r.strike === c.atm ? { "data-atm": "1" } : {})} />
             </Disclosure>
-            <p className="k-note">{chainCounts(c).note} {c.note}</p>
+            {/* the page's own note says the rest, once, at its foot (R66-006: the same sentence twice in a row) */}
+            <p className="k-note">{chainCounts(c).note}</p>
           </div>
         )}
     </Card>
@@ -309,6 +310,8 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
  * India VIX card, which reads the next expiry that day). */
 const expiringToday = (c: Pick<ChainFacts, "expiry">) => !!c.expiry && c.expiry.slice(0, 10) === istToday();
 const EXPIRING_IV = ". These options expire today, so their IV runs high in their last hours; the India VIX card reads the next expiry's";
+// after the close they have no time left, so no IV at all (R66-007: "–" under the live hours' reason at 15:35 IST)
+const EXPIRED_IV = ". These options expired at today's close, so there is no time left to work out an IV from; pick the next expiry for one";
 
 function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }) {
   if (!full) return <Stat label="IV percentile and rank" value={<Link to="/plans" className="link k-small">{plan} plan</Link>} note="Over StratLab's recorded days" />;

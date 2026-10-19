@@ -134,7 +134,7 @@ export function FoChangesPage() {
             <Card label="Every change">
               <CardHead title="Every change" />
               <div className="k-toolbar">
-                <ChipBar label="Kind of change" value={filter} onChange={(f) => setFilter(f as Filter)} options={FILTERS.map(([value, label]) => ({ value, label }))} />
+                <ChipBar label="Kind of change" wrap value={filter} onChange={(f) => setFilter(f as Filter)} options={FILTERS.map(([value, label]) => ({ value, label }))} />
                 <label className="k-search sf-search"><Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a symbol" aria-label="Find a symbol" /></label>
                 {v.mine.length > 0 && <CheckField label="Only my watchlist and sessions" checked={onlyMine} onChange={setOnlyMine} />}
               </div>
