@@ -267,17 +267,33 @@ def set_alert_emails(uid: str, on: bool) -> None:
     db.set_setting(ALERT_OFF + uid, "" if on else "1")
 
 
+# the pages where a reader chooses an email's alerts or reminders: its "Manage emails" opens that page, not Settings, which
+# has no switch for them (R69-002: the advance tax reminder's "Manage emails" opened Settings → Alerts)
+CHOSEN_ON = ("/alerts", "/money/calendar", "/money/tax-tools", "/research/screens", "/research/scan", "/research/filings",
+             "/trade/events", "/trade/fo-changes", "/invest/holders")
+# one email that has its own unsubscribe, instead of every alert email's (R69-003: the paper trading report's "Turn off
+# alert emails" turned off every alert, reminder and admin note): its link's words
+OWN_UNSUBSCRIBE = {"daily_report": "Turn off this report"}
+
+
+def manage_path(path: str) -> str | None:
+    """The page an email's "Manage emails" opens: the page its link goes to when the reader chose the alert there, else
+    None (Settings → Notifications → Alerts)."""
+    return path if any(path == p or path.startswith(p + "?") or path.startswith(p + "#") for p in CHOSEN_ON) else None
+
+
 def send_message(to: str, subject: str, text: str, path: str = "/account", label: str = "Alert",
                  why: str = "You get this because you turned on notifications in StratLab.", button_label: str | None = None,
-                 headers: dict | None = None, uid: str | None = None) -> None:
+                 headers: dict | None = None, uid: str | None = None, unsub: str | None = None) -> None:
     """Email a plain-lines message (subject and text, as a phone notification would carry them) in the shared email
     design, with a button to `path` on the site and a Manage emails link. The text version is the lines themselves.
     With `uid` (the reader), the footer has a one-click unsubscribe and the email carries stratlab.studio's own
     List-Unsubscribe headers, so the mail service's tracking link isn't the one a mail app offers (R9P-001)."""
     from . import email_kit as kit
-    html, plain = kit.message(subject, text, path, label, why, button_label=button_label,
-                              date=kit.today_label(), unsubscribe="Turn off alert emails" if uid else None)
-    html, plain, own = kit.finish(html, plain, uid, ALERT_EMAILS if uid else None)
+    what = unsub if unsub in OWN_UNSUBSCRIBE else ALERT_EMAILS
+    html, plain = kit.message(subject, text, path, label, why, button_label=button_label, date=kit.today_label(),
+                              unsubscribe=OWN_UNSUBSCRIBE.get(what, "Turn off alert emails") if uid else None, manage=manage_path(path))
+    html, plain, own = kit.finish(html, plain, uid, what if uid else None)
     send_email(to, subject, plain, html=html, headers={**(own or {}), **(headers or {})} or None)
 
 
@@ -296,6 +312,7 @@ NEWSLETTER_NAMES = {"market_in": "the India market brief", "market_us": "the US 
                     "screens": "the weekly emails from your saved stock screens",
                     "advance_tax": "the advance tax reminders",
                     "alert_emails": "alert emails (your alerts, reminders and the admin notes)",
+                    "daily_report": "the daily paper trading report",
                     "all": "all StratLab newsletters, tips and reminders"}
 
 
@@ -376,7 +393,7 @@ def tell_admins(subject: str, text: str, label: str = "Admin alert") -> int:
 
 
 def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: str | None = None,
-             label: str = "Alert", force_email: bool = False) -> list[tuple[str, object]]:
+             label: str = "Alert", force_email: bool = False, unsub: str | None = None) -> list[tuple[str, object]]:
     """(channel, send) for every channel the user set up that the server can use. Email is skipped once the person
     unsubscribed from alert emails, except for a test they asked for (`force_email`). Telegram and email are Basic and
     up (the plan's "alerts"), so they stop after a downgrade to Free; the phone stays."""
@@ -393,7 +410,7 @@ def jobs_for(profile: dict, subject: str, text: str, url: str = "/paper", why: s
         jobs.append(("telegram", lambda: send_telegram(profile["telegram_chat_id"], text)))
     to = email_for(profile)
     if to and email_ready() and email_confirmed(profile) and (force_email or alert_emails_on(profile.get("id"))):   # only an address its owner confirmed from a link
-        jobs.append(("email", lambda: send_message(to, subject, text, url, label, uid=profile.get("id"), **({"why": why} if why else {}))))
+        jobs.append(("email", lambda: send_message(to, subject, text, url, label, uid=profile.get("id"), unsub=unsub, **({"why": why} if why else {}))))
     return jobs
 
 
@@ -404,9 +421,9 @@ def reached(channel: str, result) -> bool:
 
 
 def notify(profile: dict, subject: str, text: str, background: bool = True, url: str = "/paper", why: str | None = None,
-           label: str = "Alert") -> list[str]:
+           label: str = "Alert", unsub: str | None = None) -> list[str]:
     """Send to every usable channel the user set up. Returns the channels attempted."""
-    pairs = jobs_for(profile, subject, text, url, why, label)
+    pairs = jobs_for(profile, subject, text, url, why, label, unsub=unsub)
     channels = [c for c, _ in pairs]
     jobs = [j for _, j in pairs]
 

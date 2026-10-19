@@ -1137,7 +1137,9 @@ def _unsubscribe(t: str, act: bool = True) -> str | None:
         money_advance_tax.set_remind(uid, False)
     if act and what == alerts.ALERT_EMAILS:
         alerts.set_alert_emails(uid, False)
-    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS):
+    if act and what == "daily_report":
+        change_prefs(uid, lambda cur: {**cur, "daily_report": False})
+    if act and what not in ("tips", "screens", "advance_tax", alerts.ALERT_EMAILS, "daily_report"):
         newsletter_prefs.set(uid, {k: "off" for k in newsletter_prefs.KEYS} if what == "all" else {what: "off"})
     return alerts.NEWSLETTER_NAMES[what]
 

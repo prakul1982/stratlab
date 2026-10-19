@@ -85,6 +85,10 @@ export function AlertSettingsCard() {
           </FormActions>
         </div>}
         {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
+        {/* which alerts this card holds and which are chosen elsewhere: an alert email's "Manage emails" opens the page its
+            alerts were set on, and the rest land here (R69-002) */}
+        {ch.email && <p className="k-small k-muted k-hint-line" data-testid="alert-where">Price alerts, scan and filing alerts, event
+          and money reminders and screen emails are each turned on or off on their own page; they all go to this email.</p>}
         {ch.email && me.alerts.email_off && <p className="k-small k-muted k-hint-line" data-testid="alert-emails-off">Alert emails are off: you used the unsubscribe link in one.{" "}
           {me.alerts.email && <button type="button" className="link" disabled={!canReport} onClick={() => void save(true)}>Turn alert emails back on</button>}</p>}
         <FormActions>

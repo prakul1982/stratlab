@@ -304,13 +304,15 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
             # the alert listed one circular four times under "5 rate or rule changes" (R59-002)
             seen_now: set = set()
             key = lambda c: (str(c.get("date")), " ".join(str(c.get("subject")).lower().split()))
+            # and by its file: one circular's zip listed under two subjects (R69-005: "5 changes", CMTR76963.zip twice)
             new = [c for c in value if c["id"] not in set(s["seen"])
-                   and not (c["id"] in seen_now or key(c) in seen_now or seen_now.update((c["id"], key(c))))]
+                   and not (c["id"] in seen_now or key(c) in seen_now or (c.get("url") and c["url"] in seen_now)
+                            or seen_now.update(x for x in (c["id"], key(c), c.get("url")) if x))]
             if new and not first:
                 s["pending"] = _once({"at": now.isoformat(timespec="minutes"), "why": "new circular",
                                       "items": (((s["pending"] or {}).get("items") or []) + new)[-20:]})
                 # the address after a dash, not in brackets: the email turns it into a link, which left a stray "(" (R52-009)
-                lines += [f"- NSE circular {c['date']}: {c['subject']}" + (f" — {c['url']}" if c["url"] else "") for c in new[:10]]
+                lines += [f"- NSE circular {c['date']}: {_whole(c['subject'])}" + (f" — {c['url']}" if c["url"] else "") for c in new[:10]]
             s["seen"] = (s["seen"] + [c["id"] for c in new])[-MAX_SEEN:] or ["-"]
             # each circular once: the exchange's list repeats some, and "5 matching" sat over a list of 2 (R57-014)
             n = len({(c.get("date"), " ".join(str(c.get("subject")).lower().split())) for c in value})
@@ -336,6 +338,15 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
     st["last_run"] = now.isoformat(timespec="minutes")
     _save(st)
     return lines
+
+
+def _whole(subject) -> str:
+    """A circular's subject without a bracket the exchange's list cut off ("… Corporate Bonds (" read as a broken line,
+    R69-005)."""
+    t = " ".join(str(subject or "").split())
+    while t.count("(") > t.count(")") and "(" in t:
+        t = t[:t.rfind("(")].rstrip(" -–:,")
+    return t
 
 
 def alert_text(lines: list[str]) -> tuple[str, str]:

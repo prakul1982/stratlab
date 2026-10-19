@@ -700,7 +700,7 @@ def note(parts: list[tuple[dict, list[dict]]], index_as_of: str | None) -> tuple
     title = f"{total} new match{'' if total == 1 else 'es'} on your screen{'' if len(parts) == 1 else 's'}"
     html, text = kit.render(
         title, blocks, kit.Footer(why="You get this weekly because you turned on emails for your saved screens.",
-                                  frequency=None, unsubscribe="Turn off screen emails",
+                                  frequency=None, unsubscribe="Turn off screen emails", manage="/research/screens",
                                   legal="These companies meet the conditions you set. Facts, not advice."),
         label="Weekly screens", date=kit.today_label(), summary="Companies that meet your screen\u2019s conditions now and didn\u2019t last week.",
         cta=("Open your screens", "/research/screens"), subject=subject)

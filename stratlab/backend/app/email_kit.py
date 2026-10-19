@@ -599,7 +599,7 @@ def _row(line: str) -> Row:
 
 
 def message(subject: str, text: str, path: str, label: str, why: str, *, summary: str | None = None, button_label: str | None = None,
-            date: str = "", footer: Footer | None = None, unsubscribe: str | None = None) -> tuple[str, str]:
+            date: str = "", footer: Footer | None = None, unsubscribe: str | None = None, manage: str | None = None) -> tuple[str, str]:
     """(html, text) for an alert, reminder or note given as a subject and plain lines: a line starting "- " is a row
     ("- Revenue: ₹64,259 crore" puts the figure on the right), a line ending in ":" heads the rows after it, a web
     address becomes a link, the rest are paragraphs, and a closing "facts, not advice" sentence becomes the small
@@ -645,7 +645,7 @@ def message(subject: str, text: str, path: str, label: str, why: str, *, summary
             rest = first_para[len(title) + 1:].strip()
             # the whole sentence is the title again (an admin alert's body opening with its own title): left out
             first_para = (rest[:1].upper() + rest[1:]) if rest else (None if summary is None and blocks else first_para)
-    f = footer or Footer(why=why, unsubscribe=unsubscribe, legal=legal or "Facts, not advice.")
+    f = footer or Footer(why=why, unsubscribe=unsubscribe, legal=legal or "Facts, not advice.", **({"manage": manage} if manage else {}))
     if legal and not f.legal:
         f.legal = legal
     default = "Open the company page" if re.fullmatch(r"/research/(IN|US)/[^/?#]+", path) else "Open StratLab"

@@ -154,7 +154,9 @@ def _my_stocks() -> tuple[str, str, str]:
 
 def _alerts_email(subject: str, text: str, path: str, label: str, why: str, date: str | None = None) -> tuple[str, str, str]:
     """An alert as alerts.send_message emails it (with its one-click unsubscribe, as the previews show every other)."""
-    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label(), unsubscribe="Turn off alert emails")
+    from . import alerts
+    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label(), unsubscribe="Turn off alert emails",
+                              manage=alerts.manage_path(path))
     html, plain = kit.preview_links(html, plain)
     return kit.subject_line(subject), html, plain
 
@@ -221,6 +223,34 @@ def _admin() -> tuple[str, str, str]:
     return _alerts_email("StratLab: 2 checks failing", text, "/admin", "Admin alert", "You get this because you are a StratLab admin.")
 
 
+def _daily_report() -> tuple[str, str, str]:
+    """The paper trading report after a market's close, as live.py sends it: its own unsubscribe (R69-004: not listed)."""
+    from . import alerts, daily_report as R
+    day = _last_weekday(_today()).isoformat()
+    rows = [{"name": "NIFTY Supertrend", "currency": "INR", "closed": 2, "wins": 1, "pnl": 1840.0, "open": 1, "unrealised": -620.0,
+             "equity": 512_400.0, "capital": 500_000.0},
+            {"name": "BANKNIFTY breakout", "currency": "INR", "closed": 0, "wins": 0, "pnl": 0.0, "open": 0, "unrealised": 0.0,
+             "equity": 488_150.0, "capital": 500_000.0}]
+    subject = f"StratLab daily report: India, {kit.fmt_date(day, year=False, weekday=True)}"
+    html, plain = kit.message(subject, R.text("India", day, rows), "/paper", "Alert", "You get this because you turned on notifications in StratLab.",
+                              date=kit.today_label(), unsubscribe=alerts.OWN_UNSUBSCRIBE["daily_report"])
+    html, plain = kit.preview_links(html, plain)
+    return kit.subject_line(subject), html, plain
+
+
+def _weekly_admin() -> tuple[str, str, str]:
+    """The owner's Monday summary (R69-004: not listed)."""
+    from . import alerts, weekly
+    now = datetime.now(ZoneInfo("UTC"))
+    facts = {"stats": {"new": 1, "users": 10, "paying": {}, "given": {"pro": 6}, "experiments": 42, "ai": 7},
+             "checks": [{"at": now.isoformat(), "fail": False}] * 6 + [{"at": now.isoformat(), "fail": True, "failed": ["Prices"],
+                                                                         "failed_detail": [{"name": "Prices", "detail": "The last update was 3 hours old."}]}],
+             "audits": {"IN": {"enabled": True, "checked": 48, "issues": []}, "US": {"enabled": True, "checked": 19, "issues": []}},
+             "errors": 1, "admin_url": kit.site("/admin")}
+    subject, text = weekly.summary(now, facts)
+    return _alerts_email(subject, text, "/admin", "Weekly summary", alerts.ADMIN_WHY)
+
+
 def _screens() -> tuple[str, str, str]:
     from . import screens
     parts = [({"name": "Quality at a fair price", "region": "IN", "filters": screens.clean("IN", {"sector": ["Information Technology"], "stage": [2], "ranges": {"pe": {"min": 5, "max": 25}}})},
@@ -260,6 +290,7 @@ def registry() -> dict:
         "market_in": ("Market brief, India (daily)", "Newsletters", lambda: _market("IN"), True, False),
         "market_us": ("Market brief, US (daily)", "Newsletters", lambda: _market("US"), True, False),
         "market_weekly": ("Weekly brief, India (Saturday)", "Newsletters", lambda: _market("IN", True), True, False),
+        "market_weekly_us": ("Weekly brief, US (Saturday)", "Newsletters", lambda: _market("US", True), True, False),
         "my_stocks": ("My stocks", "Newsletters", _my_stocks, True, False),
         "screens": ("Weekly screens", "Newsletters", _screens, True, False),
         "advance_tax": ("Advance tax reminder", "Reminders", _advance_tax, True, False),
@@ -269,7 +300,9 @@ def registry() -> dict:
         "events": ("Market events reminder", "Reminders", _events, True, False),
         "fo_changes": ("F&O contract changes", "Alerts", _fo, True, False),
         "money_calendar": ("Money calendar reminder", "Reminders", _money_calendar, True, False),
+        "daily_report": ("Paper trading report (after each close)", "Alerts", _daily_report, True, False),
         "admin_alert": ("Admin alert", "Admin", _admin, True, False),
+        "weekly_admin": ("Weekly summary (admins, Monday)", "Admin", _weekly_admin, True, False),
         "confirm": ("Confirm your email", "Account", _confirm, False, True),
         "test": ("Test email", "Admin", test_email, False, True),
     }

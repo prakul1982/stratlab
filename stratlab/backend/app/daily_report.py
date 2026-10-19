@@ -190,7 +190,10 @@ class Reporter:
                 if not can_alert(profile) or not wants_report(self.db, uid):
                     continue
                 rows = [summarise(s, day) for s in sorted(items, key=lambda x: x.name)]
-                send(profile, f"StratLab daily report: {market_name(market)}", text(market_name(market), day, rows))
+                # the subject names the day, as every other email's does (R69-006: "StratLab daily report: India" alone)
+                from .email_kit import fmt_date
+                send(profile, f"StratLab daily report: {market_name(market)}, {fmt_date(day, year=False, weekday=True)}",
+                     text(market_name(market), day, rows))
                 out.append((uid, market))
             except Exception as e:
                 print("daily report failed:", uid, market, e)

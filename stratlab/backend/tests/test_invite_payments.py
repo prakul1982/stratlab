@@ -212,7 +212,7 @@ def test_the_referrer_is_told_how_they_earned(w, monkeypatch):
         pays(f"u-p{i}", NOW + 6 * DAY)
     mine = [(s, t) for to, s, t in sent if to == "u-ref@example.com"]
     assert [s for s, _ in mine] == ["You've got a free month of StratLab Basic"] * 4 + ["You've got 8 extra days of StratLab Basic"]
-    assert "has subscribed" in mine[2][1] and "25% off a month" in mine[4][1]
+    assert "has subscribed" in mine[2][1] and "adds 8 days, up to 8 times in a year" in mine[4][1]
     assert all("for each of your first 2 friends who subscribe" in t for _, t in mine)
 
 
