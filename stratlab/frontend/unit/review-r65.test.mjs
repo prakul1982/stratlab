@@ -30,7 +30,7 @@ test("R65-005: a chain's time is named once", async () => {
 });
 
 test("R65-004, R65-005, R65-007: a visitor picks the currency; the VIX card names its chain's time once; breadth says what's locked", () => {
-  assert.match(read("src/pages/Login.tsx"), /<select className="k-input" value=\{currency\} onChange=\{\(e\) => pick\(e\.target\.value\)\} aria-label="Prices in">/);
+  assert.match(read("src/pages/Login.tsx"), /<select className="k-input" value=\{currency\} onChange=\{\(e\) => pick\(e\.target\.value\)\} aria-label="Prices in" disabled=\{!pricing\}>/);
   assert.match(read("src/components/VixPanel.tsx"), /upperFirst\(chainWithTime\(ivNow, vixTime\(ivNow\.as_of\)\)\)/);
   assert.match(read("src/pages/BreadthPage.tsx"), /Today's numbers and today's charts are on every plan\. The history charts, from 3 months back,/);
 });

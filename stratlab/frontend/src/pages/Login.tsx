@@ -480,13 +480,13 @@ function Pricing() {
           ) : loading ? <span className="lp-skel lp-skel-seg" /> : <span className="small muted">Prices are per month</span>}
           {/* the currency, as the signed-in Plans page offers it (R65-004: an Indian visitor whose browser says en-US saw only
               dollars, with no way to pick rupees) */}
-          {pricing && !loading && (
-            <label className="small muted lp-currency">Prices in{" "}
-              <select className="k-input" value={currency} onChange={(e) => pick(e.target.value)} aria-label="Prices in">
-                {Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)}
-              </select>
-            </label>
-          )}
+          {/* there from the first frame (disabled until the prices come), so nothing below moves when they arrive (R5V-006) */}
+          <label className="small muted lp-currency">Prices in{" "}
+            <select className="k-input" value={currency} onChange={(e) => pick(e.target.value)} aria-label="Prices in" disabled={!pricing}>
+              {pricing ? Object.entries(pricing.currencies).map(([c, r]) => <option key={c} value={c}>{c} · {r.name}</option>)
+                : <option value={currency}>{currency}</option>}
+            </select>
+          </label>
         </div>
         <div className="lp-prices">
           {PLAN_IDS.map((p) => {
