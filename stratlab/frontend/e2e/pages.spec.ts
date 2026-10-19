@@ -1126,6 +1126,8 @@ test("screens: filter by plain facts, sort by a column, save one; no provider na
   await saved.click();                                                                  // a saved screen opens its conditions
   await expect(page.getByText(/3 of 20 companies match/)).toBeVisible();
   await page.getByRole("button", { name: `Delete ${tag}` }).click();
+  // asks first (R62-011)
+  await page.getByRole("dialog", { name: `Delete “${tag}”?` }).getByRole("button", { name: "Delete this screen" }).click();
   await expect(page.getByRole("button", { name: `${tag} · weekly` })).toHaveCount(0);
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/kite|zerodha|yahoo|screener\.in|finnhub/i);
