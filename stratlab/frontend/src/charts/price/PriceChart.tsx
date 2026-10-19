@@ -53,6 +53,8 @@ export interface PriceChartProps {
   onPickPrice?: ((price: number) => void) | null;
   /** Chart replay: the candles shown are a replay's, so a drawing appears only once the replay reaches the candle it was drawn on. */
   replay?: boolean;
+  /** A hidden replay: no dates on the time axis or under the crosshair. */
+  hideDates?: boolean;
   /** Fixed decimals for prices (spot forex quotes to 5); by the price's size when left out. */
   decimals?: number;
   /** No volume panel or Vol switch: the instrument has no exchange volume (spot forex). */
@@ -240,6 +242,7 @@ const [saveNote, setSaveNote] = useState("");
   useEffect(() => { engineRef.current?.setType(shownType); rootRef.current!.dataset.type = shownType; }, [shownType]);
   useEffect(() => { engineRef.current?.setCurrency(currencySymbol(currency)); }, [currency]);
   useEffect(() => { engineRef.current?.setClipFuture(!!props.replay); }, [props.replay]);
+  useEffect(() => { engineRef.current?.setHideDates(!!props.hideDates); }, [props.hideDates]);
   useEffect(() => { lsSet(LS.type, type); }, [type]);
   const showVolume = volume && !props.noVolume;
   useEffect(() => { engineRef.current?.setVolume(showVolume); }, [showVolume]);

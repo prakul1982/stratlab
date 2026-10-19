@@ -1012,7 +1012,7 @@ test("invite: your invite link, how many friends joined, and sharing it", async 
   const words = page.getByTestId("invite-reward-line");
   await expect(words).toContainText("What a friend gets. A friend who joins with your link and uses StratLab on 3 different days in their first 2 weeks gets a month of Basic free.");
   await expect(words).toContainText("What you get. You earn a month of free Basic for each of your first 2 friends who do this in a year, and for each of your "
-    + "first 2 friends who subscribe. After that, each friend who subscribes adds 8 days. You're on Pro, so it's kept for you and starts only if your Pro plan stops.");
+    + "first 2 friends who subscribe. After that, each friend who subscribes adds 8 days, up to 8 times in a year. You're on Pro, so it's kept for you and starts only if your Pro plan stops.");
   await expect(words).not.toContainText("You get a month of Basic");
   const status = page.getByTestId("invite-status");
   for (const [k, v] of [["This year: friends who used StratLab", "2 of 2 months"], ["This year: friends who subscribed", "1 of 2 months"],

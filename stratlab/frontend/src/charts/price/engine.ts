@@ -77,6 +77,8 @@ export class PriceChartEngine {
   hideAll = false;
   /** Chart replay: a drawing shows only once the replay has reached the candle it was drawn on. */
   clipFuture = false;
+  /** A hidden replay: the time axis names no day or month, only the candle's number (R61-011: "Sep", "13" under "dates hidden"). */
+  hideDates = false;
   /** The risk amount a new long or short position starts with. */
   defaultRisk = 0;
   private sym = "";
@@ -252,6 +254,7 @@ export class PriceChartEngine {
   }
 
   setClipFuture(on: boolean): void { this.clipFuture = on; this.invalidate(false); }
+  setHideDates(on: boolean): void { this.hideDates = on; this.invalidate(false); }
 
   get canUndo(): boolean { return this.history.canUndo; }
   get canRedo(): boolean { return this.history.canRedo; }
@@ -831,7 +834,7 @@ export class PriceChartEngine {
     c.textAlign = "center";
     for (const t of tt) {
       const x = this.time.x(t.i);
-      if (x < 16 || x > pw - 16) continue;
+      if (this.hideDates || x < 16 || x > pw - 16) continue;
       c.fillStyle = t.major ? th.text : th.muted;
       c.fillText(t.label, x, H - AXIS_H / 2);
     }
@@ -1163,7 +1166,7 @@ export class PriceChartEngine {
         pct: (v) => (Math.abs(v) < 0.005 ? "0.00%" : `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}%`),
         money: (v) => `${sym}${this.format(Math.round(v), 0)}`,
         count: (n) => this.format(n, 0),
-        time: (t) => timeLabel(this.wallOf(t), this.intraday),
+        time: (t) => (this.hideDates ? "" : timeLabel(this.wallOf(t), this.intraday)),
         bars: (t0, t1) => barsBetween(this.times, t0, t1),
         span: durationText,
       };
@@ -1193,7 +1196,7 @@ export class PriceChartEngine {
     }
     const bar = this.shown[this.hoverIndex];
     if (bar) {
-      const text = timeLabel(bar.w, this.intraday);
+      const text = this.hideDates ? `Candle ${this.hoverIndex + 1}` : timeLabel(bar.w, this.intraday);
       const w = c.measureText(text).width + 14;
       const left = Math.max(0, Math.min(pw - w, cx - w / 2));
       c.fillStyle = th.ink;

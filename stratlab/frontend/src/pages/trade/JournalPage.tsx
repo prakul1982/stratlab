@@ -251,7 +251,7 @@ export function JournalPage() {
                 Your plan keeps the last {j.limit} trades, so {j.beyond_limit.toLocaleString("en-IN")} older one{j.beyond_limit === 1 ? " isn't" : "s aren't"} counted. {j.plan_name} counts every trade.
               </Notice>
             )}
-            {j.verdict ? <VerdictView v={j.verdict} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
+            {j.verdict ? <VerdictView v={j.verdict} n={s.n} totals={j.tax_totals.length > 0} /> : <Locked plan={j.plan_name} what="The honesty checks on your real trades (enough trades, luck or edge, bad-luck drawdown, charges)" />}
             <Stats s={s} />
             <Card label="Running P&L after charges">
               <CardHead title="Running P&L after charges" />
@@ -348,7 +348,7 @@ const CHECK_HELP: Record<string, string> = {
   costs: "Would the result survive charges twice as high: a costlier broker, more slippage, or a busier market?",
 };
 
-function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
+function VerdictView({ v, n, totals }: { v: NonNullable<Journal["verdict"]>; n: number; totals: boolean }) {
   return (
     <>
       <section className="j-verdict" aria-label="Verdict on your real trades">
@@ -356,6 +356,9 @@ function VerdictView({ v }: { v: NonNullable<Journal["verdict"]> }) {
           <span className="k-eyebrow">Verdict on your real trades</span>
           <h2 className={`verdict-head j-verdict-head ${v.verdict}`}>{v.headline}</h2>
           <p className="j-verdict-sum">{v.summary}</p>
+          {/* the tax report's yearly F&O totals aren't trades it can judge: say what the verdict covers (R61-004: "Only 11
+              trades: too few to judge" over a page with 1,11,201 F&O trades in its totals) */}
+          {totals && <p className="k-small k-muted">Judged on the {n.toLocaleString("en-IN")} round trip{n === 1 ? "" : "s"} listed here. The F&amp;O, commodity and currency totals from your tax report aren't trade by trade, so they aren't part of this verdict.</p>}
         </div>
         <Card>
           <span className="k-small k-muted"><b>Strength of evidence</b></span>

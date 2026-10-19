@@ -367,7 +367,8 @@ export function OptionsPage() {
       ...named(`${name} ${st ? st.name.toLowerCase() : "options"}`) });
   };
   const pickStructure = (id: string) => {
-    if (id === "custom") { patch({ structure: "custom" }); return; }
+    // legs of your own: a made-up name stops naming a structure it no longer is (R61-003: "NIFTY short straddle" over three legs)
+    if (id === "custom") { patch({ structure: "custom", ...named(`${s.underlying} options`) }); return; }
     const st = STRUCTURES.find((x) => x.id === id)!;
     patch({ structure: id, offsetUnit: st.unit, legs: st.legs.map((l) => ({ ...l })), ...named(`${s.underlying} ${st.name.toLowerCase()}`) });
   };
@@ -538,7 +539,7 @@ export function OptionsPage() {
                 <Seg label="Distance unit" value={s.offsetUnit} options={[{ value: "strikes", label: "Strikes" }, { value: "points", label: "Points" }]}
                   onChange={(v) => void switchUnit(v as "strikes" | "points")} />
               </div>
-              <LegsEditor s={s} preview={preview} rules={rulesOk} step={step} set={(legs) => patch({ legs, structure: "custom" })} />
+              <LegsEditor s={s} preview={preview} rules={rulesOk} step={step} set={(legs) => patch({ legs, structure: "custom", ...named(`${s.underlying} options`) })} />
             </div>
           </Disclosure>
         </div>

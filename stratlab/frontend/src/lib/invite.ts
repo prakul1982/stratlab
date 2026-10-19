@@ -18,10 +18,11 @@ export const FRIEND_GETS = "A friend who joins with your link and uses StratLab 
 
 /** What you get, on the plan you have now (`paid`: the plan you have without the launch offer). Someone on Free gets
  * Basic straight away; someone on Basic or Pro has the time kept for when their plan stops, as the server does it. */
-export function youGet(v: Pick<Invites, "use_cap" | "paid_cap" | "extra_days">, paid: Plan): string {
-  const use = v.use_cap ?? 2, pay = v.paid_cap ?? 2, extra = v.extra_days ?? 8;
+export function youGet(v: Pick<Invites, "use_cap" | "paid_cap" | "extra_days" | "extra_cap">, paid: Plan): string {
+  const use = v.use_cap ?? 2, pay = v.paid_cap ?? 2, extra = v.extra_days ?? 8, times = v.extra_cap ?? 8;
+  // the cap on the extra days, as the FAQ gives it (R61-019: the page left it out)
   const rule = `for each of your first ${use} friends who do this in a year, and for each of your first ${pay} friends who subscribe. `
-    + `After that, each friend who subscribes adds ${extra} days.`;
+    + `After that, each friend who subscribes adds ${extra} days, up to ${times} times in a year.`;
   return paid === "free"
     ? `You get a month of Basic free ${rule}`
     : `You earn a month of free Basic ${rule} You're on ${PLAN[paid]}, so it's kept for you and starts only if your ${PLAN[paid]} plan stops.`;

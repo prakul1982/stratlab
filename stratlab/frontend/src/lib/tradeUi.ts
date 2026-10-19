@@ -27,6 +27,13 @@ export function checksLine(passed: number, run: number, notRun?: string[]): stri
   return `${run} of ${CHECKS} checks run · ${passed >= run ? `all ${run} passed` : `${passed} passed`}${which}`;
 }
 
+/** The checks line under a headline, or "" when the headline already says it (R61-007: "…; 3 of 4 checks run · all 3 passed."
+ * over "3 of 4 checks run · all 3 passed" on the landing page's cards). */
+export function underHeadline(line: string, headline: string | null | undefined): string {
+  const lead = line.split(" · ")[0].toLowerCase();
+  return headline && headline.toLowerCase().includes(lead) ? "" : line;
+}
+
 /** A strategy that lost money after costs: no pass count is headlined for it (R16-006); its checks are shown for reference. */
 export const LOST_CHECKS = "Lost money after costs · the checks, for reference";   // the same words as the share card (R58-009): the checks did run
 export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && ret != null && ret <= 0;
