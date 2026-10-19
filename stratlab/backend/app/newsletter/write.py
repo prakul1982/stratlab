@@ -30,7 +30,9 @@ BANNED = [r"\bbuy", r"\bsell", r"\bhold\b", r"\bholding on\b", r"\baccumulat", r
           r"\brecommend", r"\bshould (invest|consider|look)", r"\binvest in\b", r"\bmultibagger", r"\btop picks?\b", r"\bpicks?\b",
           r"\bhot\b", r"\bbullish", r"\bbearish", r"\boutlook", r"\bforecast", r"\bpredict", r"\bexpect", r"\blikely\b",
           r"\bwill (rise|fall|go|climb|drop|rally|gain|continue)", r"\bupside", r"\bdownside", r"\bstop[- ]?loss", r"\bundervalued",
-          r"\bovervalued", r"\bopportunit", r"\bguarantee", r"\bmust\b", r"\brally ahead", r"\bbreakout candidate", r"\bsure[- ]shot"]
+          r"\bovervalued", r"\bopportunit", r"\bguarantee", r"\bmust\b", r"\brally ahead", r"\bbreakout candidate", r"\bsure[- ]shot",
+          # a stock-picking service's own stance ("keeps us positive on Lilly", CNBC Investing Club) is advice, not a fact (R72-002)
+          r"\b(positive|negative|constructive|cautious) on\b", r"\binvesting club\b"]
 _BANNED = re.compile("|".join(BANNED), re.I)
 ALLOWED_CAPS = {"US", "IN", "IST", "AI", "NSE", "BSE", "ST", "S2", "IPO", "QIP", "GDP", "RBI", "SEBI", "FII", "DII", "ETF"}
 _cache = TTLCache(max_items=200)

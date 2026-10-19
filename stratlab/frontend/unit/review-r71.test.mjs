@@ -18,7 +18,7 @@ test("R71-003: a market's index trading now says 'today, live' beside India's 'o
   assert.equal(tileWhen("2026-10-19", "2026-10-19", day, true, true), "on 19 Oct");     // closed: its day
   assert.equal(tileWhen("2026-10-16", "2026-10-19", day, false, true), "on 16 Oct");    // before the open: Friday's
   assert.equal(tileWhen("2026-10-19", "2026-10-19", day, false, false), null);          // a pair trading round the clock
-  assert.match(read("src/pages/MineHome.tsx"), /closed\(tileMarket\(t\)\), !!tileMarket\(t\)\)/);
+  assert.match(read("src/pages/MineHome.tsx"), /closed\(tileMarket\(t\)\), !!tileMarket\(t\),/);
 });
 
 test("R71-006: a live price shows the close its move is from", () => {

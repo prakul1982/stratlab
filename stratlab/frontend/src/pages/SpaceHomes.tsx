@@ -212,8 +212,9 @@ export function InvestHome() {
 /** The next few market events (RBI policy, data releases, the Fed, index changes) on one line each, from the Events page. */
 function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: number; testId?: string; region?: Region }) {
   const v = useEvents();
-  // the US tab lists the US's own (the Fed, US data), not India's RBI and IIP (R71-004)
-  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && e.kind !== "holiday" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
+  // the US tab lists the US's own (the Fed, US data), not India's RBI and IIP (R71-004); India's holidays count (R72-005: the
+  // evening before Tuesday's holiday, "Coming up" started at Wednesday's RBI minutes)
+  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">
