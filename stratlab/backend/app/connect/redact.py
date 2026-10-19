@@ -48,8 +48,18 @@ def mask(text) -> str:
 class SecretFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         try:
-            record.msg = mask(record.getMessage())
-            record.args = ()
+            full = record.getMessage()
+            masked = mask(full)
+            if masked == full:
+                pass            # nothing to hide: the record is left as it is
+            elif record.name == "uvicorn.access" and isinstance(record.args, tuple):
+                # its formatter unpacks five arguments, so they are masked in place (the path carries any token, with its
+                # "?t=" before it); flattening them made every request print a "Logging error" traceback, enough to hit the
+                # host's log rate limit and drop real errors (R73-004)
+                record.args = tuple(mask(a) if isinstance(a, str) else a for a in record.args)
+            else:
+                record.msg = masked
+                record.args = ()
             if record.exc_info:
                 record.exc_text = mask(logging.Formatter().formatException(record.exc_info))
                 record.exc_info = None

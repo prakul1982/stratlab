@@ -78,8 +78,8 @@ test("Plans: no word of GST while the invoice has none; the confirm step follows
   await expect(confirm).toContainText('The payment window that opens next is headed "StratLab · Basic, monthly" and shows the amount in rupees.');
   await expect(confirm).not.toContainText(/GST|shows the amount only/);
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.locator("main")).toContainText("Every payment gets an invoice in Account.");
-  await expect(page.locator("main")).not.toContainText(/GST/);
+  await expect(page.locator("main")).toContainText("The price shown is all you pay: no GST is added. Every payment gets an invoice in Account.");
+  await expect(page.locator("main")).not.toContainText(/incl\. GST|include 18% GST|GST invoice/);
   expect(subscribed).toBe(false);
   await noSideways(page);
   expect(errors).toEqual([]);

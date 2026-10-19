@@ -98,8 +98,9 @@ export function pricingIntro(o: Offer | null | undefined, _pro: Record<string, u
       // the Plans page shows the countdown box with the end, so its line doesn't state the offer a second time
       lede: (where === "landing" ? `Launch offer: every Pro feature is free for everyone until ${day}${local ? ` (${local})` : ""}. After that, each plan gets what its card lists.`
         : "When the launch offer ends, each plan gets what its card lists.")
-        // whether a plan's button sells something now, said outright (R68-009: "Continue with Google to get Pro" during a free offer)
-        + (o!.payments ? " Basic and Pro are on sale now too, for anyone who wants their plan in place when the offer ends."
+        // whether a plan's button sells something now, said outright (R68-009: "Continue with Google to get Pro" during a free offer),
+        // and when what is bought starts: the subscription begins at payment, offer or not (R73-005)
+        + (o!.payments ? " Basic and Pro are on sale now too. A paid month or year starts on the day you pay, not when the offer ends."
           : ` Paid plans aren't on sale yet; ask us at ${email} for early access.`),
     };
   }
@@ -184,7 +185,7 @@ export function finePrint(o: Offer | null | undefined, x: {
   currency: string; inRupees: boolean; inRupeesYear: boolean; year?: { basic: string; pro: string } | null; charged?: { basic: string; pro: string } | null;
   /** the rupee price of a year, when a year is charged in rupees though shown in another currency */
   chargedYear?: { basic: string; pro: string } | null;
-  /** invoices carry GST (the seller's GSTIN is set); without it nothing here speaks of GST (R7M-001). Taken as true when not given. */
+  /** invoices carry GST (the seller's GSTIN is set); without it no GST is promised, only that none is added (R7M-001, R73-001). Taken as true when not given. */
   gst?: boolean;
 }): string[] {
   const out: string[] = [];
@@ -193,7 +194,8 @@ export function finePrint(o: Offer | null | undefined, x: {
   const gst = x.gst ?? true;
   if (inr) {
     if (gst) out.push(buy ? "Rupee prices include 18% GST, and every payment gets a GST invoice." : "Rupee prices include 18% GST.");
-    else if (buy) out.push("Every payment gets an invoice in Account.");
+    // without a GSTIN the invoice charges none, so the price is the whole amount: said, so a buyer needn't wonder (R73-001)
+    else if (buy) out.push("The price shown is all you pay: no GST is added. Every payment gets an invoice in Account.");
   } else if (buy && x.inRupees && x.charged) {
     out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month${gst ? " including GST" : ""}, and your bank converts it, so the amount in ${x.currency} can differ.`);
   }
