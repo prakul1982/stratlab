@@ -125,9 +125,13 @@ def entry_id(slug: str, preset: str) -> str:
     return f"seed-{slug}-{SHORT.get(preset, preset[:6])}"
 
 
-def strategy_of(spec: dict, name: str) -> Strategy:
+def strategy_of(spec: dict, name: str, market: str = "IN") -> Strategy:
     body = {k: v for k, v in spec["body"].items() if k != "risk"}
     risk = {**RISK, **spec["body"].get("risk", {})}
+    # brokerage is a flat amount in the market's own money: ₹20 an order in India, none on the US's commission-free
+    # brokers (R62-004: $20 an order on the US runs, $10,080 on one card), as a new notebook's defaults do
+    if market != "IN" and "brokerage" not in spec["body"].get("risk", {}):
+        risk["brokerage"] = 0
     return Strategy(name=name, tf=spec["tf"], text=spec["text"], risk=risk, **body)
 
 
@@ -207,8 +211,8 @@ def seed(registry, only: list[str] | None = None, now: str | None = None, sleep=
     for slug, spec in STRATEGIES.items():
         if only and slug not in only:
             continue
-        strat = strategy_of(spec, spec["name"])
         for market, pid in spec["groups"]:
+            strat = strategy_of(spec, spec["name"], market)
             if out or failed:
                 sleep(gap)
             try:

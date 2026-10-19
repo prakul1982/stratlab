@@ -34,6 +34,12 @@ export function underHeadline(line: string, headline: string | null | undefined)
   return headline && headline.toLowerCase().includes(lead) ? "" : line;
 }
 
+/** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass
+ * (R62-003: "Passed the checks" over a verdict of "4 of 4 checks run · 2 passed"). Undefined keeps the badge's own words. */
+export function badgeLabel(v: { verdict: string; passed: number; total: number }): string | undefined {
+  return v.verdict === "edge" && v.passed < v.total ? checksLine(v.passed, v.total) : undefined;
+}
+
 /** A strategy that lost money after costs: no pass count is headlined for it (R16-006); its checks are shown for reference. */
 export const LOST_CHECKS = "Lost money after costs · the checks, for reference";   // the same words as the share card (R58-009): the checks did run
 export const lostMoney = (verdict?: string, ret?: number | null) => verdict === "no_edge" && ret != null && ret <= 0;

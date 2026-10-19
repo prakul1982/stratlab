@@ -34,7 +34,7 @@ test("the compare page lists most in one trade, the product and the short exit a
 test("the compare page counts the checks with checksLine, out of four like the other pages", () => {
   const src = read("src/pages/CompareExperiments.tsx");
   assert.match(src, /\["Checks passed", \(e\) => checksLine\(e\.verdict\.passed, e\.verdict\.total\)/);
-  assert.match(src, /import \{ checksLine \} from "\.\.\/lib\/tradeUi";/);
+  assert.match(src, /import \{ (?:\w+, )*checksLine \} from "\.\.\/lib\/tradeUi";/);
 });
 
 test("RSI of a flat series is 50, as the engine's", () => {

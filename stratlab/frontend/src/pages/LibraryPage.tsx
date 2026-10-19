@@ -201,7 +201,7 @@ export function LibraryPage() {
             )}
           </>
         )}
-      <p className="k-note">Published by StratLab users for research and paper trading. Past results don't predict future returns, and nothing here is investment advice.</p>
+      <p className="k-note">Published by StratLab and its users for research and paper trading. Past results don't predict future returns, and nothing here is investment advice.</p>
       {taking && (
         <ConfirmDialog title={`Take "${taking.name}" out of the library?`} confirmLabel="Take it down" onConfirm={takeDown} onClose={() => setTaking(null)}>
           Copies people already made stay theirs.

@@ -212,13 +212,21 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
         minScore: n.minScore, tf: n.tf, session: n.session, product: n.product,
         risk: rebuiltRisk(s.risk, n.risk, out.built.gaps.mentioned, true) });
       setRewrite(null);
+      setHandEdited(false);
       if (out.note) setRewriteNote(out.note);
       // a rule left out or a number that didn't make it into the rules is said where the rules are (R11C-004)
       setRewriteWarnings([...(out.built.gaps.warnings ?? []), ...out.built.gaps.notes]);
       onRebuilt?.(out.built.gaps);
     } catch (e) { setRewriteNote((e as Error).message); } finally { setRebuilding(false); }
   };
-  const set = (patch: Partial<Strategy>) => onChange({ ...s, ...patch });
+  // a rule changed by hand since the words were written: the words no longer say what the rules do, and rebuilding from
+  // them would undo the change without a word (R62-002)
+  const [handEdited, setHandEdited] = useState(false);
+  const RULE_KEYS = ["entry", "exit", "shortEntry", "shortExit", "entryJoin", "side", "tf"];
+  const set = (patch: Partial<Strategy>) => {
+    if (Object.keys(patch).some((k) => RULE_KEYS.includes(k))) setHandEdited(true);
+    onChange({ ...s, ...patch });
+  };
   const setRisk = (patch: Partial<Risk>) => onChange({ ...s, risk: { ...s.risk, ...patch } });
   const sess: Session = { ...NO_SESSION, ...(s.session ?? {}) };
   const setSess = (patch: Partial<Session>) => onChange({ ...s, session: { ...sess, ...patch } });
@@ -324,6 +332,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           <label className="k-small k-muted" htmlFor="rewrite">Describe the whole strategy the way you'd like it. The rules below are rebuilt from it; the market and your capital stay.</label>
           <textarea id="rewrite" className="k-textarea" rows={3} value={rewrite} onChange={(e) => setRewrite(e.target.value)}
             placeholder="e.g. Buy when the 20 EMA crosses above the 50 EMA and RSI is above 50, sell when it crosses back, 2% stop" />
+          {handEdited && <Notice tone="warn" role="note">These words are from before you changed the rules by hand. Rebuilding replaces the rules below with what the words say, so update the words first if you want to keep your changes.</Notice>}
           <div className="k-row">
             <button type="button" className="btn sm" disabled={rebuilding || rewrite.trim().length < 5} onClick={rebuild}>{rebuilding ? "Rebuilding…" : "Rebuild the rules"}</button>
             {rewriteNote && <Notice tone="warn" role="status">{rewriteNote}</Notice>}
