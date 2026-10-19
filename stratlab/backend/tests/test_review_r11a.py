@@ -136,7 +136,10 @@ def test_greeks_after_settlement_on_expiry_day_say_the_settlement_is_fixed(monke
     from tests.fake_options_kite import _expiries
     from tests.test_options_api import setup
     setup(monkeypatch)
-    e = _expiries()[0]
+    # an expiry after today's, so the contract list still has it whatever the real time: today's own expiry drops out of
+    # the list after its close, and the test then failed with a 404 every expiry-day evening
+    today = datetime.now(IST).date()
+    e = next(x for x in _expiries() if x > today)
     monkeypatch.setattr(main.positioning, "ist_now", lambda: datetime.combine(e, dtime(15, 35), IST))
     try:
         r = TestClient(main.app).post("/options/greeks", json={"exchange": "NFO", "underlying": "NIFTY", "expiry": e.isoformat(),
