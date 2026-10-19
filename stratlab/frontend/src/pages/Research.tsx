@@ -19,6 +19,7 @@ import { loadSurveillance } from "../lib/surveillance";
 import { loadEtfGaps } from "../lib/etfGaps";
 import { loadFoChanges } from "../lib/foChanges";
 import { AlertButton } from "../components/AlertForm";
+import { Trash } from "../components/Icons";
 import { liveQuote, useLiveRefresh } from "../lib/liveRefresh";
 import { useShareCompany } from "../components/ShareCompany";
 import { MoreMenu } from "../components/MoreMenu";
@@ -788,22 +789,22 @@ export function WatchlistPage() {
                 <><Link className="link" to={`/research/${w.region}/${encodeURIComponent(w.symbol)}`}><b>{w.symbol}</b></Link>
                   {w.name && <span className="k-sub-line">{w.name}</span>}
                   <span className="k-sub-line"><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></span></>) },
-              { key: "p", header: "Price", numeric: true, cell: (w) => {
+              // the day's change sits under the price, not in a column of its own, so a 400px phone fits the row with its
+              // Remove (R64-001: 440px of table in a 334px box, Remove and "Today" cut off)
+              { key: "p", header: `Price · ${Object.values(quotes ?? {}).some((q) => sessionOf(q, marketTz(region))) ? "last session" : "today"}`, numeric: true, cell: (w) => {
                 const q = quotes?.[w.symbol];
                 if (quotes == null || !(w.symbol in quotes)) return "…";       // its batch hasn't come yet
                 if (q?.price == null) return "–";
                 const at = quoteAt(q.at, marketTz(region));
-                return <>{price(q.price, region === "IN" ? "INR" : "USD")}{at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
+                // out of hours the change is the last completed session's, and says its day (R41A): "today" only of today's
+                // a quote from an earlier day in the market's own time zone (a US quote on a Saturday) is that session's
+                // too, though the server needn't say so: its change is already the session's (R42-004: "Today" over Friday)
+                const x = q.change_pct, d = sessionOf(q, marketTz(region));
+                return <>{price(q.price, region === "IN" ? "INR" : "USD")}
+                  {x != null && <span className="k-sub-line"><Delta value={x}>{pct(x, 2)}</Delta>{d && <span data-testid="watch-change-day"> · {fmtDate(d, { weekday: true, year: false })}</span>}</span>}
+                  {at && <span className="k-sub-line">{at}</span>}{settling && <span className="k-sub-line" data-testid="watch-settling">{SETTLING}</span>}</>;
               } },
-              // out of hours the change is the last completed session's, and says its day (R41A): "Today" only of today's
-              // a quote from an earlier day in the market's own time zone (a US quote on a Saturday) is that session's
-              // too, though the server needn't say so: its change is already the session's (R42-004: "Today" over Friday)
-              { key: "c", header: Object.values(quotes ?? {}).some((q) => sessionOf(q, marketTz(region))) ? "Last session" : "Today", numeric: true, cell: (w) => {
-                if (quotes == null || !(w.symbol in quotes)) return "…";
-                const x = quotes[w.symbol]?.change_pct, d = sessionOf(quotes[w.symbol], marketTz(region));
-                return x == null ? "–" : <><Delta value={x}>{pct(x, 2)}</Delta>{d && <span className="k-sub-line" data-testid="watch-change-day">{fmtDate(d, { weekday: true, year: false })}</span>}</>;
-              } },
-              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm" aria-label={`Remove ${w.symbol} from your watchlist`} onClick={() => toggle(w, false).catch(fail)}>Remove</button> },
+              { key: "r", header: "", action: true, cell: (w) => <button className="btn quiet sm icon-only" aria-label={`Remove ${w.symbol} from your watchlist`} title="Remove" onClick={() => toggle(w, false).catch(fail)}><Trash size={16} /></button> },
             ]} />
         </Card>
       )}

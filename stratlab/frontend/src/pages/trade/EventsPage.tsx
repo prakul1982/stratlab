@@ -146,8 +146,12 @@ export function EventsPage() {
     // weekly expiries come every week, so only the nearest one is listed: tomorrow's NIFTY weekly expiry is the date an F&O
     // reader most needs, and leaving every weekly out dropped it (R49-007)
     const ahead = v.events.filter((e) => e.date >= v.today && e.date < endIso);
-    const weekly = ahead.find((e) => e.kind === "expiry" && e.title.includes("weekly"));
-    return ahead.filter((e) => !(e.kind === "expiry" && e.title.includes("weekly")) || e === weekly);
+    // the nearest one of each index's: NIFTY's and SENSEX's (R64-008: Thursday's SENSEX weekly was left out)
+    const isWeekly = (e: (typeof ahead)[number]) => e.kind === "expiry" && e.title.includes("weekly");
+    const firsts = new Set<(typeof ahead)[number]>();
+    const seen = new Set<string>();
+    for (const e of ahead) if (isWeekly(e) && !seen.has(e.title)) { seen.add(e.title); firsts.add(e); }
+    return ahead.filter((e) => !isWeekly(e) || firsts.has(e));
   }, [v]);
 
   const save = async (p: Partial<EvPrefs>) => {

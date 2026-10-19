@@ -7,7 +7,7 @@ import {
   chainCounts, pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
-import { signTone } from "../lib/format";
+import { istToday, signTone } from "../lib/format";
 import { Legend, LineChart } from "../components/Charts";
 import { StrikeChart } from "../components/StrikeChart";
 import { useMoreColumns } from "../components/MoreColumns";
@@ -280,7 +280,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
               <Stat label="Max-pain strike" value={strike(c.max_pain)} note={chainCounts(c).maxPain} />
               <Stat label="Most call open interest" value={strike(c.top?.call?.strike)} note={c.top?.call ? `${contracts(c.top.call.oi)} ${unit}` : undefined} />
               <Stat label="Most put open interest" value={strike(c.top?.put?.strike)} note={c.top?.put ? `${contracts(c.top.put.oi)} ${unit}` : undefined} />
-              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}`} />
+              <Stat label={atmIvLabel(c.atm, strike)} value={c.atm_iv == null ? "–" : `${c.atm_iv.toFixed(2)}%`} note={`StratLab's model, from this chain's prices, ${istTime(c.as_of)}${expiringToday(c) ? EXPIRING_IV : ""}`} />
               <IvFig c={c} full={full} plan={plan} />
             </StatRow>
             <div className="k-spread">
@@ -305,11 +305,20 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
   );
 }
 
+/** A chain whose options expire today: its model IV runs away in their last hours (R64-002: 29.5% here beside 12.9% on the
+ * India VIX card, which reads the next expiry that day). */
+const expiringToday = (c: Pick<ChainFacts, "expiry">) => !!c.expiry && c.expiry.slice(0, 10) === istToday();
+const EXPIRING_IV = ". These options expire today, so their IV runs high in their last hours; the India VIX card reads the next expiry's";
+
 function IvFig({ c, full, plan }: { c: ChainFacts; full: boolean; plan: string }) {
   if (!full) return <Stat label="IV percentile and rank" value={<Link to="/plans" className="link k-small">{plan} plan</Link>} note="Over StratLab's recorded days" />;
   const s = c.iv;
+  // why there's none, in a whole sentence (R64-002: "Given for the nearest expiry only: the recorded days are its" with the
+  // nearest expiry picked)
+  const why = expiringToday(c) ? "Not given on the day these options expire: their last hours aren't comparable with the recorded days. Pick the next expiry for it."
+    : "Given for the nearest expiry only, as the recorded days are that expiry's.";
   if (!s || s.percentile == null)
-    return <Stat label="IV percentile and rank" value="–" note={s ? `${s.days} of the ${s.need} earlier recorded days needed so far (today is the day compared with them, so it isn't counted)` : "Given for the nearest expiry only: the recorded days are its"} />;
+    return <Stat label="IV percentile and rank" value="–" note={s ? `${s.days} of the ${s.need} earlier recorded days needed so far (today is the day compared with them, so it isn't counted)` : why} />;
   return <Stat label="IV percentile · rank" value={`${s.percentile.toFixed(0)} · ${s.rank == null ? "–" : s.rank.toFixed(0)}`}
     note={`Over ${s.days} recorded days (${s.low?.toFixed(1)}%–${s.high?.toFixed(1)}%)`} />;
 }

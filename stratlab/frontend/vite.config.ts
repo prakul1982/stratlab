@@ -30,7 +30,7 @@ export default defineConfig({
             // what the entry point reads before anything else: no imports, so it stays out of the account code
             { name: "boot", test: /src[\\/]lib[\\/](entry|config|http)\.ts$/ },
             // (the public pages use them too: none of them may import the account code below)
-            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating)|components[\\/](Icons|Logo|ui))\.tsx?$/ },
+            { name: "common", test: /src[\\/](lib[\\/](brand|format|marketHours|rotating|lazyRetry)|components[\\/](Icons|Logo|ui))\.tsx?$/ },
             // the signed-in app's own start-up: server calls with a login, and the account state. A visitor never downloads it
             // the two kit pieces that read the account (a plan note, the company picker): apart from the rest of the kit, which the public pages use
             // the two the landing page uses (the billing switch and the sign-in panel), on their own so the landing page stays small
