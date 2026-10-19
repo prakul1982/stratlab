@@ -165,6 +165,7 @@ export default function PriceChart(props: PriceChartProps) {
   const [tf, setTf] = useState<Tf>(!!load && lay0?.tf && offered.includes(lay0.tf as Tf) ? (lay0.tf as Tf) : props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
   const [range, setRange] = useState<RangeKey | null>(() => (load ? (lay0?.tf && offered.includes(lay0.tf as Tf) ? ((lay0.range as RangeKey) ?? null) : props.range === undefined ? "1Y" : props.range) : null));
   const [type, setType] = useState<ChartType>(() => { const t = lay0?.type ?? lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
+  const [attempt, setAttempt] = useState(0);          // "Try again" after a failed read reads the same candles again
   const [volume, setVolume] = useState(() => (lay0?.volume ?? lsGet<unknown>(LS.volume, true)) !== false);
   const [mine, setMine] = useState<StudyConfig[]>(() => validStudies(lay0?.studies ?? lsGet(LS.studies, [])));
   const [pageList, setPageList] = useState<StudyConfig[]>(pageStudies ?? []);
@@ -401,7 +402,7 @@ const [saveNote, setSaveNote] = useState("");
         syncData();
       })
       .catch((err) => { if (req === reqRef.current) { setStatus("error"); setError((err as Error).message || "Couldn't load prices."); } });
-  }, [load, tf, range, shownFrom, applyRange, applyOpenFrom, syncData]);
+  }, [load, tf, range, shownFrom, applyRange, applyOpenFrom, syncData, attempt]);
 
   // older candles when the chart is scrolled back to its first ones
   const maybeMore = useCallback(() => {
@@ -669,7 +670,7 @@ const [saveNote, setSaveNote] = useState("");
         })()}
         {status === "loading" && <div className="pc-status">Loading prices…</div>}
         {status === "empty" && <div className="pc-status">No candles for this timeframe yet.</div>}
-        {status === "error" && <div className="pc-status">Couldn't load prices: {error}</div>}
+        {status === "error" && <div className="pc-status"><div>Couldn't load prices: {error}<br /><button type="button" className="pc-btn pc-retry" onClick={() => setAttempt((n) => n + 1)}>Try again</button></div></div>}
         {fetchingMore && <div className="pc-loading-more">Loading older candles…</div>}
         {chosen && !ui.hideAll && (
           <SelectionBar d={chosen} symbol={currencySymbol(currency) || ""} focusText={focusText} onUpdate={(patch) => drawProps.onUpdate(chosen.id, patch)}

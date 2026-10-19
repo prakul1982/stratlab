@@ -42,8 +42,8 @@ test("Plans and the confirm step say nothing of GST while the invoice carries no
   assert.deepEqual(finePrint(live, { ...x, gst: true }).slice(0, 1), ["Rupee prices include 18% GST, and every payment gets a GST invoice."]);
   assert.deepEqual(finePrint(live, x).slice(0, 1), ["Rupee prices include 18% GST, and every payment gets a GST invoice."]);       // not told: as before
   const none = finePrint(live, { ...x, gst: false }).join(" ");
-  assert.match(none, /^Every payment gets an invoice in Account\./);
-  assert.doesNotMatch(none, /GST/);
+  assert.match(none, /^The price shown is all you pay: no GST is added\. Every payment gets an invoice in Account\./);
+  assert.doesNotMatch(none, /incl\. GST|include 18% GST|GST invoice/);
   const abroad = finePrint(live, { currency: "SAR", inRupees: true, inRupeesYear: true, charged: { basic: "₹699", pro: "₹1,999" }, gst: false }).join(" ");
   assert.match(abroad, /a card is charged ₹699 \(Basic\) or ₹1,999 \(Pro\) a month, and your bank converts it/);
   assert.doesNotMatch(abroad, /GST/);

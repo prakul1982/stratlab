@@ -164,6 +164,21 @@ def title_key(t: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(t or "").lower()).strip()
 
 
+# the same index move told by several sites ("Sensex crashes 900 points", "Sensex plunges over 900 points"), and a live
+# blog's running title ("Sensex Today | Stock Market Live Updates: ..."): a brief carries each once (R73-008: four of five
+# India headlines on 19 Oct were the one fall)
+_MOVE = re.compile(r"\b(sensex|nifty|bank nifty|dow|s&p 500|nasdaq)\b[^|;:]*?\b(\d[\d,]*)\s*(?:points|pts|pt)\b", re.I)
+_LIVE = re.compile(r"\b(?:live updates|live blog|stock market live|market live)\b", re.I)
+
+
+def story_keys(title: str) -> set[str]:
+    """What makes a headline the same story as another already picked: the index move it reports, and being a live blog."""
+    out = {f"move:{m.group(1).lower()}:{m.group(2).replace(',', '')}" for m in _MOVE.finditer(title or "")}
+    if _LIVE.search(title or ""):
+        out.add("live")
+    return out
+
+
 def _local_day(iso: str | None, region: str) -> str | None:
     try:
         at = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
@@ -341,9 +356,11 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
         if dated and (not day or not (frm <= day <= to)):
             continue
         k = title_key(title)
-        if k in keys:
+        story = story_keys(title)
+        if k in keys or story & keys:
             continue
         keys.add(k)
+        keys |= story
         out.append({"headline": title, "url": _story_url(h.get("url")), "at": h.get("at"), "source": source})
     return out[:n]
 

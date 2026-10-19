@@ -97,7 +97,7 @@ export function invoiceWarning(s: InvoiceSeller | undefined): string | null {
   const all = s.missing.length >= 4;
   return `${all ? "The invoice seller details are empty" : `The invoice seller details are missing the ${s.missing.join(", ")}`}. `
     + (s.gst ? "Invoices carry GST, but are incomplete without them."
-      : "Until the GSTIN is set, every invoice is a plain one that says the supplier isn't registered under GST and charges none, and the Plans page says nothing about GST. If you are registered, fill the details in before the first payment.");
+      : "Until the GSTIN is set, every invoice is a plain one that says the supplier isn't registered under GST and charges none, and the Plans page says no GST is added. If you are registered, fill the details in before the first payment.");
 }
 
 /** Every service's light, worded once. */
