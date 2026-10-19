@@ -195,7 +195,7 @@ export function InvestHome() {
         </div>
       </Card>
       <ToolStrip label="Invest tools" tools={tools} />
-      <NextEvents />
+      <NextEvents region={region} />
       <div className="grid2 space-panels">
         <WatchPanel region={region} />
         <ResultsToday region={region} />
@@ -210,9 +210,10 @@ export function InvestHome() {
 }
 
 /** The next few market events (RBI policy, data releases, the Fed, index changes) on one line each, from the Events page. */
-function NextEvents({ limit = 3, testId = "invest-events" }: { limit?: number; testId?: string }) {
+function NextEvents({ limit = 3, testId = "invest-events", region }: { limit?: number; testId?: string; region?: Region }) {
   const v = useEvents();
-  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && e.kind !== "holiday").slice(0, limit) : null;
+  // the US tab lists the US's own (the Fed, US data), not India's RBI and IIP (R71-004)
+  const next = v ? v.events.filter((e) => e.date >= v.today && e.kind !== "expiry" && e.kind !== "holiday" && (region !== "US" || e.kind === "us")).slice(0, limit) : null;
   if (next && !next.length) return null;
   return (
     <Card testId={testId} label="Coming up">
