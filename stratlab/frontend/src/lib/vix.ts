@@ -8,7 +8,7 @@ export type VixPercentile = { days: number; need: number; percentile: number | n
 export type Vix = {
   quote: VixQuote | null; value: number | null; value_day?: string | null; intraday: { t: string; v: number }[]; history: { day: string; close: number }[];
   percentile: VixPercentile; stored: { days: number; first: string | null; last: string | null };
-  nifty_iv: { today: { iv: number; strike?: number | null; as_of: string; source: "live" | "recorded"; at_close?: boolean } | null; series: { day: string; iv: number }[] };
+  nifty_iv: { today: { iv: number; strike?: number | null; as_of: string; source: "live" | "recorded"; at_close?: boolean; expiry?: string | null; rolled?: boolean } | null; series: { day: string; iv: number }[] };
   note: string; today: string;
   /** the trading session a reading now belongs to: today once the market has opened, else the last trading day (a weekend's is Friday's) */
   session?: string;

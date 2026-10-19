@@ -347,7 +347,7 @@ def test_every_pcr_row_counts_the_same_window_and_says_so(monkeypatch):
 def test_the_vix_cards_atm_iv_says_its_strike(monkeypatch):
     got = {"taken_at": "2026-10-15T09:40:00+05:30", "source": "live"}
     monkeypatch.setattr(PO, "chain_now", lambda od, name, choice, now: (got, now, {"atm_iv": 13.45, "atm": 22750.0}))
-    monkeypatch.setattr(PO, "chain_series", lambda name, since=None: [])
+    monkeypatch.setattr(PO, "chain_series", lambda name, since=None, **_: [])
     today = vix.nifty_iv(object(), ist("09:41", "2026-10-15"))["today"]
     assert today["iv"] == 13.45 and today["strike"] == 22750.0
 

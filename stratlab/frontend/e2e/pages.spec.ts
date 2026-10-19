@@ -1653,7 +1653,7 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   if (info.project.name === "phone") await touchable(page);
 
   // a shorter range, then another group (the US), keep the page whole
-  const ranges = page.getByRole("group", { name: "Time range" });
+  const ranges = page.getByRole("group", { name: "History charts' range" });
   const ticks = () => charts.locator(".ch").first().locator("svg.ch-svg text.ch-tick").allTextContents();
   const before = (await ticks()).join("|");
   await ranges.getByRole("button", { name: "3M" }).click();
@@ -1686,7 +1686,7 @@ test("market breadth on the Free plan: today's numbers, and the charts behind Ba
   const errors = await open(page, "/invest/breadth", "Rose / fell", sessionAs("free-token", "u-free", "free@example.com"));
   await expect(page.getByTestId("breadth-locked")).toContainText("on the Basic plan");
   await expect(page.getByTestId("breadth-charts")).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Time range" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "History charts' range" })).toHaveCount(0);
   await sane(page, errors);
 });
 
