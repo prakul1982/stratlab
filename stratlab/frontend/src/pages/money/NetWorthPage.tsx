@@ -326,7 +326,8 @@ export function NetWorthPage() {
     setEdit({ id: e.id, kind: k, form });
   };
   const askRemove = (id: string, name: string, then?: () => void) => setAsk({
-    title: `Remove ${name}?`, body: "It is taken out of your net worth and the history. Your other entries stay.", label: "Remove this entry",
+    title: `Remove ${name}?`, // R62-005: earlier days' snapshots keep the entry, so the dialog says so instead of promising the history changes
+    body: "It is taken out of your net worth from today. Earlier days in the history chart keep it until you remove that day's snapshot below the chart. Your other entries stay.", label: "Remove this entry",
     run: async () => { if (await send(`/money/net-worth/items/${id}`, "DELETE", undefined, "Removed.")) then?.(); },
   });
   const download = async () => {

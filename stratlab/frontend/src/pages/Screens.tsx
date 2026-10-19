@@ -14,7 +14,7 @@ import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CheckField, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
 
@@ -101,6 +101,7 @@ export function ScreensPage() {
   const [name, setName] = useState("");
   const [weekly, setWeekly] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dropping, setDropping] = useState<SavedScreen | null>(null);
   // on a phone the filters start folded, so the table is in view; one tap opens them
   const [showFilters, setShowFilters] = useState(() => typeof matchMedia !== "function" || matchMedia("(min-width: 1361px)").matches);
   const seq = useRef(0);
@@ -170,8 +171,9 @@ export function ScreensPage() {
       notify(asNew ? `Saved “${r.screen.name}”.` : `Updated “${r.screen.name}”.`);
     } catch (e) { fail(e); } finally { setSaving(false); }
   };
+  // asked first (R62-011): one tap on the bin took a saved screen and its weekly email with it
   const remove = async (s: SavedScreen) => {
-    try { setSaved(await screensApi.remove(s.id)); if (open?.id === s.id) setOpen(null); notify(`Deleted “${s.name}”.`); } catch (e) { fail(e); }
+    try { setSaved(await screensApi.remove(s.id)); if (open?.id === s.id) setOpen(null); notify(`Deleted “${s.name}”.`); } catch (e) { fail(e); } finally { setDropping(null); }
   };
 
   // the US column is the SEC's industry division (Manufacturing, Services), not a market sector (R13S-015)
@@ -210,7 +212,7 @@ export function ScreensPage() {
               <span key={s.id} className="saved-screen">
                 <button className={`btn quiet sm${open?.id === s.id ? " on" : ""}`} aria-pressed={open?.id === s.id} onClick={() => load(s)}
                   title={s.conditions.join("; ") || "Every company"}>{s.name}{s.region !== region ? ` (${s.region})` : ""}{s.notify ? " · weekly" : ""}</button>
-                <button className="btn quiet sm icon-only" aria-label={`Delete ${s.name}`} onClick={() => remove(s)}><Trash size={16} /></button>
+                <button className="btn quiet sm icon-only" aria-label={`Delete ${s.name}`} onClick={() => setDropping(s)}><Trash size={16} /></button>
               </span>
             ))}
           </div>
@@ -315,6 +317,8 @@ export function ScreensPage() {
         </div>
       </div>
       <p className="k-note inv-text">Companies appear here once StratLab has gathered their reported numbers; the list grows through the day. A blank means the company doesn't report that number. Not investment advice.</p>
+      {dropping && <ConfirmDialog title={`Delete “${dropping.name}”?`} confirmLabel="Delete this screen" onConfirm={() => void remove(dropping)} onClose={() => setDropping(null)}>
+        The saved filters{dropping.notify ? " and its weekly email" : ""} go. The companies and your other screens aren't touched.</ConfirmDialog>}
     </div>
   );
 }

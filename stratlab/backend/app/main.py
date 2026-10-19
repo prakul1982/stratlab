@@ -1564,6 +1564,20 @@ def with_rule_problems(nb: dict) -> dict:
     return {**nb, "rule_problems": found} if found else nb
 
 
+DEFAULT_RISK_IN = (500000.0, 20.0)       # the rules' starting capital and brokerage, both in rupees
+
+
+def risk_in_currency(nb: dict) -> dict:
+    """A notebook on a market that isn't priced in rupees with the rupee starting figures untouched (₹5,00,000 and ₹20 an
+    order read as $500,000 and $20 an order) gets the ones the page gives such a market: 10,000 and no brokerage, as
+    the app's own riskForCurrency does when an instrument is picked (R62-004: a US notebook paid $20 an order)."""
+    cur = ((nb.get("instrument") or {}).get("currency") or "").upper()
+    risk = (nb.get("strategy") or {}).get("risk") or {}
+    if cur and cur != "INR" and (float(risk.get("capital") or 0), float(risk.get("brokerage") or 0)) == DEFAULT_RISK_IN:
+        nb["strategy"] = {**nb["strategy"], "risk": {**risk, "capital": 10000.0, "brokerage": 0.0}}
+    return nb
+
+
 @app.post("/notebooks")
 def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
     strategy = req.strategy or Strategy(name=req.name or "Untitled notebook")
@@ -1574,7 +1588,7 @@ def create_notebook(req: NotebookReq, profile=Depends(current_profile)):
         nb["group"] = group_body(req.group)     # e.g. "Backtest ST S2 on this group" from a scan
     if req.gaps is not None:
         nb["gaps"] = req.gaps.model_dump()      # the questions still open, there when the person comes back
-    return with_rule_problems(save_notebook(profile, nb))
+    return with_rule_problems(save_notebook(profile, risk_in_currency(nb)))
 
 
 @app.get("/notebooks/{nid}")
@@ -1610,6 +1624,8 @@ def update_notebook(nid: str, req: NotebookReq, profile=Depends(current_profile)
         nb["gaps"] = req.gaps.model_dump()
     if req.clearGaps:
         nb.pop("gaps", None)
+    if req.instrument is not None or req.strategy is not None:
+        nb = risk_in_currency(nb)
     return ok(with_rule_problems(save_notebook(profile, nb)))
 
 

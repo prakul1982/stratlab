@@ -5,7 +5,7 @@ import type { Experiment } from "../lib/types";
 import { XYChart } from "../components/Charts";
 import { pctTick } from "../lib/chartFormat";
 import { VerdictBadge } from "../components/ui";
-import { checksLine } from "../lib/tradeUi";
+import { badgeLabel, checksLine } from "../lib/tradeUi";
 import { compareGap, legacyNote, splitLegacy } from "../lib/legacyRun";
 import { Card, CardHead, DataTable, EmptyState, Field, FormGrid, Notice, PageHeader, Select, Signed, Skeleton, type Column } from "../components/kit";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
@@ -103,7 +103,7 @@ export function CompareExperiments() {
         {[a, b].map((e) => (
           <Card key={e.v} label={`v${e.v}`}>
             <span className="k-eyebrow">v{e.v} · {e.label}</span>
-            <div><VerdictBadge v={e.verdict.verdict} /></div>
+            <div><VerdictBadge v={e.verdict.verdict} label={badgeLabel(e.verdict)} /></div>
             <CardHead level={3} title={<Link to={`/n/${nb.id}/e/${e.v}`} className="k-title-link">{e.verdict.headline}</Link>} />
             <span className="k-small k-muted">{e.verdict.summary}</span>
           </Card>

@@ -1,4 +1,4 @@
-import { money, TF_NAME } from "./format";
+import { money, periodName, TF_NAME } from "./format";
 import { opSay, refName } from "./rules";
 import type { Cond, Risk, Strategy } from "./types";
 
@@ -29,6 +29,11 @@ export function targetIn(v: number | undefined, unit: Risk["tgtType"]): string {
   return `${v}%`;
 }
 
+/** A test period as the period chips say it: whole years as years ("5 years"), anything else in days. */
+export function spanIn(days: number): string {
+  return days >= 365 && days % 365 === 0 ? periodName(days) : `${days.toLocaleString("en-IN")} day${days === 1 ? "" : "s"}`;
+}
+
 /** How a run sizes its trades, in words, with its own currency. */
 function sizing(r: Risk, cur: string | null | undefined): string {
   if ((r.sizing ?? "risk") === "risk") return "by risk";
@@ -45,7 +50,7 @@ export function changes(a: CompareRun, b: CompareRun): string[] {
   if (a.instrument?.symbol !== b.instrument?.symbol) out.push(`Instrument: ${a.instrument?.symbol} → ${b.instrument?.symbol}`);
   if ((sa.side ?? "long") !== (sb.side ?? "long")) out.push(`Direction: ${SIDE[sa.side ?? "long"]} → ${SIDE[sb.side ?? "long"]}`);
   if (sa.tf !== sb.tf) out.push(`Candles: ${TF_NAME[sa.tf]} → ${TF_NAME[sb.tf]}`);
-  if (a.days !== b.days) out.push(`Test period: ${a.days} → ${b.days} days`);
+  if (a.days !== b.days) out.push(`Test period: ${spanIn(a.days)} → ${spanIn(b.days)}`);
   const rules = (s: Strategy, k: "entry" | "exit" | "shortEntry" | "shortExit") => (s[k] ?? []).map(condText).join(" · ") || "none";
   if (rules(sa, "entry") !== rules(sb, "entry") || sa.entryJoin !== sb.entryJoin) out.push(`Entry: ${rules(sa, "entry")} → ${rules(sb, "entry")}`);
   if (rules(sa, "exit") !== rules(sb, "exit")) out.push(`Exit: ${rules(sa, "exit")} → ${rules(sb, "exit")}`);

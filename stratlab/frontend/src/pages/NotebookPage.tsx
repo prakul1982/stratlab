@@ -23,6 +23,7 @@ import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
 import { IdeaComposer } from "../components/IdeaComposer";
 import "./trade/trade.css";
 import { usePlansAction, usePlansToast } from "../components/PlanInterest";
+import { badgeLabel } from "../lib/tradeUi";
 import { LIMITS } from "../lib/plans";
 
 /* /n/:id: one notebook: its question, what it tests on, the rules, and every experiment run on them. Built from the kit
@@ -369,7 +370,7 @@ function NotebookView() {
     { key: "ret", header: "Overall", numeric: true, cell: (e) => isLegacyEmptied(e) ? "Not shown" : <Signed value={e.stats.ret}>{lost(e.stats.ret)}</Signed> },
     { key: "what", header: "What changed", wrap: true, cell: (e) => <><Link className="link" to={`/n/${nb.id}/e/${e.v}`}><b>{e.label}</b></Link><span className="k-sub-line">{dateOnly(e.created_at)} · {e.instrument.symbol} · {periodName(e.days)}{isLegacyEmptied(e) ? "" : ` · ${e.stats.n} trade${e.stats.n === 1 ? "" : "s"}`}</span>{isLegacyEmptied(e) && <span className="k-sub-line">{legacyNote(e)}</span>}</> },
     { key: "unseen", header: "Unseen part", numeric: true, cell: (e) => { if (isLegacyEmptied(e)) return "–"; const u = e.verdict.checks.find((c) => c.id === "unseen")?.data; return u ? <Signed value={u.unseen_ret}>{lost(u.unseen_ret)}</Signed> : "–"; } },
-    { key: "verdict", header: "Verdict", cell: (e) => isLegacyEmptied(e) ? "Not shown" : <VerdictBadge v={e.verdict.verdict} /> },
+    { key: "verdict", header: "Verdict", cell: (e) => isLegacyEmptied(e) ? "Not shown" : <VerdictBadge v={e.verdict.verdict} label={badgeLabel(e.verdict)} /> },
   ];
 
   return (
