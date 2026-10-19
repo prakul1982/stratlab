@@ -14,6 +14,9 @@ from .signal import SignalFeed
 
 IST = ZoneInfo("Asia/Kolkata")
 POLL = 5
+# while a poll keeps failing the same way (the broker's login ended overnight), it is retried this often and said once,
+# not every 5 s all night (R73)
+POLL_FAILING = 60
 
 
 class OptionSession:
@@ -111,8 +114,14 @@ class OptionSession:
                 self.signal.poll(now)
         except Exception as e:
             self.poll_ok = False
-            print("options poll failed:", self.id, e)
+            msg = str(e)
+            if msg == getattr(self, "_poll_error", None):
+                self.next_poll = time.time() + POLL_FAILING
+            else:
+                print("options poll failed:", self.id, msg)
+            self._poll_error = msg
             return
+        self._poll_error = None
         with self.lock:
             self.quotes = q
             self.fresh = self.data.fresh(sq, now) and (spot_from != "spot" or cds_open(now))   # the spot pair's own quote time

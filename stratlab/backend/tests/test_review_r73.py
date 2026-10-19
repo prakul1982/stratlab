@@ -70,3 +70,24 @@ def test_one_headline_per_index_move_and_one_live_blog():
     assert not {titles[1], titles[3], titles[4]} & set(got)
     assert content.story_keys("Dow jumps 1,200 points") == {"move:dow:1200"}
     assert content.story_keys("Nifty ends flat; IT stocks gain") == set()
+
+
+def test_an_options_poll_failing_the_same_way_is_said_once_and_retried_each_minute(capsys):
+    import time
+    from app.options import session as S
+    from tests.test_options import at, quiet_session
+    s, _ = quiet_session()
+
+    def down(*a, **k):
+        raise RuntimeError("Indian market data is offline: the broker login has ended.")
+    real = s.data.quotes
+    s.data.quotes = down
+    for _ in range(3):
+        s.next_poll = 0.0
+        s.on_timer(at("09:40"))
+    assert capsys.readouterr().out.count("options poll failed") == 1
+    assert not s.poll_ok and s.next_poll > time.time() + S.POLL + 30        # the repeat waits a minute, not 5 s
+    s.data.quotes = real                                                    # the broker is back: polls go on as before
+    s.next_poll = 0.0
+    s.on_timer(at("09:41"))
+    assert s.poll_ok and s.next_poll <= time.time() + S.POLL
