@@ -378,6 +378,20 @@ def week_window(region: str, day: date) -> tuple[str, str]:
     return start.isoformat(), previous_trading_day(region, day + timedelta(days=1)).isoformat()
 
 
+def closures_after(region: str, day: date) -> list[dict]:
+    """The weekdays the market is shut between this brief's day and the next session, with the holiday's name when the
+    calendar has one: the last brief before a holiday said nothing of it (R67-001, Mon 19 Oct before Tue 20 Oct)."""
+    from ..data.calendar import holiday_name
+    out, d = [], day + timedelta(days=1)
+    for _ in range(10):
+        if is_trading_day(region, d):
+            return out + [{"next_open": d.isoformat()}] if out else []
+        if d.weekday() < 5:
+            out.append({"day": d.isoformat(), "name": _safe(lambda d=d: holiday_name(region, d))})
+        d += timedelta(days=1)
+    return []
+
+
 def market_headlines(region: str, day: date | None = None, weekly: bool = False, indices: list[dict] | None = None) -> list[dict]:
     rows = [h for h in _main().research_hub.headlines(region) if h.get("headline")]
     if day is None:
@@ -401,6 +415,9 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
         got = _safe(fn)
         if got and (name != "scan" or got["st_s2"] or got["stage2"]):
             facts[name] = got
+    shut = _safe(lambda: closures_after(region, day), [])
+    if shut:
+        facts["closures"] = shut
     if any(k in facts for k in ("indices", "rotation", "scan", "headlines")):
         _cache.set(key, facts, 6 * 3600)
     return facts

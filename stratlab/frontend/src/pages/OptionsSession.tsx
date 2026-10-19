@@ -109,8 +109,10 @@ export function OptionsSession() {
       {!running && snap.stop_reason && <Notice>Stopped: {snap.stop_reason}</Notice>}
       {snap.notice && <Notice tone="warn">{snap.notice}</Notice>}
       {p?.held && <Notice tone="warn">{p.held}</Notice>}
-      {running && a.halted && <Notice tone="warn">The daily loss cap was hit. No more trades today; it starts again tomorrow.</Notice>}
-      {running && snap.note && !p && <Notice>{snap.note}</Notice>}
+      {/* "the next market day", not "tomorrow": a holiday or a weekend can come first (R67-003: "tomorrow" was Tue 20 Oct, a
+          holiday); and the engine's own note saying the same is not shown under it */}
+      {running && a.halted && <Notice tone="warn">The daily loss cap was hit. No more trades today; it trades again from the next market day.</Notice>}
+      {running && snap.note && !p && !(a.halted && /loss cap/i.test(snap.note)) && <Notice>{snap.note}</Notice>}
       {snap.signal && (
         <Card label="Signal">
           <div className="k-row">

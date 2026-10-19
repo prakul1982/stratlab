@@ -909,10 +909,10 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     # the listed contracts are today's and later, so the days already past come from the rule (R63-006: only the week's
     # and the month's expiries carried a dot; 6 and 13 Oct had none)
-    weekly = {d for d in _rule_weekly(frm, to, 1) if d < today} | ({_day(d) for d in got} - {None}) if got else set(_rule_weekly(frm, to, 1))
+    weekly = _past_and_listed(_rule_weekly(frm, to, 1), got, today)
     for d in sorted(weekly):
         if frm <= d <= to and d not in monthly:
-            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (_listed_day(d, "Tuesday") if got and d >= today else
+            out.append(_ev("expiry", d, "NIFTY weekly expiry", "NIFTY's weekly options expire" + (_listed_day(d, "Tuesday") if (got and d >= today) or d.weekday() != 1 else
                            " (the exchange's rule: Tuesdays, a day earlier on a holiday)."), eid=_id("exp-w", d), time_ist="15:30",
                            status="released" if d < today else "scheduled"))
     # BSE's SENSEX options expire on Thursdays (R63-006: Positioning listed the 22 Oct SENSEX weekly; the calendar didn't)
@@ -920,7 +920,7 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
         bse = [d for d in (listed("BFO", "SENSEX") if listed else []) if isinstance(d, str)]
     except Exception:
         bse = []
-    sensex = {d for d in _rule_weekly(frm, to, 3) if d < today} | ({_day(d) for d in bse} - {None}) if bse else set(_rule_weekly(frm, to, 3))
+    sensex = _past_and_listed(_rule_weekly(frm, to, 3), bse, today)
     last_of_month: dict[str, date] = {}
     for d in sensex:
         k = d.isoformat()[:7]
@@ -931,9 +931,20 @@ def expiry_events(today: date, listed=None, frm: date | None = None, to: date | 
             kind = "monthly" if month_end else "weekly"
             usual = "last Thursday of the month" if month_end else "Thursday"
             out.append(_ev("expiry", d, f"SENSEX {kind} expiry", f"SENSEX's {kind} options expire on BSE"
-                           + (_listed_day(d, usual, weekday=3) if bse and d >= today else " (the exchange's rule: Thursdays, a day earlier on a holiday)."),
+                           + (_listed_day(d, usual, weekday=3) if (bse and d >= today) or d.weekday() != 3 else " (the exchange's rule: Thursdays, a day earlier on a holiday)."),
                            eid=_id("exp-sx", d), time_ist="15:30", status="released" if d < today else "scheduled"))
     return out
+
+
+def _past_and_listed(rule: list[date], listed: list[str], today: date) -> set[date]:
+    """The listed expiries (today's and later), with the rule's for the days the list no longer has: the past, and today
+    once today's contracts have expired and left the list (R67-002: Monday 19 Oct's moved NIFTY expiry vanished from the
+    calendar after its close). A rule date in a week the list already covers is the list's to give."""
+    have = {d for d in (_day(x) for x in listed) if d}
+    if not have:
+        return set(rule)
+    weeks = {d.isocalendar()[:2] for d in have}
+    return have | {d for d in rule if d <= today and (d < today or d.isocalendar()[:2] not in weeks)}
 
 
 def _rule_weekly(frm: date, to: date, weekday: int) -> list[date]:

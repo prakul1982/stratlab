@@ -42,8 +42,15 @@ export function liveReadLine(l: Pick<NonNullable<LiveView["latest"]>, "adv" | "d
 }
 
 /** The page header's chip above a live card: the numbers under the chip are the last close's, so it says so (R24-011:
- * "Prices as of 14 Oct" above "Today, live as of 09:15"). */
-export const breadthChipLabel = (live: unknown) => (live ? "Last close" : "Prices as of");
+ * "Prices as of 14 Oct" above "Today, live as of 09:15"). After today's close, until the evening's count, today's is the last
+ * close, so the chip names the day-by-day figures instead (R67-004: "Last close 16 Oct" above "Today, final" on 19 Oct). */
+export const breadthChipLabel = (live: unknown) =>
+  (live && (live as { state?: string }).state === "final" ? "Daily figures to" : live ? "Last close" : "Prices as of");
+
+/** The day-by-day card's title beside the live card: "Last close" while the market trades, "Previous session" once today's
+ * final count stands above it (R67-004). */
+export const dailyTitle = (day: string, live: unknown) =>
+  (live && (live as { state?: string }).state === "final" ? `Previous session · ${day}` : live ? `Last close · ${day}` : `Latest numbers · ${day}`);
 
 /** The live points as one series per measure (a share is the count above the average over the stocks that had that average). */
 export function liveSeries(live: Pick<LiveView, "fields" | "points">): LiveSeries {

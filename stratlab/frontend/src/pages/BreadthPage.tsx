@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
+  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -123,7 +123,7 @@ export function BreadthPage() {
             ) : (
               <>
                 {data.live && <LiveCard live={data.live} group={data.group} />}
-                <Headline t={data.today} help={help} lastClose={!!data.live} pending={data.pending} revised={data.revised} />
+                <Headline t={data.today} help={help} live={data.live} pending={data.pending} revised={data.revised} />
                 {data.locked ? (
                   <div data-testid="breadth-locked"><PlanNote>Today's numbers and today's charts are on every plan. The history charts, from 3 months back, and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
                 ) : shown && <>
@@ -198,7 +198,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
   );
 }
 
-function Headline({ t, help, lastClose, pending, revised }: { t: Today; help: Record<string, string>; lastClose?: boolean; pending?: Pending; revised?: Revision[] }) {
+function Headline({ t, help, live, pending, revised }: { t: Today; help: Record<string, string>; live?: unknown; pending?: Pending; revised?: Revision[] }) {
   const changed = revisionLines(revised, shortDay);
   const vs = t.prev_day ? ` vs ${shortDay(t.prev_day)}` : "";
   const lab = (label: string, info?: string) => <>{label}{info && <Info label={`About ${label.toLowerCase()}`}>{info}</Info>}</>;
@@ -217,7 +217,7 @@ function Headline({ t, help, lastClose, pending, revised }: { t: Today; help: Re
   };
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
-      <CardHead title={latestDue(t.day, pending) ?? (lastClose ? `Last close · ${shortDay(t.day)}` : `Latest numbers · ${shortDay(t.day)}`)} />
+      <CardHead title={latestDue(t.day, pending) ?? dailyTitle(shortDay(t.day), live)} />
       <StatRow>
         <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />
