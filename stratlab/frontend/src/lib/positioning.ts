@@ -210,6 +210,7 @@ export function vixIvNote(strikeAt: number | null | undefined, chain: string, fm
   // the nearest expiry's IV, beside India VIX's 30-day measure: they differ by design, most when the expiry is days away (R52-014)
   const base = strikeAt ? `At the ${fmt(strikeAt)} strike · ${chain}` : chain;
   // on an expiry day the expiring options' last hours aren't read (R63-001: 34.41% beside a VIX of 14.73)
-  if (rolled) return `${base} · the next expiry's IV, as today's options expire today; India VIX measures the next 30 days, so the two differ`;
-  return `${base} · the nearest expiry's IV; India VIX measures the next 30 days, so the two differ, most near expiry`;
+  // whole sentences after the chain's words (R66-001: "· the nearest expiry's IV; India VIX…" read as a fragment)
+  if (rolled) return `${base}. The IV of the next expiry's options, as today's expire today. India VIX measures the next 30 days, so the two differ.`;
+  return `${base}. The IV of the nearest expiry's options. India VIX measures the next 30 days, so the two differ, most of all near expiry.`;
 }

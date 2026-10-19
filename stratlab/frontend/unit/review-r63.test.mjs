@@ -13,8 +13,8 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 test("R63-001: on an expiry day the VIX card's IV says it is the next expiry's", async () => {
   const { vixIvNote } = await import("../src/lib/positioning.ts");
   const f = (v) => String(v);
-  assert.match(vixIvNote(23150, "Live chain, 09:33", f, true), /the next expiry's IV, as today's options expire today/);
-  assert.match(vixIvNote(23150, "Live chain, 09:33", f), /the nearest expiry's IV/);
+  assert.match(vixIvNote(23150, "Live chain, 09:33", f, true), /The IV of the next expiry's options, as today's expire today\./);
+  assert.match(vixIvNote(23150, "Live chain, 09:33", f), /The IV of the nearest expiry's options\./);
   assert.match(read("src/components/VixPanel.tsx"), /strike, !!ivNow\.rolled\)/);
 });
 

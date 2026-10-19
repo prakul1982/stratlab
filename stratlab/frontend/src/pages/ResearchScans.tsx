@@ -52,6 +52,9 @@ function ScanElapsed({ count }: { count?: number }) {
   return <>{scanningText(count)} {sec} s</>;
 }
 
+/** How long the rotation can take before the page says it is still working. */
+const ROTATION_SLOW_MS = 6000;
+
 export function ScanPage() {
   const [region, setRegion] = useRegion();
   const [params, setParams] = useSearchParams();
@@ -145,7 +148,7 @@ export function ScanPage() {
         <CardHead title="Scan a group" />
         <FormGrid label="Scan a group" onSubmit={runScan}>
           <FieldGroup label="Scan" wide info={<>Each scan is a short list of chart rules, all of which must hold. Pick one to read its rules below.</>}>
-            <ChipBar label="Scan rule sets" value={scan.id} onChange={pickScan} options={scans.map((s) => ({ value: s.id, label: s.name }))} />
+            <ChipBar label="Scan rule sets" wrap value={scan.id} onChange={pickScan} options={scans.map((s) => ({ value: s.id, label: s.name }))} />
           </FieldGroup>
           {scan.text && (
             <div className="k-field wide" data-testid="scan-rule">
@@ -277,13 +280,17 @@ export function RotationPage() {
     return () => window.clearTimeout(t);
   }, [tail]);
 
+  // a read that takes a while says so (R66-002: 13 s of skeleton on the first view after the close, the day's closes being
+  // read for every member before the answer is kept)
+  const [slow, setSlow] = useState(false);
   useEffect(() => {
     let live = true;
-    setBusy(true); setFailed(null);
+    setBusy(true); setFailed(null); setSlow(false);
+    const late = window.setTimeout(() => { if (live) setSlow(true); }, ROTATION_SLOW_MS);
     api<RotationOut>(`/research/rotation?region=${region}&set=${encodeURIComponent(setId)}&interval=${interval}&tail=${askTail}`)
       .then((r) => { if (live) setOut(r); }).catch((e) => { if (live) { setOut(null); setFailed((e as Error).message); } })
-      .finally(() => { if (live) setBusy(false); });
-    return () => { live = false; };
+      .finally(() => { window.clearTimeout(late); if (live) { setBusy(false); setSlow(false); } });
+    return () => { live = false; window.clearTimeout(late); };
   }, [region, setId, interval, askTail, tries]);
 
   useEffect(() => { setPicked(null); setFocus(null); }, [region, setId]);
@@ -339,7 +346,8 @@ export function RotationPage() {
         </FormGrid>
       </Card>
       {failed && <ErrorState title="The rotation couldn't be worked out" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{failed}</ErrorState>}
-      {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} /></Card>}
+      {busy && !out && !failed && <Card><Skeleton label="Comparing each one with the market" lines={4} />
+        {slow && <p className="k-small k-muted" role="status" data-testid="rotation-slow">Still working: the first look after the close reads the day's closes for every member. It can take up to a minute, and the answer is kept for the next visit.</p>}</Card>}
       {out && (
         <ChartFrame title={`${out.name} vs ${out.benchmark}`}
           actions={<div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
