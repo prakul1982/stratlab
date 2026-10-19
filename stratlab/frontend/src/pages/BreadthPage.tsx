@@ -125,7 +125,7 @@ export function BreadthPage() {
                 {data.live && <LiveCard live={data.live} group={data.group} />}
                 <Headline t={data.today} help={help} lastClose={!!data.live} pending={data.pending} revised={data.revised} />
                 {data.locked ? (
-                  <div data-testid="breadth-locked"><PlanNote>Today's numbers are on every plan. The history, charts and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
+                  <div data-testid="breadth-locked"><PlanNote>Today's numbers and today's charts are on every plan. The history charts, from 3 months back, and the sector table are on the {data.plan_needed} plan.</PlanNote></div>
                 ) : shown && <>
                   <AlertBox group={data.group} />
                   <Charts data={data} h={shown} help={help} />

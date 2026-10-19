@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import {
-  atmIvLabel, chainUnit, chainWords, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
+  atmIvLabel, chainUnit, chainWithTime, contracts, contractsShort, crore, dayName, istTime, NEAR_STRIKES, PARTICIPANTS, pct, RANGES, ratio, shortDay, sides, signed, spanLine, statusLine, strike, strikesRead, unitLine,
   chainCounts, pcrNote, pcrStrikes, rangeFrom, type CashPoint, type ChainFacts, type ChainPoint, type Coverage, type PartPoint, type PcrRow, type PRow, type Span, type Summary,
 } from "../lib/positioning";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
@@ -270,7 +270,7 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
           <div className="k-stack" data-testid="chain-facts">
             <div className="k-stack k-tight">
               <p className="k-small k-muted">
-                Expiry {dayName(c.expiry)} · spot {strike(c.spot)} · {chainWords(c)}, {istTime(c.as_of)}
+                Expiry {dayName(c.expiry)} · spot {strike(c.spot)} · {chainWithTime(c, istTime(c.as_of))}
               </p>
               <Source testId="chain-recorded">{recordedLine(name, c.recorded)}</Source>
             </div>
