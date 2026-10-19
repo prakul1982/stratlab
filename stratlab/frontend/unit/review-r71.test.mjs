@@ -30,3 +30,9 @@ test("R71-004: the Invest home's US tab lists the US's own coming events", () =>
   assert.match(src, /\(region !== "US" \|\| e\.kind === "us"\)/);
   assert.match(src, /<NextEvents region=\{region\} \/>/);
 });
+
+test("R71-009: Market events shows the newest index change open and folds the earlier ones", () => {
+  const src = read("src/pages/trade/EventsPage.tsx");
+  assert.match(src, /shown\.slice\(0, 1\)\.map\(\(c\) => card\(c, 0\)\)/);
+  assert.match(src, /<Disclosure summary=\{`Earlier index changes \(\$\{Math\.min\(4, shown\.length\) - 1\}\)`\} testId="ev-index-earlier">/);
+});
