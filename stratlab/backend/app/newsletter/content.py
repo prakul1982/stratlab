@@ -171,6 +171,16 @@ _MOVE = re.compile(r"\b(sensex|nifty|bank nifty|dow|s&p 500|nasdaq)\b[^|;:]*?\b(
 _LIVE = re.compile(r"\b(?:live updates|live blog|stock market live|market live)\b", re.I)
 
 
+# a stock-picking service's own pages: their headlines carry the service's stance even when the words don't show it ("Stocks
+# try for back-to-back gains — plus, …" from CNBC's Investing Club), so a brief carries none of them (R76)
+_STANCE_SOURCES = re.compile(r"^https?://(?:www\.)?cnbc\.com/investingclub/", re.I)
+
+
+def stance_source(url) -> bool:
+    from ..intel.news import publisher_url
+    return bool(_STANCE_SOURCES.search(publisher_url(str(url or "")) or str(url or "")))
+
+
 def story_keys(title: str) -> set[str]:
     """What makes a headline the same story as another already picked: the index move it reports, and being a live blog."""
     out = {f"move:{m.group(1).lower()}:{m.group(2).replace(',', '')}" for m in _MOVE.finditer(title or "")}
@@ -354,6 +364,8 @@ def pick_headlines(region: str, rows: list[dict], frm: str, to: str, seen: set[s
             continue
         day = _local_day(h.get("at"), region)
         if dated and (not day or not (frm <= day <= to)):
+            continue
+        if stance_source(h.get("url")):
             continue
         k = title_key(title)
         story = story_keys(title)

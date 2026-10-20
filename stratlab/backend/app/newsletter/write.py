@@ -32,7 +32,9 @@ BANNED = [r"\bbuy", r"\bsell", r"\bhold\b", r"\bholding on\b", r"\baccumulat", r
           r"\bwill (rise|fall|go|climb|drop|rally|gain|continue)", r"\bupside", r"\bdownside", r"\bstop[- ]?loss", r"\bundervalued",
           r"\bovervalued", r"\bopportunit", r"\bguarantee", r"\bmust\b", r"\brally ahead", r"\bbreakout candidate", r"\bsure[- ]shot",
           # a stock-picking service's own stance ("keeps us positive on Lilly", CNBC Investing Club) is advice, not a fact (R72-002)
-          r"\b(positive|negative|constructive|cautious) on\b", r"\binvesting club\b"]
+          r"\b(positive|negative|constructive|cautious) on\b", r"\binvesting club\b",
+          # a trade idea ("Apple shares aren't cheap. Here's how to get long for less") is advice too (R76)
+          r"\b(get|go|going|getting) (long|short)\b", r"\bhow to (play|trade)\b", r"\bways? to play\b"]
 _BANNED = re.compile("|".join(BANNED), re.I)
 ALLOWED_CAPS = {"US", "IN", "IST", "AI", "NSE", "BSE", "ST", "S2", "IPO", "QIP", "GDP", "RBI", "SEBI", "FII", "DII", "ETF"}
 _cache = TTLCache(max_items=200)
