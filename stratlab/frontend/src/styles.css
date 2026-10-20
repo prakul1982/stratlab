@@ -805,6 +805,9 @@ table.legs input[type=number] { width: 72px !important; }
 .pub { min-height: 100vh; background: var(--paper); }
 .pub-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--line); }
 .pub-main { max-width: 960px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 32px) 64px; }
+/* while a public page is still a loading placeholder, its main fills the screen, so the footer waits below it instead of
+   showing under the placeholder and jumping down when the page arrives (R75-002: /library's layout shift on a phone) */
+main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 .pub-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 640px) { .pub-checks { grid-template-columns: 1fr; } }
 

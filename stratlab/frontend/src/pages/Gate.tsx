@@ -106,7 +106,7 @@ export function NotFound({ signedIn }: { signedIn: boolean }) {
           </div>
           <nav className="gate-links" aria-label="Places to go">
             <LinkCard to="/pricing" title="Plans">What Free, Basic and Pro include and cost.</LinkCard>
-            <LinkCard to="/faq" title="Questions">Tips, real trades, options, invites and your data.</LinkCard>
+            <LinkCard to="/faq" title="Questions">Advice, real trades, options, invites and your data.</LinkCard>
             <LinkCard to="/library" title="Strategy library">StratLab's own strategies with the verdict each earned.</LinkCard>
             <LinkCard to="/contact" title="Contact us">Questions reach a person.</LinkCard>
           </nav>

@@ -1725,8 +1725,12 @@ def _head(title: str, desc: str, canonical: str, extra: str = "", robots: str = 
     indexed = not robots.startswith("noindex")
     link = f'<link rel="canonical" href="{e(canonical)}">\n' if indexed else ""
     og_url = f'<meta property="og:url" content="{e(canonical)}">' if indexed else ""
+    # the heading's and the text's fonts asked for first, so they are in before the first paint where they can be, not
+    # swapped in after it, moving the list and the search under a heading that rewraps (R75-002: /stocks' layout shift)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" href="/fonts/fraunces-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <meta name="robots" content="{robots}">
