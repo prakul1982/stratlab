@@ -103,6 +103,15 @@ FUND_TYPES = {"ETF": "an exchange-traded product (an ETF or ETN)", "MUTUALFUND":
               "CURRENCY": "a currency", "CRYPTOCURRENCY": "a crypto asset", "FUTURE": "a futures contract"}
 
 
+
+def _source_down(ex: Exception) -> bool:
+    """The market data source is down for every company, not just this one: India's broker login has ended."""
+    try:
+        from .kite_service import KiteNotReady
+    except Exception:
+        return False
+    return isinstance(ex, KiteNotReady)
+
 class Busy(Exception):
     """Too many fresh pages built this minute, and no stored copy to show."""
 
@@ -1237,6 +1246,7 @@ class Pages:
         # the largest companies first, and a page the source had no newer close for at an earlier try after the rest
         due.sort(key=lambda x: (tries.get(x[0], 0), -(shown_cap(x[1]["facts"]) or 0)))
         done = failed = 0
+        stopped = 0             # pages not tried because the source is down for every one of them
         ok: set[str] = set()
         for i, (symbol, stored) in enumerate(due[:limit]):
             if i and gap:
@@ -1246,6 +1256,11 @@ class Pages:
             except Exception as ex:                   # no prices for this one today: tried again at its next build
                 failed += 1
                 print("stock pages: price refresh failed:", region, symbol, str(ex)[:120])
+                if _source_down(ex):
+                    # the broker's login has ended (overnight): every other page would fail the same way, one a second;
+                    # they are left for the next run instead of tried and logged one by one
+                    stopped = len(due[:limit]) - i - 1
+                    break
                 continue
             facts_now = with_new_close(stored["facts"], bars, analyse)
             stored = {**stored, "facts": facts_now}
@@ -1263,9 +1278,9 @@ class Pages:
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
         retry = sum(1 for s, _ in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
-        if len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
+        if not stopped and len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page still behind is tried again at its next build
-        return {"refreshed": done, "left": max(0, len(due) - limit), "failed": failed, **({"retry": retry} if retry else {}),
+        return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
 
     def html(self, region: str, symbol: str, co: dict) -> str:
