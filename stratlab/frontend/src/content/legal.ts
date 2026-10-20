@@ -61,7 +61,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
       "If we change a price, it applies from your next renewal after we've told you, and you can cancel before then.",
     ] },
     { h: "Fair use" },
-    { p: "Don't misuse the service: no scraping or automated bulk requests, no attempts to break its security or reach other people's data, no reselling access, and nothing unlawful. Plan limits (experiments, AI builds, paper sessions) apply per account. We may limit or suspend accounts that misuse the service." },
+    { p: "Don't misuse the service: no scraping or automated bulk requests, no attempts to break its security or reach other people's data, no reselling access, and nothing unlawful. Plan limits (backtests, AI builds, paper sessions) apply per account. We may limit or suspend accounts that misuse the service." },
     { h: "What you publish" },
     { p: "Strategies you publish to the public library, and verdicts you share by link, can be seen by anyone with access. Only publish what you're happy to share. You keep ownership of your ideas and let us display what you publish. We may remove published content that's misleading, abusive or unlawful." },
     { h: "Market data and AI" },

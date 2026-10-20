@@ -121,3 +121,11 @@ def test_the_stock_price_pass_stops_when_the_broker_login_has_ended(mem, capsys)
         return [{"t": "2026-10-08T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1.0}]
     got = pages.refresh_prices("US", one_bad, gap=0, now=now)
     assert got["refreshed"] == 2 and got["failed"] == 1
+
+
+def test_stock_pages_ask_for_their_heading_and_text_fonts_first():
+    from app import stock_pages
+    import inspect
+    src = inspect.getsource(stock_pages)
+    for f in ("fraunces-latin-400-normal", "ibm-plex-sans-latin-400-normal"):
+        assert f'<link rel="preload" href="/fonts/{f}.woff2" as="font" type="font/woff2" crossorigin>' in src
