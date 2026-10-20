@@ -91,3 +91,33 @@ def test_an_options_poll_failing_the_same_way_is_said_once_and_retried_each_minu
     s.next_poll = 0.0
     s.on_timer(at("09:41"))
     assert s.poll_ok and s.next_poll <= time.time() + S.POLL
+
+
+from tests.test_review_r7v import mem, us  # noqa: E402,F401  (the in-memory settings table and a US page's facts)
+
+
+def test_the_stock_price_pass_stops_when_the_broker_login_has_ended(mem, capsys):
+    import json
+    from datetime import datetime, timezone
+    from app import stock_pages
+    from app.kite_service import KiteNotReady
+    now = datetime(2026, 10, 9, 0, 30, tzinfo=timezone.utc)
+    built = now.timestamp() - 30 * 3600
+    for i, sym in enumerate(("AAA", "BBB", "CCC")):
+        mem[f"stocks:page:US:{sym}"] = json.dumps({"ts": built, "facts": us(symbol=sym, price_at="2026-10-07", market_cap=1_000.0 * (3 - i))})
+    asked = []
+
+    def down(region, sym):
+        asked.append(sym)
+        raise KiteNotReady("Indian market data is offline: the broker login has ended.")
+    pages = stock_pages.Pages(lambda r, c: None)
+    got = pages.refresh_prices("US", down, gap=0, now=now)
+    assert asked == ["AAA"] and capsys.readouterr().out.count("price refresh failed") == 1
+    assert got["failed"] == 1 and got["left"] == 2 and "US" not in pages.prices_done      # tried again at the next run
+
+    def one_bad(region, sym):                       # one company with no prices: the others are still read
+        if sym == "AAA":
+            raise RuntimeError("no candles")
+        return [{"t": "2026-10-08T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 1.0}]
+    got = pages.refresh_prices("US", one_bad, gap=0, now=now)
+    assert got["refreshed"] == 2 and got["failed"] == 1
