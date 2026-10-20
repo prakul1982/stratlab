@@ -129,3 +129,22 @@ def test_stock_pages_ask_for_their_heading_and_text_fonts_first():
     src = inspect.getsource(stock_pages)
     for f in ("fraunces-latin-400-normal", "ibm-plex-sans-latin-400-normal"):
         assert f'<link rel="preload" href="/fonts/{f}.woff2" as="font" type="font/woff2" crossorigin>' in src
+
+
+def test_a_brief_leaves_out_trade_ideas_and_a_stock_picking_service_s_pages():
+    from app.newsletter import content
+    from app.newsletter.write import banned
+    assert banned("Apple shares aren't cheap. Here's how to get long for less")
+    assert banned("Three ways to play the AI trade") and banned("Traders go short on regional banks")
+    assert not banned("Long-dated Treasury yields rise") and not banned("Oil falls for a long stretch as supply grows")
+    rows = [
+        {"headline": "Stocks try for back-to-back gains — plus, Qnity gets iPhone business from Apple",
+         "url": "https://www.cnbc.com/investingclub/2026/10/20/stocks-try.html", "at": "2026-10-20T15:00:00Z", "source": "CNBC"},
+        {"headline": "Apple shares aren't cheap. Here's how to get long for less",
+         "url": "https://www.cnbc.com/2026/10/20/apple-shares.html", "at": "2026-10-20T15:00:00Z", "source": "CNBC"},
+        {"headline": "Wall Street closes higher as Dow gains 1%",
+         "url": "https://www.cnbc.com/2026/10/20/stocks.html", "at": "2026-10-20T15:00:00Z", "source": "CNBC"},
+    ]
+    got = [h["headline"] for h in content.pick_headlines("US", rows, "0000-00-00", "9999-99-99")]
+    assert got == [rows[1]["headline"], rows[2]["headline"]]           # the club's page is never picked
+    assert [t for t in got if not banned(t)] == ["Wall Street closes higher as Dow gains 1%"]   # the trade idea isn't shown
