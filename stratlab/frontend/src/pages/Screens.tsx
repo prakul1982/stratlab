@@ -311,6 +311,7 @@ export function ScreensPage() {
                 <button type="button" className={`btn${open ? " quiet" : ""}`} disabled={saving || full} onClick={() => save(true)}>{open ? "Save as a new screen" : "Save screen"}</button>
               </FormActions>
             </FormGrid>
+            {saved && !full && <p className="k-small k-muted" data-testid="screens-left">{saved.count} of {saved.limit} saved.</p>}
             {full && <p className="k-small k-muted">Your plan keeps {saved?.limit} saved screen{saved?.limit === 1 ? "" : "s"}. Delete one to save another, or <Link className="link" to="/plans">see plans</Link>.</p>}
             {weekly && saved?.email && !saved.email_confirmed && <Notice>The email goes out once you've confirmed {saved.email} in <Link className="link" to="/settings#newsletters">Settings</Link>.</Notice>}
           </Card>

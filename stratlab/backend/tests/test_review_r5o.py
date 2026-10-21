@@ -131,7 +131,7 @@ def test_an_adr_page_is_its_us_listing_in_dollars():
     # an ordinary US company is unchanged
     nvda = us_listing({"exchange": "NASDAQ NMS - GLOBAL MARKET", "currency": "USD", "marketCapitalization": 4312000.5},
                       {"currency": "USD", "exchange": "NasdaqGS", "high52": 1, "low52": 1}, {"52WeekLow": 86.6, "52WeekHigh": 195.6})
-    assert (nvda["exchange"], nvda["currency"], nvda["foreign"], nvda["range52"]) == ("NASDAQ NMS - GLOBAL MARKET", "USD", False, {"low": 86.6, "high": 195.6})
+    assert (nvda["exchange"], nvda["currency"], nvda["foreign"], nvda["range52"]) == ("Nasdaq", "USD", False, {"low": 86.6, "high": 195.6})
     assert nvda["market_cap"] == 4312000.5e6
     # its "similar companies" were ENI.MI and GSP.MI, Milan's euro prices shown with a dollar sign: US listings only
     from app.intel.company import FOREIGN_TICKER

@@ -455,7 +455,7 @@ function Locked({ plan, coverage }: { plan: string; coverage?: Coverage }) {
       <CardHead title="History" />
       <p className="k-small k-muted">
         Charts of each participant's positions and long / short shares by day, the FII and DII cash flows, each index's PCR and ATM IV by day, and where today's IV sits among the recorded days, are on the {plan} plan.
-        {coverage?.participants.days ? ` ${spanLine(coverage.participants)} of participant files are kept.` : ""} Today's numbers above are on every plan.
+        {coverage?.participants.days ? ` The participant history covers ${spanLine(coverage.participants)}.` : ""} Today's numbers above are on every plan.
       </p>
       <Link to="/plans" className="btn sm k-btn-end">See the {plan} plan</Link>
     </Card>

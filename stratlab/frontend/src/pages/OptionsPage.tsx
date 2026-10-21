@@ -277,13 +277,13 @@ function Chain({ s }: { s: OptionStrategy }) {
   const greekCols: Column<CRow>[] = [
     g("ce_g", (x) => `${(x.iv! * 100).toFixed(1)}%${x.iv_from === "atm" ? "*" : ""}`, "iv", "Call IV"), g("ce_g", (x) => n(x.delta!, 2), "d", "Call delta"),
     g("ce_g", (x) => String(+x.gamma!.toPrecision(2)), "g", "Call gamma"), g("ce_g", (x) => n(x.theta!, 2), "t", "Call theta"), g("ce_g", (x) => n(x.vega!, 2), "v", "Call vega"),
-    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike}</b> },
+    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</b> },
     g("pe_g", (x) => `${(x.iv! * 100).toFixed(1)}%${x.iv_from === "atm" ? "*" : ""}`, "iv", "Put IV"), g("pe_g", (x) => n(x.delta!, 2), "d", "Put delta"),
     g("pe_g", (x) => String(+x.gamma!.toPrecision(2)), "g", "Put gamma"), g("pe_g", (x) => n(x.theta!, 2), "t", "Put theta"), g("pe_g", (x) => n(x.vega!, 2), "v", "Put vega"),
   ];
   const quoteCols: Column<CRow>[] = [
     { key: "cq", header: "Call bid / ask", numeric: true, cell: (r) => q(r.ce) }, { key: "co", header: "Call OI", numeric: true, cell: (r) => r.ce?.oi?.toLocaleString("en-IN") ?? "–" },
-    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike}</b> },
+    { key: "k", header: "Strike", numeric: true, cell: (r) => <b>{r.strike.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</b> },
     { key: "pq", header: "Put bid / ask", numeric: true, cell: (r) => q(r.pe) }, { key: "po", header: "Put OI", numeric: true, cell: (r) => r.pe?.oi?.toLocaleString("en-IN") ?? "–" },
   ];
   // Indian index and stock options trade in the Indian market's hours; outside them the prices are the last ones struck (R20-012)
