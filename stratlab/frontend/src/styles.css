@@ -1004,6 +1004,7 @@ label.btn.disabled { opacity: .5; }
 .space-card-title svg { flex: none; color: var(--ink-2); }
 .space-card-title b { font-size: 15px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .space-card-line { line-height: 1.4; min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 560px) { .space-card-line { display: block; -webkit-line-clamp: unset; overflow: visible; min-height: 0; } }   /* a card's caveat is read in full on a phone (R76-006) */
 .space-card-foot { display: flex; align-items: center; min-height: 20px; margin-top: auto; padding-top: 4px; color: var(--muted); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }   /* a long status wraps onto a second line: a flex box clips text with no ellipsis (R13S-008) */
 .space-card-foot.live, .space-card-lead .space-card-foot { font-weight: 600; }
 .space-card-foot.live { color: var(--up); }     /* 5:1 on the paper; the lighter series green was 3.8:1 */
@@ -2132,4 +2133,16 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 @media (max-width: 640px) {
   .lp-menu > summary, .lp-nav .lp-menu nav a, .lp-more > summary, .pub-menu > summary, .pub-nav .pub-menu nav a { min-height: 44px; }
   .lp-nav .btn.sm, .pub-nav .btn.sm, .btn.sm.lp-idea-btn { height: auto; min-height: 44px; }
+}
+
+/* R76-005: on a phone the breadcrumbs, the ticks, the "How this works" toggles, the space home's search box, a table's
+   row-name buttons and the chart's toolbar buttons were 21 to 34 px to tap. Their reach grows to 44 px; a row-name
+   button's padding is taken back by a negative margin, so a table keeps its row height. */
+@media (max-width: 640px) {
+  .k-crumb a, .k-crumb-btn, .k-crumb li > [aria-current="page"] { min-height: 44px; }
+  .k-check { min-height: 44px; }
+  .k-disclosure > summary, details > summary.k-small { min-height: 44px; }
+  .search-box input { min-height: 44px; }
+  .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
+  .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
 }

@@ -53,7 +53,7 @@ export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k 
 
 export const FEATURES: Record<PlanId, string[]> = {
   free: [`${L.free.backtests_per_month} backtests a month, each with a full verdict, and ${L.free.ai_builds_per_month} AI strategy builds`,
-    "A free paper-trading trial of 5 market days from your first start (after that, paper trading needs Basic or Pro), and the options builder with Greeks and breakevens after charges",
+    "A free trial of 5 market days paper trading one notebook strategy on one stock, from your first start (after that, paper trading needs Basic or Pro; options paper trading is on Basic), and the options builder with Greeks and breakevens after charges",
     `Today's derivatives positioning, F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
     `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
@@ -69,7 +69,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax and a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`, `Paper trade ${L.pro.live_limit} strategies at a time`,
-    "Indian F&O stocks and indices in notebooks and backtests, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
+    "Indian F&O contracts (futures and options on stocks and indices) in notebooks and backtests; the stocks themselves are on every plan, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],

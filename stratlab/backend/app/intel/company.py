@@ -311,6 +311,19 @@ def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
 
 
 US_VENUE = re.compile(r"NASDAQ|NYSE|NEW YORK|AMEX|ARCA|BATS|CBOE|OTC|\bUS\b", re.I)
+_VENUES = ((re.compile(r"NASDAQ|^NMS$|^NGM$|^NCM$", re.I), "Nasdaq"), (re.compile(r"ARCA|^PCX$", re.I), "NYSE Arca"),
+           (re.compile(r"AMEX|NYSE AMERICAN|^ASE$", re.I), "NYSE American"), (re.compile(r"BATS|CBOE|^BTS$", re.I), "Cboe"),
+           (re.compile(r"NYSE|NEW YORK|^NYQ$", re.I), "NYSE"), (re.compile(r"OTC", re.I), "OTC"))
+
+
+def venue_name(ex: str | None) -> str | None:
+    """A US exchange in its everyday name: the profile's "NASDAQ NMS - GLOBAL MARKET" reads "Nasdaq" (R76-008)."""
+    for pat, name in _VENUES:
+        if ex and pat.search(ex):
+            return name
+    return ex
+
+
 FOREIGN_TICKER = re.compile(r"\.(MI|L|PA|DE|F|AS|BR|SW|TO|V|AX|HK|T|KS|SS|SZ|NS|BO|MC|LS|VI|ST|OL|CO|HE|IR|SA|MX|JO|TA|SI|KL|BK|JK|NZ|TW)$")   # a home-market ticker (ENI.MI)
 
 
@@ -349,7 +362,7 @@ def us_listing(profile: dict, listing: dict | None, metrics: dict, fx=_fx) -> di
         lo, hi = own_lo, own_hi
     cap = profile.get("marketCapitalization")
     rate = fx(home, cur) if cap else None
-    return {"exchange": ex, "currency": cur, "reporting_currency": home, "foreign": foreign,
+    return {"exchange": venue_name(ex), "currency": cur, "reporting_currency": home, "foreign": foreign,
             "range52": {"low": lo, "high": hi}, "market_cap": cap * 1e6 * rate if cap and rate else None}
 
 

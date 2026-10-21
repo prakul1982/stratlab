@@ -58,6 +58,8 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
   const members: GroupMember[] = pick === "custom" ? custom : preset ? preset.symbols.map((symbol) => ({ symbol })) : [];
   const noun = market.id === "CRYPTO" ? "coins" : market.id === "FX" || market.id === "CDS" ? "pairs" : market.id === "MCX" || market.id === "CMDTY" ? "commodities" : "stocks";
 
+  const overCap = me?.plan_info.group_size != null && members.length > me.plan_info.group_size;
+
   const save = async () => {
     if (members.length < 2) { notify(`Add at least two ${noun} to the group.`); return; }
     setBusy(true);
@@ -101,13 +103,17 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
               const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) setMaxOpen(n);
             }} />
             <FormActions>
-              <button type="submit" className="btn" disabled={busy}>{busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
+              {/* a group over the plan's size can't be run, so the button is off and points at the note that says why (R76-001:
+                  "Test on these 50 stocks" stayed pressable on Free under the "needs Pro" line) */}
+              <button type="submit" className="btn" disabled={busy || overCap} aria-describedby={overCap ? "group-cap-note" : undefined}
+                title={overCap ? `Your ${me!.plan_info.name} plan tests up to ${me!.plan_info.group_size} ${noun} in a group` : undefined}>
+                {busy ? "Saving…" : `Test on these ${members.length} ${noun}`}</button>
             </FormActions>
           </FormGrid>
           {/* the plan's cap said here, before the press, with the plan that goes higher (R51-003: a 50-stock NIFTY group on
               Free said nothing until "Test on these 50 stocks" was refused) */}
-          {me?.plan_info.group_size != null && members.length > me.plan_info.group_size && (
-            <p className="k-note" data-testid="group-cap-note">Your {me.plan_info.name} plan tests up to {me.plan_info.group_size} {noun} in a group, so this one
+          {overCap && (
+            <p className="k-note" id="group-cap-note" data-testid="group-cap-note">Your {me!.plan_info.name} plan tests up to {me!.plan_info.group_size} {noun} in a group, so this one
               needs {members.length <= LIMITS.basic.group_size ? `Basic (up to ${LIMITS.basic.group_size})` : `Pro (up to ${LIMITS.pro.group_size})`}, or a smaller group of your own.
               {" "}<Link className="link" to="/plans">See plans</Link></p>)}
           <p className="k-note">For a portfolio, size trades by <b>fixed capital per trade</b> in the rules' costs and position size, so each position gets its share.</p>
