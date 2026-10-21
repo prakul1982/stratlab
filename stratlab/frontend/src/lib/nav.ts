@@ -1,5 +1,4 @@
 import { NAV_GROUPS, type NavEntry } from "./navGroups";
-import { gateFor } from "./gates";
 
 /** The whole map of StratLab: which page lives in which group of which space. The sidebar, the group landing pages, the
  * breadcrumb, the "All features" page and ⌘K are all drawn from this one list, so a page added here shows up in all of
@@ -34,7 +33,7 @@ const fromData = (to: string): NavEntry | undefined =>
 function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; isNew?: boolean; flag?: string } = {}): NavPage {
   const d = fromData(to);
   const line = o.line ?? d?.title ?? o.blurb ?? d?.blurb ?? label;
-  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, isNew: o.isNew, flag: o.flag ?? gateFor(to)?.feature };
+  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, isNew: o.isNew, flag: o.flag };
 }
 
 export const NEW_SINCE = "5 Oct 2026";

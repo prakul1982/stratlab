@@ -10,10 +10,14 @@ import { gateFor } from "../lib/gates";
  * page the person can use today without that plan (early access, the launch offer) says "open now", as Pricing does. */
 export function PageTags({ page }: { page: NavPage }) {
   const { me } = useApp();
-  const plan = page.flag ? planOf(page.flag) : "free";
+  // a page with a paid part carries its plan from lib/gates.ts when nav.ts names none (R76-002: Positioning, Journal and
+  // the rest had no tag); looked up here, not in nav.ts, so the public pages that use the menu don't load the plans
+  const gate = gateFor(page.to);
+  const flag = page.flag ?? gate?.feature;
+  const plan = flag ? planOf(flag) : "free";
   if (!page.isNew && plan === "free") return null;
-  const part = gateFor(page.to)?.whole === false;       // lib/gates.ts: the lock is for whole pages only (as in the menu)
-  const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(page.flag && me?.plan_info?.features?.[page.flag]), part }) : null;
+  const part = gate?.whole === false;       // lib/gates.ts: the lock is for whole pages only (as in the menu)
+  const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part }) : null;
   return (
     <span className="page-tags">
       {page.isNew && <span title={`Shipped by ${NEW_SINCE}`}><Badge tone="ok" dot={false}>New</Badge></span>}

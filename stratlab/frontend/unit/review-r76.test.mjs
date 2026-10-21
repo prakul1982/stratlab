@@ -12,13 +12,14 @@ const { ALL_PAGES } = await import("../src/lib/nav.ts");
 const { PAGE_GATES } = await import("../src/lib/gates.ts");
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
-test("every page with a paid part carries its plan flag, so All features tags it (R76-002)", () => {
-  for (const [to, gate] of Object.entries(PAGE_GATES)) {
-    const page = ALL_PAGES.find((l) => l.page.to === to)?.page;
-    if (page) assert.equal(page.flag, gate.feature, to);
+test("every page with a paid part gets its plan tag on All features, without nav.ts loading the plans (R76-002)", () => {
+  for (const to of ["/research/scan", "/money/mutual-funds", "/trade/positioning", "/trade/journal", "/invest/breadth", "/money/itr"]) {
+    assert.ok(ALL_PAGES.some((l) => l.page.to === to), to);
+    assert.ok(PAGE_GATES[to]?.feature, to);
   }
-  for (const to of ["/research/scan", "/money/mutual-funds", "/trade/positioning", "/trade/journal", "/invest/breadth", "/money/itr"])
-    assert.ok(ALL_PAGES.find((l) => l.page.to === to)?.page.flag, to);
+  assert.match(read("src/components/PageTags.tsx"), /const flag = page\.flag \?\? gate\?\.feature;/);
+  // the public pages use the menu's map: it must not pull in plans.ts (e2e/review-r8v.spec.ts, R8V-013)
+  assert.doesNotMatch(read("src/lib/nav.ts"), /from "\.\/(gates|plans)"/);
 });
 
 test("a group bigger than the plan's size can't be saved, and says why (R76-001)", () => {
