@@ -312,10 +312,18 @@ _EARLY = re.compile(r"\b(early (?:session|trade|trading|deals|hours)|opening (?:
                     r"(?:open|opening|start)|opens? (?:higher|lower|flat|in the green|in the red))\b", re.I)
 
 
+# a preview written before the open: what "may drive" the day, the morning's checklist (R77-004: NDTV Profit's "Stock
+# Market Today: Gift Nifty, Jio IPO To Oil Prices; Five Key Factors That May Drive Sensex, Nifty 50 On October 21" in
+# the 21 Oct evening brief, nine hours older than the close it reports)
+_PREVIEW = re.compile(r"\b(?:factors? (?:that )?(?:may|could|will|to|likely to) (?:drive|move|guide|influence|steer|decide|dictate)|"
+                      r"(?:stocks?|things?|what) to watch|what to expect|trade setup|market setup|ahead of (?:the )?(?:market )?(?:open|opening|bell)|"
+                      r"before (?:the )?(?:market )?(?:opens?|bell)|gift nifty)\b", re.I)
+
+
 def early_story(title: str) -> bool:
     """A headline about the open or early trade (R35: 'India Set for Mixed Open', 'markets trade lower during early
-    session' in the evening's brief, hours older than the close it reports)."""
-    return bool(_EARLY.search(title or ""))
+    session' in the evening's brief, hours older than the close it reports), or a preview written before the open."""
+    return bool(_EARLY.search(title or "") or _PREVIEW.search(title or ""))
 
 
 def headline_ok(region: str, title: str, frm: str | None = None, to: str | None = None, indices: list[dict] | None = None) -> bool:

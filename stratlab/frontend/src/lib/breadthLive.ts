@@ -69,7 +69,8 @@ export function liveSeries(live: Pick<LiveView, "fields" | "points">): LiveSerie
 export const MOVES_LABEL = "Stocks up 4% or more / down 4% or more on the day";
 export const MOVES_TITLE = "Stocks up 4% or more and down 4% or more, each day";
 
-/** A sector table column's header: "Today" names its day ("Today · 14 Oct"), because before the evening's count it is the last
+/** A sector table column's header: the newest column names its day ("Latest · 14 Oct"), because before the evening's count it is the last
  * counted session's (R28-012). The other columns say how long ago and keep their label. `short` writes a day ("14 Oct"). */
 export const sectorColumnLabel = (c: { label: string; day: string }, short: (iso: string) => string) =>
-  (c.label === "Today" ? `Today · ${short(c.day)}` : c.label);
+  // the newest stored day, which is not today until the evening's run is in: "Today · 19 Oct" on 21 Oct read wrong (R77-002)
+  (c.label === "Today" ? `Latest · ${short(c.day)}` : c.label);

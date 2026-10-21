@@ -139,7 +139,7 @@ export function BreadthPage() {
 }
 
 /* ---------- today's numbers ---------- */
-const LIVE_INFO = "Worked out every 15 minutes while the market is open, from live prices: each stock's price against yesterday's close "
+const LIVE_INFO = "Worked out every 15 minutes while the market is open, from live prices: each stock's price against the previous close "
   + "(rose, fell, unchanged), and against its 20-, 50- and 200-day averages with the live price counted as the latest close. "
   + "The numbers for the close, further down, are worked out after the market shuts and are not changed by these.";
 
@@ -165,7 +165,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
         <CardHead title={liveTitle(live)} info={LIVE_INFO} infoLabel="About the live numbers" actions={<span data-testid="breadth-live-tag"><Badge tone={tag.tone}>{tag.text}</Badge></span>} />
         {live.late && <Notice tone="warn" role="status">The newest live point is {live.age_minutes} minutes old. A point is added every {live.every_minutes} minutes while the market is open; the next one comes when live prices are read again.</Notice>}
         <StatRow>
-          <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against yesterday's close`} />
+          <Stat label="Rose / fell" value={<><span className="k-up">{count(l.adv)}</span> <span className="k-muted">/</span> <span className="k-down">{count(l.dec)}</span></>} note={`${count(l.unch)} unchanged · against the previous close`} />
           <Stat label="Above 20-day average" value={share(l.pct20)} />
           <Stat label="Above 50-day average" value={share(l.pct50)} />
           <Stat label="Above 200-day average" value={share(l.pct200)} />
@@ -176,7 +176,7 @@ function LiveCard({ live, group }: { live: LiveView; group: Group }) {
       </Card>
       {several && (
         <div className="k-cols">
-          <ChartFrame title="Rose and fell through the day" info="How many stocks are above and below yesterday's close at each point."
+          <ChartFrame title="Rose and fell through the day" info="How many stocks are above and below the previous close at each point."
             table={{ label: "Rose and fell through the day", columns: [{ key: "t", header: "Time", rowHeader: true, cell: (i: number) => s.times[i] },
               { key: "a", header: "Rose", numeric: true, cell: (i: number) => count(s.adv[i]) }, { key: "d", header: "Fell", numeric: true, cell: (i: number) => count(s.dec[i]) }],
               rows: s.times.map((_, i) => s.times.length - 1 - i), rowKey: (i: number) => s.times[i] }}>

@@ -13,9 +13,9 @@ test("after the close the live card says final at the newest point's time", () =
   assert.equal(liveTag({ state: "final" }).text, "Final");
 });
 
-test("the sector table's Today column names its day", () => {
+test("the sector table's newest column names its day", () => {
   const short = (iso) => `${Number(iso.slice(8))} Oct`;
-  assert.equal(sectorColumnLabel({ label: "Today", day: "2026-10-14" }, short), "Today · 14 Oct");
+  assert.equal(sectorColumnLabel({ label: "Today", day: "2026-10-14" }, short), "Latest · 14 Oct");
   assert.equal(sectorColumnLabel({ label: "1 week ago", day: "2026-10-08" }, short), "1 week ago");
 });
 

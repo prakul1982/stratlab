@@ -41,7 +41,8 @@ const TILE_TZ: Record<string, string> = { IN: "Asia/Kolkata", US: "America/New_Y
 
 /** "on 8 Oct" when a tile's last close is a session before today in its market (R7T-003: SENSEX showed 8 Oct's −1.44% as the
  * day's move after 9 Oct's open); null when it is today's. */
-export function tileWhen(day: string | null | undefined, today: string, fmt: (iso: string) => string, closed = false, market = false, settling = false): string | null {
+export function tileWhen(day: string | null | undefined, today: string, fmt: (iso: string) => string, closed = false, market = false, settling = false,
+  roundClock = false): string | null {
   // just after the close the day's last trade isn't the close yet: said so, as the company page and the pulse do (R72-001:
   // "7,695 +0.46% on 19 Oct" beside "7,691 +0.41%, closing prints still settling")
   if (day && closed && settling && day === today) return "today, closing prints settling";
@@ -49,7 +50,10 @@ export function tileWhen(day: string | null | undefined, today: string, fmt: (is
   // "on 9 Oct" after their close while the S&P 500's, closed too, had no date)
   if (day && (day < today || closed)) return `on ${fmt(day)}`;
   // a market's index trading now says so, beside India's "on 19 Oct" (R71-003: "S&P 500 7,698 ▲ +0.51%" with no time)
-  return day && market && day === today ? "today, live" : null;
+  if (day && market && day === today) return "today, live";
+  // a pair or a future that trades round the clock says its day too, beside the indices' labels (R77-006: USD/INR and
+  // Gold had a change with no "today" or date)
+  return day && roundClock && day === today ? "today" : null;
 }
 
 /** The market a tile's day is of, for whether its session has closed: the region of a research index; none for a pair or a
