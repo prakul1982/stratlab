@@ -20,7 +20,7 @@ test("R72-001: a just-closed US tile says its closing prints are settling, not '
   const us = { id: "US", tz: "America/New_York", hours: { open: "09:30", close: "16:00", days: "Mon–Fri" }, holidays: [] };
   assert.equal(minutesSinceClose(us, new Date("2026-10-19T20:06:00Z")), 6);
   assert.equal(minutesSinceClose(us, new Date("2026-10-19T19:58:00Z")), null);        // still open
-  assert.match(read("src/pages/MineHome.tsx"), /settling\(tileMarket\(t\)\)\)/);
+  assert.match(read("src/pages/MineHome.tsx"), /settling\(tileMarket\(t\)\)[,)]/);
 });
 
 test("R72-005: the Invest home's India 'Coming up' keeps the exchange holiday", () => {

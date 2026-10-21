@@ -4,9 +4,9 @@ from app import admin_jobs, breadth, email_kit as kit, email_previews as P, live
 
 def test_update_failed_only_when_the_run_failed_and_prices_are_older_than_the_due_day():
     pending = {"day": "2026-10-15", "due": "5:55 PM ET"}
-    failed = {"US": {"as_of": "2026-10-14", "last_error": "boom"}}
+    failed = {"US": {"as_of": "2026-10-14", "last_error": "boom", "ran_at": "2026-10-14T21:55:00+00:00", "failed_at": "2026-10-15T21:50:00+00:00"}}
     assert breadth.update_failed("US", pending, failed)
-    assert not breadth.update_failed("US", pending, {"US": {"as_of": "2026-10-14", "last_error": None}})       # no error: still due
+    assert not breadth.update_failed("US", pending, {"US": {"as_of": "2026-10-14", "last_error": None, "ran_at": "2026-10-14T21:55:00+00:00"}})   # no failed run: still due
     assert not breadth.update_failed("US", pending, {"US": {"as_of": "2026-10-15", "last_error": "late"}})     # the day is in
     assert not breadth.update_failed("US", {**pending, "during": True}, failed)                                  # session still trading
     assert not breadth.update_failed("US", None, failed)

@@ -247,7 +247,7 @@ function MarketsCard({ later }: { later: boolean }) {
                     {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g at the dollar rate, before Indian duty and GST</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
-                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t))); return w && <span className="k-note nowrap" data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008) */; })()}</span>
+                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className="k-note nowrap" data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008) */; })()}</span>
                     <Spark values={s.values} tone={t.neutral ? "neutral" : s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>
                 )}
