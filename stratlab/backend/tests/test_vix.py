@@ -61,8 +61,9 @@ def test_parse_real_quote():
 
 def test_parse_real_graph_drops_the_pre_open():
     pts = V.parse_graph(FV.fixture("graph.json"))
-    assert pts and pts[0]["t"] == "2026-10-05T09:08+05:30" and pts[-1] == {"t": "2026-10-05T12:07+05:30", "v": 15.21}
-    assert len({p["t"] for p in pts}) == len(pts) and all(p["t"] >= "2026-10-05T09:08" for p in pts)
+    # the 09:08-09:14 points carry the previous close (14.46) unmarked: left out with the pre-open (R79-002)
+    assert pts and pts[0]["t"] == "2026-10-05T11:53+05:30" and pts[-1] == {"t": "2026-10-05T12:07+05:30", "v": 15.21}
+    assert len({p["t"] for p in pts}) == len(pts) and all(p["t"] >= "2026-10-05T09:15" for p in pts)
     assert V.parse_graph({"data": {"grapthData": [["x", 1], [1, "bad"]]}}) == [] and V.parse_graph(None) == []
 
 

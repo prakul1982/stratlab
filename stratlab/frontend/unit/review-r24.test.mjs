@@ -50,9 +50,9 @@ test("R24-003: the live card says how many stocks it read and how many have no p
   assert.equal(liveReadLine({ adv: 1, dec: 1, unch: 0 }), null);                     // an older point has no group size
 });
 
-test("R24-011: the breadth chip says 'Last close' above a live card", async () => {
+test("R24-011, R79-008: the breadth chip names the daily figures above a live card", async () => {
   const { breadthChipLabel } = await import("../src/lib/breadthLive.ts");
-  assert.equal(breadthChipLabel({ state: "live" }), "Last close");
+  assert.equal(breadthChipLabel({ state: "live" }), "Daily figures to");
   assert.equal(breadthChipLabel(null), "Prices as of");
   assert.match(read("src/pages/BreadthPage.tsx"), /asOfLabel=\{breadthChipLabel\(data\?\.live\)\}/);
 });

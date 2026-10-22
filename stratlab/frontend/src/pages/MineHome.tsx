@@ -7,7 +7,7 @@ import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, minutesSinceClose, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
-import { MARKET_TILES, goldInr10g, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
@@ -307,7 +307,7 @@ function WatchCard() {
   }, [items]);
   return (
     <Card testId="mine-watch">
-      <CardHead title={movers?.some((m) => m.q.change_day) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
+      <CardHead title={movers?.length && movers.every((m) => moverDay(m.region, m.q)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
         : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (
@@ -321,7 +321,7 @@ function WatchCard() {
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
-                {m.q.change_day && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(m.q.change_day, { weekday: true, year: false })}</span>}
+                {(() => { const d = moverDay(m.region, m.q); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
               </li>
             ))}
           </ul>

@@ -51,7 +51,9 @@ export function VixPanel() {
                 <Stat label="India VIX" value={val(v.value != null ? vixNum(v.value) : null, "Not read yet")}
                   note={vixChange(q ?? null) ? <span data-testid="vix-change">{vixChange(q ?? null)} from {q?.prev_close != null ? vixNum(q.prev_close) : "the last close"}</span> : undefined} />
                 <Stat label={fresh?.rangeLabel ?? "Today's range"} value={val(q?.low != null && q?.high != null ? `${vixNum(q.low)} – ${vixNum(q.high)}` : null, "Not available")}
-                  note={q?.open != null ? `Opened at ${vixNum(q.open)}` : undefined} />
+                  note={q?.open != null || q?.range_off_line ? <span data-testid="vix-range-note">{[q?.open != null ? `Opened at ${vixNum(q.open)}` : "",
+                    // the exchange's day range can hold an opening tick the minute chart starts after (R79-002)
+                    q?.range_off_line ? "The exchange's range includes ticks the chart below doesn't draw" : ""].filter(Boolean).join(". ")}</span> : undefined} />
                 <Stat label="Percentile, past year" value={val(v.percentile.percentile != null ? String(Math.round(v.percentile.percentile)) : null, "Not enough days yet")}
                   note={<span data-testid="vix-pct">{vixPercentileLine(v.percentile)}{v.percentile.low != null && v.percentile.high != null ? `; range ${vixNum(v.percentile.low)} – ${vixNum(v.percentile.high)}` : ""}</span>} />
                 <Stat label={VIX_IV_LABEL} value={val(ivNow ? `${ivNow.iv.toFixed(2)}%` : null, "Not recorded yet")}

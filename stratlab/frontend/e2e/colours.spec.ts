@@ -56,7 +56,7 @@ test("positioning: every change and net figure carries the up or down colour, an
   const net = main.getByTestId("part-figs").locator(".k-stat").first();
   await expect(net.locator(".k-stat-v")).toHaveClass(/k-(up|down)/);
   await expect(net.locator(".k-stat-d .k-up, .k-stat-d .k-down")).toContainText(/^[+−]/);
-  await expect(net.locator(".k-stat-d")).toContainText("from the day before");
+  await expect(net.locator(".k-stat-d")).toContainText("from the previous trading day");
   // a level stays plain
   await expect(table.locator("tbody tr").first().locator("td").nth(1).locator(":scope > .k-up, :scope > .k-down")).toHaveCount(0);
   // the FII/DII cash figures are coloured by sign too

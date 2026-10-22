@@ -40,7 +40,10 @@ export function pcrNote(rows: PcrRow[]): string {
     : [`${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} show StratLab's newest recordings, from ${span}.`];
   const dated = older.length ? `${older.join(" ")} ` : "";
   if (rows.some((r) => r.at_close)) return `The market is shut, so ${older.length ? "the other indices show" : "each index shows"} StratLab's recording of its last close. ${dated}Live chains are read while the market trades, at most once a minute.`;
-  return `${older.length ? dated : rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
+  // during the session a recording stands in for a live chain that couldn't be read just then: said so, not "show the
+  // recordings ... Live chains are read at most once a minute" side by side (R79-001)
+  if (older.length) return `${dated}The live chain couldn't be read just then; it is tried again each minute.`;
+  return `${rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
 }
 
 /** The strikes either side of the money the recordings keep, and the headline PCR counts. */

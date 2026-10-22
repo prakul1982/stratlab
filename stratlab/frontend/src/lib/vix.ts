@@ -3,7 +3,7 @@
 import { asOf, dayIn, fmtDate, IST } from "./format";
 
 export type VixQuote = { value: number; prev_close: number | null; change: number | null; change_pct: number | null; open: number | null;
-  high: number | null; low: number | null; year_high: number | null; year_low: number | null; as_of: string | null; source: "exchange" | "feed" };
+  high: number | null; low: number | null; year_high: number | null; year_low: number | null; as_of: string | null; source: "exchange" | "feed"; range_off_line?: boolean };
 export type VixPercentile = { days: number; need: number; percentile: number | null; low: number | null; high: number | null };
 export type Vix = {
   quote: VixQuote | null; value: number | null; value_day?: string | null; intraday: { t: string; v: number }[]; history: { day: string; close: number }[];
