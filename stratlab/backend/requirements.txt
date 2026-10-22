@@ -17,5 +17,5 @@ pypdf>=6.19.0,<7                # reads company presentations and call transcrip
 python-pptx>=1.0,<2       # the company deck download
 reportlab>=4.2,<5           # the deck as a PDF (same slides as the PowerPoint)
 casparser>=1.4.1,<2       # reads the mutual fund CAS PDF (MIT; its ISIN list and pypdfium2 come with it)
-cryptography>=42,<51        # encrypts the passwords and tokens users connect (Fernet)
+cryptography>=50.0.2,<51        # encrypts the passwords and tokens users connect (Fernet)
 psycopg[binary,pool]>=3.2,<4      # the optional second database for market data (MARKET_DATABASE_URL)
