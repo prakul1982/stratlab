@@ -217,7 +217,7 @@ def test_the_price_job_moves_stale_pages_to_the_new_close(w, monkeypatch):
                 {"t": iso(0) + "T00:00:00-04:00", "o": 1, "h": 125, "l": 100, "c": 110.0}]
     pages = stock_pages.Pages(lambda r, c: None)
     got = pages.refresh_prices("US", bars_of, lambda b: {"stage": 2, "stage_days": 3, "st_up": True, "st_days": 1}, gap=0, now=now)
-    assert got == {"refreshed": 2, "left": 0, "failed": 1}
+    assert got == {"refreshed": 2, "left": 0, "failed": 1, "errors": 1}     # BROKE's read raised: a read error, not a late close
     assert order[0] == "NVDA" and "AAPL" not in order                  # the largest first; a current page isn't read again
     stored = json.loads(db.get_setting("stocks:page:US:NVDA"))
     f = stored["facts"]

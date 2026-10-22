@@ -56,7 +56,10 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   market: Market; onPick: (i: Instrument) => void; autoFocus?: boolean; compact?: boolean;
   kinds?: string[]; placeholder?: string; label?: string;
 }) {
-  const { fail } = useApp();
+  const { fail, me } = useApp();
+  // Indian futures and options are Pro's: on Free and Basic the search finds no contracts, so it says so instead of
+  // listing nothing about them (R82-005: "Search a stock, index or F&O" then no F&O and no word why)
+  const fnoLocked = market.id === "IN" && !!me && !me.plan_info?.features?.fno;
   const fid = useId();
   const listId = `${fid}-list`;
   const [q, setQ] = useState("");
@@ -114,6 +117,7 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
         {shown && (
           <div className="results" id={listId} role="listbox" aria-label="Suggestions">
             {results!.length === 0 && <p className="k-small k-muted k-pad" role="presentation">No {what ?? "matches"} in {market.name} {what ? "match" : ""} "{q.trim()}".</p>}
+            {fnoLocked && !kinds && <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-locked">Futures and options contracts are on the Pro plan.</p>}
             {results!.map((r, i) => (
               <button key={r.id} id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
                 onMouseDown={(e) => e.preventDefault()} onMouseMove={() => setOn(i)} onClick={() => pick(r)}>

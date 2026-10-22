@@ -1245,7 +1245,7 @@ class Pages:
             due.append((symbol, stored))
         # the largest companies first, and a page the source had no newer close for at an earlier try after the rest
         due.sort(key=lambda x: (tries.get(x[0], 0), -(shown_cap(x[1]["facts"]) or 0)))
-        done = failed = 0
+        done = failed = errors = 0     # errors: reads that raised, of the failed (the rest had no newer close yet)
         stopped = 0             # pages not tried because the source is down for every one of them
         ok: set[str] = set()
         for i, (symbol, stored) in enumerate(due[:limit]):
@@ -1255,6 +1255,7 @@ class Pages:
                 bars = closed_bars(bars_of(region, symbol) or [], region, now)
             except Exception as ex:                   # no prices for this one today: tried again at its next build
                 failed += 1
+                errors += 1
                 print("stock pages: price refresh failed:", region, symbol, str(ex)[:120])
                 if _source_down(ex):
                     # the broker's login has ended (overnight): every other page would fail the same way, one a second;
@@ -1280,7 +1281,7 @@ class Pages:
         retry = sum(1 for s, _ in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
         if not stopped and len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page still behind is tried again at its next build
-        return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, **({"retry": retry} if retry else {}),
+        return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, "errors": errors, **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
 
     def html(self, region: str, symbol: str, co: dict) -> str:

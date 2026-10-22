@@ -65,11 +65,22 @@ def test_admin_lists_the_company_pages_price_job(monkeypatch):
     # R81-005: the job that moves the public company pages to each close had no row in Admin → Data and jobs
     from app import admin_jobs
     monkeypatch.setattr(main, "price_refresh_status", {"last_run": "2026-10-22T21:00:00+00:00", "IN": {"refreshed": 0, "left": 0, "failed": 0},
-                                                      "US": {"refreshed": 0, "left": 120, "failed": 300}})
+                                                      "US": {"refreshed": 0, "left": 120, "failed": 300, "errors": 300}})
     rows = {r["name"]: r for r in admin_jobs.rows()}
     r = rows["Company pages' prices"]
     assert r["state"] == "bad" and "US: no page's price could be read in the last pass (300 tried)" in r["error"]
-    assert any("US: 0 updated, 120 waiting, 300 not read" in x for x in r["log"])
+    assert any(x.startswith("US: 0 updated, 120 waiting, 0 without a newer close yet") and x.endswith("300 not read") for x in r["log"])
+
+
+def test_companies_without_a_newer_close_are_not_a_problem(monkeypatch):
+    # R82 (seen in Admin): 299 small India companies with no candle at the last close read as "no page could be read"
+    from app import admin_jobs
+    monkeypatch.setattr(main, "price_refresh_status", {"last_run": "2026-10-22T21:32:29+00:00",
+                                                      "IN": {"refreshed": 1, "left": 1033, "failed": 299, "errors": 0},
+                                                      "US": {"refreshed": 297, "left": 6018, "failed": 3, "errors": 3}})
+    r = {r["name"]: r for r in admin_jobs.rows()}["Company pages' prices"]
+    assert r["state"] == "ok" and r["error"] is None
+    assert any(x.startswith("India: 1 updated, 1033 waiting, 299 without a newer close yet") for x in r["log"])
 
 
 def test_wire_stories_about_conflict_and_religion_stay_out_of_market_headlines():

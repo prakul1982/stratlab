@@ -356,9 +356,14 @@ def rows() -> list[dict]:
             if x.get("error"):
                 errors.append(f"{name}: {x['error']}")
                 continue
-            log.append(f"{name}: {x.get('refreshed', 0)} updated, {x.get('left', 0)} waiting, {x.get('failed', 0)} not read")
-            if x.get("failed") and not x.get("refreshed"):
-                errors.append(f"{name}: no page's price could be read in the last pass ({x['failed']} tried)")
+            err = x.get("errors", x.get("failed", 0))       # reads that raised; the rest of `failed` had no newer close yet
+            late = max(0, (x.get("failed") or 0) - err)
+            log.append(f"{name}: {x.get('refreshed', 0)} updated, {x.get('left', 0)} waiting, "
+                       f"{late} without a newer close yet (a small company that didn't trade, or not out yet), {err} not read")
+            # a Problem only when reads fail and none worked: the long tail of companies that didn't trade at the last
+            # close is normal, not a problem (R82: "India: no page's price could be read" over 299 such pages)
+            if err and not x.get("refreshed"):
+                errors.append(f"{name}: no page's price could be read in the last pass ({err} tried)")
         return _row("page-prices", "Company pages' prices", "After each market's close, every 15 minutes until every stored page has it",
                     st.get("last_run"), "; ".join(errors) or None, errors + log)
     add("Company pages' prices", page_prices)

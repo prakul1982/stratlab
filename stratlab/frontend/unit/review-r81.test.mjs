@@ -23,3 +23,13 @@ test("R81-020: the journal offers the tax report's newer trades and says how far
 test("R81-012: an options trade's note about paused prices is shown on the session page", () => {
   assert.match(read("src/pages/OptionsSession.tsx"), /\{x\.note && <span className="k-note" data-testid="trade-gap">\{x\.note\}\.<\/span>\}/);
 });
+
+test("R82-005: on Free and Basic the instrument search says F&O contracts are on Pro", () => {
+  const s = read("src/components/InstrumentSearch.tsx");
+  assert.match(s, /const fnoLocked = market\.id === "IN" && !!me && !me\.plan_info\?\.features\?\.fno;/);
+  assert.match(s, /\{fnoLocked && !kinds && <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-locked">Futures and options contracts are on the Pro plan\.<\/p>\}/);
+});
+
+test("R82-009: Pro's AI builds line names the daily cap the Plans page names", () => {
+  assert.match(read("src/components/IdeaComposer.tsx"), /`Unlimited AI builds\$\{u\.ai_builds_per_day \? ` \(up to \$\{u\.ai_builds_per_day\} a day\)` : ""\}`/);
+});
