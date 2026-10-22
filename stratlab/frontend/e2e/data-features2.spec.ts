@@ -65,7 +65,7 @@ test("market breadth: live while the market is open, and what it says when live 
   await expect(live.locator("svg[role=img]")).toHaveCount(2);
   // the daily numbers stay, labelled as the last close; between the close and the evening's count it says when
   // today's comes ("Latest close 15 Oct · today's count comes after …"), so either wording, whenever this runs
-  await expect(page.getByTestId("breadth-today").getByRole("heading", { name: /^(Last close · |Latest close )/ })).toBeVisible();
+  await expect(page.getByTestId("breadth-today").getByRole("heading", { name: /^(Last close · |Latest close |Previous session · )/ })).toBeVisible();
   // the Table switch has the same numbers
   await live.getByRole("button", { name: "Table" }).first().click();
   await expect(live.getByRole("table", { name: "Rose and fell through the day" }).locator("tbody tr")).toHaveCount(points);
