@@ -288,6 +288,8 @@ function TradeList({ rows, events, shown, toggle }: { rows: Trade[]; events: Ord
             <span className="trade-main">
               <span className="trade-when">{span(x)}</span>
               <span className="k-note">{x.why}{x.rolls ? `, ${x.rolls} roll${x.rolls === 1 ? "" : "s"}` : ""} · premium {inr(x.credit)} · before costs {inr(x.gross)} · costs {inr(x.costs)}</span>
+              {/* why a stop came late: the prices were away (R81-012) */}
+              {x.note && <span className="k-note" data-testid="trade-gap">{x.note}.</span>}
             </span>
             <b className={`trade-pnl ${upDown(x.pnl)}`}>{inr(x.pnl)}</b>
           </button>

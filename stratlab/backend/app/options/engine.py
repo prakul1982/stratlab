@@ -20,6 +20,7 @@ from . import strikes as SR
 
 TICK = 0.05
 VIX_KEY = "NSE:INDIA VIX"     # the India VIX quote an entry filter reads (sessions quote it beside the legs)
+PAUSE_NOTE = 120          # seconds without live prices, during an open trade, that the trade's record mentions
 
 
 class Contracts:
@@ -373,6 +374,7 @@ class OptionsEngine:
             "opened": p["opened"], "closed": now.isoformat(), "why": why, "pnl": round(net, 2),
             "gross": round(p["closed_pnl"], 2), "costs": round(p["costs"], 2), "credit": round(p["credit"], 2),
             "rolls": p["rolls"], "units": p["units"], "orders": p["orders"], "best": round(p["peak"], 2),
+            **({"note": p["gap_note"]} if p.get("gap_note") else {}),
             "worst": round(p["low"], 2), "spot_in": p["spot_in"], "expiry": p["expiry"],
             "legs": [{"sym": l["sym"], "side": l["side"], "qty": l["qty"], "entry": l["entry"], "exit": l.get("exit")}
                      for l in p["legs"]],
@@ -445,7 +447,14 @@ class OptionsEngine:
                 p["held"] = "Settlement price not available yet; the expired position is held until it is."
                 return out
             if not fresh:
+                p.setdefault("paused_from", now.isoformat())   # when the prices stopped, for the trade's note (R81-012)
                 return out   # without live prices no stop can be judged; hold and wait
+            if p.get("paused_from"):
+                gone = datetime.fromisoformat(p.pop("paused_from"))
+                if (now - gone).total_seconds() >= PAUSE_NOTE:
+                    # R81-012: a stop "overshot" by half while the prices were away for 28 minutes; the trade says so
+                    p["gap_note"] = (f"No live prices from {gone.strftime('%H:%M')} to {now.strftime('%H:%M')}, so the stops "
+                                     "and the daily loss cap were checked when they returned")
             if now >= _at(now, t.squareoff) or p["opened"][:10] != today:
                 self._exit(now, quotes, "Square-off", out)
                 return out

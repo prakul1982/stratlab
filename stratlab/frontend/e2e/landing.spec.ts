@@ -62,11 +62,12 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   await expect(page.locator("#faq details")).not.toHaveCount(0);
   expect(await page.locator("#faq details").count(), "the FAQ stays short").toBeLessThanOrEqual(10);
   // the option chains StratLab records, as the server records them
-  // (R5V-019: options can be paper traded, not backtested, so the question says "backtest" and the answer starts with No)
+  // (R5V-019, R80-001: one listed contract backtests on its own prices (Pro); strike-picking strategies are paper traded only)
   const options = page.locator("#faq details", { hasText: "Can I backtest options?" });
   await options.locator("summary").click();
   await expect(options).toContainText("NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX");
   await expect(options).toContainText("What you can do today is paper trade options");
+  await expect(options).toContainText("One contract at a time");
   // the invite rule, in the backend's own numbers (R5V-019: the owner's longer wording was one sentence nobody could follow;
   // unit/seo.test.mjs checks each number against app/invite_rewards.py)
   const invites = page.locator("#faq details", { hasText: "How do invite rewards work?" });

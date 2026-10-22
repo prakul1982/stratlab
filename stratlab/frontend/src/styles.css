@@ -55,6 +55,8 @@ html, body { margin: 0; }
 body {
   background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
+  /* an iPhone turned sideways draws under its notch and corners (viewport-fit=cover): keep the page inside them (R80-014) */
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--blue); }
@@ -1966,6 +1968,10 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .pub-nav .pub-menu { margin-left: auto; margin-right: var(--s3); }
 .pub-nav .pub-menu-start nav { left: 0; right: auto; }
 @media (min-width: 641px) { .pub-nav .pub-menu { display: none; } }          /* a phone's Menu: wider screens have the rows on the landing page */
+.pub-links { display: flex; gap: 22px; margin-left: auto; margin-right: var(--s4); }
+.pub-links a { display: inline-flex; align-items: center; min-height: 36px; color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14.5px; }
+.pub-links a:hover { color: var(--ink); }
+@media (max-width: 1000px) { .pub-links { display: none; } .pub-nav .pub-menu { display: block; } }   /* the row needs the room: the Menu below that (R80-017) */
 @media (max-width: 1000px) { .lp-menu { display: block; } .lp-nav > .btn { margin-left: 0; } }
 @media (max-width: 600px) { .lp-more > summary { min-height: 40px; } }
 

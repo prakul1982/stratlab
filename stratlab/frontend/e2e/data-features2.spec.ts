@@ -152,7 +152,7 @@ test("strategy library: StratLab's own strategies, badged, each with the verdict
   const first = cards.first();
   await expect(first.getByText("StratLab", { exact: true }).first()).toBeVisible();      // the badge
   await expect(first.getByText("by StratLab", { exact: true })).toBeVisible();
-  await expect(first.getByText(/checks passed|checks run|Lost money after costs · the checks, for reference/).first()).toBeVisible();
+  await expect(first.getByText(/checks passed|checks run|Lost money after costs · its checks are shown for reference/).first()).toBeVisible();
   // honest results, whatever they are, as facts about the checks (R5O-014: no "Likely a real edge" on a card): one of the five
   const verdicts = await cards.locator(".verdict-badge, [data-verdict]").count();
   expect(verdicts + (await page.getByText(/Passed the checks|Mixed check results|Failed a robustness check|Too few trades|Lost money after costs/).count())).toBeGreaterThan(0);

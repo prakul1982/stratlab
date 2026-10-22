@@ -130,7 +130,7 @@ class Yahoo(Source):
         meta = r.get("meta") or {}
         tz = ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")
         q = ((r.get("indicators") or {}).get("quote") or [{}])[0]
-        candles = []
+        candles, blank = [], []
         for i, ts in enumerate(r.get("timestamp") or []):
             try:
                 o, h, l, c = q["open"][i], q["high"][i], q["low"][i], q["close"][i]
@@ -141,6 +141,8 @@ class Yahoo(Source):
             if filled:
                 o, h, l, c = _from_quote(meta, tz, t, (o, h, l), candles[-1]["c"] if candles else None)
             if None in (o, h, l, c):
+                if tf == "1d":
+                    blank.append(t.date().isoformat())
                 continue
             if tf == "1d":   # daily candles are stamped at the session open; keep the date only
                 t = t.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -153,8 +155,36 @@ class Yahoo(Source):
         dedup = {}
         for b in candles:
             dedup[b["t"]] = b
-        out = {"meta": meta, "candles": list(dedup.values())}
+        if blank:
+            for b in self._from_hours(symbol, blank, tz).values():
+                dedup.setdefault(b["t"], b)
+        out = {"meta": meta, "candles": sorted(dedup.values(), key=lambda b: b["t"])}
         return (out, at) if with_time else out
+
+    BLANK_DAYS = 30          # how far back a blank daily candle is rebuilt from hourly ones
+
+    def _from_hours(self, symbol: str, days: list[str], tz) -> dict[str, dict]:
+        """Daily candles for recent sessions the daily answer sent blank, built from that day's hourly candles (R81-002:
+        Yahoo sent 21 Oct blank for NVDA, AAPL, MSFT and AMZN, so their charts skipped the day and their day's change was
+        measured from 20 Oct). {day: candle}; nothing when the hours aren't there either."""
+        today = datetime.now(tz).date()
+        want = sorted(d for d in set(days) if (today - datetime.fromisoformat(d).date()).days <= self.BLANK_DAYS)
+        if not want:
+            return {}
+        span = (today - datetime.fromisoformat(want[0]).date()).days + 2
+        try:
+            hours = self._chart(symbol, "1h", span, INTERVAL["1h"][0], 3600)["candles"]
+        except Exception:                     # the hours unreadable too: the day stays out, as before
+            return {}
+        out = {}
+        for d in want:
+            hs = [b for b in hours if b["t"][:10] == d]
+            if not hs:
+                continue
+            start = datetime.fromisoformat(hs[0]["t"]).replace(hour=0, minute=0, second=0, microsecond=0)
+            out[d] = {"t": start.isoformat(), "o": hs[0]["o"], "h": max(b["h"] for b in hs), "l": min(b["l"] for b in hs),
+                      "c": hs[-1]["c"], "v": float(sum(b.get("v") or 0 for b in hs))}
+        return out
 
     def events(self, symbol: str, days: int = 1100) -> dict:
         """The dividends and splits in a stock's daily price history, by ex-date in the exchange's zone:

@@ -286,7 +286,7 @@ test("the FAQ says what the backend does: invite rewards, and that options are p
   assert.doesNotMatch(invites, /25%|about a week/, "one way of saying it");
   const options = FAQ.find((f) => /options/i.test(f.q));
   assert.equal(options.q, "Can I backtest options?");
-  assert.match(faqText(options), /^No\. /);
+  assert.match(faqText(options), /^One contract at a time\. /);   // one listed contract backtests on its own prices; a strike-picking strategy doesn't (R80-001)
   assert.match(faqText(options), /paper trade options/);
   for (const [q, a] of FAQ.map((f) => [f.q, faqText(f)])) assert.doesNotMatch(q + a, /\bhonest/i);
 });

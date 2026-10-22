@@ -22,6 +22,11 @@ export function PublicFrame({ children, className = "", action }: { children: Re
       <SkipLink />
       <header className="pub-nav">
         <Link to="/" aria-label="StratLab home"><Logo size={40} /></Link>
+        {/* wider screens: the same links as a row, as on the landing page and the company pages (R80-017: a visitor reading a
+            strategy had no way to Plans or the questions but the logo) */}
+        <nav className="pub-links" aria-label="Site">
+          {PUBLIC_MENU.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
+        </nav>
         {/* on a phone (640px and under) the way to the rest of the site: the same `details` Menu the landing page has. Beside a
             page's own wide button (/library's "Continue with Google") the Menu sits mid-header, so its list opens from the
             button's left edge, under it, not out to the screen's left edge (R29A-009) */}

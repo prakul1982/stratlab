@@ -42,7 +42,7 @@ export const PAGES: PageMeta[] = [
   { path: "/pricing", title: "Plans · StratLab",
     description: "What the Free, Basic and Pro plans include and cost. Prices are in rupees; outside India the price is shown in your currency and charged in rupees.", index: true, canonical: "/", updated: "2026-10-08",     // the landing page with its prices: one address for both (R26-006)
     heading: "Plans and prices",
-    summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and paper sessions.",
+    summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
       "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
   { path: "/faq", title: "Questions · StratLab",
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08",

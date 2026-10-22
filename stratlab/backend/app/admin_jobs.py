@@ -343,6 +343,26 @@ def rows() -> list[dict]:
                     st.get("last_error"), [f"{st.get('today', 0)} saved today"] + why)
     add("Option chain recording", recorder)
 
+    def page_prices():
+        # the public company pages' prices after each close (R81-005: every US page sat on 20 Oct's close and Admin
+        # had no row for this job, so nothing said so)
+        st = getattr(m, "price_refresh_status", None) or {}
+        names = {"IN": "India", "US": "US"}
+        log, errors = [], []
+        for r, name in names.items():
+            x = st.get(r)
+            if not isinstance(x, dict):
+                continue
+            if x.get("error"):
+                errors.append(f"{name}: {x['error']}")
+                continue
+            log.append(f"{name}: {x.get('refreshed', 0)} updated, {x.get('left', 0)} waiting, {x.get('failed', 0)} not read")
+            if x.get("failed") and not x.get("refreshed"):
+                errors.append(f"{name}: no page's price could be read in the last pass ({x['failed']} tried)")
+        return _row("page-prices", "Company pages' prices", "After each market's close, every 15 minutes until every stored page has it",
+                    st.get("last_run"), "; ".join(errors) or None, errors + log)
+    add("Company pages' prices", page_prices)
+
     def ibkr_daily():
         st = _connect_status(m)
         r = st.get("ibkr") or {}

@@ -214,7 +214,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O contracts (futures and options on stocks and indices) in notebooks and backtests; the stocks themselves are on every plan, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview"]) {
+    "2 company deep dives and 1 slide deck a month", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan. Options paper trading entered on your own rules' signals, with strikes picked by delta or premium, and options what-if sliders with a roll preview"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
   for (const card of await page.locator(".k-plans > .k-card").all()) expect(await card.locator("li").count()).toBeLessThanOrEqual(9);

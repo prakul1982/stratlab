@@ -117,7 +117,7 @@ def reason(e: dict) -> str | None:
     if n is not None and n < MIN_TRADES:
         return "No trades in this period, so nothing was tested." if n == 0 else f"Only {n} trade{'s' if n != 1 else ''} in this period, too few to tell skill from luck."
     if v.get("verdict") == "no_edge" and (st.get("ret") or 0) <= 0:
-        return "Lost money after costs over the period, so the checks weren't run: there was no gain to test."
+        return "Lost money after costs over the period; its checks still ran and are shown for reference."
     checks = [c for c in v.get("checks") or [] if c.get("id") in CHECK_NAME]
     if not checks:
         return None
@@ -233,7 +233,7 @@ def restated(e: dict) -> dict:
     if kind == "not_enough" or (isinstance(n, int) and n < MIN_TRADES):
         out.append(reason(e) or "Too few trades to tell skill from luck.")
     elif kind == "no_edge":
-        out.append("It lost money after costs over the period, so the checks weren't run: there was no gain to test.")
+        out.append("It lost money after costs over the period. Its checks still ran and are shown below for reference: with no gain, a passed check doesn't point to an edge.")   # the checks did run; "weren't run" contradicted the list under it (R80-005)
     else:
         unseen = st.get("unseen")
         for c in checks_of(e):
@@ -480,8 +480,12 @@ def search(entries: list[dict], market: str = "", verdict: str = "", q: str = ""
         rows.sort(key=lambda e: e.get("published_at") or "", reverse=True)
     elif sort == "copied":
         rows.sort(key=lambda e: (-(e.get("copies") or 0), e.get("published_at") or ""))
-    else:   # best: the strongest verdicts first, then what held up on unseen data
-        rows.sort(key=lambda e: (RANK.get((e.get("verdict") or {}).get("verdict"), 9),
+    else:   # best: the strongest verdicts first, then the most checks passed of those run (R81-013: "2 passed" sat above
+            # "all 3 passed"), then what held up on unseen data
+        def passed(e):
+            v = e.get("verdict") or {}
+            return (v.get("passed") or 0) / v["total"] if v.get("total") else 0
+        rows.sort(key=lambda e: (RANK.get((e.get("verdict") or {}).get("verdict"), 9), -passed(e),
                                  -((e.get("stats") or {}).get("unseen") or -1e9), -((e.get("stats") or {}).get("ret") or -1e9)))
     rows.sort(key=lambda e: not ran(e))          # strategies that never traded have no evidence: below the rest, whatever the sort
     return rows

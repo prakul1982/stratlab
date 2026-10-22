@@ -58,7 +58,9 @@ export function VisitorApp() {
   const wait = <main id="main" tabIndex={-1}><h1 className="sr-only">StratLab</h1><Opening label="Opening StratLab" /></main>;
   // ...and when the page came with its own words (a cold /library, /pricing or /faq), those words stay on screen while its
   // code downloads, instead of a splash that replaces them for a second (R10V-006); with none, the splash
-  const words = heldStartup();
+  // (not for /faq: its words are one heading, and the landing page then drew above it and scrolled to its questions, a
+  // 0.6 layout shift on a phone; the splash replaces nothing that moves (R80-003))
+  const words = view.kind === "landing" && view.section === "faq" ? "" : heldStartup();
   const fallback = words ? <div style={{ display: "contents" }} data-held dangerouslySetInnerHTML={{ __html: words }} /> : wait;
   return (
     <Suspense fallback={fallback}>
