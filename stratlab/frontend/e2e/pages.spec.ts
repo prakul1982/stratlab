@@ -1630,8 +1630,9 @@ test("market breadth: today's numbers, small charts, sectors, groups and ranges;
   // the index is its own small chart: no chart has a second scale
   await expect(charts.getByRole("heading", { name: /^NIFTY 500/ })).toBeVisible();
   expect(await charts.locator("svg[role=img]").count()).toBeGreaterThanOrEqual(9);
-  // R24-011: above the live card the chip says the numbers under it are the last close's
-  await expect(page.getByText(/Last close|Prices as of/).first()).toBeVisible();
+  // R24-011, R79-008: above the live card the chip names the day-by-day figures; with no live card, their day. The demo's
+  // live card is live or final by the clock (just after 15:30 IST it is final), so either wording is right whenever this runs
+  await expect(page.getByText(/Daily figures to|Last close|Prices as of/).first()).toBeVisible();
   // each figure and chart explains itself
   await charts.getByRole("button", { name: "About McClellan oscillator" }).click();
   await expect(page.getByRole("note")).toContainText("39-day");
