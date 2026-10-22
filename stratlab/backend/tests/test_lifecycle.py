@@ -357,7 +357,9 @@ def test_dates_in_reminders(w):
         lifecycle.build("nope", {})
 
 
-def test_a_launch_offer_ending_at_midnight_names_the_day_it_ends(w):
+def test_a_launch_offer_ending_at_midnight_names_the_day_it_ends(w, monkeypatch):
+    # the email's header carries today's date: fixed, so the test reads the same after midnight IST
+    monkeypatch.setattr(lifecycle.kit, "today_label", lambda: "Thu 22 Oct")
     midnight = datetime(2026, 10, 22, 18, 30, tzinfo=timezone.utc)                   # 00:00 IST on Fri 23 Oct
     for kind in ("promo_before", "promo_end"):
         _, _, text = lifecycle.build(kind, {}, {"last_day": date(2026, 10, 22), "end": midnight})
