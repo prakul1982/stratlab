@@ -70,3 +70,12 @@ def test_admin_lists_the_company_pages_price_job(monkeypatch):
     r = rows["Company pages' prices"]
     assert r["state"] == "bad" and "US: no page's price could be read in the last pass (300 tried)" in r["error"]
     assert any("US: 0 updated, 120 waiting, 300 not read" in x for x in r["log"])
+
+
+def test_wire_stories_about_conflict_and_religion_stay_out_of_market_headlines():
+    # R81-006
+    from app.newsletter.content import OFF_TOPIC
+    assert OFF_TOPIC.search("Israeli settlers steal Palestinians' olives as attacks on harvest grow more violent - Reuters")
+    assert OFF_TOPIC.search("As Trump's support slips, white evangelicals remain his Republican bedrock - Reuters")
+    assert not OFF_TOPIC.search("Wall Street falls as tech stocks slide")
+    assert not OFF_TOPIC.search("Oil prices rise as supply worries grow")
