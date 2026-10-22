@@ -145,6 +145,9 @@ const ICON: Record<string, ReactNode> = {
   gear: I(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></>),
 };
 
+/** How long the chart waits before reading candles again after a busy answer. */
+const BUSY_RETRY_MS = 2500;
+
 export default function PriceChart(props: PriceChartProps) {
   const { symbol, storageKey, currency, load, markers, levels, pageStudies, compareLoad, height = 420 } = props;
   const offered = (props.timeframes ?? (load ? ALL_TFS : [props.tf ?? "1d"])).filter((t) => ALL_TFS.includes(t));
@@ -387,7 +390,11 @@ const [saveNote, setSaveNote] = useState("");
     const base: BaseTf = tf === "1w" || tf === "1mo" ? "1d" : tf;
     const fetchRange = range ? RANGES.find((x) => x.key === range)!.fetch : tf === "1w" ? "5y" : tf === "1mo" ? "max" : props.history ?? "1y";
     setStatus("loading"); setError("");
-    load(base, { range: fetchRange })
+    // a busy market-data source (502/503/504) is read once more after a pause before the error shows (R73-003)
+    const once = () => load(base, { range: fetchRange });
+    const busy = (err: unknown) => [502, 503, 504].includes((err as { status?: number })?.status ?? 0);
+    once()
+      .catch((err) => (busy(err) && req === reqRef.current ? new Promise((ok) => setTimeout(ok, BUSY_RETRY_MS)).then(once) : Promise.reject(err)))
       .then((r) => {
         if (req !== reqRef.current) return;
         const bars = toBars(r.candles ?? []);

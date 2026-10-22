@@ -216,8 +216,9 @@ function PcrTable({ coverage }: { coverage?: Coverage }) {
         : rows === "error" ? <ErrorState title="The chains couldn't be read just now" action={{ label: "Try again", onClick: () => setAgain((x) => x + 1) }}>Try again in a minute.</ErrorState>
         : (
       <>
+      {/* a card per index on a phone: the fourth column sat past the right edge under the fade (R79-007) */}
       <div data-testid="pcr-table">
-        <DataTable label="Put-call ratio for each index's nearest expiry" columns={cols} rows={rows} rowKey={(r) => r.name} rowAttrs={(r) => ({ "data-pcr": r.name })}
+        <DataTable label="Put-call ratio for each index's nearest expiry" columns={cols} rows={rows} rowKey={(r) => r.name} stack rowAttrs={(r) => ({ "data-pcr": r.name })}
           rowNote={(r) => (r.source ? undefined : coverage?.chains[r.name]?.days ? `No live chain now; recorded since ${dayName(coverage.chains[r.name].first)}` : "No live chain now, and not recorded yet")} />
       </div>
       <p className="k-note" data-testid="pcr-note">{pcrNote(rows)}</p>
