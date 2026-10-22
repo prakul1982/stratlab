@@ -15,7 +15,7 @@ test("R67-003: the loss-cap banner says the next market day, and the engine's no
 test("R67-004: after the close the breadth chip and the day card don't call 16 Oct the last close", async () => {
   const { breadthChipLabel, dailyTitle } = await import("../src/lib/breadthLive.ts");
   assert.equal(breadthChipLabel({ state: "final" }), "Daily figures to");
-  assert.equal(breadthChipLabel({ state: "live" }), "Last close");
+  assert.equal(breadthChipLabel({ state: "live" }), "Daily figures to");
   assert.equal(breadthChipLabel(null), "Prices as of");
   assert.equal(dailyTitle("16 Oct", { state: "final" }), "Previous session · 16 Oct");
   assert.equal(dailyTitle("16 Oct", { state: "live" }), "Last close · 16 Oct");

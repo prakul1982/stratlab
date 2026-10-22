@@ -88,7 +88,7 @@ function ParticipantTable({ rows, kind, seg, split }: { rows: PRow[]; kind: "oi"
   );
 }
 
-/** "+1.2 pts from the day before" for a change in a share. */
+/** "+1.2 pts from the previous trading day" (the day before is a holiday after one, R79-003) for a change in a share. */
 const pts = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)} pts`;
 
 /** A figure with both sides written out, one to a line ("19.3% long", "80.7% short"), the bar under them. */
@@ -100,7 +100,7 @@ function SidesFig({ label, long, short, words, chg }: { label: string; long: num
         <span className="k-stat-v pos-sides"><span>{pct(long)} {words[0]}</span><span>{pct(short)} {words[1]}</span>
           <PosBar long={long} /></span>
       )}
-      {chg != null && <span className="k-stat-d">Long share <Signed value={chg}>{pts(chg)}</Signed> from the day before</span>}
+      {chg != null && <span className="k-stat-d">Long share <Signed value={chg}>{pts(chg)}</Signed> from the previous trading day</span>}
     </div>
   );
 }
@@ -134,7 +134,7 @@ function Participants({ s }: { s: Summary }) {
         <div data-testid="part-figs">
           <StatRow label="FII figures">
             <Stat label={`FII ${segWord} futures, net`} value={signed(n(fii, `fut_${seg}_net`))} tone={signTone(n(fii, `fut_${seg}_net`))}
-              note={<><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the day before</>} />
+              note={<><Sgn v={n(fii, `fut_${seg}_net_chg`)} /> from the previous trading day</>} />
             <SidesFig label={`FII ${segWord} futures, ${words.join(" · ")}`} long={n(fii, `fut_${seg}_long_pct`)} short={n(fii, `fut_${seg}_short_pct`)} words={words}
               chg={kind === "oi" ? n(fii, `fut_${seg}_long_pct_chg`) : null} />
             <Stat label={`FII ${segWord} calls, net`} value={signed(n(fii, `opt_${seg}_call_net`))} tone={signTone(n(fii, `opt_${seg}_call_net`))}

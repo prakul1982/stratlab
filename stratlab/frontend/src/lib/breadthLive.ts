@@ -45,7 +45,9 @@ export function liveReadLine(l: Pick<NonNullable<LiveView["latest"]>, "adv" | "d
  * "Prices as of 14 Oct" above "Today, live as of 09:15"). After today's close, until the evening's count, today's is the last
  * close, so the chip names the day-by-day figures instead (R67-004: "Last close 16 Oct" above "Today, final" on 19 Oct). */
 export const breadthChipLabel = (live: unknown) =>
-  (live && (live as { state?: string }).state === "final" ? "Daily figures to" : live ? "Last close" : "Prices as of");
+  // "Last close 21 Oct" right above "Today, live as of 09:45" read as a contradiction (R79-008): the chip names what it
+  // dates, the day-by-day figures, while today trades too
+  (live ? "Daily figures to" : "Prices as of");
 
 /** The day-by-day card's title beside the live card: "Last close" while the market trades, "Previous session" once today's
  * final count stands above it (R67-004). */

@@ -510,7 +510,9 @@ def test_the_plan_ended_note_says_free_when_the_account_cannot_be_read_again(w, 
     assert outbox[-1]["subject"] == "Your StratLab subscription has stopped" and "launch offer" in outbox[-1]["text"]
 
 
-def test_an_offer_ending_seconds_after_midnight_is_said_as_the_day_before(w):
+def test_an_offer_ending_seconds_after_midnight_is_said_as_the_day_before(w, monkeypatch):
+    # the email's header carries the day it is sent: fixed here, or the test failed on 22 Oct itself ("22 Oct" not in text)
+    monkeypatch.setattr(lifecycle.kit, "today_label", lambda: "Tue 20 Oct")
     end = datetime(2026, 10, 22, 0, 0, 30, tzinfo=IST)                    # 00:00:30 IST on Thu 22 Oct
     assert lifecycle._end_text(end) == "at the end of Wed 21 Oct (India time)"
     assert lifecycle._end_text(datetime(2026, 10, 22, 0, 1, tzinfo=IST)) == "on Thu 22 Oct at 12:01 am IST"

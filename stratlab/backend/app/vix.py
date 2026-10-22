@@ -153,7 +153,9 @@ def parse_graph(data) -> list[dict]:
         except (TypeError, ValueError, OverflowError, OSError):
             continue
         key = t.isoformat(timespec="minutes")
-        if v is None or key in seen:
+        # points before the 09:15 open are the previous close carried into the pre-open, drawn as if they were today's
+        # readings (R79-002: a flat 15.68 from before 09:15 to 09:17, then the day's own line)
+        if v is None or key in seen or key[11:16] < "09:15":
             continue
         seen.add(key)
         out.append({"t": key, "v": v})
@@ -356,11 +358,27 @@ def panel(options_data=None, now: datetime | None = None, feed=None) -> dict:
     value = q["value"] if q else (hist[-1][1][3] if hist else None)
     past = [v[3] for d, v in hist if d < (value_day or today.isoformat())]
     every = daily(today=today)
-    return {"quote": q, "value": value, "value_day": value_day, "intraday": intraday(feed), "history": [{"day": d, "close": v[3]} for d, v in hist],
+    line = intraday(feed)
+    return {"quote": within_line(q, line), "value": value, "value_day": value_day, "intraday": line, "history": [{"day": d, "close": v[3]} for d, v in hist],
             "percentile": percentile(value, past),
             "stored": {"days": len(every), "first": every[0][0] if every else None, "last": every[-1][0] if every else None},
             "nifty_iv": nifty_iv(options_data, now) if options_data is not None else {"today": None, "series": []},
             "note": NOTE, "today": today.isoformat(), "session": session_now(now)}
+
+
+def within_line(q: dict | None, line: list[dict]) -> dict | None:
+    """The quote, marked `range_off_line` when the exchange's day high or low lies outside the minute line drawn beside
+    it: its figures can carry an opening tick the chart leaves out (R79-002: "Today's range 14.32 – 16.67" beside a line
+    whose lowest point was 15.7). The exchange's figures are kept as they are; the panel says why they aren't drawn."""
+    if not q or not line or q.get("value") is None:
+        return q
+    day = str(q.get("as_of") or "")[:10]
+    pts = [p["v"] for p in line if not day or p["t"][:10] == day]
+    if not pts:
+        return q
+    lo, hi = min(pts + [q["value"]]), max(pts + [q["value"]])
+    off = (q.get("low") is not None and q["low"] < lo - 0.05) or (q.get("high") is not None and q["high"] > hi + 0.05)
+    return {**q, "range_off_line": bool(off)}
 
 
 def session_now(now: datetime) -> str:
