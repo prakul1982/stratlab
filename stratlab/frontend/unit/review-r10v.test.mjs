@@ -150,7 +150,7 @@ test("the start-up block is kept as drawn, without its fade-in class, so drawing
 
 test("the visitor half draws the kept words while a page's code downloads, and the app starts from them (R10V-006)", () => {
   const visitor = read("src/visitor/VisitorApp.tsx");
-  assert.match(visitor, /const words = heldStartup\(\);/);
+  assert.match(visitor, /const words = view\.kind === "landing" && view\.section === "faq" \? "" : heldStartup\(\);/);   // not /faq (R80-003)
   assert.match(visitor, /words \? <div style=\{\{ display: "contents" \}\} data-held dangerouslySetInnerHTML=\{\{ __html: words \}\} \/> : wait/);
   assert.match(visitor, /<Suspense fallback=\{fallback\}>/);
   // with nothing kept, the splash is still a main landmark with a heading (R6V-013)

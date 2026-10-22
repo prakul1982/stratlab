@@ -1652,11 +1652,11 @@ def description(f: dict) -> str:
 # the site's own look (frontend/src/styles.css): paper and ink, one blue, Fraunces headings and IBM Plex text. The fonts
 # are the site's own files (the frontend build copies them to /fonts), so a slow or missing font only falls back
 STYLE = """
-@font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/fraunces-latin-400-normal.woff2) format("woff2")}
-@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
-@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
-@font-face{font-family:"Montserrat";font-style:normal;font-weight:300;font-display:swap;src:url(/fonts/montserrat-latin-300-normal.woff2) format("woff2")}
-@font-face{font-family:"Montserrat";font-style:normal;font-weight:800;font-display:swap;src:url(/fonts/montserrat-latin-800-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/fraunces-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:optional;src:url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Montserrat";font-style:normal;font-weight:300;font-display:optional;src:url(/fonts/montserrat-latin-300-normal.woff2) format("woff2")}
+@font-face{font-family:"Montserrat";font-style:normal;font-weight:800;font-display:optional;src:url(/fonts/montserrat-latin-800-normal.woff2) format("woff2")}
 :root{--paper:#F5F1E8;--card:#FFFDF8;--ink:#1D1B17;--ink-2:#2E2B25;--muted:#5C574D;--line:#E2DAC8;--line-2:#D8CFBA;--chip:#ECE6D8;
 --blue:#1F4FB5;--blue-ink:#163A87;--on-ink:#F5F1E8;--orange-ink:#8A3A0A;--orange-soft:#F8E7D9;color-scheme:light;
 --serif:"Fraunces",Georgia,serif;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -1697,8 +1697,8 @@ th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:
 ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
 .ctas{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .links{display:flex;flex-wrap:wrap;gap:8px}.links a{display:inline-flex;align-items:center;min-height:40px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--card);color:var(--ink-2)}
-form.find{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
-form.find input{flex:1;min-width:200px}form.find button{cursor:pointer;font:inherit}
+form.find{display:flex;gap:8px;flex-wrap:nowrap;margin:12px 0}form.find select,form.find button{flex:none}form.find input,form.find select{min-height:44px;border:1px solid var(--line-2);border-radius:10px;padding:0 12px;background:var(--card);color:var(--ink);font:inherit}
+form.find input{flex:1;min-width:0}form.find button{cursor:pointer;font:inherit}
 footer.site{border-top:1px solid var(--line);margin-top:24px}footer.site .in{max-width:880px;margin:0 auto;padding:20px 16px 40px;font-size:13px;color:var(--muted)}
 footer.site nav{display:flex;flex-wrap:wrap;gap:4px 16px}footer.site nav a{color:var(--muted);display:inline-block;padding:8px 0}
 @media (max-width:640px){footer.site nav a{padding:12px 0;min-height:44px}.links a{min-height:44px}a[href^="mailto:"]{display:inline-block;padding:12px 0;min-height:44px}}
@@ -1789,7 +1789,7 @@ def _find_form(region: str | None, q: str = "") -> str:
     r = (region or "IN").lower()
     opts = "".join(f'<option value="{k}"{" selected" if k == r else ""}>{v}</option>' for k, v in (("in", "India"), ("us", "US")))
     return (f'<form class="find" action="/stocks" method="get" role="search"><label class="skip" for="q">Company name or symbol</label>'
-            f'<input id="q" name="q" value="{e(q[:40])}" placeholder="Company name or symbol" autocomplete="off">'
+            f'<input id="q" name="q" value="{e(q[:40])}" placeholder="Company or symbol" autocomplete="off">'
             f'<label class="skip" for="m">Market</label><select id="m" name="m">{opts}</select>'
             '<button class="btn" type="submit">Find</button></form>')
 
@@ -1798,7 +1798,12 @@ _KEEP_UPPER = {"IBM", "AMD", "AIG", "UPS", "PNC", "PPG", "ICE", "CME", "USA", "U
                "REIT", "ADR", "II", "III", "IV", "NVIDIA", "ASML", "HSBC", "UBS", "BHP", "SAP", "TSMC", "KLA", "CSX", "AT&T"}
 # words title case gets wrong, as the companies write them
 _SPELLED = {"JPMORGAN": "JPMorgan", "PAYPAL": "PayPal", "MCDONALDS": "McDonalds", "EBAY": "eBay", "BLACKROCK": "BlackRock",
-            "FEDEX": "FedEx", "MASTERCARD": "Mastercard", "SALESFORCE": "Salesforce", "SERVICENOW": "ServiceNow"}
+            "FEDEX": "FedEx", "MASTERCARD": "Mastercard", "SALESFORCE": "Salesforce", "SERVICENOW": "ServiceNow",
+            # brands written in mixed case (R80-016: "Conocophillips")
+            "CONOCOPHILLIPS": "ConocoPhillips", "PEPSICO": "PepsiCo", "ABBVIE": "AbbVie", "NVIDIA": "NVIDIA", "AUTOZONE": "AutoZone",
+            "MCKESSON": "McKesson", "MCCORMICK": "McCormick", "DOORDASH": "DoorDash", "CROWDSTRIKE": "CrowdStrike",
+            "MONGODB": "MongoDB", "DUPONT": "DuPont", "GODADDY": "GoDaddy", "HUBSPOT": "HubSpot", "DEXCOM": "DexCom",
+            "NETAPP": "NetApp", "ONEOK": "ONEOK", "IDEXX": "IDEXX", "BIOGEN": "Biogen"}
 
 
 def proper_name(name: str | None) -> str | None:

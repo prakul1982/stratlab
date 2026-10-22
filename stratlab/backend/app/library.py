@@ -117,7 +117,7 @@ def reason(e: dict) -> str | None:
     if n is not None and n < MIN_TRADES:
         return "No trades in this period, so nothing was tested." if n == 0 else f"Only {n} trade{'s' if n != 1 else ''} in this period, too few to tell skill from luck."
     if v.get("verdict") == "no_edge" and (st.get("ret") or 0) <= 0:
-        return "Lost money after costs over the period, so the checks weren't run: there was no gain to test."
+        return "Lost money after costs over the period; its checks still ran and are shown for reference."
     checks = [c for c in v.get("checks") or [] if c.get("id") in CHECK_NAME]
     if not checks:
         return None
@@ -233,7 +233,7 @@ def restated(e: dict) -> dict:
     if kind == "not_enough" or (isinstance(n, int) and n < MIN_TRADES):
         out.append(reason(e) or "Too few trades to tell skill from luck.")
     elif kind == "no_edge":
-        out.append("It lost money after costs over the period, so the checks weren't run: there was no gain to test.")
+        out.append("It lost money after costs over the period. Its checks still ran and are shown below for reference: with no gain, a passed check doesn't point to an edge.")   # the checks did run; "weren't run" contradicted the list under it (R80-005)
     else:
         unseen = st.get("unseen")
         for c in checks_of(e):

@@ -18,7 +18,7 @@ export const FAQ: Faq[] = [
   { q: "Does StratLab file my tax return?",
     a: ["No. The tax report is an estimate to check with a chartered accountant, and the ITR-ready export lays out your year the way the ITR-2 and ITR-3 schedules ask for it. You or your CA file the return."] },
   { q: "Can I backtest options?",
-    a: ["No. Backtesting options needs real past prices for every strike, and StratLab doesn't fill the gap with a pricing model. It records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history.",
+    a: ["One contract at a time. On Pro, a notebook can backtest a single listed futures or options contract on that contract's own past prices. A strategy that picks its strike as it goes (by delta or premium, or rolling to each new expiry) can't be backtested: that needs real past prices for every strike, and StratLab doesn't fill the gap with a pricing model. It records the NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX chains every 5 minutes to build that history.",
       "What you can do today is paper trade options: live on NSE, BSE, MCX and NSE currency option prices, with fills at the real bid and ask, at a set time or when a notebook's rules signal. The Greeks and the payoff before expiry are model estimates, labelled with their inputs."] },
   { q: "How do invite rewards work?",
     a: ["You and a friend can each get a free month of Basic. Your invite link is on the Invite friends page, in the account menu (or at stratlab.studio/invite).",

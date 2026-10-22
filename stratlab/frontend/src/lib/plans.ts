@@ -69,7 +69,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax and a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`, `Paper trade ${L.pro.live_limit} strategies at a time`,
-    "Indian F&O contracts (futures and options on stocks and indices) in notebooks and backtests; the stocks themselves are on every plan, options entered on your own rules' signals, strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
+    "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan. Options paper trading entered on your own rules' signals, with strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
     "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],

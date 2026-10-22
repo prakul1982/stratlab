@@ -11,7 +11,7 @@ test("a public page still loading fills the screen, so its footer doesn't jump w
 });
 
 test("plan limits are named as the plan cards name them, and the 404 page's FAQ card doesn't say 'Tips' (R75-003, R75-005)", () => {
-  assert.match(read("src/content/legal.ts"), /Plan limits \(backtests, AI builds, paper sessions\) apply per account\./);
+  assert.match(read("src/content/legal.ts"), /Plan limits \(backtests, AI builds, strategies paper traded at a time\) apply per account\./);
   assert.doesNotMatch(read("src/content/legal.ts") + read("src/content/seo.ts"), /limits on experiments|\(experiments, AI builds/);
   assert.match(read("src/pages/Gate.tsx"), /title="Questions">Advice, real trades, options, invites and your data\./);
 });

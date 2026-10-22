@@ -39,9 +39,10 @@ export { CHECK_RESULT, testedRange, TOTAL_AFTER_COSTS, TOTAL_HOLD, TOTAL_NOTE, w
 
 /** The verdict filter, in the words of the checks rather than a judgement of the strategy (R5O-014). */
 // the filter says what "passed" is about: the checks test whether a result holds up, not whether it beat buying and
-// holding (R47-010: "Passed the checks" read as "a good strategy" beside cards that trail buy and hold)
+// holding (R47-010: "Passed the checks" read as "a good strategy" beside cards that trail buy and hold); and a strategy
+// with a warning or a check not run is in it too, so it says what holds for all of them (R80-012)
 export const VERDICTS: [string, string][] = [["", "Any result"],
-  ...(Object.entries(VERDICT_FACT) as [string, string][]).map(([v, l]): [string, string] => [v, v === "edge" ? "Passed the robustness checks" : l])];
+  ...(Object.entries(VERDICT_FACT) as [string, string][]).map(([v, l]): [string, string] => [v, v === "edge" ? "No check failed" : l])];
 
 /** What the checks test, said once on a card whose strategy passed them but trails buy and hold (R47-010). */
 export const CHECKS_NOT_HOLD = "The checks test whether the result holds up, not whether it beat buying and holding.";

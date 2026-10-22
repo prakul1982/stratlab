@@ -18,9 +18,22 @@ export const PUBLIC_FONTS = [
 
 export const fontSource = (file, pkg) => path.join(root, "node_modules", pkg, "files", file);
 
+/** The app's own fonts the first screen draws with, asked for by index.html straight away: they arrived after the landing
+ * page had drawn in the stand-in serif, and the 80 px heading re-wrapped and pushed the hero down (R80-007, CLS 0.13). */
+const FIRST_SCREEN = /^assets\/(fraunces-latin-400-normal|fraunces-latin-600-normal|ibm-plex-sans-latin-400-normal|ibm-plex-sans-latin-600-normal)-[\w-]+\.woff2$/;
+
 export function publicFonts() {
   return {
     name: "stratlab-public-fonts",
+    transformIndexHtml: {
+      order: "post",
+      handler(_html, ctx) {
+        if (!ctx.bundle) return [];
+        return Object.keys(ctx.bundle).filter((f) => FIRST_SCREEN.test(f)).sort().map((f) => ({
+          tag: "link", attrs: { rel: "preload", href: `/${f}`, as: "font", type: "font/woff2", crossorigin: "" }, injectTo: "head",
+        }));
+      },
+    },
     generateBundle() {
       for (const [file, pkg] of PUBLIC_FONTS) this.emitFile({ type: "asset", fileName: `fonts/${file}`, source: fs.readFileSync(fontSource(file, pkg)) });
     },
