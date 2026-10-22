@@ -204,8 +204,11 @@ def _local_day(iso: str | None, region: str) -> str | None:
 OTHER_MARKETS = {
     "US": re.compile(r"\b(london|ftse|gilts?|uk stocks|british stocks|europe(an)? (stocks|shares|markets?)|stoxx|dax|cac|euro ?zone|"
                      r"nikkei|topix|japan(ese)? (stocks|shares)|hang seng|china stocks|chinese stocks|shanghai|shenzhen|asian (stocks|shares|markets?)|"
-                     r"sensex|nifty|dalal street|indian (stocks|shares|markets?)|asx|tsx|canad\w+ stocks|bovespa)\b", re.I),
-    "IN": re.compile(r"\b(london stocks|ftse|gilts?|stoxx|dax|cac|nikkei|topix|hang seng|asx|tsx|bovespa)\b", re.I),
+                     r"sensex|nifty|dalal street|indian (stocks|shares|markets?)|asx|tsx|canad\w+ stocks|bovespa|"
+                     # R81-010: "Gulf markets fall as fresh Houthi strikes…" led the US brief the day the NASDAQ fell 2.59%
+                     r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul)\b", re.I),
+    "IN": re.compile(r"\b(london stocks|ftse|gilts?|stoxx|dax|cac|nikkei|topix|hang seng|asx|tsx|bovespa|"
+                     r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul)\b", re.I),
 }
 OWN_MARKET = {"US": re.compile(r"\b(s&p|s&amp;p|dow|nasdaq|wall street|u\.s\.|us stocks|american)\b", re.I),
               "IN": re.compile(r"\b(sensex|nifty|dalal street|india\w*|rupee)\b", re.I)}
