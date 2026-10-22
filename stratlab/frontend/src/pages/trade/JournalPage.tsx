@@ -105,8 +105,9 @@ export function JournalPage() {
   const [segment, setSegment] = useState("all");
   // trades the tax report already has from the person's tradebooks: offered here, so an empty journal says so
   const [taxTrades, setTaxTrades] = useState(0);
+  const [taxLast, setTaxLast] = useState<string | null>(null);
   const seq = useRef(0);
-  useEffect(() => { api<{ trades: number }>("/tax").then((t) => setTaxTrades(t.trades ?? 0)).catch(() => undefined); }, []);
+  useEffect(() => { api<{ trades: number; last_trade?: string | null }>("/tax").then((t) => { setTaxTrades(t.trades ?? 0); setTaxLast(t.last_trade ?? null); }).catch(() => undefined); }, []);
 
   const load = useCallback(() => {
     const q = new URLSearchParams({ segment, market });
@@ -170,6 +171,8 @@ export function JournalPage() {
   if (!j) return <div className="k-page j-page">{header}<Card><Skeleton label="Opening your journal" /></Card></div>;
   const s = j.summary;
   const has = j.total > 0;
+  // the newest real (not chart-replay) trade's exit day, beside the tax report's newest (R81-020)
+  const newestReal = j.trades.filter((t) => t.src !== "practice").map((t) => t.exit_t.slice(0, 10)).sort().pop() ?? null;
   const anyTrades = j.markets.some((x) => x.n > 0);
   const others = j.markets.filter((x) => x.n > 0);
   const segs = SEGMENT_ORDER.filter((k) => j.segment_counts[k]);
@@ -262,6 +265,14 @@ export function JournalPage() {
             {j.full && <PaperVsReal j={j} />}
             <Trades j={j} onEdit={setEditing} />
           </>
+        )}
+        {/* the tax report has trades past the journal's newest (R81-020: "Trades up to 27 Jun 2025" here, "trades up to
+            16 Mar 2026" on Money, and nothing said why): the newer ones are one press away; ones already here are skipped */}
+        {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (
+          <p className="banner" data-testid="j-tax-newer">
+            Your tax report has trades up to {fmtDate(taxLast, { tz: "Asia/Kolkata" })}; this journal's go up to {fmtDate(newestReal, { tz: "Asia/Kolkata" })}.{" "}
+            <button type="button" className="link-btn" disabled={busy} onClick={() => { if (!busy) void fromTax(); }}>{busy ? "Bringing them in…" : "Bring in the newer ones"}</button>
+          </p>
         )}
         {j.tax_totals.length > 0 && <TaxTotals rows={j.tax_totals} />}
         {has && (taxTrades > 0 || j.tax_totals.length > 0) && (

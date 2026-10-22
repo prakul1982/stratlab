@@ -59,6 +59,10 @@ export function CompanySearch({ region, autoFocus, onPick, placeholder }: {
               <span className="small muted">{r.exchange}</span>
             </button>
           ))}
+          {/* a few matches or none: the company may be listed in the other market (R81-019: "apple" on the India tab
+              found only Butterfly Gandhimathi Appliances, with no word that Apple is on the US tab) */}
+          {rows.length <= 2 && <p className="small muted results-none" data-testid="other-market">
+            {region === "IN" ? "A US company? Search it on the US tab." : "A company listed in India? Search it on the India tab."}</p>}
         </div>
       )}
     </label>

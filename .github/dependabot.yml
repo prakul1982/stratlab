@@ -3,7 +3,8 @@ updates:
   - package-ecosystem: pip
     directory: /stratlab/backend
     schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    # paused for the public launch (owner, 22 Oct 2026): no new update PRs until it settles; set back to 5 after
+    open-pull-requests-limit: 0
     groups:
       python-minor:
         update-types: [minor, patch]
@@ -16,7 +17,8 @@ updates:
   - package-ecosystem: npm
     directory: /stratlab/frontend
     schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    # paused for the public launch (owner, 22 Oct 2026): no new update PRs until it settles; set back to 5 after
+    open-pull-requests-limit: 0
     ignore:
       # React, TypeScript and Vite majors need a hand-checked upgrade
       - dependency-name: "*"
@@ -27,3 +29,4 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    open-pull-requests-limit: 0     # paused for the launch too

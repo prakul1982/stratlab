@@ -110,3 +110,12 @@ def test_a_short_blip_leaves_no_note():
     e.step(at("10:00"), 25000, c, quotes(25000), False)
     e.step(at("10:01"), 25000, c, quotes(25000, bump=60), True)
     assert "note" not in e.trades[-1]
+
+
+def test_a_gulf_markets_story_stays_out_of_the_us_and_india_briefs():
+    # R81-010
+    from app.newsletter.content import other_region
+    t = "Gulf markets fall as fresh Houthi strikes on Saudi Arabia raise regional risk"
+    assert other_region("US", t) and other_region("IN", t)
+    assert not other_region("US", "Wall Street falls as Gulf markets slide")      # names this market too
+    assert not other_region("US", "Oil jumps after Houthi strikes")
