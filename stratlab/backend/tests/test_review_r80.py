@@ -86,3 +86,27 @@ def test_best_verdict_puts_all_passed_above_some_passed():
     mk = lambda i, p, t, unseen: {"id": i, "verdict": {"verdict": "edge", "passed": p, "total": t}, "stats": {"unseen": unseen, "ret": 10, "trades": 50}}
     rows = library.search([mk("a", 2, 3, 9.0), mk("b", 3, 3, 1.0), mk("c", 2, 3, 5.0)])
     assert [r["id"] for r in rows] == ["b", "a", "c"]
+
+
+def test_an_options_trade_says_when_its_prices_paused():
+    # R81-012: a stop came 50% late after 28 minutes without live prices; the trade's record now says why
+    from tests.test_options import at, contracts, quotes, straddle
+    from app.options.engine import OptionsEngine
+    e, c = OptionsEngine(straddle()), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    e.step(at("12:25"), 25000, c, quotes(25000), False)                  # the prices stop
+    e.step(at("12:40"), 25000, c, quotes(25000), False)
+    e.step(at("12:53"), 25000, c, quotes(25000, bump=60), True)         # back, far past the stop
+    t = e.trades[-1]
+    assert t["why"] == "Stop loss"
+    assert t["note"] == "No live prices from 12:25 to 12:53, so the stops and the daily loss cap were checked when they returned"
+
+
+def test_a_short_blip_leaves_no_note():
+    from tests.test_options import at, contracts, quotes, straddle
+    from app.options.engine import OptionsEngine
+    e, c = OptionsEngine(straddle()), contracts()
+    e.step(at("09:30"), 25000, c, quotes(25000), True)
+    e.step(at("10:00"), 25000, c, quotes(25000), False)
+    e.step(at("10:01"), 25000, c, quotes(25000, bump=60), True)
+    assert "note" not in e.trades[-1]

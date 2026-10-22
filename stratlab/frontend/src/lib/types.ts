@@ -265,7 +265,7 @@ export interface OptCharges {
   breakevens: number[]; breakevens_after: number[]; rates_as_of: string;
 }
 export interface OptLegLive { sym: string; opt: "CE" | "PE"; side: "sell" | "buy"; strike: number; qty: number; entry: number; mark: number; open: boolean; pnl: number }
-export interface OptTrade { opened: string; closed: string; why: string; pnl: number; gross: number; costs: number; credit: number; rolls: number;
+export interface OptTrade { opened: string; closed: string; why: string; note?: string; pnl: number; gross: number; costs: number; credit: number; rolls: number;
   units: number; orders: number; best: number; worst: number; expiry: string; legs: { sym: string; side: string; qty: number; entry: number; exit: number | null }[] }
 export interface OptionSnapshot {
   id: string; name: string; kind: "options"; status: "running" | "stopped" | "paused"; stop_reason?: string | null; notice?: string | null;
