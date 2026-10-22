@@ -79,3 +79,10 @@ def test_wire_stories_about_conflict_and_religion_stay_out_of_market_headlines()
     assert OFF_TOPIC.search("As Trump's support slips, white evangelicals remain his Republican bedrock - Reuters")
     assert not OFF_TOPIC.search("Wall Street falls as tech stocks slide")
     assert not OFF_TOPIC.search("Oil prices rise as supply worries grow")
+
+
+def test_best_verdict_puts_all_passed_above_some_passed():
+    # R81-013
+    mk = lambda i, p, t, unseen: {"id": i, "verdict": {"verdict": "edge", "passed": p, "total": t}, "stats": {"unseen": unseen, "ret": 10, "trades": 50}}
+    rows = library.search([mk("a", 2, 3, 9.0), mk("b", 3, 3, 1.0), mk("c", 2, 3, 5.0)])
+    assert [r["id"] for r in rows] == ["b", "a", "c"]
