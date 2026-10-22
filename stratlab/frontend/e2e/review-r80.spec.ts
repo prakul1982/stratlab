@@ -38,9 +38,10 @@ test("the price chart reads its candles again after a busy answer instead of sho
     if (calls === 1) return r.fulfill({ status: 503, body: JSON.stringify({ detail: "The market data source is busy." }), contentType: "application/json" });
     return r.fallback();
   };
-  const errors = await open(page, "/research/IN/RELIANCE", [[/\/research\/chart\/IN\/RELIANCE\?tf=1d/, busyOnce]]);
+  const errors = await open(page, "/research/IN/RELIANCE", [[/\/research\/chart\/IN\/RELIANCE\?tf=/, busyOnce]]);
   const chart = page.getByTestId("price-chart").first();
-  await expect(chart).toHaveAttribute("data-loaded", "1d", { timeout: 30_000 });
+  // whichever timeframe the chart opens on (daily, or hourly while the market is open): its first read is the busy one
+  await expect(chart).toHaveAttribute("data-loaded", /^(5m|15m|1h|1d|1w|1mo)$/, { timeout: 30_000 });
   await expect(chart.getByText("Couldn't load prices")).toHaveCount(0);
   expect(calls).toBeGreaterThanOrEqual(2);
   expect(errors).toEqual([]);

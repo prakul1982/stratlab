@@ -24,3 +24,49 @@ def test_the_stocks_search_form_keeps_one_row_and_fonts_dont_shift_it():
     assert "font-display:swap" not in html and "font-display:optional" in html
     assert "form.find{display:flex;gap:8px;flex-wrap:nowrap" in html and "form.find input{flex:1;min-width:0}" in html
     assert 'placeholder="Company or symbol"' in stock_pages._find_form("IN")
+
+
+def test_a_session_yahoo_sends_blank_is_rebuilt_from_its_hours():
+    # R81-002 / R81-001: Yahoo sent NVDA's 21 Oct daily candle blank; the chart skipped the day and the day's change was
+    # measured from 20 Oct (-1.7% instead of -4.1%)
+    from datetime import datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    import httpx
+    from app.intel.yahoo import Yahoo
+    ny = ZoneInfo("America/New_York")
+    today = datetime.now(ny).replace(hour=0, minute=0, second=0, microsecond=0)
+    d0, d1, d2 = today - timedelta(days=2), today - timedelta(days=1), today
+
+    def at(d, h=9, m=30):
+        return int(d.replace(hour=h, minute=m).timestamp())
+
+    def handler(r):
+        p = dict(r.url.params)
+        meta = {"symbol": "NVDA", "currency": "USD", "exchangeTimezoneName": "America/New_York", "regularMarketPrice": 212.8,
+                "regularMarketTime": at(d2, 13, 50), "chartPreviousClose": 200.0}
+        if p["interval"] == "60m":
+            ts = [at(d1, 9, 30), at(d1, 10, 30), at(d1, 15, 30)]
+            q = {"open": [217.0, 219.0, 221.0], "high": [219.5, 222.0, 222.6], "low": [216.5, 218.0, 220.4],
+                 "close": [219.0, 221.0, 221.97], "volume": [10, 20, 30]}
+        else:
+            ts = [at(d0), at(d1), at(d2)]
+            q = {"open": [215.0, None, 220.0], "high": [217.0, None, 221.0], "low": [214.0, None, 211.0],
+                 "close": [216.47, None, 212.8], "volume": [100, None, 50]}
+        return httpx.Response(200, json={"chart": {"result": [{"meta": meta, "timestamp": ts, "indicators": {"quote": [q]}}]}})
+
+    y = Yahoo(transport=httpx.MockTransport(handler))
+    bars = y.chart("NVDA", "1d", 10, exact=True)["candles"]
+    assert [b["t"][:10] for b in bars] == [d0.date().isoformat(), d1.date().isoformat(), d2.date().isoformat()]
+    assert bars[1]["c"] == 221.97 and bars[1]["o"] == 217.0 and bars[1]["h"] == 222.6 and bars[1]["l"] == 216.5
+    assert y.meta("NVDA")["prev_close"] == 221.97
+
+
+def test_admin_lists_the_company_pages_price_job(monkeypatch):
+    # R81-005: the job that moves the public company pages to each close had no row in Admin → Data and jobs
+    from app import admin_jobs
+    monkeypatch.setattr(main, "price_refresh_status", {"last_run": "2026-10-22T21:00:00+00:00", "IN": {"refreshed": 0, "left": 0, "failed": 0},
+                                                      "US": {"refreshed": 0, "left": 120, "failed": 300}})
+    rows = {r["name"]: r for r in admin_jobs.rows()}
+    r = rows["Company pages' prices"]
+    assert r["state"] == "bad" and "US: no page's price could be read in the last pass (300 tried)" in r["error"]
+    assert any("US: 0 updated, 120 waiting, 300 not read" in x for x in r["log"])
