@@ -36,6 +36,16 @@ def fresh_kept_answers():
 
 
 @pytest.fixture(autouse=True)
+def razorpay_confirms_what_the_event_says(monkeypatch):
+    """A webhook's subscription is checked against Razorpay's own copy (app/billing.py _confirmed) before anything acts on
+    it; tests have no Razorpay, so the event's copy stands for it. tests/test_billing_events.py checks _confirmed itself."""
+    import importlib
+    billing = importlib.import_module("app.billing")      # loaded here, so a test that imports it later is covered too
+    monkeypatch.setattr(billing, "_confirmed", lambda sub: sub)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def no_official_close_reads():
     """The official-close store (app/official_close.py) never reads the exchange's file or the broker from a test: a
     test that wants it sets its own sources. Its memory doesn't carry over from one test to the next."""
