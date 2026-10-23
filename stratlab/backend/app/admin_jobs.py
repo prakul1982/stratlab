@@ -356,6 +356,12 @@ def rows() -> list[dict]:
             if x.get("error"):
                 errors.append(f"{name}: {x['error']}")
                 continue
+            if x.get("source_down"):
+                # the source turned the pass away (India's broker before the morning login): the pages wait for it,
+                # not a problem (R84-005: red "no page's price could be read (1 tried)" at 06:30 IST)
+                log.append(f"{name}: waiting for the price source (the broker's daily login, for India); "
+                           f"{x.get('left', 0)} pages are read once it's back")
+                continue
             err = x.get("errors", x.get("failed", 0))       # reads that raised; the rest of `failed` had no newer close yet
             late = max(0, (x.get("failed") or 0) - err)
             log.append(f"{name}: {x.get('refreshed', 0)} updated, {x.get('left', 0)} waiting, "
