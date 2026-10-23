@@ -70,3 +70,25 @@ def test_a_halted_subscription_still_recovers_and_a_new_one_starts_fresh(monkeyp
     send("subscription.cancelled", "cancelled")
     send("subscription.activated", "active", "sub_2")  # a new checkout after the cancel
     assert (profile["plan"], profile["plan_status"], profile["razorpay_subscription_id"]) == ("pro", "active", "sub_2")
+
+
+# Railway's 21 Oct 2026 breach may have exposed the webhook secret: a forged, validly signed event must not switch a plan on
+def test_a_subscription_is_confirmed_with_razorpay_before_it_counts(monkeypatch):
+    from razorpay.errors import BadRequestError
+    from app import billing
+    calls = []
+
+    class Subs:
+        def fetch(self, sid):
+            calls.append(sid)
+            if sid == "sub_real":
+                return {"id": "sub_real", "status": "active", "notes": {"user_id": "u1"}}
+            raise BadRequestError("The id provided does not exist")
+
+    class Client:
+        subscription = Subs()
+    monkeypatch.setattr(billing, "client", lambda: Client())
+    confirmed = billing._confirmed_check
+    assert confirmed({"id": "sub_real", "status": "pending"}) == {"id": "sub_real", "status": "active", "notes": {"user_id": "u1"}}
+    assert confirmed({"id": "sub_madeup", "status": "active", "notes": {"user_id": "attacker"}}) is None
+    assert confirmed({"id": "not-a-sub"}) is None and calls == ["sub_real", "sub_madeup"]

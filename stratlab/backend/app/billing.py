@@ -393,6 +393,22 @@ def _end_plan(event: dict, payment_id: str):
         lifecycle.later(lifecycle.plan_ended, profile, sub_id, profile.get("plan"))
 
 
+def _confirmed_check(sub: dict) -> dict | None:
+    """Razorpay's own copy of a subscription an event names; None when Razorpay doesn't know it. A lookup that fails
+    for a network reason is raised, so the webhook isn't marked handled and Razorpay's retry tries again."""
+    sid = str(sub.get("id") or "")
+    if not sid.startswith("sub_"):
+        return None
+    try:
+        got = client().subscription.fetch(sid)
+    except BadRequestError:
+        return None                             # no such subscription on this account: a made-up event
+    return got if isinstance(got, dict) and got.get("id") == sid else None
+
+
+_confirmed = _confirmed_check          # what _act calls (tests, which have no Razorpay, stand the event's copy in for it)
+
+
 def _act(event: dict):
     name = event.get("event", "")
     if name in REVERSALS:                      # these carry no subscription: invite rewards, and a full refund or lost dispute
@@ -404,6 +420,11 @@ def _act(event: dict):
             _end_plan(event, pid)
         return
     sub = (event.get("payload", {}).get("subscription") or {}).get("entity")
+    if not sub:
+        return
+    # the subscription as Razorpay itself has it, not as the event says: a signed event is trusted only as far as its
+    # secret, and Railway's 21 Oct breach may have exposed that secret (a forged "charged" event would switch a plan on)
+    sub = _confirmed(sub)
     if not sub:
         return
     profile = db.profile_by_subscription(sub["id"])
