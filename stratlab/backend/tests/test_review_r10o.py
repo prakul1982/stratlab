@@ -385,3 +385,16 @@ def test_a_figure_labelled_by_size_is_left_to_the_reader():
     assert G.plain_sentences("Debt of ₹4.03 lakh crore remains sizable.") == ""
     assert G.plain_sentences("FIIs ownership decreased by 2.02%.") == "FIIs ownership decreased by 2.02 percentage points."
     assert G.plain_sentences("Promoter stake is higher than a year ago at 50.3%.") != ""     # a comparison, not a label
+
+
+# R83-001: in the session a recording standing in for the live chain says so, so the page asks again shortly
+def test_a_recording_standing_in_during_the_session_is_marked_reading(monkeypatch):
+    rec = _recording(taken="2026-10-23T09:41:00+05:30", expiry="2026-10-27")
+    live = {**_recording(expiry="2026-10-27"), "source": "live", "taken_at": "2026-10-23T09:46:00+05:30"}
+    monkeypatch.setattr(PO, "live_chains", lambda od, names, choice, quick=False: {"NIFTY": rec, "BANKNIFTY": live})
+    out = {r["name"]: r for r in PO.pcr_table(_NoFeed(), _ist("2026-10-23", "09:46"), ("NIFTY", "BANKNIFTY"))}
+    assert out["NIFTY"]["reading"] is True and out["BANKNIFTY"]["reading"] is False
+    # out of hours the close's recording is the answer, nothing is being read
+    monkeypatch.setattr(PO, "recorded_chain", lambda name, choice, day, now=None: _recording(taken="2026-10-23T15:29:00+05:30", expiry="2026-10-27"))
+    shut = PO.pcr_table(_NoFeed(), _ist("2026-10-23", "19:00"), ("NIFTY",))
+    assert shut[0]["reading"] is False

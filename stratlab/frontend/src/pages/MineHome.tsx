@@ -53,7 +53,7 @@ export function MineHome() {
   const lede = useMemo(() => {
     const parts: string[] = [];
     const m = markets.find((x) => x.id === "IN");
-    const st = m && m.status !== "soon" ? marketState(m) : null;
+    const st = m && m.status !== "soon" ? marketState(m, new Date(now)) : null;     // the same minute the line counts from
     if (st && !st.offline) {
       const mins = st.change ? (st.change.getTime() - now) / 60000 : null;
       if (st.open && mins !== null) parts.push(`Indian markets close in ${inWords(mins)}.`);
@@ -291,6 +291,8 @@ type Mover = { region: Region; symbol: string; name: string | null; q: Quote };
 
 function WatchCard() {
   const { items, failed, retry } = useWatchlist();
+  const { markets } = useApp();
+  const day = (m: Mover) => { const mk = markets.find((x) => x.id === m.region); return moverDay(m.region, m.q, new Date(), !!mk && mk.status !== "soon" && !marketState(mk).open); };
   const [movers, setMovers] = useState<Mover[] | null>(null);
   useEffect(() => {
     if (items === null) return;
@@ -308,7 +310,7 @@ function WatchCard() {
   }, [items]);
   return (
     <Card testId="mine-watch">
-      <CardHead title={movers?.length && movers.every((m) => moverDay(m.region, m.q)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
+      <CardHead title={movers?.length && movers.every((m) => day(m)) ? "Your watchlist, last session" : "Your watchlist today"} actions={<Link className="btn quiet sm" to="/research/watchlist">All</Link>} />
       {failed ? <ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed.</ErrorState>
         : movers === null ? <Skeleton label="Reading your watchlist prices" lines={3} />
         : !movers.length ? (
@@ -322,7 +324,7 @@ function WatchCard() {
                 <Link to={`/research/${m.region}/${encodeURIComponent(m.symbol)}`}><b>{m.symbol}</b>{m.name && <span className="k-stat-d">{m.name}</span>}</Link>
                 <span className="px">{price(m.q.price, m.region === "US" ? "USD" : "INR")}</span>
                 <Delta value={m.q.change_pct}>{pct(m.q.change_pct, 2)}</Delta>
-                {(() => { const d = moverDay(m.region, m.q); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
+                {(() => { const d = day(m); return d && <span className="k-note" data-testid="mine-mover-day"> {fmtDate(d, { weekday: true, year: false })}</span>; })()}
               </li>
             ))}
           </ul>

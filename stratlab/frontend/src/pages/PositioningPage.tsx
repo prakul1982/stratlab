@@ -197,10 +197,23 @@ function recordedLine(name: string, r: Span | undefined): string {
   return `StratLab has recorded ${name}'s chain since ${dayName(r.first)} (${r.days} trading day${r.days === 1 ? "" : "s"}).`;
 }
 
+const REREAD = 4;
+
 function PcrTable({ coverage }: { coverage?: Coverage }) {
   const [rows, setRows] = useState<PcrRow[] | null | "error">(null);
   const [again, setAgain] = useState(0);
   useEffect(() => { setRows(null); api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => setRows(d.pcr)).catch(() => setRows("error")); }, [again]);
+  // rows standing in for a live chain being read are asked for again, quietly, until the live ones arrive (at most
+  // REREAD times): the table kept a recording beside the chain panel's live PCR (R83-001)
+  const [tries, setTries] = useState(0);
+  const waiting = Array.isArray(rows) && rows.some((r) => r.reading);
+  useEffect(() => {
+    if (!waiting || tries >= REREAD) return;
+    const t = window.setTimeout(() => {
+      api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => { setRows(d.pcr); setTries((n) => n + 1); }).catch(() => setTries((n) => n + 1));
+    }, 15000);
+    return () => window.clearTimeout(t);
+  }, [waiting, tries]);
   const cols: Column<PcrRow>[] = [
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },

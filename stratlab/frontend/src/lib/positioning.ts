@@ -15,7 +15,9 @@ export type PcrRow = { name: string; exchange: string; expiry?: string; cycle?: 
   pcr_all?: number | null; strikes_read?: number; near_strikes?: number; spot?: number | null; source: "live" | "recorded" | null; at_close?: boolean; as_of?: string;
   /** R24-004: the strikes of the PCR's window (`strikes_window`, 31) that had open interest read, and whether that is short of
    * the window (older servers send none of these) */
-  basis?: "near"; strikes_counted?: number; strikes_window?: number; partial?: boolean };
+  basis?: "near"; strikes_counted?: number; strikes_window?: number; partial?: boolean;
+  /** R83-001: a recording standing in while the live chain is read behind it (the table asks again shortly) */
+  reading?: boolean };
 
 /** The PCR table's strikes cell: the strikes the PCR counted out of its window, the same basis on every row ("31 of 31"),
  * with "partial" when some had no open interest read (R24-004: "Strikes read" showed 81 or 31 beside the same near-the-money
@@ -42,6 +44,8 @@ export function pcrNote(rows: PcrRow[]): string {
   if (rows.some((r) => r.at_close)) return `The market is shut, so ${older.length ? "the other indices show" : "each index shows"} StratLab's recording of its last close. ${dated}Live chains are read while the market trades, at most once a minute.`;
   // during the session a recording stands in for a live chain that couldn't be read just then: said so, not "show the
   // recordings ... Live chains are read at most once a minute" side by side (R79-001)
+  // a recording standing in while the live read runs behind it is not a failed read (R83-001)
+  if (older.length && rec.some((r) => r.reading)) return `${dated}The live chain is being read; this table updates when it arrives.`;
   if (older.length) return `${dated}The live chain couldn't be read just then; it is tried again each minute.`;
   return `${rows.some((r) => r.source === "recorded") ? "Where the live chain is offline, the newest recording is shown. " : ""}Live chains are read at most once a minute.`;
 }

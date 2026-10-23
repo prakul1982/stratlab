@@ -59,14 +59,16 @@ export function tileWhen(day: string | null | undefined, today: string, fmt: (is
 /** The session a watchlist mover's change is of, when it isn't today's in its market: the server's `change_day` (India
  * before the open), else the market day of the quote's own time when that is before today there (R79-005: NVDA +2.54%
  * on My space at 09:50 IST, the US's 21 Oct move, with no day beside the S&P 500's "on 21 Oct"). Null for today's move. */
-export function moverDay(region: string, q: { change_day?: string | null; at?: string | null }, now = new Date()): string | null {
+export function moverDay(region: string, q: { change_day?: string | null; at?: string | null }, now = new Date(), closed = false): string | null {
   if (q.change_day) return q.change_day;
   const tz = TILE_TZ[region];
   if (!tz || !q.at) return null;
   const at = new Date(q.at);
   if (Number.isNaN(at.getTime())) return null;
   const day = at.toLocaleDateString("en-CA", { timeZone: tz }), today = now.toLocaleDateString("en-CA", { timeZone: tz });
-  return day < today ? day : null;
+  // today's session that has closed says its day too, as the S&P 500's tile does (R83-003: NVDA −4.40% at 09:19 IST,
+  // still 22 Oct in New York, with no day beside TCS's live move)
+  return day < today || (closed && day === today) ? day : null;
 }
 
 /** The market a tile's day is of, for whether its session has closed: the region of a research index; none for a pair or a
