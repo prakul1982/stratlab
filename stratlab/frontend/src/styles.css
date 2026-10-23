@@ -1418,7 +1418,7 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-chip:hover { border-color: var(--ink); }
 .k-chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .k-chip.add { border-style: dashed; color: var(--blue-ink); }
-@media (max-width: 640px), (pointer: coarse) { .k-chip { height: 40px; } }   /* a finger, not a mouse: 40px, not 32px (R86-004) */
+@media (max-width: 640px) { .k-chip { height: 44px; } }   /* a phone-wide window: 44px, as on a touch screen below, not 32px (R86-004) */
 /* a set of on/off chips (ChipSet): on is filled with a tick, off is plain and muted, so "all on" still reads as on */
 .k-chipset .k-chip { color: var(--muted); }
 .k-chipset .k-chip[aria-pressed="true"] { color: var(--on-ink); }

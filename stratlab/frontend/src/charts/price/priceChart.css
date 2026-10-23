@@ -176,9 +176,9 @@
 /* R13S-014: the keys beside a drawing tool (T, R, Shift+H) mean nothing on a screen with no keyboard */
 @media (hover: none) and (pointer: coarse) { .pc-pop button.item.row kbd { display: none; } }
 
-/* fingers, not a mouse: the tool buttons are 40px targets, not 32–34px (R86-004). Here, after the rules above, as this
-   file loads after the app's styles */
-@media (max-width: 640px), (pointer: coarse) {
-  .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 40px; }
-  .pc-btn.icon { width: 40px; }
+/* a phone-wide window is a finger too, touch screen or not: the tool buttons are the same 44px targets as on a touch
+   screen (R86-004 measured 32–34px at 400px wide; R13S-011 keeps 44px on a touch screen) */
+@media (max-width: 640px) {
+  .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 44px; }
+  .pc-btn.icon { width: 44px; }
 }

@@ -45,13 +45,15 @@ test("R86-005: a scan running a few seconds says the day's first scan is the slo
   assert.match(src, /<ScanElapsed count=\{cur\?\.count\} \/><\/p><SlowFirstScan \/>/);
 });
 
-test("R86-004: on a phone the filter chips and the chart's tool buttons are 40px targets", () => {
+test("R86-004: in a phone-wide window the filter chips and the chart's tool buttons are 44px, as on a touch screen", () => {
   const css = read("src/styles.css");
-  const phone = css.indexOf("@media (max-width: 640px), (pointer: coarse) { .k-chip { height: 40px; } }");
+  const phone = css.indexOf("@media (max-width: 640px) { .k-chip { height: 44px; } }");
   assert.ok(phone > css.indexOf(".k-chip { flex: none; height: 32px;"));                 // after the 32px rule it overrides
   const chart = read("src/charts/price/priceChart.css");
-  assert.match(chart, /@media \(max-width: 640px\), \(pointer: coarse\) \{\s*\.pc-btn, \.pc-sel, \.pc-seg \.pc-btn \{ min-height: 40px; \}\s*\.pc-btn\.icon \{ width: 40px; \}/);
-  assert.ok(chart.lastIndexOf("min-height: 40px") > chart.indexOf(".pc-seg .pc-btn { border: 0;"));   // after the 32px rule it overrides
+  assert.match(chart, /@media \(max-width: 640px\) \{\s*\.pc-btn, \.pc-sel, \.pc-seg \.pc-btn \{ min-height: 44px; \}\s*\.pc-btn\.icon \{ width: 44px; \}/);
+  // nothing under 44px in a touch rule (R13S-011: a 40px rule after the touch screen's 44px one shrank the iPad's buttons)
+  assert.ok(!chart.includes("@media (max-width: 640px), (pointer: coarse)"));
+  assert.ok(!css.includes(".k-chip { height: 40px; }"));
 });
 
 test("R89-002: the US prints count as settling for 50 minutes after a traded close, and the rotation page says provisional then", async () => {
