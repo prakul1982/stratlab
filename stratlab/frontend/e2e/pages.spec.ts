@@ -1308,7 +1308,9 @@ test("corporate actions: the calendar, a company's actions, and a bonus applied 
 
   await page.goto("/research/IN/TCS");
   const panel = page.locator("#corporate-actions");
-  await expect(panel.getByText(/Interim dividend ₹11 a share/)).toBeVisible({ timeout: 30_000 });
+  // the fake exchange's dates are relative to India's day, so a run that crosses midnight IST reads the list again and
+  // carries the dividend under two ex-dates (CI at 00:10 IST, 24 Oct): one is enough, as in the calendar above
+  await expect(panel.getByText(/Interim dividend ₹11 a share/).first()).toBeVisible({ timeout: 30_000 });
   await expect(panel.getByText(/Final dividend ₹30 a share/)).toBeVisible();
   await expect(panel.getByText(/Dividends with an ex-date in the last 12 months/)).toBeVisible();
 
