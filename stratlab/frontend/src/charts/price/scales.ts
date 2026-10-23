@@ -52,6 +52,7 @@ export class ValueScale {
   height = 100;
   lo = 0;                   // the visible range, in transformed units
   hi = 1;
+  positive = false;         // the fitted values are all at or above zero (prices): no gridline is labelled below zero
 
   tf(v: number): number {
     if (this.mode === "log") return Math.log(Math.max(v, 1e-12));
@@ -75,6 +76,7 @@ export class ValueScale {
 
   /** Fit real values lo..hi, leaving `marginTop` and `marginBottom` (fractions of the height) empty. */
   fit(lo: number, hi: number, marginTop = 0.08, marginBottom = 0.08): void {
+    this.positive = lo >= 0;
     let a = this.tf(lo), b = this.tf(hi);
     if (!Number.isFinite(a) || !Number.isFinite(b)) { a = 0; b = 1; }
     if (b - a < 1e-9) { const pad = Math.abs(a) * 0.01 || 1; a -= pad; b += pad; }
@@ -109,7 +111,10 @@ export class ValueScale {
       }
       return out;
     }
-    return niceTicks(this.lo, this.hi, count).map((u) => this.untf(u));
+    // the margin under a price that starts near zero (AAPL monthly, all of its history) reaches below it: a price can't
+    // be negative, so those gridlines aren't drawn (R89-006: "0" and "−100" under the bars)
+    const vs = niceTicks(this.lo, this.hi, count).map((u) => this.untf(u));
+    return this.mode === "normal" && this.positive ? vs.filter((v) => v >= 0) : vs;
   }
 }
 

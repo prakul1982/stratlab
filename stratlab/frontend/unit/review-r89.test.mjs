@@ -81,3 +81,21 @@ test("R89-005: the previous close shows after the close and while prints settle,
   assert.match(src, /\{!preOpen && q\.change != null && <span className="k-note" data-testid="price-prev">Previous close \{price\(q\.price - q\.change, currency\)\}<\/span>\}/);
   assert.doesNotMatch(src, /!closed && !preOpen && !settling && q\.change != null && <span className="k-note" data-testid="price-prev">/);
 });
+
+test("R89-006: a price scale whose margin reaches under zero labels no gridline below zero; percent and signed studies keep theirs", async () => {
+  const { ValueScale } = await import("../src/charts/price/scales.ts");
+  const s = new ValueScale();
+  s.top = 0; s.height = 400;
+  s.fit(0.1, 350, 0.1, 0.22);                         // AAPL monthly since 1980, with the volume band under it
+  assert.ok(s.lo < 0);                                 // the margin itself still reaches below zero (the bars keep their room)
+  const t = s.ticks();
+  assert.ok(t.length >= 3 && t.every((v) => v >= 0), String(t));
+  const m = new ValueScale();
+  m.top = 0; m.height = 400;
+  m.fit(-2, 3);                                         // MACD: a signed study keeps its negative lines
+  assert.ok(m.ticks().some((v) => v < 0));
+  const p = new ValueScale();
+  p.mode = "percent"; p.base = 100; p.top = 0; p.height = 400;
+  p.fit(90, 120);                                       // percent mode: −10% is a real line
+  assert.ok(p.ticks().some((v) => v < 100));
+});
