@@ -86,8 +86,9 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
           <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signedMove(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> <span className="nowrap">{closed && q.change_day ? `on ${fmtDate(q.change_day, { year: false })}` : since}</span>{/* "on 16 Oct" never splits (R53-008) */}
         </span>
       )}
-      {/* while it trades, the close the move is from (R71-006: "$216.31 ▲ +2.18 (+1.02%) today" with no previous close) */}
-      {!closed && !preOpen && !settling && q.change != null && <span className="k-note" data-testid="price-prev">Previous close {price(q.price - q.change, currency)}</span>}
+      {/* the close the move is from, while it trades and after its close too (R71-006: "$216.31 ▲ +2.18 (+1.02%) today"
+          with no previous close; R89-005: none after the close either, so the base couldn't be checked) */}
+      {!preOpen && q.change != null && <span className="k-note" data-testid="price-prev">Previous close {price(q.price - q.change, currency)}</span>}
     </div>
   );
 }

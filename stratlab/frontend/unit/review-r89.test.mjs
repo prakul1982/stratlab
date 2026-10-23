@@ -75,3 +75,9 @@ test("R89-002: the US prints count as settling for 50 minutes after a traded clo
 test("R89-003: the tile's long 'closing prints settling' words wrap inside the tile; 'on 16 Oct' stays together", () => {
   assert.match(read("src/pages/MineHome.tsx"), /className=\{w\.includes\("settling"\) \? "k-note" : "k-note nowrap"\} data-testid="mine-mkt-when"/);
 });
+
+test("R89-005: the previous close shows after the close and while prints settle, not only while the market trades", () => {
+  const src = read("src/components/Research.tsx");
+  assert.match(src, /\{!preOpen && q\.change != null && <span className="k-note" data-testid="price-prev">Previous close \{price\(q\.price - q\.change, currency\)\}<\/span>\}/);
+  assert.doesNotMatch(src, /!closed && !preOpen && !settling && q\.change != null && <span className="k-note" data-testid="price-prev">/);
+});
