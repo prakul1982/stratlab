@@ -274,6 +274,9 @@ CHOSEN_ON = ("/alerts", "/money/calendar", "/money/tax-tools", "/research/screen
 # one email that has its own unsubscribe, instead of every alert email's (R69-003: the paper trading report's "Turn off
 # alert emails" turned off every alert, reminder and admin note): its link's words
 OWN_UNSUBSCRIBE = {"daily_report": "Turn off this report"}
+# every other alert email's link: it turns off reminders (money calendar, market events, tax dates) as well as alerts,
+# so its words say both (R87-005: a money calendar reminder's footer read "Turn off alert emails")
+ALERT_UNSUB_WORDS = "Turn off alert and reminder emails"
 
 
 def manage_path(path: str) -> str | None:
@@ -292,7 +295,7 @@ def send_message(to: str, subject: str, text: str, path: str = "/account", label
     from . import email_kit as kit
     what = unsub if unsub in OWN_UNSUBSCRIBE else ALERT_EMAILS
     html, plain = kit.message(subject, text, path, label, why, button_label=button_label, date=kit.today_label(),
-                              unsubscribe=OWN_UNSUBSCRIBE.get(what, "Turn off alert emails") if uid else None, manage=manage_path(path))
+                              unsubscribe=OWN_UNSUBSCRIBE.get(what, ALERT_UNSUB_WORDS) if uid else None, manage=manage_path(path))
     html, plain, own = kit.finish(html, plain, uid, what if uid else None)
     send_email(to, subject, plain, html=html, headers={**(own or {}), **(headers or {})} or None)
 

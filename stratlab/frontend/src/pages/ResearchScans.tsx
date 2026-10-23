@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
+import { asOf, dayIn, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, closeLabel, sessionClosed, useRegion, type Region } from "../lib/research";
-import { marketState } from "../lib/marketHours";
+import { marketState, usSettling } from "../lib/marketHours";
+import { useMinute } from "../lib/clock";
 import { RegionSwitch } from "../components/Research";
 import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
@@ -50,6 +51,13 @@ function ScanElapsed({ count }: { count?: number }) {
   const [sec, setSec] = useState(0);
   useEffect(() => { const t0 = Date.now(); const id = setInterval(() => setSec(Math.floor((Date.now() - t0) / 1000)), 1000); return () => clearInterval(id); }, []);
   return <>{scanningText(count)} {sec} s</>;
+}
+
+/** Said once a scan has run a few seconds: the day's first scan reads every chart, later ones reuse them (R86-005). */
+function SlowFirstScan() {
+  const [show, setShow] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setShow(true), 3000); return () => clearTimeout(id); }, []);
+  return show ? <p className="k-note" data-testid="scan-first-slow">The day's first scan of a list reads each stock's daily chart, so a long list can take 20 seconds or more. Scans after that take a second or two.</p> : null;
 }
 
 /** How long the rotation can take before the page says it is still working. */
@@ -172,7 +180,7 @@ export function ScanPage() {
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
       {scanErr && !busy && <ErrorState title="The scan didn't run" action={{ label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
       {!out && !busy && !scanErr && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
-      {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
+      {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><SlowFirstScan /><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
         <Card>
           <CardHead title={`${preset.scan_name}: ${preset.name}`} info={preset.stored
@@ -252,7 +260,8 @@ const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑"
 
 export function RotationPage() {
   const [region, setRegion] = useRegion();
-  const { fail } = useApp();
+  const { fail, markets } = useApp();
+  const now = useMinute();
   // the group (or the sector drilled into), the candle size and the trail are kept in the address (replaced, not
   // pushed), so Back from a stock returns to the same chart (review 5c)
   const [params, setParams] = useSearchParams();
@@ -316,10 +325,14 @@ export function RotationPage() {
   const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
   const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
+  // just after the US close the last candle is today's provisional close, as the company pages and tiles say (R89-002)
+  const provisional = region === "US" && !!out?.as_of && out.as_of.slice(0, 10) === dayIn(now, marketTz("US"))
+    && usSettling(markets.find((m) => m.id === "US"), new Date(now));
   const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of} asOfLabel="Closes up to" asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
+        asOfLabel={provisional ? "Provisional closes (prints still settling) up to" : "Closes up to"} asOfTz={marketTz(region)}
         lede="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} /></div>
       <Card>

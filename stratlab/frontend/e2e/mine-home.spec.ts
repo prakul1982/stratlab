@@ -138,6 +138,11 @@ test("my space: Customise hides, shows and reorders the cards, and remembers it"
   await expect(page.getByText("Every card is hidden")).toBeVisible();
   await page.getByRole("button", { name: "Show the cards" }).click();
   expect(await order(page)).toEqual(CARDS.map((c) => c.id));
+  // the panel is still open: Escape closes it too, and focus goes back to its button (R86-010)
+  await expect(page.locator("#mine-customise")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#mine-customise")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Customise", exact: true })).toBeFocused();
   await sane(page, errors, phone);
 });
 

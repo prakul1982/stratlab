@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta } from "../lib/networth";
-import { inWords, marketState, minutesSinceClose, usTodayNote } from "../lib/marketHours";
+import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate, monthShort } from "../lib/format";
@@ -21,7 +21,6 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInline } from "../components/PlanInterest";
 import { notRunning } from "../lib/tradeUi";
 
-const SETTLE_US_MIN = 50;          // a little past the server's 45 minutes, so the tile never says final before the page does
 
 /* /mine: "My space", the person's own home. Every figure is read from what the app already has (net worth, holdings, paper
  * sessions, the markets, the calendars, the watchlist); a card with nothing to show says so and offers the next step.
@@ -77,7 +76,11 @@ export function MineHome() {
       <PageHeader eyebrow={dateLine()} title={`${greeting()}${first ? `, ${first}` : ""}`} lede={lede}
         actions={<button type="button" className="btn quiet sm" aria-expanded={customise} aria-controls="mine-customise" onClick={() => setCustomise(!customise)}>Customise</button>} />
       <PromoCountdown /><FirstSteps />
-      {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => setCustomise(false)} />}
+      {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => {
+        // closed with Done or Escape: focus goes back to the Customise button, not to the top of the page
+        setCustomise(false);
+        requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
+      }} />}
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
@@ -100,6 +103,11 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
     onChange({ ...layout, order });
   };
   const toggle = (id: CardId) => onChange({ ...layout, hidden: layout.hidden.includes(id) ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] });
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) onDone(); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [onDone]);
   return (
     <Card id="mine-customise" label="Customise My space">
       <CardHead title="Customise My space" info="Choose which cards show and put them in your order. It is kept on this device."
@@ -230,7 +238,7 @@ function MarketsCard({ later }: { later: boolean }) {
   const { markets } = useApp();
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
-  const settling = (id: string | null) => { const m = id === "US" ? markets.find((x) => x.id === id) : null; const n = m ? minutesSinceClose(m) : null; return n != null && n < SETTLE_US_MIN; };
+  const settling = (id: string | null) => usSettling(id === "US" ? markets.find((x) => x.id === id) : null);
   return (
     <Card testId="mine-markets" label="Markets">
       <CardHead title="Markets" info="Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today." actions={<Link className="btn quiet sm" to="/research/pulse">Market pulse</Link>} />
@@ -248,7 +256,7 @@ function MarketsCard({ later }: { later: boolean }) {
                     {t.id === "gold" && series.usdinr && <span className="k-note">≈ {inr(goldInr10g(s.last, series.usdinr.last))} per 10 g at the dollar rate, before Indian duty and GST</span>}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
-                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className="k-note nowrap" data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008) */; })()}</span>
+                      {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>
                     <Spark values={s.values} tone={t.neutral ? "neutral" : s.changePct != null && s.changePct < 0 ? "down" : "up"} label={`${t.label}, last month`} />
                   </>
                 )}

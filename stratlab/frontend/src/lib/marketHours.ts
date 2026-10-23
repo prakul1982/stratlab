@@ -106,6 +106,16 @@ export function minutesSinceClose(m: Market, now = new Date()): number | null {
   return traded && w.min >= c ? w.min - c : null;
 }
 
+/** How long after the US close a page still calls its prices provisional: a little past the server's 45 minutes, so no
+ * page says final before the company pages do. */
+export const SETTLE_US_MIN = 50;
+
+/** Whether the US closing prints are still settling now (today traded, closed less than SETTLE_US_MIN minutes ago). */
+export function usSettling(m: Market | null | undefined, now = new Date()): boolean {
+  const n = m?.id === "US" ? minutesSinceClose(m, now) : null;
+  return n != null && n < SETTLE_US_MIN;
+}
+
 /** The market whose hours an options session keeps: its exchange's own. NFO and BFO trade with India's futures and
  * options close (`fo_close`, 15:40 since 3 Aug 2026), MCX and CDS have their own markets; the server sends each market's
  * hours as of today (MCX closes at 23:55 while US daylight saving is off), so none is written down here. */
