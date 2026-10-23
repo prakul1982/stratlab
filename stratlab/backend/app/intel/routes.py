@@ -581,6 +581,16 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
     # while the market trades, a read an hour; once it has closed, one read per close, whoever asks and whenever (R13-011:
     # two views 12 minutes apart after the US close got two different texts, the hour having turned in India)
     hour = datetime.now(IST).strftime("%Y-%m-%d %H") if is_open else "close"
+    # between the US close and its settle point the levels are the day's last prints, not yet its close: that read is kept
+    # apart and only until they settle, so the evening's read is written on the final closes, never "closed at" a
+    # provisional level (R89-007: "The S&P 500 closed at 7,623.68" under "closing prints still settling")
+    from .. import stock_pages
+    settling = None if is_open else stock_pages.settling(r)
+    settle_ttl = None
+    if settling:
+        hour = "settling"
+        until = stock_pages.next_settle(r)
+        settle_ttl = max(60.0, (until - datetime.now(timezone.utc)).total_seconds()) if until else 900.0
     cash = flows_today() if r == "IN" else None            # the day's FII and DII figures, as Positioning has them (R10O-004)
     cash_day = cash.get("as_of") if cash and cash.get("status") == "ok" else None
 
@@ -591,7 +601,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         except Exception:
             sectors = None
         early = before_close_at(r, indices)
-        read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r) and not early, sectors=sectors, cash=cash, before_close=early)
+        read = A.pulse(r, f, indices, news, _ai, closed=not market_open(r) and not early and not settling, sectors=sectors, cash=cash,
+                       before_close=early, settling=bool(settling) and not early)
         # the time of the levels the text quotes, so a read kept while the tiles move on says what its numbers are of (R16B-002)
         return {**read, "levels_at": max((i["at"] for i in indices if i.get("at")), default=None)}
     try:
@@ -599,8 +610,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
         return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day),
-                          3600 if is_open else CLOSED_MOOD_TTL, refresh, build, counted=False,
-                          min_age=300 if is_open else CLOSED_MOOD_TTL))
+                          3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
+                          min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
     except HTTPException as e:
         # like a company's AI read: no read right now is an answer ("unavailable", and why), not a failed request on
         # every opening of the page; the levels and headlines don't depend on it
