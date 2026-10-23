@@ -1003,7 +1003,10 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     out.update(source=got["source"], at_close=bool(got.get("at_close")), as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
                spot=got.get("spot"), rows=strikes, change_from=_taken(prev).astimezone(IST).isoformat(timespec="minutes") if prev else None,
                strikes_counted=len(rows), window_strikes=len(near(rows, got.get("spot"))), lot=lot, unit="lots" if lot else "shares", near_strikes=NEAR, top=top,
-               pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")})
+               pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")},
+               # in the session a recording answers at once while the live chain is read behind it; the page asks again
+               # shortly (R83-002: "recorded chain, 09:21 IST" stayed up after the live one was read)
+               reading=chain_time(now)[1] == "live" and got["source"] == "recorded")
     out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
                   **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
     out["iv"] = None

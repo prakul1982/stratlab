@@ -250,9 +250,22 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
   useEffect(() => {
     let live = true;
     setC(null);
+    setTries(0);
     api<ChainFacts>(`/trade/positioning/chain?name=${name}&expiry=${expiry}`).then((d) => live && setC(d)).catch(() => live && setC("error"));
     return () => { live = false; };
   }, [name, expiry, again]);
+  // a recording standing in while the live chain is read is asked for again, quietly, as the PCR table is (R83-002)
+  const [tries, setTries] = useState(0);
+  const waiting = !!c && c !== "error" && !!c.reading;
+  useEffect(() => {
+    if (!waiting || tries >= REREAD) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      api<ChainFacts>(`/trade/positioning/chain?name=${name}&expiry=${expiry}`).then((d) => { if (live) { setC(d); setTries((n) => n + 1); } })
+        .catch(() => live && setTries((n) => n + 1));
+    }, 15000);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [waiting, tries, name, expiry]);
   const hasChg = c && c !== "error" && c.rows.some((r) => r.call_chg != null || r.put_chg != null);
   type CR = ChainFacts["rows"][number];
   // contracts (lots), as the exchange's chain and the participant table count them; shares only when the lot isn't known (R7T-002)

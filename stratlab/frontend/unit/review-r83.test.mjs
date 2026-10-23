@@ -46,3 +46,9 @@ test("R83-001: a recording standing in while the live chain is read says so, and
   assert.match(s, /const waiting = Array\.isArray\(rows\) && rows\.some\(\(r\) => r\.reading\);/);
   assert.match(s, /if \(!waiting \|\| tries >= REREAD\) return;/);
 });
+
+test("R83-002: the chain panel asks again while a recording stands in for the live chain", () => {
+  const s = read("src/pages/PositioningPage.tsx");
+  assert.match(s, /const waiting = !!c && c !== "error" && !!c\.reading;/);
+  assert.match(s, /if \(!waiting \|\| tries >= REREAD\) return;[\s\S]*\/trade\/positioning\/chain\?name=\$\{name\}&expiry=\$\{expiry\}/);
+});

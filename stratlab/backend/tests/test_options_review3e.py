@@ -203,3 +203,18 @@ def test_prices_read_after_the_close_are_timed_from_the_close():
     assert got["days"] == 3.0
     assert G.struck_at(datetime(2026, 10, 16, 11, 0, tzinfo=IST)) == datetime(2026, 10, 16, 11, 0, tzinfo=IST)
     assert G.struck_at(datetime(2026, 10, 16, 23, 0, tzinfo=IST), "MCX").hour == 23
+
+
+# R83-002: in the session a recording standing in for the live chain is marked, so the page asks again
+def test_a_recorded_chain_in_the_session_is_marked_reading(monkeypatch):
+    e = "2026-10-27"
+    at = datetime(2026, 10, 23, 9, 21, tzinfo=IST)
+    rec = {"expiry": e, "expiries": [e], "spot": 25000.0, "chain": FP.chain(25000.0, 0.12, e, at), "source": "recorded",
+           "taken_at": at.isoformat(), "lot": 75}
+    monkeypatch.setattr(P, "live_chain", lambda o, ex, n, c: rec)
+    monkeypatch.setattr(P, "chain_series", lambda name, since=None: [])
+    monkeypatch.setattr(P, "recorded_before", lambda *a, **k: None)
+    monkeypatch.setattr(P, "chain_coverage", lambda name: {"days": 25})
+    assert P.chain_view(None, "NIFTY", "current", now=datetime(2026, 10, 23, 9, 22, tzinfo=IST))["reading"] is True
+    monkeypatch.setattr(P, "live_chain", lambda o, ex, n, c: {**rec, "source": "live"})
+    assert P.chain_view(None, "NIFTY", "current", now=datetime(2026, 10, 23, 9, 46, tzinfo=IST))["reading"] is False
