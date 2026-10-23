@@ -26,3 +26,14 @@ test("R88-007: the landing FAQ answers what it costs and how to cancel, in the r
 test("R88-009: the Free card says ₹0 always, not per month or year, on the Plans page and the landing page", () => {
   for (const f of ["src/pages/PlansPage.tsx", "src/pages/Login.tsx"]) assert.match(read(f), /p === "free" \? " always"/, f);
 });
+
+test("R86-015: a company's price move keeps its decimals, as the price beside it does", async () => {
+  const { signedMove } = await import("../src/lib/format.ts");
+  assert.equal(signedMove(2), "+2.00");
+  assert.equal(signedMove(0.7), "+0.70");
+  assert.equal(signedMove(-1234.5, 2, "US"), "−1,234.50");
+  assert.equal(signedMove(-123456.5), "−1,23,456.50");             // India's grouping
+  assert.equal(signedMove(0.001), "0.00");                          // rounds to nothing: no sign
+  assert.equal(signedMove(null), "–");
+  assert.match(read("src/components/Research.tsx"), /signedMove\(q\.change, 2\)/);
+});

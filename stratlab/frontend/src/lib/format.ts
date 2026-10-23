@@ -459,6 +459,14 @@ export function signed(v: number | null | undefined, dp = 0, market?: string | n
   return `${/[1-9]/.test(s) ? (v > 0 ? "+" : "−") : ""}${s}`;     // a figure that rounds to zero carries no sign
 }
 
+/** A price move with a sign and always `dp` decimals, as the price beside it is written: "+2.00 (+0.17%)", never "+2"
+ * next to "+0.70" (R86-015). */
+export function signedMove(v: number | null | undefined, dp = 2, market?: string | null): string {
+  if (!ok(v)) return "–";
+  const s = Math.abs(v).toLocaleString(market && market !== "IN" ? "en-US" : "en-IN", { maximumFractionDigits: dp, minimumFractionDigits: dp });
+  return `${/[1-9]/.test(s) ? (v > 0 ? "+" : "−") : ""}${s}`;
+}
+
 /** A plain count or amount without a currency sign, grouped as its market writes it: 2,08,772 in India, 208,772 in the
  * US. With no market, India's. */
 export function grouped(v: number | null | undefined, dp = 0, market?: string | null): string {

@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { stageMeaning } from "../lib/stageNote";
-import { ago, writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signed } from "../lib/format";
+import { ago, writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
 import {
   SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
@@ -83,7 +83,7 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
       <span className="k-stat-v">{price(q.price, currency)}</span>
       {q.change_pct != null && (
         <span className="k-stat-d">
-          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signed(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> <span className="nowrap">{closed && q.change_day ? `on ${fmtDate(q.change_day, { year: false })}` : since}</span>{/* "on 16 Oct" never splits (R53-008) */}
+          <Delta value={q.change_pct} tone={preOpen ? "neutral" : "auto"}>{q.change != null ? `${signedMove(q.change, 2)} (${pct(q.change_pct, 2)})` : pct(q.change_pct, 2)}</Delta> <span className="nowrap">{closed && q.change_day ? `on ${fmtDate(q.change_day, { year: false })}` : since}</span>{/* "on 16 Oct" never splits (R53-008) */}
         </span>
       )}
       {/* while it trades, the close the move is from (R71-006: "$216.31 ▲ +2.18 (+1.02%) today" with no previous close) */}
