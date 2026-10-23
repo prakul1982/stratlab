@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
-import { asOf, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
+import { asOf, dayIn, fmtDate, marketTz, pct, price, safeHref } from "../lib/format";
 import { eyebrowOf } from "../lib/eyebrow";
 import { REGION_NAME, closeLabel, sessionClosed, useRegion, type Region } from "../lib/research";
-import { marketState } from "../lib/marketHours";
+import { marketState, usSettling } from "../lib/marketHours";
+import { useMinute } from "../lib/clock";
 import { RegionSwitch } from "../components/Research";
 import { rotationFromQuery, rotationQuery, withParams } from "../lib/investUi";
 import { homeRegion } from "../lib/homeMarket";
@@ -259,7 +260,8 @@ const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑"
 
 export function RotationPage() {
   const [region, setRegion] = useRegion();
-  const { fail } = useApp();
+  const { fail, markets } = useApp();
+  const now = useMinute();
   // the group (or the sector drilled into), the candle size and the trail are kept in the address (replaced, not
   // pushed), so Back from a stock returns to the same chart (review 5c)
   const [params, setParams] = useSearchParams();
@@ -323,10 +325,14 @@ export function RotationPage() {
   const names = (q: Quadrant) => all.filter((r) => r.quadrant === q).map((r) => r.name);
   const entered = all.filter((r) => r.quadrant === "leading" && r.moved && r.moved !== "leading").map((r) => r.name);
   const unit = interval === "weekly" ? "week" : "day";
+  // just after the US close the last candle is today's provisional close, as the company pages and tiles say (R89-002)
+  const provisional = region === "US" && !!out?.as_of && out.as_of.slice(0, 10) === dayIn(now, marketTz("US"))
+    && usSettling(markets.find((m) => m.id === "US"), new Date(now));
   const few = (xs: string[], n = 5) => !xs.length ? "none" : xs.length <= n + 1 ? xs.join(", ") : `${xs.slice(0, n).join(", ")} and ${xs.length - n} more`;
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of} asOfLabel="Closes up to" asOfTz={marketTz(region)}
+      <PageHeader eyebrow={eyebrowOf("/research/rotation")} title="Sector rotation" asOf={out?.as_of}
+        asOfLabel={provisional ? "Provisional closes (prints still settling) up to" : "Closes up to"} asOfTz={marketTz(region)}
         lede="Where each sector (or stock) stands against the market, and which way it's moving. Right of centre = stronger than the benchmark; above centre = gaining pace. Most move clockwise through the four corners." />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={(r) => { setRegion(r); setSetId("sectors"); setBackTo(null); }} /></div>
       <Card>
