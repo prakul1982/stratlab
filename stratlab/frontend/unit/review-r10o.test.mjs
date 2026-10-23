@@ -76,6 +76,6 @@ test("R10O-011: a bank's financing margin row is left out when none of it can be
 test("R10O-010: the rotation chart's date label is the last finished session the server sends", () => {
   // the server leaves a session still trading out of the candles; the page only prints the as_of it is given
   const page = read("src/pages/ResearchScans.tsx");
-  assert.match(page, /asOfLabel="Closes up to"/);
+  assert.match(page, /asOfLabel=\{provisional \? "Provisional closes \(prints still settling\) up to" : "Closes up to"\}/);   // provisional just after the US close (R89-002)
   assert.match(page, /closes\{out\.as_of \? ` to \$\{fmtDate\(out\.as_of\)\}` : ""\}/);
 });
