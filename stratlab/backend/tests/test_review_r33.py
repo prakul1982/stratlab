@@ -3,7 +3,7 @@ from app import admin_jobs, breadth, email_kit as kit, email_previews as P, live
 
 
 def test_update_failed_only_when_the_run_failed_and_prices_are_older_than_the_due_day():
-    pending = {"day": "2026-10-15", "due": "5:55 PM ET"}
+    pending = {"day": "2026-10-15", "due": "5:05 PM ET"}
     failed = {"US": {"as_of": "2026-10-14", "last_error": "boom", "ran_at": "2026-10-14T21:55:00+00:00", "failed_at": "2026-10-15T21:50:00+00:00"}}
     assert breadth.update_failed("US", pending, failed)
     assert not breadth.update_failed("US", pending, {"US": {"as_of": "2026-10-14", "last_error": None, "ran_at": "2026-10-14T21:55:00+00:00"}})   # no failed run: still due
@@ -15,7 +15,7 @@ def test_update_failed_only_when_the_run_failed_and_prices_are_older_than_the_du
 
 def test_the_jobs_table_names_the_time_the_page_gives(monkeypatch):
     import inspect
-    assert "5:55 PM" in breadth.due_label("US")
+    assert "5:05 PM" in breadth.due_label("US")
     src = inspect.getsource(admin_jobs)
     assert "5:45 PM New York" not in src and "due_label('US')" in src
 

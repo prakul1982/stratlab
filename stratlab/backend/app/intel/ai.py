@@ -312,9 +312,10 @@ companies with the most direct link to the theme, in value-chain order, not rank
 
 
 def pulse(region: str, focus: str, indices: list[dict], headlines: list[dict], ai, closed: bool | None = None,
-          sectors: dict | None = None, cash: dict | None = None, before_close: str | None = None) -> dict:
+          sectors: dict | None = None, cash: dict | None = None, before_close: str | None = None, settling: bool = False) -> dict:
     """`before_close`: the market has closed but the levels are from this earlier time (R30-002): the read says "at" that
-    time, never "closed at". `cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
+    time, never "closed at". `settling`: the market has just closed and the levels are its last prints, still settling
+    into the official close (R89-007): the read says where they stood, never that it closed, ended or finished at them. `cash` is positioning.cash_today(): the day's FII and DII figures, the only ground for a sentence on who bought or
     sold (R10O-004)."""
     cash_facts = grounding.flow_facts(cash)
     headlines = grounding.session_headlines(headlines, ist_date())          # nothing older than the session day (R28-004)
@@ -348,6 +349,7 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
              # after the close the levels are the day's close: the read says the market closed, never "opened" (R6O-025)
              **({"session": "The market has closed for the day: the levels are its close. Say how it closed."} if closed else {}),
              **({"session": f"The market has closed, but these levels are as of {before_close}, before the close. Say \"at\" the level as of that time; never say it closed at it."} if before_close else {}),
+             **({"session": "The market has just closed and these levels are its latest prints, still settling into the official close. Say where each index stood; never say it closed, ended or finished at a level."} if settling else {}),
              # StratLab's own count of the sector indices that rose and fell, the only one the read may give (R8B-004)
              **({"sectors": {k: sectors[k] for k in ("up", "down", "unchanged", "of")}} if sectors else {}),
              # the FII and DII figures StratLab's Positioning page shows for the day, in ₹ crore (R10O-004)
@@ -369,8 +371,8 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     # every claim checked in code against the index numbers and the headlines; what doesn't hold is dropped (R5O-018)
     out = grounding.ground_pulse(read, indices, headlines, sectors, cash_facts)
     out = grounding.closed_words(out) if closed else out
-    if before_close:                 # the model's own wording is not trusted with it
-        out = {**out, "tone": re.sub(r"\bclosed at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
+    if before_close or settling:     # the model's own wording is not trusted with it
+        out = {**out, "tone": re.sub(r"\b(closed|ended|finished) at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
     # numbers the page's way (R7O-001), and a day as the app writes it (R70-010: "as of 2026‑10‑16")
     tidy = lambda t: grounding.app_dates(grounding.tidy_numbers(t, region))          # noqa: E731
     return {**out, "tone": tidy(out.get("tone")),
