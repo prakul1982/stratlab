@@ -17,6 +17,9 @@ def w(monkeypatch):
 
 def test_a_mistyped_indian_symbol_is_answered_at_once(w):
     c, h = w["client"], world.headers("pro-token")
+    # the first company request of a fresh app loads the company lists once (1.5–2 s on a busy CI runner, three CI failures
+    # on 23 Oct): asked once before the timing, so the bound below measures a mistyped symbol, not the cold start
+    assert c.get("/research/company/IN/WARMUP", headers=h).status_code in (400, 404, 502)
     for sym in ["NOPE", "-1", "NULL", "1E309", "XYZ123"] * 3:           # well past the company source's per-minute allowance
         t = time.monotonic()
         r = c.get(f"/research/company/IN/{sym}", headers=h)

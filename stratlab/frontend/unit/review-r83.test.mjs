@@ -60,3 +60,13 @@ test("R86-001/002/003/004: phone tables become cards; the journal's catch-up is 
   assert.match(read("src/components/RiskOverview.tsx"), /<DataTable stack label=\{`Running sessions in/);
   assert.match(read("src/pages/trade/JournalPage.tsx"), /className="btn sm" disabled=\{busy\}[\s\S]*?\{busy \? "Bringing them in…" : "Bring in the newer ones"\}/);
 });
+
+test("R86-006: the chart legend hides the old view's candle while a new range loads", () => {
+  assert.match(read("src/charts/price/PriceChart.tsx"), /\{h && status !== "loading" && <>/);
+});
+
+test("R87-002: a locked contract isn't listed beside its lock note; Pro gets the contract format when a futures search finds none", () => {
+  const s = read("src/components/InstrumentSearch.tsx");
+  assert.match(s, /!\(fnoLocked && \(i\.fno \|\| \["FUT", "CE", "PE"\]\.includes\(i\.type \?\? ""\)\)\)/);
+  assert.match(s, /data-testid="fno-hint">Contracts are found by their symbol: NIFTY26NOVFUT for a future, NIFTY26NOV22600CE for an option\./);
+});

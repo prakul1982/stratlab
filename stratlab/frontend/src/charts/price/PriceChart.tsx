@@ -631,7 +631,8 @@ const [saveNote, setSaveNote] = useState("");
         <div className="pc-legend" role="group" aria-label="Legend">
           <div aria-hidden="true">
             <span className="title">{symbol}</span><span className="k">{TF_LONG[tf]}</span>
-            {h && <>
+            {/* the old view's candle under the new view's label for the ~2 s a range loads read as a wrong change (R86-006) */}
+            {h && status !== "loading" && <>
               {shownType !== "line" && shownType !== "area" && shownType !== "baseline" && <>
                 <span className="pc-hide-phone"><span className="k">O</span>{fmt(h.bar.o)}</span><span className="pc-hide-phone"><span className="k">H</span>{fmt(h.bar.h)}</span><span className="pc-hide-phone"><span className="k">L</span>{fmt(h.bar.l)}</span>
               </>}
