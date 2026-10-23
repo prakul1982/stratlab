@@ -923,6 +923,12 @@ class Research:
         return {"news": c.get("news") or [], "wiki": (c.get("about") or {}).get("wiki"), "peers": c.get("peers") or [],
                 "sources": c.get("sources") or []}
 
+    def _listing_or_none(self, sym: str) -> dict | None:
+        try:
+            return self.yahoo.meta(sym)
+        except Exception:
+            return None
+
     def _quiet_candles(self, sym: str) -> list[dict]:
         try:
             return self.yahoo.chart(sym, "1d", 400)["candles"]
@@ -947,7 +953,17 @@ class Research:
         # the profile is read here while the others run (R11E: it went first and alone); only the encyclopedia entry
         # needs its name, so that one starts once it's in
         started = self._start(tasks)
-        p = fh.profile(sym)
+        try:
+            p = fh.profile(sym)
+        except SourceError as e:
+            # the profile source busy or down for a minute: the page stands on the listing's name, exchange and currency,
+            # each other part saying what couldn't be read, instead of "Couldn't open AAPL" (R88-001: 2 of 3 loads failed)
+            if not e.busy:
+                raise
+            lst = self._listing_or_none(sym)
+            if not (lst and lst.get("name")):
+                raise
+            p = {"name": lst["name"], "currency": lst.get("currency"), "exchange": lst.get("exchange"), "from_listing": True}
         if not p.get("name"):
             raise NotFound("Finnhub", f"No US company found for {sym}. Use the exact ticker, like NVDA or AAPL.")
         if not lean:

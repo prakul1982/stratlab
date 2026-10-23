@@ -638,3 +638,24 @@ def test_a_caller_arriving_after_a_failure_asks_again():
     up.status = 200
     assert s.fetch("/q") == {"v": 1}                   # not handed the earlier failure
     assert up.calls == 2
+
+
+def test_a_busy_profile_source_leaves_the_us_page_standing_on_its_listing(monkeypatch):
+    """R88-001: the profile source down for a minute failed the whole AAPL page ("Couldn't open AAPL")."""
+    from app import main
+    from app.intel.net import SourceError
+    hub = main.research_hub
+    fh = hub.finnhub
+
+    def busy(*a, **k):
+        raise SourceError("Finnhub", "Finnhub isn't answering right now. Try again in a minute.", busy=True)
+    for name in ("profile", "quote", "metrics", "peers", "recommendation", "earnings", "financials", "insider", "earnings_calendar", "news"):
+        monkeypatch.setattr(fh, name, busy)
+    monkeypatch.setattr(hub.yahoo, "meta", lambda s: {"name": "Apple Inc.", "currency": "USD", "exchange": "NasdaqGS", "price": 348.2})
+    monkeypatch.setattr(hub, "_quiet_candles", lambda s: [])
+    out = hub._company_us("AAPL", lean=True)
+    assert out["name"] == "Apple Inc." and out["currency"] == "USD"
+    # with the listing gone too, the page still says it can't be opened
+    monkeypatch.setattr(hub.yahoo, "meta", lambda s: (_ for _ in ()).throw(SourceError("Yahoo", "down", busy=True)))
+    with pytest.raises(SourceError):
+        hub._company_us("AAPL", lean=True)

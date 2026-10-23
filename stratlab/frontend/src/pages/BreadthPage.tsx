@@ -374,7 +374,7 @@ function SectorHeat({ t }: { t: SectorTable }) {
     <div className="k-stack">
       <DataTable stack label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
         columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => <span className="hyphens">{softHyphens(r.sector)}</span> /* "Telecommunica-tion", not "Telecommunicatio / n" on a phone (R54-012, R55-001) */ }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
-          ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{sectorColumnLabel(c, shortDay)}</span>, numeric: true,
+          ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{sectorColumnLabel(c, shortDay)}</span>, cardLabel: sectorColumnLabel(c, shortDay), numeric: true,
             cell: (r: SectorTable["rows"][number]) => {
               const v = r.values[i];
               return <span className={`inv-heat-cell heat${v == null ? 0 : Math.min(9, Math.floor(v / 10))}`} title={`${r.sector}, ${c.label.toLowerCase()} (${c.day}): ${share(v)}`}>{share(v)}</span>;

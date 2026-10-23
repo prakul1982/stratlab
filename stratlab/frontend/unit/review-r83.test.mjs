@@ -70,3 +70,11 @@ test("R87-002: a locked contract isn't listed beside its lock note; Pro gets the
   assert.match(s, /!\(fnoLocked && \(i\.fno \|\| \["FUT", "CE", "PE"\]\.includes\(i\.type \?\? ""\)\)\)/);
   assert.match(s, /data-testid="fno-hint">Contracts are found by their symbol: NIFTY26NOVFUT for a future, NIFTY26NOV22600CE for an option\./);
 });
+
+test("R88-003: breadth's sector cards name each figure's day; heat stays inside its figure; no 'scrolls sideways' on cards", () => {
+  assert.match(read("src/pages/BreadthPage.tsx"), /cardLabel: sectorColumnLabel\(c, shortDay\)/);
+  const t = read("src/components/kit/DataTable.tsx");
+  assert.match(t, /const label = c\.cardLabel \?\? \(typeof c\.header === "string" \? c\.header : undefined\);/);
+  assert.match(t, /aria-label=\{stack && phone \? `\$\{label\}, as cards` : `\$\{label\}, scrolls sideways`\}/);
+  assert.match(read("src/styles.css"), /\.k-tbl-wrap\.stack \.inv-heat-cell \{ display: inline-block; margin: 0;/);
+});
