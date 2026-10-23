@@ -183,7 +183,10 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             "best_day": {"date": best[0], "pnl": best[1]} if best and best[1] > 0 else None,
             "max_drawdown_pct": round(fall["pct"] * 100, 2) if fall else 0.0,
             "deepest_fall": {"pnl": fall["pnl"], "pct": round(fall["pct"] * 100, 2), "date": fall["date"],
-                             **({"intraday": True, "at": fall["t"][11:16], "day_close": round(close, 2) if close is not None else None} if intraday else {})} if fall else None,
+                             **({"intraday": True, "at": fall["t"][11:16], "day_close": round(close, 2) if close is not None else None,
+                                 # the low held to the close: the day's P&L ended where the low left it, within a rupee (R85-007:
+                                 # "−₹5,14,491 at the lowest point … the day closed at −₹5,14,491" for a low at 12:53)
+                                 "held": close is not None and abs(close - fall["level"]) < 1.0} if intraday else {})} if fall else None,
             "curve": [{"t": d, "pnl": round(v, 2)} for d, v in line][-180:],
         })
     currencies.sort(key=lambda c: -c["capital"])

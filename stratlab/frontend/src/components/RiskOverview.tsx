@@ -10,7 +10,7 @@ import "../pages/trade/trade.css";
 interface Cur {
   currency: string; sessions: number; capital: number; equity: number; pnl: number; today: number; open_value: number;
   worst_day: { date: string; pnl: number } | null; best_day: { date: string; pnl: number } | null; max_drawdown_pct: number;
-  deepest_fall?: { pnl: number; pct: number; date: string; intraday?: boolean; at?: string; day_close?: number | null } | null;
+  deepest_fall?: { pnl: number; pct: number; date: string; intraday?: boolean; at?: string; day_close?: number | null; held?: boolean } | null;
   curve: { t: string; pnl: number }[];
   /** the market's latest trading day, and that session's result when today is not a trading day (a weekend, a holiday) */
   session?: string; session_pnl?: number | null;
@@ -56,7 +56,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
               <Stat item label="Since the start" value={money(c.pnl, c.currency)} tone={tone(c.pnl)} note={`${c.sessions} session${c.sessions === 1 ? "" : "s"}`} />
               <Stat item label="Worst day" value={c.worst_day ? money(c.worst_day.pnl, c.currency) : "None yet"} tone={tone(c.worst_day?.pnl ?? null)} note={c.worst_day ? day(c.worst_day.date) : undefined} />
               <Stat item label="Deepest fall" value={`${num(c.max_drawdown_pct, 1)}%`}
-                note={c.deepest_fall ? (c.deepest_fall.intraday && c.deepest_fall.day_close === c.deepest_fall.pnl
+                note={c.deepest_fall ? (c.deepest_fall.intraday && (c.deepest_fall.held ?? c.deepest_fall.day_close === c.deepest_fall.pnl)
                   // the low held to the close: one figure, not "-3,94,147 ... the day closed at -3,94,147" (R77-007)
                   ? `${money(c.deepest_fall.pnl, c.currency)} on ${day(c.deepest_fall.date)}${c.deepest_fall.at ? `, reached at ${c.deepest_fall.at} IST` : ""} and held to the close`
                   : c.deepest_fall.intraday
