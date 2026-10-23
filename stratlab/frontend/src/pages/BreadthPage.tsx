@@ -372,7 +372,7 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
 function SectorHeat({ t }: { t: SectorTable }) {
   return (
     <div className="k-stack">
-      <DataTable label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
+      <DataTable stack label="Share of each sector's stocks above their 50-day average" rows={t.rows} rowKey={(r) => r.sector} sticky={t.rows.length > 14}
         columns={[{ key: "s", header: "Sector", rowHeader: true, cell: (r) => <span className="hyphens">{softHyphens(r.sector)}</span> /* "Telecommunica-tion", not "Telecommunicatio / n" on a phone (R54-012, R55-001) */ }, { key: "n", header: "Stocks", numeric: true, cell: (r) => r.stocks },
           ...t.columns.map((c, i) => ({ key: c.label, header: <span title={c.day}>{sectorColumnLabel(c, shortDay)}</span>, numeric: true,
             cell: (r: SectorTable["rows"][number]) => {
@@ -392,7 +392,7 @@ function Recent({ h }: { h: History }) {
   const idx = Array.from({ length: Math.min(20, n) }, (_, k) => n - 1 - k);
   const num = (key: string, header: string, get: (i: number) => string): Column<number> => ({ key, header, numeric: true, cell: get });
   return (
-    <DataTable label="The last 20 trading days" rows={idx} rowKey={(i) => h.days[i]} empty="No days to show."
+    <DataTable stack label="The last 20 trading days" rows={idx} rowKey={(i) => h.days[i]} empty="No days to show."
       columns={[{ key: "d", header: "Day", rowHeader: true, cell: (i) => shortDay(h.days[i]) },
         num("adv", "Rose", (i) => count(h.adv[i])), num("dec", "Fell", (i) => count(h.dec[i])),
         num("p50", "Above 50-day", (i) => share(h.pct50[i])), num("p200", "Above 200-day", (i) => share(h.pct200[i])),

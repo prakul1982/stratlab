@@ -271,7 +271,7 @@ export function JournalPage() {
         {has && (!market || market === "in") && taxLast && newestReal && taxLast.slice(0, 10) > newestReal && (
           <p className="banner" data-testid="j-tax-newer">
             Your tax report has trades up to {fmtDate(taxLast, { tz: "Asia/Kolkata" })}; this journal's go up to {fmtDate(newestReal, { tz: "Asia/Kolkata" })}.{" "}
-            <button type="button" className="link-btn" disabled={busy} onClick={() => { if (!busy) void fromTax(); }}>{busy ? "Bringing them in…" : "Bring in the newer ones"}</button>
+            <button type="button" className="btn sm" disabled={busy} onClick={() => { if (!busy) void fromTax(); }}>{busy ? "Bringing them in…" : "Bring in the newer ones"}</button>
           </p>
         )}
         {j.tax_totals.length > 0 && <TaxTotals rows={j.tax_totals} />}

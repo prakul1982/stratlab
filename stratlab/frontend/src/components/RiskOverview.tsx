@@ -68,7 +68,7 @@ export function RiskOverview({ onOpen }: { onOpen: (id: string, kind: string) =>
                 format={(v) => money(v, c.currency)} axisFormat={(v) => moneyCompact(v, c.currency)}
                 series={[{ label: "All sessions", values: c.curve.map((p) => p.pnl), color: "var(--series-1)", area: { base: 0, pos: "var(--series-1)", neg: "var(--series-2)" } }]} />
             )}
-            <DataTable label={`Running sessions in ${c.currency}`} columns={cols} rows={rows} rowKey={(r) => r.id} />
+            <DataTable stack label={`Running sessions in ${c.currency}`} columns={cols} rows={rows} rowKey={(r) => r.id} />
           </Card>
         );
       })}

@@ -374,7 +374,7 @@ export function RotationPage() {
             <button className="btn quiet sm" onClick={() => setPicked(new Set(all.map((r) => r.id)))}>Show all {all.length}</button>
             {all.some((r) => r.core === false) && <button className="btn quiet sm" onClick={() => setPicked(null)}>Main sectors only</button>}
             <button className="btn quiet sm" onClick={() => setPicked(new Set())}>Clear</button></>} />
-          <DataTable label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
+          <DataTable stack label="Where each one stands" rows={all} rowKey={(r) => r.id} sticky={all.length > 14} rowAttrs={(r) => ({ className: focus === r.id ? "rot-row on" : "rot-row" })}
             columns={[
               { key: "on", header: <span className="sr-only">Show on chart</span>, cell: (r) => <label className="k-tap"><input type="checkbox" checked={isOn(r)} onChange={() => toggle(r)} aria-label={`Show ${r.name} on the chart`} /></label> },
               { key: "n", header: isIndex ? "Index" : "Stock", rowHeader: true, wrap: true, cell: (r) => (isIndex

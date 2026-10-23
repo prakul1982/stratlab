@@ -52,3 +52,11 @@ test("R83-002: the chain panel asks again while a recording stands in for the li
   assert.match(s, /const waiting = !!c && c !== "error" && !!c\.reading;/);
   assert.match(s, /if \(!waiting \|\| tries >= REREAD\) return;[\s\S]*\/trade\/positioning\/chain\?name=\$\{name\}&expiry=\$\{expiry\}/);
 });
+
+test("R86-001/002/003/004: phone tables become cards; the journal's catch-up is a real button", () => {
+  assert.match(read("src/pages/BreadthPage.tsx"), /<DataTable stack label="Share of each sector's stocks above their 50-day average"/);
+  assert.match(read("src/pages/BreadthPage.tsx"), /<DataTable stack label="The last 20 trading days"/);
+  assert.match(read("src/pages/ResearchScans.tsx"), /<DataTable stack label="Where each one stands"/);
+  assert.match(read("src/components/RiskOverview.tsx"), /<DataTable stack label=\{`Running sessions in/);
+  assert.match(read("src/pages/trade/JournalPage.tsx"), /className="btn sm" disabled=\{busy\}[\s\S]*?\{busy \? "Bringing them in…" : "Bring in the newer ones"\}/);
+});
