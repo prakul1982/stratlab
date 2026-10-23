@@ -91,6 +91,7 @@ test("plans gate: Pricing and Plans say paid plans open soon, never that paid fe
   await expect(main).toContainText("support@stratlab.studio");
   await expect(main).not.toContainText(/every feature is (open|unlocked)|open to everyone until/i);
   await expect(main.getByText("Opens soon")).toHaveCount(2);
+  await expect(main.locator(".k-plan-price").first()).toHaveText(/^[₹$€£]0 always$/);   // in the reader's currency; not "₹0 / month" or "₹0 / year" (R88-009)
 });
 
 test("plans gate: while plans can't be bought, a lock offers 'Tell me when plans open', kept per person and counted for Admin", async ({ page }, info) => {

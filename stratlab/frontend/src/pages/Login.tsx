@@ -509,7 +509,7 @@ function Pricing() {
                 </div>
                 <div className="stack g2">
                   {loading ? <span className="lp-skel lp-skel-amount" aria-label="Loading the price" /> : (
-                    <div className="serif lp-amount">{price(p, year)}<span className="small muted"> / {per}</span></div>
+                    <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
                   )}
                   {p !== "free" && (
                     <span className="small lp-price-note">

@@ -46,8 +46,8 @@ def test_an_alert_email_carries_our_own_unsubscribe_headers_and_link(brevo):
     assert h["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     token = h["List-Unsubscribe"][1:-1].split("t=", 1)[1]
     assert mail_tokens.read(token, "unsubscribe") == ("u-1", alerts.ALERT_EMAILS)           # signed, for this reader and type
-    assert f"https://stratlab.studio/unsubscribe?t={token}" in msg["htmlContent"] and "Turn off alert emails" in msg["htmlContent"]
-    assert f"Turn off alert emails: https://stratlab.studio/unsubscribe?t={token}" in msg["textContent"]
+    assert f"https://stratlab.studio/unsubscribe?t={token}" in msg["htmlContent"] and "Turn off alert and reminder emails" in msg["htmlContent"]
+    assert f"Turn off alert and reminder emails: https://stratlab.studio/unsubscribe?t={token}" in msg["textContent"]
     assert "sendibt" not in msg["htmlContent"] + msg["textContent"]
 
 

@@ -77,7 +77,11 @@ export function MineHome() {
       <PageHeader eyebrow={dateLine()} title={`${greeting()}${first ? `, ${first}` : ""}`} lede={lede}
         actions={<button type="button" className="btn quiet sm" aria-expanded={customise} aria-controls="mine-customise" onClick={() => setCustomise(!customise)}>Customise</button>} />
       <PromoCountdown /><FirstSteps />
-      {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => setCustomise(false)} />}
+      {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => {
+        // closed with Done or Escape: focus goes back to the Customise button, not to the top of the page
+        setCustomise(false);
+        requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
+      }} />}
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
@@ -100,6 +104,11 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
     onChange({ ...layout, order });
   };
   const toggle = (id: CardId) => onChange({ ...layout, hidden: layout.hidden.includes(id) ? layout.hidden.filter((x) => x !== id) : [...layout.hidden, id] });
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) onDone(); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [onDone]);
   return (
     <Card id="mine-customise" label="Customise My space">
       <CardHead title="Customise My space" info="Choose which cards show and put them in your order. It is kept on this device."

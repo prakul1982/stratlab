@@ -147,7 +147,7 @@ export function PlansPage() {
                 <span className="k-small k-muted">{WHO[p]}</span>
               </div>
               <div className="k-stack tight">
-                <div className="k-plan-price">{price.shown}<span> / {period}</span></div>
+                <div className="k-plan-price">{price.shown}<span>{p === "free" ? " always" : ` / ${period}`}</span></div>
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
                 {price.charged && <span className="k-note" data-testid={`charged-${p}`}>{billing ? chargedLine(price.charged, gst, period, price.about) : `${price.charged} a ${period} in India${gst ? ", incl. GST" : ""}`}</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}

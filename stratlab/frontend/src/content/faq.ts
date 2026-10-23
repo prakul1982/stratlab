@@ -25,6 +25,9 @@ export const FAQ: Faq[] = [
       "Your friend: joins with your link and uses StratLab on 3 different days in their first 14 days. They then get a free month of Basic.",
       "You: a free month of Basic when such a friend becomes active, for your first 2 friends in any 12 months. Another free month when a friend you invited pays for a plan (their first payment, within 90 days of joining), again for your first 2 paying friends in 12 months. After that, each further paying friend gives you 8 days free, up to 8 times in 12 months.",
       "If you already pay for a plan, your free time is saved and starts when your paid plan ends."] },
+  { q: "What does it cost, and can I cancel?",
+    a: ["The Free plan costs nothing. Basic and Pro are subscriptions paid monthly or yearly; the Plans page (stratlab.studio/plans) shows each price and what each plan adds.",
+      "A paid plan renews until you cancel it, which you can do any time from Account → Plan and usage. A period that has started isn't refunded, but a double charge, a charge after cancelling or a plan that didn't start is refunded in full. The Cancellation and refunds page (stratlab.studio/refunds) has the details."] },
   { q: "Is there an app?",
     a: ["StratLab installs from the browser: on Android or a computer choose Install app, on an iPhone tap Share, then Add to Home Screen. It opens full screen with its own icon and sends alerts as notifications."] },
 ];

@@ -25,7 +25,7 @@ def test_the_paper_report_unsubscribes_only_from_itself(monkeypatch):
     assert alerts.NEWSLETTER_NAMES["daily_report"] == "the daily paper trading report"
     # every other alert keeps the one switch for alert emails
     alerts.send_message("x@example.com", "3 of your alerts fired", "Body", "/alerts", uid="u1")
-    assert "Turn off alert emails: " in sent["plain"] and "unsubscribe-alert_emails" in sent["plain"]
+    assert "Turn off alert and reminder emails: " in sent["plain"] and "unsubscribe-alert_emails" in sent["plain"]
 
 
 def test_the_previews_list_every_email_sent():

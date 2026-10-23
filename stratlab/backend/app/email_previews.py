@@ -155,7 +155,7 @@ def _my_stocks() -> tuple[str, str, str]:
 def _alerts_email(subject: str, text: str, path: str, label: str, why: str, date: str | None = None) -> tuple[str, str, str]:
     """An alert as alerts.send_message emails it (with its one-click unsubscribe, as the previews show every other)."""
     from . import alerts
-    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label(), unsubscribe="Turn off alert emails",
+    html, plain = kit.message(subject, text, path, label, why, date=date or kit.today_label(), unsubscribe=alerts.ALERT_UNSUB_WORDS,
                               manage=alerts.manage_path(path))
     html, plain = kit.preview_links(html, plain)
     return kit.subject_line(subject), html, plain
