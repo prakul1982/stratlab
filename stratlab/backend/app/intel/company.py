@@ -518,6 +518,21 @@ def us_peers(sym: str, listed: list) -> list[str]:
     return list(dict.fromkeys(same_size + narrow))[:8]
 
 
+
+def reported_quarters(rows: list[dict], today: str, n: int = 4) -> list[dict]:
+    """The last `n` reported quarters, oldest first: one row per quarter (R84-001: NVDA's list repeated "Jun 2026" with the
+    same figures, so "4 of 4 quarters beat" counted three), none dated after today, each with both figures."""
+    seen, out = set(), []
+    for e in rows:                                      # newest first, as the source sends them
+        p = str(e.get("period") or "")
+        if e.get("actual") is None or e.get("estimate") is None or not p or p[:10] > today or p in seen:
+            continue
+        seen.add(p)
+        out.append(e)
+        if len(out) == n:
+            break
+    return out[::-1]
+
 class Research:
     def __init__(self, kite: KiteService | None, finnhub=None, yahoo=None, screener=None, news=None, wiki=None):
         self.kite = kite
@@ -943,9 +958,9 @@ class Research:
         q, M = r["q"] or {}, r["m"] or {}
         # the yearly results are in the currency the company reports in (Eni: euros), not the US listing's dollars
         trend = self._us_trend(r["fin"], (p.get("currency") or "USD").upper())
-        earn = [e for e in (r["earn"] or []) if e.get("actual") is not None and e.get("estimate") is not None][:4][::-1]
-        ins = (r["ins"] or {}).get("data") or []
         today = ist_date().isoformat()
+        earn = reported_quarters(r["earn"] or [], today)
+        ins = (r["ins"] or {}).get("data") or []
         nxt = sorted([e for e in (r["cal"] or []) if e.get("date", "") >= today], key=lambda e: e["date"])
         rec = (r["rec"] or [None])[0]
         one = us_listing(p, r.get("listing"), M)

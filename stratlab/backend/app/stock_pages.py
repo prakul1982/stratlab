@@ -1281,7 +1281,8 @@ class Pages:
         retry = sum(1 for s, _ in due[:limit] if s not in ok and 0 < tries.get(s, 0) < self.MAX_TRIES)
         if not stopped and len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page still behind is tried again at its next build
-        return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, "errors": errors, **({"retry": retry} if retry else {}),
+        return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, "errors": errors,
+                **({"source_down": True} if stopped else {}), **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
 
     def html(self, region: str, symbol: str, co: dict) -> str:

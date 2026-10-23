@@ -147,3 +147,24 @@ def test_an_amount_in_an_email_stays_on_one_line():
     assert '<span style="white-space:nowrap">−₹620</span>' in html
     assert '<span style="white-space:nowrap">(+₹3,250)</span>' in html
     assert "&lt;b&gt;" in html                     # the rest is still escaped
+
+
+def test_results_versus_expectations_has_one_row_per_quarter():
+    # R84-001: NVDA showed "Jun 2026" twice with the same figures under "4 of 4 quarters beat"
+    from app.intel.company import reported_quarters
+    rows = [{"period": "2026-09-30", "actual": 2.22, "estimate": 2.14}, {"period": "2026-06-30", "actual": 1.87, "estimate": 1.79},
+            {"period": "2026-06-30", "actual": 1.87, "estimate": 1.79}, {"period": "2026-03-31", "actual": 1.62, "estimate": 1.56},
+            {"period": "2025-12-31", "actual": 1.5, "estimate": 1.4}, {"period": "2027-01-31", "actual": 9, "estimate": 9}]
+    got = reported_quarters(rows, "2026-10-23")
+    assert [r["period"] for r in got] == ["2025-12-31", "2026-03-31", "2026-06-30", "2026-09-30"]
+
+
+def test_the_page_price_row_waits_for_the_broker_login_without_a_problem(monkeypatch):
+    # R84-005: before the 08:00 IST login the row was a red Problem, "no page's price could be read (1 tried)"
+    from app import admin_jobs
+    monkeypatch.setattr(main, "price_refresh_status", {"last_run": "2026-10-23T01:00:00+00:00",
+                                                      "IN": {"refreshed": 0, "left": 1300, "failed": 1, "errors": 1, "source_down": True},
+                                                      "US": {"refreshed": 0, "left": 0, "failed": 0, "errors": 0}})
+    r = {r["name"]: r for r in admin_jobs.rows()}["Company pages' prices"]
+    assert r["state"] == "ok" and r["error"] is None
+    assert any(x.startswith("India: waiting for the price source") for x in r["log"])
