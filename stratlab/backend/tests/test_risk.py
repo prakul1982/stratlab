@@ -56,3 +56,11 @@ def test_deepest_fall_between_closes_is_said_as_intraday_and_the_line_stays_day_
 def test_deepest_fall_at_a_day_close_is_not_intraday():
     s = snap("a", "INR", 100000, 94000, [{"t": "2026-10-13T15:00", "eq": 100000}, {"t": "2026-10-14T15:00", "eq": 94000}])
     assert "intraday" not in risk.summary([s], today="2026-10-15")["currencies"][0]["deepest_fall"]
+
+
+def test_the_deepest_fall_counts_the_account_now_not_the_curves_last_point():
+    # R83-004: the curve's last point for today lagged the account, and the deepest fall was shallower than "since the start"
+    s = snap("a", "INR", 1000000, 482605, [{"t": "2026-10-22T15:30", "eq": 485509}, {"t": "2026-10-23T09:45", "eq": 484945}])
+    c = risk.summary([s], today="2026-10-23")["currencies"][0]
+    assert c["pnl"] == -517395.0
+    assert c["deepest_fall"]["pnl"] == -517395.0 and c["deepest_fall"]["date"] == "2026-10-23"

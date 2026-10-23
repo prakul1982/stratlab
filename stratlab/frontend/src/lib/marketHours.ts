@@ -87,8 +87,11 @@ export function marketState(m: Market, now = new Date()): MarketState {
   const first = skipped[0];       // the first closed day decides: the weekend, or today's own holiday
   // "holiday" is said only when today itself is one: a normal day that has closed, with a holiday tomorrow, is just closed
   const closedFor = open || first === undefined ? null : !weekday((w.wd + first) % 7) ? "weekend" : first === 0 ? "holiday" : null;
-  const change = at(until);
-  const todayOpen = new Date(now.getTime() + (o - w.min) * 60000), todayClose = new Date(now.getTime() + (c - w.min) * 60000);
+  // w.min is the whole minute: count from that minute's start, or the seconds already gone are added on top (R83-008:
+  // "close in 6h 12m" at 09:19:30, with 6h 10m left)
+  const minuteStart = now.getTime() - (now.getTime() % 60000);
+  const change = open ? new Date(minuteStart + until * 60000) : at(until);
+  const todayOpen = new Date(minuteStart + (o - w.min) * 60000), todayClose = new Date(minuteStart + (c - w.min) * 60000);
   const short = open ? "open" : closedFor ?? (until < DAY ? `opens ${inWords(until)}` : `opens ${change.toLocaleDateString("en-GB", { weekday: "short" })}`);
   return { ...base, open, closedFor, short, change, hoursLocal: `${m.hours.open}–${m.hours.close} local, ${m.hours.days}`,
     hoursYours: `${yours(todayOpen)}–${yours(todayClose)} your time` };

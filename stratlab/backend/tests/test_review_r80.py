@@ -168,3 +168,32 @@ def test_the_page_price_row_waits_for_the_broker_login_without_a_problem(monkeyp
     r = {r["name"]: r for r in admin_jobs.rows()}["Company pages' prices"]
     assert r["state"] == "ok" and r["error"] is None
     assert any(x.startswith("India: waiting for the price source") for x in r["log"])
+
+
+# R84-003: the kept India sector chart was a session behind after the evening logout
+def test_rotation_after_close_brings_kept_copies_to_the_close(monkeypatch):
+    import json as _json
+    from datetime import date as _date, datetime as _dt, timezone as _tz
+    from app import db as _db
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(_db, "_client", FakeSupabase())
+    ran = []
+
+    class Prov:
+        def ready(self):
+            return True
+    monkeypatch.setattr(main.markets, "provider", lambda r: Prov())
+    monkeypatch.setattr(main.stock_pages, "last_close", lambda r, now=None: (_date(2026, 10, 22), None))
+
+    def run(markets, region, set_, members, interval, tail):
+        ran.append((region, interval))
+        return {"rows": [{"points": [{"t": "2026-10-22"}]}], "skipped": [], "as_of": "2026-10-22", "interval": interval, "tail": tail}
+    monkeypatch.setattr(main.rotation, "run", run)
+    _db.set_setting("rotation:last:IN:sectors:weekly:5", _json.dumps({"rows": [1], "as_of": "2026-10-21"}))
+    _db.set_setting("rotation:last:US:sectors:weekly:5", _json.dumps({"rows": [1], "as_of": "2026-10-22"}))
+    done = main.rotation_after_close(_dt(2026, 10, 22, 12, 0, tzinfo=_tz.utc))
+    assert done == ["IN weekly", "IN daily", "US daily"] and ran == [("IN", "weekly"), ("IN", "daily"), ("US", "daily")]
+    kept = _db.json_value(_db.get_setting("rotation:last:IN:sectors:weekly:5"), {})
+    assert kept["as_of"] == "2026-10-22" and kept["name"] == "NSE sector indices" and kept["market"] == "IN"
+    ran.clear()
+    assert main.rotation_after_close() == [] and ran == []            # already at the close: nothing re-run

@@ -159,6 +159,12 @@ def summary(snaps: list[dict], today: str | None = None) -> dict:
             pct = e / peak - 1 if peak else 0.0
             if pct < 0 and (fall is None or pct < fall["pct"]):
                 fall = {"pct": pct, "pnl": round(e - peak, 2), "date": t[:10], "t": t, "level": round(e - cap, 2)}
+        # and the accounts' value now, which is newer than the equity curve's last point: "Deepest fall −₹5,15,055" sat
+        # beside "Since the start −₹5,17,395" (R83-004)
+        e = sum(r["equity"] for r, *_ in items)
+        pct = e / peak - 1 if peak and e < peak else 0.0
+        if pct < 0 and (fall is None or pct < fall["pct"]):
+            fall = {"pct": pct, "pnl": round(e - peak, 2), "date": today, "t": today + END, "level": round(e - cap, 2)}
         # the chart line is the day closes; a low reached between two closes is said in the summary as intraday, with its time
         # (R34-002: a point for it on the line read as a recovery the day after)
         line = combined

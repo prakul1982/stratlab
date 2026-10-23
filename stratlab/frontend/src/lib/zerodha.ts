@@ -10,7 +10,10 @@ export function zerodhaEmpty(z: ZerodhaRead | null | undefined, now: Date = new 
   if (!z || z.count !== 0 || !z.read_at) return null;
   const at = quoteAt(z.read_at, IST, now);
   // a read from today says so: "at 09:43 IST" read on a Sunday evening looked stale (R58-012)
-  return at ? `Zerodha is connected; it returned 0 holdings ${at.includes(",") ? "at" : "today at"} ${at}.` : null;
+  if (!at) return null;
+  const when = `${at.includes(",") ? "at" : "today at"} ${at}`;
+  // a login that has ended says so: "it returned 0 holdings" read as current when Settings said "log in again" (R84-019)
+  return z.live === false ? `Zerodha's login has ended; its last read, ${when}, returned 0 holdings.` : `Zerodha is connected; it returned 0 holdings ${when}.`;
 }
 
 /** The Zerodha card's status line. `label` is the server's "today 09:12" / "yesterday 23:00" in India time; `ends_at` is

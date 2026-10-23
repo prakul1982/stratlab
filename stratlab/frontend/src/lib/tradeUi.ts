@@ -142,3 +142,10 @@ export function dayStat(running: boolean, status: string, today: number | null |
 export function qtyNote(t: { cash_short?: boolean }): string | null {
   return t.cash_short ? "Sized to the cash left free" : null;
 }
+
+/** The sessions not running, paused apart from stopped ("1 paused", "2 stopped"), as Paper trading lists them (R84-013). */
+export function notRunning(rows: { status?: string | null }[]): string[] {
+  const paused = rows.filter((r) => r.status === "paused").length;
+  const stopped = rows.filter((r) => r.status !== "running" && r.status !== "paused").length;
+  return [paused ? `${paused} paused` : "", stopped ? `${stopped} stopped` : ""].filter(Boolean);
+}

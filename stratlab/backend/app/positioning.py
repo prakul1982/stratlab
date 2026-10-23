@@ -1003,7 +1003,10 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
     out.update(source=got["source"], at_close=bool(got.get("at_close")), as_of=got["taken_at"], expiry=expiry, expiries=got.get("expiries") or [],
                spot=got.get("spot"), rows=strikes, change_from=_taken(prev).astimezone(IST).isoformat(timespec="minutes") if prev else None,
                strikes_counted=len(rows), window_strikes=len(near(rows, got.get("spot"))), lot=lot, unit="lots" if lot else "shares", near_strikes=NEAR, top=top,
-               pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")})
+               pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")},
+               # in the session a recording answers at once while the live chain is read behind it; the page asks again
+               # shortly (R83-002: "recorded chain, 09:21 IST" stayed up after the live one was read)
+               reading=chain_time(now)[1] == "live" and got["source"] == "recorded")
     out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
                   **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
     out["iv"] = None
@@ -1027,7 +1030,8 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
     # live chain, else today's newest recording, answers while the live read runs behind it. Only an index with neither
     # waits for a live read.
     chains: dict[str, dict | None] = {}
-    if chain_time(now)[1] == "live":
+    session = chain_time(now)[1] == "live"
+    if session:
         chains = live_chains(options_data, tuple(names), "current", quick=True)
     else:
         close_day = chain_time(now)[0][:10]
@@ -1054,7 +1058,10 @@ def pcr_table(options_data, now: datetime | None = None, names: tuple = tuple(NA
                     # R24-004: every row's PCR is over the same window, and says how many of its strikes had open interest read
                     # (the live chain reads 81 strikes, a recording 31: "Strikes read" showed 81 or 31 beside the same 31-strike PCR)
                     "basis": "near", "strikes_counted": counted, "strikes_window": 2 * NEAR + 1, "partial": counted < 2 * NEAR + 1,
-                    "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"]})
+                    "source": got["source"], "at_close": bool(got.get("at_close")), "as_of": got["taken_at"],
+                    # in the session a recording stands in while the live chain is read behind it: the page asks again
+                    # shortly (R83-001: the table kept 09:41's recording, PCR 1.00, beside the panel's live 1.03)
+                    "reading": session and got["source"] == "recorded"})
     return out
 
 

@@ -145,13 +145,7 @@ def test_a_change_waiting_at_the_source_warns():
 
 
 # ---------- reading the sources ----------
-def test_read_freeze_and_lots():
-    assert W.read_freeze("SYMBOL,VOL_FRZ_QTY\nNIFTY,3510\nBANKNIFTY,\"1,440\"\nRELIANCE,9000\n") == {"NIFTY": 3510, "BANKNIFTY": 1440}
-    assert W.read_freeze("SYMBOL,VOL_FRZ_QTY\nNIFTYFPI,\"53,900\"\n") == {"NIFTYFPI": 53900}
-    with pytest.raises(ValueError):
-        W.read_freeze("\xd0\xcf\x11\xe0\x00\x00binary")
-    with pytest.raises(ValueError):
-        W.read_freeze("<html>Not found</html>")
+def test_read_lots():
     csv = ("UNDERLYING,SYMBOL,OCT-26,NOV-26,DEC-26\nNIFTY 50,NIFTY,65,65,65\nNIFTY BANK,BANKNIFTY,30,30,30\n"
            "Derivatives on Individual Securities,,,\nRELIANCE INDUSTRIES,RELIANCE,500,500,500\n")
     assert W.read_lots(csv) == {"NIFTY": 65, "BANKNIFTY": 30}
@@ -187,7 +181,6 @@ class FakeFetch:
 
 
 GOOD = {
-    "nse_freeze": "SYMBOL,QTY\nNIFTY,3510\nBANKNIFTY,1440\nFINNIFTY,3240\nMIDCPNIFTY,5760\nNIFTYNXT50,1125\n",
     "nse_lots": "U,SYMBOL,OCT\nX,NIFTY,65\nY,BANKNIFTY,30\n",
     "sec_fee": "<p>$20.60 per million</p>",
     "ppf": "<td>Public Provident Fund</td><td>7.1</td>",
@@ -296,3 +289,50 @@ def test_platform_check_has_the_rules_row(w):
     r = w["client"].post("/admin/platform/check", headers=world.headers("admin-token"))
     row = next(x for x in r.json()["checks"] if x["name"] == "Rates and rules last reviewed")
     assert row["area"] == "Rules" and row["state"] in ("pass", "warn")
+
+
+# R84-007: the SEC list page holds no rate, NSE's freeze file is gone, and the PPF rate is in NSI's table page
+SEC_LIST = ('<h3>Latest Section 6(b) Filing Fee Rate Advisory</h3><a href="https://www.sec.gov/rules-regulations/fee-rate-advisories/2027-1">'
+            'Section 6(b) Fee Rate Advisory for Fiscal Year 2027</a><h3>Latest Section 31 Transaction Fee Rate Advisory</h3>'
+            '<a href="https://www.sec.gov/rules-regulations/fee-rate-advisories/2026-2" data-entity-type="external">Section 31 '
+            'Transaction Fee Rate Advisory for Fiscal Year 2026</a><a href="/rules-regulations/fee-rate-advisories/2025-2">'
+            'Section 31 Transaction Fee Rate Advisory for FY 2025</a>')
+SEC_2026 = ("<p>The Securities and Exchange Commission today announced that starting on April 4, 2026, the fee rates applicable to "
+            "most securities transactions will be set at $20.60 per million dollars. Consequently, each SRO will continue to pay "
+            "the Commission a rate of $0.00 per million for covered sales occurring on charge dates through April 3, 2026</p>")
+
+
+def test_sec_list_page_leads_to_the_newest_section_31_advisory():
+    assert W.sec_advisory_link(SEC_LIST) == "https://www.sec.gov/rules-regulations/fee-rate-advisories/2026-2"
+    assert W.sec_advisory_link("<p>no links</p>") is None
+    with pytest.raises(ValueError):
+        W.read_sec_fee(SEC_LIST)
+    assert W.read_sec_fee(SEC_2026) == 20.60
+
+
+def test_fetcher_follows_the_sec_list_to_the_advisory():
+    import httpx
+    asked = []
+
+    def answer(req):
+        asked.append(str(req.url))
+        return httpx.Response(200, text=SEC_2026 if req.url.path.endswith("2026-2") else SEC_LIST)
+    f = W.Fetcher(http=httpx.Client(transport=httpx.MockTransport(answer)))
+    src = next(s for s in W.SOURCES if s["id"] == "sec_fee")
+    assert W.read_sec_fee(f.get(src, TODAY)) == 20.60
+    assert asked == [src["url"], "https://www.sec.gov/rules-regulations/fee-rate-advisories/2026-2"]
+
+
+def test_ppf_reads_the_newest_row_of_the_rate_table():
+    page = ("<h2>Public Provident Fund Account Interest Rate Since Inception</h2><table><tr><td>YEAR</td><td>RATE OF INTEREST (%)"
+            "</td></tr><tr><td>1968-69 TO 1969-70</td><td>4.8</td></tr><tr><td>01.04.1974 TO 31.07.1974</td><td>5.8</td></tr>"
+            "<tr><td>01.04.2020 TO 30.09.2026</td><td>7.1</td></tr><tr><td>01.10.2018 TO 31.06.2019</td><td>8.0</td></tr></table>")
+    assert W.read_ppf(page) == 7.1
+    src = next(s for s in W.SOURCES if s["id"] == "ppf")
+    assert src["url"].endswith("Id_Pk=178") and src["url"].startswith("http://")
+
+
+def test_the_retired_freeze_file_is_not_a_source():
+    ids = [s["id"] for s in W.SOURCES]
+    assert "nse_freeze" not in ids and "nse_circulars" in ids
+    assert W.CIRCULAR_WORDS.search("Revision in Quantity Freeze limits")

@@ -197,10 +197,23 @@ function recordedLine(name: string, r: Span | undefined): string {
   return `StratLab has recorded ${name}'s chain since ${dayName(r.first)} (${r.days} trading day${r.days === 1 ? "" : "s"}).`;
 }
 
+const REREAD = 4;
+
 function PcrTable({ coverage }: { coverage?: Coverage }) {
   const [rows, setRows] = useState<PcrRow[] | null | "error">(null);
   const [again, setAgain] = useState(0);
   useEffect(() => { setRows(null); api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => setRows(d.pcr)).catch(() => setRows("error")); }, [again]);
+  // rows standing in for a live chain being read are asked for again, quietly, until the live ones arrive (at most
+  // REREAD times): the table kept a recording beside the chain panel's live PCR (R83-001)
+  const [tries, setTries] = useState(0);
+  const waiting = Array.isArray(rows) && rows.some((r) => r.reading);
+  useEffect(() => {
+    if (!waiting || tries >= REREAD) return;
+    const t = window.setTimeout(() => {
+      api<{ pcr: PcrRow[] }>("/trade/positioning/pcr").then((d) => { setRows(d.pcr); setTries((n) => n + 1); }).catch(() => setTries((n) => n + 1));
+    }, 15000);
+    return () => window.clearTimeout(t);
+  }, [waiting, tries]);
   const cols: Column<PcrRow>[] = [
     { key: "name", header: <>Index <span className="k-note">· expiry</span></>, rowHeader: true, cell: (r) => <>{r.name}{r.source && <span className="k-sub-line" data-testid="pcr-expiry">{r.expiry ? `${shortDay(r.expiry)}${r.cycle ? ` · ${r.cycle}` : ""}` : "–"}</span>}</> },
     { key: "oi", header: "PCR (OI)", numeric: true, cell: (r) => ratio(r.pcr_oi) },
@@ -237,9 +250,22 @@ function Chain({ names, full, plan }: { names: string[]; full: boolean; plan: st
   useEffect(() => {
     let live = true;
     setC(null);
+    setTries(0);
     api<ChainFacts>(`/trade/positioning/chain?name=${name}&expiry=${expiry}`).then((d) => live && setC(d)).catch(() => live && setC("error"));
     return () => { live = false; };
   }, [name, expiry, again]);
+  // a recording standing in while the live chain is read is asked for again, quietly, as the PCR table is (R83-002)
+  const [tries, setTries] = useState(0);
+  const waiting = !!c && c !== "error" && !!c.reading;
+  useEffect(() => {
+    if (!waiting || tries >= REREAD) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      api<ChainFacts>(`/trade/positioning/chain?name=${name}&expiry=${expiry}`).then((d) => { if (live) { setC(d); setTries((n) => n + 1); } })
+        .catch(() => live && setTries((n) => n + 1));
+    }, 15000);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [waiting, tries, name, expiry]);
   const hasChg = c && c !== "error" && c.rows.some((r) => r.call_chg != null || r.put_chg != null);
   type CR = ChainFacts["rows"][number];
   // contracts (lots), as the exchange's chain and the participant table count them; shares only when the lot isn't known (R7T-002)

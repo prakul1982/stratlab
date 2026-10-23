@@ -49,7 +49,10 @@ test("a company page left open reads its chart once, not each minute (R65-001)",
       body: JSON.stringify({ RELIANCE: { price: 1180 + ++n, change_pct: 0.1, at: new Date(Date.parse(OPEN) + n * 60_000).toISOString() } }) })],
   ]);
   await expect(page.getByTestId("company-price")).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(3000);
+  // the count starts once the chart has its candles: a busy first answer is read once more after a pause (R73-003),
+  // and that second read landed after the count had started on a loaded CI runner
+  await expect(page.getByTestId("price-chart").first()).toHaveAttribute("data-loaded", /^(5m|15m|1h|1d|1w|1mo)$/, { timeout: 30_000 });
+  await page.waitForTimeout(1500);
   const first = charts;
   for (let i = 0; i < 3; i++) { await page.clock.runFor(61_000); await page.waitForTimeout(1500); }
   expect(n).toBeGreaterThanOrEqual(2);
