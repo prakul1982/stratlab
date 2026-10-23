@@ -37,3 +37,10 @@ test("R86-015: a company's price move keeps its decimals, as the price beside it
   assert.equal(signedMove(null), "–");
   assert.match(read("src/components/Research.tsx"), /signedMove\(q\.change, 2\)/);
 });
+
+test("R86-005: a scan running a few seconds says the day's first scan is the slow one", () => {
+  const src = read("src/pages/ResearchScans.tsx");
+  assert.match(src, /setTimeout\(\(\) => setShow\(true\), 3000\)/);
+  assert.match(src, /The day's first scan of a list reads each stock's daily chart, so a long list can take 20 seconds or more\. Scans after that take a second or two\./);
+  assert.match(src, /<ScanElapsed count=\{cur\?\.count\} \/><\/p><SlowFirstScan \/>/);
+});

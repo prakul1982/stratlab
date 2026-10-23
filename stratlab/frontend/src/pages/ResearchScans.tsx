@@ -52,6 +52,13 @@ function ScanElapsed({ count }: { count?: number }) {
   return <>{scanningText(count)} {sec} s</>;
 }
 
+/** Said once a scan has run a few seconds: the day's first scan reads every chart, later ones reuse them (R86-005). */
+function SlowFirstScan() {
+  const [show, setShow] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setShow(true), 3000); return () => clearTimeout(id); }, []);
+  return show ? <p className="k-note" data-testid="scan-first-slow">The day's first scan of a list reads each stock's daily chart, so a long list can take 20 seconds or more. Scans after that take a second or two.</p> : null;
+}
+
 /** How long the rotation can take before the page says it is still working. */
 const ROTATION_SLOW_MS = 6000;
 
@@ -172,7 +179,7 @@ export function ScanPage() {
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
       {scanErr && !busy && <ErrorState title="The scan didn't run" action={{ label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
       {!out && !busy && !scanErr && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
-      {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
+      {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><SlowFirstScan /><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
         <Card>
           <CardHead title={`${preset.scan_name}: ${preset.name}`} info={preset.stored
