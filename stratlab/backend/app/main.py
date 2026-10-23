@@ -1940,6 +1940,43 @@ def _member_key(m) -> str:
     return json.dumps(m, sort_keys=True, default=str) if isinstance(m, dict) else str(m)
 
 
+def rotation_run(region: str, set: str, members, interval: str, tail: int, keep_as: str | None = None) -> dict:
+    """Work out a rotation chart and hold it ten minutes; a shared set (keep_as names it) also keeps a copy for the
+    hours the market's data is offline."""
+    out = rotation.run(markets, region, set, members, interval, tail)
+    _results.set(("rotation", region, set, tuple(_member_key(m) for m in members or []), interval, tail), out, 600)
+    if keep_as:
+        try:
+            db.set_setting(f"rotation:last:{region}:{set}:{interval}:{tail}",
+                           json.dumps({"name": keep_as, "market": region, **out}, default=str))
+        except Exception as e:                    # a page that worked isn't failed for want of a copy
+            print("rotation copy not kept:", e)
+    return out
+
+
+def rotation_after_close(now: datetime | None = None) -> list[str]:
+    """Bring the kept sector charts up to each market's latest close. R84-003: the India copy was made only when
+    someone opened the page while the broker was logged in, so after the evening logout it showed 21 Oct while every
+    other India page had 22 Oct. Runs with the price job; a copy already at the close is left alone."""
+    done = []
+    for region in ("IN", "US"):
+        prov = markets.provider(region)
+        if prov is None or not prov.ready():
+            continue
+        day = stock_pages.last_close(region, now)[0].isoformat()
+        name = rotation.index_sets(region)["sectors"]["name"]
+        for interval in ("weekly", "daily"):
+            kept = db.json_value(db.get_setting(f"rotation:last:{region}:sectors:{interval}:5"), {})
+            if str((kept or {}).get("as_of") or "")[:10] >= day:
+                continue
+            try:
+                rotation_run(region, "sectors", None, interval, 5, name)
+                done.append(f"{region} {interval}")
+            except Exception as e:                # the next pass tries again
+                print("rotation after close:", region, interval, str(e)[:120])
+    return done
+
+
 @app.get("/research/rotation")
 def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "weekly", tail: int = 5,
                     profile=Depends(current_profile)):
@@ -1971,15 +2008,9 @@ def sector_rotation(region: str = "IN", set: str = "sectors", interval: str = "w
     out = _results.get(key)
     if out is None:
         try:
-            out = rotation.run(markets, region, set, members, interval, tail)
+            out = rotation_run(region, set, members, interval, tail, name if shared else None)
         except LookupError as e:
             err(404 if set.startswith("sector:") else 503, "no_benchmark", str(e))
-        _results.set(key, out, 600)
-        if shared:
-            try:
-                db.set_setting(last_key, json.dumps({"name": name, "market": region, **out}, default=str))
-            except Exception as e:                # a page that worked isn't failed for want of a copy
-                print("rotation copy not kept:", e)
     out = dict(out)
     out["skipped"] = [public_text(x) for x in out["skipped"]]
     return ok({"name": name, "market": region, **out})
@@ -4203,6 +4234,10 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
             price_refresh_status[region] = stock_page_store.refresh_prices(region, bars_of, scan.analyse, limit=limit, gap=gap, sleep=sleep, **extra)
         except Exception as e:                        # a source or storage down: the next pass tries again
             price_refresh_status[region] = {"error": str(e)[:160]}
+    try:
+        rotation_after_close()
+    except Exception as e:
+        print("rotation after close:", str(e)[:120])
     price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return price_refresh_status
 
@@ -5233,7 +5268,7 @@ def holiday_pass() -> bool | None:
     try:
         if not leader.leading():      # another container leads: it runs this pass
             return None
-        for fetch, market in ((filings_feed.holidays, "IN"), (lambda: filings_feed.holidays("CD"), "CDS")):
+        for fetch, market in ((lambda: filings_feed.holidays(named=True), "IN"), (lambda: filings_feed.holidays("CD", named=True), "CDS")):
             failed |= bool(trading_calendar.refresh_from_exchange(fetch, market).get("error"))
     except Exception as e:
         print("holiday refresh failed:", e)
@@ -5267,8 +5302,8 @@ def admin_etf_gaps_refresh(_=Depends(admin.admin_profile)):
 @app.post("/admin/holidays/refresh")
 def admin_holidays_refresh(_=Depends(admin.admin_profile)):
     """Fetch the exchange's holiday list now instead of waiting for the daily run."""
-    trading_calendar.refresh_from_exchange(filings_feed.holidays, "IN")
-    trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD"), "CDS")
+    trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays(named=True), "IN")
+    trading_calendar.refresh_from_exchange(lambda: filings_feed.holidays("CD", named=True), "CDS")
     return calendar_status()
 
 

@@ -19,6 +19,7 @@ import { Badge, Card, CardHead, Delta, EmptyState, ErrorState, PageHeader, Signe
 import { FirstSteps } from "../components/FirstSteps";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanInline } from "../components/PlanInterest";
+import { notRunning } from "../lib/tradeUi";
 
 const SETTLE_US_MIN = 50;          // a little past the server's 45 minutes, so the tile never says final before the page does
 
@@ -218,7 +219,7 @@ function PaperCard() {
     <Card testId="mine-paper">
       <CardHead title="Paper sessions" actions={<Link className="btn quiet sm" to="/paper" aria-label="Open paper sessions">Open</Link>} />
       <Stat label="Running now" value={running.length ? `${running.length} running` : "None running"}
-        note={[names, rows.length > running.length ? `${rows.length - running.length} stopped` : ""].filter(Boolean).join(" · ") || undefined} />
+        note={[names, ...notRunning(rows)].filter(Boolean).join(" · ") || undefined} />
     </Card>
   );
 }

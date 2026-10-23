@@ -26,6 +26,7 @@ import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../comp
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
+import { notRunning } from "../lib/tradeUi";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -92,10 +93,11 @@ export function TradeHome() {
   const running = rows?.filter((r) => r.status === "running") ?? [];
   const options = running.filter((r) => r.instrument?.type === "OPTIONS");
   const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+  // paused and stopped apart, as Paper trading and the Options builder list them (R84-013: "1 stopped" for a paused one)
   const tools: Tool[] = [
     { ...TRADE_TOP[0], status: rows === null ? null : options.length ? `${options.length} running` : "", go: "Build a structure →" },
     { ...TRADE_TOP[1], testId: "paper-summary",
-      status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? `None running · ${rows.length} stopped` : "" },
+      status: rows === null ? null : running.length ? `${running.length} running` : rows.length ? ["None running", ...notRunning(rows)].join(" · ") : "" },
     { ...TRADE_TOP[2],
       // the journal and the tax report are two uploads of different trades: F&O lines kept in the tax report as totals are not round trips here (R10O carry-over of R7M-013)
       ...(journal !== null && journal !== "none" && journal.count ? { line: "Your real trades as round trips, after charges. F&O lines in your tax report are kept there as totals, not counted here." } : {}),

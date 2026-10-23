@@ -942,9 +942,10 @@ class NSEFilings:
             raise SourceError(self.name, f"The exchange's list of companies looked wrong ({len(out)} companies).")
         return list({c["symbol"]: c for c in out}.values())
 
-    def holidays(self, segment: str = "CM") -> list[str]:
+    def holidays(self, segment: str = "CM", named: bool = False) -> list:
         """The exchange's published trading holidays, as ISO dates (it lists the current year, and the next one once
-        announced, usually in December). `segment`: "CM" equities, "CD" currency derivatives."""
+        announced, usually in December); `named`: (date, the exchange's name for it) pairs. `segment`: "CM" equities,
+        "CD" currency derivatives."""
         data = self._get("/api/holiday-master", {"type": "trading"},
                          referer="https://www.nseindia.com/resources/exchange-communication-holidays")
         rows = (data or {}).get(segment) if isinstance(data, dict) else None
@@ -954,9 +955,10 @@ class NSEFilings:
         for r in rows:
             raw = str((r or {}).get("tradingDate") or "").strip()
             try:
-                out.append(datetime.strptime(raw, "%d-%b-%Y").date().isoformat())
+                day = datetime.strptime(raw, "%d-%b-%Y").date().isoformat()
             except ValueError:
                 continue
+            out.append((day, " ".join(str((r or {}).get("description") or "").split())[:80]) if named else day)
         if not out:
             raise SourceError(self.name, "The exchange's holiday list came back empty.")
         return sorted(set(out))

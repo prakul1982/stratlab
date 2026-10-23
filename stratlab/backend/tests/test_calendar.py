@@ -129,3 +129,26 @@ def test_an_empty_or_failed_exchange_list_keeps_the_last_good_one(monkeypatch):
     for fetch in (lambda: [], lambda: (_ for _ in ()).throw(RuntimeError("busy"))):
         state = calendar.refresh_from_exchange(fetch, "IN")
         assert state["days"] == ["2026-10-02"] and state["error"]
+
+
+def test_the_exchange_names_its_holidays_r84_014(monkeypatch):
+    import json
+    import httpx
+    from app import db
+    from app.intel.filings import NSEFilings
+    body = {"CM": [{"tradingDate": "10-Nov-2026", "description": "Diwali-Balipratipada"},
+                   {"tradingDate": "25-Dec-2026", "description": "Christmas"}]}
+    t = httpx.MockTransport(lambda r: httpx.Response(200, json=body) if r.url.path.startswith("/api") else httpx.Response(200, text="<html></html>"))
+    got = NSEFilings(transport=t).holidays(named=True)
+    assert got == [("2026-11-10", "Diwali-Balipratipada"), ("2026-12-25", "Christmas")]
+    store = {}
+    monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+    monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+    state = calendar.refresh_from_exchange(lambda: got, "IN")
+    assert state["days"] == ["2026-11-10", "2026-12-25"] and state["names"]["2026-11-10"] == "Diwali-Balipratipada"
+    assert calendar.holiday_name("IN", date(2026, 11, 10)) == "Diwali-Balipratipada"
+    assert calendar.holiday_name("MCX", date(2026, 11, 10)) == "Diwali-Balipratipada"
+    # a later list of plain dates keeps the names of the days outside its span, and drops none it has
+    later = calendar.refresh_from_exchange(lambda: ["2027-01-26"], "IN")
+    assert later["names"] == {"2026-11-10": "Diwali-Balipratipada", "2026-12-25": "Christmas"}
+    assert json.loads(store[calendar.AUTO + "IN"])["names"] == later["names"]

@@ -4,12 +4,13 @@ Admin → Quality → Rates and rules until an admin marks it seen. Nothing is e
 code, with a test, by a person.
 
 Sources:
-- NSE's quantity freeze limits (qtyfreeze.xls, read when it comes as text) against options/data.py FREEZE.
 - NSE's F&O lot sizes (fo_mktlots.csv): the index lots, against the last copy read (the app reads lots from the
   broker each day, so this is for the record).
-- The SEC's fee rate advisories page: the latest Section 31 rate against engine/costs.py US_SEC_FEE.
-- The PPF rate on the National Savings Institute's page against money_networth.py PPF_RATE.
+- The SEC's fee rate advisories: the latest Section 31 advisory (linked from the list page) against engine/costs.py US_SEC_FEE.
+- The PPF rate table on the National Savings Institute's site against money_networth.py PPF_RATE.
 - NSE's circulars: any new one about transaction charges, freeze limits, lot sizes, STT, expiry days or trading hours.
+  Freeze limits come only this way: NSE stopped publishing its qtyfreeze file in March 2024 (NSE/FAOP/61157), and
+  the old address now opens that circular.
 
 Kept in one app_settings row (ruleswatch:state); the day it last ran in ruleswatch:day, so a restart never runs it
 twice or sends an alert twice."""
@@ -48,23 +49,6 @@ def _cells(line: str) -> list[str]:
     return [c.strip() for c in row]
 
 
-def read_freeze(text: str) -> dict[str, int]:
-    """{index: freeze limit} from NSE's freeze-limit file when it is text (CSV or tab separated); a binary
-    spreadsheet or a page without the indices raises ValueError."""
-    if not text or "\x00" in text[:2000]:
-        raise ValueError("The freeze-limit file came as a binary spreadsheet, which isn't read here.")
-    out = {}
-    for line in text.splitlines():
-        cells = _cells(line)
-        sym = next((c.upper() for c in cells if c.upper() in INDICES), None)
-        nums = [int(c.replace(",", "")) for c in cells if re.fullmatch(r"\d[\d,]*", c)]
-        if sym and nums and sym not in out:
-            out[sym] = nums[-1]
-    if not out:
-        raise ValueError("No index freeze limits found in the file.")
-    return out
-
-
 def read_lots(text: str) -> dict[str, int]:
     """{index: lot size} for the nearest month, from NSE's market lots CSV (UNDERLYING, SYMBOL, then a lot per month)."""
     out = {}
@@ -86,6 +70,15 @@ def _text(page: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page or "")))
 
 
+def sec_advisory_link(page: str) -> str | None:
+    """The newest Section 31 advisory's address from the SEC's list page: the list names filing-fee (Section 6(b))
+    advisories too, and holds no rate itself (R84-007: unread for 20 days after the page moved the rates out)."""
+    for m in re.finditer(r'<a\b[^>]*href="([^"]*fee-rate-advisories/\d{4}-\d+)"[^>]*>(.*?)</a>', page or "", re.I | re.S):
+        if re.search(r"Section\s*31", _text(m.group(2)), re.I):
+            return m.group(1) if m.group(1).startswith("http") else "https://www.sec.gov" + m.group(1)
+    return None
+
+
 def read_sec_fee(page: str) -> float:
     """The latest Section 31 rate, in dollars a million, from the SEC's fee rate advisories page (the first one
     named on it is the newest)."""
@@ -96,7 +89,14 @@ def read_sec_fee(page: str) -> float:
 
 
 def read_ppf(page: str) -> float:
-    """The PPF rate, % a year, from the small-savings rates page."""
+    """The PPF rate, % a year: the newest row of the National Savings Institute's rate table ("01.04.2020 TO
+    30.09.2026 7.1"), else the first rate named after PPF on a rates page."""
+    t = _text(page)
+    rows = re.findall(r"(\d{2})\.(\d{2})\.(\d{4})\s*TO\s*\d{2}\.\d{2}\.\d{4}\s*(\d{1,2}\.\d{1,2})(?![\d.])", t, re.I)
+    if rows and re.search(r"Public\s+Provident\s+Fund|\bPPF\b", t, re.I):
+        d, m, y, rate = max(rows, key=lambda r: (r[2], r[1], r[0]))
+        if 3 <= float(rate) <= 15:
+            return float(rate)
     for m in re.finditer(r"(?:Public\s+Provident\s+Fund|\bPPF\b)(.{0,240})", _text(page), re.I):
         for n in re.finditer(r"(?<![\d.])(\d{1,2}\.\d{1,2})(?![\d.])", m.group(1)):
             v = float(n.group(1))
@@ -145,11 +145,6 @@ def read_circulars(data, words: re.Pattern | None = None) -> list[dict]:
 
 
 # ---------- the sources ----------
-def _expected_freeze(today: date):
-    from .options.data import freeze
-    return {k: freeze(k, today.isoformat()) for k in INDICES}
-
-
 def _expected_sec(today: date):
     from .engine.costs import US_SEC_FEE
     return round(US_SEC_FEE * 1e6, 2)
@@ -161,17 +156,16 @@ def _expected_ppf(today: date):
 
 
 SOURCES = [
-    {"id": "nse_freeze", "name": "NSE quantity freeze limits", "area": "market_rules", "how": "nse_file",
-     "url": "https://nsearchives.nseindia.com/content/fo/qtyfreeze.xls", "read": read_freeze, "expected": _expected_freeze,
-     "where": "options/data.py FREEZE"},
     {"id": "nse_lots", "name": "NSE index lot sizes", "area": "market_rules", "how": "nse_file",
      "url": "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv", "read": read_lots, "expected": None,
      "where": "read from the broker each day; for the record"},
-    {"id": "sec_fee", "name": "SEC fee rate", "area": "trading_costs", "how": "web",
+    {"id": "sec_fee", "name": "SEC fee rate", "area": "trading_costs", "how": "sec",
      "url": "https://www.sec.gov/rules-regulations/fee-rate-advisories", "read": read_sec_fee, "expected": _expected_sec,
      "where": "engine/costs.py US_SEC_FEE ($ a million)"},
     {"id": "ppf", "name": "PPF rate", "area": "interest_rates", "how": "web",
-     "url": "https://www.nsiindia.gov.in/InternalPage.aspx?Id_Pk=79", "read": read_ppf, "expected": _expected_ppf,
+     # the table page, over http: the https site sends a certificate chain that can't be checked (R84-007), and Id_Pk=79
+     # was the scheme's rules, whose first rate is 1968's 4.8%
+     "url": "http://www.nsiindia.gov.in/InternalPage.aspx?Id_Pk=178", "read": read_ppf, "expected": _expected_ppf,
      "where": "money_networth.py PPF_RATE (% a year)"},
     {"id": "nse_circulars", "name": "NSE circulars on charges and contract rules", "area": "market_rules", "how": "nse_circulars",
      "url": "https://www.nseindia.com/resources/exchange-communication-circulars", "read": read_circulars, "expected": None,
@@ -277,6 +271,9 @@ class Fetcher:
                                         referer=src["url"], circuit="rules")
         r = self._client().get(src["url"])
         r.raise_for_status()
+        if src["how"] == "sec" and (link := sec_advisory_link(r.text)):
+            r = self._client().get(link)
+            r.raise_for_status()
         return r.text
 
 

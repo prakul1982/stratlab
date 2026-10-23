@@ -103,14 +103,18 @@ def auto_status(market: str = "IN") -> dict:
 def refresh_from_exchange(fetch, market: str = "IN") -> dict:
     """Fetch the exchange's holiday list and keep it. Its days replace the days kept for the span it covers (a holiday
     the exchange moved or withdrew drops off), and the days before and after that span stay (past years). `fetch()`
-    returns ISO dates. A failure, or an empty answer, is recorded and the last good list kept."""
+    returns ISO dates, or (date, name) pairs whose names are kept for holiday_name (R84-014: "Exchange holiday" for
+    10 Nov with no name, where the US and UK ones were named). A failure, or an empty answer, is recorded and the last
+    good list kept."""
     import json
     from datetime import datetime, timezone
     from .. import db
     prev = auto_status(market)
     now = datetime.now(timezone.utc).isoformat()
     try:
-        got = [d for d in fetch() if _iso(d)]
+        items = list(fetch())
+        named = {d: n for d, n in (x for x in items if isinstance(x, (tuple, list)) and len(x) == 2) if n and _iso(str(d))}
+        got = [d for d in (x[0] if isinstance(x, (tuple, list)) else x for x in items) if _iso(str(d))]
         if not got:
             raise ValueError("The exchange's holiday list came back empty.")
     except Exception as e:
@@ -119,7 +123,8 @@ def refresh_from_exchange(fetch, market: str = "IN") -> dict:
         return state
     lo, hi = min(got), max(got)
     days = sorted({d for d in prev.get("days") or [] if not lo <= d <= hi} | set(got))
-    state = {"days": days, "at": now, "tried_at": now, "error": None, "latest": max(got)}
+    names = {d: n for d, n in (prev.get("names") or {}).items() if d in days and not lo <= d <= hi} | named
+    state = {"days": days, "at": now, "tried_at": now, "error": None, "latest": max(got), "names": names}
     db.set_setting(AUTO + market, json.dumps(state))
     _extra.pop(market, None)
     _holiday_cache.clear()
@@ -279,7 +284,11 @@ def covered_until(market: str) -> date | None:
 
 
 def holiday_name(market: str, day: date) -> str | None:
-    """The holiday's name when the calendar has one (built-in rules do; the exchange's list gives dates only)."""
+    """The holiday's name when the calendar has one: the exchange's own name from its list, else the built-in rules'."""
+    if market in LISTED:
+        listed = (auto_status("IN" if market == "MCX" else market).get("names") or {}).get(day.isoformat())
+        if listed:
+            return listed
     if market in LISTED and (day.month, day.day) in FIXED_IN_NAMES:
         return FIXED_IN_NAMES[(day.month, day.day)]
     cal = _calendar(CODES[market]) if market in CODES else None
