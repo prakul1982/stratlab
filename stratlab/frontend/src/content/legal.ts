@@ -116,7 +116,7 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
   "/refunds": [
     { h: "Cancelling" },
     { ul: [
-      "Cancel any time from **Account → Plan → Cancel subscription**. No questions, no calls.",
+      "Cancel any time from **Account → Plan and usage → Cancel subscription**. No questions, no calls.",
       "You keep your paid plan until the end of the period you've paid for, then move to the Free plan. You won't be charged again.",
       "Your notebooks and results stay; only paid features and limits change.",
     ] },
