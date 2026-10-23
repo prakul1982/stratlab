@@ -68,7 +68,9 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
   const [open, setOpen] = useState(false);
   const timer = useRef<number>(undefined);
   const asked = useRef(0);
-  const fits = (i: Instrument) => !kinds || kinds.includes(i.type ?? "");
+  // a contract isn't listed where it is locked: the owner's "View as Free" asks the server as the owner, and the list showed
+  // NIFTY26NOVFUT beside "contracts are on the Pro plan" (R87-002)
+  const fits = (i: Instrument) => (!kinds || kinds.includes(i.type ?? "")) && !(fnoLocked && (i.fno || ["FUT", "CE", "PE"].includes(i.type ?? "")));
   const defaults = useDefaults().filter((d) => d.market === market.id && fits(d));
   const held = useHeld(market.id === "IN").filter((s) => !defaults.some((d) => d.symbol === s)).slice(0, 4);
   const surv = useSurveillance(market.id === "IN");
@@ -118,6 +120,9 @@ export function InstrumentSearch({ market, onPick, autoFocus, compact, kinds, pl
           <div className="results" id={listId} role="listbox" aria-label="Suggestions">
             {results!.length === 0 && <p className="k-small k-muted k-pad" role="presentation">No {what ?? "matches"} in {market.name} {what ? "match" : ""} "{q.trim()}".</p>}
             {fnoLocked && !kinds && <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-locked">Futures and options contracts are on the Pro plan.</p>}
+            {/* "NIFTY futures" found nothing on Pro, with no word of how contracts are named (R87-002) */}
+            {!fnoLocked && !kinds && market.id === "IN" && results!.length === 0 && /\b(fut|futures?|options?|calls?|puts?|ce|pe)\b/i.test(q) &&
+              <p className="k-small k-muted k-pad" role="presentation" data-testid="fno-hint">Contracts are found by their symbol: NIFTY26NOVFUT for a future, NIFTY26NOV22600CE for an option.</p>}
             {results!.map((r, i) => (
               <button key={r.id} id={`${fid}-o${i}`} type="button" role="option" aria-selected={i === on} className={i === on ? "on" : undefined}
                 onMouseDown={(e) => e.preventDefault()} onMouseMove={() => setOn(i)} onClick={() => pick(r)}>
