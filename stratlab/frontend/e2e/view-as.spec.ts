@@ -16,7 +16,9 @@ async function signIn(page: Page, session: typeof owner) {
     const host = new URL(r.request().url()).hostname;
     return host === "127.0.0.1" || host === "localhost" ? r.fallback() : r.fulfill({ status: 200, body: "{}", contentType: "application/json" });
   });
-  await page.request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer ${session.access_token}` }, data: { level: "some", focus: "both" } });
+  // setup, not the test: a connection the busy CI server reset is asked once more (ECONNRESET on a loaded runner)
+  const prefs = () => page.request.put(`${API}/me/prefs`, { headers: { Authorization: `Bearer ${session.access_token}` }, data: { level: "some", focus: "both" } });
+  await prefs().catch(async (e) => { if (!/ECONNRESET|socket hang up/.test(String(e))) throw e; await page.waitForTimeout(1000); return prefs(); });
   await page.addInitScript((s) => { localStorage.setItem("sb-demo-auth-token", JSON.stringify(s)); localStorage.setItem("stratlab.tour.v1", "1"); }, session);
   return errors;
 }
