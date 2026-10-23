@@ -64,7 +64,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   const left = allRows.length - rows.length;
   return (
     <>
-    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? label : `${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? `${label}, as cards` : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c) => {

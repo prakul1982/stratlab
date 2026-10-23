@@ -75,6 +75,6 @@ test("R88-003: breadth's sector cards name each figure's day; heat stays inside 
   assert.match(read("src/pages/BreadthPage.tsx"), /cardLabel: sectorColumnLabel\(c, shortDay\)/);
   const t = read("src/components/kit/DataTable.tsx");
   assert.match(t, /const label = c\.cardLabel \?\? \(typeof c\.header === "string" \? c\.header : undefined\);/);
-  assert.match(t, /aria-label=\{stack && phone \? label : `\$\{label\}, scrolls sideways`\}/);
+  assert.match(t, /aria-label=\{stack && phone \? `\$\{label\}, as cards` : `\$\{label\}, scrolls sideways`\}/);
   assert.match(read("src/styles.css"), /\.k-tbl-wrap\.stack \.inv-heat-cell \{ display: inline-block; margin: 0;/);
 });
