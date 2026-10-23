@@ -130,3 +130,20 @@ def test_a_gulf_markets_story_stays_out_of_the_us_and_india_briefs():
     assert other_region("US", t) and other_region("IN", t)
     assert not other_region("US", "Wall Street falls as Gulf markets slide")      # names this market too
     assert not other_region("US", "Oil jumps after Houthi strikes")
+
+
+def test_a_brief_preview_ends_at_a_sentence_or_an_ellipsis():
+    # R82-008: the Briefs list cut summaries mid-word ("…Stage 2 + S", "…without the Supe")
+    from app import email_kit
+    long = ("The S&P 500 fell 1.2% and the NASDAQ 2.6% on the week. " * 3) + "Twelve companies held Stage 2 without the Supertrend turning."
+    out = email_kit.short_line(long, 200)
+    assert len(out) <= 200 and (out.endswith(".") or out.endswith("…"))
+
+
+def test_an_amount_in_an_email_stays_on_one_line():
+    # R82-016: at phone width "−" split from "₹620" and "(+" from "₹3,250)"
+    from app import email_kit
+    html = email_kit.para("Today: 2 trades closed (1 won), −₹620; held (+₹3,250) and 1.2% <b>").html
+    assert '<span style="white-space:nowrap">−₹620</span>' in html
+    assert '<span style="white-space:nowrap">(+₹3,250)</span>' in html
+    assert "&lt;b&gt;" in html                     # the rest is still escaped
