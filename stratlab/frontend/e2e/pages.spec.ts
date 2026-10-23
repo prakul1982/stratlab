@@ -1351,7 +1351,7 @@ test("admin: rates and rules show each area's review, the source watch and every
   const panel = page.getByTestId("rules-panel");
   for (const area of ["Trading costs", "Income tax", "Interest rates", "Market rules", "Surveillance lists"])
     await expect(panel.getByRole("rowheader", { name: area, exact: true })).toBeVisible();
-  for (const src of ["SEC fee rate", "PPF rate", "NSE quantity freeze limits"]) await expect(panel.getByText(src, { exact: true })).toBeVisible();
+  for (const src of ["SEC fee rate", "PPF rate", "NSE circulars on charges and contract rules"]) await expect(panel.getByText(src, { exact: true })).toBeVisible();
   await panel.getByRole("button", { name: /Show all \d+ rules/ }).click();
   await expect(panel.getByRole("rowheader", { name: /US SEC fee \(Section 31\)/ })).toBeVisible();
   await expect(panel.getByText("$20.60 a million on sells")).toBeVisible();
