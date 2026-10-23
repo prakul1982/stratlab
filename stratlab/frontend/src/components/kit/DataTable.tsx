@@ -13,6 +13,7 @@ export type Column<R> = {
   action?: boolean;                          // the last column's buttons (Edit, Remove): as narrow as they are, right-aligned
   sortable?: boolean;                        // the header is a button that sorts by this column (needs the table's `sort`)
   cell: (row: R) => ReactNode;
+  cardLabel?: string;                        // the figure's name on a phone card when the header isn't plain text (R88-003)
 };
 
 const cls = (c: { numeric?: boolean; wrap?: boolean; action?: boolean }) => [c.numeric && "k-num", c.wrap && "k-wrap", c.action && "k-act"].filter(Boolean).join(" ") || undefined;
@@ -63,7 +64,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
   const left = allRows.length - rows.length;
   return (
     <>
-    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={`${label}, scrolls sideways`} tabIndex={0}>
+    <div ref={box} className={`k-tbl-wrap${stack ? " stack" : ""}${pinHead ? " pinhead" : ""}`} role="region" aria-label={stack && phone ? label : `${label}, scrolls sideways`} tabIndex={0}>
       <table className="k-table" aria-label={label} role={stack ? "table" : undefined}>
         <thead>
           <tr role={stack ? "row" : undefined}>{columns.map((c) => {
@@ -86,7 +87,7 @@ export function DataTable<R>({ label, columns, rows: allRows, rowKey, empty = "N
               <tr key={rowKey(r, ri)} role={stack ? "row" : undefined} {...rowAttrs?.(r)}>
                 {columns.map((c, i) => {
                   if (note !== undefined && i > 0) return i === 1 ? <td key={c.key} colSpan={columns.length - 1} className="k-row-note">{note}</td> : null;
-                  const label = typeof c.header === "string" ? c.header : undefined;
+                  const label = c.cardLabel ?? (typeof c.header === "string" ? c.header : undefined);
                   return c.rowHeader ? <th key={c.key} scope="row" role={stack ? "rowheader" : undefined} className={cls(c)}>{minusNode(c.cell(r))}</th>
                     : <td key={c.key} role={stack ? "cell" : undefined} data-label={label} className={cls(c)}>{minusNode(c.cell(r))}</td>;
                 })}
