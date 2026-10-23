@@ -44,3 +44,10 @@ test("R86-005: a scan running a few seconds says the day's first scan is the slo
   assert.match(src, /The day's first scan of a list reads each stock's daily chart, so a long list can take 20 seconds or more\. Scans after that take a second or two\./);
   assert.match(src, /<ScanElapsed count=\{cur\?\.count\} \/><\/p><SlowFirstScan \/>/);
 });
+
+test("R86-004: on a phone the filter chips and the chart's tool buttons are 40px targets", () => {
+  assert.match(read("src/styles.css"), /@media \(max-width: 640px\), \(pointer: coarse\) \{[^}]*\.k-chip \{ height: 40px; \}/s);
+  const chart = read("src/charts/price/priceChart.css");
+  assert.match(chart, /@media \(max-width: 640px\), \(pointer: coarse\) \{\s*\.pc-btn, \.pc-sel, \.pc-seg \.pc-btn \{ min-height: 40px; \}\s*\.pc-btn\.icon \{ width: 40px; \}/);
+  assert.ok(chart.lastIndexOf("min-height: 40px") > chart.indexOf(".pc-seg .pc-btn { border: 0;"));   // after the 32px rule it overrides
+});

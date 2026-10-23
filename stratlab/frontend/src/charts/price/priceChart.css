@@ -175,3 +175,10 @@
 }
 /* R13S-014: the keys beside a drawing tool (T, R, Shift+H) mean nothing on a screen with no keyboard */
 @media (hover: none) and (pointer: coarse) { .pc-pop button.item.row kbd { display: none; } }
+
+/* fingers, not a mouse: the tool buttons are 40px targets, not 32–34px (R86-004). Here, after the rules above, as this
+   file loads after the app's styles */
+@media (max-width: 640px), (pointer: coarse) {
+  .pc-btn, .pc-sel, .pc-seg .pc-btn { min-height: 40px; }
+  .pc-btn.icon { width: 40px; }
+}

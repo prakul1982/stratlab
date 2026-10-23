@@ -914,6 +914,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
 @media (max-width: 640px), (pointer: coarse) {
   select { min-height: 40px; }
   input[type=checkbox], input[type=radio] { width: 22px; height: 22px; }
+  .k-chip { height: 40px; }                     /* the filter chips: 40px a finger can hit, not 32px (R86-004) */
   
   .legal-links a, a.link.tiny { display: inline-block; padding: 8px 0; margin-inline: 0; }
   /* a tablet is wider than a phone but still a finger */
