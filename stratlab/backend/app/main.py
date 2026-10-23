@@ -6261,12 +6261,13 @@ def news_link(iid: str, n: int):
 
 @app.get("/news")
 def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile=Depends(current_profile)):
-    """Recent issues: a region's Market Brief, or the caller's own My Stocks."""
+    """Recent issues: a region's Market Brief, or the caller's own My Stocks. Each one's preview is whole sentences, or ends in an
+    ellipsis (R82-008: the list cut summaries mid-word, "…without the Supe")."""
     if kind not in news.KINDS:
         err(400, "bad_kind", "Pick the market brief or my stocks.")
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
-                        "preview": (i.get("summary") or "")[:200]} for i in news.recent(kind, scope, max(1, min(60, limit)))]}
+                        "preview": email_kit.short_line(i.get("summary"), 200)} for i in news.recent(kind, scope, max(1, min(60, limit)))]}
 
 
 @app.get("/news/{iid}")

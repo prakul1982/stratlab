@@ -252,13 +252,23 @@ def _t(s: str) -> str:
     return " ".join(str(s).split())
 
 
+# an amount with its sign and bracket ("(+₹3,250)", "−₹620", "-$1.2"): kept on one line in the HTML part
+_AMOUNT = re.compile(r"\(?[+\-\u2212]?(?:₹|\$|€|£)\s?[\d,]+(?:\.\d+)?(?:\s?(?:crore|lakh|bn|mn|k))?\)?|\(?[+\-\u2212](?:₹|\$|€|£)?[\d,]+(?:\.\d+)?%\)?")
+
+
+def _held(text: str) -> str:
+    """Escaped text with each amount kept whole: a phone-width email broke "−" from "₹620" and "(+" from "₹3,250)"
+    (R82-016)."""
+    return _AMOUNT.sub(lambda m: f'<span style="white-space:nowrap">{m.group(0)}</span>', escape(text))
+
+
 def para(text: str, muted: bool = False, size: int = 15) -> Block:
     cls, col = ("c-muted", L["muted"]) if muted else ("c-ink2", L["ink2"])
-    return Block(f'<p class="{cls}" style="margin:0 0 14px;font:{size}px/1.55 {SANS};color:{col}">{escape(text)}</p>', text)
+    return Block(f'<p class="{cls}" style="margin:0 0 14px;font:{size}px/1.55 {SANS};color:{col}">{_held(text)}</p>', text)
 
 
 def note(text: str) -> Block:
-    return Block(f'<p class="c-muted" style="margin:0 0 14px;font:13px/1.5 {SANS};color:{L["muted"]}">{escape(text)}</p>', text)
+    return Block(f'<p class="c-muted" style="margin:0 0 14px;font:13px/1.5 {SANS};color:{L["muted"]}">{_held(text)}</p>', text)
 
 
 def heading(text: str) -> Block:
