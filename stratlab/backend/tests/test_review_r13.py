@@ -363,7 +363,7 @@ def test_the_us_52_week_low_is_the_last_365_days_of_candles():
 
 # ---------- R13-009: breadth's stated time and revised days ----------
 def test_breadth_says_when_the_count_is_in_and_notes_a_revised_day(mem):
-    assert breadth.due_label("US") == "5:55 PM ET"
+    assert breadth.due_label("US") == "5:05 PM ET"
     row = lambda adv, dec, unch: [501, adv, dec, unch] + [0] * (len(breadth.COLS) - 4)      # noqa: E731
     old = {"2026-10-07": row(250, 250, 1), "2026-10-08": row(337, 163, 1)}
     new = {"2026-10-08": row(338, 163, 1), "2026-10-09": row(317, 184, 0)}

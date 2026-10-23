@@ -72,7 +72,10 @@ GROUPS = {
 DEFAULT = "nifty500"
 REGIONS = ("IN", "US")
 CLOSE = {"IN": ("Asia/Kolkata", "15:45"), "US": ("America/New_York", "16:15")}     # a day's candle is final after this
-RUN_AT = {"IN": ("Asia/Kolkata", "18:30"), "US": ("America/New_York", "17:45")}    # the daily run, after the close
+# the daily run, after the close. The US one starts once the closing prints have settled (stock_pages.settle, 45 minutes
+# after 16:00), five minutes after the US brief (16:50), so the count is in about an hour after the close instead of two
+# (R89-001: "23 Oct due about 5:55 PM ET" beside company pages and tiles already on 23 Oct)
+RUN_AT = {"IN": ("Asia/Kolkata", "18:30"), "US": ("America/New_York", "16:55")}
 # the run starts at the first check after RUN_AT (one every 5 minutes) and reads every stock of the market, a few minutes
 # more: the time the pages give is when it is in, not when it starts (R13-009: "due about 5:45 PM ET", in at 5:51)
 RUN_TAKES = {"US": 10}
@@ -80,7 +83,7 @@ RANGES = {"3m": 63, "6m": 126, "1y": 252, "2y": 504, "all": None}
 
 
 def due_label(region: str) -> str | None:
-    """When a market's daily count is usually in, as the pages say it: "5:55 PM ET" for the US run (RUN_AT, plus the
+    """When a market's daily count is usually in, as the pages say it: "5:05 PM ET" for the US run (RUN_AT, plus the
     RUN_TAKES minutes it takes to start and finish). None for India, whose pages already say "18:30 IST" (stock_pages.DUE_AT)."""
     if region != "US":
         return None
@@ -91,7 +94,7 @@ def due_label(region: str) -> str | None:
 
 def update_failed(region: str, pending: dict | None, stat: dict | None = None) -> bool:
     """The run for the day the page says is due failed, and its prices are older than that day: the page then says the
-    update didn't finish instead of "due about 5:55 PM ET" long after that time. Only a failed run counts (`failed_at`,
+    update didn't finish instead of "due about 5:05 PM ET" long after that time. Only a failed run counts (`failed_at`,
     newer than the last finished run, on or after the due day): a finished run keeps the last stock it couldn't read in
     `last_error`, and that said "the 21 Oct update didn't finish" at 16:30 IST, two hours before the run (R77-002)."""
     if not pending or pending.get("during"):
