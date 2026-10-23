@@ -45,8 +45,9 @@ test("Plans and the confirm step say nothing of GST while the invoice carries no
   assert.match(none, /^The price shown is all you pay: no GST is added\. Every payment gets an invoice in Account\./);
   assert.doesNotMatch(none, /incl\. GST|include 18% GST|GST invoice/);
   const abroad = finePrint(live, { currency: "SAR", inRupees: true, inRupeesYear: true, charged: { basic: "₹699", pro: "₹1,999" }, gst: false }).join(" ");
-  assert.match(abroad, /a card is charged ₹699 \(Basic\) or ₹1,999 \(Pro\) a month, and your bank converts it/);
-  assert.doesNotMatch(abroad, /GST/);
+  // R85-002: a visitor seeing another currency is told no GST is added too, not left to wonder
+  assert.match(abroad, /a card is charged ₹699 \(Basic\) or ₹1,999 \(Pro\) a month \(no GST is added\), and your bank converts it/);
+  assert.doesNotMatch(abroad, /including GST|include 18% GST|GST invoice/);
   assert.equal(paymentWindowLine("Basic", "month"), 'The payment window that opens next is headed "StratLab · Basic, monthly" and shows the amount in rupees.');
   assert.match(paymentWindowLine("Pro", "year"), /StratLab · Pro, yearly/);
   const plans = read("src/pages/PlansPage.tsx");

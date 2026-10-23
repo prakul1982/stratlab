@@ -64,3 +64,13 @@ def test_the_deepest_fall_counts_the_account_now_not_the_curves_last_point():
     c = risk.summary([s], today="2026-10-23")["currencies"][0]
     assert c["pnl"] == -517395.0
     assert c["deepest_fall"]["pnl"] == -517395.0 and c["deepest_fall"]["date"] == "2026-10-23"
+
+
+def test_a_low_that_held_to_the_close_is_said_once():
+    # R85-007: "−₹5,14,491 at the lowest point on 22 Oct (12:53 IST), during the day; the day closed at −₹5,14,491"
+    s = snap("a", "INR", 1000000, 1000000 - 514491.4, [{"t": "2026-10-21T15:30", "eq": 1000000},
+                                                       {"t": "2026-10-22T15:30", "eq": 1000000 - 514491.4}],
+             closed=[["2026-10-22T12:53:00", -514491.6]])
+    c = risk.summary([s], today="2026-10-23")["currencies"][0]
+    f = c["deepest_fall"]
+    assert f["intraday"] and f["at"] == "12:53" and f["held"] is True

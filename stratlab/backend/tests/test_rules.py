@@ -336,3 +336,17 @@ def test_the_retired_freeze_file_is_not_a_source():
     ids = [s["id"] for s in W.SOURCES]
     assert "nse_freeze" not in ids and "nse_circulars" in ids
     assert W.CIRCULAR_WORDS.search("Revision in Quantity Freeze limits")
+
+
+def test_a_newly_listed_index_lot_is_not_a_change_and_an_alert_names_only_what_moved(fdb):
+    # R85-003: "now NIFTY 65, BANKNIFTY 30, … NIFTYFPI 1,100, was NIFTY 65, BANKNIFTY 30, …" flagged "Changed at the source"
+    W.run(FakeFetch(GOOD), TODAY, NOW)
+    more = {**GOOD, "nse_lots": "U,SYMBOL,OCT\nX,NIFTY,65\nY,BANKNIFTY,30\nZ,NIFTYFPI,1100\n"}
+    assert W.run(FakeFetch(more), TODAY, NOW) == []
+    st = {s["id"]: s for s in W.state()["sources"]}["nse_lots"]
+    assert not st["pending"] and st["value"]["NIFTYFPI"] == 1100
+    moved = {**GOOD, "nse_lots": "U,SYMBOL,OCT\nX,NIFTY,75\nY,BANKNIFTY,30\nZ,NIFTYFPI,1100\n"}
+    lines = W.run(FakeFetch(moved), TODAY, NOW)
+    assert len(lines) == 1 and "NIFTY 75" in lines[0] and "NIFTY 65" in lines[0] and "BANKNIFTY" not in lines[0]
+    p = {s["id"]: s for s in W.state()["sources"]}["nse_lots"]["pending"]
+    assert p["now"] == "NIFTY 75" and p["was"] == "NIFTY 65"

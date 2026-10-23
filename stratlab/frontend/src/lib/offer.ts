@@ -197,7 +197,7 @@ export function finePrint(o: Offer | null | undefined, x: {
     // without a GSTIN the invoice charges none, so the price is the whole amount: said, so a buyer needn't wonder (R73-001)
     else if (buy) out.push("The price shown is all you pay: no GST is added. Every payment gets an invoice in Account.");
   } else if (buy && x.inRupees && x.charged) {
-    out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month${gst ? " including GST" : ""}, and your bank converts it, so the amount in ${x.currency} can differ.`);
+    out.push(`Paid in rupees for now: a card is charged ${x.charged.basic} (Basic) or ${x.charged.pro} (Pro) a month${gst ? " including GST" : " (no GST is added)"}, and your bank converts it, so the amount in ${x.currency} can differ.`);
   }
   if (buy && o?.yearly && x.year) {
     const rupeesYear = x.inRupeesYear && !inr;

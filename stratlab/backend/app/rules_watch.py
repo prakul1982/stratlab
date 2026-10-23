@@ -183,6 +183,25 @@ def _same(value, expected) -> bool:
         return value == expected
 
 
+def _moved(was, value) -> bool:
+    """Whether a source's value changed: for a table, a row it had that now reads differently or is gone. A row read for
+    the first time (NIFTYFPI's lot, once the file listed it) is kept without an alert (R85-003)."""
+    if isinstance(was, dict) and isinstance(value, dict):
+        return any(k not in value or value[k] != v for k, v in was.items())
+    return json.dumps(was, sort_keys=True) != json.dumps(value, sort_keys=True)
+
+
+def _diff_keys(was, value) -> set | None:
+    """A table's rows that moved, for the alert to name; None for a single value."""
+    if isinstance(was, dict) and isinstance(value, dict):
+        return {k for k in set(was) | set(value) if was.get(k) != value.get(k)}
+    return None
+
+
+def _only(value, keys):
+    return {k: v for k, v in value.items() if k in keys} if keys and isinstance(value, dict) else value
+
+
 def _show(value) -> str:
     if isinstance(value, dict):
         return ", ".join(f"{k} {v:,}" if isinstance(v, (int, float)) else f"{k} {v}" for k, v in value.items())
@@ -318,16 +337,18 @@ def run(fetch: Fetcher, today: date, now: datetime | None = None) -> list[str]:
         expected = src["expected"](today) if src["expected"] else None
         fp = hashlib.sha1(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
         was = s["value"]
-        changed = was is not None and json.dumps(was, sort_keys=True) != json.dumps(value, sort_keys=True)
+        changed = was is not None and _moved(was, value)
         differs = expected is not None and not _same(value, expected)
         if (changed or differs) and fp != s["alerted"]:
             why = "differs from what StratLab uses" if differs else "changed at the source"
-            s["pending"] = {"at": now.isoformat(timespec="minutes"), "why": why, "was": _show(was) if was is not None else None,
-                            "now": _show(value), "uses": _show(expected) if expected is not None else None}
+            # a table names only what moved: "now NIFTY 65, BANKNIFTY 30, … was NIFTY 65, BANKNIFTY 30, …" read as no change (R85-003)
+            keys = _diff_keys(was, value) if changed and not differs else None
+            s["pending"] = {"at": now.isoformat(timespec="minutes"), "why": why, "was": _show(_only(was, keys)) if was is not None else None,
+                            "now": _show(_only(value, keys)), "uses": _show(expected) if expected is not None else None}
             s["alerted"] = fp
-            lines.append(f"- {src['name']}: {why}. Source now says {_show(value)}"
+            lines.append(f"- {src['name']}: {why}. Source now says {_show(_only(value, keys))}"
                          + (f"; StratLab uses {_show(expected)} ({src['where']})" if expected is not None else
-                            f"; it said {_show(was)} before" if was is not None else "") + f". {src['url']}")
+                            f"; it said {_show(_only(was, keys))} before" if was is not None else "") + f". {src['url']}")
         elif expected is not None and not differs and s["pending"] and s["pending"].get("why") == "differs from what StratLab uses":
             s["pending"] = None        # the code was updated to match
         s["value"], s["shown"] = value, _show(value)
