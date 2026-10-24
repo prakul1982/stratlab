@@ -253,6 +253,28 @@ def _universe(u) -> dict | None:
     return {"preset": preset, "symbols": symbols, "maxOpen": max_open}
 
 
+# ---------- ideas the notebook can't test: option contracts and multi-leg positions (DA-001, DA-009) ----------
+# A notebook tests rules on one price series (a stock, an index, a coin, a pair). A single option, a straddle or any
+# multi-leg position is priced from its strikes, expiry and volatility, which no rule on the underlying holds: building
+# "Buy a call option when RSI crosses above 60" from the underlying's price once dropped the RSI and said nothing.
+_OPTIONS = re.compile(
+    r"\b(?:straddles?|strangles?|iron\s+(?:condors?|fly|flies|butterfl(?:y|ies))|butterfl(?:y|ies)\s+spreads?|condors?|"
+    r"(?:bull|bear)\s+(?:call|put)(?:\s+spreads?)?|(?:credit|debit|calendar|vertical|diagonal|ratio)\s+spreads?|"
+    r"covered\s+calls?|protective\s+puts?|cash[- ]secured\s+puts?|"
+    r"(?:call|put)\s+options?|options?\s+(?:strateg(?:y|ies)|contracts?|chains?|premiums?|legs?)|"
+    r"(?:buy|sell|write|short|long|trade)\w*\s+(?:[\w&]+\s+){0,3}options?|"
+    r"at[- ]the[- ]money|in[- ]the[- ]money|out[- ]of[- ]the[- ]money|atm|otm|itm)\b"
+    r"|\b\d{4,6}\s?(?:ce|pe)\b", re.I)
+OPTIONS_IDEA_MESSAGE = ("That idea trades options (a single option, a straddle or another multi-leg position). A notebook tests rules on "
+                        "one price series, such as a stock, an index or a coin, so it can't test an option's premium or its legs. "
+                        "Build it in the Options builder instead.")
+
+
+def options_idea(text: str) -> bool:
+    """Whether the sentence is an options strategy: refused up front, before any AI build is used."""
+    return bool(_OPTIONS.search(text or ""))
+
+
 # ---------- the AI's rules checked against the sentence they came from (R11C-004, R11C-005) ----------
 # values on the price's own scale: compared with a number, it must be a price above 0
 FLIP = {"gt": "lt", "lt": "gt", "xa": "xb", "xb": "xa", "eq": "eq"}
@@ -290,6 +312,45 @@ def _scaled_from_text(kind: str, period, text: str) -> dict | None:
     return {"l": {"t": kind, **({"p": period} if period else {})}, "op": op, "r": {"t": "num", "v": v}}
 
 
+_OSC_NAME = {"rsi": "RSI", "stoch_k": "Stochastic", "adx": "ADX"}
+# a note that says nothing could be made, kept only while no rule came out (DA-001: "no rules could be generated" over the
+# rules it was shown beside)
+_NO_RULES_NOTE = re.compile(r"\b(?:no|not any|none of the)\b[^.]*\brules?\b[^.]*\b(?:generat|creat|built|express|made|produc)|"
+                            r"\bcan(?:'t|not) (?:be )?(?:expressed|generated|built)\b|\bnothing (?:can|could) be\b|"
+                            r"\b(?:could not|couldn't|unable to) (?:generate|create|build|express)\b", re.I)
+
+
+def _lost_subject(c: dict, text: str, periods: dict) -> tuple[dict, str] | None:
+    """A rule of the price against a plain number between 0 and 100, when the sentence names one 0-100 indicator and that
+    number, and never sets the price against it: the indicator is the rule's subject, lost on the way ("sell when it falls
+    below 50" after "RSI crosses above 60" came back as "Price is below 50", DA-001). Read again with the indicator."""
+    l, r = c.get("l") or {}, c.get("r") or {}
+    for price, num, price_left in ((l, r, True), (r, l, False)):
+        if price.get("t") != "price" or num.get("t") != "num" or price.get("k") not in (None, 1) or price.get("ago") or price.get("tf"):
+            continue
+        v = num.get("v")
+        if v is None or not 0 < v <= 100:
+            continue
+        named = [k for k, pat in SCALED.items() if re.search(rf"\b{pat}\b", text, re.I)]
+        if len(named) != 1:
+            return None
+        lit = rf"(?<![\d.]){v:g}(?![\d.])"
+        if not re.search(lit, text) or re.search(rf"\b(?:price|close|closes|closing|ltp|stocks?|shares?|index|coin)\b[^.;,]{{0,30}}?{lit}", text, re.I):
+            return None
+        kind = named[0]
+        p = periods.get(kind)
+        if p is None:
+            m = re.search(rf"\b{SCALED[kind]}\s*\(?\s*(\d{{1,3}})\b", text, re.I)
+            p = int(m.group(1)) if m else None
+        osc = {"t": kind, **({"p": p} if p else {})}
+        op = c.get("op") if price_left else FLIP.get(c.get("op"), "gt")
+        fixed = {"l": osc, "op": op, "r": {"t": "num", "v": v}, **({"w": c["w"]} if c.get("w") is not None else {})}
+        say = {"gt": "is above", "lt": "is below", "xa": "crosses above", "xb": "crosses below", "eq": "is"}[op]
+        name = _OSC_NAME[kind] + (f" {p}" if p else "")
+        return fixed, f"\"Price {say} {v:g}\" was read as \"{name} {say} {v:g}\": the indicator your words name."
+    return None
+
+
 _W52 = re.compile(r"\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b"
                   r"|\b(?:12|twelve)[- ]?months?[- ]*(low|high)s?\b|\b(?:yearly|annual)\s+(low|high)s?\b", re.I)
 _TOUCH = re.compile(r"\b(?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?|mak(?:e|es|ing) a new)\b", re.I)
@@ -321,6 +382,13 @@ def check_against_text(out: dict, text: str) -> dict:
     - "no stop loss" is a stop of 0, said (and so never asked again), and "after 15 bars" is a time exit."""
     notes = list(out.get("notes") or [])
     risk0 = dict(out.get("risk") or {})            # a target or stop read from a rule against the entry price
+    # the length each 0-100 indicator already has in the rules, for a rule that lost its indicator (DA-001)
+    periods = {}
+    for k in ("entry", "exit", "shortEntry", "shortExit"):
+        for c in out.get(k) or []:
+            for ref in (c.get("l") or {}, c.get("r") or {}):
+                if ref.get("t") in SCALED and ref.get("p"):
+                    periods.setdefault(ref["t"], ref["p"])
 
     def clean(conds: list[dict]) -> list[dict]:
         kept = []
@@ -373,6 +441,11 @@ def check_against_text(out: dict, text: str) -> dict:
                 else:
                     notes.append("A rule comparing the price with a 0-100 value was left out: the two aren't on the same scale.")
                 continue
+            lost = _lost_subject(c, text, periods)
+            if lost:
+                kept.append(lost[0])
+                notes.append(lost[1])
+                continue
             kept.append(c)
         return kept
 
@@ -382,6 +455,8 @@ def check_against_text(out: dict, text: str) -> dict:
         if k in ("entry", "shortEntry") and out[k] and len(out[k]) < before and out.get("entryJoin") in ("any", "score"):
             # the rest of an "any of these" list decides alone once a rule is gone (R18-002: volume alone opened 3,014 trades)
             notes.append("A rule was left out of the entry rules, so the ones left now decide the entry on their own. Check them before you run it.")
+    if out.get("entry") or out.get("shortEntry"):
+        notes = [n for n in notes if not _NO_RULES_NOTE.search(n)]       # rules came out: a note saying none could must not stand (DA-001)
     # "Sell when it crosses below" is the way out of a buy, not a short sale (R11C-004)
     if out.get("side") in ("short", "both") and not _SHORT.search(text):
         if out["side"] == "both":

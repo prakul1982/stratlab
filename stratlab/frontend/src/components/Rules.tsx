@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { money, TF_NAME } from "../lib/format";
-import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, selfMultipleNote, NO_STOP_SIZE_NOTE, sizedWithoutStop, switchStopUnit } from "../lib/rules";
+import { DEFAULTS, defaultExit, INDICATOR_GROUPS, INDICATORS, MAX_RULES, meaningful, mkRef, NO_SESSION, OPS, opSay, rebuiltRisk, refName, selfMultipleNote, NO_STOP_SIZE_NOTE, sizedWithoutStop, stopWords, switchStopUnit } from "../lib/rules";
 import { HELP } from "../lib/help";
 import { CANDLE_LIMITS, CANDLE_SIZES, CANDLE_UNITS, candleCheck } from "../lib/intervals";
 import { Info } from "./ui";
@@ -187,8 +188,10 @@ const TGT_UNITS: [NonNullable<Risk["tgtType"]>, string, string][] = [
   ["pct", "% target", "percent of the entry price"], ["points", "point target", "price points"], ["r", "R target", "a multiple of the stop distance: 2R is twice the risk"],
 ];
 
-export function RulesCard({ s, currency, onChange, onRebuilt }: {
+export function RulesCard({ s, currency, onChange, onRebuilt, defaultStop }: {
   s: Strategy; currency: string; onChange: (s: Strategy) => void;
+  /** The stop loss is the notebook's default: the idea never set one and no question about it was answered (DA-008). */
+  defaultStop?: boolean;
   /** Called after "Edit in words" rebuilds the rules, with what the new words said and didn't say. */
   onRebuilt?: (gaps: Built["gaps"]) => void;
 }) {
@@ -196,15 +199,16 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
   const [rewrite, setRewrite] = useState<string | null>(null);
   const [rebuilding, setRebuilding] = useState(false);
   const [rewriteNote, setRewriteNote] = useState("");
+  const [rewriteOptions, setRewriteOptions] = useState(false);     // the words describe an options idea: the Options builder is the way on (DA-001)
   const [rewriteWarnings, setRewriteWarnings] = useState<string[]>([]);
   const [unitNote, setUnitNote] = useState<string | null>(null);
   const rebuild = async () => {
     if (rewrite === null) return;
-    setRebuilding(true); setRewriteNote(""); setRewriteWarnings([]);
+    setRebuilding(true); setRewriteNote(""); setRewriteWarnings([]); setRewriteOptions(false);
     try {
       const out = await buildIdea(rewrite.trim());
       if (out.usedAI) refreshMe();
-      if (!out.built) { setRewriteNote(out.note); return; }
+      if (!out.built) { setRewriteNote(out.note); setRewriteOptions(!!out.options); return; }
       const n = out.built.strategy;
       // the stop, target, trail and time limit come from the words; risk per trade, sizing and the rest only when the words
       // state them; the capital stays (as the box says)
@@ -238,6 +242,8 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
   const shortEntry = s.shortEntry ?? [], shortExit = s.shortExit ?? [];
   const stopType = r.stopType ?? "pct", tgtType = r.tgtType ?? "pct";
   const riskAmount = (r.capital * r.riskPct) / 100;
+  // the VWAP the rules use: restarted each day on intraday candles, a rolling average on daily ones (DA-005)
+  const vwapRef = [...s.entry, ...s.exit, ...shortEntry, ...shortExit].flatMap((c) => [c.l, c.r]).find((x) => x.t === "vwap");
 
   const sideTok = (_: string) => (
     <Choice title="Long, short or both" value={side} onChange={(v) => set({ side: v })} display={short ? "Sell short" : "Buy"} options={[
@@ -274,7 +280,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
   const fullNote = <p className="k-note">{MAX_RULES} rules is the most a list can hold. Remove one to add another.</p>;
 
   // how many advanced settings are in use, so "More settings" says so while closed
-  const moreOn = [r.trail, r.maxBars, intraday && (sess.start || sess.end), intraday && sess.squareoff, intraday && sess.maxTradesDay,
+  const moreOn = [r.maxBars, intraday && (sess.start || sess.end), intraday && sess.squareoff, intraday && sess.maxTradesDay,
     intraday && sess.cooldown, intraday && sess.dailyLossPct, (r.sizing ?? "risk") === "capital"].filter(Boolean).length;
   const addBtn = (key: "entry" | "exit" | "shortEntry" | "shortExit", c: Cond, label: string) => full(key) ? fullNote : (
     <button type="button" className="add-rule" onClick={() => addRule(key, c)}>+ {label}</button>
@@ -335,7 +341,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           {handEdited && <Notice tone="warn" role="note">These words are from before you changed the rules by hand. Rebuilding replaces the rules below with what the words say, so update the words first if you want to keep your changes.</Notice>}
           <div className="k-row">
             <button type="button" className="btn sm" disabled={rebuilding || rewrite.trim().length < 5} onClick={rebuild}>{rebuilding ? "Rebuilding…" : "Rebuild the rules"}</button>
-            {rewriteNote && <Notice tone="warn" role="status">{rewriteNote}</Notice>}
+            {rewriteNote && <Notice tone="warn" role="status" actions={rewriteOptions ? <Link className="btn sm" to="/options">Open the Options builder</Link> : undefined}>{rewriteNote}</Notice>}
           </div>
         </div>
       )}
@@ -346,6 +352,12 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
         </div>
       )}
       <p className="k-small k-muted">Tap any highlighted word to change it: the indicator, its length, the condition or a number.</p>
+      {vwapRef && (
+        <p className="k-note" data-testid="vwap-note">
+          {intraday ? "VWAP here is the day's VWAP: it restarts at each trading day's open, so its length isn't used."
+            : `On daily candles VWAP is a rolling ${vwapRef.p ?? DEFAULTS.vwap?.[0] ?? 20}-candle average, not the day's VWAP. Pick 5-minute, 15-minute or 1-hour candles to use the day's VWAP.`}
+        </p>
+      )}
       {[...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])].map(selfMultipleNote).filter((n): n is string => !!n).map((n) => (
         <Notice key={n} tone="warn" role="status">{n} A run is refused while it is in the notebook.</Notice>
       ))}
@@ -371,7 +383,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
       <Block title="Exit" info={s.entry.length > 0 ? <Info label="Crosses or is above?">{HELP.crosses}</Info> : undefined}>
         {list("exit", s.exit, (i) => i === 0 ? <b>{short ? "Buy back" : "Sell"} when</b> : <b>or when</b>, false)}
         {both && list("shortExit", shortExit, (i) => i === 0 ? <b>Buy back a short when</b> : <b>or when</b>, false)}
-        {!s.exit.length && !shortExit.length && <p className="sentence k-muted">No sell rule yet.</p>}
+        {!s.exit.length && !shortExit.length && <p className="sentence k-muted" data-testid="no-sell-rule">No sell rule yet.{intraday && sess.squareoff ? ` Every open trade closes at ${sess.squareoff}, the square-off time.` : ""}</p>}
         <p className="sentence">
           {/* "at a 3% stop or a 6% target", "at a 3% stop, with no target", "with no stop loss and at a 6% target": never
               "or a no target" (R6O-010) */}
@@ -385,6 +397,18 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           {r.tgt > 0 && <>{tgtType === "pct" ? "" : " "}{unitTok("tgt")}</>}.
           <Info label="What are a stop loss and a target?"><b>Stop loss:</b> {HELP.stop}<br /><br /><b>Target:</b> {HELP.target}<br /><br /><b>Units:</b> {HELP.stopUnits}</Info>
         </p>
+        {/* a trailing stop is an exit like the stop loss: shown with the rules, not only inside More settings (DA-008) */}
+        {(r.trail ?? 0) > 0 && (
+          <p className="sentence" data-testid="trail-line">
+            Also close if the price {short ? "rises" : "falls"}{" "}
+            <NumTok title="Trailing stop (%)" value={r.trail ?? 0} suffix="%" missing="off" max={50} onChange={(v) => setRisk({ trail: v })}
+              hint="Moves the stop with the best price since the trade opened, staying this far behind it. It never moves back. 0 turns it off." />{" "}
+            from its best since the trade opened (a trailing stop).
+          </p>
+        )}
+        {defaultStop && r.sl > 0 && (
+          <p className="k-note" data-testid="default-stop-note">The {stopWords(r.sl, stopType)} is a default: your idea didn't set a stop loss. Change it above, or set it to 0 to test without one.</p>
+        )}
         {unitNote && <Notice tone="warn" role="status" className="stop-unit-note">{unitNote}</Notice>}
         {/* below the block's rules, like the entry's add button */}
         {exitPick("exit", both ? "Add a sell rule" : "Add an exit rule")}
@@ -401,7 +425,7 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
           <p className="sentence" data-testid="risk-line">
             <b>Risk per trade:</b>{" "}
             <NumTok title="Risk per trade (% of your capital)" value={r.riskPct} suffix="%" min={0.1} max={100}
-              onChange={(v) => setRisk({ riskPct: v })} hint="The share of your capital you would lose if the stop loss is hit." />{" "}of your capital{" "}
+              onChange={(v) => setRisk({ riskPct: v })} hint="The share of your starting capital you would lose if the stop loss is hit. After losses it is the share of what is left, so trades shrink; after a profit the size does not grow." />{" "}of your capital{" "}
             <span className="k-amount" data-testid="risk-amount">({money(riskAmount, currency)})</span>
             <Info label="What does risk per trade mean?">{HELP.risk} With {r.riskPct}% of {money(r.capital, currency)}, that is {money(riskAmount, currency)} if the stop loss is hit.</Info>
           </p>
@@ -438,21 +462,21 @@ export function RulesCard({ s, currency, onChange, onRebuilt }: {
             <TimeTok title="Last entry time" value={sess.end} empty="the close" onChange={(v) => setSess({ end: v })}
               hint="No new trades on candles that close after this time." />, square off at{" "}
             <TimeTok title="Square-off time" value={sess.squareoff} empty="never (hold overnight)" onChange={(v) => setSess({ squareoff: v })}
-              hint="Any open trade closes on the candle that ends at this time. Indian intraday (MIS) costs apply when set." />, at most{" "}
-            <NumTok title="Trades per day" value={sess.maxTradesDay} step={1} max={100} missing="any number of" render={(v) => `${v}`}
-              onChange={(v) => setSess({ maxTradesDay: Math.round(v) })} hint="0 means no limit." />{" "}trade{sess.maxTradesDay === 1 ? "" : "s"} a day, wait{" "}
+              hint="Any open trade closes on the candle that ends at this time. Indian intraday (MIS) costs apply when set." />, trades per day:{" "}
+            <NumTok title="Trades per day" value={sess.maxTradesDay} step={1} max={100} missing="no limit" render={(v) => `at most ${v}`}
+              onChange={(v) => setSess({ maxTradesDay: Math.round(v) })} hint="0 means no limit." />, wait{" "}
             <NumTok title="Cooldown (candles)" value={sess.cooldown} step={1} max={500} missing="no candles" render={(v) => `${v} candle${v === 1 ? "" : "s"}`}
-              onChange={(v) => setSess({ cooldown: Math.round(v) })} hint="After a trade closes, skip this many candles before entering again." />{" "}after each trade, and stop for the day after losing{" "}
-            <NumTok title="Daily loss cap (% of capital)" value={sess.dailyLossPct} max={100} missing="any amount" suffix="%"
-              onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until the next market day." />.
+              onChange={(v) => setSess({ cooldown: Math.round(v) })} hint="After a trade closes, skip this many candles before entering again." />{" "}after each trade, daily loss limit:{" "}
+            <NumTok title="Daily loss cap (% of capital)" value={sess.dailyLossPct} max={100} missing="no limit" suffix="%"
+              onChange={(v) => setSess({ dailyLossPct: v })} hint="Once the day's loss (including the open trade) reaches this % of capital, the trade is closed and nothing more happens until the next market day. 0 means no limit." />.
             <Info label="Intraday session rules">{HELP.session}</Info>
           </p>
         )}
         <span className="k-eyebrow">Costs and position size</span>
         <FormGrid label="Costs and position size">
-          <Field label="Position size">{(id) => (
+          <Field label="Position size" wide>{(id) => (
             <Select id={id} value={r.sizing ?? "risk"} onChange={(v) => setRisk({ sizing: v as Risk["sizing"] })}
-              options={[{ value: "risk", label: "By risk (% of capital at the stop)" }, { value: "capital", label: "Fixed capital per trade" }]} />
+              options={[{ value: "risk", label: "By risk (% of capital)" }, { value: "capital", label: "Fixed capital per trade" }]} />
           )}</Field>
           {(r.sizing ?? "risk") === "capital" && <>
             <NumField label="Capital per trade" min={0} step={1000} value={r.perTrade ?? 0} onValid={(v) => { if (v >= 0) setRisk({ perTrade: v }); }} />

@@ -8,12 +8,12 @@ const DAY_MS = 86_400_000;
 
 /** Is this text a period this file knows: "all", a preset, or "35 days". */
 export const isPeriod = (p: unknown): p is string =>
-  typeof p === "string" && (p === "all" || p in PRESET_DAYS || /^\d{1,3} (days|weeks|months|years)$/.test(p));
+  typeof p === "string" && (p === "all" || p in PRESET_DAYS || /^\d{1,4} (days|weeks|months|years)$/.test(p));
 
 /** How many calendar days a period covers, or null for all of them. */
 export function periodDays(p: string): number | null {
   if (p in PRESET_DAYS) return PRESET_DAYS[p];
-  const m = p.match(/^(\d{1,3}) (days|weeks|months|years)$/);
+  const m = p.match(/^(\d{1,4}) (days|weeks|months|years)$/);
   return m ? Math.round(Number(m[1]) * UNIT_DAYS[m[2]]) : null;
 }
 

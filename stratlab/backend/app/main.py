@@ -67,7 +67,7 @@ from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
 from . import rule_check
-from .engine.verdict import restate_empty, restated as verdict_restated
+from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -1449,6 +1449,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
 
 @app.post("/ai/strategy")
 def ai_strategy(req: AIReq, profile=Depends(current_profile)):
+    if ai_writer.options_idea(req.text):
+        # a single option, a straddle or any multi-leg idea can't be tested as rules on a price series: said before any AI
+        # build is used, and the same whether or not the month's builds are left (DA-001, DA-009)
+        err(422, "options_idea", ai_writer.OPTIONS_IDEA_MESSAGE)
     with ai_slot(profile) as (used, limit):
         try:
             out = write_strategy(req.text, pro=all_indicators(profile))
@@ -1774,6 +1778,9 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
     rec["req_days"] = req.days
+    stop_note = research.assumed_stop_note(nb.get("gaps"), strategy)
+    if stop_note and isinstance(rec.get("verdict"), dict):
+        rec["verdict"] = with_notes(rec["verdict"], [stop_note])
     if not req.label.strip():
         rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
     # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over

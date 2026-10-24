@@ -20,7 +20,7 @@ test("risk sizing with no stop loss and no trail is flagged, with a stop it is n
   assert.equal(R.sizedWithoutStop({ sizing: "risk", sl: 2, trail: 0 }), false);
   assert.equal(R.sizedWithoutStop({ sizing: "risk", sl: 0, trail: 3 }), false);
   assert.equal(R.sizedWithoutStop({ sizing: "capital", sl: 0, trail: 0 }), false);
-  assert.match(R.NO_STOP_SIZE_NOTE, /Most in one trade/);
+  assert.match(R.NO_STOP_SIZE_NOTE, /Max capital per trade \(%\)/);          // the field's own label (DA-010)
   assert.doesNotMatch(R.NO_STOP_SIZE_NOTE, /if the stop loss is hit/);
 });
 
@@ -45,7 +45,7 @@ for (const [text, exit] of [
   ["Buy when price crosses above 50 SMA, sell when price crosses below it.", ["Price xb SMA 50"]],
   ["Buy when price crosses above 50 SMA, sell when it crosses back below.", ["Price xb SMA 50"]],
   ["Buy when price closes above the 20 EMA. Sell when it closes below it.", ["Price lt EMA 20"]],
-  ["Buy when price is above the 50 SMA. Sell when it falls below it.", ["Price lt SMA 50"]],
+  ["Buy when price is above the 50 SMA. Sell when it falls below it.", ["Price xb SMA 50"]],        // "falls below" is a move across, as "crosses below" is (DA-002)
 ]) {
   test(`sell rule kept: ${text}`, () => {
     const p = parse(text);

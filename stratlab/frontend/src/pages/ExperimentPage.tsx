@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, dataUrl } from "../lib/api";
 import { useApp } from "../lib/app";
 import { candleSpan, charge, fall, fmtDate, money, monthYear, num, pct, periodName, price, priceDp, qty, TF_NAME, tzOf, when } from "../lib/format";
-import { CHECKS, checkTone, checksLine, qtyNote, tradeListFacts, upDown } from "../lib/tradeUi";
+import { CHECKS, checkTone, checksLine, qtyNote, splitHeadline, summaryLines, tradeListFacts, upDown } from "../lib/tradeUi";
 import type { Basket, BasketRow, Check, Experiment, Notebook, Trade, WalkForward, WFWindow } from "../lib/types";
 import { DrawdownBand, Heatmap, SplitBars, XYChart } from "../components/Charts";
 import { pctTick, moneyCompact } from "../lib/chartFormat";
@@ -150,7 +150,7 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
           unseenLabel={`Tested on ${yearSpan(d.unseen_from, d.unseen_to)} · ${withOpen(d.unseen_trades, d.open_unseen ?? 0)}`} />
       )}
       {c.id === "unseen" && d?.spanning > 0 && (
-        <span className="k-note">{d.spanning === 1 ? "1 trade was opened before the split and closed after it; it counts" : `${d.spanning} trades were opened before the split and closed after it; they count`} with the built part (marked in Every trade).</span>
+        <span className="k-note">{d.spanning === 1 ? "1 trade was opened in the built period and closed in the unseen one; it counts" : `${d.spanning} trades were opened in the built period and closed in the unseen one; they count`} with the built part (marked in Every trade).</span>
       )}
       {c.id === "nearby" && d && (
         <>
@@ -159,7 +159,8 @@ function CheckCard({ c, cur }: { c: Check; cur: string }) {
             <span>{d.col_label} {d.cols[0]} → {d.cols[d.cols.length - 1]}</span>
             {d.row_label && <span>{d.row_label} {d.rows[0]} → {d.rows[d.rows.length - 1]}</span>}
           </div>
-          <p className="k-small k-muted"><b className="k-ink">{d.profitable} of {d.total}</b> nearby settings made money. Yours is outlined.</p>
+          {/* the check's line below already counts how many made money; this says only which cell is yours (DA-023) */}
+          <p className="k-small k-muted">Yours is outlined.</p>
         </>
       )}
       {c.id === "shuffle" && d && <DrawdownBand yours={d.yours} p95={d.p95} worst={d.worst} />}
@@ -312,6 +313,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
   const tz = tzOf(e.instrument);
   const intraday = e.tf !== "1d";
   const v = e.verdict;
+  const head = splitHeadline(v.headline);
   const unseen = v.checks.find((c) => c.id === "unseen")?.data;
   const cap = e.strategy.risk.capital;
   const st = e.stats;
@@ -331,7 +333,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
   const tradeCols: Column<Trade>[] = [
     ...(e.group ? [{ key: "sym", header: "Symbol", rowHeader: true, cell: (t: Trade) => <b>{t.symbol}</b> }] : []),
-    { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Spans the split: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
+    { key: "open", header: intraday ? "Opened (candle)" : "Opened", cell: (t) => <>{at(t.entry_t)}{t.spans_split ? <span className="k-sub-line">Closed in the unseen period: counts as built</span> : t.part === "unseen" ? <span className="k-sub-line">Unseen part</span> : null}</> },
     { key: "close", header: intraday ? "Closed (candle)" : "Closed", cell: (t) => (t.exit_t ? at(t.exit_t) : "Still open") },
     ...(twoWay ? [{ key: "side", header: "Side", cell: (t: Trade) => (t.side === "short" ? "Short" : "Long") }] : []),
     { key: "qty", header: "Qty", numeric: true, cell: (t) => <>{qty(t.qty, step, e.instrument.market)}{qtyNote(t) && <span className="k-sub-line">{qtyNote(t)}</span>}</> },
@@ -380,8 +382,17 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
 
       <section className="k-verdict-hero" aria-label="The verdict">
         <div className="k-stack">
-          <div className="k-card-titlerow"><h2 className={`verdict-head ${v.verdict}`}>{v.headline}</h2><Info label="About the verdict: how it is decided">{HELP.verdict}</Info></div>
-          <p className="k-lede">{v.summary}</p>
+          <div className="k-card-titlerow"><h2 className={`verdict-head ${v.verdict}`}>{head.main}</h2><Info label="About the verdict: how it is decided">{HELP.verdict}</Info></div>
+          {head.checks && <p className="k-small k-muted" data-testid="verdict-checks">{head.checks}</p>}
+          <div className="k-stack k-tight" data-testid="verdict-summary">
+            {summaryLines(v.summary).map((line) => <p key={line} className="k-lede">{line}</p>)}
+          </div>
+          {open > 0 && (
+            <p className="k-note" data-testid="open-trade-note">
+              {open === 1 ? "1 trade is still open: it is valued at the last close in the return." : `${open} trades are still open: they are valued at the last close in the return.`}{" "}
+              Average trade, win rate and profit factor count closed trades only.
+            </p>
+          )}
         </div>
         <Card label="Strength of evidence">
           <CardHead level={3} title="Strength of evidence" info={HELP.strength} infoLabel="About the strength of evidence" />
@@ -400,7 +411,7 @@ function ExperimentView({ nb, e }: { nb: Notebook; e: Experiment }) {
         <ChartFrame title="Where the money came from, and went" info={HELP.equity} label="Account value" actions={<span className="k-note">{money(cap, cur)} start</span>}>
           <XYChart ariaLabel="Account value over the test, with the unseen part shaded" times={e.series.t} tz={tz} height={260} compare
             format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} refs={[{ v: cap }]} split={e.series.split}
-            splitNotes={unseen ? [`tuned on these years: ${pct(unseen.built_ret)}`, `never seen: ${pct(unseen.unseen_ret)}`] : undefined}
+            splitNotes={unseen ? [`built part: ${pct(unseen.built_ret)}`, `unseen part: ${pct(unseen.unseen_ret)}`] : undefined}
             series={[
               { id: "strategy", label: "Strategy", values: e.series.equity, color: "var(--ink)", width: 2 },
               { id: "hold", label: "Buy and hold", values: e.series.buy_hold, color: "var(--muted)", width: 1.5, dash: "5 4" },

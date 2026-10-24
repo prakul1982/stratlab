@@ -12,7 +12,7 @@ export const INDICATORS: { t: RefType; name: string; friendly: string; pro?: boo
   { t: "price", name: "Price", friendly: "The closing price of each candle.", group: "avg" },
   { t: "sma", name: "Average (SMA)", friendly: "The plain average of the last N closing prices.", group: "avg" },
   { t: "ema", name: "Fast average (EMA)", friendly: "An average of the last N closes that leans on the newest ones, so it turns sooner.", group: "avg" },
-  { t: "vwap", name: "Volume-weighted average (VWAP)", friendly: "The average price weighted by how much traded at each price.", pro: true, group: "avg" },
+  { t: "vwap", name: "Volume-weighted average (VWAP)", friendly: "The average price weighted by how much traded at each price. On intraday candles it restarts every trading day (the length is not used); on daily candles it is a rolling average over the length you set, not the day's VWAP.", pro: true, group: "avg" },
   { t: "bb_upper", name: "Upper band (Bollinger)", friendly: "The average plus a few standard deviations: a band above the price.", pro: true, group: "avg" },
   { t: "bb_mid", name: "Middle band (Bollinger)", friendly: "The average the Bollinger bands sit around.", pro: true, group: "avg" },
   { t: "bb_lower", name: "Lower band (Bollinger)", friendly: "The average minus a few standard deviations: a band below the price.", pro: true, group: "avg" },
@@ -169,17 +169,32 @@ function normInd(w: string): RefType { w = w.trim(); return w === "ema" ? "ema" 
 /** "52-week low" / "52-week high" (also "52 wk", "52w", "one-year"): the lowest low / highest high of the previous 252 daily
  * candles, a trading year (R18-002: "buy when price touches its 52-week low" became "Price is below 0"). */
 const WEEK52 = /\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(low|high)s?\b/;
-function parseRef(s: string): Ref | null {
+/** Indicators the simple converter doesn't read: a clause that names one is reported, never turned into a rule about the
+ * price (DA-002). */
+const UNREAD_INDICATOR = /\b(macd|bollinger|bands?|supertrend|adx|stoch\w*|atr|vwap|volume|obv|cci|ichimoku|fibonacci|pivots?|donchian|keltner|momentum|williams|parabolic)\b/;
+/** `pronoun`: whether "it" counts as the price (on the right of a rule it does; on the left it stands for the subject of the
+ * clause before, which the caller carries). */
+function parseRef(s: string, pronoun = true): Ref | null {
   let m;
   if ((m = s.match(WEEK52))) return { t: (m[1] ?? m[2]) === "low" ? "dc_lower" : "dc_upper", p: 252 };
-  if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
+  // "the lowest low of the last 20 days", "the 20-day high": the highest high / lowest low of the previous N candles
+  if ((m = s.match(/\b(highest high|lowest low)\b[^0-9.;,]*(\d+)/)) || (m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)s?\s*[- ]?(high|low)\b/))) {
+    const word = /^\d/.test(m[1]) ? m[2] : m[1];
+    const n = /^\d/.test(m[1]) ? +m[1] : +m[2];
+    return { t: /low/.test(word) ? "dc_lower" : "dc_upper", p: n };
+  }
+  if ((m = s.match(/(\d+)\s*[- ]?\s*(?:day|period|bar|candle)?s?\s*(ema|sma|rsi|moving average|average|avg|ma\b)/))) return { t: normInd(m[2]), p: +m[1] };
   if ((m = s.match(/\b(ema|sma|rsi|ma)\s*\(?\s*(\d+)/))) return { t: normInd(m[1]), p: +m[2] };
   if (/\brsi\b/.test(s)) return { t: "rsi", p: 14 };
   if (/\bstage\b/.test(s)) return { t: "stage", p: 150, m: 20 };
-  if (/\b(price|close|ltp|it)\b/.test(s)) return { t: "price" };
+  if (pronoun ? /\b(price|close|ltp|it)\b/.test(s) : /\b(price|close|ltp)\b/.test(s)) return { t: "price" };
   return null;
 }
-export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short"; dropped: string[] } {
+/** "drops below", "goes back above", "rises above": a move across a level, which happens on one candle, as "crosses" does
+ * (DA-002: "RSI drops below 30" came back as "RSI 14 is below 30", a level that holds on every candle it stays there). */
+const MOVES = /^(?:drops?|falls?|dips?|slips?|sinks?|declines?|goes|go|moves?|rises?|climbs?|jumps?|breaks?|gets?|drifts?|pulls?|runs?)\b/;
+
+export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short"; dropped: string[]; unread: string[] } {
   let t = " " + raw.toLowerCase().replace(/\s+/g, " ") + " ";
   const short = /\b(sell short|short sell|go short|short(?:ing)?\b(?! ?-?term))/.test(t);
   const out: { entry: Cond[]; exit: Cond[]; risk: Partial<Risk>; side: "long" | "short" } = { entry: [], exit: [], risk: {}, side: short ? "short" : "long" };
@@ -221,11 +236,12 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
   t = t.replace(new RegExp(`(?:with |and |, )?(?:an? )?${N} ?% ?(?:${STOP}|${TARGET})`, "g"), " ");
   t = t.replace(/(?:with |and |, )?(?:an? )?(?:stop[ -]?loss|\bsl\b|\bstop\b|target|take[ -]?profit|\btp\b|\brisk(?:ing)?|capital)[^.;,]*?\d[\d,.]*\s*%?(?:\s*(?:lakhs?|lacs?|crores?|cr|k)\b)?(?: of (?:my |the )?capital)?/g, " ");
   const clauses = t.split(/[.;\n]| then |,(?= ?(?:and )?(?:sell|exit|close|square|buy|enter|go long)\b)| and (?=(?:sell|exit|close|square off|buy|enter|go long)\b)/);
-  const opRe = /((?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?)(?= (?:its |the |a |an |new |their )*(?:52|fifty[- ]?two|one|1)[- ]?(?:weeks?|wks?|w|year)\b)|cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<|\bis\b(?! (?:now |just |not |no longer |back |still )?(?:above|below|over|under|greater|less|more|crossing|touch|hit|reach|the (?:above|below)))|\bequals?\b|=)/;
+  const opRe = /((?:touch(?:es|ed|ing)?|hit(?:s|ting)?|reach(?:es|ed|ing)?)(?= (?:its |the |a |an |new |their )*(?:52|fifty[- ]?two|one|1)[- ]?(?:weeks?|wks?|w|year)\b)|(?:drops?|falls?|dips?|slips?|sinks?|declines?|goes|go|moves?|rises?|climbs?|jumps?|breaks?|gets?|drifts?|pulls?|runs?)(?: (?:back|down|up))? (?:above|over|below|under)\b|cross(?:es|ing)? (?:back )?(?:above|over)\b|crossover\b|cross(?:es|ing)? (?:back )?(?:below|under)\b|crossunder\b|\babove\b|greater than|more than|\bover\b|>|\bbelow\b|less than|\bunder\b|<|\bis\b(?! (?:now |just |not |no longer |back |still )?(?:above|below|over|under|greater|less|more|crossing|touch|hit|reach|the (?:above|below)))|\bequals?\b|=)/;
   let side: "entry" | "exit" = "entry";
   let lastRef: Ref | null = null;
   let lastCross: Cond | null = null;
   let lastRight: Ref | null = null;   // what "it" on the right of a clause stands for: the line the last rule compared against
+  const unread: string[] = [];         // clauses the converter could not turn into a rule: said, never guessed at (DA-002)
   // "close" as a way out ("close the trade"), never the price closing ("the price closes above the SMA", R11C-004: that
   // buy rule became a sell rule); the first of the two kinds of word in a clause decides which it is
   const EXIT = /\b(sell|exit|close\b(?! (?:is |was )?(?:above|below|over|under))|square off|book profit)/;
@@ -246,19 +262,27 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
     }
     for (const p of cl.split(/ and | & /)) {
       const om = p.match(opRe);
-      if (!om || om.index == null) continue;
+      if (!om || om.index == null) {
+        // no comparison to read, but a condition it names that the converter doesn't know ("in Stage 2", "with volume confirmation")
+        if (UNREAD_INDICATOR.test(p) || /\bin stage\b|\bstage (?:one|two|three|four|\d)\b/.test(p)) unread.push(p.trim().slice(0, 80));
+        continue;
+      }
       const leftText = p.slice(0, om.index);
-      let L = parseRef(leftText);
+      // an indicator the converter doesn't read is the clause's subject: the clause is reported, not made about the price
+      if (UNREAD_INDICATOR.test(p)) { unread.push(p.trim().slice(0, 80)); continue; }
+      let L = parseRef(leftText, false);
+      // "sell when it goes back above 55": "it" is the subject of the clause before (RSI 14), not the price (DA-002)
       if (!L && lastRef && !/[a-z]{3,}/.test(leftText.replace(/\b(sell|exit|close|buy|when|if|and|then|it|is|goes|go|moves?|once|price)\b/g, ""))) L = lastRef;
       if (!L && /\b(buy|sell|exit|close|when|if)\b/.test(leftText)) L = { t: "price" };
-      if (!L) continue;
+      if (!L) { if (/[a-z]{3,}/.test(p.replace(/\b(sell|exit|close|buy|when|if|and|then|it|is)\b/g, ""))) unread.push(p.trim().slice(0, 80)); continue; }
       lastRef = L;
       const right = p.slice(om.index + om[0].length);
       const w = om[0];
+      const crossing = /cross/.test(w) || MOVES.test(w);
       // "sell when it crosses below it": a right-hand side that is only the word "it" is the line the last rule used
       const itOnly = /^\s*it\s*$/.test(right);
       let R = parseRef(right);
-      if (/cross/.test(w) && lastCross && !/\d/.test(right) && (!R || itOnly)) {
+      if (crossing && lastCross && !/\d/.test(right) && (!R || itOnly)) {
         // "sell when it crosses back below": the same two lines as the last crossing, the other way
         L = lastCross.l; R = lastCross.r;
       } else if (itOnly && lastRight && !/cross/.test(w)) {
@@ -266,21 +290,21 @@ export function parseStrategyText(raw: string): { entry: Cond[]; exit: Cond[]; r
       }
       if (!R) {
         const nm = right.match(/-?\d+(?:\.\d+)?/);
-        if (!nm) continue;
+        if (!nm) { unread.push(p.trim().slice(0, 80)); continue; }
         R = { t: "num", v: +nm[0] };
       }
       // "touches its 52-week low": the candle's low reaches the level (its high, for a high)
       const reaches = /^(touch|hit|reach)/.test(w);
       if (reaches && R.t !== "dc_lower" && R.t !== "dc_upper") continue;
       if (reaches && L.t === "price") L = { t: R.t === "dc_lower" ? "low" : "high" };
-      const op: Op = /^(is|equals?|=)$/.test(w) ? "eq" : reaches ? (R.t === "dc_lower" ? "lt" : "gt") : /cross/.test(w) ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
+      const op: Op = /^(is|equals?|=)$/.test(w) ? "eq" : reaches ? (R.t === "dc_lower" ? "lt" : "gt") : crossing ? (/under|below/.test(w) ? "xb" : "xa") : /above|greater|more|over|>/.test(w) ? "gt" : "lt";
       out[side].push({ l: L, op, r: R });
       if (R.t !== "num") lastRight = R;
       if (op === "xa" || op === "xb") lastCross = { l: L, op, r: R };
     }
   }
   const entry = meaningful(out.entry), exit = meaningful(out.exit);
-  return { ...out, entry: entry.kept, exit: exit.kept, dropped: [...entry.dropped, ...exit.dropped] };
+  return { ...out, entry: entry.kept, exit: exit.kept, dropped: [...entry.dropped, ...exit.dropped], unread: [...new Set(unread)] };
 }
 
 /* ---------- checks on built rules (R11C-004) ---------- */
@@ -348,6 +372,13 @@ export function unplacedNumbers(text: string, s: Strategy, names: (string | null
   t = t.replace(/\b(nifty|sensex|bank ?nifty|s&p|nasdaq|dow)\s*\d+/g, " ")
     .replace(/\d+\s*[- ]?\s*(?:min(?:ute)?s?|m|hours?|hr|h|day)\s+(?:candles?|bars?|charts?|timeframe)/g, " ")
     .replace(/\b\d{1,2}:\d{2}\b/g, " ").replace(/\b(?:1|one)[- ]?(?:hour|day)\b/g, " ");
+  // "3:15pm" or "3pm", when the strategy holds that time (the square-off, the entry window): a time the rules used is not a
+  // number that went missing (DA-007: "The number 3 in your words isn't in the rules" from the 3:15pm square-off)
+  const times = new Set(Object.values(s.session ?? {}).filter((v): v is string => typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v)).map((v) => v.replace(/^0/, "")));
+  t = t.replace(/\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\b\.?/g, (all, h: string, mi: string | undefined, ap: string) => {
+    const hh = (+h % 12) + (ap === "p" ? 12 : 0);
+    return times.has(`${hh}:${mi ?? "00"}`) ? " " : all;
+  });
   const have = numbersIn(s);
   const seen = new Set<number>();
   for (const m of t.matchAll(/\d+(?:,\d{3})*(?:\.\d+)?/g)) {
@@ -486,7 +517,9 @@ export function noRuleNote(idea: string, notes: string[] = []): { note: string; 
   if (looksLikeRule(idea)) {
     return { system: true, note: "That one is on our side: the builder couldn't turn your sentence into rules just now, and your wording looks fine. Try again, start from a classic idea, or build the rules by hand." };
   }
-  return { system: false, note: "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." + (notes.length ? " " + notes.join(" ") : "") };
+  // a builder's note that only says there is no entry rule repeats the line before it (DA-009: "We couldn't find an entry rule. No entry rule was found.")
+  const extra = notes.filter((n) => !/\b(?:no|not|couldn.t|could not|can.?t|unable)\b[^.]*\b(?:entry|rules?|buy)\b/i.test(n));
+  return { system: false, note: "We couldn't find an entry rule. Say when to buy (or to short), e.g. \"Buy when the price is above the 50-day average\"." + (extra.length ? " " + extra.join(" ") : "") };
 }
 
 /** What the person should see about rules that didn't come out as written: a rule left out, a number from the sentence
@@ -503,6 +536,6 @@ export function ruleWarnings(idea: string, s: Strategy, dropped: string[], names
 }
 
 /** Sizing by risk needs a stop to measure the risk from: with no stop loss and no trailing stop the engine ignores the risk
- * share and puts in the most one trade may hold ("Most in one trade", maxAlloc). */
+ * share and puts in the most one trade may hold ("Max capital per trade (%)", maxAlloc). */
 export const sizedWithoutStop = (r: Pick<Risk, "sl" | "trail" | "sizing">) => (r.sizing ?? "risk") === "risk" && !(r.sl > 0) && !((r.trail ?? 0) > 0);
-export const NO_STOP_SIZE_NOTE = "There is no stop loss, so there is nothing to measure risk from. Position size comes from \"Most in one trade\" instead, and the risk per trade does not apply.";
+export const NO_STOP_SIZE_NOTE = "There is no stop loss, so there is nothing to measure risk from. Position size comes from \"Max capital per trade (%)\" under More settings instead, and the risk per trade does not apply.";

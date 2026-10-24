@@ -52,7 +52,7 @@ export const SPAN_UNITS: CustomUnit[] = [
 ];
 /** Days in "45 days", "6 weeks", "3 months" or "2 years"; null for anything else. */
 export function spanDays(v: string): number | null {
-  const m = /^(\d{1,3}) (days|weeks|months|years)$/.exec(v);
+  const m = /^(\d{1,4}) (days|weeks|months|years)$/.exec(v);
   if (!m) return null;
   const n = Number(m[1]);
   return n * ({ days: 1, weeks: 7, months: 30, years: 365 } as Record<string, number>)[m[2]];

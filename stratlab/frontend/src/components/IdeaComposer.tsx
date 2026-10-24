@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { blankStrategy, detectInstrument, detectTf, meaningful, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, ruleWarnings, withDefaultExit } from "../lib/rules";
@@ -11,7 +12,7 @@ export interface Built {
   strategy: Strategy;
   instrument: Instrument | null;
   question: string;
-  gaps: { mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; warnings?: string[] };
+  gaps: { mentioned: string[]; notes: string[]; instName: string | null; instMarket?: string | null; usedAI: boolean; fallback: string; warnings?: string[] };
   group?: Group | null;   // a strategy that trades a list of instruments together
 }
 
@@ -63,13 +64,16 @@ export async function findInstrument(name: string, market?: string | null): Prom
 /** Turn a sentence into rules: the AI builder, or the simple converter when the AI can't run (or hands back no rule).
  * Returns the built strategy, or a note saying what's missing (`system`: the fault is ours, not the wording's).
  * Throws only on errors worth showing as-is. */
-export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean }> {
+export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean; options?: boolean }> {
   let out: AIOut, usedAI = true, fallback = "";
   let parsedDropped: string[] = [];   // rules the simple converter read and left out as meaningless: said, never silent
+  let parsedUnread: string[] = [];    // clauses the simple converter could not read at all: said, never guessed at (DA-002)
   try {
     out = await api<AIOut>("/ai/strategy", { method: "POST", body: { text: idea } });
   } catch (e) {
     const err = e as ApiError;
+    // an options idea (a single option, a straddle, a multi-leg position) is refused whole: no rules are made from a part of it (DA-001)
+    if (err.code === "options_idea") return { built: null, usedAI: false, system: false, options: true, note: err.message };
     if (!(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend", "network"].includes(err.code || "") || err.status >= 500)) throw e;
     usedAI = false;
     fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
@@ -77,6 +81,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
       : "The AI builder isn't available right now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
     const p = parseStrategyText(idea);
     parsedDropped = p.dropped;
+    parsedUnread = p.unread;
     const mentioned = Object.keys(p.risk);
     const tf = detectTf(idea), inst = detectInstrument(idea);
     if (p.exit.length) mentioned.push("exit");
@@ -88,6 +93,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     // the AI answered with no rule: the simple converter gets a go before anyone is told their wording is the problem
     const p = parseStrategyText(idea);
     parsedDropped = p.dropped;
+    parsedUnread = p.unread;
     if (p.entry.length) {
       const mentioned = Object.keys(p.risk);
       const tf = detectTf(idea), inst = detectInstrument(idea);
@@ -98,9 +104,12 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
       out = { ...out, entry: p.entry, exit: p.exit, entryJoin: "all", tf: out.tf ?? tf, instrument: out.instrument ?? inst, risk: { ...out.risk, ...p.risk }, mentioned, side: p.side };
     }
   }
+  const unreadNote = (parsedUnread.length ? `The simple converter couldn't read "${parsedUnread.slice(0, 2).join('"; "')}". Check the rules.` : "").slice(0, 280);
   if (!out.entry?.length) {
     const r = noRuleNote(idea, out.notes);
-    return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
+    // a clause the converter couldn't read is the reason, not "your wording looks fine, it's on our side"
+    const why = unreadNote && r.system ? "Describe the rule with price, SMA, EMA or RSI, or build the rules by hand." : r.note;
+    return { built: null, usedAI, system: r.system && !unreadNote, note: [fallback, unreadNote, why].filter(Boolean).join(" ") };
   }
   const instrument = out.instrument ? await findInstrument(out.instrument, out.market || (market && market !== "CSV" ? market : null)) : null;
   // what the sentence plainly says about the money side ("no stop loss", "stop loss 3%", "after 15 bars") stands when the
@@ -117,6 +126,12 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     minScore: out.minScore ?? 0, session: out.session ?? s.session, product: out.product ?? "auto",
     risk: riskForCurrency({ ...s.risk, ...extra, ...out.risk }, instrument?.currency),
   };
+  // a trailing stop asked for is the stop: the notebook's default 2% stop is not added beside it, where it would decide nearly
+  // every exit unseen (DA-008)
+  if ((strategy.risk.trail ?? 0) > 0 && !mentioned.includes("sl") && out.risk?.sl === undefined && !("sl" in extra)) {
+    strategy.risk = { ...strategy.risk, sl: 0 };
+    mentioned.push("sl");
+  }
   if (!strategy.entry.length) {
     const r = noRuleNote(idea, out.notes);
     return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
@@ -126,8 +141,9 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     usedAI, note: fallback,
     // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
     built: { strategy: built, instrument, question: questionFrom(idea, instrument?.symbol),
-      gaps: { mentioned, notes: out.notes || [], instName: out.instrument, usedAI, fallback,
-        warnings: ruleWarnings(idea, built, [...Object.values(checked).flatMap((x) => x.dropped), ...parsedDropped], [out.instrument, instrument?.symbol, instrument?.name]) } },
+      gaps: { mentioned, notes: out.notes || [], instName: out.instrument, instMarket: out.market ?? (market && market !== "CSV" ? market : null), usedAI, fallback,
+        warnings: [...ruleWarnings(idea, built, [...Object.values(checked).flatMap((x) => x.dropped), ...parsedDropped], [out.instrument, instrument?.symbol, instrument?.name]),
+          ...(unreadNote ? [unreadNote] : [])].slice(0, 10) } },
   };
 }
 
@@ -145,12 +161,14 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [stuck, setStuck] = useState(false);     // a build found no rule: offer another go, the classic ideas, the manual builder
+  const [options, setOptions] = useState(false);   // the idea trades options: the way on is the Options builder, not another go (DA-001)
 
   const building = useRef(false);            // Ctrl+Enter in the box while a build runs must not start a second one
   const build = async (idea = text) => {
     if (building.current) return;
     idea = idea.trim();
     setStuck(false);
+    setOptions(false);
     if (idea.length < 5) { setNote("Describe your idea first, for example: \"Buy NIFTY 50 when it's above the 50-day average\"."); return; }
     building.current = true;
     setBusy(true);
@@ -158,7 +176,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     try {
       const r = await buildIdea(idea, market);
       if (r.usedAI) refreshMe();
-      if (!r.built) { setNote(r.note); setStuck(true); return; }
+      if (!r.built) { setNote(r.note); setOptions(!!r.options); setStuck(!r.options); return; }
       if ((await onBuilt(r.built)) !== false) setText("");
     } catch (e) {
       fail(e);
@@ -193,7 +211,7 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
           <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
       {note && (
-        <Notice tone="warn" role="status" actions={stuck ? <>
+        <Notice tone="warn" role="status" actions={options ? <Link className="btn sm" to="/options">Open the Options builder</Link> : stuck ? <>
           <button type="button" className="btn sm" disabled={busy} onClick={() => build()}>Try again</button>
           {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
           {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}

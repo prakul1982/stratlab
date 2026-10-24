@@ -34,6 +34,22 @@ export function underHeadline(line: string, headline: string | null | undefined)
   return headline && headline.toLowerCase().includes(lead) ? "" : line;
 }
 
+/** A verdict's headline as two lines: the comparison with buying and holding as the headline, and the checks as their own
+ * line under it. The stored headline joins them with "; " ("44.5 points ahead of buy and hold after costs; 4 of 4 checks run ·
+ * 2 passed."), which at headline size ran to four or five lines and fused two messages (DA-020). */
+export function splitHeadline(headline: string): { main: string; checks: string } {
+  const i = headline.indexOf("; ");
+  if (i < 0) return { main: headline, checks: "" };
+  const checks = headline.slice(i + 2).trim();
+  return { main: headline.slice(0, i).replace(/\.$/, "") + ".", checks: checks.charAt(0).toUpperCase() + checks.slice(1) };
+}
+
+/** A verdict's summary as short lines, one sentence each (DA-028: a group's summary, with its notes, was one wall of text). A
+ * sentence ends at a full stop before a capital letter or a sign, so "62.5 points" and "+4.1%" stay whole. */
+export function summaryLines(summary: string | null | undefined): string[] {
+  return (summary ?? "").split(/(?<=[.!?])\s+(?=[A-Z0-9+−-])/).map((x) => x.trim()).filter(Boolean);
+}
+
 /** A run's badge words where the plain "Passed the checks" would overstate it: the count when some checks didn't pass
  * (R62-003: "Passed the checks" over a verdict of "4 of 4 checks run · 2 passed"). Undefined keeps the badge's own words. */
 export function badgeLabel(v: { verdict: string; passed: number; total: number }): string | undefined {

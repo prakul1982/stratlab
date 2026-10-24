@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
-import { defaultExit, refName, statedIn } from "../lib/rules";
+import { useApp } from "../lib/app";
+import { INDIA_FEED, reconnectAt, type DataNote } from "../lib/dataBack";
+import { defaultExit, opSay, refName, statedIn } from "../lib/rules";
 import type { Instrument, Strategy } from "../lib/types";
 import { Badge, Card, CardHead, Notice } from "./kit";
 import "../pages/trade/trade.css";
@@ -10,6 +12,8 @@ import "../pages/trade/trade.css";
  * after the person leaves and comes back (R5O-010). */
 export interface GapInfo {
   mentioned: string[]; notes: string[]; instName: string | null; usedAI: boolean; fallback: string; answered?: Record<string, string>;
+  /** The market the builder gave the instrument's name ("IN" for RELIANCE): known by name while its data can't be searched (DA-004). */
+  instMarket?: string | null;
   /** What didn't come out of the words as written: a rule left out, a number not in the rules (R11C-004). */
   warnings?: string[];
 }
@@ -19,14 +23,19 @@ interface Q { id: string; short: string; title: string; why: string; options: Op
 
 const plain = (r: Strategy["entry"][number]["l"]) => refName(r);
 
-function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string): Q[] {
+function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults: Instrument[], currency: string, dataNote?: DataNote | null): Q[] {
   // what the idea said, at the build or in the words the rules were last rebuilt from, is never asked again (R11C-005: a
   // 3% stop given in "Edit in words" was asked again, and "Use the default answers" put 2% over it)
   const m = new Set([...gaps.mentioned, ...statedIn(s.text)]), qs: Q[] = [], r = s.risk;
   const together = s.entry.length > 1;
+  const sell = s.side === "short";                 // a short idea sells first: its questions say sell, never buy (DA-006)
   if (!hasInstrument) {
+    // India's data is offline (the banner says so): an Indian name is known, just not searchable until the login, at the time the banner gives (DA-004)
+    const india = !!gaps.instName && !!dataNote && (INDIA_FEED.has(gaps.instMarket ?? "") || /\b(nifty|sensex)\b/i.test(gaps.instName));
+    const back = reconnectAt(dataNote);
     qs.push({ id: "inst", short: "Instrument", title: "What do you want to test it on?",
-      why: gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "The same rules can behave very differently on different markets.",
+      why: india ? `"${gaps.instName}" is an Indian listing, and Indian price data is offline right now, so it can't be looked up yet. ${back ? `It reconnects on ${back}.` : "It reconnects with the next daily data login."} Pick another market now, or come back then.`
+        : gaps.instName ? `We couldn't find "${gaps.instName}". Pick one, or search every market.` : "The same rules can behave very differently on different markets.",
       options: [
         ...defaults.slice(0, 5).map((i, k) => ({ label: i.symbol, rec: k === 0, explain: i.market === "CRYPTO" ? "Crypto, trades 24/7" : i.type === "INDEX" ? "Indian index" : i.exchange || "",
           apply: () => ({ instrument: i }) })),
@@ -39,15 +48,16 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
       // beside another condition it is a filter, a state that holds while the other one fires: a one-time cross of it
       // would almost never fall on the same candle (R11C-006: "price above the 200-day SMA" with RSI under 30 became a
       // cross, and 0 trades in 5 years). On its own, the cross stays the default.
-      qs.push({ id: `style${k}`, short: "Buy timing", title: `Buy only when it first crosses ${w}, or any time it's ${w}?`,
+      const act = sell ? "Sell short" : "Buy";
+      qs.push({ id: `style${k}`, short: sell ? "Entry timing" : "Buy timing", title: `${act} only when it first crosses ${w}, or any time it's ${w}?`,
         why: together
-          ? `"${plain(c.l)} is ${w} ${plain(c.r)}" is one of ${s.entry.length} buy conditions. As a state it holds on every candle it stays ${w}, so the other conditions decide when to buy; a one-time cross rarely falls on the same candle as them.`
+          ? `"${plain(c.l)} is ${w} ${plain(c.r)}" is one of ${s.entry.length} ${sell ? "short" : "buy"} conditions. As a state it holds on every candle it stays ${w}, so the other conditions decide when to ${sell ? "sell short" : "buy"}; a one-time cross rarely falls on the same candle as them.`
           : `"${plain(c.l)} is ${w} ${plain(c.r)}" stays true on every candle, not just once. That decides how often you trade.`,
         options: [
-          { label: `Only when it first crosses ${w}`, rec: !together, explain: "Buys once, on the candle where it moves across.",
+          { label: `Only when it first crosses ${w}`, rec: !together, explain: `${sell ? "Sells short" : "Buys"} once, on the candle where it moves across.`,
             apply: (st) => ({ ...st, entry: st.entry.map((x, i) => (i === k ? { ...x, op: x.op === "gt" ? "xa" : "xb" } : x)) }) },
           { label: `Any time it's ${w}`, rec: together, apply: (st) => st,
-            explain: together ? "A filter: buys when the other conditions fire while it holds." : "Buys straight away, and again after every exit while it stays there." },
+            explain: together ? `A filter: ${sell ? "sells short" : "buys"} when the other conditions fire while it holds.` : `${sell ? "Sells short" : "Buys"} straight away, and again after every exit while it stays there.` },
         ] });
     }
   });
@@ -57,7 +67,8 @@ function questions(s: Strategy, gaps: GapInfo, hasInstrument: boolean, defaults:
     const dflt = defaultExit(s);
     if (dflt.length) {
       const d = dflt[0];
-      opts.push({ label: d.r.t === "num" ? `Sell when ${plain(d.l)} rises back above ${d.r.v}` : `Sell when ${plain(d.l)} drops below ${plain(d.r)}`, rec: true,
+      // worded as the rule is: "crosses below", not "drops below" over a rule that says crosses (DA-006)
+      opts.push({ label: `${sell ? "Buy back" : "Sell"} when ${plain(d.l)} ${opSay(d.op)} ${d.r.t === "num" ? d.r.v : plain(d.r)}`, rec: true,
         explain: "Exit when the entry condition no longer holds.", apply: (st) => ({ ...st, exit: defaultExit(st) }) });
     }
     opts.push({ label: r.tgt > 0 ? "Only my stop loss and target" : "No sell rule, only my stop loss", rec: !opts.length,
@@ -119,7 +130,8 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
   };
   const [defaults, setDefaults] = useState<Instrument[]>([]);
   useEffect(() => { api<Instrument[]>("/instruments/defaults").then(setDefaults).catch(() => {}); }, []);
-  const all = questions(s, gaps, hasInstrument, defaults, currency);
+  const { me } = useApp();
+  const all = questions(s, gaps, hasInstrument, defaults, currency, me?.data_note);
   const open = all.filter((q) => !answered[q.id]);
   const now = open[0];
 
@@ -142,7 +154,7 @@ export function GapsCard({ s, gaps, hasInstrument, currency, onStrategy, onInstr
         ))}
         {now ? (
           <>
-            <CardHead title={now.title} actions={<span className="k-note">{Object.keys(answered).length + 1} of {Object.keys(answered).length + open.length}</span>} />
+            <CardHead title={now.title} actions={<span className="k-note">Question {Object.keys(answered).length + 1} of {Object.keys(answered).length + open.length}</span>} />
             <p className="k-small k-muted">{now.why}</p>
             <div className="k-starters">
               {now.options.map((o) => (

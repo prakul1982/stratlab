@@ -5,6 +5,8 @@ export type CustomUnit = { value: string; label: string; plural?: string };
 /** What a custom entry becomes: the choice to use, or why it cannot be used (shown under the row, in words). */
 export type CustomCheck = { value: string; label?: string } | { error: string };
 
+const NEGATIVE = "Use a whole number of 1 or more. A minus sign isn't allowed.";
+
 function load(key: string): Choice[] {
   try {
     const raw = JSON.parse(localStorage.getItem(key) ?? "[]");
@@ -50,9 +52,13 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
 
   const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value))];
   const count = Number(n);
-  const valid = Number.isInteger(count) && count >= 1 && count <= 999;
+  // up to four digits ("1000" days is a real period); a minus sign is kept in the box and refused in words, not dropped so that
+  // "-3" quietly became 3 (DA-013)
+  const negative = n.startsWith("-");
+  const valid = Number.isInteger(count) && count >= 1 && count <= 9999;
   const add = () => {
-    if (!custom || !valid) return;
+    if (!custom) return;
+    if (!valid) { if (n) setProblem(negative ? NEGATIVE : "Use a whole number from 1 to 9,999."); return; }
     const u = custom.units.find((x) => x.value === unit);
     if (!u) return;
     let opt: Choice = { value: `${count} ${u.value}`, label: `${count} ${count === 1 ? u.label : u.plural ?? u.label}` };
@@ -84,13 +90,13 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
       {custom && open && (
         <div className="k-custom" role="group" aria-label="Custom choice">
           <input ref={num} className="k-input" inputMode="numeric" placeholder="35" value={n} aria-label="How many" aria-invalid={n !== "" && !valid}
-            onChange={(e) => { setN(e.target.value.replace(/\D/g, "").slice(0, 3)); setProblem(null); }}
+            onChange={(e) => { const raw = e.target.value.replace(/[^\d-]/g, ""); setN((raw.startsWith("-") ? "-" : "") + raw.replace(/-/g, "").slice(0, 4)); setProblem(null); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } else if (e.key === "Escape") { e.preventDefault(); setOpen(false); opener.current?.focus(); } }} />
           <select className="k-input" aria-label="Unit" value={unit} onChange={(e) => { setUnit(e.target.value); setProblem(null); }}>
             {custom.units.map((u) => <option key={u.value} value={u.value}>{u.plural ?? u.label}</option>)}
           </select>
           <button type="button" className="btn sm" disabled={!valid} onClick={add}>Use this</button>
-          {problem && <span className="k-note k-down" role="alert">{problem}</span>}
+          {(problem || negative) && <span className="k-note k-down" role="alert">{problem ?? NEGATIVE}</span>}
         </div>
       )}
     </div>
