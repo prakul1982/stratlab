@@ -5,6 +5,7 @@ import { useApp } from "../lib/app";
 import { featureName, gateFor, gatePlan } from "../lib/gates";
 import { unlockHint, EARLY_ACCESS_EMAIL } from "../lib/offer";
 import { PLAN_NAME } from "../lib/plans";
+import { usePlanPrice } from "../lib/currency";
 import { Notice } from "./kit";
 import { PlanActions } from "./PlanInterest";
 
@@ -16,6 +17,8 @@ export function PageLock() {
   const { pathname } = useLocation();
   const gate = gateFor(pathname);
   const locked = !!gate && !!me && me.plan_info?.features?.[gate.feature] === false;
+  const unlocks = locked && gate ? gatePlan(gate) : null;
+  const price = usePlanPrice(unlocks === "basic" || unlocks === "pro" ? unlocks : null);
   const [own, setOwn] = useState(false);
   useEffect(() => {
     setOwn(false);
@@ -31,7 +34,7 @@ export function PageLock() {
   const plan = PLAN_NAME[gatePlan(gate)];
   const yours = PLAN_NAME[(me.plan ?? "free") as "free" | "basic" | "pro"] ?? "Free";
   const what = featureName(gate.feature);
-  const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL);
+  const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL, price);
   return (
     <Notice className="page-lock plan-note" label={`${plan} feature`} actions={<PlanActions source="lock" />}>
       <b>🔒 {gate.whole ? `This page is a ${plan} feature.` : `Part of this page is on ${plan}.`}</b>{" "}

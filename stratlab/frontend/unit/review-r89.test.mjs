@@ -153,3 +153,20 @@ test("R95: phone tap targets, a dated first axis tick, charts measured again aft
   assert.equal(ticks[0].label, "21 Sep");
   assert.ok(ticks.some((t) => t.label === "Oct"));
 });
+
+test("R92-001: a lock says what the plan costs, in the visitor's currency, while plans can be bought", async () => {
+  const offer = await import("../src/lib/offer.ts");
+  const { planPriceLine } = await import("../src/lib/planPrice.ts");
+  const paid = { mode: "paid", payments: true, yearly: true, promo_until: null, free_now: {}, free_trial_days: null };
+  const p = { offer: paid, countries: {}, currencies: {
+    INR: { symbol: "₹", name: "Rupee", basic: 699, pro: 1999, basic_year: 6999, pro_year: 19999, charged_in: "INR", yearly_charged_in: "INR" },
+    SAR: { symbol: "SAR ", name: "Riyal", basic: 27, pro: 78, basic_year: 274, pro_year: 783, charged_in: "INR", yearly_charged_in: "INR", converted: true } } };
+  assert.equal(planPriceLine("basic", p, "INR"), "Basic is ₹699 a month or ₹6,999 a year.");
+  assert.equal(planPriceLine("pro", p, "SAR"), "Pro is about SAR 78 a month or about SAR 783 a year.");
+  assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }, "INR"), "Pro is ₹1,999 a month.");
+  assert.equal(planPriceLine("pro", p, "XYZ"), null);
+  assert.equal(offer.unlockHint(paid, undefined, "Basic is ₹699 a month or ₹6,999 a year."), "Basic is ₹699 a month or ₹6,999 a year. See the plans to upgrade.");
+  assert.equal(offer.unlockHint({ ...paid, payments: false, mode: "early" }, "a@b.c", "Basic is ₹699 a month."), "Paid plans open soon; ask us at a@b.c for early access.");
+  assert.match(read("src/components/kit/Notice.tsx"), /const price = usePlanPrice\(plan \?\? named\);/);
+  assert.match(read("src/components/PageLock.tsx"), /unlockHint\(me\.offer, CFG\.CONTACT_EMAIL \|\| EARLY_ACCESS_EMAIL, price\)/);
+});
