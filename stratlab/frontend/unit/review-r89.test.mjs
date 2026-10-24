@@ -113,3 +113,9 @@ test("R90-008/010/012: a US company's move says its day after the close; Pulse a
   assert.match(read("src/pages/Research.tsx"), /title=\{pulseClosedDay\(data\?\.indices\) \? "How the market felt at the last close" : "How the market feels today"\}/);
   assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
 });
+
+test("R90-011: a running paper session's card says Market closed when its market is shut", () => {
+  const src = read("src/pages/PaperPage.tsx");
+  assert.match(src, /markets\.find\(\(x\) => x\.id === r\.instrument\.market\) \?\? optionsMarket\(markets, r\.instrument\.exchange\); return !!m && !marketState\(m\)\.open;/);
+  assert.match(src, /\{r\.status === "running" && shut\(r\) && <span className="k-note" data-testid="sess-market-shut">Market closed<\/span>\}/);
+});
