@@ -161,7 +161,7 @@ export const STARTERS = [
     text: "Buy when 20 EMA crosses above 50 EMA. Sell when 20 EMA crosses below 50 EMA. Stop loss 2%, target 6%, risk 1% of capital." },
   { title: "Buy the dip", level: "Moderate", question: "Does buying sharp dips in an uptrend pay off?",
     why: "Buys after a sharp fall (low RSI) while the long-term trend is up, then sells on the bounce.",
-    text: "Buy when RSI 14 is below 35 and price is above 200 SMA. Sell when RSI 14 goes above 60. Stop loss 3%, risk 1% of capital." },
+    text: "Buy when RSI 14 is below 35 and price is above 200 SMA. Sell when RSI 14 is above 60. Stop loss 3%, risk 1% of capital." },
 ];
 
 /* ---------- plain-English parser (no AI): SMA, EMA, RSI and price rules ---------- */
