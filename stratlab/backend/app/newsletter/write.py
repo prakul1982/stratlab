@@ -205,7 +205,9 @@ def sections(f: dict) -> list[dict]:
 
 
 def subject(f: dict) -> str:
-    when = f"week to {kit.fmt_date(f['day'], year=False)}" if f["weekly"] else _day(f["day"])
+    # a weekly issue is dated its Saturday; its numbers run to Friday's close, and the subject says so, as the issue's
+    # own header does (R90-004: "Market Brief India, week to 24 Oct" over figures as of the 23 Oct close)
+    when = f"week to {kit.fmt_date(_week_end(f['day']), year=False)}" if f["weekly"] else _day(f["day"])
     if f["kind"] == "market":
         lead = next(iter(f.get("indices") or []), None)
         tail = f": {lead['name']} {_pct(lead['change_pct'])}" if lead and lead.get("change_pct") is not None else ""
@@ -333,6 +335,8 @@ def robotic(text: str) -> bool:
 def ai_summary(f: dict) -> str | None:
     from ..ai_writer import _anthropic, _gemini
     facts = {k: v for k, v in f.items() if k not in ("uid",)}
+    if f.get("weekly") and f.get("day"):             # the week ends at its last close, not the Saturday it is sent (R90-004)
+        facts["day"] = _week_end(f["day"])
     try:
         raw = complete(SYSTEM, "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str), gemini=_gemini,
                        anthropic=_anthropic, max_tokens=500, kind="research")

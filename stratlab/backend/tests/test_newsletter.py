@@ -903,3 +903,13 @@ def test_a_stage_in_the_email_says_what_it_means():
     assert now.startswith("Now Stage 3 (topping) (the 150-day average has stopped rising") and now.endswith("was Stage 2 (advancing)")
     still = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 1}, "2026-10-01")
     assert any(x["text"].startswith("Still Stage 1 (basing) (the 150-day average has stopped falling") for x in still)
+
+
+def test_a_weekly_issue_sent_on_saturday_is_the_week_to_fridays_close(w, monkeypatch):
+    # R90-004: "Market Brief India, week to 24 Oct" over figures as of the 23 Oct close
+    f = {**market(weekly=True, day=date(2026, 10, 24)), "indices": [{"name": "NIFTY 50", "price": 22600.0, "change_pct": -2.36}]}
+    assert write.subject(f) == "Market Brief India, week to 23 Oct: NIFTY 50 −2.36%"
+    seen = {}
+    monkeypatch.setattr(write, "complete", lambda system, text, **k: seen.setdefault("facts", text) and '{"summary": "x"}')
+    write.ai_summary(f)
+    assert '"day": "2026-10-23"' in seen["facts"]                                  # the AI's week ends Friday too
