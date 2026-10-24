@@ -119,3 +119,8 @@ test("R90-011: a running paper session's card says Market closed when its market
   assert.match(src, /markets\.find\(\(x\) => x\.id === r\.instrument\.market\) \?\? optionsMarket\(markets, r\.instrument\.exchange\); return !!m && !marketState\(m\)\.open;/);
   assert.match(src, /\{r\.status === "running" && shut\(r\) && <span className="k-note" data-testid="sess-market-shut">Market closed<\/span>\}/);
 });
+
+test("R90-014/R91-006: the feature check says when it ran; the library says what its dates are", () => {
+  assert.match(read("src/pages/admin/PlatformPanel.tsx"), /\{r\.auto \? "Automatic check" : "Ran"\} \{fmtDateTime\(r\.at, \{ weekday: true, tz: IST, zone: true \}\)\} \(\{ago\(r\.at\)\}\)/);
+  assert.match(read("src/pages/PublicLibrary.tsx"), /Each entry's dates are the prices its latest test covered\./);
+});

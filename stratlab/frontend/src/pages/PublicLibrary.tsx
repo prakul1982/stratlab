@@ -32,7 +32,7 @@ const CHECK_SAYS: Record<string, string> = {
   sample: "Were there enough trades to tell skill from luck (30 or more)?",
 };
 const MARKETS: [string, string][] = [["", "Every market"], ["IN", "India"], ["US", "United States"]];
-const NOTE = "Tested by StratLab on past prices, for research and paper trading. A verdict describes the past, not what comes next, and nothing here is investment advice.";
+const NOTE = "Tested by StratLab on past prices, for research and paper trading. Each entry's dates are the prices its latest test covered. A verdict describes the past, not what comes next, and nothing here is investment advice.";
 
 /** How a group was tested, so the totals can be read (R43B-004): one pot of capital, buy and hold in equal parts, and
  *  the group as it is today. */

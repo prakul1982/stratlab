@@ -41,7 +41,7 @@ export function PlatformPanel() {
       )}
       {r && (
         <>
-          <p className="k-small">{r.auto ? "Automatic check, " : ""}{ago(r.at)}{r.build ? ` on build ${r.build}` : ""} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
+          <p className="k-small">{r.auto ? "Automatic check" : "Ran"} {fmtDateTime(r.at, { weekday: true, tz: IST, zone: true })} ({ago(r.at)}){r.build ? ` on build ${r.build}` : ""} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
           <StatusList label="Feature checks">
             {[...r.checks].sort((a, b) => order[a.state] - order[b.state] || a.area.localeCompare(b.area)).map((c) => (
               <StatusRow key={c.name} state={LIGHT[c.state]} word={WORD[c.state]} label={c.name} detail={`${plainDates(c.detail)}${c.seconds != null ? ` (${c.seconds}s)` : ""}`} />
