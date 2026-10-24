@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 
 from . import db
 from .ai_providers import AIError, complete, extract_json, salvage_items
-from .deepdive import RULES, readable
+from .deepdive import RULES, customer_problems, readable, unread
 from .docs import quote_found, ranked_windows
 from .kite_service import ist_date
 
@@ -197,7 +197,7 @@ def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tup
             out["read"].append({"kind": d["kind"], "at": d["at"], "title": d["title"]})
         except AIError as e:                     # one call the AI couldn't read mustn't sink the others
             failed, last = failed + 1, e
-            out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
+            out["problems"].append(unread(d["title"], e, "the AI couldn't read it this time"))
     if pairs and failed == len(pairs):
         raise last                               # none read: the endpoint reports busy (try later) or failed
     settle(out, pairs, ai, name, 3)
@@ -261,7 +261,7 @@ def settle(out: dict, pairs: list[tuple[dict, str]], ai, name: str, fye: int, to
         except AIError:
             got = salvage_items(raw, "results")
     except AIError as e:
-        out["problems"].append(f"Checking targets against later documents: {str(e)[:80]}")
+        out["problems"].append(unread("Checking targets against later documents", e, "didn't finish this time"))
         return
     ends = {tid: (i, end) for tid, i, end in due}
     for r in got:
@@ -365,7 +365,7 @@ def view(stored_card: dict | None, nums: dict, today: date | None = None) -> dic
     return {"rows": rows, "met": met, "missed": missed, "pending": sum(r["result"] == "pending" for r in rows),
             "unchecked": sum(r["result"] == "unchecked" for r in rows),
             "score": round(met / checked * 100) if checked else None, "read": stored_card.get("read") or [],
-            "problems": stored_card.get("problems") or [], "at": stored_card.get("at"), "years": stored_card.get("years") or 2}
+            "problems": customer_problems(stored_card.get("problems")), "at": stored_card.get("at"), "years": stored_card.get("years") or 2}
 
 
 # ---------- stored reads ----------
@@ -422,7 +422,7 @@ def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int
         try:
             url, text = sec_api.release_doc(d)
         except Exception as e:
-            out["problems"].append(f"{d['title'][:60]} {d['at'][:10]}: {str(e)[:80]}")
+            out["problems"].append(unread(f"{d['title'][:48]} {d['at'][:10]}", e))
             continue
         if len(text) >= 400:
             pairs.append(({**d, "url": url}, text))
@@ -445,7 +445,7 @@ def read_us(symbol: str, name: str, docs_list: list[dict], sec_api, ai, fye: int
             out["read"].append({"kind": d["kind"], "at": d["at"], "title": d["title"]})
         except AIError as e:
             failed, last = failed + 1, e
-            out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
+            out["problems"].append(unread(d["title"], e, "the AI couldn't read it this time"))
     if failed == len(pairs):
         raise last
     settle(out, pairs, ai, name, fye)
