@@ -4240,6 +4240,8 @@ def stock_price_refresh_once(sleep=time.sleep) -> dict:
     except Exception as e:
         print("rotation after close:", str(e)[:120])
     price_refresh_status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    from . import job_status
+    job_status.kept("page-prices", dict(price_refresh_status))       # so Admin has it after a restart (R94-001)
     return price_refresh_status
 
 
