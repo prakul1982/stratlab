@@ -65,8 +65,9 @@ export const EARLY_ACCESS_EMAIL = "support@stratlab.studio";
 
 /** What to do about a locked feature, in one honest line: see the plans while they can be bought, else ask for early
  * access (the server words its 402 answers the same way: plans.upgrade_note). */
-export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMAIL): string {
-  return canBuy(o) ? "See the plans to upgrade." : `Paid plans open soon; ask us at ${email} for early access.`;
+export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMAIL, price?: string | null): string {
+  // the price first, while a plan can be bought: "Basic is ₹699 a month or ₹6,999 a year." (R92-001: no lock said it)
+  return canBuy(o) ? `${price ? `${price} ` : ""}See the plans to upgrade.` : `Paid plans open soon; ask us at ${email} for early access.`;
 }
 
 /** A paid feature's tag in the app. Locked: "Basic" or "Pro" with a lock. Usable without paying for that plan (the

@@ -45,13 +45,39 @@ export function usePricing() {
     void read(2);
     return () => { live = false; window.clearTimeout(timer); };
   }, []);
-  const auto = p ? p.countries[country() ?? ""] ?? (country() ? "USD" : "INR") : "INR";
-  const chosen = p && code && p.currencies[code] ? code : auto;
+  const chosen = pickCurrency(p, code);
   const pick = (c: string) => { setCode(c); try { localStorage.setItem(KEY, c); } catch { /* private window */ } };
   return { pricing: p, currency: chosen, pick, status };
 }
 
+/** The currency a visitor sees: their own choice, else their country's, else dollars (rupees in India). */
+function pickCurrency(p: Pricing | null, code: string): string {
+  const auto = p ? p.countries[country() ?? ""] ?? (country() ? "USD" : "INR") : "INR";
+  return p && code && p.currencies[code] ? code : auto;
+}
+
+let shared: Promise<Pricing> | null = null;
+
+/** A paid plan's price in the visitor's currency, for a lock's note: "Basic is ₹699 a month or ₹6,999 a year." (the
+ * amounts the Plans page shows, from one shared read of /pricing). Null until read, or when it can't be. */
+export function usePlanPrice(plan: "basic" | "pro" | null | undefined): string | null {
+  const [p, setP] = useState<Pricing | null>(null);
+  useEffect(() => {
+    if (!plan) return;
+    let live = true;
+    shared ??= publicGet<Pricing>("/pricing").catch((e) => { shared = null; throw e; });
+    shared.then((r) => { if (live) setP(r); }).catch(() => {});
+    return () => { live = false; };
+  }, [plan]);
+  if (!plan || !p) return null;
+  let code = "";
+  try { code = localStorage.getItem(KEY) || ""; } catch { /* private window */ }
+  return planPriceLine(plan, p, pickCurrency(p, code));
+}
+
 export { approx } from "./approx";
+export { money, planPriceLine } from "./planPrice";
+import { planPriceLine } from "./planPrice";
 
 /** An approximate converted amount with its cents: "€6.40" (whole yen). */
 export function aboutMoney(row: CurrencyRow, v: number, code: string): string {
@@ -70,8 +96,3 @@ export function rupeesNote(code: string, about: { basic: string; pro: string } |
   return `Paid in rupees for now: your card is charged the rupee price shown under each plan, and your bank converts it at its own rate and may add a fee, so the amount in ${code} can differ from the one shown.`;
 }
 
-export function money(row: CurrencyRow | undefined, v: number, code: string): string {
-  if (!row) return `₹${v.toLocaleString("en-IN")}`;
-  const n = v.toLocaleString(code === "INR" ? "en-IN" : "en-US", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: v % 1 ? 2 : 0 });
-  return `${row.symbol}${n}`;
-}
