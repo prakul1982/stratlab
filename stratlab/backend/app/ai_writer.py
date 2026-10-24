@@ -262,7 +262,7 @@ _OPTIONS = re.compile(
     r"(?:bull|bear)\s+(?:call|put)(?:\s+spreads?)?|(?:credit|debit|calendar|vertical|diagonal|ratio)\s+spreads?|"
     r"covered\s+calls?|protective\s+puts?|cash[- ]secured\s+puts?|"
     r"(?:call|put)\s+options?|options?\s+(?:strateg(?:y|ies)|contracts?|chains?|premiums?|legs?)|"
-    r"(?:buy|sell|write|short|long|trade)\w*\s+(?:[\w&]+\s+){0,3}options?|"
+    r"(?:buy|sell|write|short|long|trade)\w*\s+(?:[\w&]+\s+){0,3}options?(?!\s+expir)|"   # "on options expiry day" is a date, not an option
     r"at[- ]the[- ]money|in[- ]the[- ]money|out[- ]of[- ]the[- ]money|atm|otm|itm)\b"
     r"|\b\d{4,6}\s?(?:ce|pe)\b", re.I)
 OPTIONS_IDEA_MESSAGE = ("That idea trades options (a single option, a straddle or another multi-leg position). A notebook tests rules on "

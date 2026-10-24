@@ -148,3 +148,10 @@ def test_a_run_of_a_notebook_whose_idea_set_no_stop_says_so_on_its_verdict(api):
                                         "gaps": {"mentioned": ["sl"], "notes": [], "usedAI": True, "fallback": ""}}).json()
     exp = api.post(f"/notebooks/{said['id']}/experiments", json={"days": 400}).json()["experiment"]
     assert not any("by default" in n for n in exp["verdict"].get("notes", []))
+
+
+def test_an_expiry_day_idea_on_a_stock_is_not_an_options_idea():
+    from app.ai_writer import options_idea
+    assert not options_idea("Buy HDFC on options expiry day dips")
+    assert not options_idea("buy the stock when put-call ratio drops below 0.7")
+    assert options_idea("Sell a Bank Nifty ATM straddle") and options_idea("buy 24500 CE when nifty breaks out")
