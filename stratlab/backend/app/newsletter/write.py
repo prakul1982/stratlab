@@ -88,6 +88,16 @@ def _price(x, region: str | None) -> str:
     return kit.money(x, cur, 2) if cur else kit.num(x)
 
 
+def past_today(text: str | None, issue: dict, today: str) -> str | None:
+    """An issue's summary as read on a later day: its "today" is the issue's own day ("NASDAQ −0.21% on Fri 23 Oct"),
+    as the Briefs list shows it on the weekend (R90-007: "… −1.23% today" under Friday's issue on Saturday). The issue
+    as sent keeps its words; a weekly one names no day."""
+    day = str(issue.get("day") or "")[:10]
+    if not text or not day or issue.get("weekly") or day >= today:
+        return text
+    return re.sub(r"\btoday\b", f"on {_day(day)}", text)
+
+
 def _day(iso: str) -> str:
     """A day in the app's format: Wed 7 Oct."""
     return kit.fmt_date(str(iso), year=False, weekday=True)

@@ -107,3 +107,9 @@ test("R90-005: the watchlist's price column says last session whenever the tab's
   assert.match(src, /const shut = \(\(\) => \{ const m = markets\.find\(\(x\) => x\.id === region\); return m \? !marketState\(m\)\.open : false; \}\)\(\);/);
   assert.match(src, /header: `Price · \$\{shut \|\| Object\.values\(quotes \?\? \{\}\)\.some\(\(q\) => sessionOf\(q, marketTz\(region\)\)\) \? "last session" : "today"\}`/);
 });
+
+test("R90-008/010/012: a US company's move says its day after the close; Pulse and the money calendar say what their dates are", () => {
+  assert.match(read("src/components/Research.tsx"), /closed && \(q\.change_day \|\| quoteDay\) \? `on \$\{fmtDate\(\(q\.change_day \|\| quoteDay\)!, \{ year: false \}\)\}` : since/);
+  assert.match(read("src/pages/Research.tsx"), /title=\{pulseClosedDay\(data\?\.indices\) \? "How the market felt at the last close" : "How the market feels today"\}/);
+  assert.match(read("src/pages/money/MoneyCalendarPage.tsx"), /asOfLabel="As of"/);
+});

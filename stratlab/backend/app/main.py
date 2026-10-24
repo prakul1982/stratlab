@@ -94,6 +94,7 @@ from . import leader
 from . import swr
 from . import ask, company_cards, daily_report, deals, first_steps, ideas, invite_rewards, library, lifecycle, mail_tokens, newsletter_prefs, public, push, referrals, risk, rotation, scan, screens, stock_alerts, stock_pages, weekly
 from .newsletter import job as news
+from .newsletter import write as news_write
 from . import results as results_calendar
 from . import corp_actions
 from . import surveillance
@@ -6302,7 +6303,14 @@ def news_list(kind: str = "market", region: str = "IN", limit: int = 20, profile
         err(400, "bad_kind", "Pick the market brief or my stocks.")
     scope = ("US" if region.upper() == "US" else "IN") if kind == "market" else profile["id"]
     return {"issues": [{**{k: i.get(k) for k in ("id", "kind", "region", "day", "weekly", "subject")},
-                        "preview": email_kit.short_line(i.get("summary"), 200)} for i in news.recent(kind, scope, max(1, min(60, limit)))]}
+                        "preview": email_kit.short_line(news_write.past_today(i.get("summary"), i, _news_today(i)), 200)}
+                       for i in news.recent(kind, scope, max(1, min(60, limit)))]}
+
+
+def _news_today(issue: dict) -> str:
+    """Today in the issue's market (a My Stocks issue: India's), for its summary's "today" (R90-007)."""
+    tz = "America/New_York" if issue.get("region") == "US" else "Asia/Kolkata"
+    return datetime.now(ZoneInfo(tz)).date().isoformat()
 
 
 @app.get("/news/{iid}")
