@@ -6170,10 +6170,14 @@ def admin_moderate_library(eid: str, req: ModerateReq, _=Depends(admin.admin_pro
     return {"ok": True}
 
 
+# the owner's test sends an hour: every lifecycle email and the plain test in one sitting (R93-006: 5 left 6 unsent)
+TEST_MAILS_HOUR = 15
+
+
 @app.post("/admin/alerts/test")
 def admin_alert_test(profile=Depends(admin.admin_profile)):
     """One email to the admin's own address, straight away, so the email settings can be checked."""
-    throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
+    throttle(profile, "admin_mail_test", TEST_MAILS_HOUR, 3600, f"You've sent {TEST_MAILS_HOUR} test emails this hour. Try again later.")
     to = alerts.email_for(profile)
     if not alerts.email_ready():
         err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
@@ -6239,7 +6243,7 @@ def admin_lifecycle_preview(kind: str, profile=Depends(admin.admin_profile)):
 def admin_lifecycle_test(kind: str, profile=Depends(admin.admin_profile)):
     """One lifecycle email with made-up details to the admin's own address, now. Not recorded as sent."""
     kind = lifecycle_kind(kind)
-    throttle(profile, "admin_mail_test", 5, 3600, "You've sent 5 test emails this hour. Try again later.")
+    throttle(profile, "admin_mail_test", TEST_MAILS_HOUR, 3600, f"You've sent {TEST_MAILS_HOUR} test emails this hour. Try again later.")
     if not alerts.email_ready():
         err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
     to = alerts.email_for(profile)

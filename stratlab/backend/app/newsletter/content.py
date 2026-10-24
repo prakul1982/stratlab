@@ -161,6 +161,11 @@ def tidy_title(t: str) -> str:
         last = t.rsplit(" ", 1)[-1]
         if (re.fullmatch(r"[a-z]{1,3}", last) and last not in _SHORT_OK) or re.fullmatch(r"[B-HJ-Z]", last):   # "... 7 triggers behind R"
             return t.rsplit(" ", 1)[0].rstrip(" ,;:-–") + "…"
+        # an amount cut after its first digit ("Key factors behind Rs 3", R93-003): the currency and the digit go (a whole
+        # amount at a headline's end has more: "dividend of Rs 10")
+        words = t.split(" ")
+        if len(words) > 2 and re.fullmatch(r"\d", last) and re.fullmatch(r"(?i)rs\.?|inr|₹|\$|usd", words[-2]):
+            return " ".join(words[:-2]).rstrip(" ,;:-–") + "…"
     return t
 
 
@@ -216,7 +221,9 @@ OTHER_MARKETS = {
                      r"nikkei|topix|japan(ese)? (stocks|shares)|hang seng|china stocks|chinese stocks|shanghai|shenzhen|asian (stocks|shares|markets?)|"
                      r"sensex|nifty|dalal street|indian (stocks|shares|markets?)|asx|tsx|canad\w+ stocks|bovespa|"
                      # R81-010: "Gulf markets fall as fresh Houthi strikes…" led the US brief the day the NASDAQ fell 2.59%
-                     r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul)\b", re.I),
+                     r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul|"
+                     # R93-005: "Moody's holds steady on France's credit rating…" as the US weekly's one headline
+                     r"(?:france|germany|italy|spain|britain|the uk|japan|china|canada|mexico|brazil)(?:'s|’s)? (?:credit rating|sovereign rating|rating|budget|deficit|bonds?))\b", re.I),
     "IN": re.compile(r"\b(london stocks|ftse|gilts?|stoxx|dax|cac|nikkei|topix|hang seng|asx|tsx|bovespa|"
                      r"gulf (stocks|shares|markets?|bourses?)|mideast (stocks|shares|markets?)|saudi (stocks|shares|bourse)|tadawul)\b", re.I),
 }

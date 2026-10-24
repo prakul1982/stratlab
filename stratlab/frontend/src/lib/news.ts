@@ -11,6 +11,7 @@ export interface IssueRow {
 
 export interface IssueLine { text: string; url?: string | null }
 export interface IssueItem { text: string; url?: string | null; symbol?: string | null; region?: Region | null; lines?: IssueLine[];
+  /** A weekly brief's headline: the day it ran ("Thu 22 Oct") */ day?: string | null;
   /** My stocks: the price, its move since the previous session and the "since …" label the email shows */ price?: number | null; currency?: string | null; change_pct?: number | null; since?: string | null }
 
 export interface Issue {
