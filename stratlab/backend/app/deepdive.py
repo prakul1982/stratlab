@@ -526,7 +526,7 @@ def readable(docs_api, candidates: list[dict], need: int, problems: list[str], h
         try:
             text = docs_api.text(d["url"])
         except Exception as e:
-            problems.append(f"{d['title'][:60]}: {str(e)[:80]}")
+            problems.append(unread(d["title"], e))
             continue
         if len(text) >= MIN_CHARS:
             out.append((d, text))
@@ -562,7 +562,9 @@ def _follow(docs_api, d: dict, letter: str, hosts: tuple[str, ...], seen: set, n
         try:
             full = docs_api.text(link, extra_hosts=named(via_page or link) + named(link))
         except Exception as e:
-            notes.append(f"{d['at'][:10]}: the letter links to {link[:90]}, which couldn't be read ({str(e)[:70]})")
+            # the reason, not the address: that goes to the log (R96)
+            print(f"deep dive: {d['at'][:10]}: {link[:200]}: {str(e)[:200]}")
+            notes.append(f"{d['at'][:10]}: the letter links to a document on the company's website, which couldn't be read ({_plain_err(e)})")
             return None
         if len(full) >= MIN_CHARS:
             return ({**d, "url": link, "via": d["url"]}, full)
@@ -586,16 +588,39 @@ def _follow(docs_api, d: dict, letter: str, hosts: tuple[str, ...], seen: set, n
         try:
             html = docs_api.page(page, extra_hosts=named(page))
         except Exception as e:
-            notes.append(f"{d['at'][:10]}: the letter points to the page {page[:90]}, which couldn't be opened ({str(e)[:70]})")
+            print(f"deep dive: {d['at'][:10]}: {page[:200]}: {str(e)[:200]}")
+            notes.append(f"{d['at'][:10]}: the letter points to a page on the company's website, which couldn't be opened ({_plain_err(e)})")
             continue
         found = [u for u in page_pdfs(html, page, d.get("kind")) if u not in seen][:2]
         if not found:
-            notes.append(f"{d['at'][:10]}: the page {page[:90]} it points to has no matching PDF")
+            print(f"deep dive: {d['at'][:10]}: no matching PDF on {page[:200]}")
+            notes.append(f"{d['at'][:10]}: the company's web page it points to doesn't list the document")
         for link in found:
             got = attempt(link, via_page=page)
             if got:
                 return got, True
     return None, bool(pdfs or pages)
+
+
+def unread(title: str, e, what: str = "couldn't be opened") -> str:
+    """A document that couldn't be read, in words a reader can use; the raw error goes to the server log (R96: a customer
+    saw "the letter links to https://…, which couldn't be read (The document is too large to read here.)")."""
+    print(f"deep dive: {str(title)[:60]}: {str(e)[:200]}")
+    return f"{str(title)[:60]}: {what}"
+
+
+_URL = re.compile(r"https?://\S+")
+
+
+def _plain_err(e) -> str:
+    """An error's own words without web addresses ("The document is too large to read here.")."""
+    return _URL.sub("the source", str(e)).strip()[:90].rstrip(".")
+
+
+def customer_problems(lines) -> list[str]:
+    """The skipped-document lines a reader sees: no web addresses (those are for the log). Also tidies lines stored
+    before R96 ("the letter links to https://…pdf, which couldn't be read")."""
+    return [_URL.sub("the company's website", str(x)) for x in lines or []]
 
 
 QUARTER_ENDS = ((3, 31), (6, 30), (9, 30), (12, 31))
@@ -855,7 +880,7 @@ def read_us(symbol: str, name: str, about: str, docs_list: list[dict], sec_api, 
             url, text = fn(d)
             d = {**d, "url": url}                    # the release itself, not the 8-K's cover page
         except Exception as e:
-            out["problems"].append(f"{d['title'][:60]}: {str(e)[:80]}")
+            out["problems"].append(unread(d["title"], e))
             continue
         if len(text) >= MIN_CHARS:
             pairs.append((d, text))

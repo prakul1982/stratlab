@@ -2508,6 +2508,8 @@ def deep_view(sym: str, base: dict) -> dict:
     us = p.get("region") == "US"
     key = f"US:{sym}" if us else sym          # stored AI reads: Indian symbols keep their old keys
     reads, card = deepdive.stored(key), report_card.stored(key)
+    if reads and reads.get("problems"):          # stored before R96 could still carry web addresses and raw errors
+        reads = {**reads, "problems": deepdive.customer_problems(reads["problems"])}
     nums = deepdive.numbers(p)
     card_view = report_card.view(card, nums)
     snap = screener_summary(p)
@@ -2640,7 +2642,7 @@ def deep_dive_read(symbol: str, refresh: bool = False, region: str = "IN", years
             err(503, "ai_busy", str(e))
         except AIError as e:
             err(422, "ai_failed", str(e))
-        reads["problems"] = [public_text(x) for x in reads["problems"]]
+        reads["problems"] = [public_text(x) for x in deepdive.customer_problems(reads["problems"])]
         reads["years"] = years
         deepdive.store(key, reads)
         db.add_usage(profile["id"], "research_ai")
@@ -3529,14 +3531,16 @@ def deep_dive_card(symbol: str, refresh: bool = False, region: str = "IN", years
             else:
                 card = report_card.read(sym, p.get("name") or sym, base["docs"], deep_docs, (_gemini, _anthropic), company_hosts(p), years)
         except report_card.NoCalls as e:          # nothing read, nothing charged
-            detail = "; ".join(public_text(x) for x in e.problems[:3])
-            err(422, "no_readable_calls", ("None of the earnings releases could be read. " if us
-                                           else "None of the earnings-call transcripts could be read. ") + (detail or "")[:400])
+            # in words a reader can use: why, and that nothing was used up; no web addresses or raw errors (R96)
+            detail = "; ".join(public_text(x) for x in deepdive.customer_problems(e.problems)[:2])
+            err(422, "no_readable_calls", ("StratLab couldn't read any of this company's earnings releases, " if us
+                                           else "StratLab couldn't read any of this company's earnings-call transcripts, ")
+                + "so there's no report card for it yet" + (f" ({detail})" if detail else "") + ". This didn't use any of your AI reads.")
         except AIBusy as e:
             err(503, "ai_busy", str(e))
         except AIError as e:
             err(422, "ai_failed", str(e))
-        card["problems"] = [public_text(x) for x in card["problems"]]
+        card["problems"] = [public_text(x) for x in deepdive.customer_problems(card["problems"])]
         report_card.store(key, card)
         db.add_usage(profile["id"], "research_ai")
     return ok(deep_view(sym, base))
