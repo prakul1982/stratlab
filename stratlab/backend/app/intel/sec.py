@@ -852,6 +852,10 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "shares_from": "cover" if shares and from_cover else None, "avg_shares": avg, "no_cover_count": no_cover_count,
            # the periods the latest figures run to, and earnings per share for the P/E (R7V-002, R7V-003)
            "year_end": ends[-1], "ttm_end": max(rev_q) if has_ttm else None, "eps": eps_ttm(facts, cur, ends[-1], eps_a),
+           # each quarter's diluted EPS from the filings ({quarter end: EPS}), to check and date the results-versus-estimates
+           # rows by (DD-030, DD-031), and whether the latest annual report gives an interest expense at all (DD-035)
+           "eps_q": {e: round(v, 4) for e, v in sorted(quarterly(facts, EPS, f"{cur}/shares").items())[-8:] if v is not None},
+           "interest_shown": None if lender else any(abs(_days(e, ends[-1])) <= 10 for e in read_a(INTEREST)),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
            "bank": kind is None and lender,
            "kind": kind, "no_revenue": no_revenue,

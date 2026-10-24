@@ -42,7 +42,23 @@ def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     except (OverflowError, OSError, ValueError):
         day = candles[-1]["t"][:10] if candles else None
     before = [c["c"] for c in candles if day and c["t"][:10] < day]
-    return before[-1] if before else (meta.get("previousClose") or meta.get("chartPreviousClose"))
+    if before:
+        return before[-1]
+    # a stock's first session has no close before it: the chart's reference is its issue price, while "previousClose"
+    # is the listing auction's price, the day's open (DD-010: ZETWERK -13.19% against ₹159.25, not -8.4% against ₹151)
+    if day and _first_trade_day(meta) == day:
+        return meta.get("chartPreviousClose") or meta.get("previousClose")
+    return meta.get("previousClose") or meta.get("chartPreviousClose")
+
+
+def _first_trade_day(meta: dict) -> str | None:
+    """The day (in the exchange's zone) of a listing's first trade, from the answer's firstTradeDate; None without one."""
+    t = meta.get("firstTradeDate")
+    try:
+        return datetime.fromtimestamp(t, ZoneInfo(meta.get("exchangeTimezoneName") or "UTC")).date().isoformat() \
+            if isinstance(t, (int, float)) else None
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 # the market whose trading days a Yahoo answer follows, by its instrument type, else by its exchange's zone
@@ -228,6 +244,8 @@ class Yahoo(Source):
             "volume": m.get("regularMarketVolume"),
             "high52": m.get("fiftyTwoWeekHigh"), "low52": m.get("fiftyTwoWeekLow"),
             "tz": m.get("exchangeTimezoneName"), "type": m.get("instrumentType"),
+            # the listing's first trading day: a new listing's first session is changed against its issue price (DD-010)
+            "first_trade": _first_trade_day(m),
             "at": datetime.fromtimestamp(m["regularMarketTime"], timezone.utc).isoformat(timespec="seconds") if isinstance(m.get("regularMarketTime"), (int, float)) else None,
         }
 

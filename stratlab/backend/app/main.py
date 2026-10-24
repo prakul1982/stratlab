@@ -79,7 +79,7 @@ from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, login_time as auto_login_time, restart_process
-from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
+from .kite_service import bse_code_in, bse_only_rows, bse_twin_codes, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
 from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
@@ -2577,6 +2577,26 @@ def price_trend(sym: str, market: str = "IN") -> dict | None:
     return price_status(sym, market)[0]
 
 
+def glance_trend(sym: str, market: str = "IN") -> dict | None:
+    """At a glance's trend: Supertrend from the scans' candles, and the Stage worked out exactly as the company page's
+    price trend does it, from the same year of daily candles (DD-071: "–" for ITC and TCS, whose pages showed a Stage,
+    and "In Stage 2: 0" that couldn't be trusted). With the broker offline the scans' candles can't be read, and the
+    company page's candles stand in for both."""
+    from .intel import key_facts
+    trend = price_trend(sym, market)
+    try:
+        bars = research_hub.chart(market, sym, "1y").get("candles") or []
+    except Exception:
+        bars = []
+    if trend is None and len(bars) >= 30:
+        trend = _quiet(scan.analyse, bars)
+    if trend is not None and bars:
+        st = key_facts.stage_now(key_facts.closes_of(bars))
+        s2 = st == 2 and trend.get("st_up")             # the signal follows the Stage shown
+        trend = {**trend, "stage": st, "signal": ("fresh" if (trend.get("st_days") or 99) <= scan.FRESH else "st_s2") if s2 else "stage2" if st == 2 else None}
+    return trend
+
+
 def candle_day(t) -> str | None:
     """A daily candle's time as its day ("2026-10-08"): the candle is stamped at midnight, so the page said "Last
     close as of 8 Oct 2026, 00:00 IST" (R5O-025). A time within the day stays as it is."""
@@ -2767,15 +2787,19 @@ def investor_home(region: str = "IN", profile=Depends(current_profile)):
                 fsum = filings.summarise(filings_feed.announcements(sym))
             except Exception:
                 fsum = None
-        trend = price_trend(sym, region)
+        trend = glance_trend(sym, region)
         nums = deepdive.numbers(p) if p else None
         card = report_card.view(report_card.stored(key), nums) if nums else None
         trades = None if us else _quiet(lambda: filings_feed.insider_trades(sym))
         checks = checklist.evaluate(p, nums, fsum, trend, card, None if us else sym, trades) if p else None
         sec = investor.sector_of(region, sym)
         sector = quad.get(sec) or ({"symbol": sec, "name": rotation._label(region, sec, None), "quadrant": None} if sec else None)
-        return investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem,
-                            quotes.get(sym))
+        out = investor.row(sym, (p or {}).get("name"), trend, sector, fsum, checks, card, deepdive.stored(key) is not None, problem,
+                           quotes.get(sym))
+        if p is None and not (quotes.get(sym) or {}).get("price") and _quiet(known_instrument, region, sym) is False:
+            # saved before the watchlist checked symbols: said so, never counted or offered a deep dive (DD-070)
+            out = {**out, "unknown": True, "problem": "not a listed company or fund StratLab knows. Remove it from your watchlist."}
+        return out
 
     rows = list(_investor_pool.map(one, syms))
     # `total`: every watchlist company in this market; the page checks the first MAX and says "Showing 20 of N"
@@ -2829,14 +2853,61 @@ def holdings_matcher() -> holdings.Matcher:
                             lambda c: (isins.get(c) or [None])[0], listed, kite.ready())
 
 
+BSE_TWINS = "bse:twins"            # {NSE symbol: BSE scrip code} of the companies on both exchanges, saved once a day (DD-003)
+_twins: dict = {"day": None, "map": {}}
+
+
+def bse_twins() -> dict[str, str]:
+    """{NSE symbol: its BSE code} for the companies listed on both exchanges: from the day's full BSE list while the
+    broker is online (saved once a day), else the last saved list, so a BSE code typed for an NSE company (500325)
+    finds it with the broker offline too."""
+    day = datetime.now(IST).date().isoformat()
+    if _twins["day"] == day and _twins["map"]:
+        return _twins["map"]
+    raw = None
+    if kite.ready():
+        try:
+            nse = kite.equities()                     # reads the day's lists, the full BSE one with them
+            raw = kite.instruments_cached("BSE")
+        except Exception:
+            raw = None
+    if raw:
+        got = bse_twin_codes(raw, nse)
+        if got:
+            _twins.update(day=day, map=got)
+            try:
+                db.set_setting(BSE_TWINS, json.dumps({"day": day, "map": got}))
+            except Exception as e:                    # kept in memory; saved again tomorrow
+                print("BSE twin codes not saved:", e)
+            return got
+    if not _twins["map"]:
+        try:
+            _twins["map"] = (json.loads(db.get_setting(BSE_TWINS) or "{}") or {}).get("map") or {}
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return _twins["map"]
+
+
+def nse_twin_of(code: str) -> str | None:
+    """The NSE symbol of the company whose BSE listing has this scrip code (500325 -> RELIANCE), or None: a BSE-only
+    company, or a code nobody lists (DD-003)."""
+    c = str(code or "").strip()
+    if not (c.isdigit() and len(c) == 6):
+        return None
+    return next((s for s, v in bse_twins().items() if v == c), None)
+
+
 def _india_suggestions() -> list[dict]:
-    return suggest.india_rows(kite.equities(), _isin["map"]) if kite.ready() else []
+    return suggest.india_rows(kite.equities(), _isin["map"], _quiet(bse_twins)) if kite.ready() else []
 
 
 def _india_listed() -> dict[str, dict]:
-    """The stored list of Indian companies, named from the exchange's list where the stored one has no name."""
+    """The stored list of Indian companies, named from the exchange's list where the stored one has no name, each NSE
+    company with its BSE listing's code where one is known (DD-003)."""
     names = {v[0]: v[1] for v in isin_list().values() if isinstance(v, list) and len(v) == 2}
-    return {s: {**v, "name": v.get("name") or names.get(s)} for s, v in stock_pages.companies("IN").items()}
+    twins = _quiet(bse_twins) or {}
+    return {s: {**v, "name": v.get("name") or names.get(s), **({"twin": twins[s]} if not v.get("bse") and s in twins else {})}
+            for s, v in stock_pages.companies("IN").items()}
 
 
 suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.us_rows(_sec_companies())},
@@ -2847,6 +2918,7 @@ suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.u
 # morning warm-up reads them), and the company boxes' own lists for the research search's US side
 KiteService.names_fn = staticmethod(lambda: _isin["map"])
 Research.local_search = staticmethod(lambda q, region: suggester.search_ranked(q, region, 10))
+Research.nse_twin = staticmethod(lambda code: _quiet(nse_twin_of, code))     # 500325 opens RELIANCE (DD-003)
 
 
 @app.get("/suggest/companies")
@@ -2867,6 +2939,30 @@ def _us_find(sym: str) -> dict | None:
         return None
     q = _quiet(research_hub.quotes, "US", [sym]) or {}
     return {"symbol": sym, "name": sym} if (q.get(sym) or {}).get("price") else None
+
+
+def known_instrument(region: str, sym: str) -> bool | None:
+    """Whether a symbol is a listed company or fund StratLab knows, for the watchlist (DD-070: "ZZZZQQ" typed and Enter
+    pressed was saved, counted and offered a deep dive): India from the broker's list (any series, BSE-only by code or
+    symbol, a BSE code of an NSE company), else the stored lists; the US from the list of companies, else a price for
+    it. None when no list could be read to tell."""
+    s = (sym or "").strip().upper()
+    if region == "US":
+        return True if _quiet(_us_find, s) else None if not _quiet(suggester.rows, "US") else False
+    if kite.ready():
+        try:
+            if kite.equity(s) or nse_twin_of(s):
+                return True
+        except Exception:
+            pass
+    if suggester.find(s, "IN") or stock_pages.find("IN", s) or nse_twin_of(s):
+        return True
+    if not kite.ready() and ((_quiet(research_hub.quotes, "IN", [s]) or {}).get(s) or {}).get("price"):
+        return True                       # the broker offline: a fund or company the stored lists don't hold, priced elsewhere
+    return False if (kite.ready() or suggester.rows("IN")) else None
+
+
+research_routes.known_symbol = known_instrument
 
 
 def with_sectors(items: list[dict], known: dict[str, str] | None = None) -> list[dict]:
@@ -3909,6 +4005,10 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
         if close and not sec.non_common(sym):
             # one P/E definition, the app's: the close over earnings per share for the last four reported quarters,
             # else the latest year's, said so (R7V-002, R7V-003); the earnings per share itself, for the app's page
+            if p.get("eps_q"):
+                checks["eps_q"] = p["eps_q"]            # the filings' quarterly EPS, for the app's results rows (DD-030)
+            if p.get("interest_shown") is False:
+                checks["no_interest"] = True            # no interest expense in the latest annual report (DD-035)
             pe, basis = sec.pe_and_basis(p, close)
             if basis:
                 checks.update(pe_basis=basis["basis"], pe_end=basis["end"])

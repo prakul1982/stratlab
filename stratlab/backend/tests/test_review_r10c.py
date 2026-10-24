@@ -105,7 +105,7 @@ def test_part_year_column_is_no_growth_base():
     n = deepdive.numbers(p)
     assert n["growth"]["sales_cagr_3y"] is None and n["growth"]["profit_cagr_3y"] is None
     c = checklist.evaluate(p, n)
-    margin = next(x for x in c["checks"] if x["label"] == "Operating margin holding up")
+    margin = next(x for x in c["checks"] if x["label"] == "EBITDA margin holding up")
     assert margin["state"] == "na"                       # never the part year's 40% as "three years ago"
     p["pl"] = {"cols": ["Mar 2025 3m", "Mar 2026"], "rows": {"Sales": [25, 150], "Net Profit": [2, 15]}}
     s = summary(p)

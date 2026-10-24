@@ -41,7 +41,8 @@ export interface DeepView {
   valuation?: { name: string; short: string; value: number | null; pe: number | null; why: string };
   numbers: { years: Year[]; quarters: Quarter[]; unit: string; capex_3y_total: number | null; capex_years?: number; bank?: boolean; notes?: string[]; capex_reported?: boolean;
     growth: { sales_cagr_3y: number | null; sales_cagr_5y: number | null; profit_cagr_3y: number | null; profit_cagr_5y: number | null;
-      eps_cagr_3y?: number | null; eps_cagr_5y?: number | null } };
+      eps_cagr_3y?: number | null; eps_cagr_5y?: number | null };
+    /** growth rates off a tiny base: not meaningful (DD-018) */ growth_nm?: Record<string, { from: number; year: string }> };
   reads: null | {
     at: string; problems: string[]; read: { kind: string; at: string; title: string }[];
     business: null | { summary: string; customers: string; drivers: string[]; strengths: string[]; risks: string[]; measures?: Measure[]; industry?: string | null;
@@ -58,7 +59,9 @@ const day = (s: string) => fmtDate(s);
 const KIND: Record<string, string> = { transcript: "Call transcript", presentation: "Investor presentation", annual_report: "Annual report",
   quarterly_report: "Quarterly report", earnings_release: "Earnings release" };
 
-function Growth({ label, v, why }: { label: string; v: number | null; why?: string }) {
+function Growth({ label, v, why, nm }: { label: string; v: number | null; why?: string; nm?: { from: number; year: string } | null }) {
+  // a rate off a tiny base is not meaningful, said with the base it starts from (DD-018)
+  if (nm) return <Stat label={label} value="n/m" note={`From a base of ${nm.from.toLocaleString("en-IN")} in ${nm.year}`} />;
   return <Stat label={label} value={v == null ? "–" : pct(v)} tone={signTone(v)} note={v == null ? why : undefined} />;
 }
 
@@ -69,20 +72,26 @@ function lossNote(values: (number | null | undefined)[], years: number): string 
   return span.some((x) => x <= 0) ? "A loss year in the period, so no yearly rate" : undefined;
 }
 
-const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", other: "" };
+const METRIC: Record<string, string> = { revenue_growth: "Revenue growth", profit_growth: "Profit growth", margin: "Operating margin", capex: "Capex", revenue: "Revenue", profit: "Profit", other: "" };
 const RESULT: Record<string, [string, string]> = { met: ["Met", "pass"], missed: ["Missed", "fail"], pending: ["Not due yet", "next"], unchecked: ["Can't check", "skip"] };
+/** A target in its own unit: rupees crore, millions, a percentage, or a plain number, never a crore amount with a "%"
+ * (DD-050: "INR 40,000–50,000 crore" read "Target 40000–50000%"). */
 const target = (lo: number | null, hi: number | null, unit: string, cur = "$") =>
   lo == null ? "–" : unit === "crore" ? (hi != null ? `${inrAmount(lo)} – ${inrAmount(hi)}` : inrAmount(lo))
-    : unit === "million" ? (hi != null ? `${usdAmount(lo, cur)} – ${usdAmount(hi, cur)}` : usdAmount(lo, cur)) : `${lo}${hi != null ? `–${hi}` : ""}%`;
+    : unit === "million" ? (hi != null ? `${usdAmount(lo, cur)} – ${usdAmount(hi, cur)}` : usdAmount(lo, cur))
+    : `${lo.toLocaleString("en-IN")}${hi != null ? `–${hi.toLocaleString("en-IN")}` : ""}${unit === "%" ? "%" : ""}`;
+const actualText = (v: number, unit: string, cur = "$") =>
+  unit === "crore" ? inrAmount(v) : unit === "million" ? usdAmount(v, cur) : unit === "%" ? `${v.toFixed(1)}%` : v.toLocaleString("en-IN");
 
 /** `cur`: the currency a US filing's amounts are in ("$", or a foreign filer's own, like "CAD"). */
 function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
   const checked = c.met + c.missed;
   return (
     <>
+      {/* one reading in every cell: with nothing settled, none is met or missed yet (DD-050: "Targets met –" beside "Missed 0") */}
       <StatRow>
-        <Stat label="Targets met" value={checked ? `${c.met} of ${checked}` : "–"} />
-        <Stat label="Missed" value={String(c.missed)} />
+        <Stat label="Targets met" value={checked ? `${c.met} of ${checked}` : "None settled"} />
+        <Stat label="Missed" value={checked ? String(c.missed) : "–"} />
         <Stat label="Not due yet" value={String(c.pending)} />
         <Stat label="Couldn't check" value={String(c.unchecked)} />
       </StatRow>
@@ -101,7 +110,7 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
               <div className="promise-facts k-note">
                 {r.period && <span><span className="muted">For</span> {r.period}</span>}
                 {r.low != null && <span><span className="muted">Target</span> <b className="mono">{target(r.low, r.high, r.unit, cur)}</b></span>}
-                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{r.unit === "crore" ? inrAmount(r.actual) : r.unit === "million" ? usdAmount(r.actual, cur) : `${r.actual.toFixed(1)}%`}</b></span>}
+                {r.actual != null && <span><span className="muted">Actual</span> <b className="mono">{actualText(r.actual, r.unit, cur)}</b></span>}
                 <a className="link" href={safeHref(r.source.url)} target="_blank" rel="noopener noreferrer" title={r.source.title}>Said {day(r.source.at)} ↗</a>
               </div>
               {r.quote && <span className="k-note">"{r.quote}"</span>}
@@ -110,8 +119,8 @@ function ReportCard({ c, cur = "$" }: { c: Card; cur?: string }) {
               {r.revised && <span className="k-note">Later changed to {target(r.revised.low, r.revised.high, r.unit, cur)} ({day(r.revised.at)}).</span>}
             </div>);
         })}</div>
-      ) : <p className="k-small k-muted">No specific targets were found in these calls.</p>}
-      <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
+      ) : <p className="k-small k-muted">No specific targets were found in these {c.read.length > 0 && c.read.every((d) => d.kind === "earnings_release") ? "earnings releases" : "calls"}.</p>}
+      <p className="k-note">Checked against the reported annual and quarterly numbers: growth on the year before (within 1 point; profit within 2), operating margin (within 0.5 points; the company may quote EBITDA margin, which can differ slightly), a revenue or profit amount (at least the target, less 2%) and estimated capex (within 10%). A target the numbers can't settle (a bank's loan-to-deposit ratio, a retail mix) is settled from what the company said after the period ended, quoted word for word and checked against the document. A target repeated on later calls counts once, from the first time it was said.</p>
     </>
   );
 }
@@ -244,15 +253,16 @@ export function DeepDivePage() {
         <>
           <Panel title="Growth and margins" info="Compound annual growth from the reported annual sales and net profit. EBITDA margin is operating profit before depreciation, interest and tax, as a share of sales.">
             <StatRow>
-              <Growth label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} /><Growth label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} />
-              <Growth label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} />
-              <Growth label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} why={lossNote(years.map((y) => y.profit), 5)} />
+              <Growth label="Sales growth a year, last 3 years" v={n.growth.sales_cagr_3y} nm={n.growth_nm?.sales_cagr_3y} /><Growth label="Sales growth a year, last 5 years" v={n.growth.sales_cagr_5y} nm={n.growth_nm?.sales_cagr_5y} />
+              <Growth label="Profit growth a year, last 3 years" v={n.growth.profit_cagr_3y} why={lossNote(years.map((y) => y.profit), 3)} nm={n.growth_nm?.profit_cagr_3y} />
+              <Growth label="Profit growth a year, last 5 years" v={n.growth.profit_cagr_5y} why={lossNote(years.map((y) => y.profit), 5)} nm={n.growth_nm?.profit_cagr_5y} />
               {n.growth.eps_cagr_5y != null && <Growth label="Earnings per share growth a year, last 5 years" v={n.growth.eps_cagr_5y} />}
             </StatRow>
             {(n.notes ?? []).map((t) => <p key={t} className="k-small k-muted inv-text">{t}</p>)}
             <div className="k-cols">
               <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.sales as number) / salesS.k }))} label={us ? "Revenue" : "Sales"} unit={salesS.unit} />
-              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit} tone="blue" />
+              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit} tone="blue"
+                baseSales={(() => { const f = years.find((y) => y.profit != null); return f?.sales != null ? f.sales / profitS.k : null; })()} />
             </div>
             {n.quarters.length > 0 && (
               <DataTable label="The last eight quarters" rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}

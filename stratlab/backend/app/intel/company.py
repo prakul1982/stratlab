@@ -189,6 +189,7 @@ def _item(label, value, unit="x", note=None):
 
 
 TTM_YOY = "Last 12 months vs the 12 before"
+TTM = "Last 12 months"
 
 
 def _latest_yoy(s: dict, what: str) -> dict:
@@ -204,9 +205,123 @@ def _latest_yoy(s: dict, what: str) -> dict:
 def _groups(*groups) -> list[dict]:
     out = []
     for title, items in groups:
-        items = [i for i in items if i["value"] is not None]
+        items = [i for i in items if i["value"] is not None or i.get("text")]
         if items:
             out.append({"title": title, "items": items})
+    return out
+
+
+def _of(item: dict, period: str | None) -> dict:
+    """A Key numbers item with the period it is of, said under its label and to the AI read (DD-015: a P/E on the last
+    12 months sat beside margins of the last reported year, none of them saying so). A note it has already stays."""
+    if not period or item.get("value") is None:
+        return item
+    return {**item, "period": period, "note": item.get("note") or period}
+
+
+def _nm(item: dict, nm: dict | None, unit_word: str = "₹") -> dict:
+    """A growth rate off a tiny base as "n/m", with the base it starts from (DD-018), else the item as it is."""
+    if not nm:
+        return item
+    base = nm.get("from")
+    amount = f"{unit_word}{base:,.0f} cr" if isinstance(base, (int, float)) and unit_word == "₹" else str(base)
+    return {**item, "value": None, "text": "n/m", "note": f"Not meaningful: from a base of {amount} in {nm.get('year')}"}
+
+
+def bank_metrics(scr: dict | None) -> list[dict]:
+    """A bank's own measures, where its reported tables have them (DD-013: ROCE and "Sales" for HDFC Bank, and none of its
+    asset quality): gross and net NPA from the latest quarter that gives them, net interest income (interest earned less
+    interest paid) over average total assets for the latest year, and deposits. CASA and capital adequacy aren't in the
+    tables, so they aren't shown."""
+    from .screener import _row
+    out = []
+    qt = (scr or {}).get("quarters") or {}
+    for label, key in (("Gross NPA", "Gross NPA"), ("Net NPA", "Net NPA")):
+        vals = _row(qt, key)
+        at = next((i for i in range(len(vals) - 1, -1, -1) if vals[i] is not None), None)
+        if at is not None and at < len(qt.get("cols") or []):
+            out.append({**_item(label, vals[at], "%"), "period": f"Quarter to {qt['cols'][at]}", "note": f"Quarter to {qt['cols'][at]}"})
+    pl, bal = (scr or {}).get("pl") or {}, (scr or {}).get("balance") or {}
+    years = [i for i, c in enumerate(pl.get("cols") or []) if str(c).strip().upper() != "TTM"]
+    rev, paid = _row(pl, "Revenue", "Sales"), _row(pl, "Interest")
+    if years:
+        i = years[-1]
+        fy = str(pl["cols"][i]).strip()
+        bcols = [str(c).strip() for c in bal.get("cols") or []]
+        assets = dict(zip(bcols, _row(bal, "Total Assets")))
+        prev = str(pl["cols"][years[-2]]).strip() if len(years) > 1 else None
+        avg = [v for v in (assets.get(fy), assets.get(prev)) if v]
+        nii = rev[i] - paid[i] if i < len(rev) and i < len(paid) and rev[i] is not None and paid[i] is not None else None
+        if nii is not None and avg:
+            out.append({**_item("Net interest income / assets", nii / (sum(avg) / len(avg)) * 100, "%"), "period": f"Year to {fy}",
+                        "note": f"Year to {fy}: interest earned less interest paid, over average total assets (not the bank's own NIM)"})
+        dep = assets and dict(zip(bcols, _row(bal, "Deposits")))
+        if dep and bcols and dep.get(bcols[-1]):
+            out.append({**_item("Deposits", dep[bcols[-1]], "cr"), "period": f"as of {bcols[-1]}", "note": f"as of {bcols[-1]}"})
+    return out
+
+
+SHARE_JUMP, ASSET_JUMP = 0.25, 0.40      # a year whose share count and total assets rose by this much: a merger or acquisition
+
+
+def merger_year(scr: dict | None, sym: str = "") -> dict | None:
+    """The latest year in the last five whose share count (share capital over the face value, which a bonus issue also
+    raises) rose by SHARE_JUMP or more while its total assets rose by ASSET_JUMP or more: shares issued to take over
+    another business, so growth across that year isn't like-for-like (DD-013: HDFC Bank's FY24, HDFC Ltd merged in;
+    sales FY22 to FY24 went from ₹1,35,936 cr to ₹2,83,649 cr). {"year", "shares", "assets", "with"}, or None. A bonus
+    issue raises the share count without the assets, and is no merger."""
+    from .screener import _row
+    bal = (scr or {}).get("balance") or {}
+    cols = [str(c).strip() for c in bal.get("cols") or []]
+    eq, assets = _row(bal, "Equity Capital"), _row(bal, "Total Assets")
+    found = None
+    for i in range(max(1, len(cols) - 5), len(cols)):
+        if i == len(cols) - 1 and cols[i][:3] != cols[i - 1][:3]:
+            continue                                   # a half-year column after the last year ("Sep 2026"): not a year of its own
+        e0, e1 = (eq[i - 1], eq[i]) if i < len(eq) else (None, None)
+        a0, a1 = (assets[i - 1], assets[i]) if i < len(assets) else (None, None)
+        if e0 and e1 and a0 and a1 and e1 / e0 - 1 >= SHARE_JUMP and a1 / a0 - 1 >= ASSET_JUMP:
+            found = {"year": cols[i], "shares": round((e1 / e0 - 1) * 100), "assets": round((a1 / a0 - 1) * 100)}
+    if found:
+        into = next((v.get("name") or k for k, v in MERGED.items() if v.get("into_symbol") == sym.upper()), None)
+        if into:
+            found["with"] = f"{into} merged into it"
+    return found
+
+
+def merger_note(m: dict | None, window_years: list[str], fy_end: str | None = None) -> str | None:
+    """The caveat for a growth rate whose years include a merger year (see merger_year), else None."""
+    if not m or m["year"] not in window_years[1:]:
+        return None
+    why = f"{m['with']}: " if m.get("with") else ""
+    return (f"Includes {m['year']}: {why}the share count rose {m['shares']}% and total assets {m['assets']}% that year, so this "
+            "isn't like-for-like growth")
+
+
+def base_effects(scr: dict | None) -> list[dict]:
+    """Quarters lifted (or held down) by one-off items, from the quarterly table: other income at least twice the median
+    of the other quarters shown and a sizeable part of the profit before tax, or a tax rate 8 points or more from the
+    median. [{"quarter", "text"}]: plain facts the AI read and the page's "Latest YoY" note give beside a change measured
+    against such a quarter (DD-016: RELIANCE's -24.6% profit YoY against Jun 2025, whose ₹15,119 cr of other income was
+    about four times the usual and whose tax rate was 17%)."""
+    from statistics import median
+    from .screener import _row
+    qt = (scr or {}).get("quarters") or {}
+    cols = [str(c).strip() for c in qt.get("cols") or []]
+    oi, pbt, tax = _row(qt, "Other Income"), _row(qt, "Profit before tax"), _row(qt, "Tax %")
+    out = []
+    for i, col in enumerate(cols):
+        bits = []
+        others = [v for j, v in enumerate(oi) if j != i and v is not None]
+        o, p = (oi[i] if i < len(oi) else None), (pbt[i] if i < len(pbt) else None)
+        if o is not None and len(others) >= 3 and (m := median(others)) > 0 and o >= 2 * m and p and p > 0 and (o - m) >= 0.15 * p:
+            bits.append(f"other income of ₹{inr(o)} crore against a median of ₹{inr(m)} crore in the other quarters shown")
+        rates = [v for j, v in enumerate(tax) if j != i and v is not None]
+        t = tax[i] if i < len(tax) else None
+        if t is not None and len(rates) >= 3 and abs(t - (mt := median(rates))) >= 8:
+            bits.append(f"a tax rate of {t:.0f}% against a median of {mt:.0f}%")
+        if bits:
+            out.append({"quarter": col, "text": f"{col} had {' and '.join(bits)}: a change measured against {col} is against a quarter moved by them."})
     return out
 
 
@@ -263,7 +378,8 @@ def with_dividend_yield(c: dict, divs: list[dict], today: str) -> dict:
     later = restating_actions(divs) if c.get("region", "IN") == "IN" else []
     amt = lambda d: num(d["amount"]) / restated_by(later, str(d["ex_date"]))
     total = sum(amt(d) for d in rows)
-    special = sum(amt(d) for d in rows if d.get("sub") == "special")
+    from ..corp_actions import is_special
+    special = sum(amt(d) for d in rows if is_special(d))
     y = round(total / price * 100, 2)
     amount = f"{total:,.2f}" if cur == "₹" else f"{total:,.3f}".rstrip("0").rstrip(".") if total < 10 else f"{total:,.2f}"
     note = f"{cur}{amount} a share in the last 12 months".replace(".00 ", " ")
@@ -299,7 +415,10 @@ def reported_growth(scr: dict | None, bars: list[dict] | None) -> dict:
     if scr:
         try:
             from ..deepdive import numbers
-            out.update({k: v for k, v in (numbers(scr).get("growth") or {}).items() if v is not None})
+            nums = numbers(scr)
+            out.update({k: v for k, v in (nums.get("growth") or {}).items() if v is not None})
+            if nums.get("growth_nm"):
+                out["nm"] = nums["growth_nm"]      # rates off a tiny base, said n/m (DD-018)
         except Exception:                 # a page that can't be read this way keeps the source's own figures
             pass
     if bars:
@@ -390,7 +509,7 @@ def with_today_range(c: dict) -> dict:
         if v and v > 0:
             lo = v if lo is None else min(lo, v)
             hi = v if hi is None else max(hi, v)
-    return {**c, "range52": {"low": lo, "high": hi}}
+    return {**c, "range52": {**rng, "low": lo, "high": hi}}
 
 
 def us_year_range(given: dict, candles: list[dict] | None, price=None) -> dict:
@@ -519,6 +638,72 @@ def us_peers(sym: str, listed: list) -> list[str]:
 
 
 
+# companies that no longer trade, with what became of them (known facts: the exchanges' notices). A page opened for one
+# says so instead of showing it as live (DD-012: HDFC Ltd opened with "Market value ₹5.04 lakh cr" and "Test a strategy")
+MERGED = {"HDFC": {"name": "HDFC Ltd", "into": "HDFC Bank", "into_symbol": "HDFCBANK", "on": "2023-07-13"}}
+_GONE = re.compile(r"\s*\((merged|delisted|amalgamated|suspended)\)\s*$", re.I)
+
+
+def tidy_name(name: str) -> str:
+    """A company name as the fundamentals source can run it together ("Housing Development Finance CorporationLtd(Merged)"):
+    a space before "Ltd" or "Limited" glued to the word before it, and before a bracket (DD-012)."""
+    out = re.sub(r"(?<=[a-z])(Ltd|Limited)\b", r" \1", str(name or ""))
+    return re.sub(r"(?<=\S)\(", " (", out).strip()
+
+
+def delisted_of(sym: str, name: str | None) -> dict | None:
+    """{"on", "into", "into_symbol"} (each when known) for a company that no longer trades: one of MERGED, or one whose
+    name the fundamentals source marks "(Merged)" or "(Delisted)"; None for a listed company."""
+    known = MERGED.get(sym.upper())
+    m = _GONE.search(tidy_name(name or ""))
+    if not known and not m:
+        return None
+    return {"how": "merged" if known or m.group(1).lower() in ("merged", "amalgamated") else m.group(1).lower(),
+            **{k: v for k, v in (known or {}).items() if k != "name"}}
+
+
+NEW_LISTING_DAYS = 340         # a share whose first daily candle is this recent has traded for under a year (the page asks 370 days)
+
+
+def listing_day(bars: list[dict] | None, today: date | None = None) -> str | None:
+    """The first trading day of a share listed within the last year, from a year's daily candles (they start well after
+    the year began); None for an older share or without candles. Its "52-week" range is the range since listing (DD-011)."""
+    first = str((bars or [{}])[0].get("t") or "")[:10]
+    try:
+        d = date.fromisoformat(first)
+    except ValueError:
+        return None
+    return first if ((today or ist_date()) - d).days <= NEW_LISTING_DAYS else None
+
+
+def first_session(q: dict | None, bars: list[dict] | None, region: str = "IN") -> bool:
+    """Whether a quote is of a share's first session: daily candles, and none of them before the quote's day. That session's
+    "previous close" is the listing auction's price (the day's open), not a close (DD-010)."""
+    day = session_day((q or {}).get("at"), region)
+    return bool(day and bars) and not any(str(b.get("t") or "")[:10] < day for b in bars)
+
+
+def against_issue(q: dict, issue) -> dict:
+    """A first session's quote changed against the issue price (`ref` "issue"), as the exchange's IPO pages count it
+    (DD-010: TONBO "-2.26%" against the ₹1,160 open, +62% on its ₹700 issue price); without an issue price, no change
+    is given, rather than one against the open."""
+    px, base = num(q.get("price")), num(issue)
+    if not px or not base or base <= 0:
+        return {**q, "prev_close": None, "change": None, "change_pct": None}
+    return {**q, "prev_close": base, "change": round(px - base, 2), "change_pct": change_2dp(px, base), "ref": "issue", "change_day": None}
+
+
+def balance_before(scr: dict | None, day: str) -> bool:
+    """Whether the latest balance sheet column ("Mar 2026") ends before `day`: its share capital then predates a listing
+    on that day, and the shares issued in the IPO aren't in it (DD-011)."""
+    cols = ((scr or {}).get("balance") or {}).get("cols") or []
+    try:
+        d = datetime.strptime(str(cols[-1]).strip(), "%b %Y").date()
+    except (IndexError, ValueError):
+        return False
+    return d.isoformat()[:7] < day[:7]
+
+
 def reported_quarters(rows: list[dict], today: str, n: int = 4) -> list[dict]:
     """The last `n` reported quarters, oldest first: one row per quarter (R84-001: NVDA's list repeated "Jun 2026" with the
     same figures, so "4 of 4 quarters beat" counted three), none dated after today, each with both figures."""
@@ -586,6 +771,8 @@ class Research:
     # ---------- search ----------
     # the app's own lists of companies: (q, region) -> [{symbol, name, exchange, match}], best first. Set by main.
     local_search = None
+    # a BSE scrip code -> the NSE symbol of the same company, when it is listed on both (500325 -> RELIANCE). Set by main.
+    nse_twin = None
 
     def search(self, q: str, region: str) -> list[dict]:
         """Up to 10 companies for what's typed: a symbol, a name or a short name ("HDFC Bank", "Infy", "Apple"). India
@@ -1002,23 +1189,25 @@ class Research:
             "margins": {"gross": None if lender else num(M.get("grossMarginTTM")), "operating": num(M.get("operatingMarginTTM")),
                         "net": num(M.get("netProfitMarginTTM"))},
             "metrics": _groups(
-                ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _item("Fwd P/E", M.get("forwardPE")),
-                               _item("P/S", M.get("psTTM")), _item("P/B", M.get("pb")),
-                               _item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), _item("EV/FCF", None if lender else M.get("currentEv/freeCashFlowTTM")),
-                               _item("PEG (fwd)", M.get("forwardPEG"))]),
-                ("Profitability", [_item("Gross margin", None if lender else M.get("grossMarginTTM"), "%"),
-                                   _item("Operating margin", M.get("operatingMarginTTM"), "%"),
-                                   _item("Net margin", M.get("netProfitMarginTTM"), "%", "Last 12 months"),
-                                   _item("ROE", M.get("roeTTM"), "%", "Last 12 months"), _item("ROA", M.get("roaTTM"), "%")]),
+                # each ratio says the period it is of (DD-015): the last twelve months, the latest quarter's balance sheet,
+                # or analysts' estimates
+                ("Valuation", [_item("P/E", us_pe(q.get("c"), None if one["foreign"] else M.get("epsTTM"), M.get("peTTM"))), _of(_item("Fwd P/E", M.get("forwardPE")), "On analysts' estimates"),
+                               _of(_item("P/S", M.get("psTTM")), TTM), _of(_item("P/B", M.get("pb")), "Latest quarter"),
+                               _of(_item("EV/EBITDA", None if lender else M.get("evEbitdaTTM")), TTM), _of(_item("EV/FCF", None if lender else M.get("currentEv/freeCashFlowTTM")), TTM),
+                               _of(_item("PEG (fwd)", M.get("forwardPEG")), "On analysts' estimates")]),
+                ("Profitability", [_of(_item("Gross margin", None if lender else M.get("grossMarginTTM"), "%"), TTM),
+                                   _of(_item("Operating margin", M.get("operatingMarginTTM"), "%"), TTM),
+                                   _of(_item("Net margin", M.get("netProfitMarginTTM"), "%"), TTM),
+                                   _of(_item("ROE", M.get("roeTTM"), "%"), TTM), _of(_item("ROA", M.get("roaTTM"), "%"), TTM)]),
                 # the last twelve months against the twelve before, said so on the page and to the AI read (R38-002)
                 ("Growth", [{**_item("Revenue YoY", M.get("revenueGrowthTTMYoy"), "%±", TTM_YOY), "period": TTM_YOY},
                             {**_item("EPS YoY", M.get("epsGrowthTTMYoy"), "%±", TTM_YOY), "period": TTM_YOY},
                             _item("Revenue 3Y", M.get("revenueGrowth3Y"), "%±"),
                             _item("Revenue 5Y", M.get("revenueGrowth5Y"), "%±"), _item("EPS 5Y", M.get("epsGrowth5Y"), "%±")]),
-                ("Financial health", [_item("Current ratio", None if lender else M.get("currentRatioQuarterly")),
-                                      _item("Long-term debt / equity", M.get("longTermDebt/equityQuarterly")),
-                                      _item("Interest coverage", M.get("netInterestCoverageTTM")),
-                                      _item("Asset turnover", None if lender else M.get("assetTurnoverTTM"))]),
+                ("Financial health", [_of(_item("Current ratio", None if lender else M.get("currentRatioQuarterly")), "Latest quarter"),
+                                      _of(_item("Long-term debt / equity", M.get("longTermDebt/equityQuarterly")), "Latest quarter"),
+                                      _of(_item("Interest coverage", M.get("netInterestCoverageTTM")), TTM),
+                                      _of(_item("Asset turnover", None if lender else M.get("assetTurnoverTTM")), TTM)]),
                 # per-share money in the results' currency is per home-market share, not per US share (an ADR can be 2)
                 ("Per share and returns", [_item("EPS TTM", None if one["foreign"] else M.get("epsTTM"), "money"), _item("Beta", M.get("beta")),
                                            _item("1Y return", M.get("52WeekPriceReturnDaily"), "%±"),
@@ -1078,9 +1267,15 @@ class Research:
             return self.kite.quote([sym]).get(sym)
 
     def _company_in(self, sym: str, lean: bool = False) -> dict:
+        # a BSE code of a company NSE lists too is that company's NSE page (DD-003: 500325 opened a page "on 500325" with no
+        # prices and the fundamentals source's rounded 52-week range, while the search found nothing for it)
+        twin = self.nse_twin(sym) if callable(self.nse_twin) and sym.isdigit() and len(sym) == 6 else None
+        if twin:
+            sym = twin
         kite_ok = self._kite()
-        inst = (self.kite.equity(sym) or self.kite.by_symbol(sym)) if kite_ok else None
-        if kite_ok and not inst:
+        # a company merged away is never another listing's page under its old symbol (HDFC is not HDFC Bank, DD-012)
+        inst = (self.kite.equity(sym) or self.kite.by_symbol(sym)) if kite_ok and sym not in MERGED else None
+        if kite_ok and not inst and sym not in MERGED:
             # the exchanges' own lists have every listed stock: a symbol that isn't there (bar a known rename) is a typo,
             # answered now instead of spending the company-data source's per-minute allowance on it
             renamed = [h for h in self.kite.search(sym, False, 3) if not h.get("fno") and h.get("type") == "EQ"
@@ -1104,8 +1299,24 @@ class Research:
         scr = r.get("scr")
         if not scr and not r.get("kq") and not r.get("y"):
             raise SourceError("Research", f"Couldn't find {sym}. Use the NSE symbol (like RELIANCE or TCS), or the BSE code for a company listed only on BSE.")
+        # a share listed within the year: its first day of trading (its range is since then), and the listing's own
+        # answer, whose reference for the first session is the issue price (DD-010, DD-011)
+        listing = r.get("y")
+        listed_on = listing_day(r.get("k1y"))
+        if listed_on and not listing:
+            listing = self._listing_or_none(_yahoo_in(code or sym))
+            if (listing or {}).get("first_trade") and listing["first_trade"] < listed_on:
+                listed_on = None                     # an older share that didn't trade early in the year, not a new one
+        elif listing and listing.get("first_trade"):
+            listed_on = listing["first_trade"] if listing_day([{"t": listing["first_trade"]}]) else None
         s = scr_summary(scr) if scr else {}
-        name = (scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym
+        if listed_on and scr and balance_before(scr, listed_on):
+            # the balance sheet's share count is from before the IPO: the source's own market value, on the shares in issue
+            # now, stands (DD-011: TONBO ₹6,236 cr on the pre-IPO count against ₹6,495 cr)
+            s = {**s, "market_cap_cr": num((scr.get("ratios") or {}).get("Market Cap")) or s.get("market_cap_cr")}
+        name = tidy_name((scr or {}).get("name") or (inst or {}).get("name") or (r.get("y") or {}).get("name") or sym)
+        gone = None if inst else delisted_of(sym, name)
+        name = _GONE.sub("", name).strip() or name
         clean = re.sub(r"\s+(Ltd|Limited)\.?$", "", name, flags=re.I).strip()
         r2, sources2 = ({}, []) if lean else self._run({
             "news": ("Google News", lambda: self.news.search(f"{clean} share price", "IN")),
@@ -1129,6 +1340,11 @@ class Research:
             lo, hi = stock_pages.year_low_high(bars)
             if lo is not None and hi is not None:
                 lo52, hi52 = lo, hi
+        if quote is not None and r.get("kq") and first_session(quote, r.get("k1y")):
+            ft = (listing or {}).get("first_trade")
+            quote = against_issue(quote, (listing or {}).get("prev_close") if ft and ft == session_day(quote.get("at"), "IN") else None)
+        elif quote is not None and r.get("y") and listed_on and listed_on == session_day(quote.get("at"), "IN") and quote.get("prev_close"):
+            quote = {**quote, "ref": "issue"}           # the listing's answer already gives the first session against its issue price
         if quote is None and s.get("price"):
             quote = {"price": s["price"], "at": None}      # the fundamentals page's price carries no trade time: said as unknown
         s = at_live_price(s, num((quote or {}).get("price")), sym, (scr or {}).get("fetched_at"))
@@ -1150,14 +1366,16 @@ class Research:
             sales = next((v for k, v in pl["rows"].items() if k.lower().startswith(("sales", "revenue"))), [])
             profit = next((v for k, v in pl["rows"].items() if k.lower().startswith("net profit")), [])
             trend = {"unit": "₹ Cr", "revenue": _series(cols, sales), "profit": _series(cols, profit),
-                     "revenue_label": "Sales", "profit_label": "Net profit"}
+                     "revenue_label": "Revenue" if is_lender(scr) else "Sales", "profit_label": "Net profit"}
         qt = (scr or {}).get("quarters")
         quarters = None
         if qt:
             def row(*prefixes):
                 return next((v for k, v in qt["rows"].items() if k.lower().startswith(prefixes)), [])
             quarters = {"cols": qt["cols"][-8:], "sales": row("sales", "revenue")[-8:],
-                        "profit": row("net profit")[-8:], "opm": row("opm", "financing margin")[-8:]}
+                        "profit": row("net profit")[-8:], "opm": row("opm", "financing margin")[-8:],
+                        # the one-off lines behind a quarter's profit, for the AI read (DD-016)
+                        "other_income": row("other income")[-8:], "tax_pct": row("tax %")[-8:]}
         sh = (scr or {}).get("shareholding")
         holding = None
         if sh and sh["cols"]:
@@ -1170,33 +1388,66 @@ class Research:
                                             "change": (vals[-1] - prev) if prev is not None else None})
             holding["note"] = class_move_note(holding["rows"])
         lender = is_lender(scr)
-        return {
+        # the periods each ratio is of (DD-015), a merger's year inside a growth rate's (DD-013), quarters moved by one-off
+        # items (DD-016) and rates off a tiny base (DD-018)
+        fy = s.get("fy")
+        yr = f"Year to {fy}" if fy else None
+        pe_of = {"ttm": "Last 12 months", "year": yr}.get(s.get("pe_basis") or "")
+        fy_cols = [str(c).strip() for c in ((scr or {}).get("pl") or {}).get("cols") or [] if str(c).strip().upper() != "TTM"]
+        merged = merger_year(scr, sym)
+        span = lambda n: merger_note(merged, fy_cols[-(n + 1):])                     # noqa: E731
+        nm = mine.get("nm") or {}
+        effects = base_effects(scr)
+        ly = s.get("latest_yoy") or {}
+        ago = str(ly.get("of") or "").split(" vs ")[-1] if ly.get("basis") == "quarter" else None
+        base_hit = next((e for e in effects if e["quarter"] == ago), None)
+
+        def grown(label, v, key, n):
+            it = _item(label, v, "%±")
+            note = span(n)
+            it = {**it, "note": note} if note and it["value"] is not None else it
+            return _nm(it, nm.get(key))
+        profit_yoy = _latest_yoy(s, "profit")
+        if base_hit and profit_yoy["value"] is not None:
+            profit_yoy = {**profit_yoy, "note": f"{profit_yoy.get('note') or ''}. {base_hit['text']}".lstrip(". ")}
+        if gone:
+            # no longer traded: its last price on record (undated) is no price of today, and no market value, P/E, P/B or
+            # yield is worked out from it; the page says what became of it (DD-012)
+            gone = {**gone, "last_price": num((quote or {}).get("price"))}
+            quote, lo52, hi52 = None, None, None
+            s = {**s, "market_cap_cr": None, "pe": None, "pb": None, "div_yield": None}
+        out = {
             "region": "IN", "symbol": sym, "name": name, "exchange": exchange, "currency": "INR", "logo": None,
             "website": (scr or {}).get("website"), "industry": None, "bse_code": code,
             "facts": [{"label": "Listed", "value": f"BSE only · {code}" if code else f"NSE · {sym}"}] + ([{"label": "Market cap", "value": f"₹{inr(s['market_cap_cr'])} Cr"}] if s.get("market_cap_cr")
                                                                                                     else [{"label": "Market cap", "value": "Unavailable"}] if s.get("cap_problem") else []),
             "cap_note": stock_pages.CAP_UNAVAILABLE if s.get("cap_problem") else None,
             "market_cap": s["market_cap_cr"] * 1e7 if s.get("market_cap_cr") else None,
-            "quote": quote, "range52": {"low": lo52, "high": hi52},
+            # a share listed within the year: its range is since its first day of trading, said so (DD-011)
+            "quote": quote, "range52": {"low": lo52, "high": hi52, **({"since": listed_on} if listed_on else {})},
             "margins": None,
             "metrics": _groups(
-                ("Valuation", [_item("P/E", s.get("pe")), _item("P/B", s.get("pb")),
-                               _item("Div yield", s.get("div_yield"), "%"), _item("Book value", s.get("book_value"), "money"),
+                ("Valuation", [_of(_item("P/E", s.get("pe")), pe_of), _of(_item("P/B", s.get("pb")), f"Book value as of {s['book_as_of']}" if s.get("book_as_of") else None),
+                               _item("Div yield", s.get("div_yield"), "%"), _of(_item("Book value", s.get("book_value"), "money"), f"as of {s['book_as_of']}" if s.get("book_as_of") else None),
                                _item("Face value", s.get("face_value"), "money")]),
                 # a bank's or lender's "operating profit" is after interest paid, so an EBITDA margin (ICICIBANK -20.0%)
-                # and a debt-to-equity mean nothing for it: left out, as on its public page (R7O-001)
-                ("Returns and quality", [_item("ROCE", s.get("roce"), "%"), _item("ROE", s.get("roe"), "%"),
-                                         _item("Net margin", s.get("net_margin"), "%"),
-                                         _item("EBITDA margin", None if lender else s.get("opm"), "%"),
+                # and a debt-to-equity mean nothing for it: left out, as on its public page (R7O-001); nor does a return on
+                # capital employed, its deposits being its raw material (DD-013)
+                ("Returns and quality", [_of(_item("ROCE", None if lender else s.get("roce"), "%"), yr), _of(_item("ROE", s.get("roe"), "%"), yr),
+                                         _of(_item("Net margin", s.get("net_margin"), "%"), yr),
+                                         _of(_item("EBITDA margin", None if lender else s.get("opm"), "%"), yr),
                                          _item("Debt", s.get("debt_cr"), "cr", f"as of {s['debt_as_of']}" if s.get("debt_as_of") else None), _item("Total debt / equity", None if lender else s.get("debt_equity"))]),
-                ("Sales growth", [_latest_yoy(s, "sales"), _item("3Y CAGR", gs.get("3 Years"), "%±"),
-                                  _item("5Y CAGR", gs.get("5 Years"), "%±"), _item("10Y CAGR", gs.get("10 Years"), "%±")]),
-                ("Profit growth", [_latest_yoy(s, "profit"), _item("3Y CAGR", gp.get("3 Years"), "%±"),
-                                   _item("5Y CAGR", gp.get("5 Years"), "%±"), _item("10Y CAGR", gp.get("10 Years"), "%±")]),
+                ("Banking", bank_metrics(scr) if lender else []),
+                # a bank's top line is the interest it earns, not sales (DD-013)
+                ("Revenue growth" if lender else "Sales growth", [_latest_yoy(s, "sales"), grown("3Y CAGR", gs.get("3 Years"), "sales_cagr_3y", 3),
+                                  grown("5Y CAGR", gs.get("5 Years"), "sales_cagr_5y", 5), grown("10Y CAGR", gs.get("10 Years"), "sales_cagr_10y", 10)]),
+                ("Profit growth", [profit_yoy, grown("3Y CAGR", gp.get("3 Years"), "profit_cagr_3y", 3),
+                                   grown("5Y CAGR", gp.get("5 Years"), "profit_cagr_5y", 5), grown("10Y CAGR", gp.get("10 Years"), "profit_cagr_10y", 10)]),
                 ("Stock price CAGR", [_item("1Y", gpr.get("1 Year"), "%±"), _item("3Y", gpr.get("3 Years"), "%±"),
                                       _item("5Y", gpr.get("5 Years"), "%±"), _item("10Y", gpr.get("10 Years"), "%±")]),
             ),
             "trend": trend, "quarters": quarters, "shareholding": holding,
+            "base_effects": effects, "merger": merged,
             # no "strengths and concerns" from the fundamentals source: its lines judge ("poor sales growth of 10.2%")
             # and work figures out again at their own price ("7.20 times its book value" beside a P/B of 7.01)
             "pros": [], "cons": [],
@@ -1208,6 +1459,7 @@ class Research:
             "links": [{"label": "Screener.in", "kind": "financials", "url": (scr or {}).get("url") or f"https://www.screener.in/company/{code or sym}/"}]
                      + ([{"label": "BSE", "kind": "exchange", "url": f"https://www.bseindia.com/stock-share-price/x/x/{code}/"}] if code else []),
             "summary": s, "numbers_at": (scr or {}).get("fetched_at"), "bank": lender,
-            "testable": bool(inst) or not kite_ok,
+            "testable": not gone and (bool(inst) or not kite_ok),
             "instrument_id": inst["id"] if inst else None,
         }
+        return {**out, "delisted": gone} if gone else out

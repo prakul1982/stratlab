@@ -11,6 +11,7 @@ import {
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
 import { surpriseShown } from "../lib/surprise";
+import { tinyBase } from "../lib/researchFormat";
 import { Star } from "./Icons";
 import { Info } from "./ui";
 import { BarList, Card, CardHead, DataTable, Delta, Disclosure, Notice, Seg, Signed, Skeleton } from "./kit";
@@ -88,7 +89,8 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
       )}
       {/* the close the move is from, while it trades and after its close too (R71-006: "$216.31 ▲ +2.18 (+1.02%) today"
           with no previous close; R89-005: none after the close either, so the base couldn't be checked) */}
-      {!preOpen && q.change != null && <span className="k-note" data-testid="price-prev">Previous close {price(q.price - q.change, currency)}</span>}
+      {/* a new listing's first session is against its issue price, said so (DD-010) */}
+      {!preOpen && q.change != null && <span className="k-note" data-testid="price-prev">{q.ref === "issue" ? "Issue price" : "Previous close"} {price(q.price - q.change, currency)}{q.ref === "issue" ? " (first day of trading)" : ""}</span>}
     </div>
   );
 }
@@ -102,13 +104,15 @@ export function PriceChart({ region, symbol, currency, price: shown, asOf: shown
   return (
     <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load}
       timeframes={["5m", "15m", "1h", "1d", "1w", "1mo"]} compareLoad={compare} compareHint={region === "IN" ? "e.g. TCS" : "e.g. MSFT"}
-      note="Prices as traded, not adjusted for dividends. Intraday candles cover recent weeks." />
+      note="Prices adjusted for splits and bonus issues, not for regular dividends. Intraday candles cover recent weeks." />
   );
 }
 
 /* ---------- 52-week rail ---------- */
-export function Rail52({ q, low, high, currency, compact }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean }) {
+export function Rail52({ q, low, high, currency, compact, since }: { q: Quote | null; low: number | null; high: number | null; currency: string; compact?: boolean;
+  /** a share listed within the year: its first day of trading, and the range is since then, not 52 weeks (DD-011) */ since?: string | null }) {
   const px = q?.price;
+  const span = since ? "range since listing" : "52-week range";
   // a range that can't be this share's (another class's, another listing's) is never drawn under its price (R7T-001)
   if (px == null || low == null || high == null || high <= low || !plausibleRange(px, low, high)) return null;
   const at = (v: number) => Math.max(0, Math.min(100, ((v - low) / (high - low)) * 100));
@@ -116,18 +120,18 @@ export function Rail52({ q, low, high, currency, compact }: { q: Quote | null; l
   const band = q?.low != null && q?.high != null && q.high > q.low ? [at(q.low), at(q.high)] : null;
   // in a company's header: the rail and its two ends, under the price (the percentile is in the rail's label)
   if (compact) return (
-    <div className="inv-rail52" title={`${ordinal(Math.round(p))} percentile of its 52-week range${band ? "; the shaded band is today's range" : ""}`}>
-      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`52-week range ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
+    <div className="inv-rail52" title={`${ordinal(Math.round(p))} percentile of its ${span}${band ? "; the shaded band is today's range" : ""}`}>
+      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`${since ? "Range since listing" : "52-week range"} ${price(low, currency)} to ${price(high, currency)}; today's price sits at the ${ordinal(Math.round(p))} percentile`}>
         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
         {band && <rect className="band" x={band[0]} y="1" width={Math.max(band[1] - band[0], 0.8)} height="8" />}
         <rect className="mark" x={Math.min(98.8, Math.max(0, p - 0.6))} y="0" width="1.2" height="10" />
       </svg>
-      <div className="k-spread k-note"><span>52-wk low {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
+      <div className="k-spread k-note"><span>{since ? `Since listing (${fmtDate(since, { year: false })}): low` : "52-wk low"} {price(low, currency)}</span><span>high {price(high, currency)}</span></div>
     </div>
   );
   return (
     <div className="k-stack">
-      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`Today's price sits at ${ordinal(Math.round(p))} percentile of its 52-week range`}>
+      <svg className="inv-rail" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={`Today's price sits at ${ordinal(Math.round(p))} percentile of its ${span}`}>
         <rect className="track" x="0" y="3" width="100" height="4" rx="2" />
         {band && <rect className="band" x={band[0]} y="1" width={Math.max(band[1] - band[0], 0.8)} height="8" />}
         <rect className="mark" x={Math.min(98.8, Math.max(0, p - 0.6))} y="0" width="1.2" height="10" />
@@ -136,7 +140,7 @@ export function Rail52({ q, low, high, currency, compact }: { q: Quote | null; l
         <span className="k-muted">Low <b className="inv-ink">{price(low, currency)}</b></span>
         <span className="k-muted">High <b className="inv-ink">{price(high, currency)}</b></span>
       </div>
-      <p className="k-small">Trading in the <b>{ordinal(Math.round(p))} percentile</b> of its 52-week range{band ? ". The shaded band is today's range." : "."}</p>
+      <p className="k-small">Trading in the <b>{ordinal(Math.round(p))} percentile</b> of its {span}{band ? ". The shaded band is today's range." : "."}</p>
     </div>
   );
 }
@@ -220,7 +224,8 @@ export function MetricsGrid({ groups, currency, industry }: { groups: MetricGrou
 /* ---------- bars ---------- */
 /** Yearly figures as bars that grow up from a zero line for gains and hang down from it for losses, so a loss year reads as
  * a loss. Each year's figure is written above its bar, the year under it. */
-export function TrendBars({ points, label, unit, tone = "ink" }: { points: SeriesPoint[]; label: string; unit: string; tone?: "ink" | "blue" }) {
+export function TrendBars({ points, label, unit, tone = "ink", baseSales }: { points: SeriesPoint[]; label: string; unit: string; tone?: "ink" | "blue";
+  /** profit bars: the sales of their first year, in the same unit, for the tiny-base rule (DD-018) */ baseSales?: number | null }) {
   if (points.length < 2) return null;
   const up = Math.max(0, ...points.map((p) => p.v));
   const down = Math.max(0, ...points.map((p) => -p.v));
@@ -229,13 +234,15 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
   const zero = (up / span) * PLOT;                     // from the top
   const first = points[0].v, last = points[points.length - 1].v;
   const lossYears = points.some((p) => p.v <= 0);
-  const growth = !lossYears && first > 0 ? (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100 : null;
+  const small = !lossYears && tinyBase(first, last, points.length - 1, baseSales);          // a rate off a tiny base is n/m (DD-018)
+  const growth = !lossYears && first > 0 && !small ? (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100 : null;
   return (
     <div className="k-stack">
       <div className="k-spread">
         <b className="k-small">{label} <span className="k-muted inv-plain">({unit})</span></b>
         {growth != null ? <span className="k-small k-muted"><Signed value={growth}>{pct(growth)}</Signed> a year</span>
-          : lossYears ? <span className="k-small k-muted">loss years in between, so no yearly rate</span> : null}
+          : lossYears ? <span className="k-small k-muted">loss years in between, so no yearly rate</span>
+          : small ? <span className="k-small k-muted" data-testid="tiny-base">n/m: from a small base</span> : null}
       </div>
       <div className={`tbars${points.length >= DENSE_BARS ? " dense" : ""}`}>
         {points.map((p, i) => {
@@ -259,7 +266,7 @@ export function TrendBars({ points, label, unit, tone = "ink" }: { points: Serie
   );
 }
 
-export function EarningsBars({ rows: raw }: { rows: Company["earnings"] }) {
+export function EarningsBars({ rows: raw, basis }: { rows: Company["earnings"]; basis?: Company["earnings_basis"] }) {
   if (raw.length < 2) return null;
   // the percentage comes from the figures as printed, so they agree with it (R31-014)
   const rows = raw.map((r) => ({ ...r, surprise_pct: r.surprise_pct == null ? null : surpriseShown(r.actual, r.estimate) }));
@@ -284,12 +291,17 @@ export function EarningsBars({ rows: raw }: { rows: Company["earnings"] }) {
                 {r.surprise_pct != null && <rect className={`tbar-bar ${up ? "beat" : "neg"}`} data-v={r.surprise_pct} x="1.5" width="7" y={up ? zero - h : zero} height={h} />}
               </svg>
               <span className="tbar-year">{monthLong(r.period)}</span>{/* "Sep 2025", as the page writes months (R54-010) */}
+              {r.fiscal && <span className="k-note tbar-sub" data-testid="fiscal-quarter">{r.fiscal}</span>}
               <span className="k-note tbar-sub">{num(r.actual, 2)}<br />vs {num(r.estimate, 2)}</span>
+              {basis === "adjusted" && r.gaap != null && <span className="k-note tbar-sub">GAAP {num(r.gaap, 2)}</span>}
             </div>
           );
         })}
       </div>
-      <p className="k-note">{beats} of {rows.length} quarters beat analysts' earnings-per-share estimate.</p>
+      <p className="k-note">{beats} of {rows.length} quarters beat analysts' earnings-per-share estimate.{" "}
+        {/* what the EPS counts, so an adjusted figure is never read as the filed one (DD-031) */}
+        {basis === "adjusted" ? "EPS as the estimates count it: adjusted (non-GAAP); the GAAP diluted EPS from the company's filings is under each quarter."
+          : basis === "gaap" ? "EPS is the GAAP diluted figure from the company's filings, quarters dated by their filing." : ""}</p>
     </div>
   );
 }

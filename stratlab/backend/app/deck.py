@@ -233,7 +233,7 @@ def plan(v: dict, now: datetime | None = None) -> tuple[list[Slide], str]:
         rows = [[r["quarter"], figq(r["sales"]), _pc(r["sales_yoy"], True), _pc(r["opm"]), figq(r["profit"])] for r in q[-8:]]
         tint = {(i, 2): AMBER for i, r in enumerate(q[-8:]) if (r.get("sales_yoy") or 0) < 0}
         s.add("table", (M, 1.65, W_IN - 2 * M, 5.0), head=["Quarter", "Revenue" if bank else "Sales", "vs a year ago",
-                                                          "Financing margin" if bank else "Operating margin", "Net profit"],
+                                                          "Financing margin" if bank else "EBITDA margin", "Net profit"],     # before depreciation (DD-052)
               rows=rows, widths=[2, 2, 1.6, 1.8, 2], colors=tint)
         slides.append(s)
 

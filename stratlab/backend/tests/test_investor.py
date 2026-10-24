@@ -28,7 +28,7 @@ def test_checklist_rules():
     assert s["Price in Stage 2"][0] == "pass" and s["Supertrend up"] == ("pass", "Up for 12 days")
     assert s["Sales growth, 3 years"][0] == "pass"            # 130 → 200 over 3 years: ~15% a year
     assert s["Return on capital employed"] == ("pass", "18.2%")
-    assert s["Operating margin holding up"][0] == "pass"      # 19 now vs 17 three years before
+    assert s["EBITDA margin holding up"][0] == "pass"      # 19 now vs 17 three years before
     assert s["Total debt / equity"][0] == "na"                     # no reserves row: can't compute
     assert s["Profit turning into cash"][0] == "pass"         # (20+24+30) / (18+20+25) = 1.17
     assert s["Promoter holding"] == ("pass", "52.5%") and s["Promoter holding over a year"][0] == "fail"   # -2.5 points

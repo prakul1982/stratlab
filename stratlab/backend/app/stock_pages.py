@@ -529,7 +529,8 @@ def dividend_list(rows, restate: bool = False) -> list[dict]:
             continue
         day, amt = str(d.get("date") or d.get("ex_date") or "")[:10], _num(d.get("amount"))
         if day and amt and amt > 0:
-            out.append({"date": day, "amount": amt / restated_by(later, day), **({"special": True} if d.get("sub") == "special" else {})})
+            from .corp_actions import is_special
+            out.append({"date": day, "amount": amt / restated_by(later, day), **({"special": True} if is_special(d) else {})})
     return out
 
 
@@ -1098,7 +1099,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why",
-                                                      "type_unread")
+                                                      "type_unread", "eps_q", "no_interest")
                                if checks.get(k) is not None},
         "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],

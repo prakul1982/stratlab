@@ -191,7 +191,7 @@ def test_a_year_whose_report_has_no_revenue_line_is_a_fact_not_a_gap():
     assert any(i["level"] == "fact" and i["detail"].startswith("No revenue in Dec 2022") for i in found)
     # the checklist's sales growth over those years is explained by the same fact
     view = {"numbers": nums, "checklist": {"checks": [{"label": "Sales growth, 3 years", "state": "na"},
-                                                      {"label": "Operating margin holding up", "state": "na"},
+                                                      {"label": "EBITDA margin holding up", "state": "na"},
                                                       {"label": "Return on capital employed", "state": "na"}]},
             "valuation": {"value": 1}}
     assert not [i for i in audit.check_view(view) if i["area"] == "Checklist" and i["level"] == "gap"]
@@ -251,7 +251,7 @@ def test_a_reit_has_no_operating_margin_to_judge():
     assert p["margin_note"] in nums["notes"]
     assert not [i for i in audit.check_numbers(p, nums, {}, "reit") if "above 100%" in i["detail"]]
     cl = checklist.evaluate(p, nums)
-    assert cl["industry"]["group"] == "reit" and not [c for c in cl["checks"] if c["label"] == "Operating margin holding up"]
+    assert cl["industry"]["group"] == "reit" and not [c for c in cl["checks"] if c["label"] == "EBITDA margin holding up"]
 
 
 def test_a_bdc_is_classified_from_its_filings_and_valued_on_book():
@@ -262,7 +262,7 @@ def test_a_bdc_is_classified_from_its_filings_and_valued_on_book():
     cl = checklist.evaluate(p, nums)
     assert cl["industry"]["group"] == "bdc" and cl["industry"]["path"]
     assert any(c["label"] == "Return on equity" for c in cl["checks"])
-    assert not [c for c in cl["checks"] if c["label"] in ("Operating margin holding up", "Free cash flow, 3 years", "Total debt / equity")]
+    assert not [c for c in cl["checks"] if c["label"] in ("EBITDA margin holding up", "Free cash flow, 3 years", "Total debt / equity")]
     v = industry.valuation(p, {"pb": 0.95}, "bdc", "general")
     assert v["short"] == "P/B" and v["value"] == 0.95 and "net asset value" in v["why"]
     view = {"checklist": cl, "valuation": v, "numbers": nums}

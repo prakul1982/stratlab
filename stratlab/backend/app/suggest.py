@@ -63,12 +63,14 @@ def shown(r: dict) -> dict:
 
 
 # ---------- each market's list ----------
-def india_rows(equities: list[dict], listed: dict | None = None) -> list[dict]:
+def india_rows(equities: list[dict], listed: dict | None = None, twins: dict[str, str] | None = None) -> list[dict]:
     """From the broker's equities: NSE stocks by symbol (a restricted series under its plain symbol), and companies
     listed only on BSE, picked by their six-digit code. `listed` is the exchange's list of companies ({isin: [symbol,
-    name]}): its full name is shown, and its ISIN found, instead of the broker's shortened name."""
+    name]}): its full name is shown, and its ISIN found, instead of the broker's shortened name. `twins` ({NSE symbol:
+    BSE code}) are the BSE codes of the companies on both exchanges: typing one finds the NSE company (DD-003)."""
     full = {str(v[0]).upper(): (v[1], isin) for isin, v in (listed or {}).items()
             if isinstance(v, (list, tuple)) and len(v) == 2 and v[0]}
+    twins = twins or {}
     out, seen = [], set()
     for r in equities:
         if r.get("exchange") == "NSE":
@@ -78,7 +80,7 @@ def india_rows(equities: list[dict], listed: dict | None = None) -> list[dict]:
                 continue
             seen.add(sym)
             name, isin = full.get(sym.upper(), (None, None))
-            out.append(_entry(sym, name or r.get("name") or sym, "NSE", "IN", isin=isin))
+            out.append(_entry(sym, name or r.get("name") or sym, "NSE", "IN", code=twins.get(sym.upper()), isin=isin))
         elif r.get("exchange") == "BSE" and r.get("bse_code"):
             out.append(_entry(r["symbol"], r.get("name") or r["symbol"], "BSE", "IN", code=r["bse_code"], ident=r["bse_code"]))
     return out
@@ -92,7 +94,8 @@ def us_rows(companies: list[dict]) -> list[dict]:
 
 
 def plain_rows(market: str, listed: dict[str, dict]) -> list[dict]:
-    """From the stored list of companies with a page ({symbol: {name, bse}}): a BSE-only company by its code."""
+    """From the stored list of companies with a page ({symbol: {name, bse, twin}}): a BSE-only company by its code; an
+    NSE company also by its BSE listing's code (`twin`, DD-003)."""
     out = []
     for sym, v in listed.items():
         sym, name, code = str(sym or "").strip().upper(), (v or {}).get("name"), (v or {}).get("bse")
@@ -101,7 +104,7 @@ def plain_rows(market: str, listed: dict[str, dict]) -> list[dict]:
         if code:
             out.append(_entry(sym, name or sym, "BSE", "IN", code=str(code), ident=str(code)))
         else:
-            out.append(_entry(sym, name or sym, "NSE" if market == "IN" else "US", market))
+            out.append(_entry(sym, name or sym, "NSE" if market == "IN" else "US", market, code=(v or {}).get("twin")))
     return out
 
 
@@ -160,9 +163,16 @@ class Suggester:
         """Like search, each row (still with its matching keys) with `match`: its group in name_search."""
         markets = [market] if market in MARKETS else list(MARKETS)
         # each market ranked on its own, then merged by how well they match (India first on a tie)
-        both = [(t, n, k, r) for n, m in enumerate(markets) for k, (t, r) in enumerate(ranked(q, self._get(m)[1], limit))]
+        both = [(t, n, k, r) for n, m in enumerate(markets) for k, (t, r) in enumerate(ranked(q, self._get(m)[1], 2 * limit))]
         both.sort(key=lambda x: x[:3])
-        return [{**r, "match": t} for t, _, _, r in both[:limit]]
+        # one row per company picked: two rows with the same identifier (a listing under its symbol and its bare code)
+        # are one suggestion, and the page keys its list by it (DD-004: a stale row stayed under later searches)
+        seen, out = set(), []
+        for t, _, _, r in both:
+            if (r["market"], r["id"]) not in seen and len(out) < limit:
+                seen.add((r["market"], r["id"]))
+                out.append({**r, "match": t})
+        return out
 
     def find(self, symbol: str, market: str) -> dict | None:
         """The row for an exact symbol (or BSE code), or None."""

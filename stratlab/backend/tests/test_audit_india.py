@@ -181,12 +181,12 @@ def test_checks_a_company_without_sales_cant_judge_are_a_fact():
     years = [{"year": f"Mar {2019 + i}", "sales": s, "profit": -1, "opm": None if not s else 5} for i, s in enumerate([5, 4, 3, 0, 0, 0, 0])]
     quarters = [{"quarter": f"Q{i}", "sales": 0} for i in range(8)]
     checks = [{"label": x, "state": "na"} for x in ("Sales growth, 3 years", "Latest quarter sales vs a year ago",
-                                                     "Operating margin holding up", "Return on capital employed")]
+                                                     "EBITDA margin holding up", "Return on capital employed")]
     view = {"region": "IN", "numbers": {"years": years, "quarters": quarters}, "documents": [{"kind": "presentation"}, {"kind": "transcript"}],
             "checklist": {"checks": checks, "industry": {"path": ["x"]}}, "valuation": {"value": 1}}
     got = audit.check_view(view)
     assert got == [audit._issue("fact", "Checklist", "3 checks can't be judged without sales (none in a year compared): "
-                                                     "Sales growth, 3 years, Latest quarter sales vs a year ago, Operating margin holding up")]
+                                                     "Sales growth, 3 years, Latest quarter sales vs a year ago, EBITDA margin holding up")]
     years[-1]["sales"] = years[-4]["sales"] = 9                       # sales there: a missing number is still ours
     quarters[-1]["sales"] = quarters[-5]["sales"] = None
     assert audit.check_view(view)[0]["level"] == "gap"

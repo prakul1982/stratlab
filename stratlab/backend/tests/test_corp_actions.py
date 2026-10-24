@@ -408,7 +408,9 @@ def test_calendar_company_and_holdings_api(w):
     # a company's own card counts an ex-date of today as gone (it is in the 12 months, not "coming up")
     assert [r["kind"] for r in one["ahead"]][:2] == ["dividend"]
     assert "bonus" in [r["kind"] for r in one["past"]]
-    assert one["dividends_12m"]["amount"] == 40.0
+    # ₹30 and ₹10 in the year; once the 1:1 bonus has gone ex they are ₹15 and ₹5 in today's shares (DD-013)
+    assert one["dividends_12m"]["amount"] == (40.0 if bonus_ahead else 20.0)
+    assert bool(one["dividends_12m"].get("adjusted")) is not bonus_ahead
     us = c.get("/research/corp-actions/US/AAPL", headers=h).json()
     assert us["past"][0]["text"] == "Dividend $0.26 a share" and us["ahead_known"] is False
     for body in (got, one, us):
