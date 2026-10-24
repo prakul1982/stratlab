@@ -295,7 +295,7 @@ def test_a_filing_listed_twice_is_shown_once():
     twice = {"at": "2026-10-14", "title": "Other update: General Updates"}
     f = _facts(filings=[twice, dict(twice), {"at": "2026-10-13", "title": "Other update: General Updates"}])
     page = stock_pages.render(f, "IN", "ACME", "Acme Ltd")
-    assert page.count("Other update: General Updates") == 2           # 14 Oct once, 13 Oct once
+    assert page.count("<br>Other update</li>") == 2                    # 14 Oct once, 13 Oct once (shown as the type alone, R91-004)
     built = stock_pages.facts("IN", "ACME", {"name": "Acme"}, {"years": []}, {}, None, None, [twice, dict(twice)], "NSE")
     assert len(built["filings"]) == 1
     from app.intel import filings as fl

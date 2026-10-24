@@ -1012,6 +1012,25 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     }
 
 
+_EMPTY_SUBJECTS = {"update", "updates", "general update", "general updates"}
+_EMPTY_LABELS = {"other update", "general update", "update"}
+
+
+def filing_title(t: str) -> str:
+    """A filing's "type: subject" with the part that says nothing left out: "Credit rating: Credit Rating" and "Other
+    update: Updates" read as the type alone, "Other update: Copy of Newspaper Publication" as the subject alone
+    (R91-004: RELIANCE's list was hard to scan)."""
+    label, sep, rest = str(t or "").partition(": ")
+    if not sep:
+        return str(t or "")
+    lab, sub = label.strip(), rest.strip()
+    if not sub or sub.lower() == lab.lower() or sub.lower() in _EMPTY_SUBJECTS:
+        return lab
+    if lab.lower() in _EMPTY_LABELS:
+        return sub
+    return f"{lab}: {sub}"
+
+
 def unique_filings(rows: list[dict]) -> list[dict]:
     """Filing rows with an exact repeat (the same date and title) dropped, as the exchange lists a general update twice
     (R26-009: RELIANCE's "14 Oct 2026 Other update: General Updates" in a row twice)."""
@@ -1899,7 +1918,7 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     parts.append(_table(f))
     if f.get("filings"):
         parts.append("<h2>Recent filings</h2><div class=\"card\"><ul class=\"plain\">" + "".join(
-            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(x["title"])}</li>' for x in unique_filings(f["filings"])) + "</ul></div>")
+            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(filing_title(x["title"]))}</li>' for x in unique_filings(f["filings"])) + "</ul></div>")
     parts.append(_cta(symbol, test, deep))
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))

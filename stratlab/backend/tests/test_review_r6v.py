@@ -482,3 +482,13 @@ def test_a_page_says_why_its_last_12_months_profit_differs_from_the_newest_year(
     assert any("data-ttm-basis" in n for n in stock_pages._notes(f))
     close = {**f, "profit_ttm": 113000.0}                                    # within 5%: nothing to explain
     assert stock_pages.ttm_year_gap(close) is None and not any("data-ttm-basis" in n for n in stock_pages._notes(close))
+
+
+def test_a_filings_title_leaves_out_the_part_that_says_nothing():
+    # R91-004: "Other update: Updates", "Credit rating: Credit Rating", "Other update: Copy of Newspaper Publication"
+    t = stock_pages.filing_title
+    assert t("Credit rating: Credit Rating") == "Credit rating"
+    assert t("Other update: Updates") == "Other update"
+    assert t("Other update: Copy of Newspaper Publication") == "Copy of Newspaper Publication"
+    assert t("Board meeting: Outcome of Board Meeting") == "Board meeting: Outcome of Board Meeting"
+    assert t("Plain title") == "Plain title"
