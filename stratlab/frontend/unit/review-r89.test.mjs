@@ -101,3 +101,9 @@ test("R89-006: a price scale whose margin reaches under zero labels no gridline 
   p.fit(90, 120);                                       // percent mode: −10% is a real line
   assert.ok(p.ticks().some((v) => v < 100));
 });
+
+test("R90-005: the watchlist's price column says last session whenever the tab's market is shut, not only when a quote is dated", () => {
+  const src = read("src/pages/Research.tsx");
+  assert.match(src, /const shut = \(\(\) => \{ const m = markets\.find\(\(x\) => x\.id === region\); return m \? !marketState\(m\)\.open : false; \}\)\(\);/);
+  assert.match(src, /header: `Price · \$\{shut \|\| Object\.values\(quotes \?\? \{\}\)\.some\(\(q\) => sessionOf\(q, marketTz\(region\)\)\) \? "last session" : "today"\}`/);
+});

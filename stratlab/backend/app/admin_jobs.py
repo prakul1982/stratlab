@@ -366,10 +366,15 @@ def rows() -> list[dict]:
             late = max(0, (x.get("failed") or 0) - err)
             log.append(f"{name}: {x.get('refreshed', 0)} updated, {x.get('left', 0)} waiting, "
                        f"{late} without a newer close yet (a small company that didn't trade, or not out yet), {err} not read")
+            # which ones, and where their candles stop: a quiet tail (a small company's last trade days back) told apart
+            # from the source without the close (R90-002: "0 updated, 974 waiting, 300 without a newer close" for 17 hours)
+            if late and x.get("behind"):
+                log.append(f"{name}, for example: {', '.join(x['behind'])}")
             # a Problem only when reads fail and none worked: the long tail of companies that didn't trade at the last
             # close is normal, not a problem (R82: "India: no page's price could be read" over 299 such pages)
             if err and not x.get("refreshed"):
                 errors.append(f"{name}: no page's price could be read in the last pass ({err} tried)")
+
         return _row("page-prices", "Company pages' prices", "After each market's close, every 15 minutes until every stored page has it",
                     st.get("last_run"), "; ".join(errors) or None, errors + log)
     add("Company pages' prices", page_prices)

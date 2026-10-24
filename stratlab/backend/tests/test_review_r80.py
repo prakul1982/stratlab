@@ -197,3 +197,4 @@ def test_rotation_after_close_brings_kept_copies_to_the_close(monkeypatch):
     assert kept["as_of"] == "2026-10-22" and kept["name"] == "NSE sector indices" and kept["market"] == "IN"
     ran.clear()
     assert main.rotation_after_close() == [] and ran == []            # already at the close: nothing re-run
+

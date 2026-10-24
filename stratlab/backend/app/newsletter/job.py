@@ -198,10 +198,12 @@ def repair_index_moves(region: str, days: int = 60) -> int:
             continue
         day = date.fromisoformat(issue["day"])
         indices = []
+        prev = content.reference_day(region, day, False).isoformat()
         for i in issue.get("indices") or [{"name": n} for n, _ in content.INDICES.get(region, [])]:
             sym = dict(content.INDICES.get(region, [])).get(i["name"])
-            got = content.index_close(sym, day) if sym else None
-            indices.append({**i, **got} if got else i)
+            got = content.index_close(sym, day, prev=prev) if sym else None
+            # only from the exchange's own session before: a close the candles still lack leaves the stored figure
+            indices.append({**i, **got} if got and got.get("change_pct") is not None else i)
         indices = [i for i in indices if i.get("price") is not None]
         if not indices or indices == issue.get("indices"):
             continue
@@ -655,7 +657,9 @@ class Job:
 
     def repair_once(self):
         """Once per database: correct the daily briefs stored with the week-old day's change (see repair_index_moves)."""
-        flag = "newsfix:index-day-change-2"      # -2: the first pass skipped issues stored before 6 Oct
+        # -2: the first pass skipped issues stored before 6 Oct; -3: a day whose session before was missing from the
+        # candles when it was sent (R90-001: 22 Oct India, NIFTY −0.88% from 19 Oct's close instead of −0.54%)
+        flag = "newsfix:index-day-change-3"
         if db.get_setting(flag):
             return
         try:

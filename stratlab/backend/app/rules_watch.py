@@ -221,7 +221,7 @@ def state() -> dict:
         out.append({"id": src["id"], "name": src["name"], "area": src["area"], "url": src["url"], "where": src["where"],
                     "checked": s.get("checked"), "value": s.get("value"), "shown": s.get("shown"),
                     "expected": s.get("expected"), "error": _plain_error(s.get("error")), "fails": int(s.get("fails") or 0),
-                    "pending": _once(s.get("pending")), "alerted": s.get("alerted"), "seen": s.get("seen") or []})
+                    "pending": _added_only(_once(s.get("pending"))), "alerted": s.get("alerted"), "seen": s.get("seen") or []})
     return {"sources": out, "last_run": got.get("last_run")}
 
 
@@ -235,6 +235,31 @@ def _plain_error(e) -> str | None:
     if "CERTIFICATE_VERIFY_FAILED" in text or "SSLCertVerificationError" in text:
         return "The site's security certificate couldn't be checked, so the page wasn't read."
     return text[:200]
+
+
+def _rows(text) -> dict | None:
+    """A table as _show writes it ("NIFTY 65, BANKNIFTY 30, NIFTYFPI 1,100") back into its rows; None for one value."""
+    if not isinstance(text, str) or not text:
+        return None
+    out = {}
+    for part in re.split(r",\s+(?=[A-Za-z])", text):
+        name, _, val = part.strip().rpartition(" ")
+        if not name:
+            return None
+        out[name] = val
+    return out
+
+
+def _added_only(pending):
+    """None for a "changed at the source" table whose rows all read as they did, with rows only added: stored before a
+    first-time row stopped counting as a change (R90-003: "NSE index lot sizes" waiting for a look, NIFTYFPI newly listed
+    and every other lot the same), it no longer waits for one."""
+    if not isinstance(pending, dict) or pending.get("why") != "changed at the source":
+        return pending
+    was, now = _rows(pending.get("was")), _rows(pending.get("now"))
+    if was and now and all(now.get(k) == v for k, v in was.items()):
+        return None
+    return pending
 
 
 def _once(pending):

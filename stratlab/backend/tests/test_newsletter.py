@@ -354,6 +354,39 @@ def test_stored_briefs_get_the_right_index_moves_and_keep_their_order(w, monkeyp
     assert job.repair_index_moves("IN") == 0                                                  # already right: nothing to do
 
 
+# R90-001: on 22 Oct the feed didn't carry 21 Oct's close yet; the brief measured from 19 Oct's (−0.88% for −0.54%)
+LATE = [("2026-10-16", 23146.15), ("2026-10-19", 22888.95), ("2026-10-22", 22687.65)]
+FULL = [("2026-10-16", 23146.15), ("2026-10-19", 22888.95), ("2026-10-21", 22811.35), ("2026-10-22", 22687.65)]
+
+
+def test_a_day_whose_session_before_is_missing_from_the_candles_is_never_measured_from_an_older_close(w, monkeypatch):
+    _candles(monkeypatch, LATE)
+    monkeypatch.setattr(main.research_hub, "indices", lambda region: [])
+    got = content.index_close("^NSEI", date(2026, 10, 22), prev="2026-10-21")
+    assert got == {"price": 22687.65, "change_pct": None}                         # not −0.88%, from 19 Oct
+    assert {i["name"]: i for i in content.index_moves("IN", date(2026, 10, 22), False)}["NIFTY 50"]["change_pct"] is None
+    # the day's own quote has the exchange's change: that is used
+    monkeypatch.setattr(main.research_hub, "indices", lambda region: [{"name": "NIFTY 50", "price": 22687.65, "change_pct": -0.54, "day": "2026-10-22"}])
+    assert {i["name"]: i for i in content.index_moves("IN", date(2026, 10, 22), False)}["NIFTY 50"]["change_pct"] == -0.54
+    # once the candle is in, from 21 Oct's close
+    _candles(monkeypatch, FULL)
+    assert content.index_close("^NSEI", date(2026, 10, 22), prev="2026-10-21")["change_pct"] == -0.54
+
+
+def test_the_stored_22_oct_brief_is_corrected_once_the_missing_close_is_in(w, monkeypatch):
+    f = {**market(day=date(2026, 10, 22)), "indices": [{"name": "NIFTY 50", "price": 22687.65, "change_pct": -0.88}]}
+    job.save(job.make_issue(f, "IN"))
+    monkeypatch.setattr(job, "date", type("D", (date,), {"today": classmethod(lambda cls: date(2026, 10, 24))}))
+    _candles(monkeypatch, LATE)
+    assert job.repair_index_moves("IN") == 0                                          # still missing: the stored figure stays
+    _candles(monkeypatch, FULL)
+    assert job.repair_index_moves("IN") == 1
+    fixed = job.load("market.IN.2026-10-22")
+    assert fixed["indices"][0]["change_pct"] == -0.54 and fixed["subject"].endswith("NIFTY 50 −0.54%")
+    assert "0.88" not in fixed["html"] + fixed["text"]
+    assert "newsfix:index-day-change-3" in open(job.__file__).read()                       # runs once more after the deploy
+
+
 def test_briefs_stored_before_the_indices_field_are_rebuilt_too(w, monkeypatch):
     # an issue as stored before 6 Oct 2026: the indices only as text in the Indices section, an AI summary
     old = {"id": "market.IN.2026-10-05", "kind": "market", "region": "IN", "day": "2026-10-05", "weekly": False,
@@ -557,6 +590,17 @@ def test_a_us_stocks_since_day_is_the_session_its_change_is_measured_from(monkey
     assert label == "since Mon 12 Oct" and line.endswith("since Mon 12 Oct")
 
 
+def test_a_us_stock_whose_last_close_is_the_day_before_the_issue_says_which_close_it_is(monkeypatch):
+    # R90-006: the Fri 23 Oct issue (sent before the US opened) showed NVDA's Thursday close as if it were Friday's
+    row = _row(monkeypatch, "US", "AAPL", date(2026, 10, 14), False, _bars("2026-10-13"))
+    assert row["price_day"] == "2026-10-13"
+    f = {"stocks": [row], "since": "2026-10-13", "day": "2026-10-14"}
+    assert write.stock_sections(f)[0]["items"][0]["since"] == "from Mon 12 Oct to the Tue 13 Oct close"
+    assert write.stock_lines(row, "2026-10-13", "2026-10-14")[0]["text"].endswith("from Mon 12 Oct to the Tue 13 Oct close")
+    # an Indian stock closed on the issue's own day keeps "since"
+    assert write._move_span({"since_day": "2026-10-13", "price_day": "2026-10-14"}, "2026-10-13", "2026-10-14") == "since Tue 13 Oct"
+
+
 def test_a_weekly_stocks_since_day_is_the_last_session_on_or_before_the_week_back(monkeypatch):
     """A week back from Fri 9 Oct is the 2 Oct holiday: the change is from the Thu 1 Oct close, not "Fri 2 Oct"."""
     row = _row(monkeypatch, "IN", "TCS", date(2026, 10, 9), True, _bars("2026-10-09", skip=("2026-10-02",), tz="+05:30"))
@@ -575,7 +619,7 @@ def test_a_live_index_quote_is_used_only_if_it_is_todays_and_fresh(monkeypatch):
     from types import SimpleNamespace
     day = date(2026, 10, 14)
     quote = {"name": "NIFTY 50", "price": 25000.0, "change_pct": 0.5, "from_high_pct": -1.0}
-    monkeypatch.setattr(content, "index_close", lambda sym, d, since=None: None)       # the day's candle isn't out yet
+    monkeypatch.setattr(content, "index_close", lambda sym, d, since=None, prev=None: None)       # the day's candle isn't out yet
 
     def moves(**fields):
         monkeypatch.setattr(content, "_main", lambda: SimpleNamespace(research_hub=SimpleNamespace(indices=lambda region: [{**quote, **fields}])))
@@ -870,3 +914,13 @@ def test_a_stage_in_the_email_says_what_it_means():
     assert now.startswith("Now Stage 3 (topping) (the 150-day average has stopped rising") and now.endswith("was Stage 2 (advancing)")
     still = write.stock_lines({"symbol": "ABC", "region": "IN", "stage": 1}, "2026-10-01")
     assert any(x["text"].startswith("Still Stage 1 (basing) (the 150-day average has stopped falling") for x in still)
+
+
+def test_a_weekly_issue_sent_on_saturday_is_the_week_to_fridays_close(w, monkeypatch):
+    # R90-004: "Market Brief India, week to 24 Oct" over figures as of the 23 Oct close
+    f = {**market(weekly=True, day=date(2026, 10, 24)), "indices": [{"name": "NIFTY 50", "price": 22600.0, "change_pct": -2.36}]}
+    assert write.subject(f) == "Market Brief India, week to 23 Oct: NIFTY 50 −2.36%"
+    seen = {}
+    monkeypatch.setattr(write, "complete", lambda system, text, **k: seen.setdefault("facts", text) and '{"summary": "x"}')
+    write.ai_summary(f)
+    assert '"day": "2026-10-23"' in seen["facts"]                                  # the AI's week ends Friday too

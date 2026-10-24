@@ -20,10 +20,16 @@ def test_a_mistyped_indian_symbol_is_answered_at_once(w):
     # the first company request of a fresh app loads the company lists once (1.5–2 s on a busy CI runner, three CI failures
     # on 23 Oct): asked once before the timing, so the bound below measures a mistyped symbol, not the cold start
     assert c.get("/research/company/IN/WARMUP", headers=h).status_code in (400, 404, 502)
+    # the bug was every request past the allowance waiting for it (seconds each); one request stalled by a busy runner is
+    # not that: "-1", a 400 from the symbol check alone, once took 1.51 s on CI (24 Oct). So the typical request is quick
+    # and none waits anything like the allowance
+    took = []
     for sym in ["NOPE", "-1", "NULL", "1E309", "XYZ123"] * 3:           # well past the company source's per-minute allowance
         t = time.monotonic()
         r = c.get(f"/research/company/IN/{sym}", headers=h)
-        assert time.monotonic() - t < 1.5 and r.status_code in (400, 404, 502), (sym, r.status_code, r.text)
+        took.append(time.monotonic() - t)
+        assert r.status_code in (400, 404, 502), (sym, r.status_code, r.text)
+    assert sorted(took)[len(took) // 2] < 0.5 and max(took) < 5, took
     assert c.get("/research/company/IN/TATAMOTORS", headers=h).status_code in (200, 502)    # a known rename still resolves
 
 
