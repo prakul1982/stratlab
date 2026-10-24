@@ -118,3 +118,22 @@ test("Net worth: one snapshot is removed from the history after a confirm; the e
   expect(errors).toEqual([]);
   await request.delete(`${API}/money/net-worth`, { headers: auth });
 });
+
+test("A phone's breadth range row shows its chosen chip clear of the fade, and the custom unit's arrow clears its word (R92-003)", async ({ page }, info) => {
+  test.skip(info.project.name !== "phone", "a phone's width");
+  await page.setViewportSize({ width: 400, height: 860 });
+  await open(page, "/invest/breadth");
+  const bar = page.locator(".k-chipbar").first();
+  await expect(bar).toBeVisible({ timeout: 30_000 });
+  const chosen = bar.locator('[aria-pressed="true"]');
+  await expect(chosen).toHaveCount(1);
+  const clear = await chosen.evaluate((el) => {
+    const b = el.parentElement!, r = b.getBoundingClientRect(), c = el.getBoundingClientRect();
+    const end = b.scrollWidth - b.clientWidth - b.scrollLeft < 2;
+    return c.left >= r.left - 0.5 && (end || c.right <= r.right - 28);
+  });
+  expect(clear, "the chosen chip sits under the row's fade").toBe(true);
+  await page.getByRole("button", { name: "+ Custom" }).first().click();
+  const pad = await page.getByLabel("Unit").first().evaluate((el) => parseFloat(getComputedStyle(el).paddingRight));
+  expect(pad).toBeGreaterThanOrEqual(32);
+});

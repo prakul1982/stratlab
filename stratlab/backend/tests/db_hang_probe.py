@@ -68,7 +68,12 @@ class Server:
 
             do_PATCH = do_POST
 
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        # a listen queue for a page's dozen calls at once: the default of 5 drops the rest's connects on a busy machine, and
+        # their retry a second later passes the 1 s connect timeout, read as a 503 that isn't the database's (24 Oct CI)
+        class Busy(ThreadingHTTPServer):
+            request_queue_size = 128
+
+        self.httpd = Busy(("127.0.0.1", 0), Handler)
         self.httpd.daemon_threads = True
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
