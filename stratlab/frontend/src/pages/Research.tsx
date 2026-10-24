@@ -558,7 +558,7 @@ export function PulsePage() {
   }, [region]);
   return (
     <div className="k-page">
-      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title="How the market feels today"
+      <PageHeader eyebrow={eyebrowOf("/research/pulse")} title={pulseClosedDay(data?.indices) ? "How the market felt at the last close" : "How the market feels today"}
         lede={pulseLede(ai, (() => { const d = pulseClosedDay(data?.indices); return d ? fmtDate(d, { year: false }) : null; })(), !!data?.indices.some((i) => i.settling))}
         asOf={data?.indices.map((i) => i.at).filter(Boolean).sort().pop() ?? undefined} asOfLabel="Prices as of" asOfTz={marketTz(region)} />
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /></div>

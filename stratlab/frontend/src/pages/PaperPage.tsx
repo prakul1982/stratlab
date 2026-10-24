@@ -13,7 +13,7 @@ import type { PriceLevel } from "../charts/price/engine";
 import { Info } from "../components/ui";
 import { Badge, Card, CardHead, ChartFrame, ConfirmDialog, EmptyState, ErrorState, Notice, PageHeader, Skeleton } from "../components/kit";
 import { HELP } from "../lib/help";
-import { sessionFeed } from "../lib/marketHours";
+import { marketState, optionsMarket, sessionFeed } from "../lib/marketHours";
 import { GroupSession, type GroupSnapshot } from "../components/GroupSession";
 import { SurvBadges, survRegion } from "../components/Surveillance";
 import { FoBadges } from "../components/FoBadges";
@@ -219,6 +219,9 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
 
 /** Sessions as a row of cards, the open one outlined. */
 function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open: (r: LiveRow) => void }) {
+  const { markets } = useApp();
+  // a running session whose market is shut says so, as its page does (R90-011: "running" on a Saturday, nothing else)
+  const shut = (r: LiveRow) => { const m = markets.find((x) => x.id === r.instrument.market) ?? optionsMarket(markets, r.instrument.exchange); return !!m && !marketState(m).open; };
   return (
     <div className="k-sessions">
       {rows.map((r) => (
@@ -228,6 +231,7 @@ function SessionCards({ rows, sid, open }: { rows: LiveRow[]; sid?: string; open
           <SurvBadges region={survRegion(r.instrument)} symbol={r.instrument.symbol} plain />
           <FoBadges region={survRegion(r.instrument)} symbol={foSymbol(r.instrument)} plain />
           <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+          {r.status === "running" && shut(r) && <span className="k-note" data-testid="sess-market-shut">Market closed</span>}
           {r.cap_hit && <Badge tone="warn">Loss cap hit today</Badge>}
         </button>
       ))}

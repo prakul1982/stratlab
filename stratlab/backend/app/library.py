@@ -221,9 +221,12 @@ def restated(e: dict) -> dict:
                     else f"{abs(hold['gap']):.1f} points behind buy and hold after costs; {lab[:1].lower() + lab[1:]}")
     out: list[str] = []
     if hold:
-        diff = "" if abs(hold["gap"]) < 0.05 else f", {abs(hold['gap']):.1f} points {'more' if hold['gap'] < 0 else 'less'}"
-        out.append(f"It returned {_pc(hold['ret'])} in total over the test, after costs; buying and holding over the same period returned "
-                   f"{_pc(hold['hold'])}{diff}.")
+        # from the unrounded figures, as the page's headline numbers are: rounded to 2 places and then to 1, −27.2549
+        # read "−27.2%" here under a headline of "−27.3%" (R91-003)
+        r, h = float(st["ret"]), float(st["buy_hold"])
+        diff = "" if abs(r - h) < 0.05 else f", {abs(r - h):.1f} points {'more' if r - h < 0 else 'less'}"
+        out.append(f"It returned {_pc(r)} in total over the test, after costs; buying and holding over the same period returned "
+                   f"{_pc(h)}{diff}.")
     n = st.get("trades")
     kind = v.get("verdict")
     if hold and hold["gap"] <= -1 and kind == "edge":

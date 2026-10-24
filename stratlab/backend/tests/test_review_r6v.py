@@ -464,3 +464,12 @@ def test_pages_a_close_behind_are_read_before_ones_whose_close_is_weeks_old(w, m
         return [{"t": iso(25 if sym == "DEAD" else 0) + "T00:00:00-04:00", "o": 1, "h": 11, "l": 9, "c": 10.5}]
     got = stock_pages.Pages(lambda r, c: None).refresh_prices("US", bars_of, gap=0, now=now, limit=1)
     assert order == ["LIVE"] and got["refreshed"] == 1 and got["left"] == 1      # the live one first, despite the smaller cap
+
+
+
+def test_a_library_strategys_sentence_rounds_its_return_once_as_the_headline_does(monkeypatch):
+    # R91-003: "It returned −27.2% in total" under a headline of "−27.3%" (−27.2549 rounded to 2 places, then to 1)
+    monkeypatch.setattr(library, "ran", lambda e: True)
+    e = {"stats": {"ret": -27.2549, "buy_hold": 67.9749, "trades": 30}, "verdict": {"verdict": "no_edge"}}
+    text = library.restated(e)["fact_summary"]
+    assert "It returned −27.3% in total" in text and "returned +68.0%, 95.2 points more." in text, text

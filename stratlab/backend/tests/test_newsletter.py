@@ -260,7 +260,7 @@ def test_my_stocks_issues_are_private(w):
     assert "{unsubscribe_url}" not in mine["html"]
     listed = c.get("/news", params={"kind": "my_stocks"}, headers=headers("pro-token")).json()["issues"]
     assert listed == [{"id": "my_stocks.u-pro.2026-10-01", "kind": "my_stocks", "region": None, "day": "2026-10-01", "weekly": False,
-                       "subject": "My Stocks", "preview": "1 of your stocks had something new today."}]
+                       "subject": "My Stocks", "preview": "1 of your stocks had something new on Thu 1 Oct."}]   # read after its day (R90-007)
     for bad in ("nope", "market.IN.x", "../etc", "my_stocks.u-free.2026-10-01"):
         assert c.get(f"/news/{bad}", headers=headers("pro-token")).status_code == 404
     assert c.get("/news").status_code == 401
@@ -924,3 +924,13 @@ def test_a_weekly_issue_sent_on_saturday_is_the_week_to_fridays_close(w, monkeyp
     monkeypatch.setattr(write, "complete", lambda system, text, **k: seen.setdefault("facts", text) and '{"summary": "x"}')
     write.ai_summary(f)
     assert '"day": "2026-10-23"' in seen["facts"]                                  # the AI's week ends Friday too
+
+
+def test_a_past_issues_summary_says_its_own_day_not_today():
+    # R90-007: "S&P 500 −0.52%; NASDAQ −0.21%; DOW JONES −1.23% today" under Friday's issue, read on Saturday
+    issue = {"day": "2026-10-23", "weekly": False}
+    text = "S&P 500 −0.52%; NASDAQ −0.21%; DOW JONES −1.23% today."
+    assert write.past_today(text, issue, "2026-10-24") == "S&P 500 −0.52%; NASDAQ −0.21%; DOW JONES −1.23% on Fri 23 Oct."
+    assert write.past_today(text, issue, "2026-10-23") == text                      # read the same day: as sent
+    assert write.past_today("1 trade closed today.", {"day": "2026-10-23", "weekly": True}, "2026-10-24") == "1 trade closed today."
+    assert write.past_today(None, issue, "2026-10-24") is None
