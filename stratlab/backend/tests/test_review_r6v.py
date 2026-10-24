@@ -442,3 +442,25 @@ def test_the_price_job_names_a_few_pages_without_the_close_and_where_their_candl
     monkeypatch.setattr(main, "price_refresh_status", {"last_run": now.isoformat(), "US": got, "IN": {"refreshed": 0, "left": 0, "failed": 0}})
     r = {r["name"]: r for r in admin_jobs.rows()}["Company pages' prices"]
     assert any(x.startswith("US, for example: ") and f"(last candle {iso(1)})" in x for x in r["log"])
+
+
+def test_pages_a_close_behind_are_read_before_ones_whose_close_is_weeks_old(w, monkeypatch):
+    # R90-002 (cause): a suspended or delisted company's page (504375 at 29 Sep, WBD at 5 Oct) took every pass after each
+    # deploy, the largest first, while live pages a close behind waited
+    from app import stock_pages
+    now = datetime.now(timezone.utc)
+    day = now.date()
+    iso = lambda back: (day - timedelta(days=back)).isoformat()          # noqa: E731
+    monkeypatch.setattr(stock_pages, "last_close", lambda region, n=None: (day, now - timedelta(hours=3)))
+    built = now.timestamp() - 5 * 3600
+    pages = {"DEAD": {"price": 10.0, "price_at": iso(25), "market_cap": 9_000_000.0},
+             "LIVE": {"price": 10.0, "price_at": iso(1), "market_cap": 100.0}}
+    for s, f in pages.items():
+        db.set_setting(f"stocks:page:US:{s}", json.dumps({"ts": built, "facts": {"symbol": s, "region": "US", **f}}))
+    order = []
+
+    def bars_of(region, sym):
+        order.append(sym)
+        return [{"t": iso(25 if sym == "DEAD" else 0) + "T00:00:00-04:00", "o": 1, "h": 11, "l": 9, "c": 10.5}]
+    got = stock_pages.Pages(lambda r, c: None).refresh_prices("US", bars_of, gap=0, now=now, limit=1)
+    assert order == ["LIVE"] and got["refreshed"] == 1 and got["left"] == 1      # the live one first, despite the smaller cap
