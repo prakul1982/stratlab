@@ -292,10 +292,10 @@ def test_an_unlisted_exchange_operator_is_not_a_company(monkeypatch):
 
 # ---------- R26-009: a filing the exchange lists twice is shown once ----------
 def test_a_filing_listed_twice_is_shown_once():
-    twice = {"at": "2026-10-14", "title": "Other update: General Updates"}
-    f = _facts(filings=[twice, dict(twice), {"at": "2026-10-13", "title": "Other update: General Updates"}])
+    twice = {"at": "2026-10-14", "title": "Board meeting: Outcome of Board Meeting", "url": "https://x.example/a.pdf"}
+    f = _facts(filings=[twice, dict(twice), {"at": "2026-10-13", "title": "Board meeting: Outcome of Board Meeting"}])
     page = stock_pages.render(f, "IN", "ACME", "Acme Ltd")
-    assert page.count("<br>Other update</li>") == 2                    # 14 Oct once, 13 Oct once (shown as the type alone, R91-004)
+    assert page.count("Board meeting: Outcome of Board Meeting") == 2           # 14 Oct once, 13 Oct once (DK-018: a bare "Other update" is dropped)
     built = stock_pages.facts("IN", "ACME", {"name": "Acme"}, {"years": []}, {}, None, None, [twice, dict(twice)], "NSE")
     assert len(built["filings"]) == 1
     from app.intel import filings as fl

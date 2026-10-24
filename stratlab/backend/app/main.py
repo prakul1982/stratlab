@@ -564,6 +564,39 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
 
 
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+
+
+class HeadAsGet:
+    """HEAD on a public page (company pages, sitemaps, robots) is answered as GET is, with the same status and headers
+    and no body, its Content-Length that of what GET sends: link checkers and crawlers probe with HEAD (DK-033:
+    /stocks/... answered 405). Plain ASGI, so every other request passes straight through."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "HEAD" or not HEAD_PATHS.match(scope["path"]):
+            return await self.app(scope, receive, send)
+        start, size = {}, 0
+
+        async def drop_body(message):
+            nonlocal size
+            if message["type"] == "http.response.start":
+                start.update(message)
+            elif message["type"] == "http.response.body":
+                size += len(message.get("body") or b"")
+                if not message.get("more_body"):
+                    headers = [(k, v) for k, v in start["headers"] if k.lower() != b"content-length"]
+                    await send({**start, "headers": headers + [(b"content-length", str(size).encode())]})
+                    await send({"type": "http.response.body", "body": b""})
+
+        await self.app({**scope, "method": "GET"}, receive, drop_body)
+
+
+app.add_middleware(HeadAsGet)     # outside even the compression, so HEAD sees what GET sends
+
+
 # ---------- helpers ----------
 def upgrade(message: str, code: str = "upgrade_required"):
     err(402, code, message)
@@ -3812,13 +3845,15 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 # what the ticker is couldn't be read (no quote): a page for a visitor, but not listed in the sitemap until a
                 # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
                 checks["type_unread"] = True
-            items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
+            items = [{"at": d["at"], "title": d["title"], "url": d.get("url")} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             try:
                 found = filings_feed.announcements(sym)
-                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]} for i in found]
+                # with the exchange's summary and the document itself, so the page names what each filing is and links it (DK-018)
+                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"],
+                          "text": i.get("text"), "url": i.get("url")} for i in found]
                 red = filings.summarise(found)["red"]
             except Exception:
                 items, red = [], None
