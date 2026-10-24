@@ -72,28 +72,38 @@ def _pct(now: float | None, then: float | None) -> float | None:
 
 
 # ---------- the Market Brief ----------
-def index_close(sym: str, day: date, since: str | None = None) -> dict | None:
+def index_close(sym: str, day: date, since: str | None = None, prev: str | None = None) -> dict | None:
     """An index's close on `day` and its change from the session before (or from the last close on or before `since`,
-    for the week), read from the daily candles: the same numbers whenever the issue is built or rebuilt."""
+    for the week), read from the daily candles: the same numbers whenever the issue is built or rebuilt. `prev`: the
+    exchange's own session before `day`; when the candles lack it the day's change is left out (None), never measured
+    from an older close (R90-001: the 22 Oct India brief said NIFTY −0.88%, from 19 Oct's close, the feed not yet
+    carrying 21 Oct's; it was −0.54%)."""
     back = max(21, (date.today() - day).days + 14)        # far enough back to hold that day and the session before it
     candles = _safe(lambda: _main().research_hub.yahoo.chart(sym, "1d", back, ttl=300)["candles"], []) or []
     upto = [c for c in candles if c["t"][:10] <= day.isoformat()]
     if not upto or (not since and upto[-1]["t"][:10] != day.isoformat()):
         return None                                    # no candle for that day (yet); the week ends at its last close
     before = [c for c in upto if c["t"][:10] <= since] if since else upto[:-1]
+    if not since and prev and before and before[-1]["t"][:10] != prev:
+        before = []                                    # the session before is missing from the candles
     return {"price": round(upto[-1]["c"], 2), "change_pct": _pct(upto[-1]["c"], before[-1]["c"]) if before else None}
 
 
 def index_moves(region: str, day: date, weekly: bool) -> list[dict]:
     """The main indices: level and change on the day (from the session before), or over the week."""
     since = reference_day(region, day, True).isoformat() if weekly else None
+    prev = None if weekly else reference_day(region, day, False).isoformat()
     live = {} if weekly else {r["name"]: r for r in _safe(lambda: _main().research_hub.indices(region), []) or []}
     out = []
     for name, sym in INDICES.get(region, []):
-        got, now = index_close(sym, day, since), live.get(name)
+        got, now = index_close(sym, day, since, prev), live.get(name)
+        today = bool(now and not weekly and now.get("day") == day.isoformat() and not now.get("stale"))
         # the day's candle isn't out yet: the live quote, same measure, only if it is today's own (not a previous session's)
-        if got is None and now and not weekly and now.get("day") == day.isoformat() and not now.get("stale"):
+        if got is None and today:
             got = {"price": round(now["price"], 2), "change_pct": None if now.get("change_pct") is None else round(now["change_pct"], 2)}
+        # the candle is out but the session before it isn't: the day's own quote has the exchange's change (R90-001)
+        elif got is not None and got.get("change_pct") is None and today and now.get("change_pct") is not None:
+            got = {**got, "change_pct": round(now["change_pct"], 2)}
         if got is None:
             continue
         if now and now.get("from_high_pct") is not None:
