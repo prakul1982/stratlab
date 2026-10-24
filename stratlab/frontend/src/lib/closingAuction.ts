@@ -58,6 +58,22 @@ export function gapText(g: number | null | undefined): string {
   return `${g > 0 ? "+" : "−"}${Math.abs(g).toFixed(2)}%`;
 }
 
+/** A quantity in full, Indian grouping (1,90,000): one form down a column (DC-011: "14,105" beside "1.9 lakh"). */
+export function qtyExact(v: number | null | undefined): string {
+  return v == null || !Number.isFinite(v) ? "–" : `${v < 0 ? "−" : ""}${Math.abs(Math.round(v)).toLocaleString("en-IN")}`;
+}
+
+/** "181 above · 4 unchanged · 28 below": the three add up to the day's stocks (DC-012: "181 / 28" of 213). */
+export function aboveBelow(d: { stocks: number; up: number; down: number }): string {
+  const same = Math.max(0, d.stocks - d.up - d.down);
+  return `${d.up} above · ${same} unchanged · ${d.down} below`;
+}
+
+/** Whether a column has anything to show on any row (a column of dashes, or of zeros, is left out: DC-010, DC-011). */
+export function anyValue<R>(rows: R[], get: (r: R) => number | null | undefined, zeroCounts = true): boolean {
+  return rows.some((r) => { const v = get(r); return v != null && (zeroCounts || v !== 0); });
+}
+
 /** A quantity as a short Indian number: 1,234 / 12.3 lakh / 1.2 crore. */
 export function qtyText(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "–";

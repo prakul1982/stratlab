@@ -3,11 +3,13 @@ import { api } from "./api";
 
 /** F&O contract changes (the exchange's contract file and circulars): the dated list, and one answer for every badge in
  * the app ("Leaves F&O after 28 Jul", "Lot 75→65 from 31 Dec"), read once and kept for ten minutes. */
-export type FoKind = "exit" | "entry" | "lot" | "expiry" | "circular";
+export type FoKind = "exit" | "entry" | "lot" | "rename" | "expiry" | "circular";
 export interface FoEvent {
   id: string; kind: FoKind; symbol: string | null; symbols?: string[] | null; segment?: "index" | "stock" | null; series?: string | null;
   series_label?: string | null; expiry?: string | null; effective?: string | null; was?: number | null; now?: number | null; lot?: number | null;
   seen?: string | null; source?: string | null; no?: string | null; subject?: string | null; within?: boolean | null;
+  /** DC-019: the first day no contract of a leaving stock is left; DC-017: a renamed stock's old symbol */
+  until?: string | null; was_symbol?: string | null;
   date: string; text: string; upcoming: boolean;
   /** the circulars (and the contract file) the change rests on */
   sources?: { no: string; subject: string; url: string; date?: string | null }[];

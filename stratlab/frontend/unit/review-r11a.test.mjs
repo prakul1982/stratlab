@@ -52,7 +52,7 @@ test("India VIX from a stored close is dated 'Close on <day>' with the stale bad
 test("the chain panel says which strikes each figure counts", () => {
   const rows = Array.from({ length: 41 }, (_, i) => ({ strike: 24000 + 50 * i }));
   const t = chainCounts({ near_strikes: 15, window_strikes: 31, strikes_counted: 61, rows });
-  assert.equal(t.maxPain, "over the 31 strikes around the money, as the PCR");
+  assert.equal(t.maxPain, "near-the-money max pain: over the 31 strikes around the money, as the PCR, not the whole chain");   // DB-012
   assert.match(t.note, /PCR and max pain count the 31 strikes around the money \(15 either side/);
   assert.match(t.note, /most call and put open interest are over all 61 strikes read; the chart shows the 41 nearest\./);
 });

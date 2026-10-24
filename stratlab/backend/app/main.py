@@ -4866,6 +4866,8 @@ def trade_positioning(brief: bool = False, pcr: bool = True, profile=Depends(cur
     IV percentile and rank are on Basic and up."""
     out = positioning.summary(options_data, allows(profile["_plan"], "positioning"), brief=brief, with_pcr=pcr)
     out["plan_needed"] = PLANS[FEATURE_PLAN["positioning"]]["name"]
+    # the stocks in the F&O ban period, for Trade home's market strip (DC-001)
+    out["fo_ban"] = sorted(stock_futures._banned())
     return ok(out)
 
 

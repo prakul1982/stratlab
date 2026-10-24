@@ -36,7 +36,8 @@ from .options.greeks import black76, implied_vol, struck_at, years_to  # noqa: F
 IST = ZoneInfo("Asia/Kolkata")
 UNDERLYINGS = (("NFO", "NIFTY"), ("NFO", "BANKNIFTY"), ("NFO", "FINNIFTY"), ("NFO", "MIDCPNIFTY"), ("BFO", "SENSEX"))
 NAMES = {n: ex for ex, n in UNDERLYINGS}
-PARTICIPANTS = (("client", "Client"), ("dii", "DII"), ("fii", "FII"), ("pro", "Pro"))
+# the exchange's "Pro" (brokers trading their own money) is named "Prop desks": "Pro" sat beside the account's Pro plan (DC-006)
+PARTICIPANTS = (("client", "Client"), ("dii", "DII"), ("fii", "FII"), ("pro", "Prop desks"))
 PARTICIPANT_NAME = dict(PARTICIPANTS) | {"total": "Total"}
 # the exchange's column names (lower case, spaces collapsed) -> our keys
 COLUMNS = {
@@ -680,7 +681,8 @@ def summarise_day(name: str, day: date) -> dict | None:
     for r in snaps:
         e = str(r["expiry"])[:10]
         x[e] = chain_stats(r["chain"], r.get("spot"), e, _taken(r))
-    return {"front": front(list(x), day), "x": x, "at": max(_taken(r) for r in snaps).isoformat(timespec="minutes")}
+    return {"front": front(list(x), day), "x": x, "at": max(_taken(r) for r in snaps).isoformat(timespec="minutes"),
+            "final": all(is_final(r) for r in snaps)}
 
 
 def chain_history(name: str) -> dict:
@@ -712,7 +714,9 @@ def chain_series(name: str, since: str | None = None, roll_expiry_day: bool = Fa
             front = later[0] if later else front
         st = x.get(front) or {}
         out.append({"day": d, "expiry": front or None, "pcr_oi": st.get("pcr_near"), "pcr_vol": st.get("pcr_near_vol"),
-                    "max_pain": st.get("max_pain"), "atm_iv": st.get("atm_iv"), "spot": st.get("spot")})
+                    "max_pain": st.get("max_pain"), "atm_iv": st.get("atm_iv"), "spot": st.get("spot"),
+                    # the exchange's end-of-day open interest, or a recording read at the close (DC-003)
+                    "final": bool(s.get("final"))})
     return out
 
 
@@ -871,7 +875,8 @@ def at_the_close(name: str, live: dict, spot_q: dict | None) -> dict:
     for r in recorded_last(name, close_at.date()):
         if str(r.get("expiry"))[:10] == live["expiry"] and isinstance(r.get("chain"), list) and r.get("spot"):
             return {**live, "spot": r["spot"], "chain": r["chain"], "at_close": True, "close_recording": True,
-                    "taken_at": _taken(r).astimezone(IST).isoformat(timespec="minutes"), "lot": r.get("lot") or live.get("lot")}
+                    "taken_at": _taken(r).astimezone(IST).isoformat(timespec="minutes"), "lot": r.get("lot") or live.get("lot"),
+                    "final": is_final(r)}
     today = ist_now().date()
     prev = (spot_q or {}).get("close")
     if close_at.date() < today and prev:
@@ -928,13 +933,97 @@ def recorded_chain(name: str, choice: str, today: date, now: datetime | None = N
             if pick is None:
                 continue
         return {"expiry": str(pick["expiry"])[:10], "expiries": exps, "spot": pick.get("spot"), "chain": pick["chain"],
-                "taken_at": _taken(pick).astimezone(IST).isoformat(timespec="minutes"), "source": "recorded", "lot": pick.get("lot")}
+                "taken_at": _taken(pick).astimezone(IST).isoformat(timespec="minutes"), "source": "recorded", "lot": pick.get("lot"),
+                "final": is_final(pick)}
     return None
+
+
+# ---------- the exchange's end-of-day open interest ----------
+# The recorder's last chain of a day is read from the feed at the close, before the exchange settles the day's open
+# interest: per-strike OI was off by up to 12% and the change by up to 36% (DC-003, DB-013). Each evening the day's chains
+# are read again from the exchange's F&O bhavcopy (its final open interest, the day's volume and close by strike) and kept
+# as one more recording of the day, stamped FINAL_AT, so the day's summary, the history and the panel all use it.
+FO_BHAV = "https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{ymd}_F_0000.csv.zip"
+FINAL_AT = dtime(18, 0)      # the time a chain from the end-of-day file is stamped with (no recording is taken after the close)
+FINAL_BACK_DAYS, FINAL_STEP = 130, 3   # past recorded days re-read from the archive, a few each quiet run
+
+
+def final_stamp(day: date) -> datetime:
+    return datetime.combine(day, FINAL_AT, IST)
+
+
+def is_final(r: dict) -> bool:
+    """Whether a recording is the exchange's end-of-day chain (stamped FINAL_AT), not one read from the feed."""
+    t = _taken(r).astimezone(IST)
+    return t.time() == FINAL_AT
+
+
+def bhav_chains(text: str, names) -> dict[str, dict[str, dict]]:
+    """{index: {expiry: {"spot", "lot", "rows": {strike: {"CE": (close, oi, volume), "PE": ...}}}}} from the F&O common
+    bhavcopy's index options (FinInstrmTp IDO): open interest in shares, the day's volume in contracts (as the file has
+    it), the underlying's close."""
+    from .exchange_days import rows_of
+    want = set(names)
+    out: dict[str, dict[str, dict]] = {}
+    rows = rows_of(text)
+    if rows and "FinInstrmTp" not in rows[0]:
+        raise ValueError("not the F&O bhavcopy")
+    for r in rows:
+        name = r.get("TckrSymb", "").upper()
+        if r.get("FinInstrmTp") != "IDO" or name not in want or r.get("OptnTp") not in ("CE", "PE"):
+            continue
+        exp, k = str(r.get("XpryDt") or "")[:10], num(r.get("StrkPric"))
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", exp) or k is None:
+            continue
+        e = out.setdefault(name, {}).setdefault(exp, {"spot": num(r.get("UndrlygPric")), "lot": int(num(r.get("NewBrdLotQty")) or 0) or None,
+                                                      "rows": {}})
+        e["rows"].setdefault(k, {})[r["OptnTp"]] = (num(r.get("ClsPric")), int(num(r.get("OpnIntrst")) or 0), int(num(r.get("TtlTradgVol")) or 0))
+    return out
+
+
+def final_rows(day: dict) -> list[list]:
+    """One expiry from bhav_chains as a recording's compact rows, the AROUND_LIVE strikes each side of the money: the
+    close as the last price (no bid or ask after the day), open interest in shares, volume in shares (contracts × lot),
+    as the recorder keeps them."""
+    lot = day.get("lot") or 1
+
+    def side(x):
+        return [None, None, x[0], x[1]] if x else [None, None, None, None]
+    rows = [[k, *side(v.get("CE")), *side(v.get("PE")), (v["CE"][2] * lot) if v.get("CE") else None,
+             (v["PE"][2] * lot) if v.get("PE") else None] for k, v in sorted(day["rows"].items())]
+    return near(rows, day.get("spot"), AROUND_LIVE)
+
+
+def keep_final_chains(text: str, day: date, save=None) -> int:
+    """Keep the end-of-day chain of each NSE index expiry the recorder recorded on `day` (the ones the page and the
+    history read). Returns how many were kept; a day already kept is left as it is."""
+    save = save or db.add_option_snapshot
+    nse = [n for n, ex in NAMES.items() if ex == "NFO"]
+    got = bhav_chains(text, nse)
+    n = 0
+    for name in nse:
+        snaps = recorded_last(name, day)
+        if not snaps or any(is_final(s) for s in snaps):
+            continue
+        for s in snaps:
+            e = str(s.get("expiry") or "")[:10]
+            if e not in (got.get(name) or {}):
+                continue
+            fin = got[name][e]
+            rows = final_rows(fin)
+            if not rows:
+                continue
+            save({"taken_at": final_stamp(day).astimezone(timezone.utc).isoformat(), "exchange": "NFO", "name": name, "expiry": e,
+                  "spot": fin.get("spot") or s.get("spot"), "lot": fin.get("lot"), "chain": rows})
+            n += 1
+        _cache.pop(("day", name, day.isoformat()))
+    return n
 
 
 def lot_of(options_data, name: str, expiry: str | None, got: dict | None = None) -> int | None:
     """Shares in one contract of an index's options: the chain's own (recorded with it, or the day's instrument list's),
-    else the list's for that expiry; None when neither says."""
+    else the list's for that expiry, else the exchange's F&O contract file's for that month (DC-004, DB-011: with the feed
+    offline the page said "the lot size for this expiry couldn't be read" and showed shares); None when none says."""
     lot = (got or {}).get("lot")
     if not lot and expiry:
         try:
@@ -942,11 +1031,24 @@ def lot_of(options_data, name: str, expiry: str | None, got: dict | None = None)
             lot = getattr(c, "lot", None)
         except Exception:
             lot = None
+    if not lot and expiry:
+        lot = contract_file_lot(name, expiry)
     try:
         lot = int(lot) if lot else None
     except (TypeError, ValueError):
         lot = None
     return lot if lot and lot > 0 else None
+
+
+def contract_file_lot(name: str, expiry: str) -> int | None:
+    """An index's lot for an expiry's month as the exchange's F&O market lots file lists it (kept by fo_changes.py)."""
+    try:
+        from . import fo_changes
+        rows = (fo_changes.load_state().get("lots") or {}).get("rows") or {}
+        lots = (rows.get(name) or {}).get("lots") or {}
+        return lots.get(str(expiry)[:7])
+    except Exception:
+        return None
 
 
 def in_lots(v, lot: int | None):
@@ -1006,7 +1108,9 @@ def chain_view(options_data, name: str, choice: str = "current", full: bool = Fa
                pcr_all=stats["pcr"]["oi"], **{k: stats[k] for k in ("pcr_near", "pcr_near_vol", "max_pain", "atm_iv", "atm")},
                # in the session a recording answers at once while the live chain is read behind it; the page asks again
                # shortly (R83-002: "recorded chain, 09:21 IST" stayed up after the live one was read)
-               reading=chain_time(now)[1] == "live" and got["source"] == "recorded")
+               reading=chain_time(now)[1] == "live" and got["source"] == "recorded",
+               # the exchange's end-of-day open interest, or a chain read from the feed in the day (DC-003): the page says which
+               final=bool(got.get("final")), oi_basis="final" if got.get("final") else "intraday")
     out["pcr"] = {**stats["pcr"], "oi": near_pcr["oi"], "vol": near_pcr["vol"],
                   **{k: in_lots(near_pcr[k], lot) for k in ("call_oi", "put_oi", "call_vol", "put_vol")}}
     out["iv"] = None
@@ -1193,7 +1297,9 @@ class Runner:
         try:
             feed = self._feed()
             parts = state().get("parts") or {}
-            res = {"participants": self.participants_day(feed, day), "cash": self.cash(feed, day), "chains": self.chains(day)}
+            final = self.final_day(feed, day)          # before the summary, so the day's summary is of the final OI
+            res = {"participants": self.participants_day(feed, day), "cash": self.cash(feed, day), "chains": self.chains(day),
+                   "final_chains": final}
             stamp = now.astimezone(IST).isoformat(timespec="minutes")
             for part in ("participants", "cash"):
                 r = res[part]
@@ -1299,6 +1405,61 @@ class Runner:
         finally:
             self.running = False
 
+    def final_day(self, feed, day: date) -> str:
+        """Keep a day's end-of-day chains from the exchange's F&O bhavcopy (DC-003): "ok", "kept" (already there), "none"
+        (nothing recorded that day), "missing" (the file isn't out yet) or the error. Remembered in the state."""
+        from .exchange_days import Files
+        st = dict(state().get("finals") or {})
+        days = dict(st.get("days") or {})
+        key = day.isoformat()
+        if days.get(key) in ("ok", "none"):
+            return "kept"
+        if not any(recorded_last(n, day) for n, ex in NAMES.items() if ex == "NFO"):
+            res = "none"
+        else:
+            try:
+                text = Files(feed if isinstance(feed, Feed) else Feed(getattr(feed, "nse", feed), sleep=self.sleep),
+                             sleep=self.sleep, pace=0).text(FO_BHAV.format(ymd=day.strftime("%Y%m%d")))
+                if text is None:
+                    res = "missing"
+                else:
+                    keep_final_chains(text, day)
+                    res = "ok"
+            except (SourceError, ValueError) as e:
+                res = str(e)[:160]
+        if res in ("ok", "none"):
+            days[key] = res
+        else:
+            days[key] = (days.get(key) if isinstance(days.get(key), int) else 0) + 1
+        keep = dict(sorted(days.items())[-(FINAL_BACK_DAYS + 30):])
+        _set_state(finals={**st, "days": keep})
+        return res
+
+    def final_backfill(self, today: date, step: int = FINAL_STEP, days: int = FINAL_BACK_DAYS) -> int:
+        """Re-read a few past recorded days' end-of-day chains from the archive (DC-003: the history's PCR and max pain
+        came from recordings taken before the exchange's final open interest), newest first, and summarise them again."""
+        from .data.calendar import is_trading_day
+        done = (state().get("finals") or {}).get("days") or {}
+        feed, n = None, 0
+        for back in range(1, days + 1):
+            if n >= step:
+                break
+            d = today - timedelta(days=back)
+            seen = done.get(d.isoformat())
+            if not is_trading_day("IN", d) or seen in ("ok", "none") or (isinstance(seen, int) and seen >= CATCH_UP_TRIES):
+                continue
+            feed = feed or self._feed()
+            res = self.final_day(feed, d)
+            if res == "ok":
+                for name in NAMES:
+                    s = summarise_day(name, d)
+                    if s:
+                        store_chain_day(name, d.isoformat(), s)
+            elif res not in ("none", "missing", "kept"):
+                break                                  # busy or refusing: the next quiet run tries again
+            n += 1
+        return n
+
     def chain_backfill(self, today: date, days: int = 130) -> int:
         """Summarise every recorded day not summarised yet (the recordings are kept a few months)."""
         n = 0
@@ -1330,7 +1491,7 @@ class Job(news_job.Job):
     def __init__(self, runner: Runner):
         super().__init__()
         self.runner = runner
-        self._tried = self._caught = 0.0
+        self._tried = self._caught = self._finals = 0.0
         self.status.update(last_result=None, backfill=None, catch_up=None)
 
     @staticmethod
@@ -1366,4 +1527,10 @@ class Job(news_job.Job):
         hhmm = local.strftime("%H:%M")
         if not ("09:00" <= hhmm <= "15:45") and not (state().get("backfill") or {}).get("done"):
             self.status["backfill"] = self.runner.backfill(local.date())
+        elif not ("09:00" <= hhmm <= "18:30") and time.time() - self._finals >= RETRY_MINUTES * 60:
+            self._finals = time.time()
+            try:
+                self.status["final_backfill"] = self.runner.final_backfill(local.date())
+            except Exception as e:                 # one day's surprise never stops the job
+                print("positioning: end-of-day chains", str(e)[:120])
         return 0

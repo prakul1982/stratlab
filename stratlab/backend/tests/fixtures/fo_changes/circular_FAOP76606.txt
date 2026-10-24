@@ -1,0 +1,51 @@
+ 
+National Stock Exchange of India Limited 
+ 
+ 
+ 
+Circular 
+Department: FUTURES & OPTIONS 
+Download Ref No: NSE/FAOP/76606 Date: September 29, 2026 
+Circular Ref. No: 132/2026  
+ 
+All Members, 
+ 
+Introduction of Futures & Options Contracts on Three Individual Securities 
+ 
+In continuation to Exchange circular Ref. No.  NSE/FAOP/76257 dated September 09, 2026  members 
+are requested to note the market lot for the below securit ies which will be available for trading from 
+September 30, 2026 are as follows: 
+ 
+Sr. No. Security Name Symbol Lot Size 
+1 Anand Rathi Wealth Limited ANANDRATHI 250 
+2 Siemens Energy India Limited ENRIN 175 
+3 Ujjivan Small Finance Bank Limited UJJIVANSFB 8000 
+Accordingly, members are requested to note the following: 
+1. The scheme of strikes for the above-mentioned security is provided as Annexure A.  
+2. For the above mentioned securities, the futures contracts shall have the same tick size as 
+applicable for the underlying security in CM Segment and for the options contracts it s tick 
+size shall kept as per directions provided in circular NSE/FAOP/70382 dated September 
+23, 2025. 
+3. The details of applicab le quantity freeze shall be available in the contract file which shall 
+be applicable for trading  on September 30, 2026 . Members are advised to load the 
+updated contract.gz and  NSE_FO_contract_ddmmyyyy.csv.gz file in the trading 
+application before trading on the effective date. This file can be obtained from the directory 
+faoftp/faocommon on the Extranet server. 
+4. Additionally, members can access the contract file - NSE_FO_contract_ddmmyyyy.csv.gz 
+on the website path:- https://www.nseindia.com/all-reports-derivatives  
+ 
+For and on behalf of 
+National Stock Exchange of India Limited 
+ 
+Aarti Surve 
+Chief Manager 
+ 
+National Stock Exchange of India Limited 
+Page 2 of 2 
+ 
+ 
+ 
+ 
+ 
+Toll Free No Email id 
+1800-266-0050 (Option 1) msm@nse.co.in 
