@@ -1,6 +1,6 @@
 """Prices by currency for visitors outside India. Rupee prices live in plans.py; every other currency follows them
-automatically: the rupee price at today's exchange rate, rounded to a tidy amount (rates are read once a day). US
-dollars, euros and pounds have their own built-in prices instead ($8 and $20 a month). The admin can change any price
+at a fixed price of its own (set 24 Oct 2026 from the rupee price, rounded; $8 and $20 a month for US dollars), so no
+shown price moves with the exchange rate; the rates are still read daily for "about" notes on what a rupee charge is. The admin can change any price
 in Admin → Prices, and clear it to go back to the default.
 
 Charging: a currency is charged in that currency when its Razorpay plan IDs are set in Admin (plans are created in
@@ -14,31 +14,32 @@ from .plans import PLANS
 KEY = "prices"
 RATES = "fx-rates"             # app_settings: {"at": ISO, "rates": {"USD": 88.2, ...}} rupees per unit, read daily
 
-# code: (symbol, name, monthly Basic, monthly Pro); yearly is ten months (two free), as in rupees. These amounts are
-# used until the first exchange rate is read; after that the rupee price at today's rate, except for FIXED below.
+# code: (symbol, name, monthly Basic, monthly Pro); yearly is ten months (two free), as in rupees.
 CURRENCIES = {
     "INR": ("₹", "Indian rupee", None, None),
     "USD": ("$", "US dollar", 8, 20),
     "EUR": ("€", "Euro", 8, 19),
     "GBP": ("£", "British pound", 7, 16),
-    "AUD": ("A$", "Australian dollar", 9, 27),
-    "CAD": ("C$", "Canadian dollar", 8, 24),
-    "SGD": ("S$", "Singapore dollar", 7, 22),
-    "AED": ("AED ", "UAE dirham", 22, 64),
-    "SAR": ("SAR ", "Saudi riyal", 22, 64),
-    "CHF": ("CHF ", "Swiss franc", 5, 14),
-    "JPY": ("¥", "Japanese yen", 900, 2650),
-    "HKD": ("HK$", "Hong Kong dollar", 47, 135),
-    "NZD": ("NZ$", "New Zealand dollar", 10, 29),
-    "SEK": ("SEK ", "Swedish krona", 62, 185),
-    "NOK": ("NOK ", "Norwegian krone", 64, 190),
-    "DKK": ("DKK ", "Danish krone", 42, 125),
-    "ZAR": ("R", "South African rand", 110, 325),
-    "MYR": ("RM", "Malaysian ringgit", 27, 79),
-    "QAR": ("QAR ", "Qatari riyal", 22, 64),
+    "AUD": ("A$", "Australian dollar", 10, 30),
+    "CAD": ("C$", "Canadian dollar", 10, 29),
+    "SGD": ("S$", "Singapore dollar", 9, 27),
+    "AED": ("AED ", "UAE dirham", 27, 77),
+    "SAR": ("SAR ", "Saudi riyal", 28, 79),
+    "CHF": ("CHF ", "Swiss franc", 6, 17),
+    "JPY": ("¥", "Japanese yen", 1150, 3300),
+    "HKD": ("HK$", "Hong Kong dollar", 58, 165),
+    "NZD": ("NZ$", "New Zealand dollar", 13, 37),
+    "SEK": ("SEK ", "Swedish krona", 73, 210),
+    "NOK": ("NOK ", "Norwegian krone", 69, 195),
+    "DKK": ("DKK ", "Danish krone", 49, 140),
+    "ZAR": ("R", "South African rand", 120, 350),
+    "MYR": ("RM", "Malaysian ringgit", 30, 86),
+    "QAR": ("QAR ", "Qatari riyal", 27, 77),
 }
-# priced on their own, like comparable apps abroad, instead of following the rupee price (the admin can still change them)
-FIXED = {"USD", "EUR", "GBP"}
+# every currency has its own fixed price (the owner, 24 Oct: "we can't change prices every day"), set from the rupee
+# price at 24 Oct's rates and rounded; dollars, euros and pounds priced like comparable apps abroad. The admin can still
+# change any of them in Admin → Prices. None follows the exchange rate any more.
+FIXED = set(CURRENCIES) - {"INR"}
 
 # countries that use each currency (ISO 3166 codes); anywhere else outside India sees US dollars
 COUNTRIES = {

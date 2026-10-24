@@ -109,29 +109,29 @@ def test_stored_us_briefs_are_stamped_again_in_new_york_time_once(w):
 
 
 # ---------- R7M-003: a currency with no rate ----------
-def test_a_currency_with_no_rate_is_hidden_from_visitors_and_flagged_in_admin(mem):
+def test_a_currency_with_no_rate_still_shows_its_fixed_price(mem):
     mem[pricing.RATES] = json.dumps({"rates": {"USD": 96.78}, "errors": ["SAR: no rate", "NOK: no rate", "QAR: no rate"]})
     t = pricing.table()
-    assert t["NOK"]["no_rate"] and t["NOK"]["basic"] == 64                      # only the built-in default
-    assert not t["SAR"]["no_rate"] and t["SAR"]["basic"] == 27 and t["SAR"]["pro"] == 77        # through the dollar's peg
-    assert not t["QAR"]["no_rate"] and not t["USD"]["no_rate"] and not t["INR"]["no_rate"]
+    assert not t["NOK"]["no_rate"] and t["NOK"]["basic"] == 69                 # its own fixed price, no rate needed
+    assert not t["SAR"]["no_rate"] and t["SAR"]["basic"] == 28 and t["SAR"]["pro"] == 79
     pub = pricing.public()
-    assert "NOK" not in pub["currencies"] and "NO" not in pub["countries"]      # a Norwegian visitor sees dollars
-    assert pub["currencies"]["SAR"]["basic"] == 27 and pub["countries"]["SA"] == "SAR"
+    assert pub["currencies"]["NOK"]["basic"] == 69 and pub["countries"]["NO"] == "NOK"
     assert "no_rate" not in pub["currencies"]["USD"]
     pricing.save({"NOK": {"basic": 300, "pro": 900}})                           # a price the owner typed is the owner's
-    assert pricing.public()["currencies"]["NOK"]["basic"] == 300 and pricing.public()["countries"]["NO"] == "NOK"
+    assert pricing.public()["currencies"]["NOK"]["basic"] == 300
 
 
-def test_before_any_rate_is_read_only_the_fixed_prices_are_shown(mem):
-    assert set(pricing.public()["currencies"]) == {"INR", "USD", "EUR", "GBP"}
-    assert pricing.public()["countries"]["DE"] == "EUR" and "JP" not in pricing.public()["countries"]
+def test_before_any_rate_is_read_every_fixed_price_is_shown(mem):
+    """Every currency is a fixed price since 24 Oct, so none waits for an exchange rate."""
+    pub = pricing.public()
+    assert set(pub["currencies"]) == set(pricing.CURRENCIES)
+    assert pub["countries"]["DE"] == "EUR" and pub["countries"]["JP"] == "JPY"
 
 
-def test_admin_prices_say_which_currencies_have_no_rate(w, mem):
+def test_admin_prices_need_no_rate_for_a_fixed_price(w, mem):
     mem[pricing.RATES] = json.dumps({"at": "2026-10-09T00:00:00+00:00", "rates": {"USD": 96.78}, "errors": ["NOK: no rate", "AUD: down"]})
     rows = w["client"].get("/admin/prices", headers=ADMIN).json()
-    assert rows["currencies"]["NOK"]["no_rate"] is True and rows["currencies"]["SAR"]["no_rate"] is False
+    assert rows["currencies"]["NOK"]["no_rate"] is False and rows["currencies"]["SAR"]["no_rate"] is False
 
 
 # ---------- R7M-004: the unsubscribe page, the one-click header ----------

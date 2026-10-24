@@ -360,13 +360,14 @@ def test_riyals_go_through_the_dollar_and_the_peg():
         pricing.cross_rate("NOK", {"USDINR=X": 96.78}.get)
 
 
-def test_the_riyal_price_is_the_rupee_charge_converted(mem):
-    mem[pricing.RATES] = json.dumps({"rates": {"USD": 96.78}})       # SAR not read yet: the dollar's rate over the peg
+def test_the_riyal_price_is_fixed_and_charged_in_rupees(mem):
+    """24 Oct: every currency has a fixed price; the riyal's no longer follows the rate (it was 27 and 77 at 96.78)."""
+    mem[pricing.RATES] = json.dumps({"rates": {"USD": 96.78}})
     pricing._rates_cache[0] = 0.0
     pricing.forget()
     t = pricing.table()
-    assert t["SAR"]["basic"] == 27 and t["SAR"]["pro"] == 77 and t["SAR"]["converted"] and t["SAR"]["charged_in"] == "INR"
-    assert t["USD"]["basic"] == 8 and t["USD"]["pro"] == 20 and not t["USD"]["converted"]         # dollars stay as the owner set them
+    assert t["SAR"]["basic"] == 28 and t["SAR"]["pro"] == 79 and not t["SAR"]["converted"] and t["SAR"]["charged_in"] == "INR"
+    assert t["USD"]["basic"] == 8 and t["USD"]["pro"] == 20 and not t["USD"]["converted"]
     pricing._rates_cache[0] = 0.0
 
 

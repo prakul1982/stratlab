@@ -374,8 +374,9 @@ def test_a_fixed_price_charged_in_rupees_says_the_charge_today(mem):
     assert pub["EUR"]["basic"] == 8 and pub["EUR"]["charge_about"]["basic"] == round(699 / 108.46, 2) == 6.44
     assert pub["GBP"]["basic"] == 7 and pub["GBP"]["charge_about"]["basic"] == round(699 / 127.87, 2)
     assert pub["USD"]["charge_about"]["pro"] == round(1999 / 96.6, 2)
-    assert "charge_about" not in pub["SAR"] and "charge_about" not in pub["INR"]          # already the rupee charge converted
-    assert "rate" not in pub["EUR"]
+    # every currency is a fixed price now (24 Oct), so each says what the rupee charge is today
+    assert pub["SAR"]["basic"] == 28 and pub["SAR"]["charge_about"]["basic"] == round(699 / 25.73, 2)
+    assert "charge_about" not in pub["INR"] and "rate" not in pub["EUR"]
     pricing._rates_cache[0] = 0.0
 
 

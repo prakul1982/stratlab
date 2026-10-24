@@ -79,9 +79,10 @@ export { approx } from "./approx";
 export { money, planPriceLine } from "./planPrice";
 import { planPriceLine } from "./planPrice";
 
-/** An approximate converted amount with its cents: "€6.40" (whole yen). */
+/** An approximate converted amount, rounded to a whole unit: "€6" (the owner, 25 Oct: round every number off; it's
+ * "about" anyway, and the bank's own rate differs by more than the cents). */
 export function aboutMoney(row: CurrencyRow, v: number, code: string): string {
-  return `${row.symbol}${code === "JPY" ? Math.round(v).toLocaleString("en-US") : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${row.symbol}${Math.round(v).toLocaleString(code === "INR" ? "en-IN" : "en-US")}`;
 }
 
 /** The note under a plan's price when the card is charged in rupees: "Charged as ₹699 / month incl. GST (about €6.40 today)", the visitor's Plans wording and order (R22-004). */
