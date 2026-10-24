@@ -473,3 +473,22 @@ def test_a_library_strategys_sentence_rounds_its_return_once_as_the_headline_doe
     e = {"stats": {"ret": -27.2549, "buy_hold": 67.9749, "trades": 30}, "verdict": {"verdict": "no_edge"}}
     text = library.restated(e)["fact_summary"]
     assert "It returned −27.3% in total" in text and "returned +68.0%, 95.2 points more." in text, text
+
+
+def test_a_page_says_why_its_last_12_months_profit_differs_from_the_newest_year():
+    # R91-005: AAPL "Net profit, last 12 months 128,930" beside FY Sep 2025's 112,010, with no word on how both are right
+    f = {"region": "US", "profit_ttm": 128930.0, "years": [{"year": "Sep 2024", "profit": 93736.0}, {"year": "Sep 2025", "profit": 112010.0}]}
+    assert stock_pages.ttm_year_gap(f) == (128930.0, 112010.0, "Sep 2025")
+    assert any("data-ttm-basis" in n for n in stock_pages._notes(f))
+    close = {**f, "profit_ttm": 113000.0}                                    # within 5%: nothing to explain
+    assert stock_pages.ttm_year_gap(close) is None and not any("data-ttm-basis" in n for n in stock_pages._notes(close))
+
+
+def test_a_filings_title_leaves_out_the_part_that_says_nothing():
+    # R91-004: "Other update: Updates", "Credit rating: Credit Rating", "Other update: Copy of Newspaper Publication"
+    t = stock_pages.filing_title
+    assert t("Credit rating: Credit Rating") == "Credit rating"
+    assert t("Other update: Updates") == "Other update"
+    assert t("Other update: Copy of Newspaper Publication") == "Copy of Newspaper Publication"
+    assert t("Board meeting: Outcome of Board Meeting") == "Board meeting: Outcome of Board Meeting"
+    assert t("Plain title") == "Plain title"
