@@ -170,3 +170,8 @@ test("R92-001: a lock says what the plan costs, in the visitor's currency, while
   assert.match(read("src/components/kit/Notice.tsx"), /const price = usePlanPrice\(plan \?\? named\);/);
   assert.match(read("src/components/PageLock.tsx"), /unlockHint\(me\.offer, CFG\.CONTACT_EMAIL \|\| EARLY_ACCESS_EMAIL, price\)/);
 });
+
+test("Refunds (owner, 25 Oct): one 7-day window for every payment, monthly or yearly", () => {
+  assert.match(read("src/content/legal.ts"), /Ask within 7 days of any payment, monthly or yearly, and we refund it in full\./);
+  assert.match(read("src/content/faq.ts"), /refunded in full if you ask within 7 days of it/);
+});
