@@ -4,6 +4,7 @@ import { api, type ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { writtenAt, asOf, dayIn, fmtDate, marketTz, pct, price, quoteAt, safeHref, signed } from "../lib/format";
 import { HELP } from "../lib/help";
+import { marketState } from "../lib/marketHours";
 import { eyebrowOf } from "../lib/eyebrow";
 import {
   REGION_NAME, SETTLING, STARTER_TICKERS, THEME_IDEAS, bigMoney, canonTicker, linkLabel, settlingNow, indexWhen, metricText, monthsOld, priceLabel, pulseClosedDay, pulseLede, researchApi, resultsFiled, scaleFor, staleQuarter, trendValue, useRegion, useWatchlist, watchNote, withMore,
@@ -745,6 +746,9 @@ export function WatchlistPage() {
   const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   // between the US close and its settle point the prices are the day's last prints, said as the company header says it (R13-005)
   const settling = settlingNow(markets.find((m) => m.id === region));
+  // the market closed (a weekend, a holiday, after the bell): its prices are the last session's, whatever the date is in
+  // its own time zone (R90-005: the US tab said "Price · today" on an Indian Saturday morning, still Friday in New York)
+  const shut = (() => { const m = markets.find((x) => x.id === region); return m ? !marketState(m).open : false; })();
   const mine = (items ?? []).filter((w) => w.region === region);
   const key = mine.map((w) => w.symbol).join(",");
   useEffect(() => {
@@ -791,7 +795,7 @@ export function WatchlistPage() {
                   <span className="k-sub-line"><SurvBadges region={region} symbol={w.symbol} /><FoBadges region={region} symbol={w.symbol} plain /></span></>) },
               // the day's change sits under the price, not in a column of its own, so a 400px phone fits the row with its
               // Remove (R64-001: 440px of table in a 334px box, Remove and "Today" cut off)
-              { key: "p", header: `Price · ${Object.values(quotes ?? {}).some((q) => sessionOf(q, marketTz(region))) ? "last session" : "today"}`, numeric: true, cell: (w) => {
+              { key: "p", header: `Price · ${shut || Object.values(quotes ?? {}).some((q) => sessionOf(q, marketTz(region))) ? "last session" : "today"}`, numeric: true, cell: (w) => {
                 const q = quotes?.[w.symbol];
                 if (quotes == null || !(w.symbol in quotes)) return "…";       // its batch hasn't come yet
                 if (q?.price == null) return "–";
