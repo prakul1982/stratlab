@@ -24,7 +24,7 @@ def test_every_currency_has_prices_and_is_charged_in_rupees_until_its_plans_exis
     assert (t["USD"]["basic"], t["USD"]["pro"], t["USD"]["basic_year"], t["USD"]["pro_year"]) == (8, 20, 80, 200)
     assert t["USD"]["charged_in"] == "INR"
     assert (t["EUR"]["basic"], t["EUR"]["pro"], t["GBP"]["basic"], t["GBP"]["pro"]) == (8, 19, 7, 16)
-    assert (t["AUD"]["basic"], t["AUD"]["pro"], t["JPY"]["pro"], t["MYR"]["basic"]) == (9, 27, 2650, 27)
+    assert (t["AUD"]["basic"], t["AUD"]["pro"], t["JPY"]["pro"], t["MYR"]["basic"]) == (10, 30, 3300, 30)
     assert {"EUR", "GBP", "AUD", "JPY", "AED"} <= set(t)
     pub = pricing.public()
     assert pub["countries"]["DE"] == "EUR" and pub["countries"]["IN"] == "INR"
@@ -85,19 +85,19 @@ def test_pricing_routes(monkeypatch):
         w["close"]()
 
 
-def test_prices_follow_the_rupee_price_at_todays_rate(store, monkeypatch):
+def test_prices_stay_fixed_whatever_the_rate(store, monkeypatch):
+    """The owner, 24 Oct: "we can't change prices every day". Rates are still read (for the "about" notes), but no
+    currency's price follows them, nor a change of the rupee price."""
     pricing._rates_cache[0] = 0.0
     rates = {"USD": 88.0, "GBP": 118.0, "JPY": 0.59, "AUD": 58.0}
     state = pricing.refresh_rates(lambda code: rates.get(code) or 1 / 0)
     assert state["rates"] == rates and any("EUR" in e for e in state["errors"])
     t = pricing.table()
-    assert t["AUD"]["basic"] == 12 and t["AUD"]["pro"] == 34 and t["AUD"]["auto"]       # 699/58, 1999/58, tidied
-    assert t["JPY"]["basic"] == 1200 and t["AUD"]["basic_year"] == 120
-    assert t["CAD"]["basic"] == 8                                                       # no rate yet: the built-in amount
-    # dollars, euros and pounds keep their own prices whatever the rate ($8 and $20, whatever 699/88 comes to)
+    assert (t["AUD"]["basic"], t["AUD"]["pro"], t["AUD"]["basic_year"]) == (10, 30, 100) and t["AUD"]["auto"]
+    assert t["JPY"]["basic"] == 1150 and t["CAD"]["basic"] == 10 and not t["AUD"]["converted"]
     assert (t["USD"]["basic"], t["USD"]["pro"], t["USD"]["pro_year"], t["GBP"]["basic"]) == (8, 20, 200, 7)
     monkeypatch.setitem(pricing.PLANS["basic"], "price", 999)                           # the rupee price changes...
-    assert pricing.table()["AUD"]["basic"] == 17 and pricing.table()["USD"]["basic"] == 8   # ...the others follow
+    assert pricing.table()["AUD"]["basic"] == 10 and pricing.table()["USD"]["basic"] == 8   # ...the others don't
     pricing.save({"USD": {"basic": 9}})                                                 # changed by the admin
     t = pricing.table()
     assert t["USD"]["basic"] == 9 and not t["USD"]["auto"] and t["USD"]["pro"] == 20
