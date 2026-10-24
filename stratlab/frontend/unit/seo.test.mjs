@@ -308,7 +308,7 @@ test("the landing page: one tagline, sample labels, no old pricing variant, no v
   assert.match(login, /tabIndex=\{k === i \? 0 : -1\}/);
   assert.doesNotMatch(login, /Start free|Sign up free/);
   assert.equal(seo.TAGLINE, "Test it, research it, track it.");
-  assert.match(read("index.html"), /<title>StratLab: test it, research it, track it<\/title>/);
+  assert.match(read("index.html"), /<title>StratLab: backtest trading ideas, research stocks, track money<\/title>/);
 });
 
 test("the Privacy page lists every AI provider the code can use, says what the browser keeps before sign-in, and no longer says 'such as'", () => {

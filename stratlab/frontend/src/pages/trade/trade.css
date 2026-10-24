@@ -62,4 +62,12 @@
 .lib-oneline { margin: 0; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-clamp { margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lib-reason { margin: 0; }
+/* the public library's cards: one height per row, whatever the title's length, with the buttons along the bottom (DK-014: a two-line
+   title pushed that card's figures below its neighbour's) */
+.k-cards.lib-cards { align-items: stretch; }
+.lib-card { display: flex; flex-direction: column; }
+.lib-title { min-height: calc(2 * 1.25em); display: flex; align-items: flex-start; }
+.lib-title .k-card-head { margin: 0; }
+.lib-card .k-eyebrow { min-height: calc(2 * 1.45em); }
+.lib-result { margin: 0; }
 .explore-go { color: var(--blue-ink); font-weight: 500; }

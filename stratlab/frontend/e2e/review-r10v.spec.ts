@@ -101,7 +101,7 @@ test("a strategy's tab keeps the title its own HTML carries until its data names
   expect(titles.length, titles.join(" | ")).toBeGreaterThan(0);
   expect(titles[0]).toBe(readTitle("library/seed-supertrend-us/index.html"));          // the title its own HTML carries
   expect(titles, titles.join(" | ")).not.toContain("Strategy library · StratLab");
-  expect(titles, titles.join(" | ")).not.toContain("StratLab: test it, research it, track it");
+  expect(titles, titles.join(" | ")).not.toContain("StratLab: backtest trading ideas, research stocks, track money");
   const title = await page.title();
   expect(title.length).toBeLessThanOrEqual(64);
   // the result leads, as the page's own headline does, then a short strategy name, then StratLab

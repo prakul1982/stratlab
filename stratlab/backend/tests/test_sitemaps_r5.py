@@ -26,12 +26,12 @@ def rows(xml: bytes) -> dict[str, str | None]:
 
 def test_the_pages_sitemap_lists_every_public_page_with_the_day_it_changed(w):
     got = rows(w["client"].get("/sitemaps/pages.xml").content)
-    for path in ("/", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"):
+    for path in ("/", "/plans", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"):
         assert "https://stratlab.studio" + path in got, path
     assert "https://stratlab.studio/pricing" not in got       # R26-006: its canonical address is /, so only / is listed
     for url, day in got.items():
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or ""), (url, day)
-    assert [p for p, _ in site_pages.PAGES] == ["/", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"]
+    assert [p for p, _ in site_pages.PAGES] == ["/", "/plans", "/faq", "/library", "/terms", "/privacy", "/refunds", "/contact"]
 
 
 def test_stratlabs_own_strategies_are_listed_and_a_users_are_not(w):

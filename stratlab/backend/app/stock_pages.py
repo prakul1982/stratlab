@@ -2031,7 +2031,8 @@ def _top(sign_in: str | None = None) -> str:
     sign_in = sign_in or f"{site}/mine"
     # the landing page's own sections, in its order, then company search (R43B-007: the two menus differed)
     links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money"), ("alerts", "Alerts")))
-    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="/stocks">Companies</a>'
+    # the strategy library beside Companies, as on the landing page and the other public pages (DK-008)
+    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="{site}/library">Library</a><a href="/stocks">Companies</a>'
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
@@ -2042,7 +2043,7 @@ def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Plans")))
+                                                                ("/pricing", "Plans"), ("/library", "Strategy library")))
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"

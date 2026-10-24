@@ -193,7 +193,7 @@ def test_the_page_wears_the_sites_header_and_footer(w):
     csp = r.headers["content-security-policy"]                  # the site's fonts may load; still no script at all
     assert "font-src 'self'" in csp and "default-src 'none'" in csp and "script-src" not in csp
     for part in ('href="https://stratlab.studio/research/IN/RELIANCE">Sign in</a>', ">Contact us</a>", ">Cancellation and refunds</a>",
-                 ">Terms of service</a>", ">Privacy policy</a>", 'href="https://stratlab.studio/pricing"', 'href="/stocks">Companies</a>',
+                 ">Terms of service</a>", ">Privacy policy</a>", 'href="https://stratlab.studio/pricing"', 'href="/stocks">Companies</a>', 'href="https://stratlab.studio/library">Library</a>', '>Strategy library</a>',
                  "url(/fonts/fraunces-latin-400-normal.woff2)", "<span>Market cap</span><b>₹", " lakh crore</b>", 'id="main"'):
         assert part in t, part
     assert "Market cap (" not in t and "Sign up free" not in t
@@ -315,7 +315,7 @@ def test_public_company_pages_have_a_phone_menu_and_16px_inputs():
     head = re.search(r'<header class="nav">.*?</header>', page, re.S).group(0)
     assert '<details class="menu"><summary>Menu</summary>' in head
     menu = re.search(r"<details.*?</details>", head, re.S).group(0)
-    for label in ("Trade", "Invest", "Money", "Plans", "Companies"):
+    for label in ("Trade", "Invest", "Money", "Plans", "Library", "Companies"):
         assert f">{label}</a>" in menu, label
     css = _css(page)
     assert "details.menu{display:block}" in css and ".nav>nav{display:none}" in css

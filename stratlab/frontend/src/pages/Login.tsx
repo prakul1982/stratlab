@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState, type JSX, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { aboutMoney, approx, money, usePricing } from "../lib/currency";
-import { canBuy, finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
+import { aboutLine, chargedInRupees, money, usePricing } from "../lib/currency";
+import { finePrint, landingAction, pricingIntro, YEARLY_LABEL, yearlySaving } from "../lib/offer";
 import { FEATURES, LIMITS, PLAN_IDS, PLAN_NAME, PRICE, WHO, type PlanId } from "../lib/plans";
 import { signIn } from "../lib/signin";
 import { useDetailsDismiss } from "../lib/useDetailsDismiss";
@@ -10,6 +10,7 @@ import { FAQ } from "../content/faq";
 import { Google } from "../components/Icons";
 import { LegalLinks } from "../components/LegalLinks";
 import { Logo } from "../components/Logo";
+import { PUBLIC_MENU, SiteLinks } from "../components/PublicFrame";
 import { SkipLink } from "../components/SkipLink";
 import { Seg } from "../components/kit/Seg";
 import { Dialog } from "../components/kit/Dialog";
@@ -149,8 +150,21 @@ const MARKETS: [ReactNode, string][] = [
   ["€$", "Forex"], ["₹$", "Indian currency futures"], ["₹Au", "Indian commodities"], ["$Au", "Global commodities"], ["+", "Your own data (CSV)"],
 ];
 
+/** Real public company pages the Invest section links to, beside its made-up sample (DK-008). */
+const REAL_COMPANIES: [string, string][] = [["/stocks/in/RELIANCE", "Reliance Industries"], ["/stocks/us/AAPL", "Apple"]];
+
+/** /help's short list: where each kind of question goes (DK-011). */
+const HELP_LINKS: [string, string][] = [["/contact", "Contact us"], ["/plans", "Plans and prices"], ["/refunds", "Cancel a plan and refunds"],
+  ["/library", "How a strategy's checks come out, in the library"], ["/privacy", "What we keep, and who sees it"]];
+
 const SECTIONS: [string, string][] = [["trade", "Trade"], ["invest", "Invest"], ["money", "Money"],
   ["alerts", "Alerts"], ["pricing", "Plans"], ["faq", "FAQ"]];
+
+/** The header's links. The landing page: its sections, then the two public pages that show real work, the strategy library
+ * and the company pages (DK-008: the library was reachable only from one link far down the page). /plans has no sections to
+ * scroll to, so it carries the same links as every other public page (DK-004). */
+const NAV_LINKS = (plansOnly: boolean): [string, string][] => (plansOnly ? PUBLIC_MENU
+  : [...SECTIONS.map(([id, label]): [string, string] => [`#${id}`, label]), ["/library", "Library"], ["/stocks", "Companies"]]);
 
 /** The three spaces, one line and one small picture of the product each, in the order the page tells them. */
 const SPACES: [string, string, string, string][] = [
@@ -241,32 +255,20 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       <SkipLink />
       <header className="lp-nav">
         <a href={plansOnly ? "/" : "#top"} className="brand" aria-label="StratLab home"><Logo size={46} /></a>
-        {!plansOnly && <>
         <nav aria-label="Sections">
-          {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
-          <a href="/stocks">Companies</a>
+          {NAV_LINKS(plansOnly).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
         </nav>
         {/* on a phone the section links fold into a small menu (the row above hides there) */}
         <details className="lp-menu" ref={menu}>
           <summary>Menu</summary>
           <nav aria-label="Sections (menu)" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-            {SECTIONS.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
-            <a href="/stocks">Companies</a>
+            {NAV_LINKS(plansOnly).map(([to, label]) => <a key={to} href={to}>{label}</a>)}
           </nav>
         </details>
-        </>}
         <button type="button" className="btn outline sm" onClick={go}>Sign in</button>
       </header>
 
       <main id="main" tabIndex={-1}>
-      {plansOnly && (
-        <section id="top" className="lp-sec lp-sec-plans">
-          <div className="lp-wrap stack g12">
-            <h1 className="serif lp-h2">{heading ?? "Plans and prices"}</h1>
-            {error && <p className="banner" role="alert">{error}</p>}
-          </div>
-        </section>
-      )}
       {!plansOnly && <>
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
@@ -353,9 +355,19 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       <section id="invest" className="lp-sec">
         <div className="lp-wrap stack g36">
           <div className="lp-split">
-            <Head eyebrow="Invest · research" title="Start with any company, Indian or US.">
-              Reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
-            </Head>
+            <div className="stack g20">
+              <Head eyebrow="Invest · research" title="Start with any company, Indian or US.">
+                Reported numbers, exchange filings and the company's own documents. Plain numbers, never scores, ratings or calls on the stock.
+              </Head>
+              {/* the picture beside is made up; these are real public pages anyone can open (DK-008) */}
+              <div className="stack g6" data-testid="real-companies">
+                <b className="small">See real company pages</b>
+                <div className="row wrap g12">
+                  {REAL_COMPANIES.map(([to, label]) => <a key={to} className="btn outline sm" href={to}>{label}</a>)}
+                  <a className="btn quiet sm" href="/stocks">All companies →</a>
+                </div>
+              </div>
+            </div>
             <ResearchMock />
           </div>
           <ToolList items={RESEARCH} label="research tools" />
@@ -389,16 +401,30 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
 
       </>}
 
-      <Pricing />
+      <Pricing top={plansOnly ? { heading: heading ?? "Plans and prices", error } : undefined} />
       {/* signed out, the plans page has the same side-by-side tables as signed in, loaded only here (R60-012) */}
       {plansOnly && <section className="lp-sec lp-compare"><div className="lp-wrap"><Suspense fallback={null}><PlanCompare /></Suspense></div></section>}
 
       {!plansOnly && <>
       <section id="faq" className="lp-sec lp-alt">
         <div className="lp-wrap lp-split lp-split-top">
-          <Head eyebrow="Questions" title="Good to know.">
-            Anything not answered here, the Contact page at the bottom reaches a person.
-          </Head>
+          <div className="lp-faq-head stack g18">
+            {/* /help: its own heading and the few places people ask for, above the same questions (DK-011: it was the FAQ under another name) */}
+            {heading === "Help" ? (
+              <>
+                <Head eyebrow="Questions and contact" title="Help">
+                  The questions people ask first are beside this. The links below go to the rest, and the Contact page reaches a person.
+                </Head>
+                <ul className="lp-help-links" aria-label="Where to find help">
+                  {HELP_LINKS.map(([to, label]) => <li key={to}><Link className="link" to={to}>{label}</Link></li>)}
+                </ul>
+              </>
+            ) : (
+              <Head eyebrow="Questions" title="Good to know.">
+                Anything not answered here, <Link className="link" to="/contact">the Contact page</Link> reaches a person.
+              </Head>
+            )}
+          </div>
           <div className="lp-faq">
             {FAQ.map((f) => <details key={f.q}><summary>{f.q}</summary>{f.a.map((t) => <p key={t} className="muted">{t}</p>)}</details>)}
           </div>
@@ -430,7 +456,10 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
         <div className="lp-wrap spread wrap g16">
           <Logo size={30} />
           <p className="small muted k-measure">Research and paper trading only. No real orders are placed. Past results don't predict future returns, and nothing on StratLab is investment advice. © {new Date().getFullYear()} StratLab.</p>
-          <LegalLinks />
+          <div className="stack g6">
+            <SiteLinks />
+            <LegalLinks />
+          </div>
         </div>
       </footer>
     </div>
@@ -440,13 +469,12 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
 /** The three plans, priced in the visitor's currency (rupees in India), with the same lines as the Plans page. One look in
  * every case: while the prices are coming the cards are drawn with their amounts held back (so nothing flashes rupees and
  * then changes, and nothing moves), and if they can't be read the cards show the rupee prices with a line saying so. */
-function Pricing() {
+function Pricing({ top }: { top?: { heading: string; error: string | null } } = {}) {
   const { pricing, currency, pick, status } = usePricing();
   const loading = status === "loading";
   // what's on sale today comes from the server (plans.offer_state), the same answer the Plans page reads
   const offer = pricing?.offer ?? null;
   const local = currency !== "INR" ? pricing?.currencies[currency] : undefined;
-  const buy = canBuy(offer);
   const rupees = (p: PlanId, year = false) => `₹${PRICE[p][year ? 1 : 0].toLocaleString("en-IN")}`;
   /** The amount in the visitor's currency: the admin price table's ($8 and $20 for dollars). */
   const amount = (p: PlanId, year = false): number => {
@@ -454,22 +482,33 @@ function Pricing() {
     if (!local) return PRICE[p][year ? 1 : 0];
     return (local as unknown as Record<string, number>)[year ? `${p}_year` : p];
   };
-  const price = (p: PlanId, year = false) => (local
-    ? (p === "free" ? "" : approx(local, year ? local.yearly_charged_in : local.charged_in)) + money(local, amount(p, year), currency)
-    : rupees(p, year));
+  /** Whether this card is really charged in rupees though the visitor's currency is another: then the rupee price is its main
+   * price and the visitor's currency an "about" beside it (DK-001). A currency with its own plan keeps its fixed price. */
+  const inRupees = (p: PlanId, year = false) => p !== "free" && chargedInRupees(local, currency, year ? local?.yearly_charged_in : local?.charged_in);
+  const price = (p: PlanId, year = false) => (inRupees(p, year) ? rupees(p, year) : local ? money(local, amount(p, year), currency) : rupees(p, year));
   const intro = pricingIntro(offer, LIMITS.pro, "landing");
   const [period, setPeriod] = useState<"month" | "year">("month");
+  // the fine print's yearly prices are the ones a card shows (rupees where it is charged in rupees, so it never lists two amounts)
   const yearly = (p: PlanId) => price(p, true);
   // "incl. GST" only while the invoices carry GST (the seller's GSTIN is set); nothing speaks of it before (R7M-001)
   const gst = pricing?.invoice?.gst === true;
   const small = finePrint(offer, { currency: local ? currency : "INR", inRupees: local?.charged_in === "INR", inRupeesYear: local?.yearly_charged_in === "INR",
     year: { basic: yearly("basic"), pro: yearly("pro") }, charged: { basic: rupees("basic"), pro: rupees("pro") },
-    chargedYear: { basic: rupees("basic", true), pro: rupees("pro", true) }, gst });
+    gst });
   const showYear = !!(offer?.yearly && offer.payments);
+  // /plans on its own (`top`): the page's one heading and one short line, so the cards are in view on a desktop screen (DK-004: an h1,
+  // an eyebrow and a second heading put them 620 px down). The launch offer's longer lede moves under the cards.
+  const line = intro.title === "Plans" ? intro.lede : intro.title;
   return (
-    <section id="pricing" className="lp-sec" aria-busy={loading}>
+    <section id="pricing" className={`lp-sec${top ? " lp-sec-first" : ""}`} aria-busy={loading}>
       <div className="lp-wrap stack g32">
-        {loading ? (
+        {top ? (
+          <div className="lp-head">
+            <h1 className="serif lp-h2">{top.heading}</h1>
+            {top.error && <p className="banner" role="alert">{top.error}</p>}
+            {loading ? <span className="lp-skel lp-skel-p" /> : <p className="lp-p">{line}</p>}
+          </div>
+        ) : loading ? (
           <div className="lp-head lp-head-skel"><span className="eyebrow">Plans</span><span className="lp-skel lp-skel-h" /><span className="lp-skel lp-skel-p" /></div>
         ) : <Head eyebrow="Plans" title={intro.title}>{intro.lede}</Head>}
         {/* yearly only where it can be bought: a yearly price nobody can pay would be one more contradiction. The row keeps its height either way. */}
@@ -493,14 +532,12 @@ function Pricing() {
             const year = showYear && period === "year" && p !== "free";
             const act = landingAction(offer, p);
             const per = showYear && period === "year" ? "year" : "month";     // Free's $0 follows the switch too (R17-001)
-            // the amount a card is really charged, when it is not the amount shown (a currency that is charged in rupees)
-            const chargedInRupees = p !== "free" && !!local && (year ? local.yearly_charged_in : local.charged_in) === "INR";
-            const save = p !== "free" && year ? yearlySaving(amount(p), amount(p, true)) : null;
-            // a fixed price (euros, pounds, dollars) charged in rupees: what that charge is in the currency today (R8O-006)
-            const aboutOf = (plan: string, y: boolean) => {
-              const v = local?.charge_about?.[(y ? `${plan}_year` : plan) as "basic" | "pro" | "basic_year" | "pro_year"];
-              return v != null && local ? ` (about ${aboutMoney(local, v, currency)} today)` : "";
-            };
+            const rupeeCard = inRupees(p, year);
+            // a year's saving in the unit the card shows: rupees where it is charged in rupees (DK-001), else the currency's own
+            const save = p !== "free" && year ? (rupeeCard ? yearlySaving(PRICE[p][0], PRICE[p][1]) : yearlySaving(amount(p), amount(p, true))) : null;
+            const saveText = save == null ? "" : rupeeCard ? `₹${save.toLocaleString("en-IN")}` : money(local, save, currency);
+            // the rupee charge in the visitor's currency, whole units, beside the rupee price (R8O-006, DK-001)
+            const about = rupeeCard && local ? aboutLine(local, currency, (year ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year") : null;
             return (
               <div key={p} className={`lp-card lp-price${p === "pro" ? " lp-price-top" : ""}`} data-plan={p}>
                 <div className="stack g2">
@@ -509,14 +546,16 @@ function Pricing() {
                 </div>
                 <div className="stack g2">
                   {loading ? <span className="lp-skel lp-skel-amount" aria-label="Loading the price" /> : (
-                    <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                    <div className="lp-amount-row">
+                      <div className="serif lp-amount">{price(p, year)}<span className="small muted">{p === "free" ? " always" : ` / ${per}`}</span></div>
+                      {about && <span className="small muted" data-testid={`about-${p}`}>{about}</span>}
+                    </div>
                   )}
                   {p !== "free" && (
                     <span className="small lp-price-note">
                       {loading ? <span className="lp-skel lp-skel-note" />
-                        : chargedInRupees ? `${buy ? "Charged as" : "Will be charged as"} ${rupees(p, year)} / ${per}${gst ? " incl. GST" : ""}${aboutOf(p, year)}`
-                        : local || !gst ? "" : "incl. GST"}
-                      {!loading && save != null && <span className="lp-save">{`Saves ${money(local, save, currency)} a year against paying monthly`}</span>}
+                        : (rupeeCard || !local) && gst ? "incl. GST" : ""}
+                      {!loading && save != null && <span className="lp-save">{`Saves ${saveText} a year against paying monthly`}</span>}
                     </span>
                   )}
                 </div>
@@ -530,6 +569,7 @@ function Pricing() {
             );
           })}
         </div>
+        {!loading && top && intro.title !== "Plans" && <p className="small muted k-measure m80">{intro.lede}</p>}
         {loading ? <span className="lp-skel lp-skel-fine" /> : small.length > 0 && <p className="small muted k-measure m80">{small.join(" ")}</p>}
       </div>
     </section>
@@ -562,11 +602,19 @@ function HeroDemo() {
   return (
     <div className="lp-demo" role="group" aria-label="Example: an idea, its rules and its result"
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
-      <div className="lp-demo-tabs" role="tablist" aria-label="Example ideas">
-        {DEMOS.map((x, k) => (
-          <button key={x.tab} ref={(el) => { tabs.current[k] = el; }} type="button" role="tab" id={`${base}-t${k}`} aria-controls={`${base}-p${k}`}
-            aria-selected={k === i} tabIndex={k === i ? 0 : -1} onKeyDown={onKey} onClick={() => pick(k)}>{x.tab}</button>
-        ))}
+      {/* the tabs and the way to stop them changing, in one row above the card: below it, the button floated alone under the
+          tallest of the three examples (DK-009) */}
+      <div className="lp-demo-bar">
+        <div className="lp-demo-tabs" role="tablist" aria-label="Example ideas">
+          {DEMOS.map((x, k) => (
+            <button key={x.tab} ref={(el) => { tabs.current[k] = el; }} type="button" role="tab" id={`${base}-t${k}`} aria-controls={`${base}-p${k}`}
+              aria-selected={k === i} tabIndex={k === i ? 0 : -1} onKeyDown={onKey} onClick={() => pick(k)}>{x.tab}</button>
+          ))}
+        </div>
+        {/* the examples change on their own every 6 s: a plain way to stop that, not only hovering or picking one (R68-007, WCAG 2.2.2) */}
+        <button type="button" className="lp-demo-pause" onClick={() => setAuto((a) => !a)}>
+          {auto ? "Pause the examples" : "Play the examples"}
+        </button>
       </div>
       <div className="lp-demo-stack">
         {DEMOS.map((d, k) => (
@@ -590,10 +638,6 @@ function HeroDemo() {
           </div>
         ))}
       </div>
-      {/* the examples change on their own every 6 s: a plain way to stop that, not only hovering or picking one (R68-007, WCAG 2.2.2) */}
-      <button type="button" className="lp-demo-pause" onClick={() => setAuto((a) => !a)}>
-        {auto ? "Pause the examples" : "Play the examples"}
-      </button>
     </div>
   );
 }

@@ -6,7 +6,8 @@
 export const SITE = "https://stratlab.studio";
 
 export const TAGLINE = "Test it, research it, track it.";
-export const HOME_TITLE = "StratLab: test it, research it, track it";
+// the words people search for, not only the tagline (DK-013: "test it, research it, track it" names no keyword)
+export const HOME_TITLE = "StratLab: backtest trading ideas, research stocks, track money";
 export const HOME_DESCRIPTION = "Test trading ideas on years of real prices and paper trade them; options are paper trading only. Research Indian and US companies from their own filings. Track your holdings, funds and tax. Facts, not tips.";
 
 export type PageMeta = {
@@ -33,7 +34,7 @@ export const PAGES: PageMeta[] = [
   // track it" over a drawn "Test it, research it, track it.")
   // the home page's opening words for a crawler that doesn't run scripts, the landing page's three spaces in its own order
   // (R43B-006: the served page had about 89 words)
-  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-17", heading: TAGLINE,
+  { path: "/", title: HOME_TITLE, description: HOME_DESCRIPTION, index: true, updated: "2026-10-24", heading: TAGLINE,
     summary: [HOME_DESCRIPTION,
       "Trade: write a trading idea as plain rules, backtest it on years of real prices for Indian and US stocks, index futures, currencies, commodities and crypto, and see the result after brokerage, taxes and slippage beside buy and hold. Four checks test whether the result holds up: the unseen years it wasn't tuned on, nearby settings, a bad-luck shuffle of its trades, and enough trades to tell skill from luck. Then paper trade it on live prices, with no real orders.",
       "Invest: company pages for Indian and US listed companies with prices, results, filings and ownership, read from the companies' own reports, plus scans, market breadth and a results calendar.",
@@ -44,11 +45,18 @@ export const PAGES: PageMeta[] = [
     heading: "Plans and prices",
     summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
       "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
+  // /plans: the prices on their own page (the landing page scrolled to them is /pricing). Indexed, with its own address as the canonical
+  // one, and listed in the sitemap (DK-006: it was noindex with no canonical, a page the sitemap and the menus point to)
+  { path: "/plans", title: "Plans and prices · StratLab",
+    description: "Free, Basic and Pro side by side: what each plan includes and costs, with prices in rupees or your own currency, and how to cancel.", index: true, updated: "2026-10-24",
+    heading: "Plans and prices",
+    summary: ["StratLab has three plans: Free, Basic and Pro. Free costs nothing and needs no card. Basic and Pro are subscriptions billed monthly or yearly, with higher limits on backtests, AI builds and how many strategies you can paper trade at a time.",
+      "Prices are in Indian rupees. Outside India the page shows the price in your own currency and the payment is charged in rupees. You can cancel any time from Account."] },
   { path: "/faq", title: "Questions · StratLab",
     description: "Answers about StratLab: whether it gives tips or places real trades, how the four checks work, options, invite rewards, who can see your money data, and the app.", index: true, updated: "2026-10-08",
     heading: "Questions" },
   { path: "/library", title: "Strategy library · StratLab",
-    description: "StratLab's own trading strategies, each with the rules that were tested, the results after costs and the four checks, shown as they came out on past prices.", index: true, updated: "2026-10-08",
+    description: "StratLab's own trading strategies, each with the rules that were tested, the results after costs and the four checks, shown as they came out on past prices.", index: true, updated: "2026-10-24",
     heading: "StratLab's own strategies",
     summary: ["Well-known rule sets that StratLab ran through its own backtest and four checks, each shown with the verdict it earned, the ones that failed as plainly as the ones that held up.",
       "Each strategy's page has the rules that were tested, the return after costs beside buy and hold, and the result of each check. A verdict describes the past, not what comes next, and nothing here is investment advice."] },
@@ -259,7 +267,7 @@ export const libraryMeta = (id: string, name: string, e?: LibraryEntryWords | nu
 /** A landing-page address's own heading ("Plans and prices" at /pricing), the h1 the landing page shows there, so the
  * address's own HTML and the drawn page agree (R8V-008); none for the home page and addresses without their own page. */
 export const landingHeading = (path: string): string | undefined => {
-  const p = pageMeta(PAGE_ALIASES[tidy(path)] ?? path);
+  const p = pageMeta(path);
   return p && p.path !== "/" && p.heading !== TAGLINE ? p.heading : undefined;
 };
 
@@ -270,10 +278,6 @@ export const NOT_FOUND_DESCRIPTION = "There is no page at this address on StratL
 export const VERDICT_DESCRIPTION = "A strategy's verdict on past prices, shared by link: the result after costs and the four checks it was put through.";
 
 const tidy = (path: string) => (path.split(/[?#]/)[0].replace(/\/+$/, "") || "/");
-
-/** Addresses that open another page's words (the signed-in Plans page's address for a visitor): the build writes /plans as
- * /pricing's page, so a visitor sees the prices' heading from the first frame and not the home page's hero (R17-002). */
-export const PAGE_ALIASES: Record<string, string> = { "/plans": "/pricing" };
 
 /** Signed-in addresses a visitor can land on that have no page of their own: they say what the page they lead to says
  * (/upgrade opens Plans), or have a description of their own. Not written as pages by the build. */

@@ -8,7 +8,7 @@
 // unit/seo.test.mjs checks the output of these functions.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGE_ALIASES, PAGES, SITE } from "../src/content/seo.ts";
+import { absolute, HOME_DESCRIPTION, LIBRARY_SEEDS, libraryMeta, NOT_FOUND_DESCRIPTION, PAGES, SITE } from "../src/content/seo.ts";
 import { FAQ, faqText } from "../src/content/faq.ts";
 import { DEFAULT_BUSINESS, inline, LEGAL_BLOCKS, LEGAL_UPDATED } from "../src/content/legal.ts";
 
@@ -95,11 +95,6 @@ export function pageFiles(template) {
       body: LEGAL_BLOCKS[p.path] ? legalBody(p.path, p.heading) : "",
       after: p.path === "/library" ? LIBRARY_LINKS : "",
       faq: p.path === "/faq" })]);
-  // /plans (the signed-in Plans page's address) opens the landing page at its prices: same words as /pricing, kept out of
-  // search results with that page as the one address (R17-002: it started as the home page's hero and then jumped down)
-  const pricing = PAGES.find((p) => p.path === PAGE_ALIASES["/plans"]);
-  files.push(["plans/index.html", pageHtml(template, { title: pricing.title, description: pricing.description, canonical: null, index: false,
-    heading: pricing.heading, summary: pricing.summary })]);
   files.push(["404.html", pageHtml(template, { title: "Page not found · StratLab", description: NOT_FOUND_DESCRIPTION, canonical: null, index: false,
     heading: "Page not found", summary: [NOT_FOUND_DESCRIPTION], after: NOT_FOUND_LINKS, readable: true })]);
   return files;

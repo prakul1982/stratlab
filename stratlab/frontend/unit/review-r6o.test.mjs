@@ -85,9 +85,10 @@ test("View as chips fit the menu, paper-trade messages say Basic, and locks and 
   assert.match(css, /\.acct-pop \[role="menuitemradio"\] \{ flex: 1 1 0; min-width: 0;/);
   assert.match(read("src/components/AlertSettings.tsx"), /every paper trade\{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic<\/Badge>/);
   const plans = read("src/lib/plans.ts");
-  assert.match(plans, /every trend scan \(the Stage 2 scan/);
-  assert.match(plans, /every Market Brief on News/);
-  assert.match(plans, /daily Market Brief and My Stocks by email/);
+  // reworded in DK-003 (short lines on the cards); the same facts
+  assert.match(plans, /the Stage 2 scan and every other trend scan/);
+  assert.match(plans, /the Market Brief on News/);
+  assert.match(plans, /the daily Market Brief and My Stocks by email/);
   assert.match(read("src/pages/money/ItrExportPage.tsx"), /Part of this page is on \{v\.plan\}\. \{featureName\("itr_export"\)\}: on the \{v\.plan\} plan\. You're on \{yours\}/);
   assert.match(read("src/pages/AccountPage.tsx"), /me\.view_as && <p[^>]*>Your own use this month, against the \{me\.plan_info\.name\} plan's limits/);
 });

@@ -6,7 +6,7 @@ import { LegalLinks } from "../components/LegalLinks";
 import { api, loadRazorpay } from "../lib/api";
 import { useApp } from "../lib/app";
 import { dateOnly } from "../lib/format";
-import { aboutMoney, approx, chargedLine, money, rupeesNote, usePricing } from "../lib/currency";
+import { aboutLine, aboutMoney, chargedInRupees, money, rupeesNote, usePricing } from "../lib/currency";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { PlanCompare } from "../components/PlanCompare";
 import { PlanInterestButton } from "../components/PlanInterest";
@@ -41,22 +41,24 @@ export function PlansPage() {
     const sp = me?.plans?.[p];
     return sp ? (per === "year" ? sp.price_year : sp.price) : PRICE[p][per === "year" ? 1 : 0];
   };
-  /** The price shown in the visitor's currency, and the one their card is charged (rupees until that currency's plans exist). */
+  /** The price a card shows as its main price, and the one it is charged. A card charged in rupees shows the rupee price, with the
+   * visitor's currency only as "about $7 at today's rate" beside it (DK-001); a currency with its own plan shows its fixed price. */
   const priceOf = (p: PlanId, per: string) => {
-    if (p === "free" && row) return { shown: money(row, 0, currency), charged: null as string | null, inr: false, about: null as string | null };
-    if (p === "free" || !row || currency === "INR") return { shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, charged: null as string | null, inr: p !== "free", about: null as string | null };
-    const local = (row as unknown as Record<string, number>)[per === "year" ? `${p}_year` : p];
+    const none = { charged: null as string | null, inr: false, about: null as string | null, aside: null as string | null };
+    if (p === "free" && row) return { ...none, shown: money(row, 0, currency) };
+    if (p === "free" || !row || currency === "INR") return { ...none, shown: `₹${rupees(p, per).toLocaleString("en-IN")}`, inr: p !== "free" };
+    const field = (per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year";
+    const local = (row as unknown as Record<string, number>)[field];
     const chargedIn = per === "year" ? row.yearly_charged_in : row.charged_in;
-    // the admin table's price ($8 and $20 for dollars); "Charged as ₹…" under it while that currency is charged in rupees
-    // a converted amount says so ("≈ SAR 27") beside the rupee charge it comes from (R7O-008); a fixed price (dollars,
-    // euros, pounds) says what that rupee charge is in its currency today (R8O-006)
-    const aboutV = chargedIn === "INR" ? row.charge_about?.[(per === "year" ? `${p}_year` : p) as "basic" | "pro" | "basic_year" | "pro_year"] : undefined;
-    return { shown: approx(row, chargedIn) + money(row, local, currency), charged: chargedIn === "INR" ? money(inr, rupees(p, per), "INR") : null, inr: false,
-      about: aboutV != null ? aboutMoney(row, aboutV, currency) : null };
+    if (!chargedInRupees(row, currency, chargedIn)) return { ...none, shown: money(row, local, currency) };
+    // the admin table's amount, rounded to a whole unit, is what the rupee charge is in the visitor's currency today (R7O-008, R8O-006)
+    const aboutV = row.charge_about?.[field] ?? (row.converted ? local : undefined);
+    const charged = money(inr, rupees(p, per), "INR");
+    return { shown: charged, charged, inr: true, about: aboutV != null ? aboutMoney(row, aboutV, currency) : null, aside: aboutLine(row, currency, field) };
   };
   /** What a year saves against twelve months, in the price's own currency (Pro's year is ₹9 over ten months, so each card says its own number). */
   const savingOf = (p: "basic" | "pro") => {
-    const foreign = !!row && currency !== "INR";
+    const foreign = !!row && currency !== "INR" && !chargedInRupees(row, currency, period === "year" ? row.yearly_charged_in : row.charged_in);
     const month = foreign ? (row as unknown as Record<string, number>)[p] : rupees(p, "month");
     const year = foreign ? (row as unknown as Record<string, number>)[`${p}_year`] : rupees(p, "year");
     const save = yearlySaving(month, year);
@@ -148,8 +150,8 @@ export function PlansPage() {
               </div>
               <div className="k-stack tight">
                 <div className="k-plan-price">{price.shown}<span>{p === "free" ? " always" : ` / ${period}`}</span></div>
+                {price.aside && <span className="k-note" data-testid={`about-${p}`}>{price.aside}</span>}
                 {price.inr && gst && <span className="k-note">incl. GST</span>}
-                {price.charged && <span className="k-note" data-testid={`charged-${p}`}>{billing ? chargedLine(price.charged, gst, period, price.about) : `${price.charged} a ${period} in India${gst ? ", incl. GST" : ""}`}</span>}
                 {period === "year" && p !== "free" && savingOf(p) && <span className="k-note">Saves {savingOf(p)} a year against paying monthly</span>}
               </div>
               <ul className="k-plan-list">

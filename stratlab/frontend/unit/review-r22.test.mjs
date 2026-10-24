@@ -13,7 +13,7 @@ const mem = new Map();
 globalThis.localStorage ??= { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
 
 const { monthlyUse, aiBuildsUse, deepDiveLimitLine } = await import("../src/lib/account.ts");
-const { chargedLine } = await import("../src/lib/currency.ts");
+const { aboutLine, chargedInRupees } = await import("../src/lib/currency.ts");
 const { isPlansPath } = await import("../src/lib/deepLinks.ts");
 const { plainError } = await import("../src/pages/admin/attention.ts");
 const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
@@ -35,13 +35,22 @@ test("R22-002: the deep dive's limit line is a sentence", () => {
   assert.match(read("src/pages/DeepDive.tsx"), /deepDiveLimitLine\(/);
 });
 
-test("R22-004: the signed-in card words the rupee line as the visitor's, and the lines come in the same order", () => {
-  assert.equal(chargedLine("₹6,999", false, "year", "$73.57"), "Charged as ₹6,999 / year (about $73.57 today)");
-  assert.equal(chargedLine("₹699", true, "month", null), "Charged as ₹699 / month incl. GST");
+test("R22-004, DK-001: a card charged in rupees shows the rupee price, with the visitor's currency beside it as 'about', in the same order on both pages", () => {
+  // changed on purpose in DK-001: the rupee price is the main price ("Charged as ₹699 / month (about $7 today)" sat under a dollar one)
+  const row = { symbol: "$", name: "US dollar", basic: 8, pro: 20, basic_year: 80, pro_year: 200, charged_in: "INR", yearly_charged_in: "INR", charge_about: { basic: 7.23, basic_year: 73.57 } };
+  assert.equal(aboutLine(row, "USD", "basic"), "about $7 at today's rate");
+  assert.equal(aboutLine(row, "USD", "basic_year"), "about $74 at today's rate");
+  assert.equal(aboutLine(row, "USD", "pro"), null, "no figure, no 'about'");
+  // a converted price is the rupee charge at today's rate already
+  assert.equal(aboutLine({ ...row, symbol: "SAR ", converted: true, charge_about: undefined, basic: 27 }, "SAR", "basic"), "about SAR 27 at today's rate");
+  assert.equal(chargedInRupees(row, "USD", "INR"), true);
+  assert.equal(chargedInRupees(row, "USD", "USD"), false, "a currency with its own plan keeps its fixed price as the main price");
+  assert.equal(chargedInRupees(undefined, "INR", "INR"), false);
   const plans = read("src/pages/PlansPage.tsx");
-  assert.ok(plans.indexOf("data-testid={`charged-${p}`}") < plans.indexOf("Saves {savingOf(p)} a year"), "Charged line before Saves line");
+  assert.ok(plans.indexOf("data-testid={`about-${p}`}") < plans.indexOf("Saves {savingOf(p)} a year"), "the 'about' line before the Saves line");
   const login = read("src/pages/Login.tsx");
-  assert.ok(login.indexOf("Charged as") < login.indexOf("lp-save"), "the visitor's order");
+  assert.ok(login.indexOf("data-testid={`about-${p}`}") < login.indexOf("lp-save"), "the visitor's order");
+  assert.doesNotMatch(plans + login, /Charged as|Will be charged as/);
 });
 
 test("R22-005: a visitor's /plans draws the prices alone, never the landing page scrolled down to them", () => {

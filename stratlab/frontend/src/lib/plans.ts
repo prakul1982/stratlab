@@ -42,9 +42,9 @@ export const LIMITS: Record<PlanId, Limits> = {
 export const WHO: Record<PlanId, string> = { free: "Try every tool", basic: "For investors and part-time traders", pro: "For active traders and heavy research" };
 
 const L = LIMITS;
-// at most 9 lines a card, Trade then Invest then Money, built from the limits above so a card never says a different
-// number; tests/test_plan_copy.py checks that each paid feature is named on the card of the plan that adds it. The
-// full grid is on Plans.
+// six to eight short lines a card, each a topic with its items (DK-003: the old cards were run-on paragraphs); built from the
+// limits above so a card never says a different number. tests/test_plan_copy.py checks that each paid feature is named on
+// the card of the plan that adds it. The detail of every limit and feature is in the Plans page's "Side by side" tables.
 /** The daily safety cap on Pro's unlimited AI builds (the server's AI_BUILDS_PER_DAY). */
 export const AI_BUILDS_PER_DAY = 200;
 
@@ -53,24 +53,28 @@ export const unlimitedLabel = (p: PlanId, k: keyof Limits) => (p === "pro" && k 
 
 export const FEATURES: Record<PlanId, string[]> = {
   free: [`${L.free.backtests_per_month} backtests a month, each with a full verdict, and ${L.free.ai_builds_per_month} AI strategy builds`,
-    "A free trial of 5 market days paper trading one notebook strategy on one stock, from your first start (after that, paper trading needs Basic or Pro; options paper trading is on Basic), and the options builder with Greeks and breakevens after charges",
-    `Today's derivatives positioning, F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
+    `Paper trading trial: ${L.free.live_limit} strategy on 1 stock for 5 market days from your first start, then Basic or Pro`,
+    "Options builder with Greeks and breakevens after charges",
+    `Today's derivatives positioning and F&O contract changes, and a journal of your last ${L.free.journal_trades} trades`,
     `${L.free.deepdives_per_month} company deep dives and ${L.free.decks_per_month} slide deck a month`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
-    `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens`,
-    `Import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
-    "The tax report, money calendar, every Market Brief on News and a weekly My Stocks email", "Every market we cover, and your own CSV"],
-  basic: ["Everything in Free, plus:", `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month`,
-    "All 20+ indicators in your rules: MACD, Supertrend, Bollinger Bands, VWAP and more",
+    `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
+    "Tax report, money calendar, the Market Brief on News, a weekly My Stocks email, every market we cover and your own CSV"],
+  basic: ["Everything in Free, plus:",
+    `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups and options at set times, with trade notifications and a daily report`,
-    "Trading tools: the full trade journal, positioning history, chart replay practice, closing auction history, F&O change alerts, stock futures history, market event reminders and an India VIX entry filter",
-    `${L.basic.deepdives_per_month} company deep dives (each with a report card and checklist) and ${L.basic.decks_per_month} slide decks a month, business updates in numbers and named-holder search`,
-    "Scans and watchlist: every trend scan (the Stage 2 scan, 52-week high breakout, golden cross and five more), watchlist red flags and Watchlist at a glance, with alerts. Also market breadth charts and margin funding history, and SIP dip rules with every start month",
-    "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, money reminders, deposit rates after your own tax and a floating-rate loan check",
-    `${L.basic.stock_alerts} stock alerts and ETF gap alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings, and the daily Market Brief and My Stocks by email`],
-  pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`, `Paper trade ${L.pro.live_limit} strategies at a time`,
-    "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan. Options paper trading entered on your own rules' signals, with strikes picked by delta or premium, and options what-if sliders with a roll preview", `Group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
-    "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant", "Advance tax amounts, and the long-term exemption lot by lot",
+    "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
+    "Alerts: F&O change alerts, ETF gap alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
+    `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} slide decks a month, business updates in numbers and named-holder search`,
+    "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags, Watchlist at a glance, market breadth charts, margin funding history",
+    "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
+    `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`],
+  pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
+    `Paper trade ${L.pro.live_limit} strategies at a time; group tests of up to ${L.pro.group_size}, with faster entries and a spread limit`,
+    "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
+    "Options paper trading on your own rules' signals, strikes picked by delta or premium, and what-if sliders with a roll preview",
+    "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant",
+    "Advance tax amounts and the long-term exemption lot by lot",
     "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };

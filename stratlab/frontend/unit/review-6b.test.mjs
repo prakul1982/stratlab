@@ -19,7 +19,9 @@ test("/features has its own description and /upgrade says what Plans says, both 
   assert.equal(u.description, seo.pageMeta("/pricing").description);
   assert.equal(u.index, false);
   assert.equal(u.canonical, null);
-  assert.equal(seoFor("/plans", "gate").description, seo.pageMeta("/pricing").description);
+  // changed on purpose in DK-006: /plans is a page of its own (indexed, its own address as canonical), not an alias of /pricing
+  assert.equal(seoFor("/plans").description, seo.pageMeta("/plans").description);
+  assert.deepEqual([seoFor("/plans").index, seoFor("/plans").canonical], [true, "https://stratlab.studio/plans"]);
   assert.equal(seoFor("/account", "gate").description, seo.GATE_DESCRIPTION);
 });
 

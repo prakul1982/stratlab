@@ -8,7 +8,8 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   const lim = (p: PlanId): Limits => ({ ...LIMITS[p], ...(plans?.[p] ?? {}) });
   const num = (p: PlanId, k: keyof Limits) => {
     const v = lim(p)[k] as number | null;
-    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v}, for 5 market days` : v.toLocaleString("en-IN");
+    // Free's one session is a trial of 5 market days: said as a trial in the cell (DK-005)
+    return v == null ? unlimitedLabel(p, k) : p === "free" && k === "live_limit" ? `${v} (5-market-day trial)` : v.toLocaleString("en-IN");
   };
   const ids: PlanId[] = ["free", "basic", "pro"];
   const names = { free: "Free", basic: "Basic", pro: "Pro" };
@@ -24,7 +25,7 @@ export function PlanCompare({ plans }: { plans?: Record<string, Partial<Limits>>
   ];
   // one table per group, each with the plan names on top; the header stays in view as the page scrolls past it
   return (
-    <Card id="compare">
+    <Card id="compare" className="k-compare">
       <CardHead title="Side by side" />
       {groups.map((g) => (
         <div key={g.id} className="k-stack" data-plans-group={g.id}>
