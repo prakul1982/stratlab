@@ -346,7 +346,9 @@ def rows() -> list[dict]:
     def page_prices():
         # the public company pages' prices after each close (R81-005: every US page sat on 20 Oct's close and Admin
         # had no row for this job, so nothing said so)
-        st = getattr(m, "price_refresh_status", None) or {}
+        # kept across a restart like the other jobs' (R94-001: "Not run yet" on Check after every weekend deploy, its
+        # next pass not due until Monday's close)
+        st = job_status.kept("page-prices", dict(getattr(m, "price_refresh_status", None) or {}))
         names = {"IN": "India", "US": "US"}
         log, errors = [], []
         for r, name in names.items():
