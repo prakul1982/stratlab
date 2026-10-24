@@ -1090,6 +1090,9 @@ def thin_symbols(region: str) -> set[str]:
         return set()
 
 
+LONG_STALE_DAYS = 10           # a page whose own close is older than this (calendar days) is read after the rest
+
+
 class Pages:
     """Built pages: in memory for a few minutes, stored until the market's next close, and rebuilt at most `per_minute`
     times a minute. `gather(region, company)` builds one company's facts from the sources, or returns None when they
@@ -1108,6 +1111,7 @@ class Pages:
         self.tries: dict[str, tuple[str, dict[str, int]]] = {}    # {region: (close, {symbol: reads with no newer close})}
 
     MAX_TRIES = 8              # reads of one page at one close that found no newer candle, before it waits for its next build
+
 
     def _may_build(self) -> bool:
         with self.lock:
@@ -1243,8 +1247,16 @@ class Pages:
             if tries.get(symbol, 0) >= self.MAX_TRIES:           # the source has no newer close for it today
                 continue
             due.append((symbol, stored))
-        # the largest companies first, and a page the source had no newer close for at an earlier try after the rest
-        due.sort(key=lambda x: (tries.get(x[0], 0), -(shown_cap(x[1]["facts"]) or 0)))
+        # the largest companies first, and a page the source had no newer close for at an earlier try after the rest; a
+        # page whose own last close is weeks old (a suspended or delisted company) after those a close or two behind: the
+        # tries start again at every deploy, and such pages took every pass (R90-002: "0 updated" for 17 hours, the pages
+        # read being 504375 and IDREAM at 29 Sep, WBD at 5 Oct, ICICIPRULI and QRVO with no candles at all)
+        def long_stale(stored: dict) -> int:
+            try:
+                return int((day - date.fromisoformat(str(stored["facts"].get("price_at") or "")[:10])).days > LONG_STALE_DAYS)
+            except ValueError:
+                return 1
+        due.sort(key=lambda x: (tries.get(x[0], 0), long_stale(x[1]), -(shown_cap(x[1]["facts"]) or 0)))
         done = failed = errors = 0     # errors: reads that raised, of the failed (the rest had no newer close yet)
         behind: list[str] = []         # a few pages read with no newer close: "SYMBOL (last candle 2026-10-21)", for Admin
         stopped = 0             # pages not tried because the source is down for every one of them
