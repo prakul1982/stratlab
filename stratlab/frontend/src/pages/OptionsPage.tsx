@@ -3,9 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { axisInrFor, money, price, fmtDate, fmtDateTime, IST, tzLabel } from "../lib/format";
-import { chainStamp } from "../lib/marketHours";
+import { chainStamp, exchangeTime, optionsMarket } from "../lib/marketHours";
 import { HELP } from "../lib/help";
-import { blankOptions, convertOptLimit, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE } from "../lib/options";
+import { blankOptions, clampTyped, convertOptLimit, expiryChoiceLabel, IMPORTED, isAutoName, legName, legRule, levelText, lotOf, mergeDraft, offsetsIn, optMoney, payoff, pickedExpiry, PICKS, POPULAR_FALLBACK, rangeText, recordedLine, sessionFor, signalFrom, signalLine, spotText, staleQuoteLine, STRUCTURES, STT_NOTE, timingIssues } from "../lib/options";
 import type { LiveRow, Notebook, OptChain, OptCharges, OptionStrategy, OptLeg, OptPreview, StrikePick, Underlying } from "../lib/types";
 import { PayoffChart, type PayoffCurve, type PayoffMarker } from "../components/Charts";
 import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../components/OptionModel";
@@ -39,38 +39,66 @@ const loadDraft = (): OptionStrategy => {
   } catch { /* storage off */ }
   return blankOptions();
 };
+/** Whether the page opened on a structure kept from an earlier visit (DB-010: an imported name stayed after a reload with
+ * nothing saying where it came from). */
+const hadDraft = (): boolean => { try { return !!localStorage.getItem(DRAFT); } catch { return false; } };
+/** A recording's time, as the exchange writes it: "Fri 23 Oct, 15:41 IST". */
+const recordedAt = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? exchangeTime(new Date(iso), IST) : "its last recording");
 
 const inr = (v: number | null | undefined, dp = 0) => money(v, "INR", dp);
 const expiryName = (e: string) => fmtDate(e, { weekday: true, year: false });
+const shortDay = (e: string) => fmtDate(e, { year: false });
 
-/** A number box that keeps what is typed until it is a number in range. */
-function NumField({ label, value, onChange, min = 0, max, step = 1, unit, info }: {
+/** Whether typed text is a number the box takes. */
+const fits = (txt: string, min: number, max: number | undefined, whole: boolean) => {
+  const n = Number(txt);
+  return txt.trim() !== "" && Number.isFinite(n) && n >= min && (max == null || n <= max) && (!whole || Number.isInteger(n));
+};
+
+/** A number box that keeps what is typed until it is a number in range; out of range it says the range under the box, and
+ * on leaving it the number is held to the range (DB-004, DB-007: 0, −1 and 500 units sat in the box with nothing said; 999
+ * lots went back to 1). `placeholder` with a value of 0 shows the box empty, the placeholder the figure used instead. */
+function NumField({ label, value, onChange, min = 0, max, step = 1, unit, info, whole = false, wide, placeholder }: {
   label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; unit?: string; info?: ReactNode;
+  whole?: boolean; wide?: boolean; placeholder?: string;
 }) {
-  const [txt, setTxt] = useState(String(value));
-  useEffect(() => setTxt(String(value)), [value]);
+  const shown = (v: number) => (v === 0 && placeholder ? "" : String(v));
+  const [txt, setTxt] = useState(shown(value));
+  useEffect(() => setTxt(shown(value)), [value, placeholder]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const bad = txt.trim() !== "" && !fits(txt, min, max, whole);
   return (
-    <Field label={label} info={info} unit={unit} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step}
-      onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && (max == null || n <= max)) onChange(n); }} />
+    <Field label={label} info={info} unit={unit} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step} wide={wide}
+      placeholder={placeholder} error={bad ? rangeText(min, max, whole) : undefined}
+      onChange={(e) => { const t = e.target.value; setTxt(t); if (!t.trim() && placeholder) onChange(0); else if (fits(t, min, max, whole)) onChange(Number(t)); }}
+      onBlur={() => { if (!bad) return; const c = clampTyped(txt, min, max, whole); setTxt(shown(c ?? value)); if (c != null) onChange(c); }} />
   );
 }
 
-/** A small number box inside a sentence. */
-function InNum({ label, value, onChange, min = 0, max, step = 1 }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number }) {
+/** A small number box inside a sentence, held to its range in the same way, the range said beside it while it's out. */
+function InNum({ label, value, onChange, min = 0, max, step = 1, whole = false }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; whole?: boolean }) {
   const [txt, setTxt] = useState(String(value));
   useEffect(() => setTxt(String(value)), [value]);
+  const bad = !fits(txt, min, max, whole);
   return (
-    <input className="k-input k-in num" aria-label={label} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step}
-      onChange={(e) => { setTxt(e.target.value); const n = parseFloat(e.target.value); if (!isNaN(n) && n >= min && (max == null || n <= max)) onChange(n); }} />
+    <>
+      <input className={`k-input k-in num${bad ? " bad" : ""}`} aria-label={label} type="number" inputMode="decimal" value={txt} min={min} max={max} step={step}
+        aria-invalid={bad || undefined}
+        onChange={(e) => { setTxt(e.target.value); if (fits(e.target.value, min, max, whole)) onChange(Number(e.target.value)); }}
+        onBlur={() => { if (!bad) return; const c = clampTyped(txt, min, max, whole); setTxt(String(c ?? value)); if (c != null) onChange(c); }} />
+      {bad && <span className="k-note k-bad" role="alert">{rangeText(min, max, whole)}</span>}
+    </>
   );
 }
 
 /** Every exchange the builder trades on (NSE, BSE, MCX, NSE currency) keeps India's time: its times are IST. */
 const ZONE = tzLabel(IST);
 
-/** A time box inside a sentence: 24-hour, in the exchange's time, with the zone beside it. */
+/** A time box inside a sentence: 24-hour, in the exchange's time, with the zone beside it. Something that isn't a time is
+ * said, not silently put back (DB-004: "25:00" went back to 09:30). */
 function InTime({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return <TimeInput small label={label} zone={ZONE} value={value} onChange={onChange} />;
+  const { notify } = useApp();
+  return <TimeInput small label={label} zone={ZONE} value={value} onChange={onChange}
+    onInvalid={(typed) => notify(`"${typed}" isn't a time on the 24-hour clock (00:00 to 23:59), so ${label.toLowerCase()} stays ${value}.`)} />;
 }
 
 /** How a leg's strike is picked, and the number(s) the rule needs. */
@@ -81,7 +109,9 @@ function PickCell({ l, i, unit, upd, rules, step }: { l: OptLeg; i: number; unit
     <div className="k-leg-pick">
       <Select small label={`Leg ${i + 1} strike by`} value={pick} onChange={(v) => upd(i, { pick: v as StrikePick })}
         options={PICKS.map(([v, name]) => ({ value: v, label: `${name}${v !== "offset" && !rules ? " (Pro)" : ""}`, disabled: v !== "offset" && !rules && v !== pick }))} />
-      {pick === "offset" && <InNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={-5000} max={5000} step={unit === "points" ? step ?? 1 : 1} onChange={(v) => upd(i, { offset: v })} />}
+      {/* a distance in strikes is a whole number of them, at most 100 either side (DB-007: 2.5 and 1,000 strikes were taken) */}
+      {pick === "offset" && <InNum label={`Leg ${i + 1} distance from the money`} value={l.offset} min={unit === "points" ? -5000 : -100} max={unit === "points" ? 5000 : 100}
+        whole={unit === "strikes"} step={unit === "points" ? step ?? 1 : 1} onChange={(v) => upd(i, { offset: v })} />}
       {pick === "offset" && <span className="k-note">{unit}</span>}
       {(pick === "delta" || pick === "delta_range") && <InNum label={`Leg ${i + 1} delta`} value={n("delta", 0.2)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { delta: v })} />}
       {pick === "delta_range" && <><span className="k-note">to</span><InNum label={`Leg ${i + 1} delta, high end`} value={n("deltaTo", 0.3)} min={0.01} max={0.99} step={0.05} onChange={(v) => upd(i, { deltaTo: v })} /></>}
@@ -108,8 +138,7 @@ function LegsEditor({ s, set, preview, rules, step }: { s: OptionStrategy; set: 
     { key: "side", header: "Buy or sell", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} buy or sell`} value={l.side} onChange={(v) => upd(i, { side: v as OptLeg["side"] })} options={[{ value: "sell", label: "Sell" }, { value: "buy", label: "Buy" }]} /> },
     { key: "opt", header: "Type", cell: ({ l, i }) => <Select small label={`Leg ${i + 1} call or put`} value={l.opt} onChange={(v) => upd(i, { opt: v as OptLeg["opt"] })} options={[{ value: "CE", label: "Call (CE)" }, { value: "PE", label: "Put (PE)" }]} /> },
     { key: "by", header: "Strike by", info: HELP.optStrikeRule, cell: ({ l, i }) => <PickCell l={l} i={i} unit={unit} upd={upd} rules={rules} step={step} /> },
-    { key: "lots", header: "Lots", cell: ({ l, i }) => <input className="k-input sm k-in num" aria-label={`Leg ${i + 1} lots`} type="number" min={1} max={50} value={l.lots}
-      onChange={(e) => { const n = parseInt(e.target.value, 10); if (n >= 1 && n <= 50) upd(i, { lots: n }); }} /> },
+    { key: "lots", header: "Lots", cell: ({ l, i }) => <InNum label={`Leg ${i + 1} lots`} value={l.lots} min={1} max={50} whole onChange={(v) => upd(i, { lots: v })} /> },
     ...(preview ? [
       { key: "strike", header: "Strike", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.strike ?? (p?.pick ? "none fits" : "not listed"); } },
       { key: "fill", header: "Fill now", numeric: true, cell: ({ i }: LegRow) => { const p = preview.legs[i]; return p?.fill != null ? `${price(p.fill, "INR", preview.tick && preview.tick < 0.01 ? 4 : undefined)}${p.from_last ? " (last trade)" : ""}` : p?.no_live ? "no live quote" : "no quote"; } },
@@ -118,7 +147,8 @@ function LegsEditor({ s, set, preview, rules, step }: { s: OptionStrategy; set: 
   ];
   return (
     <div className="k-stack">
-      <DataTable label="Legs" columns={cols} rows={rows} rowKey={({ i }) => String(i)} />
+      {/* stacked on a phone, each leg a card with its labels, so Type, Strike by, Lots and Remove all show (DB-005) */}
+      <div className="opt-legs"><DataTable stack label="Legs" columns={cols} rows={rows} rowKey={({ i }) => String(i)} /></div>
       {picks.length > 0 && (
         <ul className="k-list muted" data-testid="leg-picks">
           {picks.map(([i, w]) => <li key={i}>Leg {i + 1}: {w}</li>)}
@@ -128,8 +158,9 @@ function LegsEditor({ s, set, preview, rules, step }: { s: OptionStrategy; set: 
         A rule picks its strike from the live quotes when the session enters (and at each re-centre), so the strike can differ from the one shown now.
         Deltas are the pricing model's estimates.{!rules && " Picking strikes by delta or premium is on the Pro plan; Price it now shows what a rule would pick."}
       </p>}
-      {s.legs.length < 8 && <button type="button" className="btn quiet sm k-btn-end"
-        onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 6 * (step ?? 100) : 6, lots: 1 }])}>Add a leg</button>}
+      {s.legs.length < 8 ? <button type="button" className="btn quiet sm k-btn-end"
+        onClick={() => set([...s.legs, { side: "buy", opt: "CE", offset: s.offsetUnit === "points" ? 6 * (step ?? 100) : 6, lots: 1 }])}>Add a leg</button>
+        : <p className="k-note" data-testid="legs-max">Eight legs is the most a structure can have. Remove one to add another.</p>}
     </div>
   );
 }
@@ -207,9 +238,11 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
     ...before.map((x) => ({ x, label: `Breakeven ${levelText(x, p.tick)}`, kind: "breakeven" as const, side: x < p.spot ? "left" as const : "right" as const })),
     // after charges they sit a few points inside: lines only, the numbers are in the note under the chart
     ...(c ? c.breakevens_after.map((x) => ({ x, label: "", kind: "other" as const })) : [])];
-  const stale = staleQuoteLine(p.from_last ?? p.legs.filter((l) => l.from_last).length, p.legs.length);
+  // priced on the last recording (the live feed offline): said once, over everything (DB-001); its last trades are the close's
+  const stale = p.recorded ? "" : staleQuoteLine(p.from_last ?? p.legs.filter((l) => l.from_last).length, p.legs.length);
   return (
     <>
+      {p.recorded && <Notice tone="warn" role="status" className="opt-recorded">{recordedLine(recordedAt(p.as_of))}</Notice>}
       {stale && <Notice tone="warn" role="status" className="opt-stale">{stale}</Notice>}
       {p.impossible && <Notice tone="warn" role="status" className="opt-impossible">{p.impossible}</Notice>}
       <Card label="Summary">
@@ -223,7 +256,7 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
           <Stat testId="opt-be-stat" label="Breakevens" value={before.length ? points(before, p.tick) : "None"}
             note={c ? (c.breakevens_after.length ? `${points(c.breakevens_after, p.tick)} after charges` : "none after charges") : undefined} />
           <Stat testId="opt-margin" label="Margin needed" value={p.margin != null ? inr(p.margin) : "Not available"}
-            note={p.margin != null ? "the broker's figure for these legs, asked when priced" : "the broker didn't give one; price it again"} />
+            note={p.margin != null ? "the broker's figure for these legs, asked when priced" : p.recorded ? "the broker's figure needs the live feed" : "the broker didn't give one; price it again"} />
         </StatRow>
       </Card>
       <Card label="Payoff">
@@ -258,7 +291,7 @@ function Payoff({ p, s }: { p: OptPreview; s: OptionStrategy }) {
   );
 }
 
-function Chain({ s }: { s: OptionStrategy }) {
+function Chain({ s, offline }: { s: OptionStrategy; offline: boolean }) {
   const { fail, markets } = useApp();
   const [chain, setChain] = useState<OptChain | null>(null);
   const [busy, setBusy] = useState(false);
@@ -287,17 +320,19 @@ function Chain({ s }: { s: OptionStrategy }) {
     { key: "pq", header: "Put bid / ask", numeric: true, cell: (r) => q(r.pe) }, { key: "po", header: "Put OI", numeric: true, cell: (r) => r.pe?.oi?.toLocaleString("en-IN") ?? "–" },
   ];
   // Indian index and stock options trade in the Indian market's hours; outside them the prices are the last ones struck (R20-012)
-  const stamp = chainStamp({ market: s.exchange === "NFO" || s.exchange === "BFO" ? markets.find((m) => m.id === "IN") : null,
-    times: [chain?.spot_ts, ...(chain?.rows ?? []).flatMap((r) => [r.ce?.ts, r.pe?.ts])] });
+  // a recorded chain (the live feed offline) says so and when, as the payoff above does (DB-001)
+  const stamp = chain?.recorded ? `recorded chain as of ${recordedAt(chain.as_of)} (last close)`
+    : chainStamp({ market: s.exchange === "NFO" || s.exchange === "BFO" ? markets.find((m) => m.id === "IN") : null,
+      times: [chain?.spot_ts, ...(chain?.rows ?? []).flatMap((r) => [r.ce?.ts, r.pe?.ts])] });
   const atm = (r: CRow): Record<string, string> => (r.strike === chain?.atm ? { "data-atm": "1", className: "atm" } : {});
   return (
     <Card label="Option chain" testId="chain-card">
-      <Disclosure className="chain" summary={<><b>Option chain</b><span className="k-note">bid / ask, IV and Greeks, {chain ? stamp : stamp === "live" ? "live" : "market closed"}</span></>} onToggle={(o) => { if (o && !chain) void load(); }}>
+      <Disclosure className="chain" summary={<><b>Option chain</b><span className="k-note">bid / ask, IV and Greeks, {chain ? stamp : offline ? "from the last recorded close" : stamp === "live" ? "live" : "market closed"}</span></>} onToggle={(o) => { if (o && !chain) void load(); }}>
         {busy && <Skeleton label="Loading the chain" />}
         {chain && (
           <div className="k-stack">
             <div className="k-spread k-small">
-              <span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""}{chain.spot_from === "spot" ? " (spot rate: the future has no live quote)" : ""} · expiry {chain.expiry && expiryName(chain.expiry)} · lot {chain.lot}</span>
+              <span>{s.underlying} {chain.spot != null ? (s.exchange === "CDS" ? money(chain.spot, "INR", 4) : price(chain.spot, "INR")) : ""}{chain.spot_from === "spot" ? " (spot rate: the future has no live quote)" : ""} · expiry {chain.expiry && expiryName(chain.expiry)}{chain.lot ? ` · lot ${chain.lot}` : ""}</span>
               <span className="k-row">
                 {chain.model && <Seg label="Chain columns" value={view} options={[{ value: "quotes", label: "Bid / ask" }, { value: "greeks", label: "IV and Greeks" }]} onChange={(v) => setView(v as "quotes" | "greeks")} />}
                 <button type="button" className="btn quiet sm" onClick={load}>Refresh</button>
@@ -321,7 +356,7 @@ const TILE_GROUPS: { title: string; ids: string[] }[] = [
 ];
 
 export function OptionsPage() {
-  const { fail, notify, refreshMe, notebooks, me } = useApp();
+  const { fail, notify, refreshMe, notebooks, me, markets } = useApp();
   const feats = me?.plan_info?.features;
   const rulesOk = feats ? !!feats.strike_rules : true, vixOk = feats ? !!feats.vix_filter : true, canStart = feats ? feats.options !== false : true;
   // entering on a notebook's signal is on Pro: said on the choice and the Start button, not first at Start
@@ -329,6 +364,7 @@ export function OptionsPage() {
   const nav = useNavigate();
   const plansToast = usePlansToast();
   const [s, setS] = useState<OptionStrategy>(loadDraft);
+  const [restored, setRestored] = useState(hadDraft);
   const [unds, setUnds] = useState<Underlying[] | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
   const [preview, setPreview] = useState<OptPreview | null>(null);
@@ -341,14 +377,18 @@ export function OptionsPage() {
   const live = (rows ?? []).filter((x) => x.status === "running" || x.status === "paused");     // the stopped ones fold away
 
   useEffect(() => {
-    api<Underlying[]>("/options/underlyings").then(setUnds).catch((e: ApiError) => { setUnds([]); setOffline(e.message); });
+    // offline, the indices with a recorded chain are what can be priced, on that recording (DB-001)
+    api<Underlying[]>("/options/underlyings").then(setUnds).catch((e: ApiError) => {
+      setOffline(e.message);
+      api<Underlying[]>("/options/recorded").then(setUnds).catch(() => setUnds([]));
+    });
     api<LiveRow[]>("/live/sessions").then((r) => setRows(r.filter((x) => x.instrument?.type === "OPTIONS"))).catch(() => setRows([]));
     try {
       const imp = sessionStorage.getItem(IMPORTED);
       if (imp) {
         sessionStorage.removeItem(IMPORTED);
         const d = JSON.parse(imp) as { strategy: OptionStrategy; notes: string[] };
-        setS(mergeDraft(blankOptions(), d.strategy)); setNotes(d.notes || []);
+        setS(mergeDraft(blankOptions(), d.strategy)); setNotes(d.notes || []); setRestored(false);
       }
     } catch { /* nothing imported */ }
   }, []);
@@ -357,6 +397,8 @@ export function OptionsPage() {
   const patch = useCallback((p: Partial<OptionStrategy>) => { setS((x) => ({ ...x, ...p })); setPreview(null); }, []);
   const und = unds?.find((u) => u.exchange === s.exchange && u.name === s.underlying);
   const popular = (unds?.length ? unds.filter((u) => u.popular) : POPULAR_FALLBACK.map((u) => ({ ...u, venue: u.exchange === "BFO" ? "BSE" : u.exchange === "MCX" ? "MCX" : u.exchange === "CDS" ? "NSE currency" : "NSE" }))).slice(0, 5);
+  // offline, only an index with a recorded chain can be priced (on that recording); the others wait for the live feed
+  const recordedUnd = !!offline && !!und?.recorded;
   const onPopular = popular.some((u) => u.exchange === s.exchange && u.name === s.underlying);
   // a name the person typed stays; one the builder made up follows the strategy, underlying and rules
   const named = (next: string) => (isAutoName(s.name, s.underlying) ? { name: next } : {});
@@ -425,6 +467,8 @@ export function OptionsPage() {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `${s.name.replace(/[^\w-]+/g, "-").toLowerCase()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    // said, with what the file keeps relative (DB-009: it downloaded silently, "expiry": "current" unexplained)
+    notify(`Saved ${a.download}. It keeps the expiry as a choice (${({ current: "Nearest", next: "Next", month: "Monthly" } as Record<string, string>)[s.expiry] ?? s.expiry}), not a date, so importing it later uses the expiry of that day.`);
   };
 
   const [sigBusy, setSigBusy] = useState(false);
@@ -480,6 +524,11 @@ export function OptionsPage() {
   const vf = s.vix;
   const expiryNames: Record<string, string> = { current: "the nearest expiry", next: "the next expiry", month: "the monthly expiry" };
   const exp = pickedExpiry(und?.expiries, s.expiry), lot = lotOf(und, s.expiry);
+  // one expiry a month (BANKNIFTY, FINNIFTY): Nearest and Monthly are the same day, and the page says so
+  const sameExpiry = (und?.expiries?.length ?? 0) > 1 && new Set(und!.expiries.map((e) => e.slice(0, 7))).size === und!.expiries.length;
+  // the times checked against each other and the exchange's hours (DB-004)
+  const hours = optionsMarket(markets, s.exchange)?.hours;
+  const timeIssues = timingIssues(s.timing, hours?.open, hours?.close);
   const stopWord = r.stopType === "none" ? "" : `, stopping out if the loss reaches ${r.stopType === "amount" ? inr(r.stop) : `${r.stop}% of the premium`}`;
   const tgtWord = r.tgtType === "none" ? "" : ` and taking profit at ${r.tgtType === "amount" ? inr(r.tgt) : `${r.tgt}% of the premium`}`;
   const words = `${s.name}: ${legsText}, on ${expiryNames[s.expiry] ?? `the ${s.expiry} expiry`}. ${s.signal ? `Enters whenever "${s.signal.name}" signals a trade, from ${t.entry} to ${t.lastEntry} ${ZONE}` : `Enters at ${t.entry} ${ZONE}, no later than ${t.lastEntry} ${ZONE}`}, and exits by ${t.squareoff} ${ZONE}${stopWord}${tgtWord}.`;
@@ -495,6 +544,9 @@ export function OptionsPage() {
         actions={<><Badge tone="plain" dot={false}>Live paper trading only</Badge><Info label="About options backtesting">{HELP.optBacktest}</Info></>} />
 
       {offline && <Notice tone="warn">{offline}</Notice>}
+      {restored && s.name !== blankOptions().name && (
+        <p className="k-note" data-testid="opt-restored">This is "{s.name}", kept from your last visit in this browser. Start over for a fresh structure.</p>
+      )}
       {notes.length > 0 && (
         <Notice actions={<button type="button" className="btn quiet sm" onClick={() => setNotes([])}>Got it</button>}>
           <b>Imported. Check these before you start:</b>
@@ -522,10 +574,14 @@ export function OptionsPage() {
           </FieldGroup>
           <FieldGroup label="Expiry" info="Nearest is the first expiry still to come; Next is the one after; Monthly is the last expiry of the month.">
             <div className="k-expiry">
+              {/* each choice with the date it picks (DB-008: no date anywhere; for a monthly-only index Nearest and Monthly
+                  are the same day, which the dates now show) */}
               <Seg label="Expiry" value={["current", "next", "month"].includes(s.expiry) ? s.expiry : "date"}
-                options={[{ value: "current", label: "Nearest" }, { value: "next", label: "Next" }, { value: "month", label: "Monthly" }]} onChange={(v) => patch({ expiry: v })} />
+                options={([["current", "Nearest"], ["next", "Next"], ["month", "Monthly"]] as const).map(([v, name]) => ({ value: v, label: expiryChoiceLabel(name, pickedExpiry(und?.expiries, v), shortDay) }))}
+                onChange={(v) => patch({ expiry: v })} />
               {/* the expiry priced, once there is a price: the one the pill names is the one the numbers use (R11C-007) */}
-              {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot}` : ""].filter(Boolean).join(" · ")}</span>}
+              {und && <span className="k-note" data-testid="opt-expiry-note">{[preview ? expiryName(preview.expiry) : exp ? expiryName(exp) : "", (preview ? preview.lot : lot) != null ? `lot ${preview ? preview.lot : lot} ${s.underlying}` : ""].filter(Boolean).join(" · ")}</span>}
+              {sameExpiry && <span className="k-note" data-testid="opt-expiry-same">{s.underlying} has monthly expiries only, so Nearest and Monthly are the same day.</span>}
             </div>
           </FieldGroup>
           <FieldGroup label="Strategy" wide>
@@ -582,23 +638,26 @@ export function OptionsPage() {
             <p className="k-sentence"><b>Enter at</b> <InTime label="Enter at" value={t.entry} onChange={(v) => setTiming({ entry: v })} /> on market days, no later than <InTime label="Last entry" value={t.lastEntry} onChange={(v) => setTiming({ lastEntry: v })} />.</p>
           )}
           <p className="k-sentence"><b>Exit at</b> <InTime label="Square off" value={t.squareoff} onChange={(v) => setTiming({ squareoff: v })} /> at the latest.</p>
+          {timeIssues.length > 0 && <Notice tone="warn" className="opt-time-issues"><ul className="k-list">{timeIssues.map((x) => <li key={x}>{x}</li>)}</ul></Notice>}
           <div className="k-form two" role="group" aria-label="Stop and target">
             <div className="k-field">
               <div className="k-label-row"><span className="k-lbl">Exit sooner at a loss of</span></div>
               <div className="k-row">
                 <Seg label="Stop type" value={r.stopType} options={lossOpts} onChange={(v) => switchLimit("stop", v as OptionStrategy["risk"]["stopType"])} />
-                {r.stopType !== "none" && <input className="k-input k-in num" type="number" aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: +e.target.value || 0 })} />}
+                {r.stopType !== "none" && <input className="k-input k-in num" type="number" min={0} aria-label="Stop value" value={r.stop} onChange={(e) => setRisk({ stop: Math.max(0, +e.target.value || 0) })} />}
               </div>
+              {r.stopType === "credit_pct" && r.stop > 100 && <span className="k-note">A stop of {r.stop}% of the premium exits only once the loss is {+(r.stop / 100).toFixed(2)} times the premium.</span>}
             </div>
             <div className="k-field">
               <div className="k-label-row"><span className="k-lbl">Or at a gain of</span></div>
               <div className="k-row">
                 <Seg label="Target type" value={r.tgtType} options={lossOpts} onChange={(v) => switchLimit("tgt", v as OptionStrategy["risk"]["tgtType"])} />
-                {r.tgtType !== "none" && <input className="k-input k-in num" type="number" aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: +e.target.value || 0 })} />}
+                {r.tgtType !== "none" && <input className="k-input k-in num" type="number" min={0} aria-label="Target value" value={r.tgt} onChange={(e) => setRisk({ tgt: Math.max(0, +e.target.value || 0) })} />}
               </div>
             </div>
           </div>
-          <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{lot != null ? ` A lot is ${lot} ${s.underlying}.` : ""}</p>
+          <p className="k-sentence"><b>Trade</b> <InNum label="Units" value={z.lots} min={1} max={1000} whole onChange={(v) => setZ({ lots: Math.round(v) })} /> unit{z.lots === 1 ? "" : "s"} of the structure.{lot != null ? ` A lot is ${lot} ${s.underlying}.` : ""}
+            {lot != null && und?.freeze ? ` Orders above ${und.freeze.toLocaleString("en-IN")} ${s.underlying} (${Math.floor(und.freeze / lot)} lots) go to the exchange in slices.` : ""}</p>
           <div className="k-sentence" data-testid="vix-filter">
             <CheckField label={<>Enter only while India VIX is between{!vixOk && " (Basic)"}</>} checked={!!vf} disabled={!vixOk && !vf} onChange={(on) => patch({ vix: on ? { min: 11, max: 18 } : null })} />
             {vf && <> <InNum label="Lowest (0 = none)" value={vf.min} max={100} step={0.5} onChange={(v) => patch({ vix: { ...vf, min: v } })} /> and
@@ -611,8 +670,8 @@ export function OptionsPage() {
         <More id="options" what="entries a day, daily loss cap, trailing, re-centring, sizing, costs"
           on={[t.maxEntries > 1, t.cooldown > 0, r.dailyLoss > 0, hasShort && r.legStopPct > 0, r.trailAfter > 0, hasShort && rc.enabled, z.mode === "margin", c.brokerage > 0 && c.brokerage !== 20].filter(Boolean).length}>
           <FormGrid label="More settings">
-            <NumField label="Entries a day" value={t.maxEntries} min={1} max={20} onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
-            <NumField label="Wait after a trade" value={t.cooldown} max={600} unit="min" onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
+            <NumField label="Entries a day" value={t.maxEntries} min={1} max={20} whole onChange={(v) => setTiming({ maxEntries: Math.round(v) })} />
+            <NumField label="Wait after a trade" value={t.cooldown} max={600} whole unit="minutes" onChange={(v) => setTiming({ cooldown: Math.round(v) })} />
             <NumField label="Daily loss cap" value={r.dailyLoss} step={1000} unit="₹" onChange={(v) => setRisk({ dailyLoss: v })} />
             {hasShort && <NumField label="Sold-leg stop" value={r.legStopPct} step={5} unit="+ %" info={HELP.optLegStop} onChange={(v) => setRisk({ legStopPct: v })} />}
             <NumField label="Trail once up" value={r.trailAfter} step={500} unit="₹" info={HELP.optTrail} onChange={(v) => setRisk({ trailAfter: v })} />
@@ -622,8 +681,10 @@ export function OptionsPage() {
             </FieldGroup>
             <NumField label="Paper capital" value={z.capital} min={1000} step={50000} unit="₹" onChange={(v) => setZ({ capital: v })} />
             <NumField label="Brokerage per order" value={c.brokerage} max={1000} unit="₹" onChange={(v) => setC({ brokerage: v })} />
-            <NumField label="Extra slippage" value={c.slippageTicks} max={100} unit="ticks" onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
-            <NumField label="Freeze limit" value={c.freeze} max={100000} info={HELP.optFreeze} onChange={(v) => setC({ freeze: Math.round(v) })} />
+            <NumField label="Extra slippage" value={c.slippageTicks} max={100} whole unit="ticks" onChange={(v) => setC({ slippageTicks: Math.round(v) })} />
+            {/* left empty, the exchange's own limit, shown in the box (DB-008: it read 0); the whole row, not an orphan (DB-010) */}
+            <NumField label="Freeze limit" value={c.freeze} max={100000} whole wide unit={s.underlying} info={HELP.optFreeze}
+              placeholder={und?.freeze ? `${und.freeze.toLocaleString("en-IN")}, the exchange's` : "the exchange's"} onChange={(v) => setC({ freeze: Math.round(v) })} />
             {hasShort && (
               <div className="k-field wide"><CheckField label={<>Re-centre when the market moves<Info>{HELP.optRecenter}</Info></>} checked={rc.enabled} onChange={(on) => setRc({ enabled: on })} /></div>
             )}
@@ -633,7 +694,7 @@ export function OptionsPage() {
               <FieldGroup label="Roll"><Seg label="What rolls" value={rc.roll} options={[{ value: "shorts", label: "Sold legs" }, { value: "all", label: "All legs" }]} onChange={(v) => setRc({ roll: v as "shorts" | "all" })} /></FieldGroup>
             </>}
           </FormGrid>
-          {!c.freeze && und?.freeze ? <span className="k-note">Freeze limit 0 uses the exchange's: {und.freeze.toLocaleString("en-IN")} for {und.name}.</span> : null}
+          {!c.freeze && und?.freeze ? <span className="k-note">Left empty, the freeze limit is the exchange's: {und.freeze.toLocaleString("en-IN")} {und.name} an order.</span> : null}
         </More>
       </Card>
 
@@ -642,12 +703,17 @@ export function OptionsPage() {
         <FormGrid label="Price and start" onSubmit={(e) => { e.preventDefault(); void price_(); }}>
           <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
           <FormActions>
-            <button type="submit" className="btn quiet" disabled={pricing || !!offline}>{pricing ? "Pricing…" : preview ? "Price again" : "Price it now"}</button>
-            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk))} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
+            <button type="submit" className="btn quiet" disabled={pricing || (!!offline && !recordedUnd)}>{pricing ? "Pricing…" : offline && recordedUnd ? (preview ? "Price again on the last close" : "Price it on the last close") : preview ? "Price again" : "Price it now"}</button>
+            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk)) || timeIssues.length > 0 || notes.length > 0} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
             {/* the Free plan's trial is for strategies: the lock says so, not just "Basic" (R59-005) */}
             {!canStart && <span className="k-note">Paper trading options is on the Basic plan; the Free plan's 5-market-day trial is for a notebook's strategy, not options. Price it now works on every plan. <Link className="link" to="/plans">Plans</Link></span>}
             {/* greyed out with no reason beside them read as broken (R48-004) */}
-            {offline && <span className="k-note" data-testid="opt-offline-why">Pricing and paper trading need live option quotes, which are offline now (the note at the top says until when). The last recorded chain is on <Link to="/trade/positioning">Positioning</Link>.</span>}
+            {offline && <span className="k-note" data-testid="opt-offline-why">{recordedUnd
+              ? <>Live option quotes are offline now (the note at the top says until when), so pricing uses {s.underlying}'s last recorded chain, as of {recordedAt(und?.as_of)}, and says so. Paper trading needs the live feed.</>
+              : <>Pricing and paper trading need live option quotes, which are offline now (the note at the top says until when). {unds?.some((u) => u.recorded) ? <>Offline, only {unds.filter((u) => u.recorded).map((u) => u.name).join(", ")} can be priced, on their last recorded chain.</> : <>The last recorded chain is on <Link to="/trade/positioning">Positioning</Link>.</>}</>}</span>}
+            {/* an import's notes are read before a session can start (DB-002) */}
+            {notes.length > 0 && <span className="k-note" data-testid="opt-import-confirm">Check the import notes at the top and press Got it before you start.</span>}
+            {timeIssues.length > 0 && <span className="k-note">Fix the times under When it trades before you start.</span>}
             {canStart && ruleMode && !signalOk && <span className="k-note">Entering on a notebook's rules is on the Pro plan; at a set time works on yours. <Link className="link" to="/plans">Plans</Link></span>}
             {canStart && signalOk && ruleMode && !s.signal && <span className="k-note">Pick the notebook whose rules give the signal first.</span>}
           </FormActions>
@@ -662,7 +728,7 @@ export function OptionsPage() {
       {preview && !!preview.no_live && <Notice tone="warn" role="status" className="opt-no-live">{preview.no_live_text || "No live quote, so the structure isn't priced."}</Notice>}
       {preview && preview.units !== 0 && !preview.no_live && <Payoff p={preview} s={s} />}
 
-      <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} />
+      <Chain key={`${s.exchange}${s.underlying}${s.expiry}`} s={s} offline={!!offline} />
 
       <p className="k-link-line">Where the market is positioned, by participant and strike: <Link className="link" to="/trade/positioning">open Positioning</Link>.</p>
 
@@ -678,11 +744,11 @@ export function OptionsPage() {
 
       {confirmStart && (
         <ConfirmDialog title={`Start paper trading "${s.name}"?`} confirmLabel="Start paper trading" danger={false} onConfirm={start} onClose={() => setConfirmStart(false)}>
-          It enters {startWhen} on market days with fake money, on live {s.underlying} option prices.{s.vix ? " Entries wait while India VIX is outside your band." : ""}
+          It enters {startWhen} on market days with fake money, on live {s.underlying} option prices: each leg fills at the bid when sold and the ask when bought{c.slippageTicks ? `, ${c.slippageTicks} tick${c.slippageTicks === 1 ? "" : "s"} worse` : ""}, or at its last trade when there's none, with brokerage of {inr(c.brokerage)} an order and the exchange's charges.{s.vix ? " Entries wait while India VIX is outside your band." : ""}
         </ConfirmDialog>
       )}
       {confirmReset && (
-        <ConfirmDialog title="Start over?" confirmLabel="Start over" onConfirm={() => { setS(blankOptions()); setPreview(null); setConfirmReset(false); }} onClose={() => setConfirmReset(false)}>
+        <ConfirmDialog title="Start over?" confirmLabel="Start over" onConfirm={() => { setS(blankOptions()); setPreview(null); setConfirmReset(false); setRestored(false); setNotes([]); }} onClose={() => setConfirmReset(false)}>
           This replaces what you have set up with a fresh short straddle.
         </ConfirmDialog>
       )}

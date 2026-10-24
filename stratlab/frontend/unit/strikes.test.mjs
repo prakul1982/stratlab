@@ -14,7 +14,7 @@ const leg = (p) => ({ side: "sell", opt: "PE", offset: 0, lots: 1, ...p });
 
 test("a leg's strike rule in a few words", () => {
   assert.equal(legRule(leg({}), "strikes"), "ATM");
-  assert.equal(legRule(leg({ offset: 3 }), "strikes"), "3 OTM");
+  assert.equal(legRule(leg({ offset: 3 }), "strikes"), "3 strikes OTM");
   assert.equal(legRule(leg({ offset: -200 }), "points"), "200 pts ITM");
   assert.equal(legRule(leg({ pick: "delta", delta: 0.2 }), "strikes"), "Δ 0.20");
   assert.equal(legRule(leg({ pick: "delta_range", delta: 0.15, deltaTo: 0.25 }), "strikes"), "Δ 0.15–0.25");

@@ -21,7 +21,8 @@ import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
 import { moneyCompact } from "../lib/chartFormat";
-import { STOP_DIALOG, stoppedOpenLine } from "../lib/paperText";
+import { fillsLine, rulesLines, STOP_DIALOG, stoppedOpenLine } from "../lib/paperText";
+import { opSay, refName, stopWords } from "../lib/rules";
 import "./trade/trade.css";
 import "./trade/paper.css";
 
@@ -31,7 +32,7 @@ import "./trade/paper.css";
 const statusTone = (s: string) => (s === "running" ? "ok" : s === "paused" ? "warn" : "plain") as "ok" | "warn" | "plain";
 
 /** The session's candles, updated in place every few seconds: the forming candle grows from the ticks seen so far. */
-function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
+function LiveChart({ snap, cur, note }: { snap: LiveSnapshot; cur: string; note?: string }) {
   const forming = useRef<{ t: string; o: number; h: number; l: number } | null>(null);
   const f = snap.forming;
   if (f && (!forming.current || forming.current.t !== f.t)) forming.current = { t: f.t, o: f.c, h: f.c, l: f.c };
@@ -49,7 +50,7 @@ function LiveChart({ snap, cur }: { snap: LiveSnapshot; cur: string }) {
   const s = snap.strategy;
   const studies = useMemo(() => strategyStudies([...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])]), [s]);
   return <PriceChart symbol={snap.instrument.symbol} storageKey={(snap.instrument.id || snap.instrument.symbol).slice(0, 40)} currency={cur}
-    bars={bars} tf={s.tf as Tf} timeframes={[s.tf as Tf]} markers={markers} levels={levels} pageStudies={studies} height={340} />;
+    bars={bars} tf={s.tf as Tf} timeframes={[s.tf as Tf]} markers={markers} levels={levels} pageStudies={studies} height={340} note={note} />;
 }
 
 /** A session's snapshot with every list it draws present: an older or other kind of session may leave one out (R7T-011: an
@@ -140,15 +141,34 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
     return once(async () => { try { await api(`/live/sessions/${sid}`, { method: "DELETE" }); onDeleted(); } catch (e) { fail(e); } });
   };
 
+  // every money figure to the cent, as the replay's are (DB-022: "$10" and "$9,985" beside "$0.00")
   const rows: [string, string, number | null, string | null][] = [
-    ["Equity", money(a.equity, cur), null, HELP.equityLive],
+    ["Equity", money(a.equity, cur, 2), null, HELP.equityLive],
     ["Return", pct((a.equity / a.capital - 1) * 100, 2), a.equity - a.capital, null],
-    ["Cash", money(a.cash, cur), null, HELP.cash],
+    ["Cash", money(a.cash, cur, 2), null, HELP.cash],
     ["Open position", a.qty ? `${qty(a.qty, undefined, snap.instrument.market)} at ${price(a.entry ?? 0, cur)}` : "None", null, null],
-    ["Unrealised P&L", money(a.unrealised, cur), a.unrealised, HELP.unrealised],
-    ["Realised P&L", money(a.realised, cur), a.realised, HELP.realised],
+    ["Unrealised P&L", money(a.unrealised, cur, 2), a.unrealised, `${HELP.unrealised} It already counts the costs of the entry.`],
+    ["Realised P&L", money(a.realised, cur, 2), a.realised, HELP.realised],
     ["Closed trades", a.trades ? `${a.trades} (${a.wins} won)` : "0", null, null],
   ];
+
+  // one "now" price (DB-020): the header's is the latest trade, the chart's candles are closed ones unless one is forming,
+  // and the chart says which; a stopped session's price is the last before the stop, with its time
+  const lastBar = snap.bars[snap.bars.length - 1];
+  const chartNote = snap.forming && running ? `${TF_NAME[snap.strategy.tf]} candles. The last one is still forming: it moves with each price until it closes.`
+    : lastBar ? `${TF_NAME[snap.strategy.tf]} candles, closed ones only: the last closed ${when(lastBar.t, tz, intraday, true)}.${running && snap.last_price != null ? " The latest price is above the chart." : ""}` : undefined;
+  const priceHead = snap.last_price == null ? undefined : running
+    ? `${snap.instrument.symbol} ${price(snap.last_price, cur)}, latest price${snap.last_tick_at ? `, ${when(snap.last_tick_at, tz, true, true)}` : ""}`
+    : `${snap.instrument.symbol} ${price(snap.last_price, cur)}, the last price before the stop${snap.last_tick_at ? ` (${when(snap.last_tick_at, tz, true, true)})` : ""}`;
+  // the equity curve from the starting capital (DB-022: it began at the first candle, with no $10,000 point)
+  const curve = snap.equity_curve.length && snap.equity_curve[0].t > snap.started_at ? [{ t: snap.started_at, eq: a.capital }, ...snap.equity_curve] : snap.equity_curve;
+  const span = curve.length ? Math.max(...curve.map((p) => p.eq), a.capital) - Math.min(...curve.map((p) => p.eq), a.capital) : 0;
+  // a few dollars of movement on $10,000 reads as one "$10k" label: whole amounts then
+  const axis = (x: number) => (span < a.capital * 0.05 ? money(x, cur, 0) : moneyCompact(x, cur ?? "INR"));
+  const market = markets.find((m) => m.id === snap.instrument.market);
+  const s = snap.strategy;
+  const cond = (c: (typeof s.entry)[number]) => `${refName(c.l)} ${opSay(c.op)} ${refName(c.r)}`;
+  const closedTrades = orders.filter((e) => e.side && e.pnl != null);
 
   return (
     <div className="k-page">
@@ -178,16 +198,25 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
 
       <div className="nb-grid">
         <div className="k-page">
-          <Card label="Live chart">
-            <CardHead level={3} title="Live chart" actions={snap.last_price != null ? <span className="k-small">{snap.instrument.symbol} {price(snap.last_price, cur)}</span> : undefined} />
-            {snap.bars.length ? <LiveChart snap={snap} cur={cur} /> : <p className="k-small k-muted">The chart fills in as candles close.</p>}
+          <Card label="Live chart" className="sess-chart">
+            <CardHead level={3} title={running ? "Live chart" : "Chart"} actions={priceHead ? <span className="k-small" data-testid="sess-price">{priceHead}</span> : undefined} />
+            {snap.bars.length ? <LiveChart snap={snap} cur={cur} note={chartNote} /> : <p className="k-small k-muted">The chart fills in as candles close.</p>}
+            <p className="k-note" data-testid="sess-fills">{fillsLine(s.risk, market?.costs, money(s.risk.brokerage, cur, 2))}</p>
           </Card>
           <ChartFrame title="Paper equity" info={HELP.equityLive}>
-            {snap.equity_curve.length > 1 ? (
-              <LineChart ariaLabel="Paper account value" labels={snap.equity_curve.map((p) => when(p.t, tz, intraday))} times={snap.equity_curve.map((p) => p.t)} tz={tz} height={160}
-                format={(x) => money(x, cur)} axisFormat={(x) => moneyCompact(x, cur ?? "INR")} baseline={a.capital} lines={[{ label: "Equity", values: snap.equity_curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
+            {curve.length > 1 ? (
+              <LineChart ariaLabel="Paper account value" labels={curve.map((p) => when(p.t, tz, intraday))} times={curve.map((p) => p.t)} tz={tz} height={160}
+                format={(x) => money(x, cur, 2)} axisFormat={axis} baseline={a.capital} lines={[{ label: "Equity", values: curve.map((p) => p.eq), color: "var(--series-1)", width: 2 }]} />
             ) : <ChartEmpty height={160}>Your equity curve starts after the first closed candle.</ChartEmpty>}
+            {curve.length > 1 && <p className="k-note">From the starting {money(a.capital, cur, 0)} (the grey line), after each closed candle.</p>}
           </ChartFrame>
+          <Card label="Rules">
+            <CardHead level={3} title="Rules" />
+            <ul className="k-list" data-testid="sess-rules">
+              {rulesLines(s, cond).map((x) => <li key={x}>{x}</li>)}
+              <li>{s.risk.sl ? `A ${stopWords(s.risk.sl, s.risk.stopType)}` : "No stop"}{s.risk.tgt ? `, a ${s.risk.tgt}${s.risk.tgtType === "points" ? "-point" : s.risk.tgtType === "r" ? "R" : "%"} target` : ", no target"}; {money(s.risk.capital, cur, 0)} of fake money.</li>
+            </ul>
+          </Card>
         </div>
         <div className="k-page">
           <Card label="Account">
@@ -198,8 +227,13 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
               ))}
             </div>
           </Card>
-          <Card label="Orders today">
-            <CardHead level={3} title="Orders today" />
+          <Card label="Closed trades">
+            <CardHead level={3} title={`Closed trades (${a.trades})`} />
+            {closedTrades.length ? <OrderList events={closedTrades} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
+              : <p className="k-small k-muted">None yet. A trade shows here once its exit order fills.</p>}
+          </Card>
+          <Card label="Orders">
+            <CardHead level={3} title="Orders" />
             {today.length ? <OrderList events={today} cur={cur} tz={tz} newest tf={snap.strategy.tf} close={marketClose} />
               : <p className="k-small k-muted">{!snap.events.length ? "No orders yet. They appear when your rules fire on a closed candle." : "No orders today."}</p>}
             <Earlier label="Earlier orders" count={earlier.length} className="in-card" open

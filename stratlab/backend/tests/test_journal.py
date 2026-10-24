@@ -46,9 +46,9 @@ def test_scaling_in_and_out_stays_one_trade_until_flat():
     t = got[0]
     assert t["qty"] == 25 and t["entry"] == pytest.approx((1000 + 1100 + 575) / 25) and t["exit"] == pytest.approx((600 + 2500) / 25)
     assert t["gross"] == pytest.approx(3100 - 2675) and t["segment"] == "eq_delivery" and t["hold_days"] == 4
-    # delivery: STT both ways, stamp on buys, no brokerage by default
+    # delivery: STT both ways, stamp on buys, no brokerage by default, and the DP charge on each of the two sale days (DB-040)
     want = sum(C.total(C.order_costs("in_eq", sd, q, p, 0)) for sd, q, p in
-               (("buy", 10, 100), ("buy", 10, 110), ("buy", 5, 115), ("sell", 5, 120), ("sell", 20, 125)))
+               (("buy", 10, 100), ("buy", 10, 110), ("buy", 5, 115), ("sell", 5, 120), ("sell", 20, 125))) + 2 * C.dp_charge()
     assert t["charges"] == pytest.approx(want) and t["net"] == pytest.approx(t["gross"] - want)
 
 

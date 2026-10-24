@@ -218,12 +218,14 @@ export interface OptionStrategy {
     asOf?: string } | null;
   vix?: { min: number; max: number } | null;     // enter only while India VIX is inside this band (0 = that end open)
 }
-export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; lots?: Record<string, number>; venue: string; popular: boolean; freeze: number; index: boolean }
+export interface Underlying { exchange: "NFO" | "BFO" | "MCX" | "CDS"; name: string; lot: number; expiries: string[]; lots?: Record<string, number>; venue: string; popular: boolean; freeze: number; index: boolean;
+  recorded?: boolean; as_of?: string | null }   // from the last recorded chain while the live feed is offline (DB-001)
 export interface OptQuote { ltp: number | null; bid: number | null; ask: number | null; oi?: number | null; volume?: number | null; ts?: string | null }
 export interface OptChain { expiry: string | null; expiries?: string[]; lot?: number; spot: number | null; atm?: number; step?: number;
   rows: { strike: number; ce: OptQuote | null; pe: OptQuote | null; ce_g?: OptionGreeks | null; pe_g?: OptionGreeks | null }[]; freeze?: number;
   model?: GreekModel | null;       // the inputs every strike's IV and Greeks share (model estimates)
-  spot_from?: "quote" | "spot" | "none"; spot_ts?: string | null }   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
+  spot_from?: "quote" | "spot" | "none" | "recorded"; spot_ts?: string | null;   // a currency option's underlying: the spot rate when its future has no live quote (R13-002)
+  recorded?: boolean; as_of?: string | null }      // the last recorded chain, while the live feed is offline (DB-001)
 /** A position's model view (options/greeks.py position): each leg's IV and Greeks per option, the what-if inputs of the
  * legs that have an IV, and the net Greeks (× quantity, sold legs negative). */
 export interface PositionGreeks { legs: (OptionGreeks | null)[]; model_legs: ModelLeg[]; complete: boolean; net: (NetGreeks & { pnl: number }) | null }
@@ -240,8 +242,9 @@ export interface OptPreview {
   impossible?: string | null;          // why these fills can't be real (a profit at every price)
   no_live?: number;                    // legs with no live quote at all (no bid, no ask, nothing traded): not priced (R13-002)
   no_live_text?: string | null;        // what the page says then
-  spot_from?: "quote" | "spot" | "none";   // the underlying's own quote, or the spot rate a currency option settles at
+  spot_from?: "quote" | "spot" | "none" | "recorded";   // the underlying's own quote, or the spot rate a currency option settles at
   spot_ts?: string | null;             // when the underlying's quote was struck
+  recorded?: boolean; as_of?: string | null;   // priced on the last recorded chain, as of its time (DB-001)
   charges?: OptCharges | null;     // opening and closing every leg once at the fills shown; null when a leg has no quote
   model?: GreekModel | null; greeks?: PositionGreeks | null;     // null once the expiry has passed
 }

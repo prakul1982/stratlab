@@ -81,7 +81,7 @@ from .intel.screener import summary as screener_summary
 from .kite_auto import AutoLogin, AutoLoginError, configured as auto_login_configured, login_time as auto_login_time, restart_process
 from .kite_service import bse_code_in, bse_only_rows, IST, KiteNotReady, KiteService, TickHub, today_ist as kite_today
 from .live import LimitError, LiveManager, describe, needs_fno, needs_indicators, stopped_snapshot as live_stopped
-from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, strikes as opt_strikes
+from .options import charges as opt_charges, greeks as opt_greeks, importer as opt_importer, recorded as opt_recorded, strikes as opt_strikes
 from .options.data import NO_LIVE, OptionsData, freeze as freeze_limit, no_live_quote
 from .options.engine import fill_price, from_last, tick_for, margin_units as opt_margin_units
 from .options.session import stopped_snapshot as options_stopped
@@ -1413,7 +1413,7 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     """Turn an existing strategy (StratLab export, Pine Script, Python, MQL, AFL or plain words) into rules."""
     fmt = importer.detect(req.text, req.filename)
     base = {"source": fmt, "source_name": importer.FORMATS[fmt]}
-    if opt_importer.from_json(req.text) or opt_importer.is_options(req.text, fmt):
+    if opt_importer.from_export(req.text) or opt_importer.is_options(req.text, fmt):
         return {**base, **import_options(req.text, profile)}
     if fmt in ("stratlab", "json"):
         try:
@@ -4812,12 +4812,42 @@ def options_underlyings(profile=Depends(current_profile)):
     return options_data.underlyings()
 
 
+def recorded_options(exchange: str, underlying: str, expiry: str = "current") -> "opt_recorded.Recorded":
+    """With the live feed offline, an index's last recorded chain stands in for it (DB-001: the builder showed nothing all
+    weekend while Positioning showed the recorded chain); without a recording, the offline answer."""
+    now = positioning.ist_now()
+    rec = positioning.recorded_chain(underlying, expiry, now.date(), now) if positioning.NAMES.get(underlying) == exchange else None
+    if not rec:
+        options_ready()
+        err(503, "data_offline", offline_when("Option quotes come from the live feed, which is offline until the daily data login completes."))
+    return opt_recorded.Recorded(exchange, underlying, rec)
+
+
+@app.get("/options/recorded")
+def options_recorded(profile=Depends(current_profile)):
+    """The indices whose chains are recorded, as /options/underlyings lists them, from each one's last recording: what the
+    builder can price while the live feed is offline (DB-001)."""
+    now = positioning.ist_now()
+    out = []
+    for name, ex in positioning.NAMES.items():
+        try:
+            rec = positioning.recorded_chain(name, "current", now.date(), now)
+        except Exception as e:                     # the database: the builder says it's offline, as before
+            print("recorded chain unavailable:", name, str(e)[:120])
+            rec = None
+        if rec:
+            out.append(opt_recorded.Recorded(ex, name, rec).underlying())
+    return out
+
+
 @app.get("/options/chain")
 def options_chain(exchange: str = "NFO", underlying: str = "NIFTY", expiry: str = "current", profile=Depends(current_profile)):
-    options_ready()
     if exchange not in ("NFO", "BFO", "MCX", "CDS") or not re.fullmatch(r"[A-Z0-9&-]{1,30}", underlying) or \
             not re.fullmatch(r"current|next|month|\d{4}-\d{2}-\d{2}", expiry):
         err(400, "bad_request", "Pick an exchange, an underlying and an expiry.")
+    if not options_data.ready():
+        # the last recorded chain, marked as recorded and when: the page says "as of last close" (DB-001)
+        return opt_greeks.add_to_chain(recorded_options(exchange, underlying, expiry).chain(), positioning.ist_now())
     # each strike's IV and Greeks are model estimates, on every plan
     return opt_greeks.add_to_chain(options_data.chain(exchange, underlying, expiry), positioning.ist_now())
 
@@ -4892,19 +4922,20 @@ def admin_positioning(_=Depends(admin.admin_profile)):
 
 @app.post("/options/preview")
 def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
-    """The structure at today's at-the-money strike, priced on live bid and ask, with margin and costs."""
-    options_ready()
+    """The structure at today's at-the-money strike, priced on live bid and ask, with margin and costs. With the live feed
+    offline, an index is priced on its last recorded chain instead, marked as recorded (DB-001); no margin then."""
     s = req.strategy
-    c = options_data.contracts(s.exchange, s.underlying, s.expiry)
+    data = options_data if options_data.ready() else recorded_options(s.exchange, s.underlying, s.expiry)
+    c = data.contracts(s.exchange, s.underlying, s.expiry)
     if not c:
         err(404, "no_contracts", f"No {s.underlying} options are listed on {s.exchange} for that expiry.")
-    spot, spot_q, spot_from = options_data.spot(s.exchange, s.underlying, c.expiry)
+    spot, spot_q, spot_from = data.spot(s.exchange, s.underlying, c.expiry)
     if not spot:
         err(503, "no_spot", f"Couldn't get the {s.underlying} price just now.")
     atm = c.atm(spot)
     legs = []
     # a strike rule (delta, premium, a share of the straddle) picks on the quotes of the strikes near the money now
-    rq = options_data.quotes(opt_strikes.keys_for(c, atm, s.legs)) if opt_strikes.uses_rules(s.legs) else {}
+    rq = data.quotes(opt_strikes.keys_for(c, atm, s.legs)) if opt_strikes.uses_rules(s.legs) else {}
     rm = opt_strikes.model_for(c, atm, spot, rq, positioning.ist_now()) if opt_strikes.needs_model(s.legs) else None
     for lg in s.legs:
         why = None
@@ -4914,7 +4945,7 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
             k, why = opt_strikes.pick(c, atm, lg, rq, rm)
         legs.append({"side": lg.side, "opt": lg.opt, "lots": lg.lots, "strike": k, "key": c.key(lg.opt, k) if k is not None else None,
                      "rule": opt_strikes.describe(lg, s.offsetUnit), "pick": why})
-    q = options_data.quotes([l["key"] for l in legs if l["key"]])
+    q = data.quotes([l["key"] for l in legs if l["key"]])
     for l in legs:
         l["quote"] = q.get(l["key"]) if l["key"] else None
         # a currency option with no bid, no ask and nothing traded has no live quote: it isn't priced from a last trade
@@ -4931,12 +4962,12 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
     if all(l["key"] for l in legs):
         basket = [{"key": l["key"], "side": l["side"], "qty": l["lots"] * c.lot} for l in legs]
         if s.sizing.mode == "margin":    # sized as the session sizes it (options/engine.py margin_units)
-            units, margin_one, margin_all, sizing_note = opt_margin_units(options_data.margin, basket,
+            units, margin_one, margin_all, sizing_note = opt_margin_units(data.margin, basket,
                                                                           s.sizing.capital * s.sizing.safety)
         else:
-            margin_one = options_data.margin(basket)
+            margin_one = data.margin(basket)
             if margin_one and units:
-                margin_all = options_data.margin([{**b, "qty": b["qty"] * units} for b in basket])
+                margin_all = data.margin([{**b, "qty": b["qty"] * units} for b in basket])
     priced = [{"side": l["side"], "opt": l["opt"], "strike": l["strike"], "fill": l["fill"], "qty": l["lots"] * units * c.lot}
               for l in legs if l["strike"] is not None and l["fill"] is not None]
     charges = (opt_charges.summary(priced, opt_charges.kind_for(s.exchange), s.costs.brokerage, freeze)
@@ -4950,9 +4981,20 @@ def options_preview(req: OptionStartReq, profile=Depends(current_profile)):
             "impossible": impossible(priced) if priced and len(priced) == len(legs) else None,
             "units": units, "margin_one": margin_one, "margin": margin_all, "sizing_note": sizing_note or None,
             "legs": legs, "charges": charges,
-            "strikes": c.strikes, "expiries": options_data.expiries(s.exchange, s.underlying)[:6],
+            "strikes": c.strikes, "expiries": data.expiries(s.exchange, s.underlying)[:6],
             "spot_ts": (spot_q or {}).get("ts"),
-            **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"))}
+            **_preview_greeks(c, spot, legs, units, (spot_q or {}).get("ts"), data),
+            **_recorded_marks(data, legs)}
+
+
+def _recorded_marks(data, legs: list[dict]) -> dict:
+    """A preview priced on a recording says so and when; its legs' contract names are the recording's own keys, not the
+    exchange's symbols, so none is sent."""
+    if data is options_data:
+        return {"recorded": False}
+    for l in legs:
+        l["sym"] = None
+    return {"recorded": True, "as_of": data.as_of, "lot_known": data.lot_known}
 
 
 def impossible(priced: list[dict]) -> str | None:
@@ -4965,10 +5007,10 @@ def impossible(priced: list[dict]) -> str | None:
             "pay out. Real bids and asks don't allow that, so at least one price here is out of date.")
 
 
-def _preview_greeks(c, spot: float, legs: list[dict], units: int, spot_ts=None) -> dict:
+def _preview_greeks(c, spot: float, legs: list[dict], units: int, spot_ts=None, data=None) -> dict:
     """The model's view of a priced structure, for every plan: the shared inputs, each leg's IV and Greeks, and the
     net Greeks of the whole position (empty when the expiry has passed)."""
-    m = opt_greeks.live_model(options_data, c, spot, positioning.ist_now(), spot_ts)
+    m = opt_greeks.live_model(data or options_data, c, spot, positioning.ist_now(), spot_ts)
     if not m:
         return {"model": None, "greeks": None}
     have = [l for l in legs if l["strike"] is not None]
@@ -5088,9 +5130,10 @@ def start_options(req: OptionStartReq, profile=Depends(current_profile)):
 
 
 def import_options(text: str, profile) -> dict:
-    exact = opt_importer.from_json(text)
+    # a StratLab export loads here, never through the AI: a value that doesn't fit is clamped and said (DB-002)
+    exact = opt_importer.from_export(text)
     if exact:
-        return {"kind": "options", "strategy": exact.model_dump(), "notes": [], "used_ai": False}
+        return {"kind": "options", "strategy": exact[0].model_dump(), "notes": exact[1], "used_ai": False}
     with ai_slot(profile) as (used, limit):
         try:
             data = ai_writer.ask_json(opt_importer.SYSTEM, text[:30000])

@@ -91,8 +91,8 @@ test("paper trading: a stopped session opened from the link shows with its fold 
 });
 
 test("paper session: today's orders in view, the earlier ones folded with their P&L", async ({ page }, info) => {
-  const errors = await open(page, "/paper/p1", { "/live/sessions": rows, "/live/sessions/p1": single }, "Orders today");
-  const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders today" }) });
+  const errors = await open(page, "/paper/p1", { "/live/sessions": rows, "/live/sessions/p1": single }, "Orders");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders", exact: true }) });
   const todays = card.locator(":scope > .order-list");                                    // today's orders; the earlier ones are inside the fold
   await expect(todays.locator(".order-group")).toHaveCount(1);
   await expect(todays.locator(".order-head").first()).toContainText("Entry");
@@ -108,8 +108,8 @@ test("paper session: today's orders in view, the earlier ones folded with their 
 });
 
 test("paper session: nothing today says so in one line", async ({ page }) => {
-  await open(page, "/paper/p1", { "/live/sessions": rows, "/live/sessions/p1": { ...single, events: single.events.slice(0, 6) } }, "Orders today");
-  const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders today" }) });
+  await open(page, "/paper/p1", { "/live/sessions": rows, "/live/sessions/p1": { ...single, events: single.events.slice(0, 6) } }, "Orders");
+  const card = page.locator("section", { has: page.getByRole("heading", { name: "Orders", exact: true }) });
   await expect(card).toContainText("No orders today.");
   await expect(card.locator("details.earlier summary")).toContainText("Earlier orders (6)");
 });
