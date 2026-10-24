@@ -238,11 +238,17 @@ function NotebookView() {
 
   // this month's experiments are used up on the plan (also when viewing as a smaller plan than the owner's own use, R17-004)
   const outOfRuns = me?.usage.backtests_limit != null && me.usage.backtests_used >= me.usage.backtests_limit;
+  // what the plan won't run, said under the Run button before it's pressed, not only after (R92-002)
+  const groupCap = me?.plan_info.group_size;
+  const planBlock = !fno && inst?.fno ? "Indian F&O is on the Pro plan."
+    : !allIndicators && usesPro(s) ? "These rules use indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them."
+    : group && groupCap != null && group.members.length > groupCap
+      ? `Your ${me!.plan_info.name} plan tests up to ${groupCap} instruments in a group and this one has ${group.members.length}: pick fewer, or ${group.members.length <= LIMITS.basic.group_size ? `Basic tests up to ${LIMITS.basic.group_size}` : `Pro tests up to ${LIMITS.pro.group_size}`}.`
+    : null;
   const run = async () => {
     if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
-    if (!fno && inst?.fno) { plansToast("Indian F&O is on the Pro plan."); return; }
-    if (!allIndicators && usesPro(s)) { plansToast("This uses indicators beyond price, SMA, EMA and RSI. Basic unlocks all of them."); return; }
+    if (planBlock) { plansToast(planBlock); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -464,6 +470,7 @@ function NotebookView() {
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
           </FormGrid>
+          {planBlock && <p className="k-note" data-testid="run-plan-block">🔒 {planBlock} <Link className="link" to="/plans">Plans</Link></p>}
           <p className="k-note">
             {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}
             {runCopy(group?.members.length ?? 0, running, elapsed)}

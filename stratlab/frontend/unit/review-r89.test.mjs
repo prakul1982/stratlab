@@ -124,3 +124,16 @@ test("R90-014/R91-006: the feature check says when it ran; the library says what
   assert.match(read("src/pages/admin/PlatformPanel.tsx"), /\{r\.auto \? "Automatic check" : "Ran"\} \{fmtDateTime\(r\.at, \{ weekday: true, tz: IST, zone: true \}\)\} \(\{ago\(r\.at\)\}\)/);
   assert.match(read("src/pages/PublicLibrary.tsx"), /Each entry's dates are the prices its latest test covered\./);
 });
+
+test("R92-002/003/005: the notebook says what its plan won't run before Run; a phone chip row shows its chosen chip; a shut market hides a stale wait", () => {
+  const nb = read("src/pages/NotebookPage.tsx");
+  assert.match(nb, /\{planBlock && <p className="k-note" data-testid="run-plan-block">🔒 \{planBlock\}/);
+  assert.match(nb, /if \(planBlock\) \{ plansToast\(planBlock\); return; \}/);
+  const chips = read("src/components/kit/ChipBar.tsx");
+  assert.match(chips, /querySelector<HTMLElement>\('\[aria-pressed="true"\]'\)/);
+  assert.match(chips, /\$\{atEnd \? " end" : ""\}/);
+  const css = read("src/styles.css");
+  assert.match(css, /\.k-chipbar\.end \{ mask-image: none; -webkit-mask-image: none; \}/);
+  assert.match(css, /\.k-custom select\.k-input \{ padding-right: 36px; \}/);
+  assert.match(read("src/pages/OptionsSession.tsx"), /!\(feed === closed && \/\^Waiting for \(live prices\|the option chain\)\/\.test\(snap\.note\)\)/);
+});

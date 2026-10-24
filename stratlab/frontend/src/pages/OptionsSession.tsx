@@ -112,7 +112,8 @@ export function OptionsSession() {
       {/* "the next market day", not "tomorrow": a holiday or a weekend can come first (R67-003: "tomorrow" was Tue 20 Oct, a
           holiday); and the engine's own note saying the same is not shown under it */}
       {running && a.halted && <Notice tone="warn">The daily loss cap was hit. No more trades today; it trades again from the next market day.</Notice>}
-      {running && snap.note && !p && !(a.halted && /loss cap/i.test(snap.note)) && <Notice>{snap.note}</Notice>}
+      {/* a "waiting for prices" note left from the last tick isn't shown while the market is shut: nothing is awaited (R92-005) */}
+      {running && snap.note && !p && !(a.halted && /loss cap/i.test(snap.note)) && !(feed === closed && /^Waiting for (live prices|the option chain)/.test(snap.note)) && <Notice>{snap.note}</Notice>}
       {snap.signal && (
         <Card label="Signal">
           <div className="k-row">

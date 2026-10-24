@@ -32,6 +32,21 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
   const num = useRef<HTMLInputElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (open) num.current?.focus(); }, [open]);
+  // a phone's one scrolling row: the chosen chip is scrolled clear of the faded end, and the fade goes once the row is
+  // scrolled to its end, so a chosen last chip ("All") doesn't read as unavailable (R92-003)
+  const bar = useRef<HTMLDivElement>(null);
+  const [atEnd, setAtEnd] = useState(false);
+  const edge = () => { const b = bar.current; if (b) setAtEnd(b.scrollWidth - b.clientWidth - b.scrollLeft < 2); };
+  useEffect(() => {
+    const b = bar.current;
+    const on = b?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (b && on && b.scrollWidth > b.clientWidth) {
+      const r = b.getBoundingClientRect(), c = on.getBoundingClientRect(), fade = 32;
+      if (c.right > r.right - fade) b.scrollLeft += c.right - r.right + fade;
+      else if (c.left < r.left) b.scrollLeft -= r.left - c.left;
+    }
+    edge();
+  }, [value, mine.length]);
 
   const all = [...options, ...mine.filter((m) => !options.some((o) => o.value === m.value))];
   const count = Number(n);
@@ -61,7 +76,7 @@ export function ChipBar({ label, options, value, onChange, custom, wrap }: {
     <div className="k-chipwrap">
       {/* "+ Custom" sits beside the scrolling row, not at its faded end, so it is never cut off at the card's edge (R7O-010) */}
       <div className={`k-chiprow${wrap ? " wrap" : ""}`} role="group" aria-label={label}>
-        <div className={`k-chipbar${wrap ? " wrap" : ""}`}>
+        <div ref={bar} className={`k-chipbar${wrap ? " wrap" : ""}${atEnd ? " end" : ""}`} onScroll={edge}>
           {all.map((o) => <button key={o.value} type="button" className="k-chip" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>{o.label}</button>)}
         </div>
         {custom && <button ref={opener} type="button" className="k-chip add" aria-expanded={open} onClick={() => setOpen((x) => !x)}>+ Custom</button>}
