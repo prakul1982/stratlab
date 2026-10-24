@@ -137,7 +137,11 @@ def market_sections(f: dict) -> list[dict]:
                                                                f"The next session is {_day(reopen)}.")]})
     heads = [h for h in f.get("headlines") or [] if not banned(h["headline"])]
     if heads:
-        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source")) for h in heads]})
+        # a week's headlines each say their day: two that say "today" with different Sensex falls read as a contradiction (R93-004)
+        # (kept beside the title, so the stored title stays the source's own for the checks that re-read it)
+        from .content import _local_day
+        out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source"),
+                    day=_day(d) if f["weekly"] and (d := _local_day(h.get("at"), region)) else None) for h in heads]})
     return out
 
 
@@ -482,7 +486,7 @@ def _row(it: dict) -> kit.Row:
         value = None if price is None else kit.money(price, it["currency"], 2) if it.get("currency") else kit.num(price)
         return kit.Row(it["text"], value=value, change=it.get("change_pct"),
                        since=it.get("since"), url=it.get("url"), lines=lines)
-    return kit.Row(it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
+    return kit.Row(f"{it['day']}: {it['text']}" if it.get("day") else it["text"], url=it.get("url"), lines=lines, source=it.get("source"))
 
 
 def link_path(issue_id: str, n: int) -> str:

@@ -171,6 +171,8 @@ def _stock_alert() -> tuple[str, str, str]:
 def _events() -> tuple[str, str, str]:
     from . import market_events as M
     day = _today() + timedelta(days=1)
+    while day.weekday() >= 5:            # an RBI decision and an expiry fall on a weekday (R93-009: "Sun 25 Oct")
+        day += timedelta(days=1)
     text = M.reminder_text([{"title": "RBI policy decision", "time": "10:00"}, {"title": "NIFTY weekly expiry"}], 1, day)
     return _alerts_email(f"StratLab: RBI policy decision and 1 more, {M._short(day)}", text, "/trade/events", "Market events",
                          "You get this because you turned on market event reminders on StratLab.")

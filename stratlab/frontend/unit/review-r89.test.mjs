@@ -137,3 +137,7 @@ test("R92-002/003/005: the notebook says what its plan won't run before Run; a p
   assert.match(css, /\.k-custom select\.k-input \{ padding-right: 36px; \}/);
   assert.match(read("src/pages/OptionsSession.tsx"), /!\(feed === closed && \/\^Waiting for \(live prices\|the option chain\)\/\.test\(snap\.note\)\)/);
 });
+
+test("R93-004: a weekly brief's headline shows the day it ran", () => {
+  assert.match(read("src/pages/NewsPage.tsx"), /\{it\.day && <span className="k-note" data-testid="news-item-day">\{it\.day\}: <\/span>\}<ItemText/);
+});

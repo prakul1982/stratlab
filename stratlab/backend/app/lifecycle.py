@@ -411,7 +411,8 @@ def sample_invoice(now: datetime) -> dict:
     total = float(PLANS["pro"]["price"])
     lines, supply, note = invoices.tax_lines(total, s, buyer)
     tax = round(sum(x["amount"] for x in lines), 2)
-    return {"number": f"{s.get('prefix') or 'SL'}/{invoices.fy(now)}/0001", "date": now.astimezone(IST).date().isoformat(),
+    # "SAMPLE", not "0001": a forwarded test can't be taken for the first real invoice (R93-007)
+    return {"number": f"{s.get('prefix') or 'SL'}/{invoices.fy(now)}/SAMPLE", "date": now.astimezone(IST).date().isoformat(),
             "payment_id": "pay_sample", "seller": s, "buyer": buyer, "supply": supply, "note": note, "currency": "INR",
             "item": {"description": "StratLab Pro plan, monthly subscription", "sac": invoices.SAC, "taxable": round(total - tax, 2)},
             "taxes": lines, "total": total, "place_of_supply": invoices.STATES.get(buyer["state"], "India")}
