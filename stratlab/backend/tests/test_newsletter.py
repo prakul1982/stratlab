@@ -590,6 +590,17 @@ def test_a_us_stocks_since_day_is_the_session_its_change_is_measured_from(monkey
     assert label == "since Mon 12 Oct" and line.endswith("since Mon 12 Oct")
 
 
+def test_a_us_stock_whose_last_close_is_the_day_before_the_issue_says_which_close_it_is(monkeypatch):
+    # R90-006: the Fri 23 Oct issue (sent before the US opened) showed NVDA's Thursday close as if it were Friday's
+    row = _row(monkeypatch, "US", "AAPL", date(2026, 10, 14), False, _bars("2026-10-13"))
+    assert row["price_day"] == "2026-10-13"
+    f = {"stocks": [row], "since": "2026-10-13", "day": "2026-10-14"}
+    assert write.stock_sections(f)[0]["items"][0]["since"] == "from Mon 12 Oct to the Tue 13 Oct close"
+    assert write.stock_lines(row, "2026-10-13", "2026-10-14")[0]["text"].endswith("from Mon 12 Oct to the Tue 13 Oct close")
+    # an Indian stock closed on the issue's own day keeps "since"
+    assert write._move_span({"since_day": "2026-10-13", "price_day": "2026-10-14"}, "2026-10-13", "2026-10-14") == "since Tue 13 Oct"
+
+
 def test_a_weekly_stocks_since_day_is_the_last_session_on_or_before_the_week_back(monkeypatch):
     """A week back from Fri 9 Oct is the 2 Oct holiday: the change is from the Thu 1 Oct close, not "Fri 2 Oct"."""
     row = _row(monkeypatch, "IN", "TCS", date(2026, 10, 9), True, _bars("2026-10-09", skip=("2026-10-02",), tz="+05:30"))

@@ -131,10 +131,21 @@ def market_sections(f: dict) -> list[dict]:
     return out
 
 
-def stock_lines(r: dict, since: str) -> list[dict]:
+def _move_span(r: dict, since: str, day: str | None) -> str:
+    """Over what a stock's move is: "since Wed 21 Oct" to the issue's own day, or, when the stock's last close is an
+    earlier day's (a US stock in an issue sent before the US opens), both ends: "from Wed 21 Oct to the Thu 22 Oct
+    close" (R90-006: NVDA's Thursday close read as Friday's under an issue dated Friday)."""
+    start = _day(r.get("since_day") or since)
+    end = r.get("price_day")
+    if end and day and str(end)[:10] < str(day)[:10]:
+        return f"from {start} to the {_day(end)} close"
+    return f"since {start}"
+
+
+def stock_lines(r: dict, since: str, day: str | None = None) -> list[dict]:
     lines = []
     if r.get("change_pct") is not None:
-        lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} since {_day(r.get('since_day') or since)}", "url": None})
+        lines.append({"text": f"Price {_price(r['price'], r.get('region'))}, {_pct(r['change_pct'])} {_move_span(r, since, day)}", "url": None})
     if r.get("stage_changed"):
         lines.append({"text": f"Now {STAGE_NAME.get(r['stage'], 'Stage ' + str(r['stage']))}"
                               + (f" ({STAGE_WHY[r['stage']]})" if r['stage'] in STAGE_WHY else "")
@@ -180,10 +191,10 @@ def stock_sections(f: dict) -> list[dict]:
     out = []
     if f.get("stocks"):
         out.append({"title": "What changed for your stocks", "items": [
-            _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"])[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
+            _item(r["symbol"], stock_url(r["region"], r["symbol"]), stock_lines(r, f["since"], f.get("day"))[1 if r.get("change_pct") is not None else 0:], price=r.get("price"),
                   region=r.get("region"),
                   currency=CURRENCY.get(r.get("region") or ""),
-                  change_pct=r.get("change_pct"), since=f"since {_day(r.get('since_day') or f['since'])}" if r.get("change_pct") is not None else None)
+                  change_pct=r.get("change_pct"), since=_move_span(r, f["since"], f.get("day")) if r.get("change_pct") is not None else None)
             for r in f["stocks"]]})
     if f.get("results"):
         out.append({"title": "Results this week", "items": [result_item(r) for r in f["results"]]})

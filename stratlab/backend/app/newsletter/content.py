@@ -589,7 +589,7 @@ def stock_row(region: str, sym: str, day: date, weekly: bool, since: str) -> dic
     stage_moved = now["stage"] is not None and stage_before is not None and now["stage"] != stage_before
     changed = bool(stage_moved or signal or flags or trades or (surv or {}).get("changes") or (change is not None and abs(change) >= MOVE[weekly]))
     return {"symbol": sym, "region": region, "price": round(now["price"], 2), "change_pct": change, "stage": now["stage"],
-            "stage_before": stage_before, "stage_changed": stage_moved, "since_day": str(before_bars[-1]["t"])[:10] if before_bars else None, "st_s2": signal, "filings": flags, "deals": trades, "surveillance": surv, "headlines": news,
+            "stage_before": stage_before, "stage_changed": stage_moved, "since_day": str(before_bars[-1]["t"])[:10] if before_bars else None, "price_day": last, "st_s2": signal, "filings": flags, "deals": trades, "surveillance": surv, "headlines": news,
             "changed": changed}
 
 
