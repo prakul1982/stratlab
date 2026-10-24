@@ -61,7 +61,7 @@ export const PAGES: PageMeta[] = [
     description: "What StratLab collects and why, who processes it, what your browser stores before and after sign-in, and how to see, correct or delete your data.", index: true, updated: "2026-10-18",
     heading: "Privacy policy" },
   { path: "/refunds", title: "Refunds · StratLab",
-    description: "How to cancel a StratLab plan, when a payment is refunded and how to ask. You can cancel any time from Account.", index: true, updated: "2026-09-26",
+    description: "How to cancel a StratLab plan, the 7-day refund on any payment and how to ask. You can cancel any time from Account.", index: true, updated: "2026-10-25",
     heading: "Cancellation and refunds" },
   { path: "/contact", title: "Contact · StratLab",
     description: "How to reach StratLab for help, billing and refunds, or a privacy request, with the email address for each.", index: true, updated: "2026-09-26",

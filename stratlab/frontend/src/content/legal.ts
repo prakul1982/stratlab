@@ -15,7 +15,7 @@ export const DEFAULT_BUSINESS: Business = { name: "StratLab", email: "support@st
   privacy: "privacy@stratlab.studio", address: "", gstin: "" };
 
 /** The day each page's words last changed (the sitemap's dates, backend/app/site_pages.py, say the same). */
-export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "18 October 2026", "/refunds": "26 September 2026", "/contact": "26 September 2026" };
+export const LEGAL_UPDATED: Record<string, string> = { "/terms": "16 October 2026", "/privacy": "18 October 2026", "/refunds": "25 October 2026", "/contact": "26 September 2026" };
 
 export type Tok = { t: "text" | "b" | "code"; s: string } | { t: "link"; s: string; to: string } | { t: "mail"; s: string; to: string };
 
@@ -122,8 +122,9 @@ export const LEGAL_BLOCKS: Record<string, Block[]> = {
     ] },
     { h: "Refunds" },
     { ul: [
-      "Because you can use a paid plan straight away and cancel any time before it renews, payments for a period that has started aren't refunded.",
-      "We refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.",
+      "Changed your mind? Ask within 7 days of any payment, monthly or yearly, and we refund it in full. The plan then ends and your account moves to the Free plan.",
+      "After those 7 days, the period you've paid for isn't refunded; you can still cancel any time so it doesn't renew.",
+      "Whenever it happens, we refund in full if you were charged twice, charged after cancelling, or charged but your plan didn't activate and we can't fix it.",
       "To ask for a refund, email [{billing}](mail:billing) from your account's email with the payment date. We reply within 2 working days. Approved refunds go back to the original payment method within 5–7 working days (your bank may take longer to show it).",
     ] },
     { h: "Delivery" },
