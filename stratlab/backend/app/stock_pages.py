@@ -1962,6 +1962,21 @@ def pe_profit_gap(f: dict):
     return (pe, implied, profit) if abs(implied - pe) > 0.1 * pe else None
 
 
+def ttm_year_gap(f: dict) -> tuple[float, float, str] | None:
+    """(last 12 months' net profit, the newest year's, that year) when they differ by more than 5%, for a page with no
+    P/E note to say why: the trailing figure is the four latest quarters (R91-005: AAPL's "last 12 months 128,930"
+    beside the table's FY Sep 2025 112,010, with nothing on the page saying how both can be right)."""
+    ttm = _num(f.get("profit_ttm"))
+    years = [y for y in f.get("years") or [] if isinstance(y, dict) and y.get("year") and _num(y.get("profit")) is not None]
+    if ttm is None or not years or pe_profit_gap(f):
+        return None
+    last = years[-1]
+    p = _num(last.get("profit"))
+    if not p or abs(ttm - p) <= 0.05 * abs(p):
+        return None
+    return ttm, p, str(last.get("year"))
+
+
 def extreme(f: dict) -> bool:
     """Whether a margin on the page is beyond ±100%: revenue tiny next to costs or profit, so the margins are arithmetic,
     not a description of the business."""
@@ -2015,6 +2030,9 @@ def _notes(f: dict) -> list[str]:
                    f'(₹{_amount(f, profit)} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}. '
                    "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "
                    'the table below.</p>')
+    if ttm_year_gap(f):
+        out.append('<p class="note" data-ttm-basis>The net profit for the last 12 months is the four latest reported quarters, so it '
+                   "can differ from the newest year's in the table below.</p>")
     if behind(f):
         out.append(f'<p class="note" data-behind>The price shown is from {e(_date(f.get("price_at")))}. The market has '
                    "closed since, and this page hasn't read a newer price yet (or the stock hasn't traded since).</p>")
