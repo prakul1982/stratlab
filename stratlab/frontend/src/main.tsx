@@ -17,6 +17,7 @@ import { AccountRetry, AccountWait } from "./components/AccountWait";
 import { SPACE_HOMES } from "./lib/spaces";
 import { endsAt, endsAtShort } from "./lib/offer";
 import { importWithRetry } from "./lib/lazyRetry";
+import { reconnectAt } from "./lib/dataBack";
 
 // every page loads when it's opened, so the first visit only downloads the page it shows
 const page = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
@@ -139,12 +140,9 @@ warmFirstPage(location.pathname);
 /** Indian data is offline: say why in plain words. On a weekend or holiday that's expected, not a fault. */
 function DataBanner({ note }: { note: { closed: "weekend" | "holiday" | null; back_at: string | null } | null }) {
   // the day and the time in India, where the login happens, and in the reader's own clock when that is another zone
-  // (R46-011: "02:30 your time" on a Saturday was Monday's; R48-003: "your time" was UTC and never said IST)
-  const at = note?.back_at ? new Date(note.back_at) : null;
-  const fmt = (tz?: string) => at ? `${at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: tz }).replace(",", "")}, ${at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz })}` : "";
-  const local = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
-  const inIndia = local === "Asia/Kolkata" || local === "Asia/Calcutta";
-  const back = at ? `${fmt("Asia/Kolkata")} IST${inIndia ? "" : ` (${fmt()} your time)`}` : null;
+  // (R46-011: "02:30 your time" on a Saturday was Monday's; R48-003: "your time" was UTC and never said IST); the market
+  // picker and the questions about an idea say it from the same place (DA-004)
+  const back = reconnectAt(note);
   const others = <span className="banner-more"> Crypto, the other markets and your own data work as usual.</span>;
   if (note?.closed) {
     const why = note.closed === "weekend" ? "closed for the weekend" : "closed today for an exchange holiday";

@@ -4,11 +4,11 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
 import { currencySymbol, dateOnly, money, pct, periodName, TF_NAME } from "../lib/format";
-import { isAutoNotebookName, rebuiltRisk, riskForCurrency, usesPro } from "../lib/rules";
+import { isAutoNotebookName, rebuiltRisk, riskForCurrency, statedIn, usesPro } from "../lib/rules";
 import { runCopy, runTime } from "../lib/notebookText";
 import type { Experiment, Instrument, LiveRow, Notebook, Strategy, Tf } from "../lib/types";
 import { getUpload } from "../lib/upload";
-import { makeSaver, type SaveState } from "../lib/notebookSave";
+import { fitGaps, makeSaver, type SaveState } from "../lib/notebookSave";
 import { track, trackBacktest } from "../lib/analytics";
 import { spanCheck, spanDays, SPAN_UNITS } from "../lib/intervals";
 import { GapsCard, type GapInfo } from "../components/Gaps";
@@ -78,6 +78,9 @@ export function useNotebook(id: string | undefined, page?: string) {
     if (p.question !== undefined) body.question = p.question;
     if (p.notes !== undefined) body.notes = p.notes;
     if (p.strategy !== undefined) body.strategy = p.strategy;
+    // the questions go through the same queue as the pick they follow: two requests at once could each write over the other's
+    // field, and a pick made just before leaving was lost while its question stayed ticked (DA-003)
+    if (p.gaps !== undefined) { if (p.gaps) body.gaps = fitGaps(p.gaps); else body.clearGaps = true; }
     if (p.instrumentId !== undefined) body.instrument = p.instrumentId ?? "";
     // an upload's currency is the one picked for it (the server can't tell from the file)
     if (p.instrumentId?.startsWith("CSV:") && p.instrument && "currency" in p.instrument && p.instrument.currency) body.currency = p.instrument.currency;
@@ -180,8 +183,8 @@ function NotebookView() {
   // notebook opened again shows the ones still open (R5O-010)
   const saveGaps = useCallback((g: GapInfo) => {
     setGaps(g);
-    if (id) void api(`/notebooks/${id}`, { method: "PUT", body: { gaps: g } }).catch(() => undefined);
-  }, [id]);
+    if (id) patch({ gaps: g }, true);
+  }, [id, patch]);
   const arrived = (loc.state as { gaps?: GapInfo } | null)?.gaps ?? null;
   const loadedId = nb?.id;
   useEffect(() => {
@@ -249,6 +252,9 @@ function NotebookView() {
     if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
     if (planBlock) { plansToast(planBlock); return; }
+    // nothing chosen to test on: the run would go to the default instrument and its defaults for money (BTC/USD with $500,000
+    // and a $20 order fee, DA-003), so it waits for a choice
+    if (!inst && !group) { notify("Choose what to test it on first: a market and an instrument, or a group.", { label: "Choose market", run: () => nav(`/n/${nb.id}/market`) }); return; }
     const body: Record<string, unknown> = { label: label.trim(), days: period };
     if (isUpload) {
       const up = getUpload(nb.id);
@@ -357,7 +363,7 @@ function NotebookView() {
     else if (action === "note") notesRef.current?.focus();
     else if (action === "edit_rules") document.getElementById("rules-h")?.scrollIntoView({ behavior: "smooth", block: "start" });
     else if (action === "loosen_entry") setStrategy({ ...s, entry: s.entry.map((c) => ({ ...c, op: c.op === "xa" ? "gt" : c.op === "xb" ? "lt" : c.op })) });
-    else if (action === "trend_filter") setStrategy({ ...s, entryJoin: "all", entry: [...s.entry, { l: { t: "price" }, op: "gt", r: { t: "sma", p: 200 } }] });
+    else if (action === "trend_filter") setStrategy({ ...s, entryJoin: "all", entry: [...s.entry, { l: { t: "price" }, op: s.side === "short" ? "lt" : "gt", r: { t: "sma", p: 200 } }] });
     if (["loosen_entry", "trend_filter", "longer_period"].includes(action)) notify("Rules updated. Run the next experiment to compare.");
   };
   applyRef.current = apply;
@@ -437,18 +443,25 @@ function NotebookView() {
           </ol>
         )}
 
-        {gaps && (
+        {/* the questions are for before the first run: once the idea has been tested they are answered or no longer matter, and
+            "Question 1 of 3" beside a finished experiment reads as unfinished (DA-011) */}
+        {gaps && experiments.length === 0 && (
           <GapsCard s={s} gaps={gaps} hasInstrument={!!inst || !!group} currency={currency}
             onStrategy={setStrategy}
             onInstrument={(i) => patch({ instrument: i, instrumentId: i.id, strategy: { ...s, risk: riskForCurrency(s.risk, i.currency) } }, true)}
-            onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); void api(`/notebooks/${nb.id}`, { method: "PUT", body: { clearGaps: true } }).catch(() => undefined); }}
+            onPickMarket={() => nav(`/n/${nb.id}/market`)} onDone={() => { setGaps(null); patch({ gaps: null }, true); }}
             onAnswered={(answered) => saveGaps({ ...gaps, answered })} />
         )}
-        {!gaps && s.entry.length > 0 && !s.exit.length && !(s.shortExit ?? []).length && (
-          <Notice tone="warn" role="status">No sell rule is set: {s.risk.sl > 0 || s.risk.tgt > 0 ? `a trade closes only at the ${[s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target"].filter(Boolean).join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test."} Add one under The rules.</Notice>
+        {(!gaps || experiments.length > 0) && s.entry.length > 0 && !s.exit.length && !(s.shortExit ?? []).length && (
+          <Notice tone="warn" role="status">No sell rule is set: {(() => {
+            // what closes a trade without a sell rule: the stop, the target, the trailing stop, a time limit, the day's square-off
+            const ways = [s.risk.sl > 0 && "stop loss", s.risk.tgt > 0 && "target", (s.risk.trail ?? 0) > 0 && "trailing stop", (s.risk.maxBars ?? 0) > 0 && "time limit",
+              s.tf !== "1d" && s.session?.squareoff && `${s.session.squareoff} square-off`].filter(Boolean);
+            return ways.length ? `a trade closes only at the ${ways.join(" or the ")}, or at the end of the test.` : "a trade stays open until the end of the test.";
+          })()} Add one under The rules.</Notice>
         )}
 
-        <RulesCard s={s} currency={currency} onChange={setStrategy}
+        <RulesCard s={s} currency={currency} onChange={setStrategy} defaultStop={!!gaps && experiments.length === 0 && !gaps.mentioned.includes("sl") && !gaps.answered?.sl && !statedIn(s.text).includes("sl")}
           onRebuilt={(g) => { if (gaps) saveGaps({ ...gaps, mentioned: [...new Set([...gaps.mentioned, ...g.mentioned])], notes: g.notes, warnings: g.warnings }); }} />
 
         <Card id="exp-h" label="Experiments">
@@ -470,6 +483,11 @@ function NotebookView() {
               <Info label="What happens when I run an experiment?">{HELP.runExperiment}</Info>
             </FormActions>
           </FormGrid>
+          {!inst && !group && (
+            <div data-testid="run-needs-market">
+              <Notice tone="warn" role="status" action={{ label: "Choose market", to: `/n/${nb.id}/market` }}>Choose what to test it on before you run it: the rules need a market and an instrument, or a group.</Notice>
+            </div>
+          )}
           {planBlock && <p className="k-note" data-testid="run-plan-block">🔒 {planBlock} <Link className="link" to="/plans">Plans</Link></p>}
           <p className="k-note">
             {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? " (limit reached)" : ""}. ` : ""}

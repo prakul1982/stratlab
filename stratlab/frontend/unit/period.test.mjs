@@ -7,8 +7,8 @@ import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDay
 const days = (n, end = "2026-10-05") => Array.from({ length: n }, (_, i) => new Date(Date.parse(end) - (n - 1 - i) * 86_400_000).toISOString().slice(0, 10));
 
 test("a period is a preset, all, or a number with a unit", () => {
-  for (const p of ["3m", "6m", "1y", "2y", "all", "45 days", "2 weeks", "18 months", "3 years"]) assert.ok(isPeriod(p), p);
-  for (const p of ["", "5y", "0 days x", "1000 days", "ten days", null, 3]) assert.ok(!isPeriod(p), String(p));
+  for (const p of ["3m", "6m", "1y", "2y", "all", "45 days", "2 weeks", "18 months", "3 years", "1000 days"]) assert.ok(isPeriod(p), p);
+  for (const p of ["", "5y", "0 days x", "10000 days", "ten days", null, 3]) assert.ok(!isPeriod(p), String(p));
 });
 
 test("periodDays counts calendar days, and all has none", () => {

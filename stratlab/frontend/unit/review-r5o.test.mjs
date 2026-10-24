@@ -150,8 +150,8 @@ test("notebook defaults invent nothing, and the sell question stays (R5O-010)", 
   assert.match(read("src/components/IdeaComposer.tsx"), /const mentioned = \[\.\.\.new Set\(\[\.\.\.\(out\.mentioned \|\| \[\]\)/);
   assert.match(read("src/components/ImportStrategy.tsx"), /\{ \.\.\.s\.risk, sl: 0, tgt: 0, \.\.\.\(out\.risk \|\| \{\}\) \}/);
   const page = read("src/pages/NotebookPage.tsx");
-  assert.match(page, /body: \{ gaps: g \}/);                       // the questions are saved with the notebook
-  assert.match(page, /body: \{ clearGaps: true \}/);
+  assert.match(page, /patch\(\{ gaps: g \}, true\)/);                // the questions are saved with the notebook, in the same queue as the pick (DA-003)
+  assert.match(page, /patch\(\{ gaps: null \}, true\)/);
   assert.match(page, /No sell rule is set:/);
   assert.match(page, /const DEFAULT_DAILY_DAYS = 1825;/);         // "years of real prices": 5 years by default
   assert.doesNotMatch(page, /useState\("365"\)/);

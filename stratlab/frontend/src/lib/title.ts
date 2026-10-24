@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { NAV, locate, locateGroup } from "./nav";
 import { isAppPath } from "./deepLinks";
+import { HOME_TITLE } from "../content/seo";
 
 /** The browser tab's title. Every page gets one from the one map of pages (lib/nav.ts): "Holdings · StratLab". A page
  * that knows something more specific (a company's symbol and price, a notebook's name) sets it with `useDocTitle`. */
@@ -80,14 +81,16 @@ export const PUBLIC_TITLES: Record<string, string> = {
 export const NOT_FOUND_TITLE = withBrand("Page not found");
 
 /** The title for a visitor who isn't signed in: "Sign in · Options builder · StratLab" on an app address (so a tab says
- * what it is waiting for), "Plans · StratLab" on /pricing and /plans, "Terms · StratLab" on a policy, "Page not found ·
+ * what it is waiting for), "Plans · StratLab" on /pricing and "Plans and prices · StratLab" on /plans, "Terms · StratLab" on a policy, "Page not found ·
  * StratLab" where nothing is, the brand's line on the landing page itself. */
 export function signedOutTitle(path: string): string {
   const p = path.split(/[?#]/)[0].replace(/(.)\/$/, "$1");
   if (PUBLIC_TITLES[p]) return withBrand(PUBLIC_TITLES[p]);
-  if (p === "/pricing" || p === "/upgrade" || p === "/plans") return withBrand("Plans");
+  if (p === "/plans") return withBrand("Plans and prices");      // the page's own title in content/seo.ts (DK-006)
+  if (p === "/pricing" || p === "/upgrade") return withBrand("Plans");
   if (p === "/help") return withBrand("Help");
-  if (p === "/" || p === "/features") return DEFAULT_TITLE;
+  if (p === "/") return HOME_TITLE;
+  if (p === "/features") return DEFAULT_TITLE;
   if (!isAppPath(p)) return NOT_FOUND_TITLE;
   if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Sign in");     // never names a page only some open
   const t = titleFor(p);

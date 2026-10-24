@@ -61,6 +61,7 @@ export function checksBeyond(line: string, label: string | null | undefined): st
 }
 
 export { checksOf, headTone, trails, unseenLabel } from "../lib/tradeUi";
+export { holdResult, libraryTally, liveOptions } from "../lib/libraryList";
 
 /** The return beside buy and hold, as the notebook's verdict says it (R5O-014). */
 /** A plain badge beside the checks badge when the strategy trails buy and hold, so "Passed" never reads as "beat the market". */

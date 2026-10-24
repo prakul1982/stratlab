@@ -459,6 +459,8 @@ def one_per_company(rows: list[dict], twins: dict[str, str] | None = None) -> li
     for r in rows:
         if r["symbol"].isdigit() and (twins.get(r["symbol"]) in nse or _NAME_WORDS.sub(" ", r["name"].lower()).strip() in names):
             continue
+        if not r["symbol"].isdigit() and twins.get(r["symbol"]) in nse and twins[r["symbol"]] != r["symbol"]:
+            continue                     # a BSE page symbol of a company NSE lists too (DK-025)
         keep.append(r)
     return keep
 

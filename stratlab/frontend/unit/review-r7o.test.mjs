@@ -42,13 +42,13 @@ test("Admin: a running job says Running on Overview too, and only errors since t
   assert.ok(attention(sv, null, [job]).some((a) => a.text === "1 server error since the last restart."));
 });
 
-test("Plans: a price converted from the rupee charge says so; dollars stay as set (R7O-008)", async () => {
-  const { approx } = await import("../src/lib/approx.ts");
-  const sar = { symbol: "SAR ", basic: 27, pro: 77, charged_in: "INR", converted: true };
-  assert.equal(approx(sar, "INR"), "≈ ");
-  assert.equal(approx({ ...sar, symbol: "$", converted: false }, "INR"), "");   // dollars: $8 and $20 as the owner set them
-  assert.equal(approx(sar, "SAR"), "");                          // charged in riyals: the amount is the charge itself
-  assert.match(read("src/pages/PlansPage.tsx"), /shown: approx\(row, chargedIn\) \+ money/);
+test("Plans: a price converted from the rupee charge is said as 'about', beside the rupee price; dollars stay as set (R7O-008, DK-001)", async () => {
+  // changed on purpose in DK-001: the card shows the rupee price, and the converted amount (the "≈ SAR 27" it used to lead with) is "about SAR 27 at today's rate" beside it
+  const { aboutLine } = await import("../src/lib/rupeeCharge.ts");
+  const sar = { symbol: "SAR ", basic: 27, pro: 77, basic_year: 270, pro_year: 770, charged_in: "INR", yearly_charged_in: "INR", converted: true };
+  assert.equal(aboutLine(sar, "SAR", "basic"), "about SAR 27 at today's rate");
+  assert.equal(aboutLine({ ...sar, symbol: "$", converted: false }, "USD", "basic"), null);   // dollars: $8 and $20 as the owner set them, no conversion claimed
+  assert.match(read("src/pages/PlansPage.tsx"), /aside: aboutLine\(row, currency, field\)/);
 });
 
 test("A paper session's minute-by-minute value across days is labelled by day, never one day's clock times (R7O-010)", async () => {

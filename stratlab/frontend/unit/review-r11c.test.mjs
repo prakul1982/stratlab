@@ -30,7 +30,7 @@ test("R11C-001: a rule edit keeps the name the person gave the notebook", () => 
 test("R11C-004: the plain-words converter reads the reviewer's sentences as written", () => {
   const a = R.parseStrategyText("On 15 minute candles, buy when the price closes above the 20-period SMA and RSI 14 is above 55. Sell when RSI 14 drops below 45.");
   assert.deepEqual(a.entry, [{ l: { t: "price" }, op: "gt", r: { t: "sma", p: 20 } }, { l: { t: "rsi", p: 14 }, op: "gt", r: { t: "num", v: 55 } }]);
-  assert.deepEqual(a.exit, [{ l: { t: "rsi", p: 14 }, op: "lt", r: { t: "num", v: 45 } }]);     // "closes above" is not a sell
+  assert.deepEqual(a.exit, [{ l: { t: "rsi", p: 14 }, op: "xb", r: { t: "num", v: 45 } }]);     // "closes above" is not a sell; "drops below" is a move across (DA-002)
   const b = R.parseStrategyText("Buy when RSI 14 falls below 30 and price is above the 200-day SMA. Sell when RSI 14 rises above 55 or after 15 bars. Stop loss 3%.");
   assert.equal(b.risk.maxBars, 15);
   assert.equal(b.risk.sl, 3);

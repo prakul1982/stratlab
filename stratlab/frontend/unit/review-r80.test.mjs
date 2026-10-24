@@ -17,7 +17,7 @@ test("R80-001: the Pro card and the FAQ say the same about backtesting options",
   assert.doesNotMatch(opt.a[0], /^No\./);
   const plans = read("src/lib/plans.ts");
   assert.match(plans, /in notebooks, each backtested on its own past prices/);
-  assert.match(plans, /Options paper trading entered on your own rules' signals, with strikes picked by delta or premium/);
+  assert.match(plans, /Options paper trading on your own rules' signals, strikes picked by delta or premium/);        // reworded in DK-003
 });
 
 test("R80-005: a losing strategy's line says its checks ran", async () => {

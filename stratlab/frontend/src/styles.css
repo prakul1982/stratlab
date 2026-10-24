@@ -616,7 +616,9 @@ td.num, .num { font-family: var(--sans); }
 .lp-cta-2 { min-height: 54px; padding: 0 22px; font-size: 16px; }
 /* hero demo */
 .lp-demo { display: flex; flex-direction: column; gap: 12px; }
-.lp-demo-pause { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink-2); font-size: 13px; text-decoration: underline; cursor: pointer; }
+.lp-demo-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 16px; }
+.lp-demo-bar .lp-demo-tabs { align-self: center; }
+.lp-demo-pause { min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink-2); font-size: 13px; text-decoration: underline; cursor: pointer; }
 .lp-demo-tabs { align-self: flex-start; display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: var(--chip); }
 .lp-demo-tabs button { border: 0; background: transparent; border-radius: 8px; padding: 0 12px; min-height: 36px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--ink-2); }
 .lp-demo-tabs button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
@@ -634,7 +636,8 @@ td.num, .num { font-family: var(--sans); }
 /* sections */
 /* a section scrolled to (/pricing, /faq) starts below the sticky header, about 71 px tall on a phone (R12-008) */
 .lp-sec { padding: clamp(48px, 6vw, 80px) 0; scroll-margin-top: 76px; }
-.lp-sec.lp-sec-plans { padding-bottom: 0; }
+/* /plans on its own starts closer to the header, so the cards are above the fold (DK-004) */
+.lp-sec.lp-sec-first { padding-top: clamp(28px, 4vw, 48px); }
 .lp-alt { background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
 .lp-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
@@ -680,12 +683,17 @@ td.num, .num { font-family: var(--sans); }
 .lp-h3 { font-size: clamp(24px, 2.6vw, 32px); line-height: 1.1; font-weight: 400; letter-spacing: -.02em; }
 .lp-anchor { scroll-margin-top: 80px; }
 .lp-split-top { align-items: start; }
+/* the FAQ is long: its heading stays in view beside it instead of leaving a blank column under it (DK-009) */
+@media (min-width: 1001px) { .lp-faq-head { position: sticky; top: 96px; } }
+.lp-help-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lp-help-links a { display: inline-flex; align-items: center; min-height: 40px; }
 .lp-tools-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* the plans: three cards, Pro outlined */
 .lp-prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .lp-price { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
 .lp-price-top { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.lp-amount-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
 .lp-amount { font-size: 44px; letter-spacing: -.02em; line-height: 1.05; }
 .lp-amount .small { font-family: var(--sans); }
 .lp-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; }
@@ -1517,6 +1525,12 @@ ul.leg-picks { margin: 0; padding-left: 18px; }
 .k-table .k-row-note { color: var(--muted); font-size: var(--t-label); }
 .k-table .info { margin-left: 4px; }
 .k-table .info-pop { white-space: normal; font-weight: 400; text-transform: none; }
+/* Plans, "Side by side": the three tables share one set of column widths, so Free, Basic and Pro stand at the same x from table to
+   table (DK-005: auto layout sized each table's columns by its own text). The plan columns wrap their words (a longer cell is two lines). */
+@media (min-width: 641px) {
+  .k-compare .k-table { table-layout: fixed; }
+  .k-compare .k-table th:not(:first-child), .k-compare .k-table td:not(:first-child) { width: 17%; white-space: normal; }
+}
 /* a table that fits its card keeps its header in view as the page scrolls (below the phone's top bar) */
 .k-tbl-wrap.pinhead { overflow: visible; background: none; border-radius: 0; animation: none; -webkit-mask-image: none; mask-image: none; }
 .k-tbl-wrap.pinhead .k-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 var(--line); }

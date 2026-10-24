@@ -75,25 +75,14 @@ export function usePlanPrice(plan: "basic" | "pro" | null | undefined): string |
   return planPriceLine(plan, p, pickCurrency(p, code));
 }
 
-export { approx } from "./approx";
 export { money, planPriceLine } from "./planPrice";
+export { aboutLine, aboutMoney, chargedInRupees } from "./rupeeCharge";
 import { planPriceLine } from "./planPrice";
-
-/** An approximate converted amount, rounded to a whole unit: "€6" (the owner, 25 Oct: round every number off; it's
- * "about" anyway, and the bank's own rate differs by more than the cents). */
-export function aboutMoney(row: CurrencyRow, v: number, code: string): string {
-  return `${row.symbol}${Math.round(v).toLocaleString(code === "INR" ? "en-IN" : "en-US")}`;
-}
-
-/** The note under a plan's price when the card is charged in rupees: "Charged as ₹699 / month incl. GST (about €6.40 today)", the visitor's Plans wording and order (R22-004). */
-export function chargedLine(charged: string, gst: boolean, period: string, about: string | null): string {
-  return `Charged as ${charged} / ${period}${gst ? " incl. GST" : ""}${about ? ` (about ${about} today)` : ""}`;
-}
 
 /** The page's note while a currency is charged in rupees, with the actual amounts when its price is a fixed one
  * (R8O-006: "can differ slightly" under €8 for a ₹699 charge of about €6.40). */
 export function rupeesNote(code: string, about: { basic: string; pro: string } | null): string {
-  if (about) return `Paid in rupees for now: your card is charged the rupee price under each plan, about ${about.basic} for Basic and ${about.pro} for Pro at today's rate, not the ${code} prices shown. Your bank converts it at its own rate and may add a fee.`;
-  return `Paid in rupees for now: your card is charged the rupee price shown under each plan, and your bank converts it at its own rate and may add a fee, so the amount in ${code} can differ from the one shown.`;
+  if (about) return `Paid in rupees for now: your card is charged the rupee price shown for each plan, about ${about.basic} for Basic and ${about.pro} for Pro at today's rate. Your bank converts it at its own rate and may add a fee.`;
+  return `Paid in rupees for now: your card is charged the rupee price shown for each plan, and your bank converts it at its own rate and may add a fee, so the amount in ${code} can differ from the one beside it.`;
 }
 

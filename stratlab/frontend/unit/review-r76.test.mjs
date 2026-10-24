@@ -30,7 +30,8 @@ test("a group bigger than the plan's size can't be saved, and says why (R76-001)
 
 test("the plans say what the Free trial is and that F&O on Pro means contracts, not the stocks (R76-003, R76-010)", () => {
   const plans = read("src/lib/plans.ts");
-  assert.match(plans, /A free trial of 5 market days paper trading one notebook strategy on one stock/);
+  // reworded as a short line in DK-003 (the card was a run-on paragraph); the same facts
+  assert.match(plans, /Paper trading trial: \$\{L\.free\.live_limit\} strategy on 1 stock for 5 market days from your first start, then Basic or Pro/);
   assert.match(plans, /Indian F&O contracts \(futures and options on stocks and indices\) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan/);
 });
 

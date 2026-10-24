@@ -447,10 +447,10 @@ def test_the_key_figures_beside_the_last_twelve_months_name_their_year():
                    net_margin=0.5, opm=5.0, pe_basis="ttm", foreign=False)
     page = stock_pages.render(f, "US", "KPLT", None)
     assert stat(page, "Net margin (year to Dec 2025)") == "0.5%" and stat(page, "EBITDA margin (year to Dec 2025)") == "5.0%"
-    assert stat(page, "Net profit, last 12 months (INR million)") == "16"
-    # without a twelve months' figure on the page there is nothing to tell apart: the plain labels
+    assert stat(page, "Net profit, last 12 months (INR million)") == "16.19"      # a small amount keeps its decimals (DK-024)
+    # a page without a twelve months' figure names the year too, as every page does (DK-024: MSFT's carried none)
     plain = stock_pages.render(facts_page("Mar 2026"), "US", "RDY", None)
-    assert stat(plain, "Net margin") == "17.4%"
+    assert stat(plain, "Net margin (year to Mar 2026)") == "17.4%" and stat(plain, "Net margin") is None
 
 
 # ---------- R12-013: no fund in the sitemap ----------

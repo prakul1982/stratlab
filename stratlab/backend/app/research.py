@@ -287,6 +287,20 @@ def record(result: dict, strategy, label: str, version: int, now: str) -> dict:
     }
 
 
+def assumed_stop_note(gaps: dict | None, strategy) -> str | None:
+    """A stop loss the notebook applied on its own: its idea never set one and no question about it was answered, so the
+    default stands. Said on the verdict, as the stop decides many exits (DA-008). Nothing for a notebook with no open
+    questions about its idea (rules written by hand or copied) or whose idea gave a stop."""
+    r = strategy.risk
+    if not gaps or not r.sl or r.sl <= 0:
+        return None
+    if "sl" in (gaps.get("mentioned") or []) or "sl" in (gaps.get("answered") or {}):
+        return None
+    unit = {"points": f"{r.sl:g}-point", "atr": f"{r.sl:g} × ATR", "swing": f"{r.sl:g}-candle swing"}.get(r.stopType or "pct", f"{r.sl:g}%")
+    return (f"A {unit} stop loss was applied by default, because the idea didn't set one. It can decide many exits; "
+            "change it under The rules to test another.")
+
+
 def summary(experiments: list[dict]) -> dict:
     from .engine.verdict import legacy_emptied
     last = experiments[-1] if experiments else None

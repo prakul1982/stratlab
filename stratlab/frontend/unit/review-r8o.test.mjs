@@ -90,15 +90,14 @@ test("R8O-009: a company's tab says its name from the first frame once it has be
 });
 
 test("R8O-006: a euro or pound price charged in rupees says that charge in its currency", async () => {
-  const { aboutMoney, chargedLine, rupeesNote } = await import("../src/lib/currency.ts");
+  const { aboutMoney, rupeesNote } = await import("../src/lib/currency.ts");
   const eur = { symbol: "€", name: "Euro", basic: 8, pro: 19, basic_year: 80, pro_year: 190, charged_in: "INR", yearly_charged_in: "INR", charge_about: { basic: 6.44 } };
   assert.equal(aboutMoney(eur, 6.44, "EUR"), "€6");          // whole units (the owner, 25 Oct)
   assert.equal(aboutMoney(eur, 6.6, "EUR"), "€7");
   assert.equal(aboutMoney({ ...eur, symbol: "¥" }, 1234.4, "JPY"), "¥1,234");
-  assert.equal(chargedLine("₹699", true, "month", "€6.44"), "Charged as ₹699 / month incl. GST (about €6.44 today)");
-  assert.equal(chargedLine("₹699", false, "month", null), "Charged as ₹699 / month");
   const note = rupeesNote("EUR", { basic: "€6.44", pro: "€18.43" });
-  assert.match(note, /about €6\.44 for Basic and €18\.43 for Pro at today's rate, not the EUR prices shown/);
+  // reworded in DK-001: the rupee prices are the ones shown now, so the note no longer contrasts them with "the EUR prices shown"
+  assert.match(note, /the rupee price shown for each plan, about €6\.44 for Basic and €18\.43 for Pro at today's rate/);
   assert.doesNotMatch(note, /slightly/);
   assert.doesNotMatch(rupeesNote("SAR", null), /slightly/);
   assert.doesNotMatch(read("src/pages/PlansPage.tsx"), /can differ slightly/);

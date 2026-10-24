@@ -8,7 +8,7 @@ import { pct, TF_NAME } from "../lib/format";
 import { signedInHere, signIn } from "../lib/signin";
 import { Search } from "../components/Icons";
 import { OpenApp, PublicFrame } from "../components/PublicFrame";
-import { CHECK_RESULT, CHECKS_NOT_HOLD, TOTAL_AFTER_COSTS, TOTAL_HOLD, BehindHold, checksBeyond, checksOf, headTone, HoldLine, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
+import { CHECK_RESULT, CHECKS_NOT_HOLD, TOTAL_AFTER_COSTS, TOTAL_HOLD, checksBeyond, checksOf, headTone, HoldLine, holdResult, libraryTally, liveOptions, Rules, shownStats, testedRange, trails, unseenLabel, VERDICTS, whereShown, type LibEntry } from "../components/LibraryBits";
 import { libraryDescription, libraryTitle } from "../lib/libraryText";
 import { VerdictBadge } from "../components/ui";
 import { Badge } from "../components/kit/Badge";
@@ -63,6 +63,10 @@ export function PublicLibrary() {
   }, [again]);
   const shown = useMemo(() => (rows ?? []).filter((e) => (!verdict || e.verdict.verdict === verdict) && (!market || e.market === market)
     && (!q.trim() || `${e.name} ${e.description} ${where(e)}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, q, verdict, market]);
+  // only the choices some strategy matches; the one picked stays so it can be undone (DK-015)
+  const verdicts = useMemo(() => liveOptions(VERDICTS, rows ?? [], (e) => e.verdict.verdict, verdict), [rows, verdict]);
+  const markets = useMemo(() => liveOptions(MARKETS, rows ?? [], (e) => e.market, market), [rows, market]);
+  const tally = useMemo(() => libraryTally(rows ?? []), [rows]);
   return (
     <PublicFrame action={<GoogleCopy label="Continue with Google" />}>
       <PageHeader eyebrow="Strategy library" title="StratLab's own strategies"
@@ -70,8 +74,8 @@ export function PublicLibrary() {
       <Card label="Find a strategy">
         <div className="k-toolbar">
           <label className="k-search"><Search size={18} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: RSI, breakout, NIFTY" aria-label="Search the library" /></label>
-          <Select label="Market" value={market} onChange={setMarket} options={MARKETS.map(([value, label]) => ({ value, label }))} />
-          <Select label="Verdict" value={verdict} onChange={setVerdict} options={VERDICTS.map(([value, label]) => ({ value, label }))} />
+          <Select label="Market" value={market} onChange={setMarket} options={markets.map(([value, label]) => ({ value, label }))} />
+          <Select label="Verdict" value={verdict} onChange={setVerdict} options={verdicts.map(([value, label]) => ({ value, label }))} />
         </div>
       </Card>
       {rows === null ? <Card><Skeleton label="Opening the library" /></Card>
@@ -79,22 +83,26 @@ export function PublicLibrary() {
         : shown.length === 0 ? <EmptyState title={rows.length ? "Nothing matches that." : "There are no strategies to show yet."}>{rows.length ? "Clear the search or the filters to see them all." : "Check back soon."}</EmptyState>
         : (
           <>
-            <span className="k-small k-muted">{shown.length} strateg{shown.length === 1 ? "y" : "ies"}</span>
-            <div className="k-cards">
+            {/* what the list adds up to, from its data, and what the checks mean once (DK-014: every card repeated it) */}
+            <div className="k-stack k-tight">
+              <p className="k-small" data-testid="lib-summary"><b>{tally.line}</b></p>
+              <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD} Points are the gap in total return after costs, over the same dates.</p>
+              <span className="k-small k-muted">{shown.length} strateg{shown.length === 1 ? "y" : "ies"} shown</span>
+            </div>
+            <div className="k-cards lib-cards">
               {shown.map((e) => {
                 const sh = shownStats(e);
+                const hold = holdResult(e);
+                const beyond = checksBeyond(checksOf(e), e.verdict.label);
                 return (
-                  <Card key={e.id} label={plainTerms(e.name)}>
+                  <Card key={e.id} label={plainTerms(e.name)} className="lib-card">
                     <div className="k-stack k-tight">
                       <span className="k-eyebrow">{where(e)} · {TF_NAME[e.tf] ?? e.tf} candles{e.side !== "long" ? ` · ${e.side === "both" ? "long and short" : "short"}` : ""}</span>
-                      <CardHead title={plainTerms(e.name)} level={2} />
-                      <span className="k-note k-row"><Badge tone="ok" dot={false}>{e.badge ?? "StratLab"}</Badge><span>by {e.author}</span></span>
+                      <div className="lib-title"><CardHead title={plainTerms(e.name)} level={2} /></div>
                     </div>
-                    <div className="k-row"><BehindHold e={e} /><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{checksBeyond(checksOf(e), e.verdict.label) && <span className="k-note">{checksBeyond(checksOf(e), e.verdict.label)}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
-                    <HoldLine e={e} />
-                    {trails(e) && <p className="k-note" data-testid="lib-checks-not-hold">{CHECKS_NOT_HOLD}</p>}
-                    {e.range && <p className="k-note" data-testid="lib-window">Tested {testedRange(e.range)}</p>}
-                    {e.reason && <p className="k-note lib-reason">{e.reason}</p>}
+                    {/* the result against buy and hold, then the checks: one line each (the figures are in the row below) */}
+                    {hold && <p className="lib-result" data-testid="lib-hold"><b>{hold}</b></p>}
+                    <div className="k-row"><VerdictBadge v={e.verdict.verdict} facts label={e.verdict.label} tone={headTone(e)} />{beyond && <span className="k-note">{beyond}</span>}{!sh.ran && <Badge tone="plain" dot={false}>Not run</Badge>}</div>
                     <div className="k-mini-stats">
                       {([[TOTAL_AFTER_COSTS, sh.ret], [TOTAL_HOLD, sh.buy_hold], [unseenLabel(e), sh.unseen]] as [string, number | null][])
                         .map(([k, n]) => <Stat key={k} label={k} value={n == null ? "–" : pct(n)} tone={k === TOTAL_AFTER_COSTS && trails(e) ? undefined : tone(n)} />)}

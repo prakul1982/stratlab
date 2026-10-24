@@ -37,12 +37,11 @@ test("R9P-005: Account's AI builds line carries Pro's daily cap, as the Plans ca
 
 test("R9P-006: the confirm step names the rupee charge in the currency shown, from the same figure as the Plans cards", async () => {
   const { chargeAboutNote, checkoutDescription } = await import("../src/lib/offer.ts");
-  const { aboutMoney, chargedLine } = await import("../src/lib/currency.ts");
+  const { aboutMoney } = await import("../src/lib/currency.ts");
   const usd = { symbol: "$", name: "US dollar", basic: 8, pro: 20, basic_year: 80, pro_year: 200, charged_in: "INR", yearly_charged_in: "INR", charge_about: { basic: 7.23 } };
   const about = aboutMoney(usd, usd.charge_about.basic, "USD");
   assert.equal(about, "$7");
   assert.equal(chargeAboutNote(true, "$8", about), " (about $7 today)");
-  assert.equal(chargedLine("₹699", false, "month", about), "Charged as ₹699 / month (about $7 today)");       // the card says the same
   assert.equal(chargeAboutNote(true, "≈ SAR 27", null), " (about SAR 27 today)");                          // a converted price: its own figure
   assert.equal(chargeAboutNote(false, "$8", about), "");                                                    // charged in the currency shown, or INR
   assert.equal(chargeAboutNote(true, "$8", null), "");

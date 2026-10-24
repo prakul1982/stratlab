@@ -160,6 +160,7 @@ class GapsReq(BaseModel):
     mentioned: list[Annotated[str, Field(max_length=20)]] = Field(default_factory=list, max_length=20)
     notes: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
     instName: Optional[str] = Field(None, max_length=80)
+    instMarket: Optional[str] = Field(None, max_length=10)       # the market the builder gave the name (DA-004: Indian symbols are known by name while India's data is offline)
     usedAI: bool = True
     fallback: str = Field("", max_length=400)
     answered: dict[Annotated[str, Field(max_length=20)], Annotated[str, Field(max_length=120)]] = Field(default_factory=dict, max_length=20)

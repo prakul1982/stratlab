@@ -68,6 +68,8 @@ CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=600"
 BEHIND_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=30"   # a page waiting for its new close
 MIN_CACHE = 60
 EXTREME = 100.0                # a margin beyond ±100% says revenue is tiny next to costs or profit
+NOT_MEANINGFUL = 1000.0        # a margin or return beyond ±1,000% is arithmetic on near-zero revenue: shown as "n/m", not a number (DK-024)
+FINANCIAL_GROUPS = {"lender", "insurer", "bdc"}     # industry.classify groups for which EBITDA margin and debt to equity mean nothing (DK-023)
 STAGE = {1: "Stage 1 (basing)", 2: "Stage 2 (advancing)", 3: "Stage 3 (topping)", 4: "Stage 4 (declining)"}
 STAGE_WHY = {1: "the 150-day average has stopped falling, or the price has climbed above a falling average",
              2: "the price is above a rising 150-day average", 3: "the 150-day average has stopped rising, or the price is below a rising one",
@@ -149,10 +151,77 @@ def _seeds(region: str) -> set[str]:
     return out | {s for p in universes.PRESETS.get(region, []) for s in p["symbols"]}
 
 
+class Listed(dict):
+    """The companies with a page ({page symbol: {name, sym, bse}}), with `twins`: {a BSE-listed page's names (its scrip
+    code and its page symbol): the NSE page symbol} for the companies that are listed on both exchanges and so have
+    no page of their own (DK-025)."""
+    twins: dict[str, str] = {}
+
+
+_NAME_DROP = {"ltd", "limited", "the", "co", "company", "india", "inds", "industries", "pvt", "private"}
+TRUNCATED_MIN = 12             # characters a BSE name must have before it counts as a cut-off form of a longer NSE name
+
+
+def name_words(name) -> list[str]:
+    """A company name as words for matching across exchanges: lower case, no punctuation, without Ltd, Limited, India…"""
+    return [w for w in re.sub(r"[^a-z0-9 ]", " ", str(name or "").lower()).split() if w not in _NAME_DROP]
+
+
+def cut_form_of(short: list[str], long: list[str]) -> bool:
+    """Whether `short` is `long` cut short: every word the same, the last one possibly cut part-way ("relic technolog"
+    for "relic technologies"). BSE's list cuts long names, so its entry reads as a start of the NSE one."""
+    if len(short) < 2 or len(short) > len(long) or len(" ".join(short)) < TRUNCATED_MIN:
+        return False
+    return short[:-1] == long[:len(short) - 1] and long[len(short) - 1].startswith(short[-1])
+
+
+def same_company(bse_name, nse_name, same_symbol: bool = False) -> bool:
+    """Whether two exchanges' names for a company are one company: the same words, or BSE's cut-off form of NSE's. With
+    `same_symbol` (BSE trades it under the symbol NSE uses), the first word agreeing is enough: the symbol is shared by
+    some unrelated companies, and a different first word says it is one of them."""
+    a, b = name_words(bse_name), name_words(nse_name)
+    if not a or not b:
+        return False
+    if a == b or cut_form_of(a, b):
+        return True
+    return same_symbol and a[0] == b[0]
+
+
+def twin_pages(out: dict[str, dict], bse_ts: dict[str, str]) -> dict[str, str]:
+    """{BSE page symbol (and scrip code): NSE page symbol} for each BSE-only entry of `out` that is a company NSE also
+    lists (DK-025: RELICTEC and 511712 were two pages, with two canonical addresses, for one company). `bse_ts` is
+    {scrip code: BSE trading symbol}. Matched on the symbol BSE trades it under when NSE has that symbol and the names
+    agree on their first word, else on the name (the same words, or BSE's cut-off form of NSE's, one NSE company
+    only). No ISIN is kept for a BSE listing, so the name is what a match rests on."""
+    nse = {k: name_words(v.get("name")) for k, v in out.items() if not v.get("bse") and v.get("name")}
+    by_first: dict[str, list[str]] = {}
+    for k, w in nse.items():
+        if w:
+            by_first.setdefault(w[0], []).append(k)
+    twins: dict[str, str] = {}
+    for page, v in out.items():
+        code = v.get("bse")
+        if not code or not v.get("name"):
+            continue
+        ts = bse_ts.get(code, "")
+        hit = ts if ts in out and not out[ts].get("bse") and same_company(v["name"], out[ts].get("name"), same_symbol=True) else None
+        if not hit and ts in out and not out[ts].get("bse") and not out[ts].get("name"):
+            hit = ts                       # NSE's entry has no name to compare (one of StratLab's own lists): the shared symbol stands
+        if not hit:
+            words = name_words(v["name"])
+            found = [k for k in by_first.get(words[0], []) if same_company(v["name"], out[k]["name"])] if words else []
+            hit = found[0] if len(found) == 1 else None
+        if hit:
+            twins[page] = twins[code] = hit
+    return twins
+
+
 def companies(region: str) -> dict[str, dict]:
     """{page symbol: {name, sym, bse}} for every company with a page. From the stored lists (the whole-market audit's
     and this module's daily one), and StratLab's own sector lists so there is always something. A BSE-only company's
-    page is under its BSE trading symbol (or its scrip code when that isn't known); `sym` is what the sources take."""
+    page is under its BSE trading symbol (or its scrip code when that isn't known); `sym` is what the sources take. A
+    BSE listing of a company NSE also lists has no page of its own: its names are in `.twins`, which find() sends to the
+    NSE page (DK-025). A BSE name, which BSE writes in capitals, is in proper case."""
     with _companies_lock:
         hit = _companies.get(region)
         if hit and time.time() - hit[0] < 3600:
@@ -168,26 +237,23 @@ def companies(region: str) -> dict[str, dict]:
                 code = sym.split(":", 1)[1]
                 ts = str((bse.get(code) or {}).get("ts") or "").upper()
                 page = ts if ts and ts not in out else code
-                out[page] = {"name": name, "sym": code, "bse": code}
+                out[page] = {"name": proper_name(name), "sym": code, "bse": code}
             else:
                 out[sym.upper()] = {"name": name, "sym": sym.upper(), "bse": None}
     out = {k: v for k, v in out.items() if k and len(k) <= 20 and "/" not in k and not UNLISTED_NAMES.match(str(v.get("name") or ""))}
+    listed = Listed()
+    if region == "IN":
+        listed.twins = twin_pages(out, {c: str((v or {}).get("ts") or "").upper() for c, v in bse.items() if isinstance(v, dict)})
+    listed.update({k: v for k, v in out.items() if k not in listed.twins})
     with _companies_lock:
-        _companies[region] = (time.time(), out)
-    return out
+        _companies[region] = (time.time(), listed)
+    return listed
 
 
 def nse_twins() -> dict[str, str]:
-    """{BSE scrip code: NSE symbol} for companies whose BSE page sits beside an NSE one (the BSE list's trading symbol
-    is also an NSE page), so a list of companies can keep each one once."""
-    cos = companies("IN")
-    bse = _setting("audit:bse-only") or {}
-    out = {}
-    for code, v in bse.items():
-        ts = str((v or {}).get("ts") or "").upper() if isinstance(v, dict) else ""
-        if ts and ts in cos and cos[ts].get("bse") is None and code in cos:
-            out[code] = ts
-    return out
+    """{BSE scrip code or BSE page symbol: NSE symbol} for companies listed on both exchanges, whose BSE listing has no
+    page of its own, so a list of companies can keep each one once."""
+    return dict(getattr(companies("IN"), "twins", {}) or {})
 
 
 def find(region: str, symbol: str) -> tuple[str, dict] | None:
@@ -197,6 +263,9 @@ def find(region: str, symbol: str) -> tuple[str, dict] | None:
     s = (symbol or "").strip().upper()
     if s in cos:
         return s, cos[s]
+    twin = getattr(cos, "twins", {}).get(s)          # a BSE listing of a company NSE lists too: its one page is NSE's (DK-025)
+    if twin in cos:
+        return twin, cos[twin]
     if region == "US":
         for alt in (re.sub(r"[./]", "-", s), s.replace("-", ".")):
             if alt in cos:
@@ -681,6 +750,15 @@ def with_week52_report(f: dict | None, report: dict | None, symbol: str | None =
         out["high52"] = hi
     if lo is not None and cur_lo is not None and cur_lo / RANGE_SLACK <= lo < cur_lo:
         out["low52"] = lo
+    # a figure in whole rupees (the fundamentals source's, cut down, when the page was built with no daily candles; the
+    # page says so with range_whole) with the exchange's within a rupee of it: the same price, to the paisa (DK-028: TCS
+    # ₹1,976.00 against 1,976.80, INFY ₹980.00 against 980.40). A page stored before that was marked is told by the
+    # figure being whole.
+    whole = lambda v: v is not None and v == int(v)          # noqa: E731
+    if hi is not None and cur_hi is not None and 0 < abs(hi - cur_hi) < 1 and (f.get("range_whole") or whole(cur_hi)):
+        out["high52"] = hi
+    if lo is not None and cur_lo is not None and 0 < abs(lo - cur_lo) < 1 and (f.get("range_whole") or whole(cur_lo)):
+        out["low52"] = lo
     return out if (out.get("high52"), out.get("low52")) != (f.get("high52"), f.get("low52")) else f
 
 
@@ -940,16 +1018,35 @@ def shown_yield(f: dict | None):
     return dy
 
 
-def shown_industry(parts) -> list[str]:
+def shown_industry(parts, plain: bool = False) -> list[str]:
     """The industry path as a page shows it: a filing category that starts with the division before it, "Services" then
-    "Services-Prepackaged Software", without that word again."""
+    "Services-Prepackaged Software", without that word again. `plain`: the SEC's classification worded for a reader
+    (plain_industry)."""
     out: list[str] = []
     for x in _dedupe(parts):
         for o in out:
             if x.lower().startswith(o.lower() + "-"):
                 x = x[len(o) + 1:].strip()
-        out.append(x)
+        out.append(plain_industry(x) if plain else x)
     return out
+
+
+_SIC_ACRONYMS = {"tv": "TV", "us": "US", "hmos": "HMOs", "reits": "REITs", "reit": "REIT", "ii": "II", "iii": "III", "ev": "EV"}
+_SIC_PREFIX = re.compile(r"^(?:services|retail|wholesale)\s*-\s*", re.I)
+_SIC_CATCHALL = re.compile(r"[,\s]*\(?\b(?:nec|not elsewhere classified)\b\)?\s*$", re.I)
+
+
+def plain_industry(text: str) -> str:
+    """The SEC's industry title worded for a reader (DK-024: "Motor Vehicles & Passenger Car Bodies"): "&" as "and",
+    sentence case, without a "Retail-" or "Services-" prefix (the division beside it says that) or the catch-all "NEC",
+    and with TV and the like in capitals. Names that have lower case already, an Indian industry's, are left alone."""
+    t = str(text or "").strip()
+    if not t or t != t.title():
+        return t
+    t = _SIC_CATCHALL.sub("", _SIC_PREFIX.sub("", t)).strip(" ,-") or t
+    words = t.replace(" & ", " and ").split(" ")
+    out = " ".join(_SIC_ACRONYMS.get(w.lower().strip("(),"), w.lower()) for w in words)
+    return out[:1].upper() + out[1:]
 
 
 def _dedupe(parts) -> list[str]:
@@ -989,31 +1086,48 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
     # (R8V-010: Kinetic Seas' "EBITDA margin 43.7%" was its last twelve months', above a table whose latest year says
     # −1,634.4%)
     opm = years[-1].get("opm") if years else snap.get("opm")
+    # a bank or lender (its results have no operating margin), or an insurer or other financial: EBITDA margin and debt to
+    # equity mean nothing for them, and the page leaves them out (DK-023: LICI showed both)
+    financial = bool(nums.get("bank")) or _financial(p, nums, symbol)
+    # no daily candles: the year's range is the fundamentals source's, in whole rupees cut down (TCS ₹1,976 against the
+    # exchange's 1,976.80), which the exchange's 52-week report replaces when the page is served (DK-028)
+    whole_range = _num(prices.get("low52")) is None and _num(snap.get("low52")) is not None
+    name = public_text(p.get("name") or symbol)
+    if region == "US":
+        name = strip_registration(name)
     return {
         "v": FACTS_VERSION, **{k: checks[k] for k in ("sales_usd", "cap_unverified", "not_company", "divs_paid", "pe_basis", "pe_end", "eps",
                                                       "foreign", "profit_usd", "annual_unread", "annual_filed", "no_numbers", "cap_why",
                                                       "type_unread")
                                if checks.get(k) is not None},
-        "region": region, "symbol": symbol, "name": public_text(p.get("name") or symbol), "exchange": exchange,
+        "region": region, "symbol": symbol, "name": name, "exchange": exchange,
         "industry": _dedupe(public_text(str(x)) for x in (p.get("industry_path") or []) if x)[:4],
         "currency": "USD" if region == "US" else "INR", "unit": nums.get("unit") or ("$ million" if region == "US" else "₹ crore"),
         "price": prices.get("price"), "price_at": prices.get("price_at"),
         "price_basis": prices.get("price_basis"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
+        **({"range_whole": True} if whole_range else {}),
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
-        "bank": bool(nums.get("bank")), "years": years, "currency_note": p.get("currency_note"),
+        "bank": financial, "years": years, "currency_note": p.get("currency_note"),
         "growth": {k: (nums.get("growth") or {}).get(k) for k in ("sales_cagr_3y", "profit_cagr_3y", "sales_cagr_5y", "profit_cagr_5y")},
         "stage": (trend or {}).get("stage"), "stage_days": (trend or {}).get("stage_days"),
         "st_up": (trend or {}).get("st_up"), "st_days": (trend or {}).get("st_days"),
-        "filings": unique_filings([{"at": str(f.get("at") or "")[:10], "title": public_text(str(f.get("title") or ""))[:200]} for f in filings])[:6],
+        "filings": listed_filings(filings)[:6],
         "red_flags": red_flags, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 
-_EMPTY_SUBJECTS = {"update", "updates", "general update", "general updates"}
+_EMPTY_SUBJECTS = {"update", "updates", "general update", "general updates", "other", "others", "miscellaneous"}
 _EMPTY_LABELS = {"other update", "general update", "update"}
+# filings that are routine paperwork, not news (DK-018: "Copy of Newspaper Publication" and its like filled RELIANCE's list)
+FILING_NOISE = re.compile(r"newspaper|trading window|(?:loss|duplicate)\b.{0,30}\bcertificate|investor complaints|regulation 74\s*\(5\)|"
+                          r"depositories and participants|compliance certificate", re.I)
+# "Reliance Industries Limited has informed the Exchange regarding …": the part before what the filing is about
+_FILING_LEAD = re.compile(r"^.{0,140}?\b(?:has|have|had)\s+(?:informed|intimated|apprised|submitted|filed|enclosed)\s+(?:the\s+)?"
+                          r"(?:stock\s+)?exchanges?\b[,.]?\s*(?:(?:about|regarding|that|on|of|the|with respect to|in respect of)\s+)*", re.I)
+FILING_SUMMARY_MAX = 110
 
 
 def filing_title(t: str) -> str:
@@ -1031,16 +1145,100 @@ def filing_title(t: str) -> str:
     return f"{lab}: {sub}"
 
 
+def filing_summary(text: str, label: str = "") -> str:
+    """What a filing is about, from the exchange's summary of it: the first sentence without the company's "has informed
+    the Exchange regarding" lead, at most FILING_SUMMARY_MAX characters; "" when nothing but the type is left."""
+    t = re.sub(r"\s+", " ", str(text or "")).strip()
+    m = _FILING_LEAD.match(t)
+    if m:
+        t = t[m.end():]
+    t = t.strip(" .:-–")
+    if label and t.lower().startswith(label.lower()):
+        t = t[len(label):].lstrip(" .:-–,")
+    t = re.split(r"(?<=[a-z0-9\)])\.\s+(?=[A-Z])", t, maxsplit=1)[0].rstrip(" .")
+    if len(t) < 6 or t.lower() in _EMPTY_SUBJECTS or t.lower() == label.lower():
+        return ""
+    if len(t) > FILING_SUMMARY_MAX:
+        t = t[:FILING_SUMMARY_MAX].rsplit(" ", 1)[0].rstrip(" ,;:-–") + "…"
+    return t[:1].upper() + t[1:]
+
+
+def filing_entry(x: dict) -> dict | None:
+    """One filing as the page lists it, {at, title, name, url}: `name` says what the filing is (the exchange's subject, or
+    its summary when the subject is a generic "Updates"), `url` is the document on the exchange or the SEC. None for
+    routine paperwork (FILING_NOISE) and for an "Other update" that says nothing (DK-018: "Other update", "Credit
+    rating" and "Copy of Newspaper Publication" as bare text with no document behind them). A row that has a name
+    already is returned as it is; one stored before names were kept is worked out from its title."""
+    if x.get("name"):
+        return x
+    title = str(x.get("title") or "").strip()
+    text = str(x.get("text") or "")
+    lab, sep, sub = title.partition(": ")
+    lab, sub = lab.strip(), sub.strip()
+    generic = bool(sep) and (not sub or sub.lower() == lab.lower() or sub.lower() in _EMPTY_SUBJECTS)
+    if FILING_NOISE.search(title) or (generic and FILING_NOISE.search(text[:240])):
+        return None
+    if not sep:
+        name = title
+    elif not generic:
+        name = filing_title(title)
+    else:
+        about = filing_summary(text, lab)
+        if lab.lower() in _EMPTY_LABELS:
+            name = about
+        else:
+            name = f"{lab}: {about}" if about else lab
+    if not name:
+        return None
+    url = str(x.get("url") or "")
+    return {"at": str(x.get("at") or "")[:10], "title": title, "name": name, **({"url": url} if url.startswith("https://") else {})}
+
+
+def listed_filings(rows: list[dict]) -> list[dict]:
+    """The filings a page lists: each with a name and a link (filing_entry), routine paperwork left out, a repeat
+    (the same date and name) shown once. Public text only: no data source is named."""
+    out = []
+    for x in rows or []:
+        y = filing_entry({**x, "title": public_text(str(x.get("title") or ""))[:200], "text": public_text(str(x.get("text") or ""))[:600]}) if isinstance(x, dict) else None
+        if y:
+            out.append({**y, "name": public_text(y["name"])})
+    return unique_filings(out)
+
+
 def unique_filings(rows: list[dict]) -> list[dict]:
     """Filing rows with an exact repeat (the same date and title) dropped, as the exchange lists a general update twice
     (R26-009: RELIANCE's "14 Oct 2026 Other update: General Updates" in a row twice)."""
     seen, out = set(), []
     for x in rows or []:
-        k = (str(x.get("at") or "")[:10], re.sub(r"\s+", " ", str(x.get("title") or "")).strip().lower())
+        k = (str(x.get("at") or "")[:10], re.sub(r"\s+", " ", str(x.get("name") or x.get("title") or "")).strip().lower())
         if k not in seen:
             seen.add(k)
             out.append(x)
     return out
+
+
+_REGISTRATION = re.compile(r"\s*/\s*(?:[A-Za-z]{2}|NEW)\s*/?\s*$")
+
+
+def strip_registration(name: str | None) -> str | None:
+    """A US filer's name without the state of incorporation or the re-registration mark its filing appends: "Rivian
+    Automotive, Inc. / DE", "APPLIED MATERIALS INC /DE/", "COSTCO WHOLESALE CORP /NEW" (DK-024)."""
+    if not name:
+        return name
+    out = str(name).strip()
+    for _ in range(2):
+        out = _REGISTRATION.sub("", out).strip() or out
+    return out
+
+
+def _financial(p: dict, nums: dict, symbol: str) -> bool:
+    """Whether the company is a lender, insurer or other financial, by the industry it is filed under: EBITDA margin and
+    debt to equity aren't measures of such a business (DK-023)."""
+    try:
+        from . import industry
+        return industry.classify(p, nums, symbol)["group"] in FINANCIAL_GROUPS
+    except Exception:
+        return False
 
 
 def fresh(stored: dict | None, region: str, now: float | None = None) -> bool:
@@ -1418,6 +1616,7 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
         cap = next((_num(r.get("market_cap")) for r in sized if r.get("symbol") == symbol), None)
     rows = _fresh_rows([r for r in sized if r.get("symbol") != symbol])
     tidy = proper_name if region == "US" else (lambda n: n)
+    say = plain_industry if region == "US" else (lambda t: t)          # the SEC's industry titles, worded for a reader (DK-024)
     name = lambda r: str(tidy(r.get("name") or cos[r["symbol"]]["name"] or r["symbol"]))        # noqa: E731
     out: list[dict] = []
     same_ind = [r for r in rows if ind and str(r.get("industry") or "").lower() == ind[-1].lower()]
@@ -1463,7 +1662,7 @@ def peer_sections(region: str, symbol: str, industry: list[str], cap: float | No
                         "caption": f"The largest companies in the wider sector ({where}), by market value."})
     if same_ind:
         out.append({"title": "Same industry", "rows": [(r["symbol"], name(r)) for r in same_ind],
-                    "caption": f"The largest companies in the same industry ({ind[-1]}), by market value."})
+                    "caption": f"The largest companies in the same industry ({say(ind[-1])}), by market value."})
     if len(same_ind) < 4 and len(ind) > 1 and not coarse:
         have = {r["symbol"] for r in same_ind}
         sector = [r for r in rows if r["symbol"] not in have and str(r.get("sector") or "").lower() == ind[0].lower()]
@@ -1525,19 +1724,35 @@ def largest(region: str, n: int = 24) -> tuple[list[tuple[str, str]], bool]:
 
 
 def search(region: str, q: str, n: int = 30) -> list[tuple[str, str]]:
-    """Companies whose symbol or name matches what was typed: the exact symbol first, then symbols that start with it,
-    then names that contain it. At most `n` (ask for one more to know whether the list was cut)."""
+    """Companies whose symbol or name matches what was typed, best first: the exact symbol, then those whose symbol or
+    name starts with it, then those with a word of the name starting with it, then names that contain it; within each
+    group the larger company (by checked market value) first, then the rest alphabetically (DK-025: "reli" listed
+    RELAXO and RELIABLE before Reliance Industries). A company listed on both exchanges is one result. At most `n` (ask
+    for one more to know whether the list was cut)."""
     q = re.sub(r"\s+", " ", (q or "").strip()).upper()[:40]
     if not q:
         return []
     cos = companies(region)
-    names = {r["symbol"]: str(r.get("name") or "") for r in _index_rows(region) if r.get("symbol")}
+    rows = {r["symbol"]: r for r in _index_rows(region) if r.get("symbol")}
+    names = {s: str(r.get("name") or "") for s, r in rows.items()}
+    cap = {s: _row_cap(region, r) or 0.0 for s, r in rows.items()}
+    name_of = lambda s: (names.get(s) or cos[s].get("name") or "").upper()          # noqa: E731
     hit = find(region, q)
     exact = [hit[0]] if hit else []
-    starts = sorted(s for s in cos if s.startswith(q) and s not in exact)
-    contains = sorted(s for s, v in cos.items() if s not in exact and s not in starts
-                      and q in (names.get(s) or v.get("name") or "").upper())
-    return [(s, names.get(s) or cos[s]["name"] or s) for s in (exact + starts + contains)[:n]]
+    first, word, inside = [], [], []
+    for s in cos:
+        if s in exact:
+            continue
+        nm = name_of(s)
+        if s.startswith(q) or nm.startswith(q):
+            first.append(s)
+        elif any(w.startswith(q) for w in re.split(r"[^A-Z0-9&]+", nm) if w):
+            word.append(s)
+        elif q in nm:
+            inside.append(s)
+    largest_first = lambda s: (-cap.get(s, 0.0), s)          # noqa: E731
+    ordered = exact + sorted(first, key=largest_first) + sorted(word, key=largest_first) + sorted(inside, key=largest_first)
+    return [(s, names.get(s) or cos[s]["name"] or s) for s in ordered[:n]]
 
 
 # ---------- the page ----------
@@ -1557,6 +1772,13 @@ def _fmt(v, digits: int = 1, suffix: str = "") -> str:
     return f"{v:,.{digits}f}{suffix}"
 
 
+def small_digits(*values) -> int:
+    """Decimals for a set of reported amounts shown together: none for amounts in the hundreds and up, two when the
+    largest is under 100, so a small company's "2, 2, 2, 2, 3" revenue doesn't sit beside a profit of 0.43 (DK-024)."""
+    vals = [abs(x) for x in (_num(v) for v in values) if x is not None]
+    return 2 if vals and max(vals) < 100 else 0
+
+
 def _amount(f: dict, v, digits: int = 0) -> str:
     """A reported figure as _fmt writes it, with Indian digit grouping on an Indian page (₹ crore: 2,67,021, as its
     market cap and the app write it, never 267,021: R10C-007)."""
@@ -1569,10 +1791,13 @@ def _amount(f: dict, v, digits: int = 0) -> str:
 
 
 def _pct(v, whole: bool = False) -> str:
-    """A percentage; with `whole`, figures the source gives in whole percent show none of the ".0" they don't have."""
+    """A percentage; with `whole`, figures the source gives in whole percent show none of the ".0" they don't have. One
+    beyond ±NOT_MEANINGFUL is "n/m" (not meaningful): revenue near zero, not a margin (DK-024: Rivian's -7,314.5%)."""
     v = _num(v)
     if v is None:
         return "–"
+    if abs(v) > NOT_MEANINGFUL:
+        return "n/m"
     return f"{v:,.0f}%" if whole and v == round(v) else f"{v:,.1f}%"
 
 
@@ -1719,7 +1944,13 @@ h2{font-family:var(--serif);font-weight:600;font-size:21px;margin:30px 0 10px}.m
 .stat b{display:block;font-size:20px;font-weight:600}.stat span{font-size:13px;color:var(--muted)}
 .note{border-left:3px solid var(--line-2);padding:4px 0 4px 12px;margin:10px 0;font-size:14px;color:var(--ink-2)}
 .note.warn{border-color:var(--orange-ink);background:var(--orange-soft);padding:8px 12px;border-radius:0 10px 10px 0}
-details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}details.how li{margin:6px 0}
+details.how summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:10px;font-weight:600;list-style:none}details.how li{margin:6px 0}
+details.how summary::-webkit-details-marker{display:none}
+details.how summary::before{content:"";flex:none;width:9px;height:9px;border-right:2px solid var(--blue);border-bottom:2px solid var(--blue);transform:rotate(-45deg);transition:transform .15s}
+details.how[open] summary::before{transform:rotate(45deg)}
+details.how summary::after{content:"Show";margin-left:auto;color:var(--blue);font-weight:400;font-size:14px}
+details.how[open] summary::after{content:"Hide"}
+details.how summary:hover{color:var(--blue-ink)}details.how summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
 .tbl{overflow-x:auto;direction:rtl;scroll-snap-type:x proximity;scroll-padding-left:124px}.tbl table{direction:ltr}
 .tbl th:not(:first-child),.tbl td:not(:first-child){scroll-snap-align:end}
 table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:right;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -1800,7 +2031,8 @@ def _top(sign_in: str | None = None) -> str:
     sign_in = sign_in or f"{site}/mine"
     # the landing page's own sections, in its order, then company search (R43B-007: the two menus differed)
     links = "".join(f'<a href="{site}/#{k}">{v}</a>' for k, v in (("trade", "Trade"), ("invest", "Invest"), ("money", "Money"), ("alerts", "Alerts")))
-    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="/stocks">Companies</a>'
+    # the strategy library beside Companies, as on the landing page and the other public pages (DK-008)
+    menu = f'{links}<a href="{site}/pricing">Plans</a><a href="{site}/#faq">FAQ</a><a href="{site}/library">Library</a><a href="/stocks">Companies</a>'
     return (f'<a class="skip" href="#main">Skip to main content</a><header class="nav"><a class="brand" href="{site}/" aria-label="StratLab home">'
             f'{LOGO}<span class="word"><b>Strat</b>Lab</span></a><nav aria-label="Site">{menu}</nav>'
             f'<details class="menu"><summary>Menu</summary><nav aria-label="Site (menu)">{menu}</nav></details>'
@@ -1811,7 +2043,7 @@ def _foot() -> str:
     site = settings.PUBLIC_SITE_URL
     links = "".join(f'<a href="{site}{p}">{t}</a>' for p, t in (("/terms", "Terms of service"), ("/privacy", "Privacy policy"),
                                                                 ("/refunds", "Cancellation and refunds"), ("/contact", "Contact us"),
-                                                                ("/pricing", "Plans")))
+                                                                ("/pricing", "Plans"), ("/library", "Strategy library")))
     return (f'<footer class="site"><div class="in"><p>Research and paper trading only. No real orders are placed. StratLab shows '
             "facts from reported data for research and education; nothing here is investment advice or a recommendation, and "
             f"past prices don't predict future returns. © {datetime.now(timezone.utc).year} StratLab.</p>"
@@ -1849,7 +2081,7 @@ def proper_name(name: str | None) -> str | None:
     state suffix ("APPLIED MATERIALS INC /DE", "REALTY /MD/") or a re-registration mark ("COSTCO WHOLESALE CORP /NEW") is
     dropped. A capitals name with a mixed-case ending ("ELI LILLY & Co") counts as capitals."""
     if name:
-        name = re.sub(r"\s*/(?:[A-Za-z]{2}|NEW)/?$", "", name.strip()) or name
+        name = strip_registration(name) or name
     core = re.sub(r"\s+(?:Co|Inc|Corp|Ltd)\.?$", "", name or "")
     if not name or core != core.upper() or not re.search(r"[A-Z]{2}", core):
         return name
@@ -1902,11 +2134,11 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
         as_of_line = ("No recent share price is available for this company. Facts from reported results and exchange "
                       f"filings{', page built ' + e(as_of) if as_of else ''}. Not investment advice.")
     ld = _ld([{"@context": "https://schema.org", "@type": "Corporation", "name": name, "tickerSymbol": symbol,
-               "url": canonical, **({"industry": f["industry"][-1]} if f.get("industry") else {})},
+               "url": canonical, **({"industry": (plain_industry if region == "US" else str)(f["industry"][-1])} if f.get("industry") else {})},
               {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
                   {"@type": "ListItem", "position": 1, "name": "StratLab", "item": site + "/"},
                   {"@type": "ListItem", "position": 2, "name": name, "item": canonical}]}])
-    ind = " · ".join(shown_industry(f.get("industry")))
+    ind = " · ".join(shown_industry(f.get("industry"), plain=region == "US"))
     parts = [f"""<h1>{e(name)} <span class="muted">({e(symbol)})</span></h1>
 <p class="muted">{e(f.get("exchange") or country)}{(" · " + e(ind)) if ind else ""}</p>
 <p class="small muted" data-as-of>{as_of_line}</p>"""]
@@ -1916,9 +2148,13 @@ def render(f: dict | None, region: str, symbol: str, name: str | None) -> str:
     parts.append(_how(f))
     parts.append(_trend(f))
     parts.append(_table(f))
-    if f.get("filings"):
+    shown = [y for y in (filing_entry(x) for x in unique_filings(f.get("filings"))) if y]
+    if shown:
+        # each filing by what it is, with the document itself behind it when the exchange or the SEC has one (DK-018)
         parts.append("<h2>Recent filings</h2><div class=\"card\"><ul class=\"plain\">" + "".join(
-            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>{e(filing_title(x["title"]))}</li>' for x in unique_filings(f["filings"])) + "</ul></div>")
+            f'<li><span class="muted small">{e(_date(x["at"]))}</span><br>'
+            + (f'<a href="{e(x["url"])}" rel="noopener nofollow">{e(x["name"])}</a>' if x.get("url") else e(x["name"]))
+            + "</li>" for x in unique_filings(shown)) + "</ul></div>")
     parts.append(_cta(symbol, test, deep))
     for sec in peer_sections(region, symbol, f.get("industry") or [], shown_cap(f)):
         parts.append(f'<h2>{e(sec["title"])}</h2><p class="small muted" data-peers>{e(sec["caption"])}</p>' + _links(region, sec["rows"]))
@@ -1953,15 +2189,24 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     # beside the last twelve months' profit (and a P/E on it), the figures that are the newest year's own name that year,
     # so no reader takes a year's margin for the twelve months' (R12-007: Katapult's "Net profit, last 12 months $16M",
     # "P/E 1.4" and "Net margin 0.5%", the last its year to Dec 2025's)
-    end = figures_end(f) if _num(f.get("profit_ttm")) is not None else None
+    # ...and on every page alike, whether or not it has a last-12-months profit (DK-024: MSFT's carried no year, KPLT's did)
+    end = figures_end(f)
     of_year = f" (year to {_date(end)[-8:]})" if end and _date(end) else ""
     out = [(price_label(f), _money(f, f.get("price"))),
            # the range is the year's highest and lowest trade, not closes (R6V-014)
            ("1-year range (intraday)", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
-           ("Market cap", cap), (pe_label(f), _fmt(pe) if pe is not None else "n/a"),
-           (f"Net profit, last 12 months ({unit})", _amount(f, f.get("profit_ttm"))),
-           (f"Return on equity{of_year}", year(_pct(f.get("roe"))))]
+           ("Market cap", cap), (pe_label(f), _fmt(pe) if pe is not None else "n/a")]
+    ttm, owners = f.get("profit_ttm"), owners_profit(f)
+    digits = small_digits(ttm, owners)
+    if owners is not None:
+        # the table's profit includes minority shareholders' share of subsidiaries, which P/E leaves out: both are shown,
+        # each named, so the profit line and the P/E agree (DK-021: RELIANCE's 88,167 beside a P/E on 74,727)
+        out += [(f"Profit to shareholders, last 12 months ({unit})", _amount(f, owners, digits)),
+                (f"Net profit incl. minority interests, last 12 months ({unit})", _amount(f, ttm, digits))]
+    else:
+        out.append((f"Net profit, last 12 months ({unit})", _amount(f, ttm, digits)))
+    out.append((f"Return on equity{of_year}", year(_pct(f.get("roe")))))
     if not f.get("bank"):
         out += [(f"EBITDA margin{of_year}", year(_pct(f.get("opm"), whole))), ("Debt to equity", year(_fmt(f.get("debt_equity"), 2)))]
     out += [(f"Net margin{of_year}", year(_pct(f.get("net_margin")))),
@@ -1979,6 +2224,15 @@ def pe_profit_gap(f: dict):
         return None
     implied = cap / profit
     return (pe, implied, profit) if abs(implied - pe) > 0.1 * pe else None
+
+
+def owners_profit(f: dict):
+    """The last 12 months' profit that belongs to the company's shareholders, for an Indian company whose table's net
+    profit (which includes the share of minority shareholders) doesn't agree with its P/E (pe_profit_gap): market cap
+    over P/E, the profit the P/E is on (DK-021). None otherwise."""
+    gap = pe_profit_gap(f)
+    cap = shown_cap(f)
+    return cap / gap[0] if gap and cap else None
 
 
 def ttm_year_gap(f: dict) -> tuple[float, float, str] | None:
@@ -2045,8 +2299,9 @@ def _notes(f: dict) -> list[str]:
     if gap:
         pe, implied, profit = gap
         out.append(f'<p class="note" data-pe-basis>P/E {pe:,.1f} is the close over earnings per share, the profit that belongs to the '
-                   f'company\'s shareholders. Market cap divided by the net profit for the last 12 months shown above '
-                   f'(₹{_amount(f, profit)} crore, which includes the share owned by minority shareholders of subsidiaries) gives {implied:,.1f}. '
+                   f'company\'s shareholders (market cap divided by P/E: {_amount(f, owners_profit(f))} crore for the last 12 months, shown above). '
+                   f'The net profit including the share owned by minority shareholders of subsidiaries is {_amount(f, profit)} crore; '
+                   f'market cap divided by that gives {implied:,.1f}. '
                    "The last 12 months are the four latest reported quarters, so their profit can differ from the newest year's in "
                    'the table below.</p>')
     if ttm_year_gap(f):
@@ -2090,6 +2345,8 @@ def _how(f: dict) -> str:
         "equity each use inputs from that one year; if one input is missing for it, the figure is n/a. When that year ended more "
         "than about 15 months before the close, they are n/a too.",
         YIELD_NOTE,
+        f"n/m: not meaningful. A margin or return beyond ±{NOT_MEANINGFUL:,.0f}% comes from revenue or equity near zero, so it is "
+        "not shown as a number.",
     ]
     return ('<details class="card how"><summary>How these figures are worked out</summary><ul class="small">'
             + "".join(f"<li>{e(t)}</li>" for t in items) + "</ul></details>")
@@ -2126,9 +2383,11 @@ def _table(f: dict) -> str:
         return ""
     g = f.get("growth") or {}
     whole = f.get("region") == "IN" and _whole([y.get("opm") for y in ys])
-    rows = [("Revenue", "sales", lambda v: _amount(f, v)), ("Net profit", "profit", lambda v: _amount(f, v))]
+    # one precision for the amounts in the table: two decimals when they are all small, so "2, 2, 2" doesn't sit beside 0.43
+    digits = small_digits(*[y.get(k) for y in ys for k in (("sales", "profit") if f.get("bank") else ("sales", "profit", "debt"))])
+    rows = [("Revenue", "sales", lambda v: _amount(f, v, digits)), ("Net profit", "profit", lambda v: _amount(f, v, digits))]
     if not f.get("bank"):
-        rows += [("EBITDA margin", "opm", lambda v: _pct(v, whole)), ("Borrowings", "debt", lambda v: _amount(f, v))]
+        rows += [("EBITDA margin", "opm", lambda v: _pct(v, whole)), ("Borrowings", "debt", lambda v: _amount(f, v, digits))]
     head = "".join(f"<th>{e(str(y.get('year') or ''))}</th>" for y in ys)
     body = "".join(f"<tr><td>{label}</td>" + "".join(f"<td>{fmt(y.get(k))}</td>" for y in ys) + "</tr>"
                    for label, k, fmt in rows if any(_num(y.get(k)) is not None for y in ys))

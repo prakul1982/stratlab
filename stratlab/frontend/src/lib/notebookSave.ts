@@ -49,3 +49,21 @@ export function makeSaver(put: (body: Record<string, unknown>) => Promise<unknow
     },
   };
 }
+
+/** The questions about an idea cut to what the server keeps (a note of 300 characters, a warning of 300, a fallback of 400, ten
+ * of each): sent in one save with a pick of the instrument, a note that was too long would have refused the whole save and
+ * lost the pick (DA-003). */
+export function fitGaps<G extends { mentioned: string[]; notes: string[]; instName: string | null; instMarket?: string | null; fallback: string;
+  answered?: Record<string, string>; warnings?: string[] }>(g: G): G {
+  const cut = (x: string, n: number) => (x.length > n ? x.slice(0, n - 1) + "…" : x);
+  return {
+    ...g,
+    mentioned: g.mentioned.map((x) => x.slice(0, 20)).slice(0, 20),
+    notes: g.notes.map((x) => cut(x, 300)).slice(0, 10),
+    instName: g.instName ? g.instName.slice(0, 80) : null,
+    instMarket: g.instMarket ? g.instMarket.slice(0, 10) : null,
+    fallback: cut(g.fallback ?? "", 400),
+    answered: g.answered ? Object.fromEntries(Object.entries(g.answered).slice(0, 20).map(([k, v]) => [k.slice(0, 20), cut(String(v), 120)])) : undefined,
+    warnings: (g.warnings ?? []).map((x) => cut(x, 300)).slice(0, 10),
+  };
+}

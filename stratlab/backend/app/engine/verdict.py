@@ -89,8 +89,9 @@ def unseen_check(trades: list[dict], open_trades: list[dict], capital: float, bu
         status, detail = "warn", (f"{head}, {'+' if r2 >= 0 else '−'}{abs(r2):.1f}% in all: "
                                   f"too few to tell, as one or two trades decide the result. It needs at least {MIN_UNSEEN_TRADES} closed.")
     elif r2 > 0:
-        status, detail = "pass", ("It kept making money on data it wasn't tuned on." if who == "It"
-                                  else f"{who} kept making money on the part of the period it wasn't tuned on.")
+        # "the unseen part": the rules were set before the test, so "tuned" would claim a fitting that fixed rules never had (DA-024)
+        status, detail = "pass", ("It kept making money on the unseen part of the period." if who == "It"
+                                  else f"{who} kept making money on the unseen part of the period.")
     else:
         status, detail = "fail", f"{who} lost money on the part of the period it hadn't seen."
     return {"id": "unseen", "title": "Unseen data", "status": status, "detail": detail, "data": data}
@@ -332,19 +333,42 @@ def check_sample(n: int) -> dict:
     return {"id": "sample", "title": "Enough trades", "status": status, "detail": detail, "data": {"trades": n}}
 
 
-def suggestions(verdict: str, strategy, days: int, max_days: int) -> list[dict]:
+def yearly(ret: float, years: float | None) -> float | None:
+    """A return over `years` as a yearly rate, compounded; None when the test is under about a year (a rate over a shorter
+    stretch says nothing) or the account was wiped out."""
+    if not years or years < 0.95 or ret <= -100:
+        return None
+    return ((1 + ret / 100) ** (1 / years) - 1) * 100
+
+
+# a yearly return under this is below what a savings account or a fixed deposit pays in most markets
+LOW_YEARLY = 5.0
+# trailing buying and holding by this many points is "a lot"
+FAR_BEHIND = 10.0
+
+
+def weak_result(ret: float, hold: float | None, years: float | None) -> bool:
+    """Whether a profitable result trails buying and holding by a lot, or earns under LOW_YEARLY a year (DA-021)."""
+    if ret <= 0:
+        return False
+    y = yearly(ret, years)
+    return (hold is not None and ret - hold <= -FAR_BEHIND) or (y is not None and y < LOW_YEARLY)
+
+
+def suggestions(verdict: str, strategy, days: int, max_days: int, weak: bool = False) -> list[dict]:
     out = []
+    short = getattr(strategy, "side", "long") == "short"
     crosses = any(c.op in ("xa", "xb") for c in strategy.entry)
     has_trend = any(r.t in ("sma", "ema") and params(r)[0] >= 150 for c in strategy.entry for r in (c.l, c.r))
     if verdict in ("not_enough", "mixed") and days < max_days:
         out.append({"action": "longer_period", "text": "Test a longer period for more trades"})
     if verdict == "not_enough" and crosses:
-        out.append({"action": "loosen_entry", "text": "Buy whenever the condition holds, not only on the cross"})
+        out.append({"action": "loosen_entry", "text": f"{'Sell short' if short else 'Buy'} whenever the condition holds, not only on the cross"})
     if verdict in ("luck", "mixed", "no_edge") and not has_trend:
-        out.append({"action": "trend_filter", "text": "Only buy above the 200-period average"})
+        out.append({"action": "trend_filter", "text": "Only sell short below the 200-period average" if short else "Only buy above the 200-period average"})
     if verdict in ("luck", "mixed", "no_edge", "edge"):
         out.append({"action": "other_instrument", "text": "Test the same rules on another instrument"})
-    if verdict == "edge":
+    if verdict == "edge" and not weak:        # not first in line for a result that trails buying and holding by a lot (DA-021)
         out.insert(0, {"action": "paper_trade", "text": "Paper trade it on live prices"})
     out.append({"action": "note", "text": "Write a lab note about what you learned"})
     return out[:4]
@@ -362,7 +386,7 @@ def evaluate(bars: list[dict], strategy, start: int, base: dict, lot: float = 1,
         check_sample(len(trades)),
     ]
     return decide(checks, len(trades), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"),
-                  open_n=1 if base.get("open_trade") else 0)
+                  open_n=1 if base.get("open_trade") else 0, years=_years(bars, start, len(bars) - 1) or None)
 
 
 def _pc(v: float) -> str:
@@ -574,9 +598,10 @@ def restate_empty(e: dict) -> dict:
 
 
 def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days: int, hold: float | None = None,
-           open_n: int = 0) -> dict:
+           open_n: int = 0, years: float | None = None) -> dict:
     """The verdict from the checks, the closed-trade count and the return after costs. `hold` is buy and hold's return
-    over the same period: the summary always states how the two compare. `open_n`: trades still open at the end."""
+    over the same period: the summary always states how the two compare. `open_n`: trades still open at the end. `years`:
+    the test's length (the requested days when not given), for the yearly rates the summary gives."""
     by = {c["id"]: c["status"] for c in checks}
     none = n == 0 and abs(ret) < 1e-9          # not one trade, not even one still open: nothing happened to judge
     if none:
@@ -601,7 +626,7 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
         verdict = "luck"
         bits = []
         if by["unseen"] == "fail":
-            bits.append("it lost money on the part of the period it wasn't tuned on")
+            bits.append("it lost money on the unseen part of the period")
         if by["nearby"] == "fail":
             bits.append("most settings near yours lost money")
         summary = "It made money overall, but " + " and ".join(bits) + "."
@@ -618,12 +643,21 @@ def decide(checks: list[dict], n: int, ret: float, strategy, days: int, max_days
     else:
         verdict = "mixed"
         summary = "It made money after costs, but some checks pass and some don't."
+    span = years if years else days / 365.25
+    weak = weak_result(ret, hold, span)
     if not none:
         summary += versus_hold(ret, hold)
+        y = yearly(ret, span) if ret > 0 else None
+        if y is not None and (weak or verdict in ("edge", "mixed", "luck")):
+            # the yearly rate beside buy and hold's, so +4.1% over five years is not read as a good result (DA-021)
+            yh = yearly(hold, span) if hold is not None else None
+            summary += f" A year at a time, that is about {_pc(y)}" + (f" (buying and holding: {_pc(yh)})" if yh is not None else "") + "."
+            if y < LOW_YEARLY:
+                summary += f" A return under {LOW_YEARLY:g}% a year is below what a savings account or fixed deposit usually pays."
     return {"verdict": verdict, "headline": fact_headline(verdict, checks, n, ret, hold, none, open_n), "summary": summary,
             "passed": sum(1 for c in checks if c["status"] == "pass"),
             "total": sum(1 for c in checks if c["status"] != "skip"),
-            "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days)}
+            "checks": checks, "suggestions": suggestions(verdict, strategy, days, max_days, weak)}
 
 
 def with_notes(v: dict, notes: list[str]) -> dict:
@@ -661,7 +695,15 @@ def evaluate_portfolio(run, base: dict, strategy, days: int, max_days: int) -> d
     checks.append(check_shuffle(base["trades"], cap, steps=day_steps(times, base.get("equity") or [], cap)))
     checks.append(check_sample(len(base["trades"])))
     return decide(checks, len(base["trades"]), base["stats"]["ret"], strategy, days, max_days, base["stats"].get("buy_hold_ret"),
-                  open_n=len(base.get("open_trades") or []))
+                  open_n=len(base.get("open_trades") or []), years=_span_years(times))
+
+
+def _span_years(times: list[str]) -> float | None:
+    """The years between the first and last time of a run, or None."""
+    try:
+        return max((_when(times[-1]) - _when(times[0])).days / 365.25, 1 / 365.25)
+    except (IndexError, ValueError, TypeError):
+        return None
 
 
 def day_steps(times: list[str], equity: list, capital: float) -> list[float]:

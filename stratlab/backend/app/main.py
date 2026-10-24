@@ -67,7 +67,7 @@ from .guard import Guard, HeavyGate
 from . import research
 from .engine import walkforward
 from . import rule_check
-from .engine.verdict import restate_empty, restated as verdict_restated
+from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
 from .data import DataError, Registry
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
@@ -562,6 +562,39 @@ app.add_middleware(Guard)   # size cap, rate limit, security headers; inside COR
 app.add_middleware(CORSMiddleware, allow_origins=settings.FRONTEND_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"], max_age=7200)   # a browser asks before each call only every 2 h, not 10 min
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)   # outermost: JSON and pages go compressed (a chart is 5x smaller)
+
+
+HEAD_PATHS = re.compile(r"^/(?:stocks(?:/.*)?|sitemap\.xml|sitemaps/[^/]+|robots\.txt)$")
+
+
+class HeadAsGet:
+    """HEAD on a public page (company pages, sitemaps, robots) is answered as GET is, with the same status and headers
+    and no body, its Content-Length that of what GET sends: link checkers and crawlers probe with HEAD (DK-033:
+    /stocks/... answered 405). Plain ASGI, so every other request passes straight through."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "HEAD" or not HEAD_PATHS.match(scope["path"]):
+            return await self.app(scope, receive, send)
+        start, size = {}, 0
+
+        async def drop_body(message):
+            nonlocal size
+            if message["type"] == "http.response.start":
+                start.update(message)
+            elif message["type"] == "http.response.body":
+                size += len(message.get("body") or b"")
+                if not message.get("more_body"):
+                    headers = [(k, v) for k, v in start["headers"] if k.lower() != b"content-length"]
+                    await send({**start, "headers": headers + [(b"content-length", str(size).encode())]})
+                    await send({"type": "http.response.body", "body": b""})
+
+        await self.app({**scope, "method": "GET"}, receive, drop_body)
+
+
+app.add_middleware(HeadAsGet)     # outside even the compression, so HEAD sees what GET sends
 
 
 # ---------- helpers ----------
@@ -1416,6 +1449,10 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
 
 @app.post("/ai/strategy")
 def ai_strategy(req: AIReq, profile=Depends(current_profile)):
+    if ai_writer.options_idea(req.text):
+        # a single option, a straddle or any multi-leg idea can't be tested as rules on a price series: said before any AI
+        # build is used, and the same whether or not the month's builds are left (DA-001, DA-009)
+        err(422, "options_idea", ai_writer.OPTIONS_IDEA_MESSAGE)
     with ai_slot(profile) as (used, limit):
         try:
             out = write_strategy(req.text, pro=all_indicators(profile))
@@ -1741,6 +1778,9 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
         out = run_test(profile, strategy, req)
         rec = research.record(out, strategy, req.label, version, db.now_iso())
     rec["req_days"] = req.days
+    stop_note = research.assumed_stop_note(nb.get("gaps"), strategy)
+    if stop_note and isinstance(rec.get("verdict"), dict):
+        rec["verdict"] = with_notes(rec["verdict"], [stop_note])
     if not req.label.strip():
         rec["label"] = research.describe_change(experiments[-1] if experiments else None, rec)
     # the run took a while: add to the notebook as it is now, so an edit made meanwhile isn't written over
@@ -3812,13 +3852,15 @@ def stock_page_facts(region: str, co: dict) -> dict | None:
                 # what the ticker is couldn't be read (no quote): a page for a visitor, but not listed in the sitemap until a
                 # build knows it isn't a fund (R12-013: GSMT, listed from such a build, answered "GSMT is a fund" when next built)
                 checks["type_unread"] = True
-            items = [{"at": d["at"], "title": d["title"]} for d in p.get("documents") or []]
+            items = [{"at": d["at"], "title": d["title"], "url": d.get("url")} for d in p.get("documents") or []]
             exchange, red = "Listed in the US", None
         else:
             p = with_industry(sym, research_hub.screener.company(co["bse"] or sym))
             try:
                 found = filings_feed.announcements(sym)
-                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"]} for i in found]
+                # with the exchange's summary and the document itself, so the page names what each filing is and links it (DK-018)
+                items = [{"at": i["at"], "title": f"{i['label']}: {i['subject']}" if i.get("subject") else i["label"],
+                          "text": i.get("text"), "url": i.get("url")} for i in found]
                 red = filings.summarise(found)["red"]
             except Exception:
                 items, red = [], None

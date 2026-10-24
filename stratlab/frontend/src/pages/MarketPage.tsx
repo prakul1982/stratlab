@@ -10,6 +10,7 @@ import { InstrumentSearch } from "../components/InstrumentSearch";
 import { SurvBadges } from "../components/Surveillance";
 import { Card, CardHead, ChipBar, EmptyState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Select, Skeleton, TilePicker } from "../components/kit";
 import { HELP } from "../lib/help";
+import { INDIA_FEED, offlineLine } from "../lib/dataBack";
 import { NotebookProblem, useNotebook } from "./NotebookPage";
 import "./trade/trade.css";
 
@@ -126,7 +127,7 @@ function GroupPicker({ nb, market, onDone }: { nb: Notebook; market: Market; onD
 export function MarketPage() {
   const { id } = useParams();
   const nav = useNavigate();
-  const { markets, notify } = useApp();
+  const { markets, notify, me } = useApp();
   const { nb, patch, flush, problem, reload } = useNotebook(id);
   const [sel, setSel] = useState<string | null>(null);
   const [upload, setUpload] = useState<{ bars: Candle[]; skipped: number; file: string } | null>(null);
@@ -189,7 +190,8 @@ export function MarketPage() {
         </EmptyState>
       )}
       {market && market.status === "offline" && (
-        <Notice tone="warn">Market data for {market.name} is offline right now. It usually comes back after the daily data login; try again in a few minutes.</Notice>
+        // India's data comes back with the daily data login, at the time the top banner gives, and no promise of a few minutes (DA-004)
+        <Notice tone="warn">{INDIA_FEED.has(market.id) ? offlineLine(market.name, me?.data_note) : `Market data for ${market.name} is offline right now. Try again later.`}</Notice>
       )}
 
       {market && market.status === "live" && market.id !== "CSV" && (

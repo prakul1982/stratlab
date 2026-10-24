@@ -255,7 +255,7 @@ def test_same_industry_is_ranked_by_checked_value_and_says_which_industry(w):
         stock_pages.companies("US").setdefault(r["symbol"], {"name": r["name"], "sym": r["symbol"], "bse": None})
     secs = stock_pages.peer_sections("US", "AAPL", ["Manufacturing", "Electronic Computers"])
     assert secs[0]["title"] == "Same industry" and [s for s, _ in secs[0]["rows"]] == ["DELL", "HPQ", "SMCI"]
-    assert "(Electronic Computers), by market value" in secs[0]["caption"]
+    assert "(Electronic computers), by market value" in secs[0]["caption"]    # the SEC's title in plain case (DK-024)
     # fewer than four in the industry: the wider sector follows, under its own caption, never mixed into the first list
     assert secs[1]["title"] == "Same sector" and [s for s, _ in secs[1]["rows"]] == ["NVDA"] and "wider sector (Manufacturing)" in secs[1]["caption"]
     assert all(s != "AKTX" for sec in secs for s, _ in sec["rows"])        # no checked value, not ranked

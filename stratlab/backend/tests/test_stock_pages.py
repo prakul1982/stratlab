@@ -50,7 +50,7 @@ def test_no_provider_names_anywhere_public(w):
     pages = [c.get(u).text for u in ("/stocks/in/RELIANCE", "/stocks/us/AAPL", "/stocks/in/NOPE", "/stocks/in/TCS",
                                      "/sitemap.xml", "/sitemaps/stocks-in-1.xml", "/robots.txt")]
     for text in pages:
-        visible = re.sub(r"<style>.*?</style>", "", text, flags=re.S)
+        visible = re.sub(r"<[^>]*>", " ", re.sub(r"<style>.*?</style>", "", text, flags=re.S))      # the words a reader sees: a filing links to its document (DK-018)
         assert not PROVIDERS.search(visible), PROVIDERS.search(visible).group(0)
 
 

@@ -246,12 +246,12 @@ def test_the_key_figures_of_a_year_over_15_months_old_are_na_and_say_why():
     assert stock_pages.figures_stale(old) and stock_pages.figures_end(old) == "2025-03-31"
     page = stock_pages.render(old, "US", "RDY", None)
     for label in ("Return on equity", "EBITDA margin", "Debt to equity", "Net margin"):
-        assert stat(page, label) == "n/a", label
+        assert stat(page, label + " (year to Mar 2025)" if label != "Debt to equity" else label) == "n/a", label
     assert "17.0%" not in page and "27.3%" not in page and "17.4%" not in page
     assert "data-figures-old" in page and "31 Mar 2025" in page and "15 months" in page
     # the same page with its newest year in the table: the figures stand, no note
     new = stock_pages.render(facts_page("Mar 2026"), "US", "RDY", None)
-    assert stat(new, "Return on equity") == "17.0%" and stat(new, "Net margin") == "17.4%" and "data-figures-old" not in new
+    assert stat(new, "Return on equity (year to Mar 2026)") == "17.0%" and stat(new, "Net margin (year to Mar 2026)") == "17.4%" and "data-figures-old" not in new
     # a year that ended 14 months before the price is not yet too old; 16 months is
     assert not stock_pages.figures_stale(facts_page("Mar 2025", at="2026-05-30"))
     assert stock_pages.figures_stale(facts_page("Mar 2025", at="2026-08-01"))

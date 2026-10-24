@@ -165,7 +165,8 @@ def test_edge_wording_has_no_advice():
     checks = [{"id": i, "status": "pass"} for i in ("unseen", "nearby", "shuffle", "sample")]
     v = V.decide(checks, 40, 24.6, ema_cross(), 365, 3650, 70.5)
     assert v["verdict"] == "edge"
-    assert v["summary"].endswith("The strategy returned +24.6% after costs, less than buying and holding over the same period (+70.5%).")
+    assert "The strategy returned +24.6% after costs, less than buying and holding over the same period (+70.5%)." in v["summary"]
+    assert v["summary"].endswith("A year at a time, that is about +24.6% (buying and holding: +70.6%).")      # the yearly rates follow it (DA-021)
     for word in ("Worth", "should", "real money", "Treat it"):
         assert word not in v["summary"]
     mixed = V.decide([{"id": "unseen", "status": "pass"}, {"id": "nearby", "status": "warn"}, {"id": "shuffle", "status": "pass"},

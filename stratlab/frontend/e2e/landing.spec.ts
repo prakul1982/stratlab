@@ -30,12 +30,12 @@ test("landing: the three spaces with Trade first, alerts, plans, FAQ and markets
   }
   // the sections, and the menu, go Trade, Invest, Money: the strategy lab is where StratLab began
   expect(await page.locator("main section[id]").evaluateAll((els) => els.map((e) => e.id).filter((id) => id !== "top"))).toEqual(order);
-  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Companies"]);
+  await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
   await expect(page.locator(".lp-space")).toHaveText([/Trade/, /Invest/, /Money/]);
   await expect(page.locator(".lp-space .lp-space-art"), "each space shows a picture of itself").toHaveCount(3);
   await expect(page.locator("#trade .lp-options")).toContainText("Paper trade option structures");
   // what search engines and link previews show says the same
-  await expect(page).toHaveTitle("StratLab: test it, research it, track it");
+  await expect(page).toHaveTitle("StratLab: backtest trading ideas, research stocks, track money");
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]']) await expect(page.locator(sel)).toHaveAttribute("content", /trad/i);
   // what ships today, one line each
   // the long lists show a few and fold the rest ("12 more Trade tools"): open them, everything is still there
@@ -169,7 +169,7 @@ test("landing: no fake buttons, no card that looks picked, the bitcoin sign, and
     expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     await summary.click();
     const menu = page.getByRole("navigation", { name: "Sections (menu)" });
-    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Companies"]);
+    await expect(menu.getByRole("link")).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
     await page.keyboard.press("Escape");                                          // Esc closes it, and focus goes back to the button
     await expect(menu).toBeHidden();
     await expect(summary).toBeFocused();
@@ -213,4 +213,72 @@ test("landing: dark mode draws on a dark background", async ({ page }) => {
   const [r, g, b] = (bg.match(/\d+/g) ?? ["255", "255", "255"]).map(Number);
   expect((r + g + b) / 3, `background ${bg}`).toBeLessThan(80);
   await expect(page.locator("#pricing .lp-price")).toHaveCount(3);
+});
+
+// ---- the public-site audit (DK-003 to DK-015) ----
+
+test("/plans: one heading and one line, the cards in view, the public header, indexed with its own address, aligned tables (DK-004, DK-005, DK-006)", async ({ page }, info) => {
+  const errors = await open(page).then(async (e) => { await page.goto("/plans"); return e; });
+  await expect(page.locator(".lp").getByRole("heading", { level: 1 })).toHaveText("Plans and prices", { timeout: 30_000 });
+  await expect(page.locator(".lp").getByRole("heading", { level: 2, name: /Free to start|Plans/ })).toHaveCount(0);      // no second heading above the cards
+  await expect(page.locator(".lp-sec-first .eyebrow")).toHaveCount(0);
+  const free = page.locator('.lp-price[data-plan="free"]');
+  await expect(free).toBeVisible();
+  const top = (await free.boundingBox())!.y;
+  if (info.project.name !== "phone") expect(top, "the cards start above the fold").toBeLessThan(420);
+  // the same header as the other public pages
+  if (info.project.name !== "phone") await expect(page.locator('nav[aria-label="Sections"] a')).toHaveText(["Trade", "Invest", "Money", "Alerts", "Plans", "FAQ", "Library", "Companies"]);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://stratlab.studio/plans");
+  // Free, Basic and Pro stand at the same x in each table (wide screens: a phone's tables scroll or wrap)
+  if (info.project.name !== "phone") {
+    const xs = await page.locator("#compare table").evaluateAll((ts) => ts.map((t) => [...t.querySelectorAll("thead th")].slice(1).map((th) => Math.round(th.getBoundingClientRect().x))));
+    expect(xs.length).toBe(3);
+    expect(xs[1]).toEqual(xs[0]);
+    expect(xs[2]).toEqual(xs[0]);
+  }
+  await expect(page.getByRole("row", { name: /Paper trading sessions at a time/ })).toContainText("1 (5-market-day trial)");
+  expect(errors).toEqual([]);
+});
+
+test("landing: Library and Companies are in the header, the menu and the footer; Invest links real company pages; Help has its own heading (DK-008, DK-009, DK-011)", async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator(".lp-foot").getByRole("link", { name: "Strategy library" })).toHaveAttribute("href", "/library");
+  await expect(page.locator(".lp-foot").getByRole("link", { name: "Companies" })).toHaveAttribute("href", "/stocks");
+  const real = page.getByTestId("real-companies");
+  await expect(real.getByRole("link", { name: "Reliance Industries" })).toHaveAttribute("href", "/stocks/in/RELIANCE");
+  await expect(real.getByRole("link", { name: "Apple" })).toHaveAttribute("href", "/stocks/us/AAPL");
+  await expect(page.locator("#faq").getByRole("link", { name: "the Contact page" })).toHaveAttribute("href", "/contact");
+  // the pause button sits in the row of tabs, above the card, not floating under it
+  const bar = (await page.locator(".lp-demo-bar").boundingBox())!, card = (await page.locator(".lp-demo-stack").boundingBox())!;
+  const pause = (await page.getByRole("button", { name: /the examples/ }).boundingBox())!;
+  expect(pause.y).toBeLessThan(card.y);
+  expect(Math.abs(pause.y - bar.y)).toBeLessThan(bar.height);
+  await page.goto("/help");
+  await expect(page.locator("#faq").getByRole("heading", { level: 2 })).toHaveText("Help", { timeout: 30_000 });
+  await expect(page.locator("#faq").getByRole("link", { name: "Contact us" })).toHaveAttribute("href", "/contact");
+  await expect(page.locator("#faq details").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("/library: a result line, the checks and the figures on each card; one summary; no filter option without a strategy (DK-014, DK-015)", async ({ page, request }) => {
+  const list = (await (await request.get(`${API}/public/library`)).json()).entries as { market: string; verdict: { verdict: string; checks?: { status: string }[] }; vs_hold?: { gap: number } | null }[];
+  await page.goto("/library");
+  await expect(page.getByTestId("lib-summary")).toBeVisible({ timeout: 30_000 });
+  const behind = list.filter((e) => e.vs_hold && e.vs_hold.gap <= -0.05).length;
+  const failed = list.filter((e) => (e.verdict.checks ?? []).some((c) => c.status === "fail")).length;
+  await expect(page.getByTestId("lib-summary")).toHaveText(`${behind} of ${list.length} finished behind buy and hold · ${failed} failed a check`);
+  // the explanation is on the page once, not on every card
+  await expect(page.getByTestId("lib-checks-not-hold")).toHaveCount(1);
+  const cards = page.locator(".lib-card");
+  await expect(cards).toHaveCount(list.length);
+  await expect(page.locator("main")).not.toContainText(/Passed: .*Not run:|Behind buy and hold by/);
+  await expect(cards.first().getByTestId("lib-hold")).toContainText(/points (behind|ahead of) buy and hold|About the same as buy and hold/);
+  await expect(cards.first().locator(".badge").first()).toContainText(/checks run|Lost money|Too few|Mixed|Failed/);
+  await expect(cards.first().locator(".k-mini-stats .k-stat-v")).toHaveCount(3);
+  // each verdict option is one some strategy has
+  const have = new Set(list.map((e) => e.verdict.verdict));
+  const options = await page.getByLabel("Verdict").locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));
+  for (const v of options.filter(Boolean)) expect(have.has(v), `${v} is offered with no strategy`).toBe(true);
+  for (const v of have) expect(options, v).toContain(v);
 });

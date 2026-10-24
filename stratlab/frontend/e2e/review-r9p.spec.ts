@@ -45,7 +45,8 @@ test("R9P-006 and R9P-007: the confirm step says what the rupee charge is in dol
       converted: false, charge_about: { basic: 7.23, pro: 20.67, basic_year: 72.38, pro_year: 206.82 } } } })));
   await page.route(`${API}/billing/subscribe`, (r) => r.fulfill({ status: 200, json: { subscription_id: "sub_test", key_id: "rzp_test", email: "", currency: "INR" } }));
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "USD" });
-  await expect(page.getByTestId("charged-basic")).toContainText("Charged as ₹699 / month (about $7 today)", { timeout: 30_000 });
+  await expect(page.getByTestId("about-basic")).toHaveText("about $7 at today's rate", { timeout: 30_000 });
+  await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");        // DK-001: the rupee price is the main price
   await page.getByRole("button", { name: "Upgrade to Basic" }).click();
   const confirm = page.getByRole("dialog").getByTestId("plan-confirm");
   await expect(confirm).toContainText("Basic plan, billed monthly: ₹699 (about $7 today), every month.");       // the card's figure, not a second one

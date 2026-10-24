@@ -127,10 +127,12 @@ test("R8O-006: a euro price charged in rupees says that charge in euros, and the
       converted: false, charge_about: { basic: 6.44, pro: 18.43, basic_year: 64.53, pro_year: 184.39 } } },
     countries: { ...j.countries, DE: "EUR" } })));
   const errors = await open(page, "/plans", visitor, { "stratlab.currency": "EUR" });
-  await expect(page.getByTestId("charged-basic")).toContainText("Charged as ₹699 / month incl. GST (about €6 today)", { timeout: 30_000 });
-  await expect(page.getByTestId("charged-pro")).toContainText("(about €18 today)");
+  // DK-001: the rupee price is the card's main price, with the euros beside it as "about"
+  await expect(page.getByTestId("about-basic")).toHaveText("about €6 at today's rate", { timeout: 30_000 });
+  await expect(page.getByTestId("about-pro")).toHaveText("about €18 at today's rate");
+  await expect(page.locator(".k-plan-price").nth(1)).toContainText("₹699");
   const main = page.locator("main");
-  await expect(main).toContainText("about €6 for Basic and €18 for Pro at today's rate, not the EUR prices shown");
+  await expect(main).toContainText("about €6 for Basic and €18 for Pro at today's rate");
   await expect(main).not.toContainText("can differ slightly");
   expect(errors).toEqual([]);
 });

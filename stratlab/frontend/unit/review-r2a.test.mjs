@@ -43,8 +43,8 @@ test("signed-out tab titles say what they wait for (R2A-025)", async () => {
   assert.equal(signedOutTitle("/options"), "Sign in · Options builder · StratLab");
   assert.equal(signedOutTitle("/holdings").startsWith("Sign in · "), true);
   assert.equal(signedOutTitle("/pricing"), "Plans · StratLab");
-  assert.equal(signedOutTitle("/plans"), "Plans · StratLab");
-  assert.equal(signedOutTitle("/"), "StratLab: test it, research it, track it");
+  assert.equal(signedOutTitle("/plans"), "Plans and prices · StratLab");
+  assert.equal(signedOutTitle("/"), "StratLab: backtest trading ideas, research stocks, track money");     // keywords in the title (DK-013)
 });
 
 test("the closing auction says closed before the open, not continuous trading (R2A-006)", async () => {

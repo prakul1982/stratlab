@@ -100,6 +100,8 @@ test.describe("plans: the right currency at once, the charged amount on the card
   const priced = async () => {
     const body = await (await fetch(`${API}/pricing`)).json();
     body.offer = { ...body.offer, mode: "paid", payments: true, yearly: true };
+    // what the rupee charge is in dollars today (the fake world has no rate): shown beside the rupee price (DK-001)
+    body.currencies.USD = { ...body.currencies.USD, charge_about: { basic: 7.23, pro: 20.67, basic_year: 72.38, pro_year: 206.82 } };
     return body;
   };
 
@@ -115,19 +117,22 @@ test.describe("plans: the right currency at once, the charged amount on the card
     await expect(sec).not.toContainText("₹");
     const before = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     release();
-    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("$8");
-    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("$20");
+    // DK-001: a card charged in rupees shows the rupee price as its main price, the visitor's dollars only as "about" beside it
+    await expect(sec.locator('.lp-price[data-plan="basic"] .lp-amount')).toContainText("₹699");
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹1,999");
+    await expect(sec.getByTestId("about-basic")).toHaveText(/^about \$\d+ at today's rate$/);
     const after = await page.evaluate(() => (document.querySelector("#faq") as HTMLElement).getBoundingClientRect().top + scrollY);
     // (the heading and the lines under the cards wrap differently on a narrow screen, and a touch screen's switch is 44px
     // tall (R13S-011), so a phone gets more room than a laptop)
     expect(Math.abs(after - before), "what is below the plans moved when the prices arrived").toBeLessThanOrEqual(page.viewportSize()!.width < 700 ? 136 : 60);
     const basic = sec.locator('.lp-price[data-plan="basic"]');
-    await expect(basic).toContainText("Charged as ₹699 / month incl. GST");
+    await expect(basic.locator(".lp-price-note")).toContainText("incl. GST");
     const size = await basic.locator(".lp-price-note").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(size, "the charged amount is in readable type").toBeGreaterThanOrEqual(13);
     // the yearly choice says "about" and each card states its exact saving
     await sec.getByRole("radio", { name: "Yearly · about 2 months free" }).click();
-    await expect(sec.locator('.lp-price[data-plan="pro"]')).toContainText("Charged as ₹19,999 / year incl. GST");
+    await expect(sec.locator('.lp-price[data-plan="pro"] .lp-amount')).toContainText("₹19,999");
+    await expect(sec.getByTestId("about-pro")).toHaveText(/^about \$\d+ at today's rate$/);
     await expect(sec.locator('.lp-price[data-plan="basic"] .lp-save')).toContainText("Saves");
     await expect(sec.locator('.lp-price[data-plan="free"] .lp-save')).toHaveCount(0);
     await expect(sec.locator('.lp-price[data-plan="basic"] button')).toHaveText("Continue with Google to get Basic");
