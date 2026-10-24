@@ -15,6 +15,7 @@ job reads each new XBRL once and keeps the last four quarters per company in app
 
 Facts only: names and numbers as filed, listed alphabetically or by stake size within one company. Nobody is ranked,
 called a "superstar" or "smart money", and holdings are only those above 1% at the quarter's end."""
+import functools
 import json
 import re
 import threading
@@ -47,6 +48,8 @@ PAUSE = 1.0                     # seconds between documents: a steady pace for t
 MAX_QUEUE = 8000
 MAX_FOLLOWS = 20
 MAX_RESULTS = 40                # name groups a search answers with
+PARSER = 2                      # how filings are read: stored quarters read by an older parser are read again (DF-016)
+POPULAR = 8                     # the holders named in the most companies, offered before anything is typed (DF-019)
 LIST_AT = "21:00"               # India time: the day's filings are listed after this
 SYMBOL = re.compile(r"^[A-Z0-9][A-Z0-9&\-_.]{0,19}$")
 NOTE = ("From each company's quarterly shareholding pattern filed with the exchange. The filing names every public "
@@ -77,7 +80,8 @@ def _nse(feed=None):
 
 # ---------- names ----------
 HONORIFICS = {"MR", "MRS", "MS", "DR", "SHRI", "SMT", "SH", "KUM", "KUMARI", "SMT.", "M S", "MESSRS"}
-ABBREV = {"LTD": "LIMITED", "PVT": "PRIVATE", "CORP": "CORPORATION", "CO": "COMPANY", "INTL": "INTERNATIONAL", "AND": "AND"}
+ABBREV = {"LTD": "LIMITED", "PVT": "PRIVATE", "CORP": "CORPORATION", "CORPN": "CORPORATION", "CO": "COMPANY", "INTL": "INTERNATIONAL",
+          "AND": "AND"}
 
 
 def norm(name: str) -> str:
@@ -97,6 +101,32 @@ def holder_key(name: str) -> str:
     cut = re.split(r"\s+(?:A|AN|THE)\s+(?:COMPANY|TRUST|FUND|BODY|SUBSIDIARY|ENTITY|FIRM|PARTNERSHIP)\b|\s+(?:CONTROLLED|HELD|OWNED|MANAGED|PROMOTED|SPONSORED)\s+BY\b|\s+\(\s*(?:A|AN)\s",
                    str(name or "").upper(), maxsplit=1)[0]
     return norm(cut) or norm(name)
+
+
+# one holder filed under a short form of its name ("LICI ULIP-GROWTH FUND", "LIC I New Pension Plus Growth Fund" for the
+# Life Insurance Corporation of India), as Ambuja, HUL, PNB and Coforge filed LIC in the quarter to 30 Sep 2026 (DF-016)
+ALIASES = ((re.compile(r"^LIC ?I\b"), "LIFE INSURANCE CORPORATION OF INDIA"),)
+# what follows a holder's own name: the scheme or account it holds through ("- ULIF00420091...", "- P & GS Fund", "A/C
+# HDFC Flexi Cap Fund", "with Sub Accounts", "through various schemes", "(including other LIC funds ...)")
+SCHEME_TAIL = re.compile(r"\s+(?:A C\b|ULIF|P AND GS\b|ASM NON PAR\b|NON PAR\b|LIC\b|WITH (?:ITS )?SUB ACCOUNTS?\b|ALONG WITH\b|"
+                         r"AND (?:ITS )?(?:VARIOUS|SUB)\b|THROUGH (?:ITS )?VARIOUS\b|UNDER (?:ITS )?VARIOUS\b|\(?VARIOUS SCHEMES?\b|INCLUDING\b).*$")
+
+
+@functools.lru_cache(maxsize=65536)
+def entity(key: str) -> str:
+    """The holder behind a name key, whatever scheme or account it is filed through: "LICI ULIP GROWTH FUND", "LIFE
+    INSURANCE CORPORATION OF INDIA P AND GS FUND" and "LIFE INSURANCE CORPN OF INDIA" are all LIC; "HDFC TRUSTEE COMPANY
+    LIMITED A C HDFC FLEXI CAP FUND" is HDFC Trustee Company. Used to tell a holder renamed in a filing from one that has
+    gone (DF-016) and to put one holder's spellings together in the search (DF-017)."""
+    k = str(key or "")
+    for rx, to in ALIASES:
+        if rx.match(k):
+            return to
+    m = re.match(r"^(\w+ \w+)\b.*? AND \1\b", k)          # "LIFE INSURANCE CORPORATION ... AND LIFE INSURANCE CORPORATE ... FUND"
+    if m:
+        k = k[:k.index(" AND ")]
+    k = SCHEME_TAIL.sub("", k)
+    return re.sub(r"\s+LIMITED$", "", k).strip() or str(key or "")
 
 
 def tidy_name(name: str) -> str:
@@ -165,6 +195,19 @@ def _number(v) -> float | None:
     return x if x == x and abs(x) < 1e15 else None
 
 
+# names a "Category" row carries when it is a category's total, not a holder
+CATEGORY_NAME = re.compile(r"^(?:FOREIGN |OTHER |RESIDENT |NON RESIDENT )?(?:INSTITUTIONAL INVESTORS?|INSTITUTION INVESTORS?|INSTITUTIONS?|"
+                           r"BANKS?|BODIES CORPORATES?|BODY CORP\w*|CUSTODIANS?|ESCROW ACCOUNTS?|OTHERS?|DIRECTORS?|HUF|CLEARING MEMBERS?|"
+                           r"TRUSTS?|FDI\b.*|NRI\b.*|FII|FPI|BENEFICIAL HOLDINGS?\b.*)$")
+
+
+def named_one(name: str, f: dict, g: dict) -> bool:
+    """A row the company marked "Category" that is really one named holder: one shareholder, a name that isn't a
+    category's (DF-016: Hero MotoCorp filed LIC's 6.04% this way, and its holding read as gone)."""
+    n = _number(g.get("NumberOfShareholders") or f.get("NumberOfShareholders"))
+    return n == 1 and not CATEGORY_NAME.match(norm(name))
+
+
 class BadFiling(ValueError):
     """The document isn't a shareholding pattern we can read."""
 
@@ -209,7 +252,9 @@ def parse_xbrl(data: bytes | str) -> dict:
         inst = cid[2:] if cid.startswith("D_") else cid
         g = facts.get(inst, {})
         ax = axis.get(cid) or axis.get(inst) or ""
-        if ax in SKIP or (f.get("WhetherACategoryOrMoreThan1PercentageOfShareholding") or "").lower().startswith("category"):
+        if ax in SKIP:
+            continue
+        if (f.get("WhetherACategoryOrMoreThan1PercentageOfShareholding") or "").lower().startswith("category") and not named_one(name, f, g):
             continue
         promoter = "TypeOfPromoterShareholding" in f or "TypeOfPromoterShareholding" in g
         sub = f.get("CategoryOfOtherIndianShareholders") or f.get("CategoryOfOtherForeignShareholders") or f.get("CategoryOfOtherNonInstitutions") or ""
@@ -339,9 +384,9 @@ def store(symbol: str, row: dict, parsed: dict) -> tuple[dict | None, dict]:
         co = db.json_value(db.get_setting(KEY + symbol), {})
         qs = co.get("q") if isinstance(co.get("q"), dict) else {}
         old = qs.get(row["quarter"])
-        if old and old.get("filed", "") > row["filed"]:
+        if old and old.get("filed", "") > row["filed"] and int(old.get("parser") or 1) >= PARSER:
             return None, old                                  # a newer (revised) filing is already stored
-        qs[row["quarter"]] = {"rec": row["rec"], "filed": row["filed"], "url": row["url"],
+        qs[row["quarter"]] = {"rec": row["rec"], "filed": row["filed"], "url": row["url"], "parser": PARSER,
                               "rows": [[h["name"], h["kind"], h["group"], h["shares"], h["pct"]] for h in parsed["holders"]]}
         keep = sorted(qs)[-KEEP_QUARTERS:]
         co = {"name": parsed.get("name") or row.get("name") or co.get("name") or symbol, "isin": parsed.get("isin") or co.get("isin") or "",
@@ -372,6 +417,31 @@ def _change(now: dict | None, before: dict | None, had_before: bool) -> str | No
     return "dropped" if before else None
 
 
+def _line(r: dict, b: dict | None, had_before: bool) -> dict:
+    return {**{k: r[k] for k in ("name", "kind", "group", "shares", "pct")}, "prev_pct": b["pct"] if b else None,
+            "prev_shares": b["shares"] if b else None, "change": _change(r, b, had_before),
+            "pct_change": round(r["pct"] - b["pct"], 2) if b else None}
+
+
+def pair(now_rows: list[dict], before_rows: list[dict], keys: set[str], had_before: bool) -> tuple[list[dict], list[dict], bool]:
+    """A holder's rows in one company's latest quarter and the one before, by the spellings chosen. When only one of the
+    quarters has them, the other quarter's rows of the same holder under another name count (renamed: True): LIC filed as
+    "LICI ULIP-GROWTH FUND" at Ambuja is LIC still there at 7.28%, not "below 1% or out" (DF-016)."""
+    now = [r for r in now_rows if r["key"] in keys]
+    before = [r for r in before_rows if r["key"] in keys]
+    if before and not now:
+        ents = {entity(r["key"]) for r in before}
+        alt = [r for r in now_rows if entity(r["key"]) in ents]
+        if alt:
+            return alt, before, True
+    if now and not before and had_before:
+        ents = {entity(r["key"]) for r in now}
+        alt = [r for r in before_rows if entity(r["key"]) in ents]
+        if alt:
+            return now, alt, True
+    return now, before, False
+
+
 def company_view(symbol: str) -> dict | None:
     """The company page's list: each named holder in the latest quarter by stake size (promoter group, then public),
     with the change since the quarter before, and the holders that dropped below 1% (or out of the list)."""
@@ -383,11 +453,18 @@ def company_view(symbol: str) -> dict | None:
     now_rows, before_rows = _rows(latest), _rows(prev)
     before = {(r["mkey"], r["group"]): r for r in before_rows}
     holders = []
+    unmatched = []
     for r in now_rows:
         b = before.pop((r["mkey"], r["group"]), None)
-        holders.append({**{k: r[k] for k in ("name", "kind", "group", "shares", "pct")}, "prev_pct": b["pct"] if b else None,
-                        "prev_shares": b["shares"] if b else None, "change": _change(r, b, prev is not None),
-                        "pct_change": round(r["pct"] - b["pct"], 2) if b else None})
+        if b is None:
+            unmatched.append(r)
+            continue
+        holders.append(_line(r, b, prev is not None))
+    for r in unmatched:
+        # filed under another name for the same holder ("LICI ULIP-GROWTH FUND" for LIC): the same line, not new and gone (DF-016)
+        k = next((k for k, b in before.items() if k[1] == r["group"] and entity(b["key"]) == entity(r["key"])), None)
+        b = before.pop(k) if k else None
+        holders.append({**_line(r, b, prev is not None), **({"was_named": b["name"]} if b else {})})
     holders.sort(key=lambda h: (h["group"] != "promoter", -h["pct"], h["name"]))
     dropped = sorted(({"name": b["name"], "kind": b["kind"], "group": b["group"], "prev_pct": b["pct"], "prev_shares": b["shares"]}
                       for b in before.values()), key=lambda h: (-h["prev_pct"], h["name"]))
@@ -475,31 +552,69 @@ def coverage(wait: bool = False) -> dict:
     return {**out, "queued": queued}
 
 
-def search(query: str) -> list[dict]:
-    """Name groups that match the query, alphabetical: {"label", "names": [{"key", "name", "companies"}]}. Spellings that
-    look like one holder (same first and last word) are grouped; the user can untick any of them."""
+def _all_keys() -> dict[str, dict]:
+    """Every name key in the index: {key: {"key", "name" (the spelling filed most often), "companies": {symbols}, "group"}}."""
+    hit = _cache.get("keys")
+    if hit is not None:
+        return hit
     keys: dict[str, dict] = {}
+    spelt: dict[str, dict[str, int]] = {}
     for sym, co in _index().items():
-        for q in sorted(co["q"]):                      # oldest first: the name shown is the latest spelling filed
+        for q in sorted(co["q"]):
             for r in _rows(co["q"][q]):
-                if matches(query, r["key"]):
-                    k = keys.setdefault(r["key"], {"key": r["key"], "name": r["name"], "companies": set(), "q": ""})
-                    if q >= k["q"]:
-                        k["name"], k["q"] = r["name"], q
-                    k["companies"].add(sym)
+                k = keys.setdefault(r["key"], {"key": r["key"], "name": r["name"], "companies": set(), "group": r["group"]})
+                k["companies"].add(sym)
+                spelt.setdefault(r["key"], {})[r["name"]] = spelt.get(r["key"], {}).get(r["name"], 0) + 1
+    for key, k in keys.items():                        # the spelling filed most often names the key ("Corpn" once is not it)
+        k["name"] = min(spelt[key].items(), key=lambda kv: (-kv[1], kv[0]))[0]
+    _cache.set("keys", keys, 600)
+    return keys
+
+
+def _groups(keys: dict[str, dict]) -> list[dict]:
+    """Name keys put together as holders: spellings of one holder (the same entity, or the same first and last word)."""
     groups: list[dict] = []
+    by_entity: dict[str, dict] = {}
     for k in sorted(keys.values(), key=lambda x: x["key"]):
-        g = next((g for g in groups if any(alike(k["key"], n["key"]) for n in g["names"])), None)
+        g = by_entity.get(entity(k["key"])) or next((g for g in groups if any(alike(k["key"], n["key"]) for n in g["names"])), None)
         if g is None:
             groups.append({"names": []})
             g = groups[-1]
+        by_entity.setdefault(entity(k["key"]), g)
         g["names"].append({"key": k["key"], "name": k["name"], "companies": len(k["companies"])})
     for g in groups:
         g["names"].sort(key=lambda n: (-n["companies"], n["key"]))
         g["label"] = g["names"][0]["name"]
         g["companies"] = len({s for n in g["names"] for s in keys[n["key"]]["companies"]})
-    groups.sort(key=lambda g: g["label"].upper())
+    return groups
+
+
+def search(query: str) -> list[dict]:
+    """Holders whose name matches the query: {"label", "companies", "names": [{"key", "name", "companies"}]}. All of one
+    holder's spellings are one group (its schemes and short forms too: LIC's 14 spellings and its LICI funds), and the
+    user can untick any of them. The best fit comes first: a name that starts with what was typed, then the holders named
+    in the most companies (DF-017: "Life Insurance" listed Aditya Birla and Axis Max, alphabetically, before LIC)."""
+    every = _all_keys()
+    hit = {k for k in every if matches(query, k)}
+    ents = {entity(k) for k in hit}
+    keys = {k: v for k, v in every.items() if k in hit or entity(k) in ents}
+    groups = _groups(keys)
+    q = norm(query)
+    groups.sort(key=lambda g: (not any(n["key"].startswith(q) for n in g["names"]), -g["companies"], g["label"].upper()))
     return groups[:MAX_RESULTS]
+
+
+def popular(limit: int = POPULAR) -> list[dict]:
+    """The public holders named in the most companies, for the page before anything is typed: {"label", "companies"}."""
+    hit = _cache.get("popular")
+    if hit is not None:
+        return hit
+    keys = {k: v for k, v in _all_keys().items() if v.get("group") != "promoter"}
+    out = [{"label": g["label"], "companies": g["companies"]} for g in _groups(keys)]
+    out.sort(key=lambda g: (-g["companies"], g["label"].upper()))
+    out = out[:limit]
+    _cache.set("popular", out, 600)
+    return out
 
 
 def holdings(keys: list[str]) -> dict:
@@ -510,8 +625,7 @@ def holdings(keys: list[str]) -> dict:
     for sym, co in _index().items():
         qs = sorted(co["q"])
         latest, prev = co["q"][qs[-1]], (co["q"][qs[-2]] if len(qs) > 1 else None)
-        now = [r for r in _rows(latest) if r["key"] in want]
-        before = [r for r in _rows(prev) if r["key"] in want]
+        now, before, renamed = pair(_rows(latest), _rows(prev), want, prev is not None)
         if not now and not before:
             continue
         def total(rs):
@@ -525,11 +639,13 @@ def holdings(keys: list[str]) -> dict:
                      "names": (n or b)["names"], "kind": (n or b)["kind"], "group": (n or b)["group"],
                      "shares": n["shares"] if n else None, "pct": n["pct"] if n else None,
                      "prev_shares": b["shares"] if b else None, "prev_pct": b["pct"] if b else None,
-                     "change": _change(n, b, prev is not None), "pct_change": round(n["pct"] - b["pct"], 2) if n and b else None})
+                     "change": _change(n, b, prev is not None), "pct_change": round(n["pct"] - b["pct"], 2) if n and b else None,
+                     # filed under another name than the quarter before: the same holder, named as each filing names it
+                     **({"renamed": True, "prev_names": b["names"]} if renamed and n and b else {})})
     rows.sort(key=lambda r: r["company"].upper())
     held = [r for r in rows if r["pct"] is not None]
     return {"rows": rows, "count": len(held), "dropped": sum(1 for r in rows if r["change"] == "dropped"),
-            "new": sum(1 for r in rows if r["change"] == "new"), "keys": sorted(want)}
+            "new": sum(1 for r in rows if r["change"] == "new"), "renamed": sum(1 for r in rows if r.get("renamed")), "keys": sorted(want)}
 
 
 # ---------- following a holder ----------
@@ -601,10 +717,10 @@ def follow_changes(symbol: str, company_name: str, before_q: dict | None, now_q:
         uid = row.get("uid") or k[len(FOLLOW_KEY):]
         for f in row.get("items") or []:
             keys = set(f.get("names") or [])
-            def total(rs):
-                hit = [r for r in rs if r["key"] in keys]
+            now, before, _ = pair(n_rows, b_rows, keys, True)       # a holder renamed in the filing hasn't gone (DF-016)
+            def total(hit):
                 return {"shares": sum(r["shares"] for r in hit), "pct": round(sum(r["pct"] for r in hit), 2)} if hit else None
-            line = change_line(f.get("label") or "A holder you follow", company_name, symbol, total(b_rows), total(n_rows), quarter)
+            line = change_line(f.get("label") or "A holder you follow", company_name, symbol, total(before), total(now), quarter)
             if line:
                 out.setdefault(uid, []).append(line)
     return out
@@ -645,6 +761,25 @@ def enqueue(rows: list[dict], st: dict, per_company: int | None = None) -> int:
             continue
         queued[(sym, q)] = [sym, q, r["rec"], r["url"], r["filed"], r["name"]]
         added += 1
+    st["queue"] = sorted(queued.values(), key=lambda x: (x[1], x[4]), reverse=True)
+    return added
+
+
+def requeue_old(st: dict) -> int:
+    """Queue again each stored company's two latest quarters that an older parser read (the ones the search and the
+    company page use), from the filing each was read from. Returns how many were queued."""
+    queued = {(x[0], x[1]): x for x in st.get("queue") or []}
+    added = 0
+    for k, raw in db.all_settings_with_prefix(KEY):
+        sym = k[len(KEY):]
+        co = db.json_value(raw, {})
+        qs = co.get("q") if isinstance(co.get("q"), dict) else {}
+        for q in sorted(qs)[-2:]:
+            row = qs[q] or {}
+            if int(row.get("parser") or 1) >= PARSER or not _xbrl_ok(row.get("url") or "") or (sym, q) in queued:
+                continue
+            queued[(sym, q)] = [sym, q, row.get("rec") or row["url"], row["url"], row.get("filed") or q, co.get("name") or sym]
+            added += 1
     st["queue"] = sorted(queued.values(), key=lambda x: (x[1], x[4]), reverse=True)
     return added
 
@@ -697,8 +832,12 @@ class Job:
             added = enqueue(rows, st, per_company=2)
             st["backfilled"] = True
             st["filling"] = True                 # the first fill: no messages until its queue is read
+            st["parser"] = PARSER
         else:
             added = enqueue(read_list(nse, today - timedelta(days=LIST_DAYS), today), st)
+            if st.get("parser") != PARSER:
+                added += requeue_old(st)           # read again under today's parser, quietly (DF-016)
+                st["parser"], st["filling"] = PARSER, True
         st["listed_to"] = today.isoformat()
         _save_state(st)
         self.last_list = today
@@ -794,12 +933,14 @@ def named_holders(symbol: str, profile=Depends(current_profile)):
 
 @router.get("/invest/holders")
 def holder_search(q: str = "", profile=Depends(current_profile)):
-    """Search named holders across every company read, by name. Basic and up."""
+    """Search named holders across every company read, by name, the best fit first. Basic and up."""
     _need(profile, "Searching named holders across companies")
     q = q.strip()[:80]
     if q and len(norm(q).replace(" ", "")) < 3:
         err(400, "short_query", "Type at least three letters of the holder's name.")
-    return ok({"q": q, "groups": search(q) if q else [], "coverage": coverage(), "follows": follows(profile["id"]), "note": NOTE})
+    return ok({"q": q, "groups": search(q) if q else [], "coverage": coverage(), "follows": follows(profile["id"]), "note": NOTE,
+               # before anything is typed: the holders named in the most companies, one tap each (DF-019)
+               "popular": [] if q else popular()})
 
 
 class HoldingsReq(BaseModel):

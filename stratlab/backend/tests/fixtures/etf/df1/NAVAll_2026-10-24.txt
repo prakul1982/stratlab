@@ -1,0 +1,12 @@
+Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;Scheme Name;Plan;Option;Net Asset Value;Date
+
+Open Ended Schemes(Other Scheme - Other  ETFs)
+
+152891;INF666M01IP5;-;Groww Nifty 1D Rate Liquid ETF;;;111.3319;25-Oct-2026
+153045;INF769K01MY5;-;Mirae Asset Nifty 1D Rate Liquid ETF - Growth;;;1109.3801;25-Oct-2026
+149169;INF769K01HP3;-;Mirae Asset S&P 500 Top 50 ETF;;;66.2676;23-Oct-2026
+148927;INF769K01HF4;-;Mirae Asset NYSE FANG+ ETF;;;169.3739;23-Oct-2026
+153329;INF666M01JV1;-;Groww Nifty 200 ETF;;;10.4795;23-Oct-2026
+152802;INF209KC1142;-;Aditya Birla Sun Life Crisil 10 year Gilt ETF;;;109.4645;23-Oct-2026
+149438;INF247L01AU3;-;Motilal Oswal Nasdaq Q50 ETF;;;118.3705;23-Oct-2026
+140086;INF732E01037;-;Nippon India ETF Nifty 1D Rate Liquid BeES;Direct Plan;;1000.0000;25-Oct-2026

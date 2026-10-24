@@ -60,6 +60,8 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
           <Stat item label="Last NAV" value={r.nav == null ? "–" : price(r.nav, "INR")}
             note={<>{r.nav_gap != null ? `${r.nav_price_day ? `${day(r.nav_price_day)} close` : "Price"} ${gapWords(r.nav_gap, "NAV").replace(/^trades /, "")}`
               : r.nav_doubtful ? "Gap left out: the day's close and the latest price are too far apart to both be right"
+              : r.nav_mismatch ? "Gap left out: the price is 3 or more times the NAV, so the NAV is of another unit"
+              : r.nav_closed_day && r.nav_date ? `No gap: the NAV is of ${day(r.nav_date)}, a day with no trading`
               : r.nav_waiting && r.nav_date ? `No gap yet: today's price is not set against the NAV of ${day(r.nav_date)}` : "No published NAV found"}
               {r.nav_date && <><br />NAV of {day(r.nav_date)}</>}</>} />
         </StatRow>
@@ -78,7 +80,7 @@ export function EtfGapDetailView({ symbol, quiet, price: shown, day: shownDay }:
               labels={hist.map((h) => day(h.day))} height={190} baseline={0} ranges={false} table={false}
               format={(v) => pct(v, 2)} axisFormat={(v) => `${num(v, 1)}%`}
               ariaLabel={`${r.symbol}'s gap to NAV at each close, ${day(hist[0].day)} to ${day(hist[hist.length - 1].day)}`} />
-            {d.days && <span className="k-small">Over {d.days.days} trading days: from {gapShort(d.days.low)} to {gapShort(d.days.high)}, {gapShort(d.days.avg)} on average.</span>}
+            {d.days && <span className="k-small">Over {d.days.days} trading days{d.days.stored && d.days.stored > d.days.days ? ` (of ${d.days.stored} kept)` : ""}: from {gapShort(d.days.low)} to {gapShort(d.days.high)}, {gapShort(d.days.avg)} on average.</span>}
           </>
         ) : <p className="k-small k-muted">The daily history builds up from each close; there isn't enough of it yet.</p>}
       </div>

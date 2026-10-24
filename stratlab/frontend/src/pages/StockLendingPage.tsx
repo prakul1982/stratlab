@@ -3,10 +3,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
 import { eyebrowOf } from "../lib/eyebrow";
 import { inr } from "../lib/format";
-import { dayText, desksApi, plainPct, sharesShort, statusText, type DeskStatus, type LendRow, type LendTable } from "../lib/stockDesks";
+import { dayText, desksApi, plainPct, sharesShort, statusText, type DeskStatus, type LendMarketRow, type LendRow, type LendTable } from "../lib/stockDesks";
 import { Earlier } from "../components/Earlier";
 import { Info } from "../components/ui";
-import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, PageHeader, Skeleton, Stat, StatRow, StockPicker, type Column } from "../components/kit";
+import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, PageHeader, Seg, Skeleton, Stat, StatRow, StockPicker, type Column } from "../components/kit";
 
 /* /invest/stock-lending: what lending fees traded on the exchange's SLB segment for the stocks you hold and watch,
  * over the last 30 and 90 days, and any stock looked up day by day. Past traded fees with dates, never "you can earn";
@@ -62,6 +62,30 @@ function OneStock({ symbol, onClose }: { symbol: string; onClose: () => void }) 
   );
 }
 
+const MARKET_TOP = 15;
+const MARKET_ORDER = [{ value: "shares", label: "Most shares lent" }, { value: "fee", label: "Highest fee" }];
+
+/** The whole segment's newest day: what lent, how much and at what fee, for anyone (DF-022: with no holdings or watchlist
+ * the page had nothing to show). A day's facts, ordered by the reader's pick; nothing is called a good fee. */
+function MarketDay({ m, onOpen }: { m: NonNullable<LendTable["market"]>; onOpen: (s: string) => void }) {
+  const [order, setOrder] = useState("shares");
+  const rows = [...m.rows].sort((a, b) => (order === "fee" ? (b.ann ?? -1) - (a.ann ?? -1) : b.shares - a.shares) || a.symbol.localeCompare(b.symbol)).slice(0, MARKET_TOP);
+  const cols: Column<LendMarketRow>[] = [
+    { key: "s", header: "Stock", rowHeader: true, cell: (r) => <a className="link" href={`?s=${r.symbol}`} onClick={(e) => { e.preventDefault(); onOpen(r.symbol); window.scrollTo({ top: 0 }); }}><b>{r.symbol}</b></a> },
+    { key: "sh", header: "Shares lent", numeric: true, cell: (r) => sharesShort(r.shares) },
+    { key: "a", header: "A year, of the price", numeric: true, info: "The day's fee per share, weighted by the shares lent in each series, as a percent of the closing price over the days the series had left, scaled to a year.", cell: (r) => plainPct(r.ann, 2) },
+    { key: "f", header: "Fee paid", numeric: true, cell: (r) => inr(r.fee_paid, 2) },
+    { key: "t", header: "Trades", numeric: true, cell: (r) => r.trades },
+  ];
+  return (
+    <Card label="Lending across the market" testId="slb-market">
+      <CardHead title={`Lending across the market on ${dayText(m.day)}`} actions={<Seg label="Order" value={order} onChange={setOrder} options={MARKET_ORDER} />} />
+      <DataTable stack label={`Lending on ${dayText(m.day)}`} rows={rows} rowKey={(r) => r.symbol} rowAttrs={(r) => ({ "data-stock": r.symbol })} columns={cols} />
+      <p className="k-note">{rows.length} of the {m.stocks} stocks with lending trades that day. A fee from a few trades can be far from what lending fetches on other days.</p>
+    </Card>
+  );
+}
+
 export function StockLendingPage() {
   const [params, setParams] = useSearchParams();
   const pick = (params.get("s") ?? "").toUpperCase();
@@ -106,10 +130,12 @@ export function StockLendingPage() {
           )}
         </Card>
       )}
+      {t?.market && t.market.rows.length > 0 && <MarketDay m={t.market} onOpen={open} />}
       {t && (
         <Card>
           <CardHead title="How lending works" />
-          <dl className="k-dl">{t.facts.map((f) => <div key={f.title}><dt>{f.title}</dt><dd className="k-small">{f.text}</dd></div>)}</dl>
+          {/* a heading over plain prose for each point, not four columns of bold body text (DF-022) */}
+          <dl className="k-dl prose">{t.facts.map((f) => <div key={f.title}><dt>{f.title}</dt><dd className="k-small">{f.text}</dd></div>)}</dl>
           <p className="k-note">Past fees, not what lending would fetch now. Lending goes through an approved intermediary, usually your broker.</p>
         </Card>
       )}

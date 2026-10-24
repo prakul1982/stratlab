@@ -10,6 +10,7 @@ const HOLDINGS_FILES = new URL("../../backend/tests/fixtures/holdings/", import.
 const ADVICE = /\b(buy|sell|hold|accumulate|avoid|cheap|expensive|overpriced|underpriced|overvalued|undervalued)\b/i;
 const PROVIDERS = /kite|zerodha|yahoo|screener\.in|finnhub|amfi|nseindia/i;
 const SHOTS = process.env.E2E_SHOTS;
+const NO_INAV = /An indicative NAV[^.]*isn't shown[^.]*\./g;
 
 function sessionFor(n: number) {
   return { access_token: `load-${n}`, token_type: "bearer", expires_in: 86400, expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "r",
@@ -44,7 +45,8 @@ async function sane(page: Page, errors: string[], words = true) {
   if (!words) return;                    // another page's own copy (My Holdings) is checked by its own tests
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(ADVICE);
-  expect(text, "an iNAV the source doesn't give").not.toMatch(/iNAV|indicative/i);
+  // the one line that says no indicative NAV is shown (DF-007); any other mention is an iNAV the source doesn't give
+  expect(text.replace(NO_INAV, ""), "an iNAV the source doesn't give").not.toMatch(/iNAV|indicative/i);
   expect(text).not.toMatch(PROVIDERS);
 }
 
@@ -70,6 +72,8 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   const head = table.locator("thead tr").first();
   await expect(head).toContainText("Close vs NAV");                                       // one day's close against that day's NAV (R5O-005)
   await expect(head).not.toContainText("iNAV");                                          // none published: no empty columns
+  await expect(page.getByText(/An indicative NAV \(the fund house's estimate through the day\) isn't shown/)).toBeVisible();   // and said so (DF-007)
+  await expect(head).toContainText("Up to 30 trading days");                             // the days used, never a promised 30 (DF-003)
   await expect(rows.last()).toHaveAttribute("data-etf", "BANKBEES");                    // no published NAV: no gap, last
   // the page sits in Invest › Market view, in the breadcrumb at the top
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" });
@@ -93,7 +97,7 @@ test("ETF vs NAV: the widest gap first, filters, and one ETF's own view", async 
   const panel = page.locator("#etf-gap");
   await expect(panel.getByRole("heading", { name: "Price against NAV" })).toBeVisible();
   await expect(panel.getByText("SILVERBEES trades 6.9% above its last NAV.")).toBeVisible();
-  await expect(panel.getByText("Indicative NAV")).toHaveCount(0);
+  await expect(panel.getByText("Indicative NAV", { exact: true })).toHaveCount(0);        // no figure: the note only says none is shown (DF-007)
   // the NAV is dated the latest trading day (the demo's list is stamped with the last close): a weekday, never a future day
   const navDay = (await panel.getByText(/NAV of \d{1,2} \w{3}/).innerText()).match(/NAV of (\d{1,2}) (\w{3})/)!;
   const navDate = new Date(`${navDay[1]} ${navDay[2]} ${new Date().getFullYear()} 12:00 UTC`);

@@ -1685,6 +1685,10 @@ select.k-input:disabled { opacity: .6; cursor: not-allowed; }
 .k-dl > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .k-dl dt { font-size: var(--t-note); color: var(--muted); }
 .k-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+/* facts that are sentences: the term as the heading, the sentence in plain weight, two to a row at most (DF-022) */
+.k-dl.prose { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s4) var(--s5); }
+.k-dl.prose dt { font-size: var(--t-body); font-weight: 600; color: var(--ink); }
+.k-dl.prose dd { font-weight: 400; color: var(--muted); line-height: 1.5; }
 .k-downloads { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .k-downloads .btn { height: auto; min-height: 52px; padding-block: var(--s2); text-align: left; }
 .k-downloads .btn small { display: block; font-weight: 400; opacity: .75; font-size: var(--t-note); }
@@ -2173,3 +2177,17 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
   .k-table th .link-btn, .k-table td .link-btn { padding-block: 11px; margin-block: -11px; }
   .ch-bar .ch-btn, .ch-bar .ch-seg button { min-height: 40px; }
 }
+
+/* a hint that a wide grid scrolls sideways, said on a phone only (DF-014) */
+.k-swipe-hint { display: none; }
+@media (max-width: 640px) { .k-swipe-hint { display: block; } }
+
+/* Named holders: the name box with its button beside it, so an open list of names never hides the button (DF-019) */
+.holder-search { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2, 8px); margin: 0 0 var(--s2, 8px); }
+.holder-search > .k-field { flex: 1 1 260px; min-width: 0; }
+.holder-popular { flex-wrap: wrap; margin-top: var(--s2, 8px); }
+
+
+/* Invest home: the breadth and red-flag cards side by side at one height (DF-023) */
+.space-panels.even { align-items: stretch; }
+.fs-compact .k-row { justify-content: space-between; flex-wrap: wrap; }

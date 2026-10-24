@@ -1,0 +1,160 @@
+{
+ "note": "The page answer of POST /invest/holders/holdings for LIFE INSURANCE CORPORATION OF INDIA, 24 Oct 2026 (the audit's capture), trimmed to these companies",
+ "keys": [
+  "LIFE INSURANCE CORPORATION OF INDIA"
+ ],
+ "rows": [
+  {
+   "symbol": "AARTIIND",
+   "company": "AARTI INDUSTRIES LIMITED",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-16T16:48",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1740069_16102026044804_WEB.xml",
+   "names": [
+    "LIFE INSURANCE CORPORATION OF INDIA"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": 24656272,
+   "pct": 6.8,
+   "prev_shares": 24656272,
+   "prev_pct": 6.8,
+   "change": "same",
+   "pct_change": 0.0
+  },
+  {
+   "symbol": "AMBUJACEM",
+   "company": "Ambuja Cements Limited",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-09T18:13",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1735122_09102026061302_WEB.xml",
+   "names": [
+    "Life Insurance Corporation Of India"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 180793420,
+   "prev_pct": 7.28,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "APOLLOHOSP",
+   "company": "APOLLO HOSPITALS ENTERPRISE LIMITED",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-07T11:30",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1733654_07102026112959_WEB.xml",
+   "names": [
+    "LIFE INSURANCE CORPORATION OF INDIA"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 2830488,
+   "prev_pct": 1.97,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "COFORGE",
+   "company": "Coforge Limited",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-21T22:54",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1743643_21102026105431_WEB.xml",
+   "names": [
+    "Life Insurance Corporation Of India"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 15780127,
+   "prev_pct": 3.56,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "HEROMOTOCO",
+   "company": "HERO MOTOCORP LIMITED",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-19T16:34",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1741580_19102026043440_WEB.xml",
+   "names": [
+    "LIFE INSURANCE CORPORATION OF INDIA"
+   ],
+   "kind": "Other institution",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 10280714,
+   "prev_pct": 5.14,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "HINDUNILVR",
+   "company": "Hindustan Unilever Limited",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-19T22:27",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1742125_19102026102752_WEB.xml",
+   "names": [
+    "LIFE INSURANCE CORPORATION OF INDIA"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 154902720,
+   "prev_pct": 6.59,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "PNB",
+   "company": "Punjab National Bank",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-15T14:42",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1738738_15102026024246_WEB.xml",
+   "names": [
+    "Life Insurance Corporation Of India"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 1014477840,
+   "prev_pct": 8.83,
+   "change": "dropped",
+   "pct_change": null
+  },
+  {
+   "symbol": "TATAPOWER",
+   "company": "TATA POWER COMPANY LIMITED",
+   "quarter": "2026-09-30",
+   "prev_quarter": "2026-06-30",
+   "filed": "2026-10-21T14:03",
+   "url": "https://nsearchives.nseindia.com/corporate/xbrl/SHP_1742704_21102026020328_WEB.xml",
+   "names": [
+    "Life Insurance Corporation of India"
+   ],
+   "kind": "Insurance company",
+   "group": "public",
+   "shares": null,
+   "pct": null,
+   "prev_shares": 157599885,
+   "prev_pct": 4.93,
+   "change": "dropped",
+   "pct_change": null
+  }
+ ]
+}

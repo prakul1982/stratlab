@@ -46,7 +46,9 @@ def test_gap_maths():
     assert E.gap(81.20, 82.0) == -0.98
     assert E.gap("1,000.00", "1000") == 0.0
     assert E.gap(100, None) is None and E.gap(None, 100) is None and E.gap(0, 100) is None and E.gap(-5, 100) is None
-    assert E.gap(100, 40) is None                    # 150% away: a NAV for another unit, not a real gap
+    assert E.gap(100, 40) == 150.0                   # wide, but shown: a fund that has stopped making new units can (DF-001)
+    assert E.gap(220.17, 118.3705) == 86.0            # MONQ50 on 23 Oct 2026, the widest gap, no longer dropped (DF-001)
+    assert E.gap(300, 100) is None and E.gap(30, 100) is None     # 3x apart: a NAV of another unit, left out and said so
     assert E.gap(148, 100) == 48.0                    # an overseas fund that can't make new units: a real premium (R45A-016)
     assert E.gap(True, 100) is None and E.gap("-", 100) is None and E.gap(float("nan"), 100) is None
 
@@ -130,7 +132,10 @@ def test_record_fill_and_history(w):
     assert E.fill_navs(FE.navs(DAY), DAY + timedelta(days=30)) == 0                  # too far back to look
 
 
-def test_history_keeps_thirty_days(w):
+def test_history_keeps_thirty_days(w, monkeypatch):
+    from app.data import calendar
+    # DAY (2 Oct) is an exchange holiday, whose NAV is now set against the trading day before it (DF-006): here it trades
+    monkeypatch.setattr(calendar, "is_trading_day", lambda region, d: d.weekday() < 5)
     FE.seed_history(DAY, 34)
     E.refresh(Feed())
     E.record_close(DAY, E.load_live(), FE.navs(DAY))

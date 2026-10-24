@@ -51,7 +51,8 @@ def test_other_filings_are_not_updates():
 
 
 def test_sector_lists():
-    assert {"autos", "cement", "airlines", "power", "telecom", "metals", "retail", "lenders"} <= set(B.SECTORS)
+    # cement and telecom file no such updates, so they're not offered (DF-013)
+    assert {"autos", "airlines", "power", "metals", "retail", "lenders"} <= set(B.SECTORS) and not {"cement", "telecom"} & set(B.SECTORS)
     for sid, s in B.SECTORS.items():
         syms = [x for x, _ in s["symbols"]]
         assert len(syms) == len(set(syms)) and all(B.SYMBOL.match(x) for x in syms), sid
@@ -149,8 +150,8 @@ def test_quarterly_companies_have_a_figure_only_in_quarter_end_months(w):
 
 def test_comparison_with_nothing_read(w):
     B.forget()
-    c = B.compare_view("cement")
-    assert c["periods"] == [] and c["companies"] == [] and len(c["without"]) == len(B.SECTORS["cement"]["symbols"])
+    c = B.compare_view("power")
+    assert c["periods"] == [] and c["companies"] == [] and len(c["without"]) == len(B.SECTORS["power"]["symbols"])
 
 
 # ---------- my stocks ----------
@@ -179,7 +180,7 @@ def test_sector_route_has_compare_and_new_sectors(w, paid):
     seed_two()
     c = w["client"]
     r = c.get("/invest/business-updates?sector=autos", headers=headers("basic-token")).json()
-    assert r["compare"]["periods"][0] == "2026-09" and {x["id"] for x in r["sectors"]} >= {"cement", "airlines", "power", "telecom", "metals", "retail"}
+    assert r["compare"]["periods"][0] == "2026-09" and {x["id"] for x in r["sectors"]} >= {"airlines", "power", "metals", "retail"}
     row = next(x for x in r["rows"] if x["symbol"] == "MARUTI")
     assert row["exchange"] == "NSE" and row["page"] == 1 and row["reads"] == 14 and row["read_ok"] == 14
     for sid in B.SECTORS:
