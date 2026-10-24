@@ -421,4 +421,6 @@ def screen_index():
 
 if __name__ == "__main__":
     build()
-    uvicorn.run(main.app, host="127.0.0.1", port=PORT, log_level="warning")
+    # idle connections kept well past uvicorn's 5 s: a test's request client reusing one just as the server closed it got
+    # "read ECONNRESET" mid-test (the price chart's drawings check, PR 292)
+    uvicorn.run(main.app, host="127.0.0.1", port=PORT, log_level="warning", timeout_keep_alive=120)
