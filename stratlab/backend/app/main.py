@@ -800,6 +800,49 @@ def admin_set_prices(req: PricesReq, _=Depends(admin.admin_profile)):
     return prices_view()
 
 
+class CurrencyPlansReq(BaseModel):
+    currencies: list[str] = Field(default_factory=lambda: ["USD", "EUR", "GBP"], max_length=5)
+
+
+@app.post("/admin/prices/razorpay-plans")
+def admin_make_currency_plans(req: CurrencyPlansReq, who=Depends(admin.admin_profile)):
+    """Make the Razorpay plans that let a currency be charged in that currency at its fixed price (the owner, 25 Oct:
+    "$8 should be what a US card pays"), one per plan and period, and store their IDs. A plan already stored is kept.
+    Razorpay refuses a currency the account can't charge (International Payments off): that currency's error is
+    returned and nothing is stored for it, so it stays charged in rupees."""
+    out = {}
+    names = {"basic": "Basic", "pro": "Pro"}
+    for code in req.currencies:
+        row = pricing.table().get(code)
+        if not row or code == "INR":
+            out[code] = {"error": "Not a currency StratLab prices in."}
+            continue
+        made, error = {}, None
+        for plan in ("basic", "pro"):
+            for period, suffix in (("monthly", ""), ("yearly", "_year")):
+                field = f"plan_{plan}{suffix}"
+                if row.get(field):
+                    continue
+                amount = row[f"{plan}{suffix}"]
+                try:
+                    got = billing.client().plan.create({
+                        "period": period, "interval": 1,
+                        "item": {"name": f"StratLab {names[plan]} ({code}, {period})", "amount": int(round(float(amount) * 100)),
+                                 "currency": code, "description": f"StratLab {names[plan]} plan, billed {period} in {code}"},
+                        "notes": {"plan": plan, "period": "year" if suffix else "month", "currency": code}})
+                    made[field] = got["id"]
+                except Exception as e:
+                    error = public_text(str(e))[:200]
+                    break
+            if error:
+                break
+        if made:
+            pricing.save({code: made})
+        out[code] = {"made": made, **({"error": error} if error else {})}
+    log.info("admin %s: currency plans %s", who.get("email"), {c: sorted((v.get("made") or {})) for c, v in out.items()})
+    return {"result": out, **prices_view()}
+
+
 @app.get("/me")
 def me(profile=Depends(current_profile)):
     uid = profile["id"]

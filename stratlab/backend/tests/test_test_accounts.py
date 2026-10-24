@@ -53,3 +53,37 @@ def test_the_alias_keeps_the_admins_own_address():
     from app import main
     assert main.test_account_email("prakul@gmail.com", "free") == "prakul+sl-free@gmail.com"
     assert main.test_account_email("me+work@x.com", "pro-2") == "me+sl-pro-2@x.com"
+
+
+def test_an_admin_makes_the_currency_plans_and_they_are_stored(monkeypatch):
+    from app import billing, db, pricing
+    from tests import world as W
+    w = W.build(monkeypatch)
+    try:
+        store, made = {}, []
+        monkeypatch.setattr(db, "get_setting", lambda k: store.get(k))
+        monkeypatch.setattr(db, "set_setting", lambda k, v: store.__setitem__(k, v))
+        pricing.forget()
+
+        class Plans:
+            def create(self, body):
+                if body["item"]["currency"] == "GBP":
+                    raise RuntimeError("Currency GBP is not supported for this merchant")
+                made.append(body)
+                return {"id": f"plan_{body['item']['currency']}{len(made)}"}
+        monkeypatch.setattr(billing, "client", lambda: type("C", (), {"plan": Plans()})())
+        h = W.headers("admin-token")
+        r = w["client"].post("/admin/prices/razorpay-plans", headers=h, json={"currencies": ["USD", "GBP"]}).json()
+        assert sorted(r["result"]["USD"]["made"]) == ["plan_basic", "plan_basic_year", "plan_pro", "plan_pro_year"]
+        assert "not supported" in r["result"]["GBP"]["error"] and not r["result"]["GBP"]["made"]
+        usd = [b for b in made if b["item"]["currency"] == "USD"]
+        assert {(b["period"], b["item"]["amount"]) for b in usd} == {("monthly", 800), ("yearly", 8000), ("monthly", 2000), ("yearly", 20000)}
+        t = pricing.table()
+        assert t["USD"]["charged_in"] == "USD" and t["GBP"]["charged_in"] == "INR"     # dollars now charged as dollars
+        # asked again: nothing is made twice
+        again = w["client"].post("/admin/prices/razorpay-plans", headers=h, json={"currencies": ["USD"]}).json()
+        assert again["result"]["USD"]["made"] == {} and len(made) == 4
+        assert w["client"].post("/admin/prices/razorpay-plans", headers=W.headers("pro-token"), json={}).status_code == 403
+    finally:
+        pricing.forget()
+        w["close"]()
