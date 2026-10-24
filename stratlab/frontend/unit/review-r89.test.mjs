@@ -141,3 +141,15 @@ test("R92-002/003/005: the notebook says what its plan won't run before Run; a p
 test("R93-004: a weekly brief's headline shows the day it ran", () => {
   assert.match(read("src/pages/NewsPage.tsx"), /\{it\.day && <span className="k-note" data-testid="news-item-day">\{it\.day\}: <\/span>\}<ItemText/);
 });
+
+test("R95: phone tap targets, a dated first axis tick, charts measured again after first paint", async () => {
+  assert.match(read("src/components/Rotation.tsx"), /const hitR = \(phone: boolean\) => \(COARSE \|\| phone \? 22 : 12\);/);
+  assert.match(read("src/styles.css"), /\.fo-row \.link \{ display: inline-flex; justify-content: center; min-width: 32px; \}/);
+  assert.match(read("src/components/chart/core.ts"), /window\.setTimeout\(measure, 250\)/);
+  const { timeTicks } = await import("../src/charts/price/scales.ts");
+  const day = (m, d) => Date.UTC(2026, m, d);
+  const walls = [day(8, 18), day(8, 21), day(8, 22), day(9, 1), day(9, 2), day(9, 14)];
+  const ticks = timeTicks(walls, 0, walls.length - 1, (i) => i * 100, 84);
+  assert.equal(ticks[0].label, "21 Sep");
+  assert.ok(ticks.some((t) => t.label === "Oct"));
+});

@@ -13,9 +13,14 @@ export function useWidth<T extends HTMLElement>(initial = 720, min = 260) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    setW(Math.max(min, Math.round(el.getBoundingClientRect().width || initial)));
+    const measure = () => { const w = el.getBoundingClientRect().width; if (w) setW(Math.max(min, Math.round(w))); return w; };
+    if (!measure()) setW(Math.max(min, initial));
+    // not laid out yet (a card still being drawn): measured again on the next frames as well as by the observer, so a
+    // chart doesn't stay at a guessed width (R95-001: a phone chart drawn 240 px wide in a 310 px card until re-shown)
+    const timers = [requestAnimationFrame(() => measure()), window.setTimeout(measure, 250)];
     // a frame later: no "ResizeObserver loop" page error (R7T-014)
-    return watchSize(el, (e) => { if (e) setW(Math.max(min, Math.round(e.contentRect.width))); });
+    const stop = watchSize(el, (e) => { if (e) setW(Math.max(min, Math.round(e.contentRect.width))); });
+    return () => { cancelAnimationFrame(timers[0]); clearTimeout(timers[1]); stop(); };
   }, [initial, min]);
   return [ref, w] as const;
 }

@@ -95,7 +95,8 @@ test("R13S-011: on a touch screen the measured controls are 44px", () => {
   assert.match(chart, /\.pc-btn, \.pc-sel, \.pc-seg \.pc-btn, \.pc-rail \.pc-btn\.icon \{ min-height: 44px; \}/);
   assert.match(read("src/pages/admin/admin.css"), /@media \(pointer: coarse\) \{ \.adm-link \{ min-height: var\(--ctl\); \} \}/);
   const rot = read("src/components/Rotation.tsx");
-  assert.match(rot, /r=\{HIT_R\}/);
+  assert.match(rot, /r=\{hitR\(phone\)\}/);          // 44px for a finger, and on a phone-width chart (R95-002)
+  assert.match(rot, /matchMedia\("\(pointer: coarse\)"\)/);
 });
 
 test("R13S-013: the axe items listed in the review", () => {

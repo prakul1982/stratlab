@@ -1213,6 +1213,8 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 .fo-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); min-width: 0; overflow-wrap: anywhere; }
 
 .fo-row .link { padding: 0 2px; }   /* a linked symbol sits on the same line height as a plain one */
+/* a short symbol ("IEX") is still a 32 px target for a thumb (R95-003: 29 px wide) */
+.fo-row .link { display: inline-flex; justify-content: center; min-width: 32px; }
 
 .surv-badge.fo-badge { white-space: normal; max-width: 100%; }   /* wraps inside a narrow card */
 /* market events (/trade/events): neutral tags, figures in ink, the index table scrolling inside its card */

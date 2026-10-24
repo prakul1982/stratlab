@@ -165,7 +165,10 @@ export function timeTicks(walls: number[], from: number, to: number, x: (i: numb
       out.push({ i: m.i, label: m.label, major: w >= 4 });
     }
   }
-  return out.sort((p, q) => p.i - q.i);
+  out.sort((p, q) => p.i - q.i);
+  // a day before any month label says its month: a phone's axis read "21 · Oct · 14" with 21 being September (R95-005)
+  if (out[0] && /^\d{1,2}$/.test(out[0].label)) out[0].label += ` ${MONTHS[new Date(walls[out[0].i]).getUTCMonth()]}`;
+  return out;
 }
 
 /** A bar's wall-clock time in words for the crosshair label: "Tue 5 Mar 2024" or "5 Mar 2024 09:15". */

@@ -16,8 +16,10 @@ export const QUADRANTS: { id: Quadrant; name: string; says: string }[] = [
 ];
 const Q_NAME: Record<Quadrant, string> = { leading: "Leading", weakening: "Weakening", lagging: "Lagging", improving: "Improving" };
 const qColor = (q: Quadrant) => `var(--q-${q})`;
-/** The tap area of a point: 24px across for a mouse, 44px for a finger (R13S-011). */
-const HIT_R = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 22 : 12;
+/** The tap area of a point: 24px across for a mouse, 44px for a finger (R13S-011), and on a phone-width chart whatever
+ * the pointer says (R95-002: 24px at 400 px wide). */
+const COARSE = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+const hitR = (phone: boolean) => (COARSE || phone ? 22 : 12);
 
 /** The swatch that carries a quadrant's colour next to its (ink-coloured) name. */
 export function QuadrantTag({ q }: { q: Quadrant }) {
@@ -116,7 +118,7 @@ export function RotationChart({ rows, benchmark, step, focus, onFocus }: {
         {rows.map((r) => {
           const end = shown(r)[shown(r).length - 1];
           return (
-            <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={HIT_R} fill="transparent" tabIndex={0} role="button" aria-pressed={focus === r.id} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
+            <circle key={`hit-${r.id}`} cx={X(end.x)} cy={Y(end.y)} r={hitR(phone)} fill="transparent" tabIndex={0} role="button" aria-pressed={focus === r.id} aria-label={`${r.name}: ${Q_NAME[quadrantOf(end.x, end.y)]}`}
               onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(r.id)} onBlur={() => setHover(null)}
               onClick={() => onFocus?.(focus === r.id ? null : r.id)}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onFocus?.(focus === r.id ? null : r.id); } }} className="rot-hit" />
