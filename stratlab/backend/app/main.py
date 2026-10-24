@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from kiteconnect import exceptions as kite_exc
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from razorpay import errors as rz_errors
 from razorpay.errors import SignatureVerificationError
 
@@ -6224,6 +6224,75 @@ def admin_review_link(profile=Depends(admin.admin_profile)):
     except Exception as e:
         err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
     return {"sent_to": to}
+
+
+# Test accounts for the automated reviewers (owner, 24 Oct: "add more accounts"): sign-in is Google-only, which a script
+# can't drive, so an admin can make up to MAX_TEST_ACCOUNTS accounts on a "+" alias of their own address ("you+sl-free@…",
+# delivered to their own inbox), each on a plan, and email one a one-time sign-in link. They are never paying accounts.
+TEST_ACCOUNTS = "test-accounts"
+MAX_TEST_ACCOUNTS = 8
+
+
+class TestAccountReq(BaseModel):
+    label: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,19}$")
+    plan: str = "free"
+
+
+def test_account_email(admin_email: str, label: str) -> str:
+    local, _, domain = admin_email.partition("@")
+    return f"{local.split('+', 1)[0]}+sl-{label}@{domain}"
+
+
+def test_accounts() -> dict:
+    return db.json_value(db.get_setting(TEST_ACCOUNTS), {}) or {}
+
+
+@app.get("/admin/test-accounts")
+def admin_test_accounts(profile=Depends(admin.admin_profile)):
+    return {"accounts": test_accounts(), "max": MAX_TEST_ACCOUNTS}
+
+
+@app.post("/admin/test-account")
+def admin_test_account(req: TestAccountReq, profile=Depends(admin.admin_profile)):
+    """Make (or reuse) a test account on a "+" alias of the admin's own address, give it `plan`, and email that alias
+    (the admin's own inbox) a one-time sign-in link that expires in an hour."""
+    if req.plan not in PLANS:
+        err(400, "bad_plan", "Unknown plan.")
+    throttle(profile, "admin_test_account", 20, 3600, "You've asked for 20 test-account links this hour. Try again later.")
+    if not alerts.email_ready():
+        err(400, "email_not_set", "Email isn't set up on the server yet: add BREVO_API_KEY or RESEND_API_KEY in Railway.")
+    if "@" not in (profile.get("email") or ""):
+        err(400, "no_email", "Your admin account has no email address to make an alias of.")
+    email = test_account_email(profile["email"], req.label)
+    known = test_accounts()
+    if email not in {a.get("email") for a in known.values()} and len(known) >= MAX_TEST_ACCOUNTS:
+        err(409, "too_many", f"There are already {MAX_TEST_ACCOUNTS} test accounts.")
+    auth = db.sb().auth.admin
+    try:
+        auth.create_user({"email": email, "email_confirm": True})
+    except Exception as e:                      # already made: reuse it
+        if "already" not in str(e).lower() and "registered" not in str(e).lower() and "exists" not in str(e).lower():
+            err(502, "user_failed", f"The sign-in service couldn't make the account: {public_text(str(e))[:200]}")
+    try:
+        res = auth.generate_link({"type": "magiclink", "email": email,
+                                  "options": {"redirect_to": settings.PUBLIC_SITE_URL.rstrip("/") + "/"}})
+        link, uid = res.properties.action_link, res.user.id
+    except Exception as e:
+        err(502, "link_failed", f"The sign-in service couldn't make a link: {public_text(str(e))[:200]}")
+    db.get_profile(uid, email)                  # the profile row, as a first sign-in makes it
+    admin.set_plan(uid, req.plan, None)
+    entry = {"email": email, "label": req.label, "plan": req.plan, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    db.update_setting(TEST_ACCOUNTS, lambda cur: json.dumps({**(db.json_value(cur, {}) or {}), uid: entry}))
+    text = (f"A one-time sign-in link for the StratLab test account \"{req.label}\" ({req.plan} plan), for the automated "
+            f"reviewer. It works once and expires in an hour.\n\n{link}\n")
+    html = (f"<p>A one-time sign-in link for the StratLab test account \"{req.label}\" ({req.plan} plan), for the automated "
+            f"reviewer. It works once and expires in an hour.</p><p><a href=\"{link}\">Sign in to StratLab</a></p>")
+    try:
+        alerts.send_email(email, f"StratLab test account sign-in link: {req.label}", text, html=html)
+    except Exception as e:
+        err(502, "email_failed", f"The email couldn't be sent: {str(e)[:200]}")
+    log.info("admin %s: test account %s (%s)", profile.get("email"), req.label, req.plan)
+    return {"label": req.label, "plan": req.plan, "user_id": uid}
 
 
 def lifecycle_kind(kind: str) -> str:
