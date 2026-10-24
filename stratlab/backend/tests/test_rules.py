@@ -350,3 +350,22 @@ def test_a_newly_listed_index_lot_is_not_a_change_and_an_alert_names_only_what_m
     assert len(lines) == 1 and "NIFTY 75" in lines[0] and "NIFTY 65" in lines[0] and "BANKNIFTY" not in lines[0]
     p = {s["id"]: s for s in W.state()["sources"]}["nse_lots"]["pending"]
     assert p["now"] == "NIFTY 75" and p["was"] == "NIFTY 65"
+
+
+def test_a_stored_lot_size_alert_with_rows_only_added_no_longer_waits_for_a_look(monkeypatch):
+    # R90-003: stored before a first-time row stopped counting as a change (R85-003); every lot reads as it did
+    from app import db, rules_watch as rw
+    from tests.fake_db import FakeSupabase
+    monkeypatch.setattr(db, "_client", FakeSupabase())
+    pend = {"at": "2026-10-20T02:10", "why": "changed at the source", "uses": None,
+            "was": "NIFTY 65, BANKNIFTY 30, FINNIFTY 60, MIDCPNIFTY 120, NIFTYNXT50 25",
+            "now": "NIFTY 65, BANKNIFTY 30, FINNIFTY 60, MIDCPNIFTY 120, NIFTYNXT50 25, NIFTYFPI 1,100"}
+    moved = {**pend, "now": "NIFTY 75, BANKNIFTY 30, FINNIFTY 60, MIDCPNIFTY 120, NIFTYNXT50 25, NIFTYFPI 1,100"}
+    differs = {"at": "2026-10-20T02:10", "why": "differs from what StratLab uses", "was": None, "now": "NIFTY 75", "uses": "NIFTY 65"}
+    srcs = [{"id": s["id"], "pending": p} for s, p in zip(rw.SOURCES, (pend, moved, differs))]
+    rw._save({"sources": srcs})
+    got = {s["id"]: s["pending"] for s in rw.state()["sources"]}
+    assert got[rw.SOURCES[0]["id"]] is None                                   # only NIFTYFPI added: nothing to look at
+    assert got[rw.SOURCES[1]["id"]] == moved                                  # NIFTY 65 → 75 still waits
+    assert got[rw.SOURCES[2]["id"]] == differs                                # a difference from the code always waits
+    assert rw._rows("NIFTY 65, NIFTYFPI 1,100") == {"NIFTY": "65", "NIFTYFPI": "1,100"} and rw._rows("7.1") is None
