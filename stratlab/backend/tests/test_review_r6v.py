@@ -424,3 +424,21 @@ def test_same_index_same_dates_shows_one_buy_and_hold_figure():
     other = {**b, "id": "seed-c-in", "range": {"from": "2021-10-19T00:00:00", "to": rng["to"]}, "stats": {**SEED["stats"], "buy_hold": 66.0}}
     got = {e["id"]: e["stats"]["buy_hold"] for e in library.same_hold([b, a, other])}
     assert got == {"seed-a-in": 67.94, "seed-b-in": 67.94, "seed-c-in": 66.0}      # different dates keep their own figure
+
+
+def test_the_price_job_names_a_few_pages_without_the_close_and_where_their_candles_stop(w, monkeypatch):
+    # R90-002: "0 updated, 974 waiting, 300 without a newer close yet" under OK for 17 hours, with no way to tell a quiet
+    # tail of small companies from the source not having the close
+    from app import admin_jobs
+    now = datetime.now(timezone.utc)
+    day = now.date()
+    iso = lambda back: (day - timedelta(days=back)).isoformat()          # noqa: E731
+    monkeypatch.setattr(stock_pages, "last_close", lambda region, n=None: (day, now - timedelta(hours=3)))
+    built = now.timestamp() - 5 * 3600
+    for s in ("TBZ", "EXXARO"):
+        db.set_setting(f"stocks:page:US:{s}", json.dumps({"ts": built, "facts": {"symbol": s, "region": "US", "price": 10.0, "price_at": iso(2)}}))
+    got = stock_pages.Pages(lambda r, c: None).refresh_prices("US", lambda r, s: [{"t": iso(1) + "T00:00:00-04:00", "o": 1, "h": 1, "l": 1, "c": 10.0}], gap=0, now=now)
+    assert got["refreshed"] == 0 and got["failed"] == 2 and sorted(got["behind"]) == [f"EXXARO (last candle {iso(1)})", f"TBZ (last candle {iso(1)})"]
+    monkeypatch.setattr(main, "price_refresh_status", {"last_run": now.isoformat(), "US": got, "IN": {"refreshed": 0, "left": 0, "failed": 0}})
+    r = {r["name"]: r for r in admin_jobs.rows()}["Company pages' prices"]
+    assert any(x.startswith("US, for example: ") and f"(last candle {iso(1)})" in x for x in r["log"])

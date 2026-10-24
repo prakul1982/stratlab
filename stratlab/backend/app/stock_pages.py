@@ -1246,6 +1246,7 @@ class Pages:
         # the largest companies first, and a page the source had no newer close for at an earlier try after the rest
         due.sort(key=lambda x: (tries.get(x[0], 0), -(shown_cap(x[1]["facts"]) or 0)))
         done = failed = errors = 0     # errors: reads that raised, of the failed (the rest had no newer close yet)
+        behind: list[str] = []         # a few pages read with no newer close: "SYMBOL (last candle 2026-10-21)", for Admin
         stopped = 0             # pages not tried because the source is down for every one of them
         ok: set[str] = set()
         for i, (symbol, stored) in enumerate(due[:limit]):
@@ -1275,6 +1276,8 @@ class Pages:
                 # next close (R7V-005: a long tail one or two sessions behind)
                 tries[symbol] = tries.get(symbol, 0) + 1
                 failed += 1
+                if len(behind) < 5:
+                    behind.append(f"{symbol} (last candle {str(bars[-1].get('t') or '')[:10] if bars else 'none'})")
             _put(prefix + symbol, stored)
             self.mem.pop(prefix + symbol)
             self.mem.pop(f"html:{region}:{symbol}")
@@ -1282,6 +1285,7 @@ class Pages:
         if not stopped and len(due) <= limit and not retry and (official_ready is None or official_ready(day.isoformat())):
             self.prices_done[region] = day.isoformat()            # a page still behind is tried again at its next build
         return {"refreshed": done, "left": max(0, len(due) - limit) + stopped, "failed": failed, "errors": errors,
+                **({"behind": behind} if behind else {}),
                 **({"source_down": True} if stopped else {}), **({"retry": retry} if retry else {}),
                 **({"official": swapped} if official else {})}
 
