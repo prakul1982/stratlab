@@ -177,3 +177,20 @@ test("Refunds (owner, 25 Oct): one 7-day window for every payment, monthly or ye
   assert.match(read("src/content/legal.ts"), /Ask within 7 days of any payment, monthly or yearly, and we refund it in full\./);
   assert.match(read("src/content/faq.ts"), /refunded in full if you ask within 7 days of it/);
 });
+
+test("MS1-004: a finding's age reads in whole days, and the panel shows it beside the monthly check", async () => {
+  const { openDays, openFor } = await import("../src/lib/format.ts");
+  const now = Date.parse("2026-10-25T12:00:00Z");
+  assert.equal(openDays("2026-10-25T01:00:00Z", now), 0);
+  assert.equal(openDays("2026-10-22T11:00:00Z", now), 3);
+  assert.equal(openDays(null, now), null);
+  assert.equal(openDays("not a time", now), null);
+  assert.equal(openFor(0), "found today");
+  assert.equal(openFor(1), "open 1 day");
+  assert.equal(openFor(19), "open 19 days");
+  const panel = read("src/pages/admin/AuditPanel.tsx");
+  assert.match(panel, /Full re-check on the 1st of each month/);
+  assert.match(panel, /send\(\{ monthly: on \}\)/);
+  assert.match(panel, /i\.level !== "fact" && openDays\(i\.since \?\? r\.at\) != null/);        // a fact has no age: nothing is wrong
+  assert.match(panel, /Problems standing:/);
+});

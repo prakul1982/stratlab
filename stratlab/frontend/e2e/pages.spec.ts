@@ -1428,12 +1428,14 @@ test("admin: the whole-market audit tells facts and companies not checked yet ap
 
 test("admin: the whole-market audit starts, pauses, resets, re-checks one company and shows BSE waiting", async ({ page }, info) => {
   const sent: Record<string, unknown>[] = [];
-  const err = { symbol: "ACME", name: "Acme Ltd", seconds: 2, issues: [{ level: "error", area: "Numbers", detail: "Revenue or profit missing for Mar 2024" }] };
+  const err = { symbol: "ACME", name: "Acme Ltd", seconds: 2, issues: [{ level: "error", area: "Numbers", detail: "Revenue or profit missing for Mar 2024", since: new Date(Date.now() - 3 * 86400e3).toISOString() }] };
   const summary = (n: number) => ({ companies: n, clean: 0, mismatches: 1, gaps: 1, errors: n ? 1 : 0, facts: 0, pending: 0, avg_seconds: 2, slowest: [],
     by_area: n ? { Numbers: { mismatch: 1, gap: 1, error: 1, fact: 0, pending: 0 } } : {} });
   let s = { enabled: false, paused: "off", listed: 5058, checked: 3844, due: 0, current: null, eta_hours: null, rate_per_hour: 0, list_at: null, list_error: null,
     full: { running: true, since: new Date(Date.now() - 7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
-    monthly: { on: true, last: "2026-10", next: "2026-11-01" }, retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
+    monthly: { on: true, last: "2026-10", next: "2026-11-01" },
+    ages: { open: 40, today: 6, days_1_2: 4, days_3_7: 10, over_a_week: 20, oldest_days: 19 },
+    retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
     bse: { refusing: true, waiting: 1868 }, pending: 1911, new_listings: [], rows: [err], summary: summary(1) } as Record<string, unknown>;
   await page.route((u) => u.pathname === "/admin/audit/market", async (r) => {
     const req = r.request();
@@ -1459,6 +1461,8 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByText("1 gap · 1 error")).toBeVisible();
   await expect(india.getByText(/BSE is refusing requests from this server; 1,868 companies waiting/)).toBeVisible();
   await expect(india.getByText("Next full check: 1 Nov")).toBeVisible();
+  // the problems standing say how long they have stood (MS1-004)
+  await expect(india.getByTestId("audit-ages")).toContainText("Problems standing: 40 (6 found today, 14 up to a week old, 20 over a week old) · the oldest for 19 days.");
   if (info.project.name === "phone") await touchable(page);
   await india.getByRole("button", { name: "Start the India check" }).click();
   await expect(india.getByRole("button", { name: "Pause the India check" })).toBeVisible();
@@ -1466,6 +1470,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   // an error row: its reason, and a re-check of that one company
   await india.getByRole("button", { name: "Errors", exact: true }).click();
   await expect(india.getByText("Revenue or profit missing for Mar 2024")).toBeVisible();
+  await expect(india.getByTestId("audit-age")).toHaveText(" · open 3 days");
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
   // the monthly check can be switched off

@@ -69,10 +69,12 @@ def test_a_call_from_the_last_week_has_no_transcript_due_yet():
     told = deepdive.meetings([_call(stamp(2))], stamp(700))
     assert told["calls"] == 1 and told["calls_due"] == 0
     assert audit._india_documents(["presentation"], told, None) == []                    # nothing to look into yet
-    old = deepdive.meetings([_call(stamp(2)), _call(stamp(60))], stamp(700))
-    assert old["calls"] == 2 and old["calls_due"] == 1
+    old = deepdive.meetings([_call(stamp(2)), _call(stamp(20))], stamp(700))
+    assert old["calls"] == 2 and old["calls_due"] == 1 and old["calls_old"] == 0
     got = audit._india_documents(["presentation"], old, None)
     assert got[0]["level"] == "gap" and "though 2 of its filings" in got[0]["detail"]
+    older = deepdive.meetings([_call(stamp(2)), _call(stamp(60))], stamp(700))           # over six weeks with none filed: the company's (MS1-008)
+    assert older["calls_old"] == 1 and audit._india_documents(["presentation"], older, None)[0]["level"] == "fact"
     legacy = {"meets": 1, "calls": 1, "filed": 5}                                        # a stored read without the new count
     assert audit._india_documents(["presentation"], legacy, None)[0]["level"] == "gap"
 

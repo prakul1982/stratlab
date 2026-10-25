@@ -174,12 +174,17 @@ def numbers(p: dict) -> dict:
     cfo = _align(ccols, _series(cf, "Cash from Operating"), ycols)
     cfi = _align(ccols, _series(cf, "Cash from Investing"), ycols)
     reported = _align(ccols, _series(cf, "Capex"), ycols)     # US filings report it; Indian pages don't
+    # the breakdown of an Indian company's investing cash flow lists only the lines it has: from the first year that shows fixed
+    # assets bought, a year with the breakdown but no such line bought none (MS1-003: Balkrishna Paper, Tecil Chemicals)
+    first_bought = next((i for i, v in enumerate(reported) if v is not None), None) if p.get("region") != "US" else None
 
     years = []
     for i, y in enumerate(ycols):
         capex, cut = None, False          # estimated: growth in fixed assets and work in progress, plus the year's depreciation
         if not bank and reported and reported[i] is not None:
             capex = abs(reported[i])
+        elif not bank and first_bought is not None and i > first_bought and cfi and cfi[i] is not None:
+            capex = 0.0
         elif not bank and not any(v is not None for v in reported) and i > 0 and fa[i] is not None and fa[i - 1] is not None:
             d_cwip = cwip[i] - cwip[i - 1] if cwip[i] is not None and cwip[i - 1] is not None else 0
             d_dep = dep[i] if i < len(dep) and dep[i] is not None else 0
@@ -191,6 +196,7 @@ def numbers(p: dict) -> dict:
         years.append({"year": y, "sales": s, "profit": profit[i] if i < len(profit) else None, "opm": opm[i] if i < len(opm) else None,
                       "capex": round(capex, 1) if capex is not None else None,
                       "capex_pct_sales": round(capex / s * 100, 1) if capex is not None and s else None, "capex_cut": cut,
+                      "capex_na": capex is None and not cut,            # no balance sheet for the year yet (a half-yearly reporter)
                       "cfo": c, "cfi": cfi[i] if cfi else None,
                       "fcf": round(c - capex, 1) if c is not None and capex is not None else None,
                       "debt": debt[i] if debt else None})
@@ -229,6 +235,10 @@ def numbers(p: dict) -> dict:
         "capex_3y_total": round(sum(recent_capex), 1) if recent_capex else None, "capex_years": len(recent_capex),     # of the last 3
         "unit": p.get("unit") or "₹ crore", "fye": _fye(p), "capex_reported": any(v is not None for v in reported), "bank": bank, "basis": p.get("basis"), "notes": notes,
         "no_revenue": list(p.get("no_revenue") or []),
+        # years whose sales or profit isn't in the structured data under any standard label (US), and years whose operating
+        # margin is left out because it came out above 100% or on nil sales (MS1-009, MS1-011)
+        "sales_untagged": list(p.get("sales_untagged") or []), "profit_untagged": list(p.get("profit_untagged") or []),
+        "margin_left_out": list(p.get("margin_left_out") or []),
     }
 
 
@@ -284,6 +294,7 @@ TRANSCRIPT = re.compile(r"\btran?scr?i?pts?\b", re.I)
 MEET = re.compile(r"analysts?/institutional investor meet|con\.? ?call|earnings call|conference call", re.I)
 MEET_CATEGORIES = ("concall", "investor_meet")     # filing classes: earnings calls, and meetings with analysts or investors
 CALL_GRACE_DAYS = 7      # an earnings call this recent may not have its transcript filed yet
+CALL_STALE_DAYS = 45     # ...and one this old that still has none was never given one (the rule is five working days) (MS1-008)
 
 # a deck or transcript for shareholders' resolutions (an AGM, a postal ballot) isn't the business presentation or a call
 NOT_DECK = re.compile(r"postal ballot|general meeting|\b[ae]gm\b|shareholders?'*s? approval", re.I)
@@ -354,7 +365,9 @@ def meetings(items: list[dict], since: str) -> dict:
     # a call is told about a few days ahead and its transcript is due five working days after: one from the last week
     # has no transcript to find yet
     fresh = (ist_now() - timedelta(days=CALL_GRACE_DAYS)).strftime("%Y-%m-%dT%H:%M")
+    stale = (ist_now() - timedelta(days=CALL_STALE_DAYS)).strftime("%Y-%m-%dT%H:%M")
     return {"meets": len(meets), "calls": len(calls), "calls_due": sum(i["at"] < fresh for i in calls),
+            "calls_old": sum(i["at"] < stale for i in calls),
             "shareholder": shareholder_meetings(recent), "filed": len(recent)}
 
 

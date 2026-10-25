@@ -4,6 +4,7 @@
 The result has the same shape as the Indian company pages (see screener.parse), in US$ millions instead of ₹ crore,
 so the deep dive, checklist, valuation and deck work on it unchanged. Two things are better than the Indian source:
 capex is reported directly (no estimate) and cash is reported, so enterprise value can subtract it."""
+import math
 import re
 import threading
 import time
@@ -47,7 +48,12 @@ REVENUE_ELSE = ("RevenuesNetOfInterestExpense",      # a bank's or broker's tota
                 # advisory and investment banking fees; IFRS airlines, shipowners and telecoms name the service sold
                 "RegulatedOperatingRevenue", "RegulatedOperatingRevenueGas", "RegulatedOperatingRevenueElectric",
                 "InvestmentBankingRevenue", "RevenueAndOperatingIncome", "RevenueFromRenderingOfTransportServices",
-                "RevenueFromRenderingOfTelecommunicationServices")
+                "RevenueFromRenderingOfTelecommunicationServices",
+                # patent and licence royalties, hospital and clinic fees, data and consulting services, grants, gross sales and
+                # home building: the only revenue line some companies tag (MS1-011)
+                "RoyaltyRevenue", "HealthCareOrganizationRevenueNetOfPatientServiceRevenueProvisions", "SalesRevenueGoodsGross",
+                "RevenueFromRenderingOfDataServices", "RevenueFromRenderingOfInformationTechnologyConsultingServices",
+                "RevenueFromGovernmentGrants", "HomeBuildingRevenue", "ReimbursementRevenue")
 # ...and when no revenue line is tagged at all, the income statement's own arithmetic: gross profit plus the cost of
 # sales, or operating profit plus total costs (each pair from the same period)
 COST_OF_SALES = ("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfSales")
@@ -56,6 +62,7 @@ TOTAL_COSTS = ("CostsAndExpenses",)
 PRETAX = ("IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
           "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
           "ProfitLossBeforeTax")
+TAX = ("IncomeTaxExpenseBenefit", "IncomeTaxExpenseBenefitContinuingOperations", "IncomeTaxExpenseContinuingOperations")
 INTEREST = ("InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt", "InterestAndDebtExpense", "FinanceCosts")
 # a bank's revenue when it files no total: interest and dividend income plus everything else it earns (fees)
 BANK_INTEREST = ("InterestAndDividendIncomeOperating", "InterestIncomeOperating", "InterestAndFeeIncomeLoansAndLeases",
@@ -96,7 +103,7 @@ CFI = ("NetCashProvidedByUsedInInvestingActivities", "NetCashProvidedByUsedInInv
 CAPEX = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets", "PaymentsForCapitalImprovements",
          "PaymentsToAcquireOtherPropertyPlantAndEquipment", "PaymentsToAcquireAndDevelopRealEstate",
          "PaymentsToDevelopRealEstateAssets", "PaymentsToAcquireRealEstate", "PaymentsToAcquireOilAndGasPropertyAndEquipment",
-         "PaymentsToAcquireOilAndGasProperty", "PaymentsToExploreAndDevelopOilAndGasProperties", "PaymentsToAcquireMiningAssets",
+         "PaymentsToAcquireOilAndGasProperty", "PaymentsToExploreAndDevelopOilAndGasProperties", "PaymentsToAcquireOilAndGasEquipment", "PaymentsToAcquireMiningAssets",
          "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities", "PurchaseOfPropertyPlantAndEquipment",
          # lessors' aircraft and equipment, buildings and machinery bought outright, and software built or bought
          "PaymentsToAcquireEquipmentOnLease", "PaymentsForFlightEquipment", "PaymentsToAcquireMachineryAndEquipment", "PaymentsToAcquireBuildings",
@@ -179,14 +186,19 @@ def _label(end: str) -> str:
 
 
 def _facts(facts: dict, concept: str, unit: str = "USD") -> list[dict]:
+    """A concept's rows from both taxonomies: a company that moved from US GAAP to IFRS (Alcon, Frontline) has the same
+    concept name under each, the early years in one and the later in the other (MS1-010)."""
+    out: list[dict] = []
     for ns in ("us-gaap", "ifrs-full"):
         units = ((facts.get(ns) or {}).get(concept) or {}).get("units") or {}
         if unit in units:
-            return units[unit]
+            out += units[unit]
+            continue
         for u, rows in units.items():            # "USD/shares" for per-share numbers
             if u.startswith(unit):
-                return rows
-    return []
+                out += rows
+                break
+    return out
 
 
 def flows(facts: dict, concepts: tuple, kind: str, unit: str = "USD") -> dict[str, float]:
@@ -216,6 +228,7 @@ def flows(facts: dict, concepts: tuple, kind: str, unit: str = "USD") -> dict[st
     return out
 
 
+DEP_SLACK = 1.5               # depreciation above this many times the larger of a year's revenue and operating result is a unit slip
 SPLIT_MIN = 1.4                # a later annual report's per-share figure for a year this many times (or 1/this) the earlier one's
 SPLIT_FIT = 0.03               # ...and within this of a split's ratio (n for m): a split restated it
 
@@ -430,7 +443,7 @@ def _accns_ending(facts: dict, concepts: tuple, end: str, unit: str = "USD") -> 
 REVENUE_NAME = re.compile(r"Revenue|Sales|Turnover", re.I)
 NOT_REVENUE_NAME = re.compile(r"Cost|Deferred|Receivable|Payable|Liabilit|Tax|ProForma|Percent|Concentration|Unearned|Proceeds|"
                               r"Payments|Increase|Decrease|Contract(Asset|Liab)|Allowance|Unbilled|Reserve|Gain|Loss|Expense|"
-                              r"Marketing|Commission|Rebate|Return|Discount|Impair|Repurchase|Related|Segment|Geograph", re.I)
+                              r"Marketing|Commission|Rebate|Return|Discount|Impair|Repurchase|Related|Segment|Geograph|EquityMethod|Disposal|Sublease", re.I)
 
 
 def _revenue_like_accns(facts: dict, end: str, unit: str = "USD") -> set[str]:
@@ -441,6 +454,32 @@ def _revenue_like_accns(facts: dict, end: str, unit: str = "USD") -> set[str]:
             if REVENUE_NAME.search(concept) and not NOT_REVENUE_NAME.search(concept):
                 out |= {f["accn"] for f in ((body.get("units") or {}).get(unit) or []) if f.get("end") == end and f.get("start") and f.get("accn")}
     return out
+
+
+def _sales_above_nil(facts: dict, end: str, unit: str = "USD") -> bool:
+    """Whether any revenue-like concept (listed or named like revenue; a gross profit or a cost of sales above nil too: there
+    is no cost of sales without sales) has a full-year figure above nil for the year ending `end`."""
+    for ns in ("us-gaap", "ifrs-full"):
+        for concept, body in (facts.get(ns) or {}).items():
+            if concept in ALL_REVENUE or (REVENUE_NAME.search(concept) and not NOT_REVENUE_NAME.search(concept)):
+                for f in ((body.get("units") or {}).get(unit) or []):
+                    if (f.get("end") == end and f.get("start") and 340 <= _days(f["start"], end) <= 380
+                            and f.get("val") and float(f["val"]) > 0):
+                        return True
+    return False
+
+
+def _sales_named(facts: dict, end: str, unit: str = "USD") -> bool:
+    """Whether a concept named like revenue or sales that we don't read has a full-year figure above nil for the year ending
+    `end`: a line of the income statement to add to our lists, not one the company keeps out of the data."""
+    for ns in ("us-gaap", "ifrs-full"):
+        for concept, body in (facts.get(ns) or {}).items():
+            if REVENUE_NAME.search(concept) and not NOT_REVENUE_NAME.search(concept) and concept not in ALL_REVENUE:
+                for f in ((body.get("units") or {}).get(unit) or []):
+                    if (f.get("end") == end and f.get("start") and 340 <= _days(f["start"], end) <= 380
+                            and f.get("val") and float(f["val"]) > 0 and f.get("form") in ANNUAL):
+                        return True
+    return False
 
 
 def _depreciation(facts: dict, kind: str, unit: str = "USD") -> dict[str, float]:
@@ -566,6 +605,8 @@ NO_RESULTS = {
                  "can't be shown here yet.",
     "new": "Registered with the SEC recently: no annual results filed yet, so they can't be shown here.",
     "stopped": "Has deregistered from SEC reporting, so its results can't be shown here.",
+    "untagged": "Files annual reports with the SEC, but their income statements aren't in the structured data (XBRL), "
+                "so its results can't be shown here.",
     "none": "Doesn't file annual results with the SEC (no 10-K, 20-F or 40-F), so they can't be shown here.",
 }
 UNREAD = "The company's annual reports are filed as data, but no revenue or profit could be read from them."
@@ -601,7 +642,14 @@ def no_results(subs: dict | None, facts: dict | None = None, symbol: str = "") -
             return NO_RESULTS["part_year"]    # the first annual report covers the months since the company began
         if any(f.get("form") in ANNUAL for ns in ("us-gaap", "ifrs-full") for c in (facts.get(ns) or {}).values()
                for rows in (c.get("units") or {}).values() for f in rows):
-            return UNREAD                     # figures filed as data, but no revenue or profit among them: our gap
+            # figures filed as data, but none from an income statement (a shell whose annual report tags only notes and
+            # the cash flow): the results aren't in the data, which is a fact about the filing (MS1-013); a statement line
+            # tagged in a way we can't read is our gap
+            income = NET_INCOME + OPERATING + ALL_REVENUE + PRETAX + EPS
+            if not any(f.get("form") in ANNUAL for ns in ("us-gaap", "ifrs-full") for c in income
+                       for rows in (((facts.get(ns) or {}).get(c) or {}).get("units") or {}).values() for f in rows):
+                return NO_RESULTS["untagged"]
+            return UNREAD
     if facts and (quarterly(facts, NET_INCOME, cur) or revenue(facts, "quarter", cur)):
         return NO_RESULTS["quarters"]
     if annual:
@@ -690,16 +738,73 @@ def _merge_year_ends(rev: dict, others: list[dict], balances: list[dict] = ()) -
                     d[canon] = d[e]
 
 
+def _slip(r: float) -> bool:
+    """Whether a ratio is a thousand, a million or a billion (a unit mistag), to within rounding."""
+    return any(abs(r / k - 1) <= 0.002 for k in (1e3, 1e6, 1e9))
+
+
+def drop_scale_slips(facts: dict) -> dict:
+    """The facts without a figure a later report filed a thousand times too big or too small (MS1-009: Coherent's 2025
+    annual report tags its 2023 depreciation 681,687,000,000 where every other filing says 681,687,000, which made an
+    operating margin of 13,000%). For one period and concept, filings that give two values a power of 1000 apart: the
+    value most filings agree on stands, else the one nearer the scale of the concept's other periods. Per-share and
+    share counts are left alone (a reverse split restates them by such a ratio for a reason)."""
+    out = dict(facts)
+    for ns in ("us-gaap", "ifrs-full"):
+        changed = {}
+        for name, body in (facts.get(ns) or {}).items():
+            units = {}
+            for unit, rows in (body.get("units") or {}).items():
+                if "/" in unit or unit in ("shares", "pure") or len(rows) < 2:
+                    continue
+                by: dict = {}
+                for i, f in enumerate(rows):
+                    if f.get("val"):
+                        by.setdefault((f.get("start"), f["end"]), []).append((i, abs(float(f["val"]))))
+                bad: set[int] = set()
+                typical = None
+                for group in by.values():
+                    vals = sorted(v for _, v in group)
+                    if len(group) < 2 or not _slip(vals[-1] / vals[0]) or any(vals[0] * 1.05 < v < vals[-1] / 1.05 for v in vals):
+                        continue                      # one value, or not just two scales
+                    big = [i for i, v in group if v > vals[0] * 1.05]
+                    small = [i for i, v in group if v <= vals[0] * 1.05]
+                    if len(big) == len(small):         # a tie: the scale the concept has in its other periods
+                        if typical is None:
+                            alls = sorted(g[-1][1] for g in (sorted(x, key=lambda y: y[1]) for x in by.values()))
+                            typical = alls[len(alls) // 2]
+                        if len(by) < 3 or not typical:
+                            continue                   # nothing else to judge by
+                        keep_small = abs(math.log(vals[0] / typical)) <= abs(math.log(vals[-1] / typical))
+                        bad.update(big if keep_small else small)
+                    else:
+                        bad.update(big if len(small) > len(big) else small)
+                if bad:
+                    units[unit] = [f for i, f in enumerate(rows) if i not in bad]
+            if units:
+                changed[name] = {**body, "units": {**body["units"], **units}}
+        if changed:
+            out[ns] = {**facts[ns], **changed}
+    return out
+
+
 def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: str = "") -> dict:
     """The company in the deep dive's shape: P&L, balance sheet and cash flow by year, the last twelve quarters,
     and the industry path, in millions of the currency the company reports in (US dollars for nearly all)."""
-    facts = facts_json.get("facts") or {}
+    facts = drop_scale_slips(facts_json.get("facts") or {})
     subs = subs or {}
     cur = currency(facts) or "USD"
     rev_a, rev_q = revenue(facts, "annual", cur), revenue(facts, "quarter", cur)
     ni_a, ni_q = flows(facts, NET_INCOME, "annual", cur), quarterly(facts, NET_INCOME, cur)
     owner_sign(ni_a, flows(facts, PROFIT_TOTAL, "annual", cur), flows(facts, MINORITY_PROFIT, "annual", cur))
     owner_sign(ni_q, quarterly(facts, PROFIT_TOTAL, cur), quarterly(facts, MINORITY_PROFIT, cur))
+    # a loss-making company whose income statement stops at the loss before tax (nothing to tax): that is its profit
+    # (MS1-013: Micromem's 20-F tags ProfitLossBeforeTax and no ProfitLoss)
+    for ni, tax, pre in ((ni_a, flows(facts, TAX, "annual", cur), flows(facts, PRETAX, "annual", cur)),
+                         (ni_q, quarterly(facts, TAX, cur), quarterly(facts, PRETAX, cur))):
+        for e, v in pre.items():
+            if e not in ni and (tax.get(e) == 0 or tax.get(e) is None and v < 0):
+                ni[e] = v
     op_a, op_q = flows(facts, OPERATING, "annual", cur), quarterly(facts, OPERATING, cur)
     # many companies show no operating profit line (Alcoa, HCA): then profit before tax with the interest it paid added
     # back (EBIT, as EBITDA is usually defined), else revenue less total costs
@@ -716,6 +821,11 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
             if e not in op and e in rev:
                 op[e] = rev[e] - c
     dep_a, dep_q = _depreciation(facts, "annual", cur), _depreciation(facts, "quarter", cur)
+    # depreciation is part of the costs: more of it than the revenue and operating result put together is a figure filed
+    # in the wrong scale (MS1-009: InspireMD's $188 million on $5 million of sales), not a cost to add back
+    for dep, op, rev in ((dep_a, op_a, rev_a), (dep_q, op_q, rev_q)):
+        for e in [e for e, v in dep.items() if e in rev and v > DEP_SLACK * max(abs(rev[e]), abs(op.get(e) or 0))]:
+            del dep[e]
     # operating profit as on the Indian pages: before depreciation (EBITDA), so margins and EV/EBITDA mean the same
     ebitda = lambda op, dep: (op + dep) if op is not None and dep is not None else None   # noqa: E731
     eb_a = {e: ebitda(op_a.get(e), dep_a.get(e)) for e in op_a}
@@ -729,9 +839,14 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
 
     def no_revenue_line(e: str) -> bool:      # the year's annual report has no revenue line at all
         # (an operating profit with no revenue behind it is a revenue we didn't read, not a year without sales)
-        return (e in ni_a and e not in rev_a and not (op_a.get(e) or 0) > 0
-                and _not_in_report(facts, NET_INCOME, ALL_REVENUE, e, cur, that_year=True)
-                and not _accns_for(facts, NET_INCOME, e, cur) & _revenue_like_accns(facts, e, cur))
+        if e not in ni_a or e in rev_a or (op_a.get(e) or 0) > 0:
+            return False
+        if (_not_in_report(facts, NET_INCOME, ALL_REVENUE, e, cur, that_year=True)
+                and not _accns_for(facts, NET_INCOME, e, cur) & _revenue_like_accns(facts, e, cur)):
+            return True
+        # a loss with no operating profit, and no revenue-like figure above nil for the year (a gross profit of nil, a line
+        # of nothing, a total since the company began): no sales that year (MS1-011)
+        return ni_a[e] < 0 and not _sales_above_nil(facts, e, cur)
 
     ends = sorted(set(rev_a) | set(ni_a))
     # the oldest years can come only from a note or another statement that goes back further than the income
@@ -745,6 +860,12 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         raise NoNumbers(SEC.name, no_results(subs, facts, symbol))
     kind = company_kind(subs, facts)
     no_revenue = [_label(e) for e in ends if no_revenue_line(e)]
+    # years the structured data has a profit for but no sales line under any standard label, or sales but no profit: the
+    # company tags the line with a label of its own (Intrepid Potash's sales, Tanger's profit), so the figure isn't in the
+    # SEC's data, not one we failed to read (MS1-011)
+    sales_untagged = [_label(e) for e in ends if e in ni_a and e not in rev_a and _label(e) not in no_revenue
+                      and not _sales_named(facts, e, cur)]
+    profit_untagged = [_label(e) for e in ends if e in rev_a and e not in ni_a]
     for i, e in enumerate(ends):
         # a year whose cash flow statement shows no purchases of plant and equipment at all, and whose plant is known
         # and didn't grow, or which has no plant and no depreciation at all: capex was nil, not missing. Plant that
@@ -759,15 +880,29 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
         # ...and a balance sheet with no borrowings on it, from a report with no interest expense either: no debt
         if e not in debt and e in equity and _not_in_report(facts, EQUITY + EQUITY_TOTAL, DEBT_ANY + INTEREST, e, cur, instant=True):
             debt[e] = 0.0
+    # the last three years' cash flow statements show no purchase of plant and equipment at all (or no cash flow figures
+    # at all in the data): there is no capex to show, which is a fact about the filings (MS1-012)
+    last3 = ends[-3:]
+    capex_untagged = len(last3) == 3 and not any(e in capex_a for e in last3) and (
+        not any(e in cfo_a for e in last3) or all(_not_in_report(facts, CFO, CAPEX, e, cur) for e in last3 if e in cfo_a))
     cols = [_label(e) for e in ends]
     no_margin = kind in NO_MARGIN
-    margin = lambda op, rev: round(op / rev * 100, 1) if op is not None and rev and not no_margin else None   # noqa: E731
+    left_out: list[str] = []         # years whose margin is not one: operating profit above sales, or nil or negative sales
+
+    def margin(op, rev, e=None):
+        if op is None or not rev or no_margin:
+            return None
+        if op / rev > 1 or rev < 0:          # costs written back, a gain inside operating profit, returns: not a margin (MS1-009)
+            if e in ends:
+                left_out.append(_label(e))
+            return None
+        return round(op / rev * 100, 1)
     eps_label = "EPS in $" if cur == "USD" else f"EPS in {cur}"
     ttm_rev, ttm_ni, ttm_op, ttm_dep = _ttm(rev_q), _ttm(ni_q), _ttm({e: v for e, v in eb_q.items() if v is not None}), _ttm(dep_q)
     has_ttm = ttm_rev is not None and ttm_ni is not None and max(rev_q) > ends[-1]
     pl_rows = {"Sales": [_mn(rev_a.get(e)) for e in ends],
                "Operating Profit": [_mn(eb_a.get(e)) for e in ends],
-               "OPM %": [margin(eb_a.get(e), rev_a.get(e)) for e in ends],
+               "OPM %": [margin(eb_a.get(e), rev_a.get(e), e) for e in ends],
                "Depreciation": [_mn(dep_a.get(e)) for e in ends],
                "Net Profit": [_mn(ni_a.get(e)) for e in ends],
                eps_label: [eps_a.get(e) for e in ends]}
@@ -858,10 +993,16 @@ def build(facts_json: dict, subs: dict | None = None, years: int = 12, symbol: s
            "interest_shown": None if lender else any(abs(_days(e, ends[-1])) <= 10 for e in read_a(INTEREST)),
            "industry_path": sic_path(sic, subs.get("sicDescription")) or KIND_PATHS.get(kind or "", []),
            "bank": kind is None and lender,
-           "kind": kind, "no_revenue": no_revenue,
+           "kind": kind, "no_revenue": no_revenue, "sales_untagged": sales_untagged, "profit_untagged": profit_untagged,
+           "capex_untagged": capex_untagged,
            "url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={facts_json.get('cik')}&type=10-K"}
     if no_margin:
         out["margin_note"] = MORTGAGE_REIT if kind == "reit" and not any(ppe.get(e) for e in ends) else NO_MARGIN[kind]
+    if left_out and not no_margin:
+        years_out = ", ".join(left_out[-4:])
+        out["margin_left_out"] = left_out
+        out["margin_note"] = (f"Operating margin isn't shown for {years_out}: operating profit came out above sales, or sales were nil "
+                              "or negative, as filed (a gain or other income inside operating profit, or returns), so it isn't a margin.")
     if cur != "USD":
         out["currency_name"] = CURRENCY_NAMES.get(cur, cur)
     if subs.get("website"):
@@ -1272,6 +1413,7 @@ class SEC(Source):
                     self._built[str(cik)] = (time.time(), None, str(e))
             raise
         p["symbol"] = symbol.upper()
+        p["deregistered"] = bool(_forms(subs) & DEREGISTERED)       # filed Form 15: no more reports follow (MS1-014)
         # five years of documents: a deep read can look that far back
         p["documents"] = sorted(documents(subs, days=5 * 366) + (documents(before[1], days=5 * 366) if before else []),
                                 key=lambda d: d["at"], reverse=True)
