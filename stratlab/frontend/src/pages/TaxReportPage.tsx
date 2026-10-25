@@ -479,7 +479,8 @@ function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
           note={t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B)` : undefined} />
         {payable && !payable.locked && payable.total != null && (
           <Stat label="Payable now, with interest" value={<span aria-label="Payable now">{inr(payable.total)}</span>}
-            note={<>less TDS and tax paid, plus 234A, 234B and 234C{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""} · <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link></>} />
+            note={<>less TDS and tax paid, plus 234A, 234B and 234C{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""}
+              <span className="k-stat-link"><Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link></span></>} />
         )}
       </StatRow>
       {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
@@ -555,7 +556,9 @@ function InputsPanel({ y, onSave }: { y: Year; onSave: (fy: number, v: Omit<Inpu
   return (
     <div className="k-inset">
       <h3 className="k-sub">Your inputs for {y.label}</h3>
-      <FormGrid onSubmit={(e) => { e.preventDefault(); if (!bad && !saving) void save(); }}>
+      {/* MO-3a: three columns: the three switches in the first row, the boxes (other income and its salary part, then the
+          deductions under the old regime) in the second, the button under them at the left edge */}
+      <FormGrid trio onSubmit={(e) => { e.preventDefault(); if (!bad && !saving) void save(); }}>
         <FieldGroup label="Tax regime" infoLabel="About the tax regime" info="The new regime is the default from FY 2023-24: lower slab rates, a higher standard deduction and almost no deductions. The old regime keeps deductions such as 80C and 80D. Each year's return says which one applies.">
           <Seg label="Tax regime" options={[{ value: "new", label: "New (default)" }, { value: "old", label: "Old" }]} value={regime} onChange={(r) => setRegime(r as typeof regime)} />
         </FieldGroup>

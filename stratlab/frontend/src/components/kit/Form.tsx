@@ -3,10 +3,13 @@ import { Info } from "../ui";
 
 /** A form as a grid: columns of at least 190px that wrap to the width, every box on one baseline. Fields go in, then
  * one FormActions row with the main button. */
-export function FormGrid({ onSubmit, children, label, pair }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
+export function FormGrid({ onSubmit, children, label, pair, trio }: { onSubmit?: (e: FormEvent<HTMLFormElement>) => void; children: ReactNode; label?: string;
   /** Two boxes that belong side by side (two companies to compare): each takes half the row, not a narrow column. */
-  pair?: boolean }) {
-  return <form className={`k-form${pair ? " k-form-pair" : ""}`} onSubmit={onSubmit} aria-label={label}>{children}</form>;
+  pair?: boolean;
+  /** A form of a few switches and boxes (the tax report's inputs): at most three equal columns, two on a tablet, one on a
+   * phone, so switches and boxes line up in rows instead of spreading over five or six narrow columns (MO-3a). */
+  trio?: boolean }) {
+  return <form className={`k-form${pair ? " k-form-pair" : ""}${trio ? " k-form-trio" : ""}`} onSubmit={onSubmit} aria-label={label}>{children}</form>;
 }
 
 type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "children"> & {
