@@ -75,6 +75,14 @@ export function usePlanPrice(plan: "basic" | "pro" | null | undefined): string |
   return planPriceLine(plan, p, pickCurrency(p, code));
 }
 
+/** The same line outside a component (a 402's toast, DP2-022): from the one shared read of /pricing, null when it can't be read. */
+export function planPriceFor(plan: "basic" | "pro"): Promise<string | null> {
+  shared ??= publicGet<Pricing>("/pricing").catch((e) => { shared = null; throw e; });
+  let code = "";
+  try { code = localStorage.getItem(KEY) || ""; } catch { /* private window */ }
+  return shared.then((r) => planPriceLine(plan, r, pickCurrency(r, code))).catch(() => null);
+}
+
 export { money, planPriceLine } from "./planPrice";
 export { aboutLine, aboutMoney, chargedInRupees } from "./rupeeCharge";
 import { planPriceLine } from "./planPrice";

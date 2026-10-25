@@ -1,4 +1,4 @@
-import { dateOnly } from "./format";
+import { dateOnly, fmtDate, IST } from "./format";
 import type { Me } from "./types";
 
 /* Account's words for how someone signed in and how their plan runs. No React here, so the unit tests read it as it is. */
@@ -96,4 +96,32 @@ export function viewedFreeKeepsSessions(me: Pick<Me, "plan" | "view_as" | "trial
 export function sessionsRunning(me: Pick<Me, "plan" | "view_as" | "trial" | "live_running" | "live_limit">): string {
   const n = `${me.live_running} of ${me.live_limit}`;
   return viewedFreeKeepsSessions(me) ? `${n} (kept running: you're viewing as Free; a real Free plan stops them when the trial ends)` : n;
+}
+
+/** One kept-count limit as /me/limits gives it (DP2-031: Account showed the monthly counts only). */
+export type KeptLimit = { key: string; used: number | null; limit: number | null; next: string | null };
+const KEPT_LABEL: Record<string, string> = { stock_alerts: "Stock alerts on", screens: "Saved screens", holdings: "Holdings kept",
+  mf_schemes: "Mutual fund schemes kept", networth_items: "Net worth entries", journal_trades: "Trades the journal counts" };
+
+/** Account's row for a kept-count limit: "3 of 5", "12 (no limit)", and the journal's "The last 50" / "Every trade". */
+export function keptRow(r: KeptLimit): [string, string] | null {
+  const label = KEPT_LABEL[r.key];
+  if (!label) return null;
+  if (r.key === "journal_trades") return [label, r.limit == null ? "Every trade" : `The last ${r.limit}`];
+  if (r.used == null) return [label, r.limit == null ? "No limit" : `Up to ${r.limit}`];
+  return [label, r.limit == null ? `${r.used} (no limit)` : countOf(r.used, r.limit)];
+}
+
+/** Account's paper trading row on Free, with the trial: "0 of 1 · trial: 5 market days from your first start", "… · trial: 3
+ * market days left, until 30 Oct", "… · trial ended on 30 Oct" (DP2-031: no trial and no days left were said). */
+export function trialUse(me: Pick<Me, "plan" | "view_as" | "trial" | "live_running" | "live_limit">): string {
+  const base = sessionsRunning(me), t = me.trial;
+  if (!t) return base;
+  const days = t.days ?? 5;
+  if (!t.started) return `${base} · trial: ${days} market days from your first start`;
+  // the trial ends at midnight India time after its last day: the day named is that last day, in India's calendar
+  const end = t.ends_at ? fmtDate(new Date(new Date(t.ends_at).getTime() - 1000), { tz: IST, year: false }) : null;
+  if (!t.active) return `${base} · trial ended${end ? ` on ${end}` : ""}`;
+  const left = t.days_left;
+  return `${base} · trial: ${left != null ? `${left} market day${left === 1 ? "" : "s"} left` : "running"}${end ? `, until ${end}` : ""}`;
 }

@@ -441,11 +441,25 @@ def tables(g: dict) -> list[dict]:
 IN_ONLY = ", Indian shares and funds"       # beside the US shares' own lines
 
 
+def form_fits(g: dict) -> str:
+    """Which return the year's figures from these files point to (DP2-011: ITR-2 was said for an empty year and for a year of
+    dividends only). ITR-1 is the resident's form for salary, one house and other sources up to ₹50 lakh of income: the
+    files can't tell those, so a dividends-only year says the condition."""
+    y = g["y"]
+    if y["intraday"]["count"] or y["business"]["segments"]:
+        return "ITR-3 (business income: intraday or F&O)"
+    if g.get("rows") or g.get("unit_rows") or y.get("count") or y.get("foreign") or g.get("fa") or g.get("us_div"):
+        return "ITR-2 (capital gains or foreign assets, no business income)"
+    if g.get("div_lines"):
+        return "ITR-1 if your total income is ₹50 lakh or less (dividends, no capital gains), else ITR-2"
+    return "Nothing in your files for this year"
+
+
 def summary(g: dict) -> list[tuple[str, str]]:
     y = g["y"]
     t = y.get("total") or {}
     out = [("Financial year", f"{y['label']} (assessment year {g['fy'] + 1}-{str(g['fy'] + 2)[2:]})"),
-           ("Return that fits", "ITR-3 (business income: intraday or F&O)" if y["intraday"]["count"] or y["business"]["segments"] else "ITR-2 (capital gains, no business income)"),
+           ("Return that fits", form_fits(g)),
            (f"Short-term gains{IN_ONLY if y.get('foreign') else ''} (net)", money(y["stcg"]["net"])),
            (f"Long-term gains{IN_ONLY if y.get('foreign') else ''} (net)", money(y["ltcg"]["net"])),
            *([("US shares: short-term gains (net)", money(y["foreign"]["st"]["net"])),

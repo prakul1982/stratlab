@@ -6,7 +6,8 @@ import { signOutHere } from "./signout";
 import type { Focus, Level, Market, Me, NotebookItem } from "./types";
 import { takeRef } from "./share";
 import { identify, resetAnalytics, track, trackSignup } from "./analytics";
-import { plansCall } from "./offer";
+import { canBuy, plansCall } from "./offer";
+import { planPriceFor } from "./currency";
 import { JOINED, JOIN_LABEL, joinInterest, resetInterest } from "./planInterest";
 import { readViewAs, writeViewAs, type ViewAs } from "./viewAs";
 import { CFG } from "./config";
@@ -109,8 +110,14 @@ export function AppProvider({ children, goToPlans }: { children: ReactNode; goTo
     const err = e as ApiError;
     if (err?.status === 402) {
       // while no plan can be bought, "See plans" leads nowhere: offer to tell them when plans open instead
-      if (plansCall(offer.current, false).kind === "see") notify(err.message, { label: "See plans", run: () => { track("upgrade clicked", { source: "limit" }); plans.current(); } });
-      else notify(err.message, { label: JOIN_LABEL, run: () => void joinInterest("limit").then(() => notify(JOINED)).catch(() => notify("Something went wrong. Try again.")) });
+      const show = (msg: string) => {
+        if (plansCall(offer.current, false).kind === "see") notify(msg, { label: "See plans", run: () => { track("upgrade clicked", { source: "limit" }); plans.current(); } });
+        else notify(msg, { label: JOIN_LABEL, run: () => void joinInterest("limit").then(() => notify(JOINED)).catch(() => notify("Something went wrong. Try again.")) });
+      };
+      // the one lock wording (DP2-022, DP1-018): the server's words, then the plan's price in the visitor's own currency while a
+      // plan can be bought (while none can, the server's words already say how to get early access)
+      if (canBuy(offer.current) && err.plan) void planPriceFor(err.plan).then((p) => show(p ? `${err.message} ${p}` : err.message));
+      else show(err.message);
     }
     else notify(err?.message || "Something went wrong. Try again.");
   }, [notify]);

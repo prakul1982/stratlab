@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, supabase } from "../lib/api";
 import { leavePush } from "../lib/pwa";
@@ -13,7 +13,7 @@ import { InvoicesCard } from "../components/InvoicesCard";
 import { Badge, Card, CardHead, ConfirmDialog, Field, FormActions, FormGrid, LinkCard, PageHeader } from "../components/kit";
 import { AccountWait } from "../components/AccountWait";
 import { Modal } from "../components/ui";
-import { aiBuildsUse, confirmMatches, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith } from "../lib/account";
+import { aiBuildsUse, confirmMatches, keptRow, monthlyUse, planLabel, planRow, planRun, sessionsRunning, signedInWith, trialUse, type KeptLimit } from "../lib/account";
 import { aiReadsUse } from "../lib/aiReason";
 
 const PLAN_NAME: Record<string, string> = { free: "Free", basic: "Basic", pro: "Pro" };
@@ -35,6 +35,14 @@ export function AccountPage() {
   const [ask, setAsk] = useState<"cancel" | "everywhere" | "erase" | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // every kept-count limit Plans lists, with what the account holds (DP2-031); its own call, so /me reads no more
+  const [kept, setKept] = useState<KeptLimit[] | null>(null);
+  useEffect(() => {
+    if (!me?.id) return;
+    let live = true;
+    api<{ rows: KeptLimit[] }>("/me/limits").then((r) => { if (live) setKept(r.rows); }).catch(() => { if (live) setKept(null); });
+    return () => { live = false; };
+  }, [me?.id, me?.plan]);
   if (!me) return <div className="k-page"><PageHeader eyebrow="Account" title="Account" /><Card label="Loading your account"><AccountWait label="Loading your account" /></Card></div>;
   const b = me.billing, u = me.usage;
   const meta = session?.user.user_metadata as { full_name?: string; name?: string } | undefined;
@@ -66,7 +74,9 @@ export function AccountPage() {
     ...(me.promo ? [["Launch offer", `Every Pro feature free until ${endsAt(me.promo.until)}`] as [string, string]] : []),
     ...(!me.promo && me.free_basic_until ? [["Free Basic from invites", `Until ${dateOnly(me.free_basic_until)}`] as [string, string]] : []),
     // a plan given by the owner under the launch offer: one statement, so "ends 22 Oct" never sits beside "No end date"
-    ...(row ? [me.promo && row[0] === "Given by StratLab" ? ["After the launch offer", `${planName}, given by StratLab. ${row[1]}`] as [string, string] : row] : []),
+    // a plan StratLab gave has nothing to renew or cancel: said, as there's no Cancel button for it (DP2-031)
+    ...(row ? [me.promo && row[0] === "Given by StratLab" ? ["After the launch offer", `${planName}, given by StratLab. ${row[1]}`] as [string, string]
+      : row[0] === "Given by StratLab" ? [row[0], `${row[1]}. Nothing renews and there's nothing to cancel.`] as [string, string] : row] : []),
     ["Backtests this month", monthlyUse(u.backtests_used, u.backtests_limit)],
     ["AI builds this month", aiBuildsUse(u.ai_used, u.ai_limit, u.ai_builds_per_day, !!me.is_admin)],
     // the plan's own limits are the Plans page's; when early access or the launch offer lifts them, it says so
@@ -75,7 +85,9 @@ export function AccountPage() {
     // the daily cap on fresh AI reads, said plainly with today's count (R8O-002); a company's read already written today
     // and the market mood never count
     ...(u.ai_reads_today != null ? [["Fresh AI reads today", aiReadsUse(u.ai_reads_today, u.ai_reads_limit ?? null, u.ai_reads_cap_for ?? null, u.ai_reads_plan_limit)] as [string, string]] : []),
-    ["Paper sessions running", sessionsRunning(me)],
+    // Free's sessions run in the trial: its days left, or that it ended (DP2-031)
+    ["Paper sessions running", me.trial ? trialUse(me) : sessionsRunning(me)],
+    ...((kept ?? []).map(keptRow).filter((r): r is [string, string] => !!r)),
   ];
 
   return (
@@ -106,6 +118,12 @@ export function AccountPage() {
             : run === "cancelled" ? <><span className="k-small k-muted">Cancelled. You keep {planName} until {dateOnly(b.renews_or_ends)}.</span><Link to="/plans" className="btn outline">Compare plans</Link></>
               : <><Link to="/plans" className="btn outline">Change plan</Link><button type="button" className="btn quiet danger" onClick={() => setAsk("cancel")}>Cancel subscription</button></>}
         </div>
+      </Card>
+
+      {/* the invite page was reachable from the account menu only (DP2-035) */}
+      <Card compact label="Invite friends">
+        <p className="k-small">A friend who joins with your link and uses StratLab gets a month of Basic free, and you earn free time too.</p>
+        <Link to="/invite" className="btn outline sm">Your invite link</Link>
       </Card>
 
       <InvoicesCard />

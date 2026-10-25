@@ -466,11 +466,61 @@ def trial_end(started: datetime, days: int) -> datetime:
     return datetime(d.year, d.month, d.day, tzinfo=IST) + timedelta(days=1)
 
 
+def trial_days_left(ends: datetime, now: datetime | None = None) -> int:
+    """The Indian trading days of the trial still to come, today's included while it runs (Account says it, DP2-031)."""
+    from .data.calendar import is_trading_day
+    now = now or datetime.now(timezone.utc)
+    if now >= ends:
+        return 0
+    d, last = now.astimezone(IST).date(), (ends.astimezone(IST) - timedelta(days=1)).date()
+    n = 0
+    while d <= last:
+        n += is_trading_day("IN", d)
+        d += timedelta(days=1)
+    return n
+
+
 def trial_state(profile: dict) -> dict:
     days = PLANS["free"]["live_trial_days"]
     started = profile.get("live_trial_started_at")
     if not started:
-        return {"started": False, "active": False, "ends_at": None, "available": True, "days": days}
+        return {"started": False, "active": False, "ends_at": None, "available": True, "days": days, "days_left": days}
     ends = trial_end(_dt(started), days)
     active = datetime.now(timezone.utc) < ends
-    return {"started": True, "active": active, "ends_at": ends.isoformat(), "available": active, "days": days}
+    return {"started": True, "active": active, "ends_at": ends.isoformat(), "available": active, "days": days,
+            "days_left": trial_days_left(ends)}
+
+
+# ---------- the one lock wording (DP2-022, DP1-018) ----------
+# Every lock and limit says the same three things in the same order: what is locked or used up and on which plan, when a
+# monthly count starts again, and what the next plan gives. The price and the way to get it ("Basic is ₹699 a month or
+# ₹6,999 a year." and See plans, or early access while nothing is on sale) are added after it: by upgrade_note on the
+# server while no plan can be bought, by the page in the visitor's own currency while one can (the 402 names the plan).
+def resets_on(now: datetime | None = None) -> str:
+    """The day a monthly count starts again, in India time: "1 Nov"."""
+    d = (now or datetime.now(timezone.utc)).astimezone(IST)
+    first = (d.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return f"{first.day} {first.strftime('%b')}"
+
+
+def resets_note(now: datetime | None = None) -> str:
+    """A monthly limit's last sentence, with its leading space: ' The count starts again on 1 Nov.'"""
+    return f" The count starts again on {resets_on(now)}."
+
+
+def limit_message(plan: str, key: str, used_words: str, what: str, monthly: bool = False, after: str = "") -> str:
+    """A count limit in the one wording: "<used_words>.[ The count starts again on 1 Nov.] Basic gives 25." (or "Pro has no
+    limit on <what>."); `after` goes between the reset and the next plan (what still works, what to do)."""
+    nxt = bigger_plan(plan, key)
+    more = ""
+    if nxt:
+        cap = PLANS[nxt.lower()][key]
+        more = f" {nxt} has no limit on {what}." if cap is None else f" {nxt} gives {cap}{' a month' if monthly else ''}."
+    return f"{used_words.rstrip('.')}." + (resets_note() if monthly else "") + (f" {after.strip()}" if after.strip() else "") + more
+
+
+def named_plan(message: str) -> str | None:
+    """The plan a 402's words send the reader to ("basic" or "pro"), so the page can add its price."""
+    import re
+    m = re.search(r"\b(Basic|Pro)\b", message or "")
+    return m.group(1).lower() if m else None

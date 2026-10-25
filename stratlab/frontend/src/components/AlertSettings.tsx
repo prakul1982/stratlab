@@ -5,7 +5,7 @@ import { alertsApi } from "../lib/alerts";
 import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
 import { telegramState } from "../lib/telegramState";
-import { Badge, Card, CardHead, CheckField, Field, FieldGroup, FormActions, FormGrid, Notice } from "./kit";
+import { Badge, Card, CardHead, CheckField, Field, FieldGroup, FormActions, FormGrid, Notice, PlanNote } from "./kit";
 
 /** Settings → Notifications → Alerts: what to send (the report after each market closes, a message for every paper trade)
  * and where (Telegram, email; the phone is on the Get the app page). One Save for all of it, the same call as before. */
@@ -67,7 +67,9 @@ export function AlertSettingsCard() {
       <FormGrid label="Alerts" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <FieldGroup label="What to send" wide>
           <div className="k-stack">
-            <CheckField checked={alerts.daily} disabled={!canReport} onChange={(on) => setAlerts({ ...alerts, daily: on })} label="A short report after each market closes" />
+            {/* off and marked Basic on a plan without it, never ticked-and-grey as if it were on (DP2-030) */}
+            <CheckField checked={canReport && alerts.daily} disabled={!canReport} onChange={(on) => setAlerts({ ...alerts, daily: on })}
+              label={<>A short report after each market closes{!canReport && <span className="k-inline-badge"><Badge tone="warn">Basic</Badge></span>}</>} />
             <CheckField checked={alerts.enabled} disabled={!canAlert} onChange={(on) => setAlerts({ ...alerts, enabled: on })}
               label={<>A message for every paper trade{!canAlert && <span className="k-inline-badge"><Badge tone="warn">Basic</Badge></span>}</>} />  {/* on Basic, as Plans lists it (R6O-012) */}
           </div>
@@ -84,10 +86,12 @@ export function AlertSettingsCard() {
             <button type="button" className="btn outline" onClick={() => void sendCode()}>Send code again</button>
           </FormActions>
         </div>}
-        {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
+        {/* empty, alerts go to the address you sign in with: shown in the box, so an empty box doesn't read as "no email" (DP2-030) */}
+        {ch.email && <Field label="Email" optional type="email" value={alerts.email} disabled={!canReport} maxLength={200} placeholder={me.email ?? ""}
+          hint={!alerts.email.trim() && me.email ? "Empty: alerts go to the email you sign in with." : undefined} onChange={(e) => setAlerts({ ...alerts, email: e.target.value })} />}
         {/* which alerts this card holds and which are chosen elsewhere: an alert email's "Manage emails" opens the page its
-            alerts were set on, and the rest land here (R69-002) */}
-        {ch.email && <p className="k-small k-muted k-hint-line" data-testid="alert-where">Price alerts, scan and filing alerts, event
+            alerts were set on, and the rest land here (R69-002); across the form's width, not squeezed into one column (DP2-030) */}
+        {ch.email && <p className="k-small k-muted k-hint-line k-form-wide" data-testid="alert-where">Price alerts, scan and filing alerts, event
           and money reminders and screen emails are each turned on or off on their own page; they all go to this email.</p>}
         {ch.email && me.alerts.email_off && <p className="k-small k-muted k-hint-line" data-testid="alert-emails-off">Alert emails are off: you used the unsubscribe link in one.{" "}
           {me.alerts.email && <button type="button" className="link" disabled={!canReport} onClick={() => void save(true)}>Turn alert emails back on</button>}</p>}
@@ -98,6 +102,7 @@ export function AlertSettingsCard() {
       </FormGrid>
       {/* a disabled test says why, right under the buttons, and only names what is on this page */}
       {testWhy && !testNote && <p id="alert-test-why" className="k-small k-muted k-hint-line" role="status">{testWhy}</p>}
+      {!canReport && <PlanNote plan="basic">The report after each close, a message for every paper trade and sending them by Telegram or email are on the Basic plan.</PlanNote>}
       {testNote && <Notice tone="warn" role="status">{testNote}</Notice>}
       {ch.push && <p className="k-small k-muted k-hint-line">The simplest way is a notification on your phone: <Link className="link" to="/app">Get the app</Link> and turn them on.</p>}
     </Card>

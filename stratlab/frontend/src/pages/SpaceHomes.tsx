@@ -9,6 +9,8 @@ import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
 import { dayLabel, pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
 import { NAV_GROUPS } from "../lib/navGroups";
+import { pageAt } from "../lib/nav";
+import { PageTags } from "../components/PageTags";
 import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
 import type { LiveRow } from "../lib/types";
@@ -413,10 +415,12 @@ export function MoneyHome() {
       {rest.length > 0 && (
         <section className="k-stack" aria-labelledby="money-tools">
           <h2 id="money-tools" className="k-card-title">More in Money</h2>
-          <div className="explore-grid">
-            {rest.map((e) => (
-              <Link key={e.to} to={e.to} className="k-linkcard explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span></Link>
-            ))}
+          {/* each card with its plan tag, as on the group pages ("Basic for part"), and its line in full on a phone (DP2-014) */}
+          <div className="explore-grid money-cards">
+            {rest.map((e) => {
+              const at = pageAt(e.to);
+              return <Link key={e.to} to={e.to} className="k-linkcard explore-card" data-money={e.to}><b>{e.label}</b><span className="small muted">{e.blurb ?? e.title}</span>{at && <PageTags page={at.page} />}</Link>;
+            })}
           </div>
         </section>
       )}

@@ -9,7 +9,7 @@ import { Info } from "./ui";
 import { Pencil } from "./Icons";
 import { Block, More } from "./More";
 import { buildIdea, type Built } from "./IdeaComposer";
-import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, Select, TimeInput, usePopover } from "./kit";
+import { Card, CardHead, ChipBar, Disclosure, Field, FormGrid, Notice, PlanNote, Select, TimeInput, usePopover } from "./kit";
 import type { Cond, HigherTf, Op, Ref, RefType, Risk, Session, Strategy, Tf } from "../lib/types";
 import "../pages/trade/trade.css";
 
@@ -54,8 +54,11 @@ function NumField({ label, value, min, max, step, hint, onValid }: { label: stri
 function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Ref; onChange: (r: Ref) => void; allowNum: boolean; allIndicators: boolean; tf: Tf }) {
   const def = DEFAULTS[value.t];
   const about = INDICATORS.find((i) => i.t === value.t)?.friendly;
+  // a Basic indicator stays in the list with its plan, and picking it says why it can't be used here and what it costs,
+  // leaving the rule as it was (DP1-007: about 30 options were disabled, and a click on one did nothing)
+  const [askedFor, setAskedFor] = useState<string | null>(null);
   const opt =(i: (typeof INDICATORS)[number]) => (
-    <option key={i.t} value={i.t} disabled={i.pro && !allIndicators && i.t !== value.t}>{i.name}{i.pro && !allIndicators ? " (Basic)" : ""}</option>
+    <option key={i.t} value={i.t}>{i.name}{i.pro && !allIndicators ? " (Basic)" : ""}</option>
   );
   const higher = (["15m", "1h", "1d"] as HigherTf[]).filter((h) => TF_ORDER.indexOf(h) > TF_ORDER.indexOf(tf));
   return (
@@ -63,12 +66,16 @@ function RefEditor({ value, onChange, allowNum, allIndicators, tf }: { value: Re
       <Field label="What">{(id) => (
         <select id={id} className="k-input" value={value.t} onChange={(e) => {
           const t = e.target.value as RefType;
+          const ind = INDICATORS.find((i) => i.t === t);
+          if (ind?.pro && !allIndicators && t !== value.t) { setAskedFor(ind.name); return; }
+          setAskedFor(null);
           onChange(t === "num" ? { t, v: value.t === "num" ? value.v : 50 } : { ...mkRef(t), ago: value.ago, k: value.k, tf: value.tf });
         }}>
           {INDICATOR_GROUPS.map(([g, label]) => <optgroup key={g} label={label}>{INDICATORS.filter((i) => i.group === g).map(opt)}</optgroup>)}
           {allowNum && <option value="num">A number</option>}
         </select>
       )}</Field>
+      {askedFor && <div data-testid="indicator-locked"><PlanNote plan="basic">{askedFor} is on the Basic plan, with every indicator beyond price, SMA, EMA and RSI. Your rule is unchanged.</PlanNote></div>}
       {about?.endsWith(".") && <p className="k-note">{about}</p>}
       {value.t === "num" && <NumField label="Value" step="any" value={value.v ?? ""} onValid={(v) => onChange({ ...value, v })} />}
       {def && (

@@ -6,6 +6,7 @@ import { ago, dateOnly, inr, pct, price, qty as qtyText, signTone } from "../../
 import { Info } from "../../components/ui";
 import { Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
+import { LIMITS } from "../../lib/plans";
 import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
@@ -264,7 +265,8 @@ export function MutualFundsPage() {
           {held.length > 0 && <FundCosts version={`${view.updated_at}|${view.txns}`} />}
           <FundBehaviour version={`${view.updated_at}|${view.txns}`} />
 
-          {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold, are on the {view.gains_plan} plan.</PlanNote>}
+          {/* the limit it lifts is named, as on Plans (DP2-012: the lock didn't say Free keeps 5 funds) */}
+          {!view.gains_allowed && <PlanNote>Capital gains for each financial year, and every scheme you hold (Free keeps {LIMITS.free.mf_schemes}), are on the {view.gains_plan} plan.</PlanNote>}
           {view.gains && (
             <Card label="Capital gains">
               <CardHead title="Capital gains by financial year" actions={view.gains.years.length > 0 ? (

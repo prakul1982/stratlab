@@ -89,7 +89,8 @@ test("View as chips fit the menu, paper-trade messages say Basic, and locks and 
   assert.match(plans, /the Stage 2 scan and every other trend scan/);
   assert.match(plans, /the Market Brief on News/);
   assert.match(plans, /the daily Market Brief and My Stocks by email/);
-  assert.match(read("src/pages/money/ItrExportPage.tsx"), /Part of this page is on \{v\.plan\}\. \{featureName\("itr_export"\)\}: on the \{v\.plan\} plan\. You're on \{yours\}/);
+  // the page lock's own words (PageLock.lockWords), so the two never read differently (DP2-012)
+  assert.match(read("src/pages/money/ItrExportPage.tsx"), /Part of this page is on the \{v\.plan\} plan\. \{lockWords\(featureName\("itr_export"\), v\.plan, yours, false\)\}/);
   assert.match(read("src/pages/AccountPage.tsx"), /me\.view_as && <p[^>]*>Your own use this month, against the \{me\.plan_info\.name\} plan's limits/);
 });
 

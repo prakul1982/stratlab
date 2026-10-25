@@ -5,7 +5,7 @@ import json
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import db, holdings, newsletter_prefs, push
+from . import alerts, db, holdings, newsletter_prefs, push
 from .plans import _dt
 
 KEY = "firststeps:"
@@ -82,7 +82,10 @@ def done(profile: dict, st: dict | None = None) -> dict[str, bool]:
         "watchlist": _watchlist(uid),
         "deepdive": bool(st.get("deepdive")),
         "paper": bool(db.user_sessions(uid, 1, running=False)),
-        "alerts": (any(v != "off" for v in news.values()) or bool(profile.get("telegram_chat_id"))
+        # done once something will really arrive: a newsletter only goes to a confirmed email, a Telegram chat only once its
+        # code is entered (DP2-030: Weekly chosen with an unconfirmed email ticked it)
+        "alerts": ((any(v != "off" for v in news.values()) and alerts.email_confirmed(profile))
+                   or (bool(profile.get("telegram_chat_id")) and alerts.telegram_verified(profile))
                    or bool(push.devices(uid))),
     }
 

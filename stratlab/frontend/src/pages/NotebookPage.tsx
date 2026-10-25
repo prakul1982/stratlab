@@ -17,7 +17,7 @@ import { Copy, Download, Pin, Pulse, Sparkle, Trash } from "../components/Icons"
 import { MoreMenu } from "../components/MoreMenu";
 import { RulesCard } from "../components/Rules";
 import { AutoGrow, Info, Modal, VerdictBadge } from "../components/ui";
-import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, Signed, Skeleton, type Column } from "../components/kit";
+import { Card, CardHead, CheckField, ChipBar, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Signed, Skeleton, type Column } from "../components/kit";
 import { HELP } from "../lib/help";
 import { sipTestLink } from "../lib/sip";
 import { isLegacyEmptied, legacyNote } from "../lib/legacyRun";
@@ -259,7 +259,7 @@ function NotebookView() {
   // (the month is India's, as the server counts it)
   const resetDay = (() => { const ist = new Date(Date.now() + 5.5 * 3600_000);
     return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth() + 1, 1)).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" }); })();
-  const moreRuns = me?.plan === "free" ? ` Basic gives ${LIMITS.basic.backtests_per_month} a month.` : me?.plan === "basic" ? " Pro has no limit." : "";
+  const moreRuns = me?.plan === "free" ? ` Basic gives ${LIMITS.basic.backtests_per_month} a month.` : me?.plan === "basic" ? " Pro has no limit on backtests." : "";
   const run = async () => {
     if (running || starting.current) return;
     if (!s.entry.length && !(s.shortEntry ?? []).length) { notify("Add at least one entry rule first."); return; }
@@ -506,12 +506,14 @@ function NotebookView() {
               <Notice tone="warn" role="status" action={{ label: "Choose market", to: `/n/${nb.id}/market` }}>Choose what to test it on before you run it: the rules need a market and an instrument, or a group.</Notice>
             </div>
           )}
-          {planBlock && <p className="k-note" data-testid="run-plan-block">🔒 {planBlock} <Link className="link" to="/plans">Plans</Link></p>}
-          <p className="k-note">
-            {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month${outOfRuns ? ` (limit reached). The count starts again on ${resetDay}.${moreRuns}` : "."} ` : ""}
-            {!outOfRuns && runCopy(group?.members.length ?? 0, running, elapsed)}
-            {outOfRuns && <> <Link className="link" to="/plans">Plans</Link></>}
-          </p>
+          {/* the one lock wording (DP2-022, DP1-018): the plan note, with the price and its button, not an emoji and a bare link */}
+          {planBlock && <div data-testid="run-plan-block"><PlanNote>{planBlock}</PlanNote></div>}
+          {outOfRuns && me?.usage.backtests_limit != null
+            ? <PlanNote>You've used all {me.usage.backtests_limit} backtests this month (limit reached). The count starts again on {resetDay}.{moreRuns}</PlanNote>
+            : <p className="k-note">
+              {me?.usage.backtests_limit != null ? `${Math.max(0, me.usage.backtests_limit - me.usage.backtests_used)} of ${me.usage.backtests_limit} backtests left this month. ` : ""}
+              {runCopy(group?.members.length ?? 0, running, elapsed)}
+            </p>}
           {experiments.length === 0
             ? <EmptyState title="No experiments yet">Your first run shows whether the idea holds up.</EmptyState>
             : <DataTable stack label="Experiments" columns={cols} rows={experiments} rowKey={(e) => String(e.v)} />}

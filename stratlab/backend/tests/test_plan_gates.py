@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app import alerts, billing, live, main
 from app.config import settings
 from app.models import Strategy
-from app.plans import (FEATURE_PLAN, FEATURES, PLANS, bigger_plan, decks, deepdives, group_size, has_fno, has_indicators,
+from app.plans import (FEATURE_PLAN, FEATURES, PLANS, bigger_plan, decks, deepdives, group_size, has_fno, has_indicators, resets_on,
                        plan_info)
 
 
@@ -167,11 +167,12 @@ def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
     used["n"] = 10
     with pytest.raises(Exception) as e:
         main.ai_allowance({"id": "u1", "_plan": "free"})
-    assert stop_reason(e) == "You've used all 10 AI builds this month. Basic gives 100."
+    # the one lock wording (DP2-022, DP1-018): with when the month's count starts again
+    assert stop_reason(e) == f"You've used all 10 AI builds this month. The count starts again on {resets_on()}. Basic gives 100 a month."
     used["n"] = 100
     with pytest.raises(Exception) as e:
         main.use_backtest({"id": "u1", "_plan": "basic"})
-    assert stop_reason(e) == "You've used all 100 backtests for this month. Pro has no limit on backtests."
+    assert stop_reason(e) == f"You've used all 100 backtests this month. The count starts again on {resets_on()}. Pro has no limit on backtests."
     assert main.lift("free", "holdings", "holdings") == " Basic gives 100." and main.lift("basic", "screens", "screens") == " Pro gives 25."
     assert main.lift("free", "live_limit", "paper sessions") == " Basic gives 2." and main.lift("free", "stock_alerts", "x") == " Basic gives 25."
     monkeypatch.setattr(main.db, "update_profile", lambda *a, **k: None)
@@ -180,7 +181,8 @@ def test_each_limit_says_which_plan_lifts_it(paid, monkeypatch):
     try:
         c = as_plan("free")
         r = c.put("/holdings", json={"items": [{"symbol": f"S{i}", "qty": 1} for i in range(31)]})
-        assert r.status_code == 402 and r.json()["detail"]["message"] == "Your plan keeps up to 30 stocks in My Holdings. Basic gives 100."
+        assert r.status_code == 402 and r.json()["detail"]["message"] == "Your Free plan keeps up to 30 stocks in My Holdings. Basic gives 100."
+        assert r.json()["detail"]["plan"] == "basic"                     # the plan the page adds the price of (DP2-022)
     finally:
         main.app.dependency_overrides.clear()
 
@@ -194,7 +196,7 @@ def test_parallel_backtests_cant_pass_the_monthly_limit_together(paid, monkeypat
         with pytest.raises(Exception) as e:
             with main.backtest_slot(profile):
                 pass
-        assert stop_reason(e) == "You've used all 100 backtests for this month. Pro has no limit on backtests."
+        assert stop_reason(e) == f"You've used all 100 backtests this month. The count starts again on {resets_on()}. Pro has no limit on backtests."
     with main.backtest_slot(profile):                    # released when the run ends
         pass
 

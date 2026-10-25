@@ -1,4 +1,5 @@
 import { Badge } from "./kit";
+import { Lock } from "./Icons";
 import { planOf } from "../lib/plans";
 import type { NavPage } from "../lib/nav";
 import { NEW_SINCE } from "../lib/nav";
@@ -16,12 +17,14 @@ export function PageTags({ page }: { page: NavPage }) {
   const flag = page.flag ?? gate?.feature;
   const plan = flag ? planOf(flag) : "free";
   if (!page.isNew && plan === "free") return null;
-  const part = gate?.whole === false;       // lib/gates.ts: the lock is for whole pages only (as in the menu)
+  // lib/gates.ts: the lock is for whole pages only (as in the menu); a page with a paid part and no gate of its own says so in
+  // nav.ts (`part`: My Holdings' filings and dividends, DP2-009)
+  const part = gate ? gate.whole === false : !!page.part;
   const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part }) : null;
   return (
     <span className="page-tags">
       {page.isNew && <span title={`Shipped by ${NEW_SINCE}`}><Badge tone="ok" dot={false}>New</Badge></span>}
-      {tag && <span title={tag.why}><Badge tone="plain" dot={false}>{tag.label}</Badge><span className="sr-only"> ({tag.why})</span></span>}
+      {tag && <span title={tag.why}><Badge tone="plain" dot={false}>{tag.locked && <Lock size={12} />}{tag.label}</Badge><span className="sr-only"> ({tag.why})</span></span>}
     </span>
   );
 }

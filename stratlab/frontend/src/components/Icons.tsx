@@ -45,3 +45,5 @@ export const Calendar = ({ size }: P) => <svg {...base(size)}><rect x="4" y="5" 
 export const Chevron = ({ size }: P) => <svg {...base(size)}><path d="m9 6 6 6-6 6" /></svg>;
 export const Updown = ({ size }: P) => <svg {...base(size)}><path d="m8 9 4-4 4 4M8 15l4 4 4-4" /></svg>;
 export const LogOut = ({ size }: P) => <svg {...base(size)}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l-4-4 4-4M6 12h10" /></svg>;
+/** The plan lock, in the same line style as the menu's icons (DP2-022, DP1-018, DP1-025: the 🔒 emoji in banners and buttons). */
+export const Lock = ({ size = 14 }: P) => <svg {...base(size)} className="lock-ic"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;

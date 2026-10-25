@@ -86,6 +86,15 @@ def india_rows(equities: list[dict], listed: dict | None = None, twins: dict[str
     return out
 
 
+def with_etfs(rows: list[dict], etfs: dict[str, dict]) -> list[dict]:
+    """`rows` and every ETF on the exchange's ETF list ({symbol: {name, isin}}) that isn't in them yet, so an ETF is found by
+    its symbol or fund name even while the broker's list is offline (DP2-021: NIFTYBEES found nothing in the alert form)."""
+    have = {r["_sym"] for r in rows}
+    extra = [_entry(s, (v or {}).get("name") or s, "NSE", "IN", isin=(v or {}).get("isin")) for s, v in sorted(etfs.items())
+             if s and s.upper() not in have]
+    return rows + extra
+
+
 def us_rows(companies: list[dict]) -> list[dict]:
     """From the list of US companies ([{symbol, name}]): common shares only."""
     listed = {str(c.get("symbol") or "").upper() for c in companies}

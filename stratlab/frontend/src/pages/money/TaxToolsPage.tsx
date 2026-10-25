@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { asOf as asOfText, dateOnly, inr, money, qty as qtyText, signTone } from "../../lib/format";
 import { Info } from "../../components/ui";
-import { Trash } from "../../components/Icons";
+import { Lock, Trash } from "../../components/Icons";
 import { track } from "../../lib/analytics";
 import { Badge, Card, CardHead, type Column, ConfirmDialog, DataTable, DateField, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Meter, Notice, PageHeader, PlanNote, Seg, Select, Skeleton, Stat, StatRow, UploadButton } from "../../components/kit";
 import { fyLink, movedYearNote, openFy, rememberFy, savedFy } from "../../lib/fy";
@@ -45,6 +45,8 @@ type Schedule = {
 type Payment = { d: string; amount: number };
 type Advance = {
   fy: number; label: string; dates: DueDate[]; remind: boolean; locked: boolean; as_of: string; assumptions: string[]; threshold: number; current_fy: number;
+  /** the reminders are the money calendar's, on Basic (DP2-004) */
+  remind_locked?: boolean; remind_plan?: string;
   schedule?: Schedule; inputs?: { tds: number; paid: Payment[] }; dividends_in_estimate?: number; dividend_tds?: number; income_saved?: boolean;
 };
 type LtLot = { key: string; bought: string; qty: number; cost: number; price: number; value: number; gain: number; grandfathered: boolean; bonus: boolean; text: string };
@@ -52,7 +54,8 @@ type SoonLot = LtLot & { long_from: string; days_left: number; window: number };
 type BelowLot = { key: string; bought: string; qty: number; cost: number; price: number; value: number; loss: number; loss_pct: number | null; days: number; term: "ST" | "LT"; long_from: string | null };
 type Ltcg = {
   fy: number; label: string; as_of: string; exemption: { limit: number; used: number; left: number; realised_lt_net: number; realised_st_net: number; realised_us_lt_net?: number; realised_us_st_net?: number };
-  open_lt: { lots: number; gains: number; losses: number; with_gain: number }; soon_counts: Record<string, number>; long: LtLot[]; soon: SoonLot[];
+  /** null while locked: a locked figure is no figure, never a false 0 (DP2-003) */
+  open_lt: { lots: number; gains: number; losses: number; with_gain: number } | null; soon_counts: Record<string, number> | null; long: LtLot[]; soon: SoonLot[];
   unpriced: number; facts: string[]; locked: boolean; below_cost: { rows: BelowLot[]; unpriced: number; open: number; st: number; lt: number };
   names: Record<string, { symbol: string }>; prices: boolean; trades: number;
 };
@@ -69,7 +72,9 @@ export function TaxToolsPage() {
   const tab: Tab = (TABS.find(([t]) => t === params.get("tab"))?.[0]) ?? "dividends";
   const go = (t: Tab) => setParams((p) => { const n = new URLSearchParams(p); n.set("tab", t); return n; }, { replace: true });
   return (
-    <div className="k-page">
+    // each tab says its own lock in the same place, at its top (DP2-012: the page's note showed on two tabs and an inline one on
+    // the third); the dividend detail is Basic, the amounts and lots Pro, so one page note can't say both
+    <div className="k-page" data-plan-notes="own">
       <PageHeader eyebrow="Money · Tax" title="Dividends, advance tax and the long-term exemption"
         lede={<>Built on your <Link className="link" to="/tax-report">tax report</Link> and <Link className="link" to="/holdings">holdings</Link>: the dividends you received, the advance tax due by each date, and how much of this year's long-term exemption is used.</>}
         info="The dividends you received and the TDS on them, the advance tax due by each date, and how much of this year's long-term gains exemption is used. Only you can see these figures." infoLabel="What these tools cover" />
@@ -158,6 +163,7 @@ function DividendsTab() {
   ];
   return (
     <>
+      {v.locked && <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>}
       <Card compact={!note && v.files.length === 0}>
         <CardHead title="Your dividends" info="Upload your broker's dividend statement as CSV or Excel, with columns for the date, the company (symbol, name or ISIN) and the amount (or quantity and dividend a share); TDS and currency are optional (USD for US dividends). A tax P&L ZIP uploaded to the tax report brings its dividend sheet too. Without a file, the year is estimated from your holdings and the dividends the companies declared."
           actions={<>
@@ -204,8 +210,7 @@ function DividendsTab() {
                 {y.source === "files" && y.estimate_total != null && <p className="k-note">From your holdings, the estimate for {y.label} is {inr(y.estimate_total)}.</p>}
                 {y.ais_note && <p className="k-note">{y.ais_note}</p>}
                 {y.unpriced > 0 && <p className="k-note">{y.unpriced} US payment{y.unpriced === 1 ? " isn't" : "s aren't"} counted: the dollar rate isn't available right now.</p>}
-                {y.locked ? <PlanNote>Dividends by company, with the TDS expected and the US tax withheld, are on the Basic plan.</PlanNote>
-                  : y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
+                {!y.locked && y.companies.length > 0 && <DataTable label="Dividends by company" columns={companyCols} rows={y.companies} rowKey={(c) => `${c.country}${c.symbol}`} />}
               </>
             )}
           </Card>
@@ -267,23 +272,31 @@ function AdvanceTab() {
     { key: "short", header: "Short", numeric: true, cell: (r) => <><span className={r.short > 0 ? "k-down" : undefined}>{r.short > 0 ? inr(r.short) : "–"}</span>{r.tolerated && <span className="k-sub-line">within {r.n === 0 ? "12%" : "36%"}</span>}</> },
     { key: "int", header: "234C interest", numeric: true, cell: (r) => (r.status === "passed" ? inr(r.interest_234c) : r.interest_if_missed > 0 ? <span className="k-note">{inr(r.interest_if_missed)} if not paid</span> : "–") },
   ];
+  const today = v.as_of.slice(0, 10);
+  const nextDue = v.dates.find((d) => d.date >= today)?.n;
   return (
     <>
+      {v.locked && <PlanNote>The amounts due by each date, and the interest on a short instalment, are on the Pro plan.</PlanNote>}
       <FormGrid label="Year and reminders">
         <Field label="Financial year">{(id) => (
           <Select id={id} value={v.fy} onChange={(x) => setFy(Number(x))} options={[v.current_fy, v.current_fy - 1].map((x) => ({ value: x, label: `FY ${x}-${String(x + 1).slice(2)}${x === v.current_fy ? " (this year)" : ""}` }))} />
         )}</Field>
-        <FieldGroup label="Reminders by email and phone" info="7 days and 1 day before each due date, to your confirmed email address and any phone notifications you set up in Account. Dates only: no amounts are sent.">
-          <Seg label="Advance tax reminders" options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} value={v.remind ? "on" : "off"} onChange={(x) => remind(x === "on")} />
+        {/* a short label that fits its column; how they come is behind the (i) (DP2-013: "Reminders by email and ph…") */}
+        <FieldGroup label="Reminders" infoLabel="About advance tax reminders" info="By email and phone, 7 days and 1 day before each due date: to your confirmed email address and any phone notifications you set up in Account. Dates only: no amounts are sent.">
+          {v.remind_locked
+            ? <p className="k-small k-muted" data-testid="advance-remind-locked"><Lock />On the {v.remind_plan ?? "Basic"} plan</p>
+            : <Seg label="Advance tax reminders" options={[{ value: "on", label: "On" }, { value: "off", label: "Off" }]} value={v.remind ? "on" : "off"} onChange={(x) => remind(x === "on")} />}
         </FieldGroup>
       </FormGrid>
+      {v.remind_locked && <PlanNote plan="basic">Advance tax reminders are on the {v.remind_plan ?? "Basic"} plan, with the money calendar's other reminders.</PlanNote>}
 
       <Card label="Advance tax due dates">
         <CardHead title={`Due dates, ${v.label}`} info={`Advance tax is due when the year's tax less TDS is ${inr(v.threshold)} or more (section 208; section 404 of the Income-tax Act, 2025 from FY 2026-27).`} />
+        {/* a date already gone is marked, and the next one (DP2-013: 15 Jun and 15 Sep showed as if still ahead) */}
         <ul className="k-list" aria-label="Due dates">
-          {v.dates.map((d) => <li key={d.n}><b>{d.label}</b>: {d.pct * 100}% of the year's tax (less TDS), counting what was paid before</li>)}
+          {v.dates.map((d) => <li key={d.n} className={d.date < today ? "k-muted" : undefined}><b>{d.label}</b>: {d.pct * 100}% of the year's tax (less TDS), counting what was paid before
+            {d.date < today ? <span className="k-note"> · passed</span> : d.n === nextDue ? <span className="k-note"> · next</span> : null}</li>)}
         </ul>
-        {v.locked && <PlanNote>The amounts due by each date, and the interest on a short instalment, are on the Pro plan.</PlanNote>}
       </Card>
 
       {s && v.inputs && (
@@ -314,7 +327,9 @@ function AdvanceTab() {
           <li>Section 234B: when advance tax paid by 31 March is under 90% of the tax, 1% a month on the shortfall from 1 April until it is paid. A self-assessment payment (one dated after 31 March) stops it on the amount paid.</li>
           <li>From FY 2026-27 the Income-tax Act, 2025 numbers these sections 404 (who pays), 424 (234B) and 425 (234C).</li>
         </ul>
-        <ul className="k-list muted">{v.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
+        {/* the assumptions under their own heading, in the same size as the rules above them (DP2-013: two sizes of bullet) */}
+        <h3 className="k-sub">Assumptions</h3>
+        <ul className="k-list">{v.assumptions.map((a, i) => <li key={i}>{a}</li>)}</ul>
         <Dated label="Worked out" iso={v.as_of} />
       </Card>
     </>
@@ -381,8 +396,9 @@ function LtcgTab() {
     return () => { live = false; };
   }, [fail, tries]);
   if (!v) return error ? failedLoad("Your lots couldn't be read", error, () => setTries((n) => n + 1)) : loading("Checking your lots");
+  const lock = v.locked && <PlanNote>Each open lot's long-term gain and the lots turning long-term are on the Pro plan.</PlanNote>;
   if (!v.trades) {
-    return <EmptyState title="No trades yet" action={{ label: "Open the tax report", to: "/tax-report" }}>Upload your tradebooks on the tax report to see the exemption used and your open lots.</EmptyState>;
+    return <>{lock}<EmptyState title="No trades yet" action={{ label: "Open the tax report", to: "/tax-report" }}>Upload your tradebooks on the tax report to see the exemption used and your open lots.</EmptyState></>;
   }
   const name = (k: string) => v.names[k]?.symbol ?? k;
   const ex = v.exemption;
@@ -410,20 +426,24 @@ function LtcgTab() {
     { key: "l", header: "Below cost by", numeric: true, cell: (r) => <span className="k-down">{inr(r.loss)}</span> },
     { key: "t", header: "Term today", cell: (r) => (r.term === "LT" ? "Long-term" : `Short-term, long-term from ${dateOnly(r.long_from)}`) },
   ];
+  // a locked figure is "–" with the lock, never a 0 that reads as a fact (DP2-003)
+  const lockedStat = (label: string) => <Stat label={label} value={<span aria-label={`${label}: on the Pro plan`}><Lock />–</span>} note="on the Pro plan" />;
   return (
     <>
+      {lock}
       <Card label="Long-term exemption">
         <CardHead title={`Long-term exemption, ${v.label}`} />
         <StatRow>
           <Stat label="Used by gains realised" value={<span aria-label="Exemption used">{inr(ex.used)}</span>} note={`of ${inr(ex.limit)} · ${inr(ex.left)} left`} />
           <Stat label={ex.realised_us_lt_net != null ? "Long-term gains realised, Indian shares and funds (net)" : "Long-term gains realised (net)"} value={inr(ex.realised_lt_net)} tone={signTone(ex.realised_lt_net)} note={`short-term ${inr(ex.realised_st_net)}`} />
-          <Stat label="Open long-term lots" value={v.open_lt.lots} note={`unrealised gains ${inr(v.open_lt.gains)}${v.open_lt.losses < 0 ? ` · losses ${inr(v.open_lt.losses)}` : ""}`} />
-          <Stat label="Turning long-term soon" value={v.soon_counts["90"]} note={`${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90`} />
+          {v.open_lt ? <Stat label="Open long-term lots" value={v.open_lt.lots} note={`unrealised gains ${inr(v.open_lt.gains)}${v.open_lt.losses < 0 ? ` · losses ${inr(v.open_lt.losses)}` : ""}`} />
+            : lockedStat("Open long-term lots")}
+          {v.soon_counts ? <Stat label="Turning long-term soon" value={v.soon_counts["90"]} note={`${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90`} />
+            : lockedStat("Turning long-term soon")}
         </StatRow>
         {ex.limit > 0 && <Meter pct={(ex.used / ex.limit) * 100} />}
         <p className="k-small">{inr(ex.left)} of this year's {inr(ex.limit)} exemption is unused. It doesn't carry forward to next year.</p>
         {ex.realised_us_lt_net != null && <p className="k-small k-muted" data-testid="ltcg-us-apart">{usSharesNote(ex.realised_us_st_net, ex.realised_us_lt_net, inr)} The exemption is for Indian shares and equity funds only.</p>}
-        {v.locked && <PlanNote>Each open lot's long-term gain and the lots turning long-term are on the Pro plan.</PlanNote>}
       </Card>
 
       {!v.locked && (

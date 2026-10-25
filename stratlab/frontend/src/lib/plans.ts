@@ -61,14 +61,15 @@ export const FEATURES: Record<PlanId, string[]> = {
     `${L.free.deepdives_per_month} company deep dives a month, each with the report card and checklist, and ${L.free.decks_per_month} company slide deck (its PDF and PowerPoint count as one)`,
     "Price charts, screens, sector rotation, today's market breadth, ETF prices against NAV and red flags on every company",
     `${L.free.stock_alerts} stock alerts and ${L.free.screens} saved screens; import up to ${L.free.holdings} holdings, ${L.free.mf_schemes} mutual funds and ${L.free.networth_items} net worth entries`,
-    "Tax report, money calendar, the Market Brief on News, a weekly My Stocks email, every market we cover and your own CSV"],
+    // the same words as the table's row (DP2-010: "a weekly My Stocks email" here, "Weekly Market Brief and My Stocks" there)
+    "Tax report, money calendar, the Market Brief on News, the weekly Market Brief and My Stocks emails, every market we cover and your own CSV"],
   basic: ["Everything in Free, plus:",
     `${L.basic.backtests_per_month} backtests and ${L.basic.ai_builds_per_month} AI builds a month, with all 20+ indicators: MACD, Supertrend, VWAP and more`,
     `Paper trade ${L.basic.live_limit} strategies at a time, whole groups on intraday candles and options at set times, with trade notifications and a daily report`,
     "Trading tools: full trade journal, positioning history, stock futures history, closing auction history, chart replay practice, an India VIX entry filter, SIP dip rules",
     "Alerts: F&O change alerts, ETF gap alerts and market event reminders and money reminders; the daily Market Brief and My Stocks by email",
     `${L.basic.deepdives_per_month} company deep dives and ${L.basic.decks_per_month} company slide decks a month, business updates in numbers and named-holder search`,
-    "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags, Watchlist at a glance, market breadth charts, margin funding history",
+    "Scans and watchlist: the Stage 2 scan and every other trend scan, watchlist red flags (and each holding's filings and results date), Watchlist at a glance, market breadth charts, margin funding history",
     "Money: every mutual fund and net worth entry, fund capital gains, fund costs in rupees, fund behaviour, dividends with TDS, deposit rates after your own tax, a floating-rate loan check",
     `${L.basic.stock_alerts} stock alerts, ${L.basic.screens} saved screens, ${L.basic.holdings} holdings`],
   pro: ["Everything in Basic, plus:", `Unlimited backtests, deep dives and decks; up to ${AI_BUILDS_PER_DAY} AI builds a day`,
@@ -77,7 +78,7 @@ export const FEATURES: Record<PlanId, string[]> = {
     "Options paper trading on your own rules' signals, strikes picked by delta or premium, and what-if sliders with a roll preview",
     "Export a notebook's rules and trades, forward-test alert webhooks in paper trading, and StratLab in your AI assistant",
     "Advance tax amounts and the long-term exemption lot by lot",
-    "US stocks in Indian tax, and ITR-ready schedules with a PDF pack for your CA",
+    "US stocks in Indian tax sale by sale, and ITR-ready schedules with a PDF pack for your CA",
     `${L.pro.stock_alerts} stock alerts, ${L.pro.screens} saved screens, ${L.pro.holdings} holdings`],
 };
 
@@ -88,18 +89,22 @@ export const NUMBERS: [keyof Limits, string][] = [["backtests_per_month", "Backt
   ["ai_reads_per_day", "Fresh AI reads a day (a company's read already written today, and the market mood, never count)"]];
 export const FLAGS: [string, string][] = [["indicators", "All 20+ indicators in strategy rules"], ["group_live", "Paper trade a whole group (on 5-minute, 15-minute or 1-hour candles)"], ["options", "Options paper trading at set times"],
   ["alerts", "Trade notifications"], ["daily_report", "Daily report after the close"], ["newsletter", "Daily Market Brief and My Stocks by email"],
-  ["scans", "Stage 2 + Supertrend scan, with a daily alert"], ["filings", "Red flags for the whole watchlist, with an evening alert"],
+  ["scans", "Stage 2 + Supertrend scan, with a daily alert"],
+  // what the filings feature unlocks on My Holdings too, so Plans and that page's lock agree (DP2-009)
+  ["filings", "Red flags across your watchlist and holdings: each holding's red flags, recent filings and results date on My Holdings, with an evening alert"],
   ["investor_home", "Watchlist at a glance"], ["fno", "Indian F&O in notebooks and backtests"], ["options_signal", "Options entered on your own rules' signals"],
   ["fast_entries", "Faster group entries and a spread limit"], ["export", "Export a notebook's rules and trades"],
-  ["networth", "Net worth: unlimited entries and the monthly history"],
-  ["mf_gains", "Mutual funds: every scheme, and capital gains by year"],
-  ["dividends", "Dividends by company, with TDS and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],
+  // each says the Free limit it lifts, so the page's lock does too (DP2-012: the Mutual funds lock didn't name the 5 funds)
+  ["networth", `Every net worth entry (Free keeps ${LIMITS.free.networth_items}) and the monthly history`],
+  ["mf_gains", `Every mutual fund scheme (Free keeps ${LIMITS.free.mf_schemes}) and capital gains by year`],
+  // Tax tools' table by company (My Holdings lists each holding's dividends on every plan, DP2-010)
+  ["dividends", "Dividends by company on Tax tools, with the TDS expected and US tax withheld"], ["tax_tools", "Advance tax amounts and long-term exemption facts per lot"],
   ["money_reminders", "Money calendar reminders by email or phone"],
   ["mf_costs", "Fund costs: each fund's TER parts in rupees, both plans side by side, and changes since you bought"],
   ["breadth", "Market breadth history, charts and sector table"],
   ["positioning", "Derivatives positioning history and IV percentiles"],
   ["journal", "Trade journal: every trade, the honesty checks, breakdowns and paper vs real"],
-  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax: gains in rupees, foreign tax credit and Schedule FA"],
+  ["itr_export", "ITR-ready schedules and a PDF pack for your CA"], ["us_tax", "US stocks in Indian tax sale by sale: each sale's gain in rupees, the foreign tax credit and Schedule FA"],
   ["etf_gaps", "Alerts on an ETF's price against its NAV"],
 
 ["fo_alerts", "Alerts when an F&O exit, lot size or expiry change touches your watchlist or paper sessions"],
@@ -128,8 +133,10 @@ export const EVERYONE = ["Every market, and your own CSV",
   "Market events calendar: RBI policy, data releases, the Fed, index changes, expiries and holidays",
   "Option Greeks for every strike and your position, and the payoff today beside the one at expiry (model estimates)",
   "A trade journal with the basic stats", "My Holdings, the tax report and the year's total tax estimate", "Money calendar and its calendar feed",
-  "Dividend and US share totals for each year, advance tax due dates and the exemption used", "A preview of the ITR-ready export",
-  "Weekly Market Brief and My Stocks", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
+  // what Free sees on these pages, in the words the pages use (DP2-010: Holdings' dividends, US tax's year totals, the ITR preview)
+  "Each holding's dividends on My Holdings; the year's dividend total, and each year's US share gains in rupees, on Tax tools and US stocks tax",
+  "Advance tax due dates and the exemption used", "A preview of the ITR-ready export: each schedule's totals and line counts",
+  "Weekly Market Brief and My Stocks emails", "Public company pages, share cards and invite links", "ETF prices against their NAV, with 30 days of history",
   "Named holders above 1% and the business-update filings on every company page",
   "Stock futures today: OI buildup, rollover, basis and MWPL use for every F&O stock", "Stock lending fees that traded for your holdings",
   "Margin-funded positions per stock today, and your own MTF cost worked out"];

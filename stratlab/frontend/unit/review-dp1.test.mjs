@@ -66,7 +66,7 @@ test("DP1-008: a library card says what a copy needs on the plan, before the cop
 
 test("DP1-009, DP1-012: out of runs says when the count starts again and what the next plan gives; no Run before a market", () => {
   const nb = read("src/pages/NotebookPage.tsx");
-  assert.match(nb, /\(limit reached\)\. The count starts again on \$\{resetDay\}\.\$\{moreRuns\}/);
+  assert.match(nb, /\(limit reached\)\. The count starts again on \{resetDay\}\.\{moreRuns\}<\/PlanNote>/);   // as a plan note since DP2-022
   assert.match(nb, /\{!outOfRuns && \(inst \|\| group\) && <span className="k-small k-muted kbd-hint">/);
   assert.match(nb, /const currency = group \? \(market\?\.currency \?\? ""\) : inst \? inst\.currency \|\| \(inst\.market === "IN" \? "INR" : ""\) : "";/);
   // a re-run of an earlier set-up of today opens that run

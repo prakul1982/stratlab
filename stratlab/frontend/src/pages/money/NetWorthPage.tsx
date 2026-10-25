@@ -291,7 +291,7 @@ function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
 const RANGE_DAYS: [string, string, number][] = [["3m", "3M", 93], ["1y", "1Y", 366], ["3y", "3Y", 1096]];
 
 export function NetWorthPage() {
-  const { fail, notify } = useApp();
+  const { fail, notify, me } = useApp();
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind>("cash");
@@ -559,7 +559,8 @@ export function NetWorthPage() {
         <Modal title={step === "form" ? `Add: ${FORM[kind].title}` : "Add to your net worth"} onClose={() => { setAdding(false); setStep("pick"); }} wide>
           <div className="k-stack">
             {view.limit != null && <span className="k-note">{view.count} of {view.limit} entries on your plan · <Link className="link" to="/plans">more with Basic</Link></span>}
-            {full ? <PlanNote>Your plan keeps {view.limit} entries. Basic keeps as many as you like, with the history chart.</PlanNote>
+            {/* the one lock wording (DP2-022): the plan and its count, then what Basic gives; the note adds the price */}
+            {full ? <PlanNote plan="basic">Your {me?.plan_info.name ?? "Free"} plan keeps {view.limit} entries. Delete one to add another. Basic has no limit on entries, and adds the monthly history chart.</PlanNote>
               : step === "pick" ? <TilePicker label="What is it?" groups={TILES} value={kind} onChange={(k) => { setKind(k as Kind); setAddStart(fresh(k as Kind)); setStep("form"); setFieldErrs(null); }} />
               : <>
                 <button type="button" className="btn quiet sm k-btn-end" onClick={() => setStep("pick")}>← Something else</button>
