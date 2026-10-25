@@ -122,8 +122,8 @@ test("a page kept out of search results names no canonical address, in its HTML 
   assert.equal(seoFor("/research/IN/X", "gate").canonical, null);
   assert.equal(seoFor("/verdict/abc", "verdict").canonical, null);
   // an indexed page keeps its own, and a page that turns itself back on (a library strategy) names its own address
-  // changed on purpose in R26-006: /pricing repeats the landing page, so its canonical address is /
-  assert.equal(seoFor("/pricing").canonical, "https://stratlab.studio/");
+  // changed on purpose in RC1-011: /pricing repeats the plans page, so its canonical address is /plans
+  assert.equal(seoFor("/pricing").canonical, "https://stratlab.studio/plans");
   assert.ok(!seo.sitemapPages().some((p) => p.path === "/pricing"));
   assert.equal(seoFor("/faq").canonical, "https://stratlab.studio/faq");
   assert.equal(seoFor("/library/seed-supertrend-us", "public", { index: true, canonical: seo.absolute("/library/seed-supertrend-us") }).canonical,

@@ -155,7 +155,8 @@ function SessionView({ sid, onStopped, onDeleted }: { sid: string; onStopped: ()
   // one "now" price (DB-020): the header's is the latest trade, the chart's candles are closed ones unless one is forming,
   // and the chart says which; a stopped session's price is the last before the stop, with its time
   const lastBar = snap.bars[snap.bars.length - 1];
-  const chartNote = snap.forming && running ? `${TF_NAME[snap.strategy.tf]} candles. The last one is still forming: it moves with each price until it closes.`
+  // (said from what the chart draws: a forming candle is drawn whenever the snapshot has one, so the caption never calls it closed, RC1-008)
+  const chartNote = snap.forming ? `${TF_NAME[snap.strategy.tf]} candles. The last one is still forming: it moves with each price until it closes.`
     : lastBar ? `${TF_NAME[snap.strategy.tf]} candles, closed ones only: the last closed ${when(lastBar.t, tz, intraday, true)}.${running && snap.last_price != null ? " The latest price is above the chart." : ""}` : undefined;
   const priceHead = snap.last_price == null ? undefined : running
     ? `${snap.instrument.symbol} ${price(snap.last_price, cur)}, latest price${snap.last_tick_at ? `, ${when(snap.last_tick_at, tz, true, true)}` : ""}`

@@ -56,6 +56,8 @@ export function invalidText(it: Invalid): string {
     case "greater_than": return `Enter more than ${num("gt")}.`;
     case "string_too_long": return `Use at most ${num("max_length")} characters.`;
     case "string_too_short": return "Fill this in.";
+    case "too_long": return `Use at most ${num("max_length")} items.`;
+    case "too_short": return `Pick at least ${num("min_length")}.`;
     case "missing": return "Fill this in.";
     case "float_parsing": case "int_parsing": case "float_type": case "int_type": return "Enter a number, like 10.";
     case "int_from_float": return "Enter a whole number.";

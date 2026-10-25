@@ -8,12 +8,15 @@ const initials = (s: Suggestion) => s.symbol.replace(/[^A-Za-z0-9]/g, "").slice(
  * pressing Enter on an exact symbol you typed, calls `onPick(symbol, region, name)` (the name only when picked from the list).
  * `value` is the symbol the page is showing now; the box shows it until you type. Give it an `id` (a Field does) so
  * its label points at it. */
-export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search }: {
+export function StockPicker({ value = "", onPick, onText, market = "IN", id, placeholder = "Search by name or symbol, like RELIANCE", clearOnPick, autoFocus, search, listedOnly }: {
   value?: string; onPick: (symbol: string, region: "IN" | "US", name?: string) => void; market?: Market; id?: string; placeholder?: string; clearOnPick?: boolean; autoFocus?: boolean;
   /** Text to open with as if typed: its matches are looked up and listed (a search handed over in the address). */
   search?: string;
   /** Called with the text as it is typed, for a form that accepts an exact symbol typed without picking. */
   onText?: (text: string) => void;
+  /** Only a listed company can be picked (a list that refuses any other symbol, like the watchlist): no "an exact symbol still
+   * works" and Enter takes a suggestion only (RC1-003). */
+  listedOnly?: boolean;
 }) {
   const auto = useId();
   const fid = id ?? auto;
@@ -63,7 +66,7 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
       // the marked suggestion; else the one whose symbol is exactly what was typed; else the typed symbol itself
       const typed = text.trim().toUpperCase();
       const same = rows.find((r) => r.symbol.toUpperCase() === typed || r.id.toUpperCase() === typed);
-      if (open && rows[on]) pick(rows[on]); else if (same) pick(same); else exact();
+      if (open && rows[on]) pick(rows[on]); else if (same) pick(same); else if (!listedOnly) exact();
     }
     else if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }
   };
@@ -84,7 +87,7 @@ export function StockPicker({ value = "", onPick, onText, market = "IN", id, pla
             <span className="k-sug-x">{r.market === "US" ? "US" : r.exchange}</span>
           </li>
         ))}
-        {shown && rows.length === 0 && <li className="k-sug-none" role="presentation">No listed company matches. An exact symbol still works: press Enter.</li>}
+        {shown && rows.length === 0 && <li className="k-sug-none" role="presentation">{listedOnly ? "No listed company matches. Pick one from the list." : "No listed company matches. An exact symbol still works: press Enter."}</li>}
       </ul>
       <span className="sr-only" aria-live="polite">{shown ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"}` : ""}</span>
     </div>

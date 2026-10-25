@@ -28,8 +28,8 @@ test("R26-004: /login's dialog (its h2) comes after the page's h1 in the DOM", (
   assert.ok(src.indexOf('<h1 className="serif lp-h1">') < src.indexOf("{way && ("));
 });
 
-test("R26-006: /pricing's canonical address is the landing page, and it is not in the sitemap", () => {
-  assert.equal(seoFor("/pricing").canonical, "https://stratlab.studio/");
+test("R26-006, RC1-011: /pricing's canonical address is the plans page, and it is not in the sitemap", () => {
+  assert.equal(seoFor("/pricing").canonical, "https://stratlab.studio/plans");
   assert.ok(!seo.sitemapPages().some((p) => p.path === "/pricing"));
   assert.ok(seo.sitemapPages().some((p) => p.path === "/faq"));
 });

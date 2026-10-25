@@ -36,6 +36,10 @@ SKIP = "networthskip:"               # networthskip:<uid> = the month whose snap
 RUN = "networthrun"                  # the month the last 1st-of-the-month snapshot ran for
 MAX_ITEMS = 300                      # entries one user can keep (a safety cap; plans set the real limit)
 MAX_LOG = 400                        # snapshots kept
+# how a total is worked out, stamped on each snapshot (`m`): a snapshot of another method isn't a like-for-like start for the headline
+# change (RC1-013: "Down −₹2.73 lakh since 23 Oct" was gold and the loan priced the new way against a total priced the old way).
+# 2: gold and bonds at the last close, the loan along the rate path. Bump it when a total is worked out differently.
+VALUATION = 2
 
 # rates as notified (change here when a new rate is notified); every entry can set its own
 EPF_RATE = 8.25                      # declared for FY 2025-26 (and FY 2024-25)
@@ -549,7 +553,7 @@ def record(uid: str, totals: dict, why: str, day: date | None = None, added: flo
     if partial and (d in done or why != "change" and any(h["d"][:7] == d[:7] and h.get("why") == "month" and not h.get("partial") for h in old)):
         return old
     rows = [h for h in old if h["d"] != d and not (why == "month" and h["d"][:7] == d[:7] and h.get("why") == "month" and h.get("partial"))]
-    snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
+    snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why, "m": VALUATION}
     moved = sum(h.get("added") or 0 for h in old if h["d"] == d) + (added or 0)     # the day's earlier changes stay counted
     if abs(moved) >= 0.005:
         snap["added"] = _r(moved)
@@ -1164,7 +1168,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         allowed = has_history(plan)
         limit = item_limit(plan)
         dep = f_dep.result() if f_dep else None
-        return {**v, "deposit_tax": dep, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist),
+        return {**v, "deposit_tax": dep, "history": hist if allowed else None, "history_allowed": allowed, "history_count": len(hist), "valuation": VALUATION,
                 "limit": limit, "count": len(items), "kinds": {k: LABEL[k] for k in KINDS}}
 
     @r.get("")

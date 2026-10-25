@@ -2,10 +2,13 @@
  * to an entry snapshots today, which would always read as no change). A complete total reads against the latest complete
  * snapshot; a partial one (a stock with nothing to value it by) only against a snapshot that left out exactly the same,
  * so the change is like for like. None when there's no such snapshot. */
-export function netWorthDelta(net: number, livePartial: string[] | null | undefined, hist: { d: string; net: number; partial?: string[]; added?: number }[],
-  today: string = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })): { change: number; since: string; added?: number } | null {
+export function netWorthDelta(net: number, livePartial: string[] | null | undefined, hist: { d: string; net: number; partial?: string[]; added?: number; m?: number }[],
+  today: string = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), valuation?: number): { change: number; since: string; added?: number } | null {
   const left = (p: string[] | null | undefined) => (p ?? []).join("\n");
   for (let i = hist.length - 1; i >= 0; i--) {
+    // a snapshot worked out another way isn't a start for the change: the way the total is valued changing would read as a loss
+    // or a gain that didn't happen (RC1-013); a snapshot with no method is the first one's
+    if (valuation != null && (hist[i].m ?? 1) !== valuation) continue;
     if (hist[i].d < today && left(hist[i].partial) === left(livePartial)) {
       // DP2-006: what entries added, changed or removed since then put in (a new FD) isn't a change in value: it is left
       // out of the change and said beside it
@@ -14,6 +17,15 @@ export function netWorthDelta(net: number, livePartial: string[] | null | undefi
     }
   }
   return null;
+}
+
+/** When the history has snapshots worked out the old way and none yet of the current one before today, the line that says why
+ * there is no change to show (RC1-013); null when there isn't that situation. */
+export function restatedNote(hist: { d: string; m?: number }[], valuation: number | undefined, day: (iso: string) => string,
+  today: string = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })): string | null {
+  if (valuation == null || !hist.some((h) => (h.m ?? 1) !== valuation)) return null;
+  const first = hist.find((h) => (h.m ?? 1) === valuation);
+  return `Holdings are valued a different way since ${day((first?.d ?? today))}, so the change since an earlier day isn't shown. It shows from the next day's snapshot.`;
 }
 
 /** The expected-rate note under a repo-linked loan; says so when there is no repo history to work the spread from, and

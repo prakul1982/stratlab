@@ -41,7 +41,12 @@ def test_an_export_with_100000_lots_keeps_all_four_legs_clamped_and_says_the_ran
     s, notes = export(lambda s: s["legs"][0].update(lots=0))
     assert len(s.legs) == 4 and s.legs[0].lots == 1 and "lots must be 1–50; 0 was set to 1" in notes[0]
     s, notes = export(lambda s: s["legs"][0].update(offset=9999))
-    assert len(s.legs) == 4 and s.legs[0].offset == 5000 and "between −5,000 and 5,000; 9,999 was set to 5,000" in notes[0]
+    assert len(s.legs) == 4 and s.legs[0].offset == 100 and "between −100 and 100; 9,999 was set to 100" in notes[0]
+    # in points the model's own range stands (RC1-010: a distance of 150 strikes opened the builder with an error under the box)
+    s, notes = export(lambda s: (s.update(offsetUnit="points"), s["legs"][0].update(offset=9999)))
+    assert s.legs[0].offset == 5000 and "between −5,000 and 5,000; 9,999 was set to 5,000" in notes[0]
+    s, notes = export(lambda s: s["legs"][0].update(offset=150))
+    assert s.legs[0].offset == 100 and len(notes) == 1 and "whole number of strikes between −100 and 100; 150 was set to 100" in notes[0]
     # never through the AI: the import answers without it
     assert oi.from_json(json.dumps(EXPORT)).structure == "iron_condor"
 

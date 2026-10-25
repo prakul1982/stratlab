@@ -23,7 +23,11 @@ from .intel.net import SourceError
 
 REGIONS = ("IN", "US")
 TZ = {"IN": "Asia/Kolkata", "US": "America/New_York"}
-KEY = "results:cal:"                 # results:cal:<region> = {"at": ISO time, "rows": [...]}
+KEY = "results:cal:"                 # results:cal:<region> = {"at": ISO time, "rows": [...], "v": CAL_VERSION}
+# how the stored list was read: a list stored by an older reader is read again at once, not at the next scheduled slot (RC1-005:
+# the US list stored empty by the first reader stayed empty for the day after the market calendar was added, DE-025). 2: the US
+# list from the market calendar and the SEC's earnings releases
+CAL_VERSION = 2
 ALERT_KEY = "resultsalert:"          # resultsalert:<uid> = "off" when someone turned the messages off
 AHEAD_DAYS = 21                      # how far ahead each refresh asks for
 BEHIND_DAYS = 3                      # ...and how far back (so a refresh also sees what was just reported)
@@ -240,12 +244,12 @@ def reported(r: dict) -> list[dict]:
 # ---------- storage ----------
 def load(region: str) -> dict:
     cal = db.json_value(db.get_setting(KEY + region), {})
-    return {"at": cal.get("at"), "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
+    return {"at": cal.get("at"), "v": cal.get("v") or 1, "rows": [r for r in cal.get("rows") or [] if isinstance(r, dict) and r.get("date")]}
 
 
 def save(region: str, rows: list[dict]):
     rows = sorted(rows, key=lambda r: (r["date"], r["symbol"]))[:MAX_ROWS]
-    db.set_setting(KEY + region, json.dumps({"at": datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes"), "rows": rows}))
+    db.set_setting(KEY + region, json.dumps({"at": datetime.now(ZoneInfo(TZ[region])).isoformat(timespec="minutes"), "v": CAL_VERSION, "rows": rows}))
 
 
 def merge(old: list[dict], new: list[dict], frm: date, today: date) -> list[dict]:
@@ -658,6 +662,17 @@ class Job:
                     else:
                         self.mark(name, day.strftime("%Y-%m-%d"))
                     ran = True
+            name = f"reread-{region}"
+            if load(region)["v"] < CAL_VERSION and now >= self.retry.get(name, now):
+                # the stored list is from an older reader: read again now, again in half an hour if no feed answered
+                try:
+                    out = self.refresh(region, who(), now.astimezone(ZoneInfo(TZ[region])).date())
+                    if out["rows"] is None:
+                        self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
+                except Exception as e:
+                    print("results re-read failed:", region, str(e)[:160])
+                    self.retry[name] = now + timedelta(minutes=RETRY_MINUTES)
+                ran = True
             for step, at, stamp, work in (("morning", MORNING_AT[region], "%Y-%m-%d", self.morning),
                                           ("check", CHECK_FROM[region], "%Y-%m-%dT%H", self.follow_up)):
                 day, run = self.claim(f"{step}-{region}", now, region, at, stamp=stamp)

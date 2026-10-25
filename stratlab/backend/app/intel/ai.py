@@ -302,11 +302,23 @@ def theme_text(text, length: int) -> str:
     return " ".join(kept)[:length]
 
 
+def core_phrase(text) -> str:
+    """The theme's central point as the phrase "Everything converges on …" can end with (RC1-009: "Everything converges on
+    Domestic self-reliance in defence hardware… is the central." was a sentence run into another): the words before an
+    ellipsis or a verb that starts a sentence, with no full stop; empty when too little is left to be a phrase."""
+    t = theme_text(text, 200)
+    t = re.split(r"\s*(?:\.{2,}|…)\s*|\s+(?:is|are|was|were|remains?|becomes?|would be|will be)\s+(?:the|a|an)\b", t, maxsplit=1)[0]
+    t = t.strip(" .,;:—–-")
+    if not t or len(t.split()) < 2 or len(t) > 100:
+        return ""
+    return t
+
+
 def theme_served(out: dict) -> dict:
     """A stored theme map's text as today's checks would write it (DE-013), however long ago it was kept."""
     out = dict(out)
-    for k, n in (("summary", 900), ("core", 120)):
-        out[k] = theme_text(out.get(k), n)
+    out["summary"] = theme_text(out.get("summary"), 900)
+    out["core"] = core_phrase(out.get("core"))
     out["sub_themes"] = [{**x, "detail": theme_text(x.get("detail"), 400)} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
     out["sub_themes"] = [x for x in out["sub_themes"] if x["detail"]]
     out["value_chain"] = [{**v, "description": theme_text(v.get("description"), 600)} for v in out.get("value_chain") or [] if isinstance(v, dict)]
@@ -357,7 +369,7 @@ policies that exist; leave out anything you aren't sure of.
                  for e in (r.get("etfs") or []) if isinstance(e, dict)][:4],
         "sub_themes": [{"name": str(s.get("name") or "")[:80], "detail": theme_text(s.get("detail"), 400)}
                        for s in (r.get("sub_themes") or []) if isinstance(s, dict)][:6],
-        "core": theme_text(r.get("core"), 120),
+        "core": core_phrase(r.get("core")),
         "clusters": [{"name": str(c.get("name") or "")[:60], "companies": cos(c.get("companies"))}
                      for c in (r.get("clusters") or []) if isinstance(c, dict)][:6],
         "screen": [{"name": str(s.get("name") or "")[:60], "ticker": str(s.get("ticker") or "").upper()[:20],

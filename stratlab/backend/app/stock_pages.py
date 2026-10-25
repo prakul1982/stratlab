@@ -55,7 +55,9 @@ SETTLE_BY = {"IN": 3 * 3600}
 # page's issued count was taken net of treasury shares, and a page knew whether its ticker's type was read (R12-005 to
 # 013), are rebuilt when next opened, in either market. Until then such a page is served brought in line
 # where that's cheap (main.stock_page_older_facts), and the screens' indexer rebuilds the largest first (R8V-003)
-FACTS_VERSION = 8
+# (9: or before a US page kept each quarter's filed EPS and whether its annual report gives an interest expense, which the
+# app's results rows are checked by: RC1 DD-030, AAPL's Jun 2026 quarter stayed 1.91 against a filed 2.02)
+FACTS_VERSION = 9
 ADR_CHECKED = 3                # the version from which a depositary share's market value was checked (screens.row)
 PE_BASIS_KEPT = 4              # the version from which a page keeps what its P/E's earnings cover (pe_basis, pe_end)
 PE_STALE_DAYS = 456            # a P/E on a year that ended more than about 15 months before the price is n/a (R7V-003)
@@ -483,6 +485,7 @@ def _num(v):
     return f if f == f and abs(f) != float("inf") else None
 
 
+NEW_LISTING_DAYS = 340         # candles reaching back less than this are of a share listed within the year (as intel/company.py counts it)
 RANGE_DAYS = 365               # the 1-year range runs over exactly this many days back from the last close
 RANGE_SLACK = 1.25             # an exchange figure further than this from the candle's is another basis (an unadjusted one)
 
@@ -650,8 +653,17 @@ def price_facts(bars: list[dict], region: str | None = None, now: datetime | Non
     if not bars:
         return {}
     low, high = year_low_high(bars)
-    return {"price": _num(bars[-1].get("c")), "price_at": str(bars[-1].get("t") or "")[:10], "price_basis": "close",
-            "high52": high, "low52": low, "price_official": bool(bars[-1].get("official"))}
+    out = {"price": _num(bars[-1].get("c")), "price_at": str(bars[-1].get("t") or "")[:10], "price_basis": "close",
+           "high52": high, "low52": low, "price_official": bool(bars[-1].get("official"))}
+    # a share listed within the year: its range is since its first day of trading, and the page says so (RC1-007: ZETWERK's
+    # "1-year range" two days after listing)
+    try:
+        first, last = str(bars[0].get("t") or "")[:10], out["price_at"]
+        if (date.fromisoformat(last) - date.fromisoformat(first)).days < NEW_LISTING_DAYS:
+            out["range_since"] = first
+    except ValueError:
+        pass
+    return out
 
 
 MOVE_BOUNDS = (0.6, 1.7)      # a day's move beyond this is a split or bonus, not the price: ratios are not scaled by it
@@ -1111,6 +1123,7 @@ def facts(region: str, symbol: str, p: dict, nums: dict, snap: dict, trend: dict
         "price_basis": prices.get("price_basis"),
         "high52": prices.get("high52") or snap.get("high52"), "low52": prices.get("low52") or snap.get("low52"),
         **({"range_whole": True} if whole_range else {}),
+        **({"range_since": prices["range_since"]} if prices.get("range_since") else {}),
         "market_cap": snap.get("market_cap_cr"), "market_cap_unit": "$ million" if region == "US" else "₹ crore", "pe": snap.get("pe"), "roe": snap.get("roe"), "roce": snap.get("roce"),
         "div_yield": snap.get("div_yield"), "div_special": snap.get("div_special"), "profit_ttm": _ttm_profit(p),
         "net_margin": snap.get("net_margin"), "opm": opm, "debt": snap.get("debt_cr"), "debt_equity": snap.get("debt_equity"),
@@ -1901,7 +1914,8 @@ def description(f: dict) -> str:
     if _num(f.get("price")) is not None:
         word = "last price" if behind(f) or not is_close(f) else "last close"
         price = f"{word} {_money(f, f['price'])}" + (f" on {_date(f['price_at'])}" if f.get("price_at") else "")
-    rng = (f"1-year range {_money(f, f['low52'])} to {_money(f, f['high52'])}"
+    rng = ((f"range since listing {_money(f, f['low52'])} to {_money(f, f['high52'])}" if f.get("range_since")
+            else f"1-year range {_money(f, f['low52'])} to {_money(f, f['high52'])}")
            if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "")
     tails = (["Price, 1-year range and recent filings, from reported data.", "Price and recent filings."] if f.get("no_numbers")
              else ["Revenue and profit trend, margins, debt, recent filings and the price trend, from reported data.",
@@ -2198,7 +2212,8 @@ def _stats(f: dict) -> list[tuple[str, str]]:
     of_year = f" (year to {_date(end)[-8:]})" if end and _date(end) else ""
     out = [(price_label(f), _money(f, f.get("price"))),
            # the range is the year's highest and lowest trade, not closes (R6V-014)
-           ("1-year range (intraday)", f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
+           (f"Range since listing on {_date(f['range_since'])} (intraday)" if f.get("range_since") and _date(f["range_since"]) else "1-year range (intraday)",
+            f"{_money(f, f.get('low52'))} to {_money(f, f.get('high52'))}"
             if _num(f.get("low52")) is not None and _num(f.get("high52")) is not None else "–"),
            ("Market cap", cap), (pe_label(f), _fmt(pe) if pe is not None else "n/a")]
     ttm, owners = f.get("profit_ttm"), owners_profit(f)
