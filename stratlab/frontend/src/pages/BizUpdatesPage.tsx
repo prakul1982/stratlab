@@ -84,7 +84,7 @@ export function BizUpdatesPage() {
         <>
           <PlanNote>The sector view of business updates is on the Basic plan. Each company page lists its own update filings for everyone.</PlanNote>
           <LockedPreview title="Business updates" actions={false} points={[
-            "Each sector's monthly and quarterly figures side by side: automakers' sales, banks' deposits and advances, cement, airlines and airports, power, telecom, metals and retail.",
+            "Each sector's monthly and quarterly figures side by side: automakers' sales, banks' deposits and advances, port and airport traffic, power capacity and generation, metals and mining, and retail.",
             "Every company's change on the month and on the year, each figure linked to the filing it was read from.",
             "My stocks: your holdings and watchlist first, with the latest update each has filed.",
             "A message when a new update is read for a stock you hold or watch.",
