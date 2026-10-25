@@ -5,9 +5,9 @@
 - Holdings: results meetings, corporate actions (ex-dates and record dates of dividends, bonuses, splits and the
   like, and the record dates announced with an AGM) for the user's holdings and watchlist, from the stored results
   and corporate-actions calendars; gold bonds' maturity months.
-- Other Money pages, when they exist: maturities, premiums, EMIs and loan rate resets (money_networth), through an
-  optional hook that gives nothing when missing. (Advance-tax amounts need the whole tax estimate and a SIP's date
-  is not saved anywhere, so neither is a hook; the plain instalment dates are above.)
+- Other Money pages, when they exist: maturities, premiums, EMIs and loan rate resets (money_networth), and on Pro the
+  advance tax still due by each instalment and a past year's tax still unpaid (money_routes), through optional hooks
+  that give nothing when missing. (A SIP's date is not saved anywhere, so it isn't a hook.)
 - The user's own events, once, every month or every year.
 
 The feed is an ICS file at a private, unguessable link (a token only its owner sees, turned off or replaced at any
@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from . import db, leader, run_marks
+from . import db, leader, run_marks, tax_due
 from .auth import current_profile
 from .branding import public_text
 from .responses import err as _err
@@ -55,7 +55,9 @@ FEED_RATE = (60, 3600)            # requests a token may make in that many secon
 MAX_LIST = 1500                   # events in one answer
 REMIND_DAYS = (1, 2, 3, 7, 14)
 REMIND_AT = "08:40"               # India time, each day
-HOOKS = [("money_networth", "upcoming_dates", "money")]      # (module, function, category); each called as f(uid, days, frm=window start)
+# (module, function, category); each called as f(uid, days, frm=window start). money_routes gives the user's own tax
+# items (instalment amounts, a past year's tax still unpaid) on a plan with the advance tax amounts (DH-040, DH-043)
+HOOKS = [("money_networth", "upcoming_dates", "money"), ("money_routes", "calendar_dates", "tax")]
 NOTES = [
     "Tax dates are the ones the law sets for a resident individual; the tax department can extend them. Advance tax "
     "is due only when the year's tax, after TDS, is ₹10,000 or more.",
@@ -123,10 +125,12 @@ def tax_dates(fy: int) -> list[dict]:
 
     Advance tax: section 211 of the 1961 Act (section 404 of the Income-tax Act, 2025 from tax year 2026-27): 15%,
     45%, 75% and 100% by 15 Jun, 15 Sep, 15 Dec and 15 Mar; the presumptive scheme (44AD/44ADA) pays it all by 15 Mar.
-    Returns (section 139): 31 Jul without an audit; from FY 2025-26 the Finance Act 2026 moved non-audit business and
-    profession returns (ITR-3, ITR-4) to 31 Aug; 31 Oct with an audit. Belated return by 31 Dec (139(4)); revised by
-    31 Dec, or by 31 Mar from FY 2025-26 (Finance Act 2026). Sources, checked 4 Oct 2026:
-    https://cleartax.in/s/due-date-tax-filing and the Budget 2026 summaries on the ITR due dates."""
+    Returns (section 139) and the tax audit report, from the one table of the Act's dates and the CBDT's extensions
+    (tax_due.py; DH-040: the next item was the old 31 Oct audit-case date, and the audit report had no date at all):
+    31 Jul without an audit; from FY 2025-26 the Finance Act 2026 moved non-audit business and profession returns
+    (ITR-3, ITR-4) to 31 Aug; 31 Oct with an audit, its report a month before. Belated return by 31 Dec (139(4)); revised
+    by 31 Dec, or by 31 Mar from FY 2025-26 (Finance Act 2026, a fee after 31 Dec). Sources, checked 25 Oct 2026: the
+    CBDT circulars named in tax_due.py, https://cleartax.in/s/due-date-tax-filing and the Budget 2026 summaries."""
     lab, ay = fy_label(fy), fy + 1
     sec = "263" if fy >= 2026 else "139"     # the Income-tax Act, 2025 renumbers section 139 from tax year 2026-27
     out = []
@@ -140,23 +144,31 @@ def tax_dates(fy: int) -> list[dict]:
     out.append(_ev(date(fy + 1, 3, 31), f"Last day for {lab} tax-saving investments (old regime)", "tax", "tax_saving",
                    "Deductions under the old regime (80C, 80D, 80CCD(1B) and the like) count only for payments made by 31 "
                    "March. PPF and Sukanya Samriddhi accounts need their yearly minimum deposit by then to stay active.", ref=lab))
+
+    def moved(kind: str) -> str:
+        x = tax_due.due(fy, kind)
+        return f" Extended from {x['statutory'].day} {x['statutory']:%b %Y} by {x['source']}." if x["extended"] else ""
     if fy >= 2025:
-        out.append(_ev(date(ay, 7, 31), f"ITR due date for {lab} (no business income)", "tax", "itr",
-                       "Return due date for individuals without business or professional income (ITR-1, ITR-2).", ref=lab))
-        out.append(_ev(date(ay, 8, 31), f"ITR due date for {lab} (business, no audit)", "tax", "itr",
+        out.append(_ev(tax_due.return_due(fy), f"ITR due date for {lab} (no business income)", "tax", "itr",
+                       "Return due date for individuals without business or professional income (ITR-1, ITR-2)." + moved("no_business"), ref=lab))
+        out.append(_ev(tax_due.return_due(fy, True), f"ITR due date for {lab} (business, no audit)", "tax", "itr",
                        "Return due date for business or professional income without a tax audit (ITR-3, ITR-4), from "
-                       "FY 2025-26. Intraday and F&O trading count as business income.", ref=lab))
+                       "FY 2025-26. Intraday and F&O trading count as business income." + moved("business"), ref=lab))
     else:
-        out.append(_ev(date(ay, 7, 31), f"ITR due date for {lab} (no audit)", "tax", "itr",
-                       "Return due date when the accounts don't need a tax audit.", ref=lab))
-    out.append(_ev(date(ay, 10, 31), f"ITR due date for {lab} (audit cases)", "tax", "itr",
-                   "Return due date when the accounts need a tax audit (section 44AB).", ref=lab + " audit"))
+        out.append(_ev(tax_due.return_due(fy), f"ITR due date for {lab} (no audit)", "tax", "itr",
+                       "Return due date when the accounts don't need a tax audit." + moved("no_business"), ref=lab))
+    out.append(_ev(tax_due.due(fy, "audit_report")["date"], f"Tax audit report due for {lab}", "tax", "audit_report",
+                   "The tax audit report (Form 3CA or 3CB, with Form 3CD) for accounts audited under section 44AB, such as "
+                   "trading turnover above ₹10 crore." + moved("audit_report") + " " + tax_due.PENALTY_271B, ref=lab + " audit report"))
+    out.append(_ev(tax_due.return_due(fy, True, True), f"ITR due date for {lab} (audit cases)", "tax", "itr",
+                   "Return due date when the accounts need a tax audit (section 44AB)." + moved("audit"), ref=lab + " audit"))
     if fy >= 2025:
-        out.append(_ev(date(ay, 12, 31), f"Last day for a belated {lab} return", "tax", "itr_late",
+        out.append(_ev(tax_due.belated(fy), f"Last day for a belated {lab} return", "tax", "itr_late",
                        f"A return filed after its due date (section {sec}(4)), with the late fee. Losses can't be carried forward "
                        "from a late return.", ref=lab))
-        out.append(_ev(date(ay + 1, 3, 31), f"Last day to revise the {lab} return", "tax", "itr_revise",
-                       f"A revised return (section {sec}(5)) can be filed until 31 March from FY 2025-26.", ref=lab))
+        out.append(_ev(tax_due.revise_by(fy), f"Last day to revise the {lab} return", "tax", "itr_revise",
+                       f"A revised return (section {sec}(5)) can be filed until 31 March from FY 2025-26; revising after 31 "
+                       "December carries a fee (₹1,000, or ₹5,000 when total income is over ₹5 lakh).", ref=lab))
     else:
         out.append(_ev(date(ay, 12, 31), f"Last day for a belated or revised {lab} return", "tax", "itr_late",
                        "A late return (section 139(4)) or a revised one (139(5)). Losses can't be carried forward from a "
@@ -644,6 +656,12 @@ class EventReq(BaseModel):
     repeat: str = Field("none", pattern="^(none|monthly|yearly)$")
 
 
+def _no_twin(events: list[dict], e: dict):
+    """DH-041: the same name on the same day twice is refused, not saved again without a word."""
+    if any(x["id"] != e["id"] and x["date"] == e["date"] and x["title"].casefold() == e["title"].casefold() for x in events):
+        _err(409, "duplicate", f"\"{e['title']}\" is already in your calendar on that date.")
+
+
 def _clean_event(req: EventReq, eid: str) -> dict:
     d = _day(req.date)
     if not d or not date(2000, 1, 1) <= d <= date(2100, 12, 31):
@@ -662,7 +680,9 @@ def add_event(req: EventReq, profile=Depends(current_profile)):
     data = load(profile["id"])
     if len(data["events"]) >= MAX_EVENTS:
         _err(400, "too_many", f"The calendar keeps up to {MAX_EVENTS} of your own events. Delete one first.")
-    data["events"].append(_clean_event(req, uuid.uuid4().hex[:16]))
+    new = _clean_event(req, uuid.uuid4().hex[:16])
+    _no_twin(data["events"], new)
+    data["events"].append(new)
     save(profile["id"], data)
     return _ok(view(profile, _today() - timedelta(days=7), _today() + timedelta(days=90)))
 
@@ -673,7 +693,9 @@ def edit_event(eid: str, req: EventReq, profile=Depends(current_profile)):
     data = load(profile["id"])
     if not any(e["id"] == eid for e in data["events"]):
         _err(404, "not_found", "That event isn't in your calendar any more.")
-    data["events"] = [_clean_event(req, eid) if e["id"] == eid else e for e in data["events"]]
+    new = _clean_event(req, eid)
+    _no_twin(data["events"], new)
+    data["events"] = [new if e["id"] == eid else e for e in data["events"]]
     save(profile["id"], data)
     return _ok(view(profile, _today() - timedelta(days=7), _today() + timedelta(days=90)))
 

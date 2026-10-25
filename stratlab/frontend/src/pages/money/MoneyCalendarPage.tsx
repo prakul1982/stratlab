@@ -77,7 +77,7 @@ function OwnDates({ rows, edit, remove }: { rows: Own[]; edit: (o: Own) => void;
   return (
     <ul className="mc-own" aria-label="Your dates">
       {rows.map((o) => (
-        <li key={o.id} className="k-spread">
+        <li key={o.id} className="k-spread mc-own-row">
           <span className="k-small"><b>{o.title}</b> · {longDay(o.date)}{o.repeat !== "none" && <span className="k-muted"> · {REPEAT[o.repeat].toLowerCase()}</span>}{o.amount != null && <span> · {inr(o.amount)}</span>}</span>
           <span className="k-row">
             <button type="button" className="btn quiet sm" onClick={() => edit(o)} aria-label={`Change ${o.title}`}>Change</button>
@@ -158,10 +158,17 @@ export function MoneyCalendarPage() {
   const step = (n: number) => { setPicked(null); setCursor(({ y, m }) => { const d = new Date(y, m + n, 1); return { y: d.getFullYear(), m: d.getMonth() }; }); };
 
   const saveEvent = async () => {
-    const amount = form.amount.trim() ? Number(form.amount.replace(/,/g, "")) : null;
-    // DP2-016: each problem said as itself (a negative amount was answered "Enter a date and a name")
-    if (!form.date || !form.title.trim()) { notify("Enter a date and a name; the amount is optional."); return; }
-    if (amount != null && !(amount >= 0)) { notify("The amount can't be below 0. Leave it empty if there's none."); return; }
+    const typed = form.amount.replace(/[,\s₹]/g, "");
+    // DH-041: only plain rupees ("1e3" was taken as ₹1,000); a minus sign, the typographic one too, is said as below 0
+    const amount = typed ? (/^\d+(\.\d{1,2})?$/.test(typed) ? Number(typed) : /^[-−]/.test(typed) ? -1 : NaN) : null;
+    // DP2-016, DH-041: each problem said as itself, the amount's first when that's the one wrong
+    if (amount != null && amount < 0) { notify("The amount can't be below 0. Leave it empty if there's none."); return; }
+    if (amount != null && Number.isNaN(amount)) { notify("Enter the amount in rupees, as a number like 250000."); return; }
+    if (!form.date && !form.title.trim()) { notify("Enter a date and a name; the amount is optional."); return; }
+    if (!form.date) { notify("Enter a date for it."); return; }
+    if (!form.title.trim()) { notify("Give it a name."); return; }
+    const twin = (view?.own ?? []).find((o) => o.id !== form.id && o.date === form.date && o.title.trim().toLowerCase() === form.title.trim().toLowerCase());
+    if (twin) { notify(`"${twin.title}" is already in your calendar on that date.`); return; }
     setBusy(true);
     try {
       const body = { date: form.date, title: form.title.trim(), note: form.note.trim(), amount, repeat: form.repeat };
@@ -281,7 +288,7 @@ export function MoneyCalendarPage() {
         <Card label="Your own dates">
           <CardHead title={form.id ? "Change your date" : "Add your own date"} info="A fixed deposit maturing, an insurance premium, an EMI, a rent increase: once, or every month or year." />
           <FormGrid onSubmit={(e) => { e.preventDefault(); void saveEvent(); }} label="Your own date">
-            <DateField label="Date" value={form.date} onChange={(date) => setForm({ ...form, date })} />
+            <DateField label="Date" value={form.date} onChange={(date) => setForm({ ...form, date })} placeholder={`e.g. ${fmtDate(parse(addDays(today, 30)))}`} />
             <Field label="Name" maxLength={80} placeholder="e.g. FD matures" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <Field label="Amount" optional unit="₹" inputMode="decimal" placeholder="e.g. 250000" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             <Field label="Repeats">{(id) => <Select id={id} value={form.repeat} onChange={(v) => setForm({ ...form, repeat: v as Repeat })} options={(Object.keys(REPEAT) as Repeat[]).map((r) => ({ value: r, label: REPEAT[r] }))} />}</Field>
@@ -322,14 +329,15 @@ export function MoneyCalendarPage() {
             ) : rem && (
               <FormGrid label="Reminders" onSubmit={(e) => { e.preventDefault(); void saveReminders(); }}>
                 <div className="k-field wide"><CheckField label="Remind me before my dates" checked={rem.on} onChange={(on) => setRem({ ...rem, on })} /></div>
-                <Field label="How early">{(id) => <Select id={id} value={rem.days} onChange={(v) => setRem({ ...rem, days: Number(v) })} options={view.remind_days.map((d) => ({ value: d, label: d === 1 ? "The day before" : `${d} days before` }))} />}</Field>
-                <Field label="By">{(id) => <Select id={id} value={rem.channel} onChange={(v) => setRem({ ...rem, channel: v as Reminders["channel"] })}
+                {/* DH-042: with reminders off, the choices below are off too, not ticked and live */}
+                <Field label="How early">{(id) => <Select id={id} disabled={!rem.on} value={rem.days} onChange={(v) => setRem({ ...rem, days: Number(v) })} options={view.remind_days.map((d) => ({ value: d, label: d === 1 ? "The day before" : `${d} days before` }))} />}</Field>
+                <Field label="By">{(id) => <Select id={id} disabled={!rem.on} value={rem.channel} onChange={(v) => setRem({ ...rem, channel: v as Reminders["channel"] })}
                   options={[{ value: "both", label: "Email and phone" }, { value: "email", label: "Email" }, { value: "push", label: "Phone notification" }]} />}</Field>
                 <div className="k-field wide" role="group" aria-label="Remind me about">
                   <div className="k-label-row"><span className="k-lbl">Remind me about</span></div>
                   <div className="k-row">
                     {view.cats.filter((c) => c.id !== "market").map((c) => (
-                      <CheckField key={c.id} label={c.label} checked={rem.cats.includes(c.id)}
+                      <CheckField key={c.id} label={c.label} checked={rem.on && rem.cats.includes(c.id)} disabled={!rem.on}
                         onChange={(on) => setRem({ ...rem, cats: on ? [...rem.cats, c.id] : rem.cats.filter((x) => x !== c.id) })} />
                     ))}
                   </div>

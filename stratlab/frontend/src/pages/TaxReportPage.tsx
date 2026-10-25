@@ -36,10 +36,16 @@ type Total = {
   income: { normal: number; special: number; total: number; salary: number; standard_deduction: number; deductions: number };
   carry_forward: { speculative: number; business: number }; steps: string[]; lines: { label: string; amount: number; kind: string }[];
   notes?: string[]; confirmed?: boolean; source?: string | null;
+  /** as the return rounds them: total income (section 288A) and the tax on it (section 288B), DH-004 */
+  rounded?: { income: number; tax: number } | null;
 };
+/** The year being filed as one figure with the interest (Pro: it needs Tax tools' payments), DH-003. */
+type Payable = { fy: number; locked: boolean; plan?: string; total?: number; due?: string; past_due?: boolean; balance?: number;
+  interest_234a?: number; interest_234b?: number; interest_234c?: number; fee_234f?: number };
 type Year = {
   fy: number; label: string; stcg: Side; ltcg: Side; foreign?: { st: Side; lt: Side; count: number } | null; exempt_old: number | null; exemption: { limit: number; used: number; left: number };
   buckets: Bucket[]; steps: string[]; tax: number; tax_with_cess: number; carry_forward: { st: number; lt: number };
+  losses?: { st: number; lt: number }; brought_forward?: { fy: number; label: string; kind: "st" | "lt"; amt: number; used: number; left: number }[];
   intraday: { count: number; buy: number; sell: number; pnl: number; turnover: number; stt?: number; stt_estimated?: boolean }; gf_missing: number; gf_applied: number; count: number; rows: Sale[];
   business: Business; total: Total; inputs: Inputs; other_regime: { regime: "new" | "old"; total: number } | null; filing: string[]; turnover: number;
   mutual_funds?: MfYear | null;
@@ -59,6 +65,7 @@ type Report = {
   updated_at: string | null; trades: number; business_lines: number; prices: boolean; prices_at: string | null; max_trades: number;
   mf?: { allowed: boolean; count: number; plan: string };
   us_trades?: number;
+  payable?: Payable | null;
 };
 type Problem = { line: number | null; text: string; reason: string };
 type Skipped = { name: string; reason: string };
@@ -195,9 +202,15 @@ export function TaxReportPage() {
   const name = (k: string) => rep?.names[k]?.symbol ?? k;
   const has = !!rep && (rep.trades > 0 || rep.business_lines > 0 || (rep.mf?.count ?? 0) > 0);
 
+  // DH-005: the year's losses (and those brought in) are rows too, so each column adds up to the net shown under it
+  const lossRows: Bucket[] = y ? [
+    ...(y.losses?.st ? [{ key: "loss_st", label: "Short-term losses this year", rate: null as unknown as number, gains: -y.losses.st, after_setoff: -y.carry_forward.st, exempt: 0, taxable: 0, tax: 0, slab: true }] : []),
+    ...(y.losses?.lt ? [{ key: "loss_lt", label: "Long-term losses this year", rate: null as unknown as number, gains: -y.losses.lt, after_setoff: -y.carry_forward.lt, exempt: 0, taxable: 0, tax: 0, slab: true }] : []),
+    ...(y.brought_forward ?? []).map((p) => ({ key: `bf_${p.fy}_${p.kind}`, label: `${p.kind === "st" ? "Short" : "Long"}-term loss brought forward from ${p.label}`, rate: null as unknown as number, gains: -p.amt, after_setoff: -p.left, exempt: 0, taxable: 0, tax: 0, slab: true })),
+  ] : [];
   const bucketCols: Column<Bucket>[] = [
     { key: "kind", header: "Kind", rowHeader: true, cell: (b) => b.label },
-    { key: "rate", header: "Rate", numeric: true, cell: (b) => rate(b.rate, b.slab) },
+    { key: "rate", header: "Rate", numeric: true, cell: (b) => (b.key.startsWith("loss_") || b.key.startsWith("bf_") ? "–" : rate(b.rate, b.slab)) },
     { key: "gains", header: "Gains", numeric: true, cell: (b) => inr(b.gains) },
     { key: "after", header: "After set-off", numeric: true, cell: (b) => inr(b.after_setoff) },
     { key: "ex", header: "Exempt", numeric: true, cell: (b) => inr(b.exempt) },
@@ -244,6 +257,8 @@ export function TaxReportPage() {
         lede="Your tradebooks from every broker, matched first in, first out: short- and long-term gains for each financial year, with the exemption and set-off."
         info="Add F&O and your other income for the year's total tax. Only you can see your trades." infoLabel="About the tax report" />
       <Notice label="Estimate only"><b>Estimate only.</b> {rep?.disclaimer ?? "An estimate from the files you uploaded and the income you entered, not tax advice. It covers only the income you enter or import here, for an individual of the age band and residency you choose. Slab tax depends on your full income, and advance tax and TDS already paid aren't included. Check it with a chartered accountant (CA) before you file or pay tax."}</Notice>
+
+      {rep && has && y && <Headline y={y} payable={rep.payable?.fy === y.fy ? rep.payable : null} />}
 
       <Card>
         <CardHead title="Upload your trades"
@@ -341,14 +356,16 @@ export function TaxReportPage() {
               <Stat label={<>Tax on share gains, before basic exemption, rebate and surcharge <Info label="How the tax is estimated">Short-term gains on listed shares are taxed at 15% for sales before 23 July 2024 and 20% from that day; long-term gains (held more than 12 months) at 10% and 12.5%, above the yearly exemption. Gains times rates, before any unused basic exemption, the 87A rebate, surcharge and the 4% cess; the total tax estimate below applies them.</Info></>}
                 value={inr(y.tax)} note={`${inr(y.tax_with_cess)} with 4% cess`} />
             </StatRow>
-            {y.exemption.limit > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
+            {y.exemption.limit > 0 && y.exemption.used > 0 && <Meter pct={Math.max(0, Math.min(100, (y.exemption.used / y.exemption.limit) * 100))} />}
             {y.foreign && <p className="k-small k-muted" data-testid="tax-us-apart">{usSharesNote(y.foreign.st.net, y.foreign.lt.net, inr)} Their tax is in the estimate; the US card below has each sale.</p>}
           </Card>
 
           <Card>
             <CardHead title={`How ${y.label} adds up`} />
             {y.buckets.length === 0 ? <EmptyState title={`No gains or losses in ${y.label}`}>No capital gains or losses were realised in {y.label}.</EmptyState>
-              : <DataTable stack label="Gains by rate" columns={bucketCols} rows={y.buckets} rowKey={(b) => b.key} />}
+              : <DataTable stack label="Gains by rate" columns={bucketCols} rows={[...y.buckets, ...lossRows]} rowKey={(b) => b.key}
+                  foot={lossRows.length ? { kind: "Net", gains: inr(y.buckets.reduce((n, b) => n + b.gains, 0) + lossRows.reduce((n, b) => n + b.gains, 0)),
+                    after: inr(y.buckets.reduce((n, b) => n + b.after_setoff, 0) + lossRows.reduce((n, b) => n + b.after_setoff, 0)) } : undefined} />}
             {y.steps.length > 0 && <ul className="k-list">{y.steps.map((s, i) => <li key={i}>{s}</li>)}</ul>}
             {y.exempt_old != null && <p className="k-note">Long-term results on sales before 1 April 2018 ({inr(y.exempt_old)}) were exempt under the old section 10(38), so they aren't counted.</p>}
             {y.gf_missing > 0 && <p className="k-small"><b>{y.gf_missing} sale{y.gf_missing === 1 ? "" : "s"}</b> of shares held on 31 Jan 2018 used the actual cost, because their 31 Jan 2018 price isn't known. Grandfathering could lower that gain; enter the price below.</p>}
@@ -377,8 +394,8 @@ export function TaxReportPage() {
           {y.count > 0 && (
             <Card id="tax-sales">
               <CardHead title="Each sale, matched to its purchase" actions={<><span className="k-note">{y.count} line{y.count === 1 ? "" : "s"}</span>{salesMore.toggle}</>} />
-              <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, 30)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} stack />
-              {y.rows.length > 30 && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
+              <DataTable label="Realised sales" columns={saleCols} rows={(allSales ? y.rows : y.rows.slice(0, FIRST_SALES)).map((r, i) => ({ ...r, i }))} rowKey={(r) => String(r.i)} stack />
+              {y.rows.length > FIRST_SALES && !allSales && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAllSales(true)}>Show all {y.rows.length}</button>}
               {y.count > y.rows.length && <p className="k-note">The CSV download has all {y.count} lines.</p>}
               <p className="k-note">Cost includes brokerage and charges from your files; sale is after them. STT isn't deductible, so it isn't included. Each figure is rounded to the rupee and the gain is worked out from the exact amounts, so a line or a total can differ by ₹1 from subtracting the rounded figures.</p>
             </Card>
@@ -447,6 +464,28 @@ const REGIME = { new: "New regime", old: "Old regime" } as const;
 const AGES: [Age, string][] = [["below60", "Below 60"], ["60to79", "60–79"], ["80plus", "80+"]];
 const AGE_TEXT: Record<Age, string> = { below60: "below 60", "60to79": "60 to 79", "80plus": "80 or more" };
 const ITR3_URL = "https://www.incometax.gov.in/iec/foportal/help/individual-business-profession";
+// DH-006: fewer lines open at first, so a phone's page isn't 12,800px of cards; the rest are one button away
+const FIRST_SALES = 10;
+const FIRST_UNDERLYINGS = 5;
+
+/** DH-006: the year's total, and what is payable with the interest, at the top of the page, not under the upload. */
+function Headline({ y, payable }: { y: Year; payable: Payable | null }) {
+  const t = y.total;
+  if (!t.available) return null;
+  return (
+    <Card compact label="The year's tax">
+      <StatRow>
+        <Stat label={`Total tax estimate, ${y.label}`} value={<a className="link" href="#tax-total">{inr(t.total)}</a>}
+          note={t.rounded ? `${inr(t.rounded.tax)} as the return rounds it (sections 288A and 288B)` : undefined} />
+        {payable && !payable.locked && payable.total != null && (
+          <Stat label="Payable now, with interest" value={<span aria-label="Payable now">{inr(payable.total)}</span>}
+            note={<>less TDS and tax paid, plus 234A, 234B and 234C{payable.due ? `, as if paid by ${payable.past_due ? "today" : dateOnly(payable.due)}` : ""} · <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link></>} />
+        )}
+      </StatRow>
+      {payable?.locked && <p className="k-small k-muted" data-testid="tax-payable-locked">What is still payable, with your TDS and payments taken off and the interest under sections 234A, 234B and 234C added, is in <Link className="link" to={fyLink("/money/tax-tools", y.fy) + "&tab=advance"}>Tax tools</Link> on the {payable.plan ?? "Pro"} plan.</p>}
+    </Card>
+  );
+}
 
 /** The year's total tax, where it comes from, the inputs it needs and, below, how it was worked out. */
 function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omit<Inputs, "saved">) => Promise<void>; filing: boolean }) {
@@ -459,7 +498,7 @@ function TotalCard({ y, onSave, filing }: { y: Year; onSave: (fy: number, v: Omi
   ];
   const lineCols: Column<{ i: number; label: string; amount: number; kind: string }>[] = [
     { key: "what", header: "Step", rowHeader: true, wrap: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{l.label}</b> : <span className={l.kind === "note" ? "k-muted" : undefined}>{l.label}</span>) },
-    { key: "amount", header: "Amount", numeric: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" ? <b>{inr(l.amount)}</b> : <span className={l.kind === "amount" ? tone(l.amount) : undefined}>{inr(l.amount)}</span>) },
+    { key: "amount", header: "Amount", numeric: true, cell: (l) => (l.kind === "total" || l.kind === "subtotal" || l.kind === "rounded" ? <b>{inr(l.amount)}</b> : <span className={l.kind === "amount" ? tone(l.amount) : undefined}>{inr(l.amount)}</span>) },
   ];
   return (
     <Card id="tax-total" label="Total tax estimate">
@@ -575,7 +614,8 @@ function BusinessCard({ y }: { y: Year }) {
   const top = b.segments.flatMap((s) => s.by.map((u) => ({ ...u, seg: s.label }))).map((u, i) => ({ ...u, i }));
   const segCols: Column<Segment>[] = [
     { key: "seg", header: "Segment", rowHeader: true, cell: (s) => <><b>{s.label}</b><span className="k-sub-line">{dateOnly(s.first)} to {dateOnly(s.last)}</span></> },
-    { key: "trades", header: "Trades", numeric: true, cell: (s) => s.trades.toLocaleString("en-IN") },
+    // DH-007: each line of the broker's tradewise file is one exit, so it is said as that, not "trades"
+    { key: "trades", header: "Exit lines", numeric: true, cell: (s) => s.trades.toLocaleString("en-IN") },
     { key: "pnl", header: "Result", numeric: true, cell: (s) => <span className={tone(s.pnl)}>{inr(s.pnl)}</span> },
     { key: "charges", header: "Charges", numeric: true, cell: (s) => inr(s.charges) },
     { key: "net", header: "After charges", numeric: true, cell: (s) => <span className={tone(s.net)}>{inr(s.net)}</span> },
@@ -584,7 +624,7 @@ function BusinessCard({ y }: { y: Year }) {
   const underCols: Column<(typeof top)[number]>[] = [
     { key: "u", header: "Underlying", rowHeader: true, cell: (u) => u.u },
     { key: "seg", header: "Segment", cell: (u) => u.seg },
-    { key: "trades", header: "Trades", numeric: true, cell: (u) => u.trades.toLocaleString("en-IN") },
+    { key: "trades", header: "Exit lines", numeric: true, cell: (u) => u.trades.toLocaleString("en-IN") },
     { key: "pnl", header: "Result", numeric: true, cell: (u) => <span className={tone(u.pnl)}>{inr(u.pnl)}</span> },
   ];
   return (
@@ -596,8 +636,8 @@ function BusinessCard({ y }: { y: Year }) {
       <p className="k-note">Turnover is the total of profits and losses, trade by trade ({inr(b.turnover)}). Netted per contract first, as broker summaries often show it, it is {inr(b.turnover_contract)}. Your files' lines aren't kept, only these totals.</p>
       {top.length > 0 && (
         <>
-          <DataTable stack label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, 8)} rowKey={(u) => String(u.i)} />
-          {top.length > 8 && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {top.length}</button>}
+          <DataTable stack label="F&O by underlying" columns={underCols} rows={all ? top : top.slice(0, FIRST_UNDERLYINGS)} rowKey={(u) => String(u.i)} />
+          {top.length > FIRST_UNDERLYINGS && !all && <button type="button" className="btn quiet sm k-btn-end" onClick={() => setAll(true)}>Show all {top.length}</button>}
         </>
       )}
     </Card>

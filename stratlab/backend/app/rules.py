@@ -125,9 +125,12 @@ def registry() -> list[dict]:
         "add the next year once its Finance Act is out (February)")
     add("new_act", "tax", "Income-tax Act, 2025 section numbers", ", ".join(f"{o}→{n}" for o, n in T.NEW_SECTIONS.items()),
         "tax_total.py NEW_SECTIONS", "https://cleartax.in/s/section-156-income-tax-act-2025 and the Act's concordance", "2026-04-01")
-    add("itr_dates", "tax", "Return due dates", "31 Jul (no business income), 31 Aug (business, no audit, from FY 2025-26), 31 Oct (audit); "
-        "belated 31 Dec; revised by 31 Mar (from FY 2025-26)", "money_calendar.py tax_dates, tax_total.py filing_facts, money_advance_tax.py",
-        "https://cleartax.in/s/due-date-tax-filing (Finance Act 2026 amendment of section 139)", "2026-04-01")
+    add("itr_dates", "tax", "Return due dates", "31 Jul (no business income), 31 Aug (business, no audit, from FY 2025-26), 31 Oct (audit; "
+        "audit report 30 Sep); belated 31 Dec; revised by 31 Mar (from FY 2025-26). CBDT extensions by year in tax_due.py: FY 2025-26 "
+        "audit report 21 Oct 2026, audit-case return 21 Nov 2026",
+        "tax_due.py (read by money_calendar.py, tax_total.py filing_facts, money_advance_tax.py, money_us_tax.py)",
+        "https://cleartax.in/s/due-date-tax-filing (Finance Act 2026 amendment of section 139); "
+        "https://www.incometax.gov.in/iec/foportal/sites/default/files/2026-09/Circular-7-2026.pdf (CBDT Circular 7/2026)", "2026-09-28")
     add("advance_tax", "tax", "Advance tax", f"due at {_inr(A.THRESHOLD)} or more; 15/45/75/100% by 15 Jun, Sep, Dec, Mar; 234B/234C {_pct(A.RATE)} a month",
         "money_advance_tax.py", "Income-tax Act 1961 sections 208-211, 234B, 234C (404, 424, 425 of the 2025 Act)")
     add("dividend_tds", "tax", "Dividend TDS", f"{_pct(D.TDS_RATE)} once a company's dividends pass {_inr(D.tds_threshold(2026))} a year",

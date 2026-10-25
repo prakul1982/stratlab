@@ -32,8 +32,10 @@ def year_rows(trades, fy, fmv=None):
 
 # ---------- Schedule 112A ----------
 def test_112a_columns_are_the_forms():
-    assert I.COLS_112A[0].endswith("(1a)") and I.COLS_112A[1].endswith("(1b)") and I.COLS_112A[2] == "ISIN Code (2)"
-    assert [c.split("(")[-1].split(")")[0] for c in I.COLS_112A[:15]] == ["1a", "1b", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
+    # DH-010: no column 1b from AY 2026-27 (it was the FY 2024-25 form's only); the portal file has the template's header
+    assert I.COLS_112A[0].endswith("(1a)") and I.COLS_112A[1] == "ISIN Code (2)"
+    assert [c.split("(")[-1].split(")")[0] for c in I.COLS_112A[:14]] == ["1a", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
+    assert I._with_1b(I.COLS_112A, 2024, I.COL_1B)[1] == I.COL_1B and I._with_1b(I.PORTAL_112A, 2025, I.PORTAL_1B) == I.PORTAL_112A
 
 
 def test_112a_grandfathering_lines():
@@ -70,17 +72,17 @@ def test_112a_missing_fmv_and_the_portal_layout():
                              b("2021-01-02", 2, 10, "Y"), s("2025-08-01", 2, 5, "Y")], 2025)
     g = {"rows": rows, "names": names}
     t = I.t_112a(g)
-    a = next(r for r in t["rows"] if r[3] == "A Ltd")
-    assert a[0] == "BE" and a[9] == 0 and a[7] == 100 and any("no 31 Jan 2018 price" in n for n in t["notes"])
-    assert t["rows"][-1][0] == "Total" and t["rows"][-1][14] == pytest.approx(200 + 60 - 10)
+    a = next(r for r in t["rows"] if r[2] == "A Ltd")
+    assert a[0] == "BE" and a[8] == 0 and a[6] == 100 and any("no 31 Jan 2018 price" in n for n in t["notes"])
+    assert t["rows"][-1][0] == "Total" and t["rows"][-1][13] == pytest.approx(200 + 60 - 10)
     p = I.t_112a_portal(g)
-    assert len(p["columns"]) == 15
+    assert len(p["columns"]) == 14
     be = [r for r in p["rows"] if r[0] == "BE"]
     ae = [r for r in p["rows"] if r[0] == "AE"]
     assert len(be) == 1 and len(ae) == 1                                    # everything after 31 Jan 2018 is one line
-    assert ae[0][2:4] == ["INNOTREQUIRD", "CONSOLIDATED"] and ae[0][4] is None and ae[0][6] == 100 and ae[0][14] == 50
+    assert ae[0][1:3] == ["INNOTREQUIRD", "CONSOLIDATED"] and ae[0][3] is None and ae[0][5] == 100 and ae[0][13] == 50
     out = I.portal_csv(p)
-    assert out.splitlines()[0].startswith("Share/Unit acquired (1a)") and "Note" not in out and I.LABEL not in out
+    assert out.splitlines()[0].startswith("Share/Unit acquired(1a),ISIN Code(2)") and "Note" not in out and I.LABEL not in out
 
 
 def test_the_portal_csv_keeps_text_that_starts_like_a_formula_as_text():
@@ -151,7 +153,7 @@ def test_business_and_tax_paid():
                                                 {"d": "2026-07-20", "amount": 3000.0}])
     t = I.t_business(g)
     intra = t["rows"][0]
-    assert intra[0].startswith("Intraday") and intra[2] == 99.72 and intra[6] == 99.72   # less 0.025% STT, estimated
+    assert intra[0].startswith("Intraday") and intra[2] == 100 and intra[6] == 99.72     # turnover in whole rupees (DH-007); less 0.025% STT
     fno = next(r for r in t["rows"] if r[0].startswith("F&O"))
     assert fno[2:7] == [900000, 400000, 50000, 8000, 42000]
     assert any("sum of the absolute profit or loss" in n for n in t["notes"]) and any("separately" in n for n in t["notes"])
@@ -204,9 +206,10 @@ def test_preview_and_every_export(w):
     v = c.get("/money/itr?fy=2025", headers=PRO).json()
     assert v["label"] == "FY 2025-26" and v["ay"] == "2026-27" and not v["locked"] and "not a filed return" in v["label_text"]
     by = {t["key"]: t for t in v["tables"]}
-    assert set(by) == {"112a", "112a_portal", "cg", "cg_periods", "os", "business", "tax_paid", "foreign", "form67", "fa"}
-    acme = next(r for r in by["112a"]["rows"] if r[2] == "INE002A01018")
-    assert acme[0] == "BE" and acme[1] == "AE" and acme[4] == 4 and acme[10] == 150
+    assert set(by) == {"112a", "112a_portal", "cg", "cg_periods", "os", "business", "general", "setoff", "cfl", "tax_paid", "tti",
+                       "foreign", "form67", "fa"}
+    acme = next(r for r in by["112a"]["rows"] if r[1] == "INE002A01018")
+    assert acme[0] == "BE" and acme[3] == 4 and acme[9] == 150               # no 1b column for FY 2025-26 (DH-010)
     assert any(r[0].startswith("Long-term, section 112, foreign shares") for r in by["cg"]["rows"])
     assert any(r[0] == "Advance tax" and r[2] == 4000 for r in by["tax_paid"]["rows"])
     assert by["fa"]["rows"] and by["fa"]["rows"][0][1] == "2-UNITED STATES OF AMERICA"

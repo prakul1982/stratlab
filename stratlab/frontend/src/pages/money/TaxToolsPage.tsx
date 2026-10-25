@@ -43,11 +43,22 @@ type Schedule = {
     self_assessment?: number; unpaid?: number; fully_paid?: boolean; to_today?: boolean }; steps: string[];
 };
 type Payment = { d: string; amount: number };
+/** A past year's tax with what's paid taken off and the interest added, as one figure (DH-003). */
+type Payable = {
+  fy: number; label: string; tax: number; tds: number; advance: number; self_assessment: number; balance: number; refund: number;
+  interest_234a: number; interest_234b: number; interest_234c: number; fee_234f: number; total: number; due: string; on: string; past_due: boolean;
+  lines: { label: string; amount: number }[];
+};
 type Advance = {
   fy: number; label: string; dates: DueDate[]; remind: boolean; locked: boolean; as_of: string; assumptions: string[]; threshold: number; current_fy: number;
   /** the reminders are the money calendar's, on Basic (DP2-004) */
   remind_locked?: boolean; remind_plan?: string;
   schedule?: Schedule; inputs?: { tds: number; paid: Payment[] }; dividends_in_estimate?: number; dividend_tds?: number; income_saved?: boolean;
+  payable?: Payable | null; return_due?: string; audit?: boolean;
+  /** a year before the one shown still owes tax (DH-020) */
+  owed?: { fy: number; label: string; total: number; balance: number; due: string }; opened_on_owed?: boolean;
+  /** every plan: the shares of the tax report's total by each date (DH-021) */
+  plain?: { tax: number; due: boolean; rows: (DueDate & { amount: number })[] };
 };
 type LtLot = { key: string; bought: string; qty: number; cost: number; price: number; value: number; gain: number; grandfathered: boolean; bonus: boolean; text: string };
 type SoonLot = LtLot & { long_from: string; days_left: number; window: number };
@@ -61,7 +72,8 @@ type Ltcg = {
 };
 
 const usd = (v: number | null | undefined) => money(v, "USD", 2);
-const TABS = [["dividends", "Dividends"], ["advance", "Advance tax"], ["ltcg", "Long-term exemption"]] as const;
+// DH-022: on a phone the third tab's short name keeps the three on one line
+const TABS = [["dividends", "Dividends", undefined], ["advance", "Advance tax", undefined], ["ltcg", "Long-term exemption", "Exemption"]] as const;
 type Tab = (typeof TABS)[number][0];
 const DISCLAIMER = "Estimates and arithmetic on your own figures, not tax advice. Check them with a chartered accountant (CA) before you file or pay tax.";
 const tone = (v: number | null | undefined) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
@@ -79,7 +91,7 @@ export function TaxToolsPage() {
         lede={<>Built on your <Link className="link" to="/tax-report">tax report</Link> and <Link className="link" to="/holdings">holdings</Link>: the dividends you received, the advance tax due by each date, and how much of this year's long-term exemption is used.</>}
         info="The dividends you received and the TDS on them, the advance tax due by each date, and how much of this year's long-term gains exemption is used. Only you can see these figures." infoLabel="What these tools cover" />
       <Notice label="Estimate only"><b>Estimate only.</b> {DISCLAIMER}</Notice>
-      <Seg label="Tax tools" options={TABS.map(([value, label]) => ({ value, label }))} value={tab} onChange={(t) => go(t as Tab)} />
+      <Seg label="Tax tools" options={TABS.map(([value, label, short]) => ({ value, label, short }))} value={tab} onChange={(t) => go(t as Tab)} />
       {tab === "dividends" && <DividendsTab />}
       {tab === "advance" && <AdvanceTab />}
       {tab === "ltcg" && <LtcgTab />}
@@ -198,7 +210,7 @@ function DividendsTab() {
                       value={inr(y.tds.expected)} note={`${y.tds.companies_over} compan${y.tds.companies_over === 1 ? "y" : "ies"} over the threshold${y.tds.in_file != null ? ` · ${inr(y.tds.in_file)} in your file` : ""}`} />
                   )}
                   {!y.locked && y.us && (
-                    <Stat label={<>US dividends <Info label="About US dividends">The US withholds 25% under the India-US tax treaty (with a W-8BEN). In India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the Indian tax on that income, by filing Form 67 before the return.</Info></>}
+                    <Stat label={<>US dividends <Info label="About US dividends">The US withholds 25% under the India-US tax treaty (with a W-8BEN). In India the dividend is taxed at your slab rate, and the US tax can be claimed as a foreign tax credit, up to the Indian tax on that income, by filing Form 67 by the end of the assessment year (31 March {y.fy + 2}; Rule 128(9)).</Info></>}
                       value={inr(y.us.gross)} note={`${usd(y.us.gross_usd)} · US tax withheld ${usd(y.us.withheld_usd)} (${inr(y.us.withheld)}), the foreign tax credit figure`} />
                   )}
                 </StatRow>
@@ -276,7 +288,14 @@ function AdvanceTab() {
   const nextDue = v.dates.find((d) => d.date >= today)?.n;
   return (
     <>
-      {v.locked && <PlanNote>The amounts due by each date, and the interest on a short instalment, are on the Pro plan.</PlanNote>}
+      {/* DH-021: the shares of the year's tax are shown on every plan (below); what Pro adds is said as itself */}
+      {v.locked && <PlanNote>Taking off your TDS and payments, the amount still due by each date and the interest under sections 234A, 234B and 234C are on the Pro plan.</PlanNote>}
+      {/* DH-020: a year before still owes tax: said at the top, with a way to it */}
+      {v.owed && v.owed.fy !== v.fy && (
+        <Notice label="Tax still unpaid" action={{ label: `Show ${v.owed.label}`, onClick: () => setFy(v.owed!.fy) }}>
+          <b>{v.owed.label}: {inr(v.owed.total)} still unpaid</b>, with the interest on it. Self-assessment tax is paid before the return is filed (section 140A); the return's due date is {dateOnly(v.owed.due)}.
+        </Notice>
+      )}
       <FormGrid label="Year and reminders">
         <Field label="Financial year">{(id) => (
           <Select id={id} value={v.fy} onChange={(x) => setFy(Number(x))} options={[v.current_fy, v.current_fy - 1].map((x) => ({ value: x, label: `FY ${x}-${String(x + 1).slice(2)}${x === v.current_fy ? " (this year)" : ""}` }))} />
@@ -290,11 +309,15 @@ function AdvanceTab() {
       </FormGrid>
       {v.remind_locked && <PlanNote plan="basic">Advance tax reminders are on the {v.remind_plan ?? "Basic"} plan, with the money calendar's other reminders.</PlanNote>}
 
+      {v.opened_on_owed && <p className="k-small k-muted" data-testid="advance-owed-year">Opened on {v.label}: its tax is still unpaid. Pick {`FY ${v.current_fy}-${String(v.current_fy + 1).slice(2)}`} above for this year's instalments.</p>}
+      {s && v.payable && <PayableCard p={v.payable} />}
+
       <Card label="Advance tax due dates">
         <CardHead title={`Due dates, ${v.label}`} info={`Advance tax is due when the year's tax less TDS is ${inr(v.threshold)} or more (section 208; section 404 of the Income-tax Act, 2025 from FY 2026-27).`} />
         {/* a date already gone is marked, and the next one (DP2-013: 15 Jun and 15 Sep showed as if still ahead) */}
         <ul className="k-list" aria-label="Due dates">
           {v.dates.map((d) => <li key={d.n} className={d.date < today ? "k-muted" : undefined}><b>{d.label}</b>: {d.pct * 100}% of the year's tax (less TDS), counting what was paid before
+            {v.plain && v.plain.tax > 0 && <> · {inr(v.plain.rows[d.n]?.amount)} of the {inr(v.plain.tax)} on your tax report, before TDS</>}
             {d.date < today ? <span className="k-note"> · passed</span> : d.n === nextDue ? <span className="k-note"> · next</span> : null}</li>)}
         </ul>
       </Card>
@@ -333,6 +356,20 @@ function AdvanceTab() {
         <Dated label="Worked out" iso={v.as_of} />
       </Card>
     </>
+  );
+}
+
+/** DH-003: what a past year still needs, as one figure, with each line that makes it up. */
+function PayableCard({ p }: { p: Payable }) {
+  return (
+    <Card label="Payable now">
+      <CardHead title={`Payable now, ${p.label}`} info="The tax as the return rounds it, less the TDS and the advance and self-assessment tax you entered, plus interest under sections 234A (a late return), 234B and 234C, and the section 234F fee once the due date has passed. The whole is rounded to ₹10 as the return rounds it (section 288B)." />
+      <b className="k-big" aria-label="Payable now">{inr(p.total)}</b>
+      <p className="k-note">{p.past_due ? `The return's due date, ${dateOnly(p.due)}, has passed: worked out as if paid and filed today. Interest under sections 234A and 234B grows by 1% a month of the tax unpaid.`
+        : `Worked out as if paid, and the return filed, by its due date, ${dateOnly(p.due)}. Each month after it adds interest under sections 234A and 234B.`}
+        {p.refund > 0.5 ? ` TDS and tax paid are more than the tax by ${inr(p.refund)}.` : ""}</p>
+      <ul className="k-list" aria-label="How the payable figure adds up">{p.lines.map((l) => <li key={l.label} className="k-spread"><span>{l.label}</span><b>{inr(l.amount)}</b></li>)}</ul>
+    </Card>
   );
 }
 
@@ -441,7 +478,7 @@ function LtcgTab() {
           {v.soon_counts ? <Stat label="Turning long-term soon" value={v.soon_counts["90"]} note={`${v.soon_counts["30"]} in 30 days · ${v.soon_counts["60"]} in 60 · ${v.soon_counts["90"]} in 90`} />
             : lockedStat("Turning long-term soon")}
         </StatRow>
-        {ex.limit > 0 && <Meter pct={(ex.used / ex.limit) * 100} />}
+        {ex.limit > 0 && ex.used > 0 && <Meter pct={(ex.used / ex.limit) * 100} />}
         <p className="k-small">{inr(ex.left)} of this year's {inr(ex.limit)} exemption is unused. It doesn't carry forward to next year.</p>
         {ex.realised_us_lt_net != null && <p className="k-small k-muted" data-testid="ltcg-us-apart">{usSharesNote(ex.realised_us_st_net, ex.realised_us_lt_net, inr)} The exemption is for Indian shares and equity funds only.</p>}
       </Card>

@@ -24,7 +24,7 @@ Sources, checked year by year (YEAR_SOURCES names each year's own):
 import json
 import math
 
-from . import db
+from . import db, tax_due
 
 KEY = "taxinputs:"                # taxinputs:<uid> = {"2025": {"regime", "other", "salary", "deductions", "age", "resident"}}
 CESS = 0.04
@@ -222,8 +222,14 @@ def _with_surcharge(b: dict, total: float, special_income: float, cap: float) ->
     return tax_slab + tax_special, sc, rate
 
 
+def round10(v: float) -> float:
+    """Sections 288A and 288B: paise dropped, then to the nearest ₹10, a last figure of 5 or more going up."""
+    n = math.floor(max(0.0, v) + 1e-6)
+    return float(n - n % 10 + (10 if n % 10 >= 5 else 0))
+
+
 def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, business: float,
-             dividends: float = 0.0, slab_gains: float = 0.0, brought: list[dict] | None = None) -> dict:
+             dividends: float = 0.0, slab_gains: float = 0.0, brought: list[dict] | None = None, _bump: float = 0.0) -> dict:
     """The year's total tax estimate.
 
     `buckets` are the capital gains year's buckets (key, rate, after_setoff, exempt, taxable); `intraday` the
@@ -231,7 +237,9 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     `dividends` the year's dividend income (income from other sources, at slab rates, surcharge capped at 15%), when the user includes it; `slab_gains` other short-term
     gains taxed at slab rates, already set off (the report sends ETF and gold bond gains as the st_unit bucket instead); `brought` earlier years'
     intraday and business losses still carried ({fy, kind "speculative"/"business", amt}). Returns the steps in plain words, a breakdown table and
-    the total."""
+    the total. `rounded` is the return's own rounding (DH-004): total income to the nearest ₹10 (section 288A), the tax
+    on it again to the nearest ₹10 (section 288B); `_bump` is that rounding's change to slab income, for the second pass."""
+    given = (buckets, intraday, business, dividends, slab_gains, brought)
     v = clean(inputs)
     r = rules(fy, v["regime"], v["age"], v["resident"])
     if r is None:
@@ -310,6 +318,7 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
 
     biz = business
     biz_cf = 0.0
+    cyla: list[dict] = []          # this year's business loss set off against other heads (Schedule CYLA in the ITR export, DH-011)
     if biz > 0:
         steps.append(f"F&O, commodity and currency profit after charges, {money(biz)}, is non-speculative business income, taxed at your slab rate.")
     elif biz < 0:
@@ -321,23 +330,27 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
             spec -= take
             loss -= take
             steps.append(f"{money(take)} of it set off against the intraday profit.")
+            cyla.append({"against": "Intraday (speculative) profit", "amount": round(take, 2)})
         take = min(rest, loss)
         if take > 0:
             rest -= take
             loss -= take
             steps.append(f"{money(take)} of it set off against your other income that isn't salary.")
+            cyla.append({"against": "Other income that isn't salary", "amount": round(take, 2)})
         for b in sorted(taxable, key=lambda b: -g_rates[b]):
             take = min(taxable[b], loss)
             if take > 0:
                 taxable[b] -= take
                 loss -= take
                 steps.append(f"{money(take)} of it set off against taxable {'short' if b.startswith('st') else 'long'}-term gains at {_pct(g_rates[b])}.")
+                cyla.append({"against": f"{'Short' if b.startswith('st') else 'Long'}-term capital gains at {_pct(g_rates[b])}", "amount": round(take, 2)})
         for b in lt_exempt:            # then against the exempt part of long-term gains (no tax saved there)
             take = min(lt_exempt[b], loss)
             if take > 0:
                 lt_exempt[b] -= take
                 loss -= take
                 steps.append(f"{money(take)} of it set off against long-term gains within the exemption.")
+                cyla.append({"against": "Long-term capital gains within the exemption", "amount": round(take, 2)})
         biz_cf = loss
         if loss > 0:
             steps.append(f"{money(loss)} of business loss is left to carry forward.")
@@ -373,7 +386,7 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                      + " They can't reduce share gains taxed at special rates.")
     elif v["deductions"] and not r["deductions"]:
         steps.append("The new regime allows almost no deductions, so the deductions you entered aren't used.")
-    normal = max(0.0, normal_gross - ded)
+    normal = max(0.0, normal_gross - ded) + _bump
     div_left = min(div, normal)           # dividends in slab income (surcharge on their tax capped at 15%)
     special_income = sum(taxable.values())
     total = normal + special_income + sum(lt_exempt.values())
@@ -430,6 +443,17 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
     cess = before_cess * CESS
     final = before_cess + cess
     steps.append(f"Health and education cess at 4%: {money(cess)}. Estimated total tax: {money(final)}.")
+    # the return rounds total income to ₹10 and works the tax out on that, then rounds the tax (DH-004: the export's
+    # ₹2,13,00,765 and ₹77,61,298 against the portal's ₹2,13,00,770 and ₹77,61,300); the rounding goes on slab income
+    rounded = None
+    if not _bump:
+        inc10 = round10(total)
+        tax_on = final
+        if abs(inc10 - total) > 0.004 and normal + inc10 - total >= 0:
+            tax_on = estimate(fy, inputs, *given, _bump=inc10 - total)["total"]
+        rounded = {"income": inc10, "tax": round10(tax_on)}
+        steps.append(f"As the return rounds them: total income {money(inc10)} (to the nearest ₹10, section 288A) and tax "
+                     f"{money(rounded['tax'])} (section 288B).")
 
     # each source's share: the special-rate tax is the gains'; the slab tax is split by each source's slab income
     special_after = b["special_total"] - (b["rebate"] - b["rebate_slab"])
@@ -487,7 +511,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         line("Less marginal relief on surcharge", -relief, "tax")
     line("Cess (4%)", cess, "tax")
     line("Estimated total tax", final, "total")
-    return {"available": True, "regime": v["regime"], "inputs": v, "total": round(final, 2), "parts": parts,
+    if rounded:
+        line("Total income, rounded to the nearest ₹10 (section 288A)", rounded["income"], "rounded")
+        line("Tax on it, rounded to the nearest ₹10 (section 288B)", rounded["tax"], "rounded")
+    return {"available": True, "regime": v["regime"], "inputs": v, "total": round(final, 2), "parts": parts, "rounded": rounded,
             "slab_tax": round(b["slab"], 2), "special_tax": round(b["special_total"], 2), "rebate": round(b["rebate"], 2),
             "surcharge": round(sc - relief, 2), "surcharge_rate": rate, "cess": round(cess, 2),
             "income": {"normal": round(normal, 2), "special": round(special_income, 2), "total": round(total, 2),
@@ -495,7 +522,7 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
                        "dividends": round(div, 2),
                        # the F&O and intraday lines the Money home shows beside the total (R6O-014)
                        "business": round(business, 2), "intraday": round(intraday, 2)},
-            "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)}, "brought_forward": bf,
+            "carry_forward": {"speculative": round(spec_cf, 2), "business": round(biz_cf, 2)}, "brought_forward": bf, "set_off": cyla,
             "steps": steps, "lines": lines, "notes": notes, "confirmed": r["confirmed"], "source": r["source"]}
 
 
@@ -521,8 +548,10 @@ def audit_fact(fy: int, turnover: float, has_business: bool) -> str | None:
         return None
     high = 10 * CRORE if fy >= 2020 else 5 * CRORE if fy == 2019 else CRORE
     if turnover > high:
-        return (f"Turnover of {_crore(turnover)} is above {_crore(high)}, the higher limit in section 44AB: a tax audit usually applies "
-                f"(the {_crore(high)} limit holds only when cash receipts and payments are 5% or less); check with your CA.")
+        # DH-002: above the higher limit section 44AB applies whatever the cash share (audit_applies says the same), so
+        # the fact is firm, with the audit report's date and the penalty, not "usually" and a note about cash
+        return (f"Turnover of {_crore(turnover)} is above {_crore(high)}, the higher limit in section 44AB: a tax audit applies. "
+                f"{tax_due.audit_dates(fy)} {tax_due.PENALTY_271B}")
     return (f"Turnover of {_crore(turnover)} is above ₹1 crore: section 44AB requires a tax audit unless cash receipts "
             f"and cash payments were each no more than 5% of the total, when the limit is {_crore(high)}.")
 
@@ -547,12 +576,12 @@ def filing_facts(fy: int, turnover: float, has_business: bool) -> list[str]:
     out.append("Under the presumptive scheme (section 44AD), a business that declares profit below 6% of turnover, or "
                "a loss, with total income above the basic exemption limit can also need an audit, depending on the "
                "years it opted in or out.")
-    if fy >= 2025:                    # Finance Act 2026 (section 139(1); section 263 of the 2025 Act)
-        out.append("Due dates for the return: 31 August after the year ends for business income without an audit (31 "
-                   "July when there's no business income), 31 October with an audit, unless extended. A revised return "
-                   "can be filed until 31 March after the year ends.")
-    else:
-        out.append("Due dates for the return: 31 July after the year ends without an audit, 31 October with one, unless extended.")
+    # the dates with the CBDT's extensions, from the one table every page reads (DH-001: "31 October with an audit,
+    # unless extended" a month after CBDT moved it to 21 November)
+    out.append(tax_due.return_dates(fy))
+    if fy >= 2025:                    # Finance Act 2026 (section 139(5); section 263 of the 2025 Act)
+        out.append(f"A revised return can be filed until {tax_due.day(tax_due.revise_by(fy))}; revising after "
+                   f"{tax_due.day(tax_due.belated(fy))} carries a fee (₹1,000, or ₹5,000 when total income is over ₹5 lakh).")
     if fy >= 2026:
         out.append(NEW_ACT_NOTE)
     return out

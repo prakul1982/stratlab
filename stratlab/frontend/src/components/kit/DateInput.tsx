@@ -53,9 +53,11 @@ export function DateInput({ id, value, onChange, min, max, ariaLabel, onProblem,
 }
 
 /** A labelled date box in a FormGrid: Field + DateInput, with the problem said under it. */
-export function DateField({ label, value, onChange, min, max, optional, info, wide, ariaLabel, hint, error }: {
+export function DateField({ label, value, onChange, min, max, optional, info, wide, ariaLabel, hint, error, placeholder }: {
   label: string; value: string; onChange: (iso: string) => void; min?: string; max?: string; optional?: boolean; info?: ReactNode; wide?: boolean;
   ariaLabel?: string; hint?: string;
+  /** the example in the empty box: a form for dates ahead gives a day ahead (DH-042: "e.g. 14 Aug 2025" in a calendar) */
+  placeholder?: string;
   /** A problem the form found (a required day left empty, the server's check); the box's own reading comes first. */
   error?: string | null;
 }) {
@@ -63,7 +65,7 @@ export function DateField({ label, value, onChange, min, max, optional, info, wi
   const shown = problem ?? error ?? null;
   return (
     <Field label={label} optional={optional} info={info} wide={wide} error={shown} hint={hint}>
-      {(id) => <DateInput id={id} value={value} onChange={onChange} min={min} max={max} ariaLabel={ariaLabel} onProblem={setProblem}
+      {(id) => <DateInput id={id} value={value} onChange={onChange} min={min} max={max} ariaLabel={ariaLabel} onProblem={setProblem} placeholder={placeholder}
         bad={!!shown} describedBy={shown || hint ? `${id}-msg` : undefined} />}
     </Field>
   );

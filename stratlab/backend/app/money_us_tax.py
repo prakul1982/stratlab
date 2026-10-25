@@ -24,7 +24,7 @@ import math
 import re
 from datetime import date, datetime, timezone
 
-from . import db, holdings_file as hf, money_fx as fx
+from . import db, holdings_file as hf, money_fx as fx, tax_due
 from .money_mf import CII, held_over
 from .tax_lots import RATE_CHANGE, fy_label, fy_of
 
@@ -70,8 +70,9 @@ ASSUMPTIONS = [
 FACTS = [
     "Schedule FA covers the calendar year (1 January to 31 December) that ends in the financial year: for the return "
     "of FY 2025-26 (AY 2026-27), calendar 2025.",
-    "Schedule FA is filed with the return, by its due date: 31 July, or 31 August with business income and no audit "
-    "(from FY 2025-26), or 31 October with an audit. A belated or revised return can add it.",
+    # DH-030: the due dates come from the one table with the CBDT's extensions (tax_due.py), not a fixed "31 October"
+    "Schedule FA is filed with the return, by its due date. " + tax_due.return_dates(2025) + " A belated or revised "
+    "return can add it.",
     "Form 67 (the foreign tax credit statement) has to be filed on or before the end of the assessment year (Rule "
     "128(9) as amended in August 2022): by 31 March 2027 for FY 2025-26. From tax year 2026-27 it becomes Form 44 "
     "under the Income-tax Rules 2026.",
