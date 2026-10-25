@@ -47,6 +47,13 @@ export function homeOf(view: SpaceView, _focus?: Focus | null): string {
   return view === "mine" ? MINE_HOME : SPACES[view].home;
 }
 
+/** The one home `/` (and the logo) opens: the space for what the person said they came for (Settings → What you see first),
+ * else the account's last choice, else My space. Not the space last visited on this device: `/` went to Trade after a look
+ * at /trade, and to Money for someone set to "All of it" (DI-013). */
+export function startView(focus: Focus | null | undefined, accountSpace?: unknown): SpaceView {
+  return viewForFocus(focus) ?? viewFromSaved(accountSpace) ?? "mine";
+}
+
 export const SPACE_HOMES = [...SPACE_IDS.map((s) => SPACES[s].home), MINE_HOME];
 
 /** The view's name as the server and older versions of the app wrote it: Mine was once called "All". */

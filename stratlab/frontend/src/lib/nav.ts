@@ -102,7 +102,7 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "watch", label: "Watch", blurb: "The companies you follow, and a message when something happens to them.", pages: [
         page("/research/watchlist", "Watchlist", "pin", "watchlist saved favourites companies i follow at a glance investor home dashboard checklist report card track record",
           { line: "The companies you follow, as a list or each one at a glance.", also: /^\/research\/investor$/ }),
-        page("/alerts", "Alerts", "bell", "alerts stock alerts price alert notify notification telegram email push trigger", { line: "Messages when a stock or the market does something you asked about." }),
+        page("/alerts", "Stock alerts", "bell", "alerts stock alerts price alert notify notification telegram email push trigger", { line: "Messages when a stock or the market does something you asked about." }),
       ] },
     ],
   },

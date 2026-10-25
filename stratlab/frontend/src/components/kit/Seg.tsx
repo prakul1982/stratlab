@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent } from "react";
 
-export type Choice = { value: string; label: string; disabled?: boolean };
+/** `short`: the label a phone shows, so the choices fit on one line; the full label stays its name (DI-028). */
+export type Choice = { value: string; label: string; disabled?: boolean; short?: string };
 
 /** A switch for 2 to 4 choices, as wide as its choices and never stretched. A radio group for screen readers: one tab
  * stop, arrow keys move and choose. More than four choices belong in a ChipBar. `label` names the group ("Range"). */
@@ -22,7 +23,8 @@ export function Seg({ label, options, value, onChange }: { label: string; option
     <div className="k-seg" role="radiogroup" aria-label={label} ref={box} onKeyDown={key}>
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={o.value === value} data-v={o.value} disabled={o.disabled}
-          tabIndex={o.value === stop ? 0 : -1} onClick={() => onChange(o.value)}>{o.label}</button>
+          tabIndex={o.value === stop ? 0 : -1} onClick={() => onChange(o.value)}>
+          {o.short ? <><span className="k-seg-long">{o.label}</span><span className="k-seg-short" aria-hidden="true">{o.short}</span></> : o.label}</button>
       ))}
     </div>
   );

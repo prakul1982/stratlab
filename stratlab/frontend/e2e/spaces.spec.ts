@@ -117,7 +117,8 @@ test("spaces: the switcher goes to a space's home and shows its groups, Mine sho
   await expect(groups(side)).toHaveText(["Pinned"]);
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
   await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
-  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveAttribute("href", "/assistant");
+  const feats = (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).plan_info.features;
+  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveCount(feats.assistant === false ? 0 : 1);
   await expect.poll(async () => (await prefs(request, u)).space).toBe("all");       // the server still calls it "all"
   expect(await page.evaluate(() => localStorage.getItem("stratlab.space"))).toBe("mine");
 
@@ -153,11 +154,15 @@ test("spaces: a deep link opens its own space, without changing the account's ch
   }
   // a deep link only switches the menu on this device; `/` still opens the space the person picked
   expect((await prefs(request, u)).space ?? null).toBeNull();
-  // picking a space in the switcher makes it the home
+  // picking a space in the switcher shows its menu; `/` stays the home of What you see first (DI-013)
   const side = await menu(page, phone);
   await side.getByRole("group", { name: "Space" }).getByRole("button", { name: "Money" }).click();
   await expect(page).toHaveURL(/\/money$/);
   await expect.poll(async () => (await prefs(request, u)).space).toBe("money");
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/invest$/, { timeout: 30_000 });
+  // ...until Settings changes it
+  await request.put(`${API}/me/prefs`, { headers: auth(u), data: { focus: "money", space: "money" } });
   await page.goto("/");
   await expect(page).toHaveURL(/\/money$/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Your money" })).toBeVisible();

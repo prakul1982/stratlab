@@ -357,7 +357,7 @@ def test_stored_briefs_get_the_facts_line_first(mem):
     job.save(issue)
     assert job.repair_facts_line("IN", days=3650) == 1
     got = job.load("market.IN.2026-10-09")
-    assert got["summary"] == "NIFTY 50 +1.30% today." and got["ai_summary"].startswith("On October 9, 2026")
+    assert got["summary"] == "NIFTY 50 +1.30% today." and got["ai_summary"].startswith("On 9 Oct 2026")      # the date day first, as the app writes it (DI-026)
     assert job.repair_facts_line("IN", days=3650) == 0
 
 

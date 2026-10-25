@@ -117,7 +117,19 @@ const EXTRA: Feature[] = [
     words: "all features pages list everything index menu map sitemap browse what can stratlab do where is" },
   { id: "mine_home", title: "My space", what: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose.", to: "/mine",
     words: "mine my space home customise customize pinned dashboard today pnl net worth coming up" },
+  // the pages and actions people look for by name that aren't in a space's menu (DI-003, DI-014)
+  { id: "help", title: "Help", what: "The tour, every explanation StratLab has written, the connection check and how to reach a person.", to: "/help",
+    words: "help support faq questions how do i guide tour stuck problem explanations articles" },
+  { id: "contact", title: "Contact us", what: "Write to a person at StratLab.", to: "/contact",
+    words: "contact us support email write person human team complaint feedback reach" },
+  { id: "theme", title: "Theme: dark or light", what: "Dark, light or the same as your device, in Settings → Experience.", to: "/settings#theme",
+    words: "dark mode light mode theme appearance night colours colors" },
+  { id: "signout", title: "Sign out", what: "Sign out of StratLab in this browser.", to: "@signout",
+    words: "sign out log out logout signout leave" },
 ];
+
+/** The pages that belong to the person, not to a market: a search that names one gets no "strategy ideas" (DI-003). */
+export const OWN_PAGES = ["account", "settings", "plans", "assistant", "invite", "phone", "help", "contact", "theme", "signout", "features", "mine_home"];
 
 /** What search looks through: every page in the menu (by its name, its one-liner and the everyday words for it, such as "MTF"
  * or "borrowed money" for Margin funding), then the features that are not a page of their own. */
@@ -135,6 +147,29 @@ const SEARCHABLE: Feature[] = (() => {
   return [...pages, ...alone, ...EXTRA];
 })();
 
+const tokensOf = (s: string) => s.toLowerCase().split(/[^a-z0-9&]+/).filter(Boolean);
+
+/** Two words one typo apart: a letter changed, added or dropped, or two side by side swapped ("relaince", "setings"). */
+export function oneTypo(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length === b.length) return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1);
+}
+
+/** How a typed word is found among a feature's words: 2 as a word or the start of one (or inside a long one, "forward" in
+ * "walkforward"), 1 a typo away (words of five letters or more, same first letter), 0 not at all. Letters inside a word no
+ * longer count ("sign" is not "signal" for "sign out", DI-003). */
+function wordHit(w: string, toks: string[], hay: string): number {
+  if (/[^a-z0-9]/.test(w)) return hay.includes(w) ? 2 : 0;       // "p&l", "a/d", "t+0" as written
+  if (toks.some((t) => t === w || (w.length >= 2 && t.startsWith(w)))) return 2;
+  if (w.length >= 5 && hay.includes(w)) return 2;
+  if (w.length >= 5 && toks.some((t) => t[0] === w[0] && t.length >= 5 && oneTypo(w, t))) return 1;
+  return 0;
+}
+
 export function match(q: string, limit = 6): Feature[] {
   const text = q.toLowerCase().trim();
   const words = searchWords(q);         // "what is walk-forward?" looks for walk and forward, not "is" inside "list"
@@ -142,12 +177,19 @@ export function match(q: string, limit = 6): Feature[] {
   const scored = SEARCHABLE.map((f) => {
     const title = f.title.toLowerCase();
     const hay = `${title} ${f.words}`.toLowerCase();
-    let s = words.reduce((n, w) => n + (hay.includes(w) ? (title.includes(w) ? 3 : 1) : 0), 0);
+    const tt = tokensOf(title), ht = tokensOf(hay);
+    let s = words.reduce((n, w) => {
+      const inTitle = wordHit(w, tt, title);
+      return n + (inTitle === 2 ? 3 : inTitle === 1 ? 2 : wordHit(w, ht, hay) ? 1 : 0);
+    }, 0);
     if (words.length > 1 && (hay.includes(text) || hay.includes(words.join(" ")))) s += 4;       // the whole phrase ("borrowed money") counts for more than its words
     if (title === text) s += 6;
     return [s, f] as const;
   }).filter(([s]) => s > 0);
-  return scored.sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, f]) => f);
+  scored.sort((a, b) => b[0] - a[0]);
+  // a page named outright ("sign out", "dark mode") leaves out pages that share only one of its words (DI-003)
+  const best = scored[0]?.[0] ?? 0;
+  return scored.filter(([s]) => best < 8 || s * 3 >= best).slice(0, limit).map(([, f]) => f);
 }
 
 /** Resolve "@notebook", "@market" and "@verdict" against where you are and your latest notebook. */

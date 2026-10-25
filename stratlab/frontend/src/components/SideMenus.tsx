@@ -7,7 +7,7 @@ import { VIEW_AS_CHOICES, choiceToPlan, planToChoice } from "../lib/viewAs";
 import { inWords, marketState } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import type { Market, Me } from "../lib/types";
-import { Close, Compass, Download, Layers, LogOut, Pencil, Share, Shield, Updown, User, Wallet } from "./Icons";
+import { Close, Compass, Download, Gear, Help, Layers, LogOut, Share, Shield, Updown, User, Wallet } from "./Icons";
 
 // The two small menus at the foot of the sidebar: which markets are open, and the account. Each is one line until
 // opened; opened, it floats above the line (a sheet from the bottom on a phone) and closes with Esc or a click outside.
@@ -96,7 +96,8 @@ export function MarketsNow({ markets }: { markets: Market[] }) {
   );
 }
 
-/** The person's initials button, with the plan, opening Account, Settings, Plan, Invite, Get the app, All features, Help and Sign out. */
+/** The person's initials button, with the plan, opening Account, Settings, Plan, Invite, Get the app, All features, Help, the
+ * tour and Sign out. The plan is named once, on Plan (DI-022); Help opens the help page, the tour is its own item (DI-014). */
 export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () => void; onGo: () => void }) {
   const { open, setOpen, btn, panel } = usePop();
   const id = useId();
@@ -129,9 +130,9 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
         <div className="side-pop-back" aria-hidden="true" />
         <div ref={panel} id={id} className="side-pop acct-pop" role="menu" aria-label="Account" onKeyDown={keys}>
           {email && <div className="side-pop-head" role="presentation"><span className="muted acct-email">{email}</span></div>}
-          <Link role="menuitem" to="/account" onClick={done(onGo)}><User size={16} />Account{plan && <span className="plan-tag">{plan}</span>}</Link>
-          <Link role="menuitem" to="/settings" onClick={done(onGo)}><Pencil size={16} />Settings</Link>
-          <Link role="menuitem" to="/plans" onClick={done(onGo)}><Wallet size={16} />Plan</Link>
+          <Link role="menuitem" to="/account" onClick={done(onGo)}><User size={16} />Account</Link>
+          <Link role="menuitem" to="/settings" onClick={done(onGo)}><Gear size={16} />Settings</Link>
+          <Link role="menuitem" to="/plans" onClick={done(onGo)}><Wallet size={16} />Plan{plan && <span className="plan-tag">{plan}</span>}</Link>
           <Link role="menuitem" to="/invite" onClick={done(onGo)}><Share size={16} />Invite friends</Link>
           <Link role="menuitem" to="/app" onClick={done(onGo)}><Download size={16} />Get the app</Link>
           <hr />
@@ -147,7 +148,8 @@ export function AccountMenu({ me, onTour, onGo }: { me: Me | null; onTour: () =>
             </div>
           )}
           <Link role="menuitem" to="/features" onClick={done(onGo)}><Layers size={16} />All features</Link>
-          <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Help</button>
+          <Link role="menuitem" to="/help" onClick={done(onGo)}><Help size={16} />Help</Link>
+          <button role="menuitem" onClick={done(onTour)}><Compass size={16} />Take the tour</button>
           <hr />
           <button role="menuitem" onClick={done(() => { void signOutHere(supabase.auth); })}><LogOut size={16} />Sign out</button>
         </div>

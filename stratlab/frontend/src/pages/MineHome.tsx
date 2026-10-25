@@ -7,9 +7,9 @@ import { evWhen } from "../lib/marketEvents";
 import { netWorthDelta } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
-import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUpAll, useMarketStrip, type Up } from "../lib/mine";
 import { fmtDate, monthShort } from "../lib/format";
-import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
+import { CARDS, DEFAULT_LAYOUT, cleanLayout, slotSpans, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
 import { useAfterPaint } from "../lib/defer";
 import { researchApi, savedRegion, useWatchlist, type Quote, type Region } from "../lib/research";
@@ -24,26 +24,34 @@ import { notRunning } from "../lib/tradeUi";
 
 /* /mine: "My space", the person's own home. Every figure is read from what the app already has (net worth, holdings, paper
  * sessions, the markets, the calendars, the watchlist); a card with nothing to show says so and offers the next step.
- * Cards can be hidden and reordered with "Customise"; the choice is kept on this device. */
+ * Cards can be hidden and reordered with "Customise"; the choice is kept on the account, so a phone and a laptop show the
+ * same My space (DI-006), and the cards are drawn in that order (DI-005). */
 
 const LAYOUT_KEY = "stratlab.mine.cards";
 
 // in India's time for someone who follows the Indian market, else their own (lib/greeting) (R5O-031)
 const zone = () => { let z: string | undefined; try { z = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* old browser */ } return greetingZone(savedRegion(), z); };
 const greeting = () => greetingAt(hourIn(zone()));
-const dateLine = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: zone() }).replace(/^(\w+) /, "$1, ");
+const ownZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return undefined; } };
+// the day in India for someone who follows the Indian market says so when their own clock is elsewhere, beside the banner's
+// "your time" (DI-011: "Sunday, 25 October" over "Sat 21:00 your time")
+const dateLine = () => new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: zone() }).replace(/^(\w+) /, "$1, ")
+  + (zone() === "Asia/Kolkata" && ownZone() && ownZone() !== "Asia/Kolkata" && ownZone() !== "Asia/Calcutta" ? " in India" : "");
 const dayNum = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); const t = new Date(y, m - 1, d); return { d: t.getDate(), m: monthShort(t), w: t.toLocaleDateString("en-GB", { weekday: "short" }) }; };
 
 export function MineHome() {
-  const { setSpace, session, markets } = useApp();
+  const { setSpace, session, markets, me, savePrefs } = useApp();
   useEffect(() => { setSpace("mine", false); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the account's layout; this browser's copy (kept from before, and while the account loads) until one is saved there
   const [raw, setRaw] = usePersisted<Layout>(LAYOUT_KEY, DEFAULT_LAYOUT);
-  const layout = useMemo(() => cleanLayout(raw), [raw]);
+  const saved = me?.prefs?.mine;
+  const layout = useMemo(() => cleanLayout(saved ?? raw), [saved, raw]);
   const [customise, setCustomise] = useState(false);
   // the calendars (the money calendar, market events, results) are below the first screen: they are read once the page has
   // painted, so the net worth, holdings and prices at the top get the connections first (R9R-010)
   const later = useAfterPaint();
-  const coming = useComingUp(6, later);
+  const upAll = useComingUpAll(later);
+  const coming = upAll ? upAll.slice(0, 6) : null;
   const first = firstName(session?.user?.user_metadata as Record<string, unknown> | undefined);
   const shown = layout.order.filter((id) => !layout.hidden.includes(id));
 
@@ -66,26 +74,29 @@ export function MineHome() {
     return parts.join(" ") || "Your money, the markets and what is coming up, in one place.";
   }, [markets, coming, now]);
 
-  const change = (next: Layout) => setRaw(next);
+  const change = (next: Layout) => { setRaw(next); void savePrefs({ mine: next }, true); };
   const cardFor = (id: CardId) => ({
-    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} />, watch: <WatchCard />,
+    networth: <NetWorthCard />, pnl: <PnlCard />, paper: <PaperCard />, markets: <MarketsCard later={later} />, coming: <ComingCard rows={coming} more={upAll ? upAll.length - (coming?.length ?? 0) : 0} />, watch: <WatchCard />,
   })[id];
+  // each card's width from its place in the chosen order, so the grid keeps that order with no gaps (DI-005)
+  const spans = slotSpans(shown);
 
   return (
     <div className="space-home mine" data-testid="mine-home">
       <PageHeader eyebrow={dateLine()} title={`${greeting()}${first ? `, ${first}` : ""}`} lede={lede}
         actions={<button type="button" className="btn quiet sm" aria-expanded={customise} aria-controls="mine-customise" onClick={() => setCustomise(!customise)}>Customise</button>} />
-      <PromoCountdown /><FirstSteps />
+      {/* right under the button that opens it, not below the first steps and out of sight on a laptop (DI-012) */}
       {customise && <CustomisePanel layout={layout} onChange={change} onDone={() => {
         // closed with Done or Escape: focus goes back to the Customise button, not to the top of the page
         setCustomise(false);
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[aria-controls="mine-customise"]')?.focus());
       }} />}
+      <PromoCountdown /><FirstSteps />
       {shown.length === 0 ? (
         <EmptyState title="Every card is hidden" action={{ label: "Show the cards", onClick: () => { change(DEFAULT_LAYOUT); } }}>Use Customise to choose what My space shows.</EmptyState>
       ) : (
         <div className="mine-grid">
-          {shown.map((id) => <div key={id} className="mine-slot" data-card={id}>{cardFor(id)}</div>)}
+          {shown.map((id) => <div key={id} className="mine-slot" data-card={id} data-span={spans[id]}>{cardFor(id)}</div>)}
         </div>
       )}
     </div>
@@ -110,12 +121,12 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
   }, [onDone]);
   return (
     <Card id="mine-customise" label="Customise My space">
-      <CardHead title="Customise My space" info="Choose which cards show and put them in your order. It is kept on this device."
+      <CardHead title="Customise My space" info="Choose which cards show and put them in your order. It is kept with your account, so your phone and laptop show the same My space. On a wide screen, cards share a row when they fit."
         actions={<><button type="button" className="btn quiet sm" onClick={() => onChange(DEFAULT_LAYOUT)}>Reset</button><button type="button" className="btn sm" onClick={onDone}>Done</button></>} />
       <ul className="mine-custom">
         {layout.order.map((id, i) => (
           <li key={id}>
-            <label><input type="checkbox" checked={!layout.hidden.includes(id)} onChange={() => toggle(id)} /> {label(id)}</label>
+            <label className="k-check"><input type="checkbox" checked={!layout.hidden.includes(id)} onChange={() => toggle(id)} /> {label(id)}</label>
             <span className="mine-move">
               <button type="button" className="btn quiet sm" aria-label={`Move ${label(id)} up`} disabled={i === 0} onClick={() => move(id, -1)}>↑</button>
               <button type="button" className="btn quiet sm" aria-label={`Move ${label(id)} down`} disabled={i === layout.order.length - 1} onClick={() => move(id, 1)}>↓</button>
@@ -156,7 +167,8 @@ function NetWorthCard() {
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
         note={move ? `since ${asOf(move.since)}` : `As of ${asOf(v.as_of) ?? "today"}`} />
-      {whole.length >= 2 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
+      {/* two snapshots joined by a line read as a trend: the chart waits for a third (DI-012) */}
+      {whole.length >= 3 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
         : <HistoryPlaceholder allowed={v.history_allowed} />}
     </Card>
   );
@@ -242,6 +254,8 @@ function MarketsCard({ later }: { later: boolean }) {
   return (
     <Card testId="mine-markets" label="Markets">
       <CardHead title="Markets" info="Each line is the last month of daily closes; the change is the latest session against the one before, with its day when that session is not today." actions={<Link className="btn quiet sm" to="/research/pulse">Market pulse</Link>} />
+      {/* the period and the colours in words, not only behind the (i) (DI-010) */}
+      <p className="k-note k-muted" data-testid="mine-mkt-key">Lines: the last month of daily closes. Indices are green or red by the day's move; the dollar and gold stay blue, as a rise in either is neither good nor bad.</p>
       <div className="mine-markets">
         {MARKET_TILES.map((t) => {
           const s = series[t.id];
@@ -269,7 +283,7 @@ function MarketsCard({ later }: { later: boolean }) {
 }
 
 /* ---------- coming up ---------- */
-function ComingCard({ rows }: { rows: Up[] | null }) {
+function ComingCard({ rows, more = 0 }: { rows: Up[] | null; more?: number }) {
   return (
     <Card testId="mine-coming">
       <CardHead title="Coming up" actions={<Link className="btn quiet sm" to="/money/calendar">Calendar</Link>} />
@@ -290,6 +304,8 @@ function ComingCard({ rows }: { rows: Up[] | null }) {
             })}
           </ul>
         )}
+      {/* the list is the next six: the rest are named as a count, not dropped in silence (DI-009) */}
+      {more > 0 && <Link className="link k-small" to="/money/calendar" data-testid="mine-coming-more">+{more} more in the calendar</Link>}
     </Card>
   );
 }

@@ -117,7 +117,7 @@ def market_sections(f: dict) -> list[dict]:
             for i in f["indices"]]})
     if f.get("rotation"):
         out.append({"title": "Sector rotation", "items": [
-            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart (weekly)", rotation_url(region))
+            _item(f"{r['sector']} moved from {r['from'].title()} to {r['to'].title()} on the rotation chart {rotation_basis(region)}", rotation_url(region))
             for r in f["rotation"]]})
     scan = f.get("scan") or {}
     # the whole rule and Stage 2 alone are two lists, so the lead's count is the first list's (R13-003)
@@ -129,6 +129,12 @@ def market_sections(f: dict) -> list[dict]:
         out.append({"title": f"Newly in Stage 2, Supertrend not up ({scan['group']})", "items": [
             _item(f"{r['symbol']} moved into Stage 2 (matches the Stage 2 rule; its Supertrend isn't up)", stock_url(region, r["symbol"]))
             for r in scan["stage2"]]})
+    # a week with a holiday says which session is missing, rather than skipping it in silence (DI-027)
+    gaps = [h for h in f.get("holidays") or [] if h.get("day")] if f["weekly"] else []
+    if gaps:
+        out.append({"title": "No session", "items": [_item(f"The {REGION_NAME[region]} market was closed on "
+                    + " and ".join(_day(h["day"]) + (f" ({h['name']})" if h.get("name") else "") for h in gaps)
+                    + f", so the week had {5 - len(gaps)} session{'s' if 5 - len(gaps) != 1 else ''}.")]})
     shut = [c for c in f.get("closures") or [] if c.get("day")]
     reopen = next((c["next_open"] for c in f.get("closures") or [] if c.get("next_open")), None)
     if shut and reopen:
@@ -143,6 +149,15 @@ def market_sections(f: dict) -> list[dict]:
         out.append({"title": "Headlines", "items": [_item(h["headline"], h.get("url"), source=h.get("source"),
                     day=_day(d) if f["weekly"] and (d := _local_day(h.get("at"), region)) else None) for h in heads]})
     return out
+
+
+# what the rotation chart measures each sector against (rotation.UNIVERSES): readers assumed NIFTY 50 (DI-027)
+ROTATION_BENCH = {"IN": "NIFTY 500", "US": "S&P 500"}
+
+
+def rotation_basis(region: str) -> str:
+    bench = ROTATION_BENCH.get(region)
+    return f"(weekly, against the {bench})" if bench else "(weekly)"
 
 
 def _move_span(r: dict, since: str, day: str | None) -> str:
@@ -232,7 +247,7 @@ def sections(f: dict) -> list[dict]:
 def subject(f: dict) -> str:
     # a weekly issue is dated its Saturday; its numbers run to Friday's close, and the subject says so, as the issue's
     # own header does (R90-004: "Market Brief India, week to 24 Oct" over figures as of the 23 Oct close)
-    when = f"week to {kit.fmt_date(_week_end(f['day']), year=False)}" if f["weekly"] else _day(f["day"])
+    when = f"week to {kit.fmt_date(_week_end(f['day'], f.get('region') or 'IN'), year=False)}" if f["weekly"] else _day(f["day"])
     if f["kind"] == "market":
         lead = next(iter(f.get("indices") or []), None)
         tail = f": {lead['name']} {_pct(lead['change_pct'])}" if lead and lead.get("change_pct") is not None else ""
@@ -361,14 +376,14 @@ def ai_summary(f: dict) -> str | None:
     from ..ai_writer import _anthropic, _gemini
     facts = {k: v for k, v in f.items() if k not in ("uid",)}
     if f.get("weekly") and f.get("day"):             # the week ends at its last close, not the Saturday it is sent (R90-004)
-        facts["day"] = _week_end(f["day"])
+        facts["day"] = _week_end(f["day"], f.get("region") or "IN")
     try:
         raw = complete(SYSTEM, "FACTS:\n" + json.dumps(facts, ensure_ascii=False, default=str), gemini=_gemini,
                        anthropic=_anthropic, max_tokens=500, kind="research")
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f))
+    text = day_first(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)))
     return text if grounded(text, f) and not robotic(text) else None
 
 
@@ -541,18 +556,46 @@ def house_numbers(text: str | None, indices: list[dict] | None) -> str | None:
         body = f"{hits.pop():.2f}" if len(hits) == 1 else body      # two indices that round alike: left as written
         return ("\u2212" if sign in ("-", "\u2212") else sign) + body + "%"
 
+    # an index named as its tile names it ("Nasdaq" beside the NASDAQ tile, DI-028)
+    for i in indices or []:
+        name = str(i.get("name") or "")
+        if len(name) > 3:
+            text = re.sub(r"\b" + re.escape(name) + r"\b", name, text, flags=re.I)
     out = _PERCENT.sub(move, _NUMBER.sub(level, text))
     return re.sub(r"(^|[\s(:;,])-(?=\d)", "\\1\u2212", out)
 
 
-def _week_end(day: str) -> str:
+def _week_end(day: str, region: str | None = None) -> str:
     """The last trading day a weekend issue's numbers run to: Saturday's or Sunday's issue is the week to Friday's close
-    ("Week to Sat 17 Oct" over figures as of the 16 Oct close read as a contradiction, R55-007), as the page says."""
+    ("Week to Sat 17 Oct" over figures as of the 16 Oct close read as a contradiction, R55-007), as the page says. With
+    the market's `region`, a Friday holiday counts too: the week of Fri 2 Oct (Gandhi Jayanti) ran to Thursday's close
+    (DI-026: "as of the 15:30 IST close of 2 Oct" over 1 Oct's figures)."""
     try:
         d = date.fromisoformat(str(day)[:10])
     except ValueError:
         return day
-    return (d - timedelta(days={5: 1, 6: 2}.get(d.weekday(), 0))).isoformat()
+    d -= timedelta(days={5: 1, 6: 2}.get(d.weekday(), 0))
+    return (trading_on_or_before(d, region) if region else d).isoformat()
+
+
+def close_day(issue: dict) -> str | None:
+    """The trading day a Market Brief's numbers are the close of: its own day, or a weekly one's last session."""
+    if issue.get("kind") != "market" or not issue.get("day"):
+        return None
+    return _week_end(issue["day"], issue.get("region") or "IN") if issue.get("weekly") else str(issue["day"])[:10]
+
+
+_MONTHS = ("Jan(?:uary)?", "Feb(?:ruary)?", "Mar(?:ch)?", "Apr(?:il)?", "May", "June?", "July?", "Aug(?:ust)?",
+           "Sep(?:t|tember)?", "Oct(?:ober)?", "Nov(?:ember)?", "Dec(?:ember)?")
+_US_DATE = re.compile(r"\b(" + "|".join(_MONTHS) + r")\.? (\d{1,2})(?:st|nd|rd|th)?\b(,? (\d{4}))?(?![\d,.]*%)")
+
+
+def day_first(text: str | None) -> str | None:
+    """A date the AI wrote in US order ("over the week ending Oct 24", "October 23, 2026") in the app's, day first
+    ("24 Oct", "23 Oct 2026") (DI-026)."""
+    if not text:
+        return text
+    return _US_DATE.sub(lambda m: f"{int(m.group(2))} {m.group(1)[:3]}" + (f" {m.group(4)}" if m.group(4) else ""), text)
 
 
 def render(issue: dict) -> tuple[str, str]:
@@ -562,7 +605,7 @@ def render(issue: dict) -> tuple[str, str]:
     view = kit.news_url(issue["id"]) if issue.get("id") else None
     kind = issue.get("kind") or ("my_stocks" if str(issue.get("id", "")).startswith("my_stocks") else "market")
     weekly = bool(issue.get("weekly"))
-    day = (f"Week to {_day(_week_end(issue['day']))}" if weekly else _day(issue["day"])) if issue.get("day") else ""
+    day = (f"Week to {_day(_week_end(issue['day'], issue.get('region') or 'IN'))}" if weekly else _day(issue["day"])) if issue.get("day") else ""
     region = issue.get("region")
     label = issue.get("label") or (TYPE_LABEL.get(kind, "Newsletter") + (DOT + REGION_NAME[region] if region in REGION_NAME else ""))
     title = issue.get("title") or issue["subject"]

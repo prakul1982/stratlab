@@ -11,7 +11,7 @@ import { Badge, Card, CardHead, ErrorState, Field, FormActions, FormGrid, PageHe
 export function InvitePage() {
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Invite friends" title="Invite friends" lede="Share your link. A friend who joins and uses StratLab gets a month of Basic free, and you earn free time too." />
+      <PageHeader title="Invite friends" lede="Share your link. A friend who joins and uses StratLab gets a month of Basic free, and you earn free time too." />
       <InviteCard />
     </div>
   );

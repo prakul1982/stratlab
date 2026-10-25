@@ -40,12 +40,27 @@ export function GroupPage() {
   );
 }
 
-/** Mine's own pages, listed beside the three spaces' groups. */
+/** My space's own pages and the account's, listed beside the three spaces' groups: every page, as the lede says (DI-015:
+ * Settings, Account, Plans, Help, Contact and the assistant were missing). */
 const MINE_PAGES: { to: string; label: string; line: string }[] = [
   { to: "/mine", label: MINE_NAME, line: "Your net worth, today's change, the markets, what is coming up and your watchlist, in the order you choose." },
   { to: "/news", label: "Briefs", line: "A short brief after each market close, for India, the US and the companies you follow." },
-  { to: "/holdings", label: "Connected accounts", line: "Bring in your broker's file: the stocks you hold." },
+  { to: "/settings#accounts", label: "Connected accounts", line: "Your broker's holdings file and tradebooks, your funds statement, the statements inbox, and the connections that update them by themselves: Zerodha, IBKR, EPF, NPS and the tax statement." },
+  { to: "/settings", label: "Settings", line: "Where alerts and emails go, what you see first, the theme and the connection check." },
+  { to: "/account", label: "Account", line: "Your profile, plan, usage, invoices, how you sign in and your data." },
+  { to: "/plans", label: "Plans", line: "What each plan includes, and the prices." },
+  { to: "/invite", label: "Invite friends", line: "Your invite link, and the free months you earn when friends join." },
+  { to: "/app", label: "Get the app", line: "Put StratLab on your phone's home screen and get notifications." },
+  { to: "/assistant", label: "Connect an AI assistant", line: "Keys that let Claude or ChatGPT use your StratLab, each one revocable." },
+  { to: "/help", label: "Help", line: "The tour, every explanation StratLab has written, and how to reach a person." },
+  { to: "/contact", label: "Contact us", line: "Write to a person at StratLab." },
 ];
+/** Each space's own home, first in its card. */
+const HOME_LINE: Record<string, string> = {
+  trade: "Your notebooks, paper trading and options in one place.",
+  invest: "Your watchlist at a glance, today's results and red flags, and any company to look up.",
+  money: "Your holdings, this year's tax estimate and everything you own.",
+};
 
 /** /features: every page by space and group with its one-liner, and a box to narrow the list. */
 export function FeaturesPage() {
@@ -54,12 +69,13 @@ export function FeaturesPage() {
   const has = (p: { label: string; line: string; words?: string }) => !t || `${p.label} ${p.line} ${p.words ?? ""}`.toLowerCase().includes(t);
   const spaces = useMemo(() => SPACE_LIST.map((s) => ({
     id: s, label: NAV[s].label, home: NAV[s].home,
+    homeShown: has({ label: `${NAV[s].label} home`, line: HOME_LINE[s] }),
     groups: NAV[s].groups.map((g) => ({ g, pages: g.pages.filter(has) })).filter((x) => x.pages.length),
-  })).filter((s) => s.groups.length), [t]);   // eslint-disable-line react-hooks/exhaustive-deps
+  })).filter((s) => s.groups.length || s.homeShown), [t]);   // eslint-disable-line react-hooks/exhaustive-deps
   const mine = MINE_PAGES.filter(has);
   return (
     <div className="stack nav-page" data-testid="features-page">
-      <PageHeader eyebrow="StratLab" title="All features" lede="Every page in StratLab by space and group, with what it is for in a line. Press Ctrl K or ⌘K to go to any of them by name." />
+      <PageHeader title="All features" lede="Every page in StratLab by space and group, with what it is for in a line. Press Ctrl K or ⌘K to go to any of them by name." />
       <div className="k-field wide">
         <input className="k-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Narrow the list: a page, or a word like “tax” or “options”" aria-label="Narrow the list of features" />
       </div>
@@ -75,6 +91,7 @@ export function FeaturesPage() {
       {spaces.map((s) => (
         <Card key={s.id} testId={`features-${s.id}`}>
           <h2 className="k-card-title"><Link to={s.home}>{s.label}</Link></h2>
+          {s.homeShown && <ul className="feat-list"><li><Link to={s.home}><b>{s.label} home</b></Link><span className="feat-line">{HOME_LINE[s.id]}</span></li></ul>}
           {s.groups.map(({ g, pages }) => (
             <section key={g.id} className="feat-group" aria-label={`${s.label}: ${g.label}`}>
               <h3 className="feat-group-title"><Link to={groupPath(s.id, g)}>{g.label}</Link></h3>

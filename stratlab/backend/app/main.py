@@ -933,7 +933,7 @@ def me(profile=Depends(current_profile)):
         "alerts": {"channels": alerts.ready_channels(), "enabled": bool(profile.get("alerts_enabled")), "telegram_chat_id": profile.get("telegram_chat_id"),
                    "telegram_verified": alerts.telegram_verified(profile),
                    "email": profile.get("alert_email"), "email_off": not alerts.alert_emails_on(profile["id"]), "daily_report": daily_report.wants_report(db, profile["id"])},
-        "prefs": {k: prefs_of(profile["id"]).get(k) for k in PREF_KEYS},
+        "prefs": prefs_out(prefs_of(profile["id"])),
         "data_online": kite.ready(),
         "data_note": data_note(),
         "billing_enabled": billing.enabled(), "yearly_enabled": billing.yearly_enabled(), "plans": public_plans(),
@@ -974,7 +974,12 @@ def next_auto_login() -> str | None:
     return (auto_login.next_login(now) or auto_login_time(now + timedelta(days=1))).isoformat(timespec="minutes")
 
 
-PREF_KEYS = ("level", "focus", "space")
+PREF_KEYS = ("level", "focus", "space", "mine")
+
+
+def prefs_out(prefs: dict) -> dict:
+    """The preferences the app reads; My space's layout only once one was saved."""
+    return {k: prefs.get(k) for k in PREF_KEYS if k != "mine" or prefs.get("mine")}
 
 
 def prefs_of(uid: str) -> dict:
@@ -1020,10 +1025,12 @@ def delete_my_data(req: DeleteMyDataReq, profile=Depends(current_profile)):
 def set_prefs(req: PrefsReq, profile=Depends(current_profile)):
     """Experience level, what the user came for (trading, investing, their money or all of it) and the space last picked
     in the menu: they only change defaults (what's expanded, what's suggested first, which menu shows), never what's
-    allowed."""
+    allowed. `mine`: My space's cards in the person's order, kept on the account rather than one browser (DI-006)."""
     given = {k: getattr(req, k) for k in PREF_KEYS}
+    if req.mine is not None:
+        given["mine"] = req.mine.model_dump()
     prefs = change_prefs(profile["id"], lambda cur: {**cur, **{k: v for k, v in given.items() if v}})
-    return {"prefs": {k: prefs.get(k) for k in PREF_KEYS}}
+    return {"prefs": prefs_out(prefs)}
 
 
 @app.get("/me/plan-interest")
@@ -2990,11 +2997,16 @@ Research.nse_twin = staticmethod(lambda code: _quiet(nse_twin_of, code))     # 5
 
 @app.get("/suggest/companies")
 def suggest_companies(q: str = Query("", max_length=40), market: str | None = Query(None, max_length=4),
-                      profile=Depends(current_profile)):
+                      ranked: bool = Query(False), profile=Depends(current_profile)):
     """Up to 8 listed companies for what's typed (India, the US or both): the exact symbol first, then symbols
-    starting with it, then names. Each has the identifier to save (`id`: NSE symbol, BSE code or US ticker)."""
+    starting with it, then names. Each has the identifier to save (`id`: NSE symbol, BSE code or US ticker).
+    `ranked`: each row also says how well it matched (`match`, name_search's group, 0 best), so the search box can put
+    a company it is sure of above its other answers (DI-002); the list works without the live feed (DI-001)."""
     m = (market or "").upper()
-    return ok({"rows": suggester.search(q[:40], m if m in suggest.MARKETS else None)})
+    mk = m if m in suggest.MARKETS else None
+    if ranked:
+        return ok({"rows": [{**suggest.shown(r), "match": r["match"]} for r in suggester.search_ranked(q[:40], mk)]})
+    return ok({"rows": suggester.search(q[:40], mk)})
 
 
 def _us_find(sym: str) -> dict | None:
@@ -6662,6 +6674,9 @@ def news_view(issue: dict) -> dict:
         out["ai_summary"] = news.write.house_numbers(out["ai_summary"], issue.get("indices"))
     # the email as it is sent: written from the stored issue the page shows (R7T-009)
     out["html"] = (news.email_of(issue)[0] if issue.get("subject") else out["html"] or "").replace(news.write.UNSUBSCRIBE, news.write.kit.site(news.write.kit.MANAGE_NEWSLETTERS))
+    # the session the numbers are the close of, holidays known: the page said "the close of 2 Oct", a holiday (DI-026)
+    if (day := news.write.close_day(issue)):
+        out["close_day"] = day
     return out
 
 
@@ -6749,14 +6764,15 @@ def set_my_emails(req: EmailPrefsReq, profile=Depends(current_profile)):
 
 @app.get("/me/first-steps")
 def my_first_steps(profile=Depends(current_profile)):
-    """The checklist on Home for a new account, each step ticked from the user's own data."""
-    return first_steps.view(profile)
+    """The checklist on Home for a new account, each step ticked from the user's own data: the steps for what they
+    came for (DI-008)."""
+    return first_steps.view(profile, focus=prefs_of(profile["id"]).get("focus"))
 
 
 @app.put("/me/first-steps")
 def set_first_steps(req: FirstStepsReq, profile=Depends(current_profile)):
     first_steps.dismiss(profile["id"], req.dismissed)
-    return first_steps.view(profile)
+    return first_steps.view(profile, focus=prefs_of(profile["id"]).get("focus"))
 
 
 # ---------- invite links ----------

@@ -48,7 +48,7 @@ interface AppState {
   focus: Focus | null;
   setFocus: (f: Focus) => Promise<void>;
   /** Several preferences in one save, like the welcome question's answers. */
-  savePrefs: (p: Prefs) => Promise<void>;
+  savePrefs: (p: Prefs, quiet?: boolean) => Promise<void>;
   /** The menu showing: one space (Trade, Invest, Money) or all of them. */
   space: SpaceView;
   /** Show another space's menu. `save` keeps it as the account's choice too (the switcher); a deep link into another
@@ -63,7 +63,7 @@ interface AppState {
   setTheme: (t: "light" | "dark" | "system") => void;
 }
 
-type Prefs = { level?: Level; focus?: Focus; space?: SpaceView };
+type Prefs = { level?: Level; focus?: Focus; space?: SpaceView; /** My space's layout, on the account (DI-006) */ mine?: { order: string[]; hidden: string[] } };
 
 const Ctx = createContext<AppState | null>(null);
 export const useApp = () => useContext(Ctx)!;

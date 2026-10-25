@@ -210,7 +210,7 @@ const moneyCard = ([t, b, tag]: [string, string, string]) => (
  * /pricing), the page's one h1, with the tagline beside it as words, so the heading a crawler reads in the address's
  * own HTML is the one the page shows (R8V-008). `plansOnly`: /plans, the prices on their own page under that heading, not the
  * whole landing page scrolled down to them: a phone drew the page's top and then jumped about 8,900 px (R22-005). */
-export function Login({ section: asked = null, panel, heading, plansOnly = false }: { section?: string | null; panel?: "login" | "signup"; heading?: string; plansOnly?: boolean } = {}) {
+export function Login({ section: asked = null, panel, heading, intro, plansOnly = false }: { section?: string | null; panel?: "login" | "signup"; heading?: string; intro?: string; plansOnly?: boolean } = {}) {
   // Google sends a refused or failed sign-in back with ?error= or #error= in the address: say so at the top, in words
   const [error, setError] = useState<string | null>(() => signInProblem(location.search, location.hash));
   const section = plansOnly ? null : asked;          // the plans page is only the prices: it starts at the top, nothing to scroll to (R22-005)
@@ -273,11 +273,13 @@ export function Login({ section: asked = null, panel, heading, plansOnly = false
       <section id="top" className="lp-hero ruled">
         <div className="lp-wrap lp-hero-grid">
           <div className="stack g22 lp-hero-copy">
-            {heading ? <h1 className="eyebrow">{heading}</h1> : <span className="eyebrow">Trade · Invest · Money · Indian and US stocks</span>}
+            {/* an address of its own (/help, /faq, /pricing, /about) leads with its own heading and line, not the home page's
+                hero under a renamed eyebrow (DI-033) */}
+            <span className="eyebrow">{heading ? <><em>Test</em> it, research it, track it.</> : "Trade · Invest · Money · Indian and US stocks"}</span>
             {heading
-              ? <p className="serif lp-h1"><em>Test</em> it, research it, track it.</p>
+              ? <h1 className="serif lp-h1 lp-own-h1">{heading}</h1>
               : <h1 className="serif lp-h1"><em>Test</em> it, research it, track it.</h1>}
-            <p className="serif lp-lede">One place for trading ideas, company research and your own money. Facts and tests, never tips.</p>
+            <p className="serif lp-lede">{heading && intro ? intro : "One place for trading ideas, company research and your own money. Facts and tests, never tips."}</p>
             <div className="row wrap g12">
               {cta()}
               <a className="btn quiet lp-cta-2" href="#trade">See how it works</a>

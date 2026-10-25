@@ -64,7 +64,7 @@ test("R9R-008: the US market's own breadth group is the S&P 500", async () => {
 test("R9R-010: the lower cards of My space read their data after the first paint", async () => {
   const mine = read("src/pages/MineHome.tsx");
   assert.match(mine, /const later = useAfterPaint\(\);/);
-  assert.match(mine, /const coming = useComingUp\(6, later\);/);
+  assert.match(mine, /const upAll = useComingUpAll\(later\);/);         // all of them, the card lists six and counts the rest (DI-009)
   assert.match(mine, /<MarketsCard later=\{later\} \/>/);
   const lib = read("src/lib/mine.ts");
   assert.match(lib, /export function useComingUp\(limit = 6, enabled = true\)/);

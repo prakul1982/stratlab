@@ -35,7 +35,7 @@ export function AccountPage() {
   const [ask, setAsk] = useState<"cancel" | "everywhere" | "erase" | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
-  if (!me) return <div className="k-page"><PageHeader eyebrow="Account" title="Account" /><Card label="Loading your account"><AccountWait label="Loading your account" /></Card></div>;
+  if (!me) return <div className="k-page"><PageHeader title="Account" /><Card label="Loading your account"><AccountWait label="Loading your account" /></Card></div>;
   const b = me.billing, u = me.usage;
   const meta = session?.user.user_metadata as { full_name?: string; name?: string } | undefined;
   const name = meta?.full_name || meta?.name || "";
@@ -80,7 +80,7 @@ export function AccountPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Account" title="Account" lede="Who you are, your plan and invoices, how you sign in, and where your data lives. Alerts, emails and what you see first are in Settings."
+      <PageHeader title="Account" lede="Who you are, your plan and invoices, how you sign in, and where your data lives. Alerts, emails and what you see first are in Settings."
         actions={<Link to="/settings" className="btn outline sm">Settings</Link>} />
 
       <Card id="profile" label="Profile">

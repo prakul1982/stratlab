@@ -20,7 +20,7 @@ const tell = (body: { welcome?: boolean; tour?: "done" | "skipped" }) => api("/m
 
 /** The first-run guide, one piece at a time: the welcome question (on a home page only, once per account), then the
  * short tour (once, right after the question), then Home's checklist (FirstSteps waits while either is open). */
-export function Onboarding() {
+export function Onboarding({ main }: { main?: string }) {
   const { me } = useApp();
   const loc = useLocation();
   const [tour, setTour] = useState(false);
@@ -54,8 +54,8 @@ export function Onboarding() {
   };
   return (
     <Suspense fallback={null}>
-      {ask && !tour && <LevelPrompt onDone={async (saved) => { setClosedHere(true); setWelcomed(true); await saved; void tell({ welcome: true }); }} />}
-      {tour && <Tour onClose={closeTour} paused={dialogs > 0} />}
+      {ask && !tour && <LevelPrompt onDone={async (saved, answered) => { setClosedHere(true); setWelcomed(answered); await saved; void tell({ welcome: true }); }} />}
+      {tour && <Tour onClose={closeTour} paused={dialogs > 0} main={main} />}
     </Suspense>
   );
 }

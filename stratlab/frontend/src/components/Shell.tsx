@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import { useDialogFocus } from "./kit/Dialog";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
-import { Bell, Book, Calendar, Chevron, Close, Compass, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
+import { Bell, Book, Calendar, Chevron, Close, Compass, Gear, Layers, Library, Lens, Menu, News, Pin, Plus, Pulse, Receipt, Search, Sparkle, Upload, Wallet } from "./Icons";
 import { Logo } from "./Logo";
 import { AccountMenu, MarketsNow } from "./SideMenus";
 import { useScrollMemory } from "../lib/scrollMemory";
@@ -30,7 +30,7 @@ const ICONS: Record<string, (p: { size?: number }) => ReactNode> = { book: Book,
 const OPEN_KEY = "stratlab.side.groups";     // per person: "stratlab.side.groups.<id>", so two people on one browser keep their own menus
 const NO_GROUPS: Record<string, boolean> = {};
 /** The pages Mine's own menu links to: opening one keeps Mine's menu showing. */
-const MINE_LINKS = ["/news"];
+export const MINE_LINKS = ["/news", "/alerts", "/research/watchlist"];
 /** Pages that belong to the person, not to a space (Account, Settings, the assistant, the app, invites): they open Mine's menu. */
 const MINE_PAGES = ["/account", "/settings", "/assistant", "/app", "/invite"];
 
@@ -64,7 +64,15 @@ export function Shell({ children }: { children: ReactNode }) {
   // the menu scrolls inside its own box: the edge with more behind it fades out, so a half-hidden row reads as "more below"
   const sideScroll = useRef<HTMLElement>(null);
   const fade = useScrollFade(sideScroll);
-  useDialogFocus(aside, open, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
+  // the tour opens the phone's menu to point at what is in it (DI-023); held open by the tour, the menu is not a modal of its
+  // own, so the tour's note keeps the keyboard and Esc
+  const [tourMenu, setTourMenu] = useState(false);
+  useEffect(() => {
+    const hold = (e: Event) => { const on = !!(e as CustomEvent<{ open: boolean }>).detail?.open; setTourMenu(on); setOpen(on); };
+    window.addEventListener("stratlab:tour-menu", hold);
+    return () => window.removeEventListener("stratlab:tour-menu", hold);
+  }, []);
+  useDialogFocus(aside, open && !tourMenu, { onEscape: () => setOpen(false), initial: () => aside.current?.querySelector<HTMLElement>(".side-close") });
   const path = loc.pathname;
   const at = locate(path);
   const onGroup = locateGroup(path);
@@ -85,9 +93,12 @@ export function Shell({ children }: { children: ReactNode }) {
   const sideNotebooks = notebooks && [...notebooks].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned))
     .filter((n, i) => i < SIDE_NOTEBOOKS || n.id === openId);
 
-  const item = (to: string, icon: ReactNode, label: ReactNode, active?: boolean, title?: string) => (
-    <NavLink key={to} to={to} title={title} {...(active === undefined ? {} : { className: () => (active ? "active" : ""), "aria-current": active ? "page" as const : false })}>{icon}{label}</NavLink>
-  );
+  // a link with its own rule for "you are here" is a plain Link marked by that rule alone: NavLink also marked every link whose
+  // address starts the current one, so /research/watchlist had Look up a company and Watchlist both current, and Settings'
+  // Notifications tab had Connected accounts (DI-016)
+  const item = (to: string, icon: ReactNode, label: ReactNode, active?: boolean, title?: string) => (active === undefined
+    ? <NavLink key={to} to={to} title={title} end>{icon}{label}</NavLink>
+    : <Link key={to} to={to} title={title} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>{icon}{label}</Link>);
   const pageLink = (p: NavPage) => {
     const Icon = ICONS[p.icon] ?? Compass;
     // a page that is a paid feature this plan lacks carries its plan, with a lock (lib/gates.ts)
@@ -160,11 +171,16 @@ export function Shell({ children }: { children: ReactNode }) {
           {!pins.pins.length && <span className="small muted side-note-wrap" title="Open the menu in a page's breadcrumb to pin it here">Nothing pinned yet. Pin a page from its breadcrumb menu.</span>}
         </div>
       </section>
+      {/* the everyday things, each one tap from My space; the AI assistant only for a plan that has it, not as a locked
+          upsell on Free and Basic (DI-017, DI-018) */}
       <section className="side-group" data-group="mine-more">
         <div className="side-list side-nav">
           {item("/news", <News />, "Briefs", at?.page.to === "/news", "Today's brief, past issues and the subscribe switches")}
+          {item("/research/watchlist", <Pin />, "Watchlist", at?.page.to === "/research/watchlist", "The companies you follow")}
+          {item("/alerts", <Bell />, "Stock alerts", at?.page.to === "/alerts", "A message when a stock or the market does what you asked about")}
           {item("/settings#accounts", <Wallet />, "Connected accounts", path === "/settings" && loc.hash === "#accounts", "Your holdings, funds and tradebooks: the files StratLab reads")}
-          {item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
+          {item("/settings", <Gear />, "Settings", path === "/settings" && loc.hash !== "#accounts", "Notifications, what you see first, the theme and the connection check")}
+          {me?.plan_info?.features?.assistant !== false && item("/assistant", <Sparkle />, "Connect an AI assistant", path === "/assistant", "Keys that let Claude or ChatGPT use your StratLab")}
         </div>
       </section>
     </>
@@ -175,6 +191,8 @@ export function Shell({ children }: { children: ReactNode }) {
     nav(homeOf(s, focus));
   };
   const homeLabel = space === "mine" ? MINE_NAME : `${SPACES[space].label} home`;
+  // the space's main action, in the menu and on a phone's top bar alike (DI-021: the phone's "+" was always New notebook)
+  const main = mainAction(space, focus);
   const sidebar = (
     <aside ref={aside} id="side-menu" className={`sidebar${open ? " open" : ""}`} aria-label={open ? "Menu" : "Navigation"}
       {...(open ? { role: "dialog", "aria-modal": true } : {})}>
@@ -185,13 +203,8 @@ export function Shell({ children }: { children: ReactNode }) {
           <button className="side-hide" aria-label="Hide the menu" title="Hide the menu (more room for the page)" onClick={() => setSlim(true)}><Chevron size={14} /></button>
         </div>
         <SpaceSwitch space={space} onPick={goSpace} />
-        {(() => {
-          // the space's main button: never a link to the page you are on
-          const main = space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
-            : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: "Add your holdings" }
-            : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
-          return path === main.to ? null : <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button>;
-        })()}
+        {/* the space's main button: never a link to the page you are on */}
+        {path !== main.to && <button className="side-new" onClick={() => nav(main.to)}>{main.icon}{main.label}</button>}
         <button className="search-btn" onClick={() => setSearch(true)} aria-keyshortcuts={/Mac/.test(navigator.platform) ? "Meta+K" : "Control+K"}>
           <Sparkle size={16} /><span>Ask or do anything</span>{/* no keyboard shortcut on a touch screen (R50-016) */}
           {!window.matchMedia?.("(pointer: coarse)").matches && <kbd>{/Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>}
@@ -237,20 +250,27 @@ export function Shell({ children }: { children: ReactNode }) {
         <Link to="/" className="brand" aria-label="StratLab home"><Logo size={40} /></Link>
         <span className="row tight">
           <button className="icon-btn" aria-label="Search or ask anything" onClick={() => setSearch(true)}><Search /></button>
-          <button className="icon-btn" aria-label="New notebook" onClick={() => nav("/new")}><Plus /></button>
+          <button className="icon-btn" aria-label={main.label} title={main.label} onClick={() => nav(main.to)}>{main.to === "/new" ? <Plus /> : main.icon}</button>
         </span>
       </header>
       {open && <div className="scrim" onClick={() => setOpen(false)} />}
       {sidebar}
-      <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb />{children}</div></main>
+      <main className="main" id="main" tabIndex={-1}><div className="page"><PageBreadcrumb mine={space === "mine"} />{children}</div></main>
       <Suspense fallback={null}>
         {search && <SearchPalette onClose={() => setSearch(false)} />}
       </Suspense>
-      <Onboarding />
+      <Onboarding main={main.label} />
     </div>
   );
 }
 
+
+/** Each space's main button: what the space is for, in one action. My space's follows what the person came for. */
+export function mainAction(space: SpaceView, focus: string | null | undefined): { to: string; icon: ReactNode; label: string } {
+  return space === "invest" || (space === "mine" && focus === "invest") ? { to: "/research", icon: <Lens size={16} />, label: "Look up a company" }
+    : space === "money" || (space === "mine" && focus === "money") ? { to: "/holdings", icon: <Book size={16} />, label: "Add your holdings" }
+    : { to: "/new", icon: <Plus size={16} />, label: "New notebook" };
+}
 
 /** Which edges of a scrolling box have more behind them ("top", "bottom", "both" or "none"): kept as the box scrolls, resizes
  * or its content changes (a group opens). The CSS fades those edges. */

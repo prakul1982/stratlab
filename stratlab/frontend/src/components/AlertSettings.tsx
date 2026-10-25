@@ -62,8 +62,9 @@ export function AlertSettingsCard() {
   };
 
   return (
-    <Card id="alerts" label="Alerts">
-      <CardHead title="Alerts" info={HELP.alerts} actions={!canReport ? <Badge tone="warn">Basic</Badge> : undefined} />
+    // named apart from Invest's stock alerts (/alerts): these are the paper trades' messages and the daily report (DI-017)
+    <Card id="alerts" label="Paper-trade alerts and the daily report">
+      <CardHead title="Paper-trade alerts and the daily report" info={HELP.alerts} actions={!canReport ? <Badge tone="warn">Basic</Badge> : undefined} />
       <FormGrid label="Alerts" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <FieldGroup label="What to send" wide>
           <div className="k-stack">
