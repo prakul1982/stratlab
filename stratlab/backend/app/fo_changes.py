@@ -317,6 +317,12 @@ def equity_fo(no) -> bool:
     return not m or m.group(1) == "FAOP"
 
 
+def kind_of(subject: str) -> str:
+    """The kind a circular's subject sorts into (the first pattern it matches), "circular" for any other."""
+    kind = next((k for k, rx in CIRCULAR_KINDS if rx.search(subject or "")), "circular")
+    return "circular" if kind in ("exit", "entry") and not DERIVATIVES.search(subject or "") else kind
+
+
 def read_circulars(data, known: set[str] | None = None) -> list[dict]:
     """The exchange's circulars about F&O contracts as changes: each sorted into exit, entry, lot, expiry (expiry days
     and sessions) or another F&O circular, with the F&O symbols its subject names (of those in `known`)."""
@@ -337,9 +343,7 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
         if not by_dept and not FO_WORDS.search(subject):
             continue
         seen.add(c["id"])
-        kind = next((k for k, rx in CIRCULAR_KINDS if rx.search(subject)), "circular")
-        if kind in ("exit", "entry") and not DERIVATIVES.search(subject):
-            kind = "circular"
+        kind = kind_of(subject)
         if kind == "circular" and not by_dept and not DERIVATIVES.search(subject):
             continue                          # "exclusion from an index", "trading hours" of another segment...
         words = set(re.findall(r"[A-Z][A-Z0-9&\-]{1,19}", subject.upper()))
@@ -352,6 +356,7 @@ def read_circulars(data, known: set[str] | None = None) -> list[dict]:
 
 # ---------- reading a circular's own file ----------
 DETAIL_KINDS = ("exit", "entry", "lot", "rename")   # the circulars whose file names the stocks, lots and dates
+DETAILS_PARSER = 2                   # bump when a circular's file is read differently: the files kept as read are read again (RC1)
 DETAILS_PER_RUN = 6                  # circular files read on each run
 DETAIL_TRIES = 3                     # a file that can't be read is tried this many runs, then left
 MAX_FILE = 6_000_000                 # bytes: a circular's PDF or zip, and each file inside a zip
@@ -906,14 +911,25 @@ def refresh(feed, today: date | None = None, now: datetime | None = None, expiry
             for k in ("url", "date"):
                 if f and not e.get(k) and f.get(k):
                     e[k] = f[k]
+        # a circular kept under an older sorting is sorted again from its subject, so one kept as "other" before renames were
+        # recognised (NSE/FAOP/77013, ICICIPRULI to ICICILIFE) is read like the rest (RC1 DC-017: the stored copy's kind
+        # was never revisited, so the file was never opened and the exit and entry the contract file shows stood)
+        for e in log:
+            if e.get("source") == "circular" and e.get("subject") and kind_of(e["subject"]) != e.get("kind"):
+                e["kind"] = kind_of(e["subject"])
         # the F&O desk's exit, entry, lot and rename circulars are read in full: the stocks, lots and dates they give
         kept_circs = {e["id"]: e for e in log if e.get("source") == "circular"}
         kept_circs.update({k: v for k, v in fresh.items() if k not in kept_circs})
+        # files read by an older reader (marked read, with nothing or less taken from them) are read again, once
+        read_before = circ.get("details") or {}
+        if circ.get("parser") != DETAILS_PARSER:
+            read_before = {k: (0 if v == "ok" else v) for k, v in read_before.items()}
         try:
-            details, read_state, trouble = read_details(feed, list(kept_circs.values()), circ.get("details") or {}, known, expiry)
+            details, read_state, trouble = read_details(feed, list(kept_circs.values()), read_before, known, expiry)
         except Exception as e:                          # a file reader's surprise never loses the run
             details, read_state, trouble = [], circ.get("details") or {}, [f"circular files: {type(e).__name__}"]
         st.setdefault("circulars", {})["details"] = {k: v for k, v in read_state.items() if k in kept_circs}
+        st["circulars"]["parser"] = DETAILS_PARSER
         for t in trouble:
             print("fo changes:", t)
         found += details

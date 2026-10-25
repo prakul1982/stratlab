@@ -275,6 +275,7 @@ def page_figures(region: str, c: dict) -> dict:
 
 corp_sources = None      # the corporate actions job's sources (set by main), for a US company's dividends
 public_facts = None      # (region, symbol) -> the stored public page's facts or None (set by main), never building one
+filed_numbers = None     # symbol -> the company's numbers read from its filings (set by main; kept six hours), for a page stored before they were kept
 
 
 def _metric(c: dict, label: str):
@@ -410,12 +411,24 @@ def with_filed_results(region: str, c: dict) -> dict:
     """A US company page with its results-versus-estimates rows checked and dated by its filings (filed_results), and its
     interest coverage said to be not meaningful when its latest annual report gives no interest expense (DD-035: Apple's
     "Interest coverage 623" on an interest cost it stopped disclosing after FY23). Unchanged without a stored public page."""
-    if region != "US" or not callable(public_facts):
+    if region != "US":
         return c
     try:
-        f = public_facts("US", c["symbol"]) or {}
+        f = (public_facts("US", c["symbol"]) or {}) if callable(public_facts) else {}
     except Exception:
-        return c
+        f = {}
+    # a public page stored before the filings' quarterly EPS was kept on it has none (RC1: AAPL's quarter to 27 Jun 2026
+    # stayed 1.91 against a filed 2.02 until that page was rebuilt): the company's filings, read once and kept six
+    # hours, give the same figures
+    from .. import stock_pages
+    if (f.get("v") or 1) < stock_pages.FACTS_VERSION and callable(filed_numbers) and (c.get("earnings") or _metric(c, "Interest coverage")):
+        try:
+            n = filed_numbers(c["symbol"]) or {}
+        except Exception:
+            n = {}
+        f = {**f, **({"eps_q": n["eps_q"]} if n.get("eps_q") and not f.get("eps_q") else {}),
+             **({"no_interest": True} if n.get("interest_shown") is False else {}),
+             **({"fye": int(str(n["fiscal_year_end"])[:2])} if str(n.get("fiscal_year_end") or "")[:2].isdigit() else {})}
     out = c
     if f.get("no_interest") and _metric(out, "Interest coverage"):
         groups = [{**g, "items": [{**i, "value": None, "text": "n/m", "note": "No interest expense in the latest annual report"}
@@ -426,7 +439,7 @@ def with_filed_results(region: str, c: dict) -> dict:
         last = ((f.get("years") or [{}])[-1] or {}).get("year") or ""
         m = _re.match(r"([A-Za-z]{3})", str(last))
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        fye = months.index(m.group(1)) + 1 if m and m.group(1) in months else None
+        fye = months.index(m.group(1)) + 1 if m and m.group(1) in months else f.get("fye")
         rows, basis = filed_results(out["earnings"], f["eps_q"], fye)
         out = {**out, "earnings": rows, **({"earnings_basis": basis} if basis else {})}
     return out

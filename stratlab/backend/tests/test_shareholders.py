@@ -265,8 +265,15 @@ def test_search_routes_and_plan_gate(w, paid):
     assert c.get("/invest/holders", headers=headers("basic-token")).json()["groups"] == []
     r = c.post("/invest/holders/holdings", json={"names": ["ASHISH KACHOLIA"]}, headers=headers("basic-token"))
     assert r.status_code == 200 and [x["symbol"] for x in r.json()["rows"]] == ["SAFARI", "XPROINDIA"]
-    for bad in ({"names": []}, {"names": ["!!"]}, {}, {"names": "x"}, {"names": ["a"] * 20}):
+    for bad in ({"names": []}, {"names": ["!!"]}, {}, {"names": "x"}, {"names": ["a"] * 2001}):
         assert c.post("/invest/holders/holdings", json=bad, headers=headers("basic-token")).status_code in (400, 422)
+    # RC1-002: a holder the app merged from 42 spellings (LIC) is asked for whole, never a 422
+    many = ["ASHISH KACHOLIA"] + [f"LIFE INSURANCE CORPORATION SPELLING {i}" for i in range(41)]
+    r = c.post("/invest/holders/holdings", json={"names": many}, headers=headers("basic-token"))
+    assert r.status_code == 200 and [x["symbol"] for x in r.json()["rows"]] == ["SAFARI", "XPROINDIA"] and len(r.json()["keys"]) == 42
+    r = c.put("/invest/holders/follow", json={"label": "Many", "names": many}, headers=headers("basic-token"))
+    assert r.status_code == 200 and len(r.json()["item"]["names"]) == 42
+    c.delete(f"/invest/holders/follow/{r.json()['item']['id']}", headers=headers("basic-token"))
     assert c.post("/invest/holders/holdings", json={"names": ["X Y"]}, headers=headers("free-token")).status_code == 402
     r = c.put("/invest/holders/follow", json={"label": "Ashish Kacholia", "names": ["ASHISH KACHOLIA"]}, headers=headers("basic-token"))
     assert r.status_code == 200 and len(r.json()["follows"]) == 1

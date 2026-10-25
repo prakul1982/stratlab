@@ -153,7 +153,7 @@ def test_ultracemcos_public_range_is_the_exchanges_print_with_no_report(monkeypa
 def test_stored_indian_pages_from_before_are_built_again():
     # every page stored before (FACTS_VERSION 7 and older) had its range from the scaled candles: rebuilt when next opened,
     # and the screens' indexer rebuilds the largest first
-    assert stock_pages.FACTS_VERSION == 8
+    assert stock_pages.FACTS_VERSION >= 8              # (9 since RC1: the filed quarterly EPS)
     old = {"ts": 1e12, "price_ts": 1e12, "facts": {**facts_page("Mar 2026", v=7), "region": "IN"}}
     assert not stock_pages.fresh(old, "IN", now=1e12 + 60)
 

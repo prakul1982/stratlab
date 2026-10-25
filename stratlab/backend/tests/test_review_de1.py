@@ -85,6 +85,17 @@ def test_an_empty_answer_for_the_whole_market_is_not_stored_as_no_results(w):
     assert R.load("US")["at"] is None                                 # the empty answer isn't stored as "no company reports"
 
 
+def test_a_us_list_stored_by_an_older_reader_is_read_again_by_the_job_at_once(w):
+    """RC1-005: the list stored empty before the market calendar was the source stayed empty until the next 06:00 slot."""
+    srcs = {"us": EmptyFeed(), "cal": Cal({"2026-10-28": fixture("calendar_earnings_2026-10-28.json")}), "sec": None, "in": None}
+    db.set_setting(R.KEY + "US", json.dumps({"at": "2026-10-23T06:00", "rows": []}))             # as the first reader left it: no version
+    assert R.load("US")["v"] == 1
+    job = R.Job(lambda: srcs, send=lambda *a, **k: None, can_alert=lambda p: False)
+    job.tick(datetime(2026, 10, 24, 15, 0, tzinfo=timezone.utc))            # a Saturday morning in New York, before the 06:00 slot's day mark is looked at
+    got = R.load("US")
+    assert got["v"] == R.CAL_VERSION and any(r["symbol"] == "MSFT" for r in got["rows"])
+
+
 def test_the_us_calendar_has_this_week_and_next_from_the_calendar_and_the_secs_releases(w):
     today = date(2026, 10, 24)
     srcs = {"us": EmptyFeed(), "cal": Cal({"2026-10-28": fixture("calendar_earnings_2026-10-28.json")}),
@@ -205,6 +216,52 @@ def test_a_price_history_adjustment_that_is_no_split_ratio_isnt_a_split():
     assert "6.665 for 1" in got[0]["text"]
     split = CA.us_rows("NVDA", {"splits": [{"date": "2024-06-10", "numerator": 10, "denominator": 1}]})[0]
     assert split["kind"] == "split" and CA.adjusts(split) and CA.split_ratio(3, 2) and CA.split_ratio(1, 20)
+
+
+def test_a_stored_split_row_that_is_no_split_ratio_is_a_price_adjustment_when_read_back(w):
+    """RC1 DE-030: the calendar and the history kept CTVA's row as a split before the reader knew better."""
+    old = CA.row("US", "CTVA", {"kind": "split", "sub": "6665:1000", "label": "Split", "text": "Split 6665-for-1000", "short": "split 6665-for-1000",
+                                "factor": 6.665}, date(2026, 10, 1), src="price history")
+    nvda = CA.row("US", "NVDA", {"kind": "split", "sub": "10:1", "label": "Split", "text": "Split 10-for-1", "short": "split 10-for-1", "factor": 10.0},
+                  date(2024, 6, 10), src="price history")
+    CA.save("US", [old, nvda])
+    CA.hist_save("US", "CTVA", [old])
+    for rows in (CA.load("US")["rows"], CA.hist_load("US", "CTVA")["rows"]):
+        ctva = next(r for r in rows if r["symbol"] == "CTVA")
+        assert ctva["kind"] == "demerger" and ctva["label"] == "Price adjustment" and not CA.adjusts(ctva)
+    assert next(r for r in CA.load("US")["rows"] if r["symbol"] == "NVDA")["kind"] == "split"
+
+
+def test_the_us_page_says_why_nothing_is_ahead(w, monkeypatch):
+    today = date(2026, 10, 26)
+    monkeypatch.setattr(CA, "us_universe", lambda tracked=(): ["LNT"])
+
+    class Down:
+        def dividends(self, d):
+            raise CA.SourceError("calendar", "down")
+
+    class Empty:
+        def dividends(self, d):
+            return []
+    # the calendar never read: said to be unread, not "none declared"
+    CA.refresh("US", {"us": None, "cal": Down()}, set(), today)
+    v = CA.view("US", "u-pro", "all", today=today)
+    assert not v["ahead_known"] and v["ahead"] == [] and "couldn't be read" in v["ahead_note"]
+    # read, and none of the companies covered has one: said so
+    CA.refresh("US", {"us": None, "cal": Empty()}, {"LNT"}, today)
+    v = CA.view("US", "u-pro", "all", today=today)
+    assert v["ahead_known"] and "No dividend is declared" in v["ahead_note"]
+    assert CA.view("IN", "u-pro", "all", today=today)["ahead_note"] == "Nothing announced with an ex-date ahead."
+
+
+def test_a_themes_central_point_is_a_phrase_never_a_sentence_run_into_the_page_lead():
+    """RC1-009: "Everything converges on Domestic self-reliance in defence hardware… is the central." """
+    from app.intel import ai
+    assert ai.core_phrase("Domestic self-reliance in defence hardware... is the central.") == "Domestic self-reliance in defence hardware"
+    assert ai.core_phrase("Domestic self-reliance in defence hardware… is the central pillar of the theme.") == "Domestic self-reliance in defence hardware"
+    assert ai.core_phrase("Indigenous production of defence platforms.") == "Indigenous production of defence platforms"
+    assert ai.core_phrase("Defence.") == "" and ai.core_phrase("") == ""
+    assert ai.theme_served({"core": "Domestic orders… is the central."})["core"] == "Domestic orders"
 
 
 # ---------- DE-032 to DE-036: red flags ----------
@@ -361,6 +418,17 @@ def test_a_price_read_without_a_stage_keeps_the_pages_stage():
     new = stock_pages.with_new_close(f, bars_from([2500.0] * 40, start=datetime(2026, 9, 14, tzinfo=timezone.utc)),
                                      analyse=lambda bars: {"stage": None, "stage_days": None, "st_up": True, "st_days": 3})
     assert new["stage"] == 1 and new["stage_days"] == 6
+
+
+def test_a_candle_without_a_price_does_not_blank_the_stage_and_old_pages_are_rebuilt():
+    bars = [{"t": f"2025-{1 + i // 28:02d}-{1 + i % 28:02d}", "o": 100 + i * 0.1, "h": 101 + i * 0.1, "l": 99 + i * 0.1, "c": 100 + i * 0.1, "v": 1}
+            for i in range(240)]
+    bars[200] = {**bars[200], "c": float("nan"), "o": None}
+    got = scan.analyse(bars)
+    assert got is not None and got["stage"] in (1, 2, 3, 4)
+    # the pages stored with a blank Stage (RC1: TCS, INFY) are from before the version that rebuilds them
+    assert stock_pages.FACTS_VERSION >= 9
+    assert not stock_pages.fresh({"ts": 9e12, "facts": {"v": 8, "stage": None}}, "IN", now=9e12)
 
 
 # ---------- DE-013, DE-014, DE-015: themes ----------

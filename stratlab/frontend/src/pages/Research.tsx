@@ -896,7 +896,7 @@ export function WatchlistPage() {
       <div className="k-toolbar"><RegionSwitch region={region} setRegion={setRegion} /><RouteSeg label="Watchlist view" views={WATCH_VIEWS} /></div>
       <Card>
         <CardHead title="Add a company" />
-        <Field label="Company">{(id) => <StockPicker id={id} market={region} clearOnPick onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
+        <Field label="Company">{(id) => <StockPicker id={id} market={region} clearOnPick listedOnly onPick={add} placeholder="Search by name or symbol, like RELIANCE" />}</Field>
       </Card>
       {items === null ? (failed
         ? <Card><ErrorState title="Your watchlist couldn't be opened" action={{ label: "Try again", onClick: retry }}>Nothing was changed. Adding or removing a company waits until it opens.</ErrorState></Card>

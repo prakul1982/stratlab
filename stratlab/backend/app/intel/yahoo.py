@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from .net import BROWSER_UA, Source, SourceError
+from .net import BROWSER_UA, NotFound, Source, SourceError
 
 # Yahoo's intraday history only goes back so far
 INTERVAL = {"1d": ("1d", 3650 * 3), "1h": ("60m", 729), "15m": ("15m", 59), "5m": ("5m", 59)}
@@ -44,11 +44,28 @@ def _previous_close(meta: dict, candles: list[dict]) -> float | None:
     before = [c["c"] for c in candles if day and c["t"][:10] < day]
     if before:
         return before[-1]
-    # a stock's first session has no close before it: the chart's reference is its issue price, while "previousClose"
-    # is the listing auction's price, the day's open (DD-010: ZETWERK -13.19% against ₹159.25, not -8.4% against ₹151)
+    # a stock's first session has no close before it: the reference is its issue price, while "previousClose" is the
+    # listing auction's price, the day's open (DD-010: ZETWERK -13.19% against ₹159.25, not -8.4% against ₹151)
     if day and _first_trade_day(meta) == day:
-        return meta.get("chartPreviousClose") or meta.get("previousClose")
+        return _issue_price(meta, candles)
     return meta.get("previousClose") or meta.get("chartPreviousClose")
+
+
+def _issue_price(meta: dict, candles: list[dict]) -> float | None:
+    """A listing's issue price, from the day's own change fields (price less the day's change: ZETWERK 138.25 - -12.75 =
+    151, TONBO 700). The chart's chartPreviousClose is the issue price only for a "range" request; for the explicit
+    period this reader asks it is the day's open (RC1-001: 159.25 and 1,160 shown as the "issue price"). When neither
+    change field is there, chartPreviousClose stands only if it isn't the first candle's open; else None."""
+    price = meta.get("regularMarketPrice")
+    if isinstance(price, (int, float)) and price > 0:
+        change, pct = meta.get("fulldayChange"), meta.get("regularMarketChangePercent")
+        if isinstance(change, (int, float)) and price - change > 0:
+            return round(price - change, 2)
+        if isinstance(pct, (int, float)) and pct > -100:
+            return round(price / (1 + pct / 100), 2)
+    ref = meta.get("chartPreviousClose")
+    opened = candles[0].get("o") if candles else None
+    return ref if isinstance(ref, (int, float)) and ref > 0 and (opened is None or abs(ref - opened) > 1e-6) else None
 
 
 def _first_trade_day(meta: dict) -> str | None:
@@ -95,6 +112,13 @@ class Yahoo(Source):
         super().__init__("https://query1.finance.yahoo.com", per_minute=90, burst=15,
                          headers={"User-Agent": BROWSER_UA, "Accept": "application/json"}, transport=transport)
         self._recent: dict = {}
+
+    def check(self, r: httpx.Response):
+        # a symbol the source has never heard of is answered 404: a wrong symbol, not a fault (RC1-004: Compare with "ZZZZ" said
+        # "Prices couldn't be read just now" because the chart route answered it as a 502)
+        if r.status_code == 404:
+            raise NotFound(self.name, "No prices found for that symbol. Check it and try again.")
+        super().check(r)
 
     WINDOW = 760                 # days of daily candles fetched when looking an instrument up (scan and rotation need ~700)
 

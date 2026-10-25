@@ -84,6 +84,18 @@ def checked(s: OptionStrategy, notes: list[str]) -> tuple[OptionStrategy, list[s
         if past:
             notes.append(f"The expiry {s.expiry} has passed, so the nearest expiry is used.")
             s = s.model_copy(update={"expiry": "current"})
+    if s.offsetUnit == "strikes" and any(l.pick == "offset" and (abs(l.offset) > 100 or l.offset != round(l.offset)) for l in s.legs):
+        # a distance counted in strikes is a whole number of them, at most 100 either way (the builder's box; the model takes up
+        # to 5,000 for points): a valid file's 150 strikes would open the page with an error under the box and no word of where
+        # it came from (RC1-010). Brought in range, as repair does for the ones that don't validate
+        legs = []
+        for i, l in enumerate(s.legs, 1):
+            if l.pick == "offset" and (abs(l.offset) > 100 or l.offset != round(l.offset)):
+                new = max(-100, min(100, int(math.floor(l.offset + 0.5))))
+                notes.append(f"Leg {i}: the distance must be a whole number of strikes {_range(-100, 100)}; {_shown(l.offset)} was set to {_shown(new)}.")
+                l = l.model_copy(update={"offset": float(new)})
+            legs.append(l)
+        s = s.model_copy(update={"legs": legs, "structure": "custom" if s.structure != "custom" else s.structure})
     r = s.risk
     if r.stopType == "credit_pct" and r.stop > 100:
         notes.append(f"The stop is {_shown(r.stop)}% of the premium: the loss can reach {r.stop / 100:,.3g} times the premium "
@@ -203,6 +215,15 @@ def repair(s: dict) -> tuple[OptionStrategy, list[str]]:
             changed = True
             continue
         before = len(notes)
+        # a distance counted in strikes is a whole number of them, at most 100 either way (the builder's box; the model takes up
+        # to 5,000 for points). A file's 150 strikes would open the page with an error under the box and no word of where it
+        # came from (RC1-010), so it is brought in range here, with the others
+        d = l.get("offset")
+        if (s.get("offsetUnit") or "strikes") == "strikes" and isinstance(d, (int, float)) and not isinstance(d, bool) and math.isfinite(d) \
+                and (abs(d) > 100 or d != round(d)):
+            new = max(-100, min(100, int(math.floor(d + 0.5))))
+            notes.append(f"Leg {i}: the distance must be a whole number of strikes {_range(-100, 100)}; {_shown(d)} was set to {_shown(new)}.")
+            l = {**l, "offset": new}
         got = _fix(OptLeg, l, f"Leg {i}: ", notes)
         try:
             legs.append(OptLeg(**got))

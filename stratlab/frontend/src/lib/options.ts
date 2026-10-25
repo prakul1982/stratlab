@@ -284,15 +284,24 @@ export function costsLine(costs: string, orders: { slices?: number }[]): string 
  * when the times work. */
 export function timingIssues(t: { entry: string; lastEntry: string; squareoff: string }, open?: string | null, close?: string | null): string[] {
   const out: string[] = [];
-  const inHours = (x: string) => !open || !close || (x >= open && x <= close);
   if (open && close) {
-    for (const [v, what] of [[t.entry, "The entry time"], [t.lastEntry, "The last entry"], [t.squareoff, "The square-off"]] as const)
-      if (!inHours(v)) out.push(`${what}, ${v}, is outside the market's hours (${open} to ${close}).`);
+    // said as it is: after the close or before the open, not only "outside the hours" (DB-004 remainder: an entry at 16:00 after a
+    // 15:40 close)
+    for (const [v, what] of [[t.entry, "The entry time"], [t.lastEntry, "The last entry"], [t.squareoff, "The square-off"]] as const) {
+      if (v > close) out.push(`${what}, ${v}, is after the market closes at ${close}, so it could never happen (the market's hours are ${open} to ${close}).`);
+      else if (v < open) out.push(`${what}, ${v}, is before the market opens at ${open}, so it could never happen (the market's hours are ${open} to ${close}).`);
+    }
   }
   if (t.lastEntry < t.entry) out.push(`The last entry (${t.lastEntry}) is before the first (${t.entry}), so it would never enter.`);
   if (t.squareoff <= t.entry || t.squareoff < t.lastEntry) out.push(`The square-off (${t.squareoff}) has to come after the entries.`);
   return out;
 }
+
+/** An exchange's usual hours, for the check above when the server's list of markets hasn't been read (it is the list's own
+ * figures that count when it has: MCX's close moves with US daylight saving, India's F&O close moved to 15:40). */
+export const FALLBACK_HOURS: Record<string, { open: string; close: string }> = {
+  NFO: { open: "09:15", close: "15:30" }, BFO: { open: "09:15", close: "15:30" }, MCX: { open: "09:00", close: "23:30" }, CDS: { open: "09:00", close: "17:00" },
+};
 
 /** A number box's range in words, for the line under it: "1 to 50", "a whole number from −100 to 100". */
 export function rangeText(min: number, max: number | undefined, whole: boolean): string {

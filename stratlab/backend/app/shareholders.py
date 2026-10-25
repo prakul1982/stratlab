@@ -47,6 +47,7 @@ BATCH = 100                     # XBRL documents read per job tick
 PAUSE = 1.0                     # seconds between documents: a steady pace for the exchange's archive
 MAX_QUEUE = 8000
 MAX_FOLLOWS = 20
+MAX_NAMES = 200                 # spellings of one holder read or followed (RC1-002: LIC alone has 42)
 MAX_RESULTS = 40                # name groups a search answers with
 PARSER = 2                      # how filings are read: stored quarters read by an older parser are read again (DF-016)
 POPULAR = 8                     # the holders named in the most companies, offered before anything is typed (DF-019)
@@ -659,7 +660,7 @@ def _save_follows(uid: str, items: list[dict]):
 
 
 def follow(uid: str, label: str, names: list[str]) -> dict:
-    keys = sorted({norm(n) for n in names if norm(n)})[:12]
+    keys = sorted({norm(n[:200]) for n in names if norm(n[:200])})[:MAX_NAMES]
     if not keys:
         raise ValueError("Pick at least one name to follow.")
     items = follows(uid)
@@ -944,14 +945,16 @@ def holder_search(q: str = "", profile=Depends(current_profile)):
 
 
 class HoldingsReq(BaseModel):
-    names: list[str] = Field(min_length=1, max_length=12)
+    # the app sends every spelling of a holder it merged (LIC: 42, TATA AIA 16): a long list is never a 422, the server
+    # reads the distinct ones up to MAX_NAMES (RC1-002)
+    names: list[str] = Field(min_length=1, max_length=2000)
 
 
 @router.post("/invest/holders/holdings")
 def holder_holdings(req: HoldingsReq, profile=Depends(current_profile)):
     """Every company where the chosen spellings of a holder appear, alphabetical, with the quarter-on-quarter change."""
     _need(profile, "Searching named holders across companies")
-    names = [n for n in req.names if isinstance(n, str) and norm(n)]
+    names = sorted({norm(n[:200]) for n in req.names if isinstance(n, str) and norm(n[:200])})[:MAX_NAMES]
     if not names:
         err(400, "no_names", "Pick at least one name.")
     return ok({**holdings(names), "coverage": coverage(), "note": NOTE})
@@ -959,7 +962,7 @@ def holder_holdings(req: HoldingsReq, profile=Depends(current_profile)):
 
 class FollowReq(BaseModel):
     label: str = Field(min_length=1, max_length=120)
-    names: list[str] = Field(min_length=1, max_length=12)
+    names: list[str] = Field(min_length=1, max_length=2000)
 
 
 @router.put("/invest/holders/follow")

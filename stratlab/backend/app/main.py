@@ -4560,7 +4560,15 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
             dy = page_dividend_yield("IN", symbol, f.get("price"), f.get("price_at"), {"sym": symbol, "bse": None}, fetch=False)
         except Exception:
             dy = None
-        return {**f, "div_yield": dy} if dy is not None else f
+        if dy is None:
+            return f
+        # with the special dividend the yield includes, said beside it as a freshly built page says it (RC1-007: TCS "4.43%"
+        # with no word of its ₹46 special, 2.6% without it)
+        try:
+            spec = stock_pages.special_in_year(india_page_dividends(symbol, {"sym": symbol, "bse": None}, False) or [], f.get("price_at"))
+        except Exception:
+            spec = None
+        return {**f, "div_yield": dy, "div_special": spec}
     if region == "US" and (f.get("v") or 1) < 4 and not sec.non_common(symbol):
         try:
             rows = corp_actions.actions_for("US", symbol, None, fetch=False)
@@ -4577,6 +4585,7 @@ def stock_page_older_facts(region: str, symbol: str, f: dict | None) -> dict | N
 stock_page_store = stock_pages.Pages(stock_page_facts, settings.STOCK_PAGE_BUILDS_PER_MINUTE, older=stock_page_older_facts)
 stock_page_store.adjust = lambda r, s, f: stock_pages.with_week52_report(f, official_close.ranges(), s) if r == "IN" else f   # R10O-007
 research_routes.public_facts = lambda r, s: stock_page_store.peek(r, s)    # the app's US P/E on the public page's EPS (R7O-004)
+research_routes.filed_numbers = lambda s: sec_feed.company(s)               # a page stored before its quarterly EPS was kept (RC1 DD-030)
 SEO_HEADERS = {"Cache-Control": stock_pages.CACHE_CONTROL}
 
 
