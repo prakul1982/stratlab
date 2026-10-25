@@ -104,10 +104,11 @@ export interface WalkForward {
   efficiency?: number | null; settings_used?: number; tuned?: string[]; grid_size?: number; from?: string; to?: string;
   series?: { t: string[]; wf: number[]; fixed: number[] };
 }
-export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string }
+/** `from`: the first day its prices cover; `short`: well after the period's own first day, so it isn't counted (DA-030). */
+export interface BasketRow { id: string; symbol: string; name?: string | null; ret?: number; buy_hold?: number; n?: number; win?: number; mdd?: number; error?: string; from?: string; short?: boolean }
 export interface Basket {
   status: "pass" | "warn" | "fail"; headline: string; market: string; days: number; tested: number; profitable: number;
-  beat_buy_hold: number; median_ret: number | null; rows: BasketRow[];
+  beat_buy_hold: number; median_ret: number | null; rows: BasketRow[]; shorter?: { symbol: string; from: string }[];
 }
 export interface NotebookSummary { experiments: number; last_verdict: VerdictKind | null; last_label: string | null; /** the last run's return in %, to say "Capital lost" at the −100% floor */ last_return?: number | null;
   /** the last run was saved by an older version and its figures contradict each other, so none are shown (R38-001) */ last_legacy?: boolean }
@@ -153,7 +154,8 @@ export interface Me {
     /** The viewed plan's own daily cap on fresh AI reads (null: none), even where it isn't enforced (an admin); and the daily
      * safety cap on unlimited AI builds (Pro's), null on a plan with a monthly limit. */
     ai_reads_plan_limit?: number | null; ai_builds_per_day?: number | null };
-  trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number } | null;
+  /** Free's paper trading trial; `days_left`: its Indian trading days still to come, today's included (DP2-031). */
+  trial: { started: boolean; active: boolean; ends_at: string | null; available: boolean; days?: number; days_left?: number } | null;
   live_running: number; live_limit: number;
   alerts: { channels?: { push: boolean; telegram: boolean; email: boolean }; enabled: boolean; telegram_chat_id: string | null; telegram_verified?: boolean; email: string | null; email_off?: boolean; daily_report?: boolean };
   data_online: boolean;

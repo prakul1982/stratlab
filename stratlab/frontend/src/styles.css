@@ -259,6 +259,7 @@ a.link { margin-inline: -2px; }
 .nb-pin { flex: none; display: inline-flex; color: var(--muted); }
 .side-list a.nb-more { padding-left: 34px; font-size: 13px; color: var(--muted); }
 .side-list a.nb-more:hover { color: var(--ink); }
+.side-list .nb-key { padding-left: 34px; font-size: 12px; }
 .side-note { display: flex; align-items: center; height: 28px; padding-left: 34px; }
 
 .side-foot { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
@@ -860,6 +861,7 @@ main.pub-main:has(.k-skel-box) { min-height: 100vh; }
   .explore-card b { font-size: 14px; line-height: 1.25; }
   .explore-card .small { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .modal .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* choices must be read in full */
+  .money-cards .explore-card .small { display: block; -webkit-line-clamp: unset; overflow: visible; }   /* Money's card lines are read in full, not cut mid-phrase (DP2-014) */
 }
 
 /* sector rotation chart */
@@ -1257,9 +1259,10 @@ table:has(td.num:nth-child(2)) th:nth-child(2) { text-align: right; }
 /* ---------- charts (components/chart) ---------- */
 /* series colours in a fixed order, validated with the dataviz palette checks against --card and --paper in each theme
  * (lightness band, chroma, colour-blind and normal-vision separation of neighbours, 3:1 contrast) */
-:root { --series-1: #1F4FB5; --series-2: #B4500F; --series-3: #138A62; --series-4: #6A3FB0; }
-:root[data-theme="dark"] { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; } }
+/* --heat-floor: the least of a series colour a heat cell shows; on the dark card a quarter of it read as the card (DA-026) */
+:root { --series-1: #1F4FB5; --series-2: #B4500F; --series-3: #138A62; --series-4: #6A3FB0; --heat-floor: 25%; }
+:root[data-theme="dark"] { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; --heat-floor: 50%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) { --series-1: #6A8EE4; --series-2: #D9773A; --series-3: #2FA877; --series-4: #9479E0; --heat-floor: 50%; } }
 .ch { position: relative; min-width: 0; max-width: 100%; }
 .ch-plot { position: relative; border-radius: 6px; }
 .ch-plot:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
@@ -2042,7 +2045,14 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .k-warn-text { color: var(--orange-ink); margin: 0; }
 /* a paid feature this plan lacks: its plan beside the menu entry, and a note at the top of the page (lib/gates.ts) */
 .side-lock { margin-left: auto; flex: none; padding: 0 6px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 18px; }
-.side-lock::before { content: "🔒 " attr(data-plan); }
+/* the plan lock is the line icon everywhere (DP2-022, DP1-018): drawn here as a mask so the sidebar keeps its plain text */
+.side-lock::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 3px; vertical-align: -1px; background: currentColor;
+  -webkit-mask: var(--lock-mask) center / contain no-repeat; mask: var(--lock-mask) center / contain no-repeat; }
+.side-lock::after { content: attr(data-plan); }
+:root { --lock-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E"); }
+svg.lock-ic { display: inline-block; vertical-align: -2px; flex: none; margin-right: 4px; }
+.plan-lock { display: inline; }
+.k-badge svg.lock-ic { margin-right: 2px; }
 .page-lock { margin-bottom: var(--s4); }
 
 /* signed out on an app address, a page that doesn't exist, a page that isn't yours (pages/Gate.tsx) */
@@ -2096,6 +2106,13 @@ a.k-health-i:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px
 .lp-skel-amount { height: 46px; width: 60%; }
 .lp-skel-note { height: 1.2em; width: 80%; }
 .lp-skel-fine { height: calc(13.5px * 1.5 * 3); width: min(80ch, 100%); }
+/* a phone wraps the lede to four lines and the fine print to six, and its switch is a touch-sized 50px: the placeholders keep
+   that room so the page below doesn't jump when the prices arrive (the FAQ moved 122px on a 412px phone) */
+@media (max-width: 640px) {
+  .lp-skel-p { height: calc(17px * 1.6 * 4); }
+  .lp-skel-fine { height: calc(13.5px * 1.5 * 6); }
+  .lp-skel-seg { height: 50px; }
+}
 .lp-price-note { display: block; min-height: calc(1.4em * 2); line-height: 1.4; color: var(--ink-2); }
 .lp-save { display: block; color: var(--ink-2); font-weight: 600; }
 .lp-price > .btn:disabled { opacity: .6; }

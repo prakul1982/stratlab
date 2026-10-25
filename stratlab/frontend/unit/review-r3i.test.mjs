@@ -21,7 +21,7 @@ const run = (over = {}, risk = {}) => ({ strategy: { ...R.blankStrategy(), ...ov
 test("the compare page writes a direction of both ways as itself, not long", () => {
   assert.deepEqual(C.changes(run({ side: "long" }), run({ side: "both" })), ["Direction: long only → both ways"]);
   assert.deepEqual(C.changes(run({ side: "short" }), run({ side: "both" })), ["Direction: short only → both ways"]);
-  assert.match(read("src/pages/CompareExperiments.tsx"), /import \{ changes \} from "\.\.\/lib\/compare";/);
+  assert.match(read("src/pages/CompareExperiments.tsx"), /import \{ changes(?:, \w+)* \} from "\.\.\/lib\/compare";/);
 });
 
 test("the compare page lists most in one trade, the product and the short exit among the changes", () => {
@@ -31,10 +31,12 @@ test("the compare page lists most in one trade, the product and the short exit a
   assert.deepEqual(C.changes(run({ side: "both", shortExit: [] }), run({ side: "both", shortExit: exit })), ["Short exit: none → Price crosses above SMA 20"]);
 });
 
-test("the compare page counts the checks with checksLine, out of four like the other pages", () => {
+test("the compare page counts the checks out of four like the other pages, as a count in its cell (DA-031)", async () => {
   const src = read("src/pages/CompareExperiments.tsx");
-  assert.match(src, /\["Checks passed", \(e\) => checksLine\(e\.verdict\.passed, e\.verdict\.total\)/);
-  assert.match(src, /import \{ (?:\w+, )*checksLine \} from "\.\.\/lib\/tradeUi";/);
+  assert.match(src, /\["Checks passed", \(e\) => checksCell\(e\.verdict\.passed, e\.verdict\.total\)/);
+  const { checksCell } = await import("../src/lib/tradeUi.ts");
+  assert.equal(checksCell(2, 4), "2 of 4");
+  assert.equal(checksCell(3, 3), "3 of 4 (1 not run)");
 });
 
 test("RSI of a flat series is 50, as the engine's", () => {

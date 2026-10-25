@@ -2,9 +2,10 @@
 same market. An edge that only works on one stock is more likely luck than an edge."""
 import statistics
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 from .engine.core import backtest
-from .research import ResearchError, load
+from .research import ResearchError, load, parse_t
 
 BASKETS = {
     "IN": ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "ITC", "LT", "SBIN", "BHARTIARTL", "AXISBANK", "KOTAKBANK", "HINDUNILVR"],
@@ -51,6 +52,13 @@ def _ids(registry, market: str, exclude: str | None) -> list[str]:
     return ids
 
 
+def short_history(first: str, days: int, now: datetime | None = None) -> bool:
+    """Whether an instrument's prices start well after the period's first day (XRP/USD's from Jul 2023 on a five-year
+    test, DA-030): more than a twentieth of the period, and at least ten days, so weekends and holidays never count."""
+    start = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+    return parse_t(first) - start > timedelta(days=max(10, days / 20))
+
+
 def _one(registry, strategy, iid: str, days: int) -> dict:
     try:
         data = load(registry, strategy, _Req(iid, days))
@@ -60,8 +68,12 @@ def _one(registry, strategy, iid: str, days: int) -> dict:
     except Exception as e:  # one instrument's data problem mustn't sink the rest
         return {"id": iid, "symbol": iid.split(":", 1)[-1], "error": f"Couldn't test it ({e.__class__.__name__})."}
     st = out["stats"]
+    first = data["bars"][data["start"]]["t"]
     return {"id": iid, "symbol": data["inst"]["symbol"], "name": data["inst"].get("name"),
-            "ret": st["ret"], "buy_hold": st["buy_hold_ret"], "n": st["n"], "win": st["win"], "mdd": st["mdd"]}
+            "ret": st["ret"], "buy_hold": st["buy_hold_ret"], "n": st["n"], "win": st["win"], "mdd": st["mdd"],
+            # its own first day, and whether that is well after the period's: such a row covers a shorter window, so it is
+            # shown but not counted with the others (DA-030)
+            "from": str(first)[:10], "short": short_history(first, data["days"])}
 
 
 def run(registry, strategy, market: str, exclude: str | None, days: int) -> dict:
@@ -72,7 +84,9 @@ def run(registry, strategy, market: str, exclude: str | None, days: int) -> dict
         raise ResearchError(503, "data_offline", "Market data for this market is offline right now. Try again soon.")
     ids = _ids(registry, market, exclude)
     rows = list(_pool.map(lambda i: _one(registry, strategy, i, days), ids))
-    tested = [r for r in rows if "error" not in r and r["n"] > 0]
+    # like for like: an instrument whose prices start well into the period is listed, not counted (DA-030)
+    shorter = [r for r in rows if "error" not in r and r.get("short")]
+    tested = [r for r in rows if "error" not in r and r["n"] > 0 and not r.get("short")]
     profitable = [r for r in tested if r["ret"] > 0]
     beat = [r for r in tested if r["ret"] > r["buy_hold"]]
     share = len(profitable) / len(tested) if tested else 0
@@ -86,5 +100,6 @@ def run(registry, strategy, market: str, exclude: str | None, days: int) -> dict
         status, headline = "fail", f"Profitable on {len(profitable)} of {len(tested)} similar instruments."
     return {"status": status, "headline": headline, "market": market, "days": days,
             "tested": len(tested), "profitable": len(profitable), "beat_buy_hold": len(beat),
+            "shorter": [{"symbol": r["symbol"], "from": r["from"]} for r in shorter],
             "median_ret": statistics.median([r["ret"] for r in tested]) if tested else None,
             "rows": sorted(rows, key=lambda r: -(r.get("ret") if r.get("ret") is not None else -1e9))}

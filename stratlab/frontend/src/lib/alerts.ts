@@ -69,6 +69,16 @@ export function alertPriceHint(sym: string | null, px: string, shut: Shut | null
   return `${sym ? `${sym}, ` : ""}${sym ? close[0].toLowerCase() + close.slice(1) : close} · ${next}`;
 }
 
+/** How far a price level is from the last price, said when it is more than 3 times away either way (DP2-023, DP1-023: ₹99,999
+ * on a ₹1,190 stock saved without a word). A note, not a refusal: a level can be set far away on purpose. */
+export function farLevel(level: number, now: number | null): string | null {
+  if (!(now != null && now > 0 && level > 0)) return null;
+  const r = level / now;
+  if (r <= 3 && r >= 1 / 3) return null;
+  return r > 1 ? `That level is ${r >= 10 ? Math.round(r) : r.toFixed(1)} times the last price. Check it before you set the alert.`
+    : `That level is ${Math.round((1 - r) * 100)}% below the last price. Check it before you set the alert.`;
+}
+
 export const conditionKey = (a: { kind: AlertKind; op: AlertOp }) =>
   CONDITIONS.find((c) => c.kind === a.kind && (c.op === a.op || c.op === null))?.key ?? "price_above";
 

@@ -2,17 +2,22 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { price } from "../lib/format";
-import { alertPriceHint, type Shut } from "../lib/alerts";
+import { alertPriceHint, farLevel, type Shut } from "../lib/alerts";
 import { marketState } from "../lib/marketHours";
 import { researchApi, type Region } from "../lib/research";
 import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, fittingConditions, type AlertBody, type AlertFits, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
 import { Modal } from "./ui";
-import { CheckField, Field, FormActions, FormGrid, Notice, Select, StockPicker } from "./kit";
+import { CheckField, Field, FormActions, FormGrid, Notice, PlanNote, Select, StockPicker } from "./kit";
+import { planOf } from "../lib/plans";
 import { type ApiError } from "../lib/api";
 import { numberProblem } from "../lib/validate";
 
 type Saved = AlertsPage & { alert: StockAlert; note: string | null };
+
+/** The kinds of alert on a paid plan, and the plan feature each needs (the server's ALERT_FEATURE). */
+const KIND_FEATURE: Partial<Record<string, string>> = { etfgap: "etf_gaps", bizupdate: "biz_updates", mwpl: "stock_futures", mtf: "mtf" };
+const KIND_NAME: Partial<Record<string, string>> = { etfgap: "ETF gap alerts", bizupdate: "Business update alerts", mwpl: "MWPL alerts", mtf: "Margin funding alerts" };
 
 /** Create or edit one alert. A stock passed in is fixed; `choices` offers a list (the watchlist) instead. */
 export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices, onSaved, condition, nowhere, link = true }: {
@@ -24,7 +29,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
    * has that link on it passes false. */
   link?: boolean;
 }) {
-  const { fail, notify, markets } = useApp();
+  const { fail, notify, markets, me } = useApp();
   const fixed = !editing && !!s0 && !choices;
   const [region, setRegion] = useState<Region>(editing?.region ?? r0);
   const [symbol, setSymbol] = useState(editing?.symbol ?? (s0 || choices?.[0]?.symbol || ""));
@@ -46,6 +51,10 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const editKey = editing ? conditionKey(editing) : undefined;
   const offered = fittingConditions(region, fits, editKey);
   const c = offered.find((x) => x.key === cond) ?? offered[0] ?? CONDITIONS[0];
+  // a kind this plan doesn't have is offered with its plan in the label, and picking it says so with the price, before
+  // anything is typed (DP2-020, DP1-007: the refusal came only after Set alert); the alert being edited keeps its kind
+  const lockedOf = (kind: string) => { const f = KIND_FEATURE[kind]; return f && me?.plan_info.features?.[f] === false ? planOf(f) : null; };
+  const locked = editing ? null : lockedOf(c.kind);
   const ccy = region === "IN" ? "INR" : "USD";
   // out of hours the price is the last close, and the alert waits for the next open: said beside the price (R13-007)
   const mkt = markets.find((m) => m.id === region);
@@ -98,20 +107,24 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   };
 
   const hint = c.kind === "etfgap"
-    ? "Checked through the trading day: the live price against the fund's last published NAV. On the Basic plan."
+    ? "Checked through the trading day: the live price against the fund's last published NAV."
     : c.kind === "mwpl"
-    ? "Checked each evening against the exchange's combined open interest file: fires when the stock's MWPL use crosses 80%, up or down. From 95% the stock is in the F&O ban period. On the Basic plan."
+    ? "Checked each evening against the exchange's combined open interest file: fires when the stock's MWPL use crosses 80%, up or down. From 95% the stock is in the F&O ban period."
     : c.kind === "mtf"
-    ? "Checked each evening against the exchange's margin trading disclosure (published the next trading day): fires when the funded shares cross your level. On the Basic plan."
+    ? "Checked each evening against the exchange's margin trading disclosure (published the next trading day): fires when the funded shares cross your level."
     : c.kind === "surveillance"
     ? "Checked twice each trading day against the exchange's surveillance lists (ASM, GSM, ESM, trade-to-trade, F&O ban, price bands). The alert says which list, which stage and the list's date."
     : c.kind === "bizupdate"
-    ? "Checked each evening against the company's exchange filings. The alert gives the update's headline figure and its change on the year, as filed. On the Basic plan."
+    ? "Checked each evening against the company's exchange filings. The alert gives the update's headline figure and its change on the year, as filed."
     : EVENT_KINDS.includes(c.kind)
     ? "Checked once each evening against that day's exchange disclosures. The alert says who, which way, how many and when."
     : c.kind === "move" || c.kind === "high52" || c.kind === "low52"
     ? "Checked through the trading day with the live price."
+    : c.kind === "stage"
+    // a Stage change is read from the daily candles, not a level crossed (DP2-024: it had the crossing alert's words)
+    ? "Checked during market hours on the daily candles, today's price as the latest: the first check notes the stage it's in (from its 150-day average and that average's slope), then it fires when the stage changes."
     : "Fires when it crosses during market hours: the first check notes which side it's on, then it waits for a cross.";
+  const far = c.kind === "price" ? farLevel(Number(value), now) : null;
 
   const takeValue = (v: string) => { setValue(v); setErrs((x) => ({ ...x, value: undefined })); };
 
@@ -143,10 +156,14 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         </>
       )}
       <Field label="Alert me when" wide>
-        {(id) => <Select id={id} value={c.key} onChange={setCond} options={offered.map((x) => ({ value: x.key, label: x.label }))} />}
+        {(id) => <Select id={id} value={c.key} onChange={setCond} options={offered.map((x) => {
+          const plan = editing ? null : lockedOf(x.kind);
+          return { value: x.key, label: plan ? `${x.label} (${plan === "pro" ? "Pro" : "Basic"})` : x.label };
+        })} />}
       </Field>
       {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)}
         placeholder={now != null ? String(Math.round(now)) : ""} error={errs.value} hint={now != null ? alertPriceHint(null, price(now, ccy), shut) : undefined} />}
+      {far && !errs.value && <p className="k-small k-warn-text k-form-wide" role="status" data-testid="alert-far">{far}</p>}
       {c.kind === "move" && <Field label="Move in a day" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="5" error={errs.value} />}
       {c.kind === "etfgap" && <Field label="Gap to its last NAV" unit="%" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="2" error={errs.value} />}
       {c.kind === "mtf" && <Field label="Level" unit="% of shares" inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)} placeholder="1" info="As a percent of the shares issued." error={errs.value} />}
@@ -154,14 +171,15 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
       {c.kind === "ma" && <Field label="Moving average">{(id) => <Select id={id} value={period} onChange={(v) => setPeriod(Number(v))} options={MA_PERIODS.map((p) => ({ value: p, label: `${p}-day average` }))} />}</Field>}
       {c.kind === "stage" && <Field label="Which change">{(id) => <Select id={id} value={stage} onChange={(v) => setStage(Number(v))}
         options={[{ value: 0, label: "Any change of stage" }, ...[1, 2, 3, 4].map((s) => ({ value: s, label: `Enters Stage ${s}` }))]} />}</Field>}
-      <p className="k-note k-form-wide">{hint}</p>
+      {locked ? <div className="k-form-wide"><PlanNote plan={locked === "pro" ? "pro" : "basic"}>{KIND_NAME[c.kind] ?? "This alert"} are on the {locked === "pro" ? "Pro" : "Basic"} plan.</PlanNote></div>
+        : <p className="k-note k-form-wide">{hint}</p>}
       <Field label="Note for yourself" optional wide value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Why you set it" />
       <div className="k-form-wide">
         <CheckField checked={repeat} onChange={setRepeat}
           label={EVENT_KINDS.includes(c.kind) ? "Repeat: keep it on after it fires (one message a day at most)" : "Repeat: keep it on after it fires (at most once a day)"} />
       </div>
       <FormActions>
-        <button className="btn" disabled={busy}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
+        <button className="btn" disabled={busy || !!locked}>{busy ? "Saving…" : editing ? "Save alert" : "Set alert"}</button>
         {link && !(nowhere && !editing) && <Link to="/settings#notifications" className="btn quiet sm">Where alerts go</Link>}
       </FormActions>
     </FormGrid>

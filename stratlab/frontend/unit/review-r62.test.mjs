@@ -12,7 +12,7 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 test("R62-003: an edge that didn't pass every check it ran says how many passed, not 'Passed the checks'", async () => {
   const { badgeLabel } = await import("../src/lib/tradeUi.ts");
-  assert.equal(badgeLabel({ verdict: "edge", passed: 2, total: 3 }), "3 of 4 checks run · 2 passed");
+  assert.equal(badgeLabel({ verdict: "edge", passed: 2, total: 3 }), "Passed 2 of 4 checks");   // as short as the other badges (DA-031)
   assert.equal(badgeLabel({ verdict: "edge", passed: 4, total: 4 }), undefined);
   assert.equal(badgeLabel({ verdict: "no_edge", passed: 1, total: 4 }), undefined);
   for (const p of ["src/pages/NotebookPage.tsx", "src/pages/CompareExperiments.tsx"])

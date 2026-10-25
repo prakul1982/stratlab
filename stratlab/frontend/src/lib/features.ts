@@ -35,7 +35,7 @@ export const FEATURES: Feature[] = [
     words: "new notebook backtest test idea strategy rules describe plain english build", home: true, goal: "test" },
   { id: "research", title: "Research a company", what: "Price, key numbers, results, news and an AI read that ends with ideas to test.", to: "/research",
     words: "company stock fundamentals analysis ai read valuation news research", home: true, goal: "understand" },
-  { id: "group", title: "Test on a whole group", what: "Run one set of rules on NIFTY 50, F&O stocks, US mega caps, big coins or your own list.", to: "@market",
+  { id: "group", title: "Test on a whole group", what: "Run one set of rules on NIFTY 50, F&O stocks, the largest US companies, big coins or your own list.", to: "@market",
     words: "group basket portfolio universe scanner momentum nifty 50 many stocks list", home: true, goal: "test" },
   { id: "options", title: "Paper trade options", what: "Straddles, strangles, iron flies, condors or any structure, filled at the live bid and ask.", to: "/options",
     words: "options straddle strangle iron fly condor spread ce pe nifty banknifty sensex fno f&o expiry expiries", home: true, goal: "trade" },

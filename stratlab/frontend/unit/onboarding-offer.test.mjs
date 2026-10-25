@@ -33,7 +33,9 @@ test("payments off: Free is open, Basic and Pro open soon, and nothing says paid
   assert.deepEqual(offer.landingAction(early, "free"), { label: "Continue with Google", buy: false });      // every sign-in button says it goes to Google (R5V-011)
   assert.equal(offer.canBuy(early), false);
   assert.equal(offer.unlockHint(early), "Paid plans open soon; ask us at support@stratlab.studio for early access.");
-  assert.equal(offer.unlockHint(paid), "See the plans to upgrade.");
+  // beside a lock's own See plans button the words don't say it again (DP2-022); a tooltip with no button does
+  assert.equal(offer.unlockHint(paid), "");
+  assert.equal(offer.unlockHint(paid, undefined, null, false), "See the plans to upgrade.");
   // the small print promises nothing that can't be bought: no invoices, no renewals, no yearly
   const small = offer.finePrint(early, { currency: "INR", inRupees: false, inRupeesYear: false, year: { basic: "₹6,999", pro: "₹19,999" } }).join(" ");
   assert.equal(small, "Rupee prices include 18% GST.");
@@ -79,7 +81,8 @@ test("the launch offer names its end; an unknown offer promises nothing", () => 
 
 test("a paid feature's tag: locked with its plan, or open with why", () => {
   const locked = offer.featureTag("basic", early, { paid: "free", canUse: false });
-  assert.deepEqual(locked, { label: "🔒 Basic", why: "A Basic feature. Paid plans open soon; ask us at support@stratlab.studio for early access.", locked: true });
+  // the lock is the tag's line icon, drawn from `locked`, not an emoji in the words (DP2-022, DP1-018)
+  assert.deepEqual(locked, { label: "Basic", why: "A Basic feature. Paid plans open soon; ask us at support@stratlab.studio for early access.", locked: true });
   assert.equal(offer.featureTag("pro", promo, { paid: "free", canUse: true }).why, "A Pro feature, open to everyone during the launch offer");
   assert.equal(offer.featureTag("basic", paid, { paid: "pro", canUse: true }).label, "Basic");          // paying for it: just the plan
   assert.equal(offer.featureTag("basic", early, { paid: "free", canUse: true }).label, "Basic · open now"); // granted by the owner, free Basic time

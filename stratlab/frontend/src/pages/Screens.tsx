@@ -14,9 +14,10 @@ import { Trash } from "../components/Icons";
 import { SurvBadges } from "../components/Surveillance";
 import { useMoreColumns } from "../components/MoreColumns";
 import {
-  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, Seg, Select, Signed, Skeleton,
+  Card, CardHead, ChipSet, CheckField, ConfirmDialog, DataTable, EmptyState, ErrorState, Field, FieldGroup, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton,
   type Column,
 } from "../components/kit";
+import { limitLine, planIdOf } from "../lib/lockText";
 
 type Draft = Partial<Record<RangeId, { min: string; max: string }>>;
 type Col = { id: keyof ScreenRow; label: string; short?: string; cell: (r: ScreenRow, region: Region) => ReactNode; india?: boolean; text?: boolean };
@@ -84,7 +85,7 @@ function rememberLoaded(key: string, n: number) {
 /** Companies filtered by plain facts, in a table. No ranking, scores or picks: the user's own conditions, sorted
  * by market value (the largest first) or by the column they choose. */
 export function ScreensPage() {
-  const { fail, notify } = useApp();
+  const { fail, notify, me } = useApp();
   const [region, setRegion] = useRegion();
   const [params, setParams] = useSearchParams();
   // the conditions and the sort are kept in the address (replaced, not pushed), so Back from a company returns to this screen
@@ -322,7 +323,11 @@ export function ScreensPage() {
               </FormActions>
             </FormGrid>
             {saved && !full && <p className="k-small k-muted" data-testid="screens-left">{saved.count} of {saved.limit} saved.</p>}
-            {full && <p className="k-small k-muted">Your plan keeps {saved?.limit} saved screen{saved?.limit === 1 ? "" : "s"}. Delete one to save another, or <Link className="link" to="/plans">see plans</Link>.</p>}
+            {/* the one lock wording (DP2-022, DP1-018): the plan and its count, what the next plan gives; the note adds the price */}
+            {full && saved && (() => {
+              const l = limitLine(planIdOf(me?.plan), "screens", `Your ${me?.plan_info.name ?? "plan"} plan keeps ${saved.limit} saved screen${saved.limit === 1 ? "" : "s"}. Delete one to save another`, "screens");
+              return l.next ? <PlanNote plan={l.next}>{l.text}</PlanNote> : <Notice>{l.text}</Notice>;
+            })()}
             {weekly && saved?.email && !saved.email_confirmed && <Notice>The email goes out once you've confirmed {saved.email} in <Link className="link" to="/settings#newsletters">Settings</Link>.</Notice>}
           </Card>
         </div>

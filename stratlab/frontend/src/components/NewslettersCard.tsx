@@ -5,7 +5,7 @@ import { useApp } from "../lib/app";
 import { HELP } from "../lib/help";
 import type { Cadence, NewsletterPrefs } from "../lib/news";
 import { track } from "../lib/analytics";
-import { Badge, Card, CardHead, ErrorState, Notice, Seg, Skeleton } from "./kit";
+import { Badge, Card, CardHead, ErrorState, Notice, PlanNote, Seg, Skeleton } from "./kit";
 
 type Key = "market_in" | "market_us" | "my_stocks";
 const ROWS: [Key, string][] = [["market_in", "Market brief: India"], ["market_us", "Market brief: US"], ["my_stocks", "My stocks"]];
@@ -25,6 +25,8 @@ export function NewslettersCard() {
   const [prefs, setPrefs] = useState<NewsletterPrefs | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [busy, setBusy] = useState<Key | "confirm" | null>(null);
+  // a Daily picked on a plan with the weekly editions only: said with its plan and price, not a dead button (DP2-030)
+  const [asked, setAsked] = useState<{ key: Key; plan: string } | null>(null);
   const loc = useLocation();
 
   useEffect(() => {
@@ -72,11 +74,12 @@ export function NewslettersCard() {
           {ROWS.map(([key, title]) => (
             <div key={key} className="k-line-row stack-narrow">
               <b>{title}</b>
-              <Seg label={title} value={prefs[key]} onChange={(v) => void set(key, v as Cadence)}
+              <Seg label={title} value={prefs[key]} onChange={(v) => { const plan = needs(prefs, key, v as Cadence); if (plan) { setAsked({ key, plan }); return; } setAsked(null); void set(key, v as Cadence); }}
                 options={CHOICES.map(([c, name]) => {
                   const plan = needs(prefs, key, c);
-                  return { value: c, label: plan ? `${name} · ${plan}` : name, disabled: !!plan || busy === key };
+                  return { value: c, label: plan ? `${name} · ${plan}` : name, disabled: busy === key };
                 })} />
+              {asked?.key === key && <PlanNote plan="basic">The daily {title === "My stocks" ? "My Stocks email" : "Market Brief"} is on the {asked.plan} plan. The weekly one is on every plan.</PlanNote>}
             </div>
           ))}
         </div>

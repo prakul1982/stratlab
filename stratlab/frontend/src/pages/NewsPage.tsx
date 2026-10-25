@@ -81,7 +81,10 @@ export function NewsPage() {
         <Card><ErrorState title="Couldn't load the news" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{listError} Check your connection and try again; your newsletter settings are safe.</ErrorState></Card>
       ) : !rows ? <Card><Skeleton label="Loading the issues" lines={4} /></Card>
         : !rows.length ? (
-          <Card><EmptyState title="No briefs yet" action={{ label: "Brief emails", to: "/settings#newsletters" }}>The first one arrives after the next market close. The headlines on each company's page are separate: they come in through the day.</EmptyState></Card>
+          // My stocks is about the stocks you hold or watch: with none, none ever comes, so it says what starts it (DP2-034)
+          tab === "mine"
+            ? <Card><EmptyState title="No My Stocks briefs yet" action={{ label: "Add to your watchlist", to: "/research" }}>This brief is about the stocks in your watchlist and My Holdings. Once either has a stock, one comes after each market close where something changed for them.</EmptyState></Card>
+            : <Card><EmptyState title="No briefs yet" action={{ label: "Brief emails", to: "/settings#newsletters" }}>The first one arrives after the next market close. The headlines on each company's page are separate: they come in through the day.</EmptyState></Card>
         ) : (
           <div className={`news-grid${shown ? " reading" : ""}`}>
             <nav className="news-list inv-issues" aria-label="Issues">

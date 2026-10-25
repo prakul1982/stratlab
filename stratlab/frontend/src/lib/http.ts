@@ -11,6 +11,8 @@ export class ApiError extends Error {
   code?: string;
   /** For a 422: each field the server turned down, with what's wrong in plain words and its limit (lib/validate). */
   fields?: Record<string, string>;
+  /** For a 402: the plan its words send the reader to, so the toast adds that plan's price (DP2-022). */
+  plan?: "basic" | "pro";
 }
 
 /** Public reads started before the page's code arrived (entry.tsx), each taken once by the page that asks for it. */

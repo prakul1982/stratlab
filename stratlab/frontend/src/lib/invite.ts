@@ -28,6 +28,17 @@ export function youGet(v: Pick<Invites, "use_cap" | "paid_cap" | "extra_days" | 
     : `You earn a month of free Basic ${rule} You're on ${PLAN[paid]}, so it's kept for you and starts only if your ${PLAN[paid]} plan stops.`;
 }
 
+/** The same, a point a line, for the page (DP2-035: one dense paragraph). */
+export function youGetLines(v: Pick<Invites, "use_cap" | "paid_cap" | "extra_days" | "extra_cap">, paid: Plan): string[] {
+  const use = v.use_cap ?? 2, pay = v.paid_cap ?? 2, extra = v.extra_days ?? 8, times = v.extra_cap ?? 8;
+  return [
+    `A month of Basic for each of your first ${use} friends a year who use StratLab on 3 days in their first 2 weeks.`,
+    `A month of Basic for each of your first ${pay} friends a year who subscribe.`,
+    `After that, ${extra} more days for each friend who subscribes, up to ${times} times a year.`,
+    paid === "free" ? "The free time starts straight away." : `You're on ${PLAN[paid]}, so it's kept for you and starts only if your ${PLAN[paid]} plan stops.`,
+  ];
+}
+
 /** This year's count and the time you have, as label and value rows. */
 export function inviteRows(v: Invites, paid: Plan): [string, string][] {
   const rows: [string, string][] = [

@@ -315,7 +315,8 @@ export function ReplayPage() {
         lede="Step through a past chart one candle at a time with the future hidden, place practice orders, and see the result after charges. Finished replays in rupees (India, MCX and NSE currency) go to your journal as practice; the journal keeps rupees only. A historical simulation: facts, not advice." />
       {failed && !ov ? <ErrorState title="Chart replay couldn't be opened" action={{ label: "Try again", onClick: () => { void load(); } }}>Nothing was changed.</ErrorState>
         : !ov ? <Card><Skeleton label="Opening chart replay" /></Card> : !ov.allowed ? (
-        <LockedPreview title="Chart replay" points={[
+        // the lock note above already offers the plans: one "See plans", not two (DA-040)
+        <LockedPreview title="Chart replay" actions={false} points={[
           "Pick a stock, an index or a coin and a past date: the chart stops there, with the candles after it hidden.",
           "Step forward one candle at a time and place practice orders, each with a stop and a target.",
           "See each trade's result after charges, and how you did against simply holding.",

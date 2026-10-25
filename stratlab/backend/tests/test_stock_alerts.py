@@ -374,7 +374,9 @@ def test_the_free_plan_has_five_alerts(w, monkeypatch):
     for i in range(5):
         assert c.post("/alerts", headers=h, json={**body, "value": 5 + i}).status_code == 200
     r = c.post("/alerts", headers=h, json=body)
-    assert r.status_code == 402 and "5 active alerts" in r.json()["detail"]["message"] and "Basic" in r.json()["detail"]["message"]
+    # the one lock wording (DP2-022): the plan, its count, what the next plan gives; the page adds the price
+    assert r.status_code == 402 and r.json()["detail"]["message"].startswith("Your Free plan has 5 alerts on at a time. Delete one to add another. Basic gives 25.")
+    assert r.json()["detail"]["plan"] == "basic"
     assert c.get("/alerts", headers=h).json()["limit"] == 5
     assert c.get("/me", headers=h).json()["plan_info"]["stock_alerts"] == 5
 

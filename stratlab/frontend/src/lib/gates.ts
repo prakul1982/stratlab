@@ -41,7 +41,7 @@ export const PAGE_GATES: Record<string, Gate> = {
 export const ELSEWHERE: Record<string, string> = {
   indicators: "the rules editor", fno: "Indian F&O instruments", group_live: "paper trading a group", options_signal: "the options builder",
   fast_entries: "group paper trading", alerts: "Settings", daily_report: "Settings", export: "a notebook's More menu",
-  newsletter: "Settings", dividends: "Holdings", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
+  newsletter: "Settings", dividends: "Tax tools (by company)", mf_costs: "Mutual funds", mf_behaviour: "Mutual funds", options_whatif: "the options builder",
   vix_filter: "the options builder", strike_rules: "the options builder", loan_check: "Net worth",
   assistant: "Connect an AI assistant (its own plan note)",
 };

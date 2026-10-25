@@ -360,7 +360,7 @@ Use ONLY the FACTS given. Restate what happened; never say what to do or what ma
 Never: buy, sell, hold or accumulate; targets or price levels to watch; picks, "hot" names or favourites; outlook,
 forecasts, expectations or predictions; any company or ticker that is not in the facts; numbers not in the facts.
 A scan names its own fixed list of stocks: call it by that name, never "large caps" or the market, and never say a stock was the only one in the market.
-Write it as short prose a person would say: whether each index rose or fell and by how much, with the % sign and thousands separators (22,520.45), never "the price is X with a Y percent change" for every index. Plain English, no markdown, no emojis. Reply with ONLY this JSON: {"summary": "..."}"""
+The line above your summary already gives each index's move, and a list below gives each index's level: don't restate them. Say what else happened, as short prose a person would say: the sectors that moved on the rotation chart, how many stocks the scan newly named, the day's headlines in a few words. A stock a scan named is named for meeting its rule: never give its price move beside it. Numbers with thousands separators (22,520.45). Plain English, no markdown, no emojis. Reply with ONLY this JSON: {"summary": "..."}"""
 
 
 # a restatement of the tiles ("The NIFTY 50 price is 22520.45 with a 0.44 percent change"): the facts line and the tiles
@@ -383,8 +383,16 @@ def ai_summary(f: dict) -> str | None:
         text = str(extract_json(raw).get("summary") or "").strip()
     except (AIError, ValueError, AttributeError, TypeError):
         return None
-    text = day_first(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)))
-    return text if grounded(text, f) and not robotic(text) else None
+    text = day_first(not_the_indices(two_decimals(own_weekday(re.sub(r"\s+", " ", text)[:700], f)), f))
+    return text if text and grounded(text, f) and not robotic(text) else None
+
+
+def not_the_indices(text: str, f: dict) -> str:
+    """The AI's words without a sentence that restates an index's move: the facts line above it and the Indices list below
+    already give each one (DP2-037: the weekly brief said the same three index figures three times)."""
+    moves = [(i["name"].lower(), f"{abs(i['change_pct']):.2f}") for i in f.get("indices") or [] if i.get("name") and i.get("change_pct") is not None]
+    keep = [x for x in re.split(r"(?<=[.!?])\s+", text or "") if x and not any(n in x.lower() and m in x for n, m in moves)]
+    return " ".join(keep).strip()
 
 
 _ONE_DP = re.compile(r"(?<![\d.,])(\d{1,3}(?:,\d{2,3})+)\.(\d)(?![\d%])")

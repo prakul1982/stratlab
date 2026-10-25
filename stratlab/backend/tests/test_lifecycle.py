@@ -468,6 +468,10 @@ def test_first_steps_tick_from_real_data(w):
     newsletter_prefs.set("u-free", market_in="weekly")
     first_steps.mark("u-free", "deepdive")
     ticks = {s["id"]: s["done"] for s in c.get("/me/first-steps", headers=headers("free-token")).json()["steps"]}
+    # a newsletter chosen while the email isn't confirmed sends nothing yet, so the step isn't done (DP2-030)
+    assert ticks == {"backtest": True, "watchlist": True, "deepdive": True, "paper": False, "alerts": False}
+    db.set_setting(alerts.CONFIRMED + "u-free", "free@example.com")
+    ticks = {s["id"]: s["done"] for s in c.get("/me/first-steps", headers=headers("free-token")).json()["steps"]}
     assert ticks == {"backtest": True, "watchlist": True, "deepdive": True, "paper": False, "alerts": True}
     db.sb().table("live_sessions").insert({"user_id": "u-free", "name": "x", "strategy": {}, "instrument": {}}).execute()
     done = c.get("/me/first-steps", headers=headers("free-token")).json()

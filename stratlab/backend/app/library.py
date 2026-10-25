@@ -276,6 +276,26 @@ def an_before_vowel_number(text: str) -> str:
     return _A_NUMBER.sub(lambda m: "An " if m.group(1) == "A" else "an ", text)
 
 
+# what StratLab's own entries once ended every description with: one sentence repeated on all of its cards (DA-037). The page
+# says it once; an entry published with it is shown without it
+SEED_NOTE = ("Run by StratLab on its own rules, with its own tests, on every stock in the group over the period shown. The verdict is "
+             "what the tests found about the past; it says nothing about the future.")
+
+
+def group_now(e: dict, out: dict) -> dict:
+    """StratLab's own entry under its group's name of today, in its title too: one published when the US list had another
+    name read "20 US large caps" beside the group picker's "20 of the largest US companies" (DA-037). {} when unchanged."""
+    seed, g = e.get("seed") or {}, out.get("group")
+    if not e.get("official") or not isinstance(g, dict) or not seed.get("universe"):
+        return {}
+    from . import universes
+    now = next((p["name"] for p in universes.PRESETS.get(seed.get("market") or "", []) if p["id"] == seed["universe"]), None)
+    was = g.get("name") or ""
+    if not now or not was or was == now:
+        return {}
+    return {"group": {**g, "name": now}, **{k: out[k].replace(was, now) for k in ("name", "question") if isinstance(out.get(k), str)}}
+
+
 def public(e: dict, viewer: str | None = None) -> dict:
     """What anyone sees: everything but the owner's id and who reported it (flags say whether it's yours)."""
     st = e.get("stats") or {}
@@ -284,7 +304,10 @@ def public(e: dict, viewer: str | None = None) -> dict:
                             "mdd": max(st["mdd"], -100.0) if isinstance(st.get("mdd"), (int, float)) else st.get("mdd")}}
     out = {k: v for k, v in e.items() if k not in ("owner", "source") + MODERATION}
     if isinstance(out.get("description"), str):
+        if e.get("official"):
+            out["description"] = out["description"].replace(SEED_NOTE, "").strip()
         out["description"] = an_before_vowel_number(out["description"])
+    out.update(group_now(e, out))
     out["ran"], out["reason"], out["vs_hold"] = ran(e), reason(e), versus_hold(e)
     out["verdict"] = restated(e)
     out["mine"] = bool(viewer and e.get("owner") == viewer)
@@ -479,7 +502,14 @@ def search(entries: list[dict], market: str = "", verdict: str = "", q: str = ""
             and all(w in " ".join([e.get("name", ""), e.get("description", ""), e.get("question", ""),
                                    (e.get("instrument") or {}).get("symbol") or "", (e.get("group") or {}).get("name") or ""]).lower()
                     for w in words)]
-    if sort == "new":
+    if sort == "hold":
+        # furthest ahead of buy and hold first, over each entry's own dates: what the checks can't say (DA-037: by checks
+        # alone, a strategy 108.5 points behind buy and hold came first)
+        def gap(e):
+            h = versus_hold(e)
+            return (h is None, -(h["gap"] if h else 0))
+        rows.sort(key=gap)
+    elif sort == "new":
         rows.sort(key=lambda e: e.get("published_at") or "", reverse=True)
     elif sort == "copied":
         rows.sort(key=lambda e: (-(e.get("copies") or 0), e.get("published_at") or ""))

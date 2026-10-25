@@ -130,16 +130,51 @@ def create_subscription(profile: dict, plan: str, period: str = "month", currenc
     if period == "year" and not yearly_enabled() and not own:
         raise ValueError("Yearly billing isn't set up yet; pick monthly.")
     charged = currency if own else "INR"
-    sub = client().subscription.create({
-        "plan_id": own or plan_ids(period)[plan],
-        "total_count": 10 if period == "year" else 120,   # up to 10 years of renewals; users can cancel any time
-        "quantity": 1,
-        "customer_notify": 1,
-        "notes": {"user_id": profile["id"], "plan": plan, "period": period, "currency": charged},
-    })
-    db.update_profile(profile["id"], pending_subscription_id=sub["id"])
+    plan_id = own or plan_ids(period)[plan]
+    # the payment window opened again for the same plan and period: the checkout started before, still unpaid, is used again
+    # rather than a new subscription made at Razorpay every time (DP2-042: five made in one sitting). Razorpay lets a
+    # subscription that is still "created" be paid until it expires; any other state, or another plan, gets a new one.
+    sub = _reusable(profile.get("pending_subscription_id"), plan_id, profile["id"])
+    if sub is None:
+        sub = client().subscription.create({
+            "plan_id": plan_id,
+            "total_count": 10 if period == "year" else 120,   # up to 10 years of renewals; users can cancel any time
+            "quantity": 1,
+            "customer_notify": 1,
+            "notes": {"user_id": profile["id"], "plan": plan, "period": period, "currency": charged},
+        })
+        _drop_unpaid(profile.get("pending_subscription_id"), profile.get("razorpay_subscription_id"))
+        db.update_profile(profile["id"], pending_subscription_id=sub["id"])
     return {"subscription_id": sub["id"], "key_id": settings.RAZORPAY_KEY_ID,
             "email": profile.get("email"), "plan": plan, "currency": charged}
+
+
+def _reusable(sid: str | None, plan_id: str, uid: str) -> dict | None:
+    """The user's unpaid checkout `sid` when it is for this Razorpay plan and can still be paid ("created": no payment
+    authorised yet), else None. A fetch that fails is no reuse: a new subscription is made, as before."""
+    if not sid:
+        return None
+    try:
+        sub = client().subscription.fetch(sid)
+    except Exception as e:
+        print("razorpay: couldn't read the pending checkout:", str(e)[:160])
+        return None
+    notes = sub.get("notes") if isinstance(sub.get("notes"), dict) else {}
+    if sub.get("status") == "created" and sub.get("plan_id") == plan_id and notes.get("user_id") in (None, uid):
+        return sub
+    return None
+
+
+def _drop_unpaid(sid: str | None, current: str | None):
+    """Cancel the checkout replaced by a new one (another plan or period), so an abandoned one isn't left open at Razorpay.
+    Never the subscription the user pays for now; a failure only leaves it to expire by itself."""
+    if not sid or sid == current:
+        return
+    try:
+        if (client().subscription.fetch(sid) or {}).get("status") == "created":
+            client().subscription.cancel(sid, {"cancel_at_cycle_end": 0})
+    except Exception as e:
+        print("razorpay: couldn't cancel the replaced checkout:", str(e)[:160])
 
 
 def activate(profile: dict, sub: dict):

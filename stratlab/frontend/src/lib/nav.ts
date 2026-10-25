@@ -23,6 +23,9 @@ export interface NavPage {
   isNew?: boolean;
   /** Plan feature flag (plans.ts) when the page is on a paid plan. */
   flag?: string;
+  /** Only part of the page is on `flag`'s plan, and the page has no gate of its own (lib/gates.ts): its card says
+   * "Basic for part" (My Holdings' filings and dividends, DP2-009). */
+  part?: boolean;
 }
 export interface NavGroup { id: string; label: string; blurb: string; pages: NavPage[] }
 
@@ -30,10 +33,10 @@ const fromData = (to: string): NavEntry | undefined =>
   [...NAV_GROUPS.Trade, ...NAV_GROUPS.Invest, ...NAV_GROUPS.Money].find((e) => e.to === to);
 
 /** A page whose texts are already written for its card on a space's home (NAV_GROUPS) reuses them. */
-function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; isNew?: boolean; flag?: string } = {}): NavPage {
+function page(to: string, label: string, icon: string, words: string, o: { line?: string; blurb?: string; also?: RegExp; isNew?: boolean; flag?: string; part?: boolean } = {}): NavPage {
   const d = fromData(to);
   const line = o.line ?? d?.title ?? o.blurb ?? d?.blurb ?? label;
-  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, isNew: o.isNew, flag: o.flag };
+  return { to, label, icon, words, line, blurb: o.blurb ?? d?.blurb ?? line, also: o.also, isNew: o.isNew, flag: o.flag, part: o.part };
 }
 
 export const NEW_SINCE = "5 Oct 2026";
@@ -111,7 +114,9 @@ export const NAV: Record<SpaceId, { label: string; home: string; groups: NavGrou
       { id: "what-you-own", label: "What you own", blurb: "Everything you own and owe, from your own files, in one place.", pages: [
         page("/money/net-worth", "Net worth", "wallet", "net worth networth assets liabilities epf ppf nps fd rd fixed deposit recurring gold sgb sovereign gold bond property cash crypto loan emi prepay prepayment home loan insurance policy premium money wealth"),
         page("/holdings", "Holdings", "book", "holdings portfolio my stocks import upload broker zerodha groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation connect account demat",
-          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.", blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings." }),
+          // each stock's red flags, recent filings and results date are the filings feature (Basic), said on its card (DP2-009)
+          { line: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and filings.", blurb: "Your stocks from your broker's file: value, gain or loss, sectors, dividends and each stock's filings.",
+            flag: "filings", part: true }),
         page("/money/mutual-funds", "Mutual funds", "layers", "mutual funds cas cams kfintech statement xirr sip fund returns category allocation capital gains"),
       ] },
       { id: "tax", label: "Tax", blurb: "What you owe on your gains and when, laid out for you and your CA.", pages: [

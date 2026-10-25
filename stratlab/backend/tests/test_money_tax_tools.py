@@ -449,6 +449,7 @@ def test_one_subscribers_failing_profile_doesnt_stop_the_others(w, monkeypatch):
     monkeypatch.setattr(A, "send", lambda p, subject, text: sent.append(p["id"]) or True)
     monkeypatch.setattr(A, "subscribers", lambda: ["u-basic", "u-pro", "u-free"])
     monkeypatch.setattr(A.db, "get_profile", lambda uid: (_ for _ in ()).throw(RuntimeError("boom")) if uid == "u-basic" else got(uid))
+    monkeypatch.setattr(A, "allows", lambda plan, f: True)          # every plan's reminders here (Free's are skipped: DP2-004)
     eve = datetime(2026, 12, 8, 4, 0, tzinfo=ZoneInfo("UTC"))
     assert A.Job().tick(eve) == 2 and sent == ["u-pro", "u-free"]
 
@@ -467,6 +468,7 @@ def test_an_advance_tax_run_killed_mid_way_skips_the_readers_already_sent(w, mon
         return True
     monkeypatch.setattr(A, "send", send)
     monkeypatch.setattr(A, "subscribers", lambda: ["u-basic", "u-pro", "u-free"])
+    monkeypatch.setattr(A, "allows", lambda plan, f: True)          # every plan's reminders here (Free's are skipped: DP2-004)
     eve = datetime(2026, 12, 8, 4, 0, tzinfo=ZoneInfo("UTC"))
     with pytest.raises(KeyboardInterrupt):
         A.Job().tick(eve)

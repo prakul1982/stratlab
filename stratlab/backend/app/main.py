@@ -122,6 +122,7 @@ from .plans import FEATURE_PLAN, PLANS, allows, offer_state, promo_active, promo
 from .plans import stock_alerts as stock_alert_limit
 from .plans import access_plan, ai_reads_per_day, bigger_plan, free_basic_until, screens as screens_limit
 from .plans import decks as decks_limit, deepdives as deepdives_limit, payments_live  # noqa: F401  (tests set main.payments_live)
+from .plans import limit_message as plan_limit_message
 
 kite = KiteService()
 hub = TickHub(kite)
@@ -975,6 +976,27 @@ def me(profile=Depends(current_profile)):
     })
 
 
+@app.get("/me/limits")
+def my_limits(profile=Depends(current_profile)):
+    """Every kept-count limit the Plans page lists, with what the account holds against it, for Account's "Plan and usage"
+    (DP2-031: it showed the monthly counts only). Its own call, so /me, which every page opens with, reads no more. A
+    limit of None is none; `used` is None where nothing is counted (the journal keeps the latest trades by itself)."""
+    plan, uid = profile["_plan"], profile["id"]
+
+    def n(fn):
+        try:
+            return fn()
+        except Exception:
+            return None
+    jobs = {"stock_alerts": lambda: sum(1 for a in stock_alerts.items(uid) if a.get("status") == "active"),
+            "screens": lambda: len(screens.items(uid)), "holdings": lambda: len(holdings.load(uid)["items"]),
+            "mf_schemes": lambda: len(money_mf.load(uid)["schemes"]), "networth_items": lambda: len(money_networth.load(uid)["items"])}
+    got = {k: _usage_pool.submit(n, f) for k, f in jobs.items()}
+    rows = [{"key": k, "used": got[k].result() if k in got else None, "limit": PLANS[plan][k], "next": bigger_plan(plan, k)}
+            for k in ("stock_alerts", "screens", "holdings", "mf_schemes", "networth_items", "journal_trades")]
+    return ok({"plan": PLANS[plan]["name"], "rows": rows})
+
+
 _usage_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="usage-counts")
 
 
@@ -1406,13 +1428,50 @@ def export_strategy(req: SaveStrategyReq, profile=Depends(current_profile)):
                     headers={"Content-Disposition": f'attachment; filename="{name}.json"'})
 
 
+TRADE_COLUMNS = ("symbol", "side", "opened", "closed", "qty", "entry_price", "exit_price", "pnl_after_costs", "return_pct", "why_closed")
+
+
+def trades_csv(exp: dict) -> str:
+    """One experiment's trades as CSV, oldest first: the rows its verdict page lists (a still-open one valued at the last
+    close, with no close time), in the instrument's own currency. Plain values, no formulas: a cell starting with = + - @
+    is quoted with a ' in front so a spreadsheet never runs it."""
+    import csv
+    import io
+    inst = exp.get("instrument") or {}
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(TRADE_COLUMNS)
+    safe = (lambda v: f"'{v}" if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v)
+    for t in exp.get("trades") or []:
+        qty, entry, pnl = t.get("qty") or 0, t.get("entry") or 0, t.get("pnl") or 0
+        ret = round(pnl / (qty * entry) * 100, 4) if qty and entry else t.get("ret")
+        w.writerow([safe(x) for x in (t.get("symbol") or inst.get("symbol") or "", t.get("side") or "long", t.get("entry_t") or "",
+                                      t.get("exit_t") or "", qty, entry, t.get("exit"), round(pnl, 2), ret,
+                                      t.get("why") if t.get("exit_t") else "Still open: valued at the last close")])
+    return buf.getvalue()
+
+
+@app.get("/notebooks/{nid}/experiments/{version}/trades.csv")
+def export_trades(nid: str, version: int, profile=Depends(current_profile)):
+    """A run's trades as a CSV file (Pro, with the rules' export): what Plans promises as "rules and trades" (DA-041)."""
+    need(profile, "export", "Trade export")
+    nb = get_notebook(profile, nid)
+    exp = next((e for e in nb.get("experiments") or [] if e["v"] == version), None)
+    if exp is None:
+        err(404, "not_found", "Experiment not found.")
+    name = "".join(ch if ch.isalnum() else "-" for ch in (nb.get("name") or "trades")).strip("-") or "trades"
+    return Response(trades_csv(exp), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}-v{version}-trades.csv"'})
+
+
 def ai_allowance(profile, held: int = 0) -> tuple[int, int | None]:
     """AI builds used this month and the plan's limit; errors out when either cap is reached. `held`: builds running
     right now that will be counted when they finish."""
     limit = PLANS[profile["_plan"]]["ai_builds_per_month"]
     used = db.count_usage(profile["id"], "ai", month_start_iso())
     if limit is not None and used + held >= limit:
-        err(429, "ai_limit", f"You've used all {limit} AI builds this month." + lift(profile["_plan"], "ai_builds_per_month", "AI builds"))
+        # the one lock wording, with when the count starts again (DP2-022, DP1-018)
+        err(429, "ai_limit", plan_limit_message(profile["_plan"], "ai_builds_per_month", f"You've used all {limit} AI builds this month", "AI builds", monthly=True))
     since = research_routes.ai_day_start()         # India's day, like the research cap
     # a safety cap on Pro's unlimited builds, said on Plans; the site's admins have none (R8O-002)
     if not admin.is_admin(profile) and db.count_usage(profile["id"], "ai", since) + held >= AI_BUILDS_PER_DAY:
@@ -1573,7 +1632,7 @@ def use_backtest(profile, held: int = 0) -> int | None:
     """Check the monthly backtest limit before running one (`held`: runs of theirs already going); returns the limit."""
     limit = PLANS[profile["_plan"]]["backtests_per_month"]
     if limit is not None and backtests_used(profile) + held >= limit:
-        upgrade(f"You've used all {limit} backtests for this month." + lift(profile["_plan"], "backtests_per_month", "backtests"),
+        upgrade(plan_limit_message(profile["_plan"], "backtests_per_month", f"You've used all {limit} backtests this month", "backtests", monthly=True),
                 "backtest_limit")
     return limit
 
@@ -2294,9 +2353,9 @@ def save_alert(profile, req: StockAlertReq, aid: str | None = None) -> dict:
     except stock_alerts.AlertError as e:             # e.g. the same alert twice
         err(400, "bad_alert", str(e))
     except stock_alerts.LimitReached as e:
-        nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["stock_alerts"] > e.limit), None)
-        upgrade(f"Your plan has {e.limit} active alert{'s' if e.limit != 1 else ''}. Delete one"
-                + (f", or move to {nxt} for more." if nxt else " to add another."), "alert_limit")
+        # the one lock wording (DP2-022): the plan and its count, then what the next plan gives (the page adds the price)
+        upgrade(plan_limit_message(profile["_plan"], "stock_alerts", f"Your {PLANS[profile['_plan']]['name']} plan has {e.limit} "
+                                   f"alert{'s' if e.limit != 1 else ''} on at a time. Delete one to add another", "alerts"), "alert_limit")
     if a is None:
         err(404, "not_found", "That alert is gone. Reload the page.")
     return {"alert": alert_view(a), "note": alert_note(a, q), **alerts_page(profile)}
@@ -2807,13 +2866,14 @@ def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
         return None
     limit = limit_of(profile["_plan"])
     if limit is not None and deep_used(profile, kind) >= limit:
-        more = lift(profile["_plan"], key, "deep dives" if kind == "deepdive" else "decks")
+        # the one lock wording, with when the count starts again (DP2-022, DP1-018)
         if kind == "deepdive":
-            upgrade(f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month. Companies "
-                    f"you've already opened this month still open.{more}", "deepdive_limit")
+            upgrade(plan_limit_message(profile["_plan"], key, f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month",
+                                       "deep dives", monthly=True, after="Companies you've already opened this month still open."), "deepdive_limit")
         # a deck is a company's: its PDF and its PowerPoint count as one, so those still download (DP1-026)
-        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month. A company's PDF and PowerPoint count as "
-                f"one deck, so the deck of a company you've already made one for still downloads in either format.{more}", "deck_limit")
+        upgrade(plan_limit_message(profile["_plan"], key, f"You've made {limit} company deck{'' if limit == 1 else 's'} this month", "decks", monthly=True,
+                                   after="A company's PDF and PowerPoint count as one deck, so the deck of a company you've already made one "
+                                         "for still downloads in either format."), "deck_limit")
     return mark
 
 
@@ -3024,17 +3084,28 @@ def nse_twin_of(code: str) -> str | None:
     return next((s for s, v in bse_twins().items() if v == c), None)
 
 
+def _etf_list() -> dict[str, dict]:
+    """The exchange's ETF list as stored ({symbol: {name, isin, ...}}), empty when none is."""
+    return (_quiet(etf_nav.load_live) or {}).get("rows") or {}
+
+
 def _india_suggestions() -> list[dict]:
-    return suggest.india_rows(kite.equities(), _isin["map"], _quiet(bse_twins)) if kite.ready() else []
+    # with every listed ETF the broker's list may leave out, so the alert form's search finds NIFTYBEES (DP2-021)
+    rows = suggest.india_rows(kite.equities(), _isin["map"], _quiet(bse_twins)) if kite.ready() else []
+    return suggest.with_etfs(rows, _etf_list()) if rows else []
 
 
 def _india_listed() -> dict[str, dict]:
     """The stored list of Indian companies, named from the exchange's list where the stored one has no name, each NSE
-    company with its BSE listing's code where one is known (DD-003)."""
+    company with its BSE listing's code where one is known (DD-003), and the exchange's ETFs (DP2-021: the search found no
+    ETF while the broker's list was offline)."""
     names = {v[0]: v[1] for v in isin_list().values() if isinstance(v, list) and len(v) == 2}
     twins = _quiet(bse_twins) or {}
-    return {s: {**v, "name": v.get("name") or names.get(s), **({"twin": twins[s]} if not v.get("bse") and s in twins else {})}
-            for s, v in stock_pages.companies("IN").items()}
+    out = {s: {**v, "name": v.get("name") or names.get(s), **({"twin": twins[s]} if not v.get("bse") and s in twins else {})}
+           for s, v in stock_pages.companies("IN").items()}
+    for s, v in _etf_list().items():
+        out.setdefault(s.upper(), {"name": (v or {}).get("name") or s, "sym": s.upper(), "bse": None})
+    return out
 
 
 suggester = suggest.Suggester({"IN": _india_suggestions, "US": lambda: suggest.us_rows(_sec_companies())},
@@ -3384,7 +3455,8 @@ def holdings_edit(req: HoldingsReq, profile=Depends(current_profile)):
     out = {}
 
     def over():
-        upgrade(f"Your plan keeps up to {limit} stocks in My Holdings." + lift(profile["_plan"], "holdings", "holdings"), "holdings_limit")
+        upgrade(plan_limit_message(profile["_plan"], "holdings", f"Your {PLANS[profile['_plan']]['name']} plan keeps up to {limit} stocks in My Holdings", "holdings"),
+                "holdings_limit")
 
     def changed(before):                  # the changes, on the holdings as saved now
         rows = {(holdings.market_of(i), i["symbol"]): dict(i) for i in before["items"]}
@@ -4013,7 +4085,7 @@ def publish_to_library(nid: str, version: int, req: LibraryReq, profile=Depends(
 
 
 @app.get("/library")
-def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", official: bool = False, profile=Depends(current_profile)):
+def browse_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", official: bool = False, profile=Depends(current_profile)):
     shown = library.same_hold([e for e in library.all_entries() if library.visible(e, profile["id"]) and (e.get("official") or not official)])
     rows = library.search(shown, market.upper()[:10], verdict[:12], q[:80], sort)
     return {"entries": [library.public(e, profile["id"]) for e in rows[:200]], "total": len(rows),
@@ -4092,7 +4164,7 @@ PUBLIC_LIBRARY_HEADERS = {"Cache-Control": "public, max-age=300"}
 
 
 @app.get("/public/library")
-def public_library(market: str = "", verdict: str = "", q: str = "", sort: str = "best", limit: int = 100):
+def public_library(market: str = "", verdict: str = "", q: str = "", sort: str = "hold", limit: int = 100):
     """StratLab's own library strategies, readable without an account: the rules that were tested and the verdict each
     earned, as the app's own backtest gave it. Only entries StratLab published itself and that are not hidden; a user's
     published strategy is never listed here (signed-in people see those in /library)."""
@@ -4115,7 +4187,8 @@ def public_verdict(token: str):
     snap = public.load(token)
     if not snap:
         err(404, "not_found", "This link was turned off or never existed.")
-    return snap
+    # whether the link keeps its own card picture, so the page names it as its preview image too (DA-034)
+    return {**snap, "image": public.has_image(token)}
 
 
 @app.get("/v/{token}.png")
@@ -4132,7 +4205,8 @@ def public_verdict_page(token: str):
     if not snap:
         # a notice that the link isn't available, not the landing page in silence (R11C-015, R11D)
         return HTMLResponse(public.gone_html(), status_code=404, headers=public.GONE_HEADERS)
-    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "public, max-age=0, s-maxage=30, must-revalidate"})   # a link turned off stops within a minute
+    # not kept by the CDN: a link turned off is a 404 at once, not a cached page for another half minute (DA-035)
+    return HTMLResponse(public.preview_html(token, snap, public.has_image(token)), headers={"Cache-Control": "no-cache"})
 
 
 # ---------- company fact cards: an image and a public link that previews as it ----------
@@ -4754,9 +4828,8 @@ def save_screen(profile, req: ScreenSaveReq, sid: str | None = None) -> dict:
     except screens.ScreenError as e:
         err(400, "bad_screen", str(e))
     except screens.LimitReached as e:
-        nxt = next((PLANS[p]["name"] for p in ("basic", "pro") if PLANS[p]["screens"] > e.limit), None)
-        upgrade(f"Your plan keeps {e.limit} saved screen{'s' if e.limit != 1 else ''}. Delete one"
-                + (f", or move to {nxt} for more." if nxt else " to save another."), "screen_limit")
+        upgrade(plan_limit_message(profile["_plan"], "screens", f"Your {PLANS[profile['_plan']]['name']} plan keeps {e.limit} saved "
+                                   f"screen{'s' if e.limit != 1 else ''}. Delete one to save another", "screens"), "screen_limit")
     if s is None:
         err(404, "not_found", "That screen is gone. Reload the page.")
     return {"screen": screens.view(s), **screens_page(profile)}
@@ -4989,7 +5062,8 @@ def start_session(profile, s, inst):
     if profile["_plan"] == "free":
         t = trial_state(profile)
         if t["started"] and not t["active"]:
-            upgrade("Your free 5-market-day paper trading trial has ended. Upgrade to Basic or Pro to keep paper trading.", "trial_ended")
+            upgrade(f"Your Free plan's {PLANS['free']['live_trial_days']}-market-day paper trading trial has ended. Basic runs "
+                    f"{PLANS['basic']['live_limit']} strategies at a time with no end date.", "trial_ended")
         start_trial = not t["started"]
         if start_trial:
             db.update_profile(profile["id"], live_trial_started_at=db.now_iso())
@@ -5515,7 +5589,7 @@ def subscribe(req: SubscribeReq, profile=Depends(current_profile)):
     not_viewing(profile)
     if profile.get("_paid_plan", profile["_plan"]) == req.plan:
         err(400, "already_on_plan", f"You're already on {PLANS[req.plan]['name']}.")
-    # each call creates a Razorpay subscription
+    # a call can create a Razorpay subscription (an unpaid one for the same plan is used again: billing.create_subscription)
     throttle(profile, "subscribe", 5, 60, "That's a lot of checkouts in a minute. Try again in a minute.")
     throttle(profile, "subscribe_day", 20, 86400, "You've started a lot of checkouts today. Try again tomorrow.")
     try:
@@ -6594,14 +6668,15 @@ def library_seed_once(sleep=time.sleep):
     """A while after starting: StratLab's own strategies are published once, when the library has none yet and market
     data is up. Market data comes up with the day's broker login, which a night-time deploy starts before, so a start
     that finds it down checks again every half hour for a day instead of giving up until the next deploy. A library
-    that has them is never touched again (a deploy costs one cheap check), and a seed is only ever run once a start.
-    (After that the admin button refreshes them.)"""
+    that has fresh ones is not touched (a deploy costs one cheap check); one last tested over a week ago is run again, so
+    its dates stay near today's (DA-038). A seed is only ever run once a start; the admin button refreshes them any time."""
     sleep(SEED_FIRST_WAIT)
     for _ in range(SEED_TRIES):
         try:
             if not leader.leading():      # another container leads: its own start seeds
                 return
-            if library_seed.seeded():
+            have = library_seed.seeded()
+            if have and not library_seed.stale(have):
                 return
             if kite.ready() and _seeding.acquire(blocking=False):
                 try:
