@@ -12,6 +12,7 @@ import { ModelInputs, ModelPanel, RollPreview, type ModelRow } from "../componen
 import type { OptionGreeks } from "../lib/greeks";
 import { More } from "../components/More";
 import { Info } from "../components/ui";
+import { Lock } from "../components/Icons";
 import { track } from "../lib/analytics";
 import { Earlier } from "../components/Earlier";
 import { FoBadges } from "../components/FoBadges";
@@ -705,7 +706,7 @@ export function OptionsPage() {
           <Field label="Name" wide maxLength={80} value={s.name} onChange={(e) => patch({ name: e.target.value })} />
           <FormActions>
             <button type="submit" className="btn quiet" disabled={pricing || (!!offline && !recordedUnd)}>{pricing ? "Pricing…" : offline && recordedUnd ? (preview ? "Price again on the last close" : "Price it on the last close") : preview ? "Price again" : "Price it now"}</button>
-            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk)) || timeIssues.length > 0 || notes.length > 0} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? "🔒 Start paper trading (Basic)" : ruleMode && !signalOk ? "🔒 Start paper trading (Pro)" : "Start paper trading"}</button>
+            <button type="button" className="btn" disabled={starting || !!offline || !canStart || (ruleMode && (!s.signal || !signalOk)) || timeIssues.length > 0 || notes.length > 0} onClick={() => setConfirmStart(true)}>{starting ? "Starting…" : !canStart ? <><Lock />Start paper trading (Basic)</> : ruleMode && !signalOk ? <><Lock />Start paper trading (Pro)</> : "Start paper trading"}</button>
             {/* the Free plan's trial is for strategies: the lock says so, not just "Basic" (R59-005) */}
             {!canStart && <span className="k-note">Paper trading options is on the Basic plan; the Free plan's 5-market-day trial is for a notebook's strategy, not options. Pricing a structure works on every plan{offline && !recordedUnd ? ", once the live option quotes are back" : ""}. <Link className="link" to="/plans">Plans</Link></span>}
             {/* greyed out with no reason beside them read as broken (R48-004) */}

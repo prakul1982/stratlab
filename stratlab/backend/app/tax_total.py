@@ -472,6 +472,10 @@ def estimate(fy: int, inputs: dict, buckets: list[dict], intraday: float, busine
         line("Less deductions (old regime)", -ded)
     line("Income taxed at slab rates", normal, "subtotal")
     line("Share gains taxed at special rates (after set-off and exemption)", special_income, "subtotal")
+    # total income counts the long-term gains inside the exemption too: their own line, so the subtotals add up to it (DP2-011:
+    # "Total income ₹1,98,000" under "Share gains ₹73,000" with nothing between)
+    if sum(lt_exempt.values()) > 0.5:
+        line("Long-term gains within the exemption (not taxed)", sum(lt_exempt.values()), "subtotal")
     line("Total income", total, "subtotal")
     line("Slab tax", b["slab"], "tax")
     line("Tax on share gains at special rates", b["special_total"], "tax")

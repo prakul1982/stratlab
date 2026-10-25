@@ -311,7 +311,8 @@ export function HoldingsPage() {
             </>} />
             <DataTable label="Positions" columns={cols} rows={rows} rowKey={(r) => `${r.exchange}:${r.symbol}`} stack />
             {facts && facts.count > facts.checked && <p className="k-note">Trend and filings are shown for the {facts.checked} largest positions.</p>}
-            {facts && !facts.filings && <PlanNote>Red flags, recent filings and results dates come from the filings feature on the {facts.filings_plan} plan.</PlanNote>}
+            {/* the words Plans uses for the filings feature (DP2-009) */}
+            {facts && !facts.filings && <PlanNote>Each holding's red flags, recent filings and results date are on the {facts.filings_plan} plan, with red flags across your watchlist.</PlanNote>}
           </Card>
 
         </>

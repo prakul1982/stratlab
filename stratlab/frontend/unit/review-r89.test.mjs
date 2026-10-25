@@ -128,7 +128,7 @@ test("R90-014/R91-006: the feature check says when it ran; the library says what
 
 test("R92-002/003/005: the notebook says what its plan won't run before Run; a phone chip row shows its chosen chip; a shut market hides a stale wait", () => {
   const nb = read("src/pages/NotebookPage.tsx");
-  assert.match(nb, /\{planBlock && <p className="k-note" data-testid="run-plan-block">🔒 \{planBlock\}/);
+  assert.match(nb, /\{planBlock && <div data-testid="run-plan-block"><PlanNote>\{planBlock\}<\/PlanNote><\/div>\}/);   // the plan note since DP2-022
   assert.match(nb, /if \(planBlock\) \{ plansToast\(planBlock\); return; \}/);
   const chips = read("src/components/kit/ChipBar.tsx");
   assert.match(chips, /querySelector<HTMLElement>\('\[aria-pressed="true"\]'\)/);
@@ -166,7 +166,8 @@ test("R92-001: a lock says what the plan costs, in the visitor's currency, while
   assert.equal(planPriceLine("pro", p, "SAR"), "Pro is about SAR 78 a month or about SAR 783 a year.");
   assert.equal(planPriceLine("pro", { ...p, offer: { ...paid, yearly: false } }, "INR"), "Pro is ₹1,999 a month.");
   assert.equal(planPriceLine("pro", p, "XYZ"), null);
-  assert.equal(offer.unlockHint(paid, undefined, "Basic is ₹699 a month or ₹6,999 a year."), "Basic is ₹699 a month or ₹6,999 a year. See the plans to upgrade.");
+  // the price, and the lock's own button says "See plans" (DP2-022: never said twice)
+  assert.equal(offer.unlockHint(paid, undefined, "Basic is ₹699 a month or ₹6,999 a year."), "Basic is ₹699 a month or ₹6,999 a year.");
   assert.equal(offer.unlockHint({ ...paid, payments: false, mode: "early" }, "a@b.c", "Basic is ₹699 a month."), "Paid plans open soon; ask us at a@b.c for early access.");
   assert.match(read("src/components/kit/Notice.tsx"), /const price = usePlanPrice\(plan \?\? named\);/);
   assert.match(read("src/components/PageLock.tsx"), /unlockHint\(me\.offer, CFG\.CONTACT_EMAIL \|\| EARLY_ACCESS_EMAIL, price\)/);

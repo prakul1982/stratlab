@@ -117,8 +117,12 @@ def test_banned_words_and_unknown_tickers_drop_the_ai_text(monkeypatch):
     s = write.summary(f)
     assert not s["ai"] and s["text"] == write.template(f)
     write._cache.clear()
-    monkeypatch.setattr(write, "complete", lambda *a, **k: json.dumps({"summary": "NIFTY 50 closed 0.42% higher; Nifty IT moved to Leading."}))
-    assert write.summary(f) == {"text": "NIFTY 50 closed 0.42% higher; Nifty IT moved to Leading.", "ai": True}
+    monkeypatch.setattr(write, "complete", lambda *a, **k: json.dumps({"summary": "Nifty IT moved to Leading on the rotation chart."}))
+    assert write.summary(f) == {"text": "Nifty IT moved to Leading on the rotation chart.", "ai": True}
+    # a sentence restating an index's move is dropped: the facts line and the Indices list already give it (DP2-037)
+    write._cache.clear()
+    monkeypatch.setattr(write, "complete", lambda *a, **k: json.dumps({"summary": "The NIFTY 50 closed 0.42% higher. Nifty IT moved to Leading."}))
+    assert write.summary(f) == {"text": "Nifty IT moved to Leading.", "ai": True}
 
 
 def test_ai_failure_falls_back_to_the_template_and_is_asked_once_per_day(w):
@@ -769,7 +773,7 @@ def test_a_failed_ai_summary_is_retried_after_a_few_minutes_not_a_day(monkeypatc
     from types import SimpleNamespace
     from app.intel import net
     f = market()
-    replies = [AIBusy("busy"), json.dumps({"summary": "NIFTY 50 closed 0.42% higher; Nifty IT moved to Leading."})]
+    replies = [AIBusy("busy"), json.dumps({"summary": "Nifty IT moved to Leading on the rotation chart."})]
 
     def fake(*a, **k):
         r = replies.pop(0)

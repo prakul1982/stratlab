@@ -65,9 +65,12 @@ export const EARLY_ACCESS_EMAIL = "support@stratlab.studio";
 
 /** What to do about a locked feature, in one honest line: see the plans while they can be bought, else ask for early
  * access (the server words its 402 answers the same way: plans.upgrade_note). */
-export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMAIL, price?: string | null): string {
-  // the price first, while a plan can be bought: "Basic is ₹699 a month or ₹6,999 a year." (R92-001: no lock said it)
-  return canBuy(o) ? `${price ? `${price} ` : ""}See the plans to upgrade.` : `Paid plans open soon; ask us at ${email} for early access.`;
+export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMAIL, price?: string | null, button = true): string {
+  if (!canBuy(o)) return `Paid plans open soon; ask us at ${email} for early access.`;
+  // the price, while a plan can be bought: "Basic is ₹699 a month or ₹6,999 a year." (R92-001: no lock said it). The way to it
+  // is the lock's own button (See plans), so the words don't say it again (DP2-022: "…or see plans for more. See the plans to
+  // upgrade."); a lock with no button (a tag's tooltip) says it in words.
+  return [price ?? "", button ? "" : "See the plans to upgrade."].filter(Boolean).join(" ");
 }
 
 /** A paid feature's tag in the app. Locked: "Basic" or "Pro" with a lock. Usable without paying for that plan (the
@@ -75,8 +78,9 @@ export function unlockHint(o: Offer | null | undefined, email = EARLY_ACCESS_EMA
 export function featureTag(plan: PlanId, o: Offer | null | undefined, x: { paid?: PlanId | null; canUse?: boolean; part?: boolean }): { label: string; why: string; locked: boolean } {
   const name = plan === "pro" ? "Pro" : "Basic";
   // a page that is free in the main and has a paid part (history, every scheme…) is not locked: its card says which part
-  if (!x.canUse && x.part) return { label: `${name} for part`, why: `Part of this page is on the ${name} plan; the rest is free. ${unlockHint(o)}`, locked: false };
-  if (!x.canUse) return { label: `🔒 ${name}`, why: `A ${name} feature. ${unlockHint(o)}`, locked: true };
+  if (!x.canUse && x.part) return { label: `${name} for part`, why: `Part of this page is on the ${name} plan; the rest is free. ${unlockHint(o, undefined, null, false)}`, locked: false };
+  // the lock is the line icon the tag draws beside the word (`locked`), not an emoji in it (DP2-022, DP1-018)
+  if (!x.canUse) return { label: name, why: `A ${name} feature. ${unlockHint(o, undefined, null, false)}`, locked: true };
   const openNow = RANK[x.paid ?? "free"] < RANK[plan];
   if (!openNow) return { label: name, why: `On the ${name} plan`, locked: false };
   const why = offerMode(o) === "promo" ? `A ${name} feature, open to everyone during the launch offer` : `A ${name} feature, open to you for now`;

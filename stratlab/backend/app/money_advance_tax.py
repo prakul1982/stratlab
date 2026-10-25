@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 from . import alerts, db, leader, run_marks
 from .config import settings
+from .plans import allows, plan_of
 from .tax_lots import fy_label, money
 
 KEY = "advtax:"                   # advtax:<uid> = {"remind": bool, "years": {"2026": {"tds", "paid": [{d, amount}]}}}
@@ -429,7 +430,7 @@ class Job:
                 run.beat()
                 try:                               # one subscriber's failure never stops the rest
                     profile = db.get_profile(uid)
-                    if profile:
+                    if profile and allows(plan_of(profile), "money_reminders"):     # Basic, as Plans lists it (DP2-004)
                         globals()["_current"] = (d, n)
                         run.record(uid)            # before the send: a kill in between drops one, never doubles
                         sent += send(profile, subject, text)

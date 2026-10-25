@@ -6,6 +6,7 @@ import { useApp } from "../../lib/app";
 import { unlockHint } from "../../lib/offer";
 import { usePlanPrice } from "../../lib/currency";
 import { PlanActions } from "../PlanInterest";
+import { Lock } from "../Icons";
 
 /** One line of words beside the page, with an optional button: a plan note ("on the Basic plan" + See plans), an
  * estimate-only reminder. `tone="warn"` gives it the orange edge. Use it instead of a bare `.banner`. */
@@ -36,5 +37,7 @@ export function PlanNote({ children, plan }: { children: ReactNode;
     setNamed(m ? (m[1] === "Pro" ? "pro" : "basic") : null);
   });
   const price = usePlanPrice(plan ?? named);
-  return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true">🔒 </span><span ref={words}>{children}</span> {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, price)}</Notice>;
+  // one lock wording everywhere (DP2-022, DP1-018): the line icon, what is locked and on which plan (and when a monthly count
+  // starts again), the price, then the button; never the emoji, never "see plans" in words beside the button
+  return <Notice className="plan-note" actions={<PlanActions source="lock" />}><span className="plan-lock" aria-hidden="true"><Lock /></span><span ref={words}>{children}</span> {unlockHint(me?.offer, CFG.CONTACT_EMAIL || undefined, price)}</Notice>;
 }

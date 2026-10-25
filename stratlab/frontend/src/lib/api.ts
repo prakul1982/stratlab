@@ -76,6 +76,7 @@ export async function api<T = any>(path: string, { method = "GET", body, raw = f
     const e = new ApiError(msg);
     e.status = r.status;
     e.code = d?.code;
+    if (d?.plan === "basic" || d?.plan === "pro") e.plan = d.plan;
     if (Array.isArray(d)) e.fields = serverProblems(d);
     if (r.status === 401) onUnauthorized();
     if (d?.code === "data_offline") onOffline();

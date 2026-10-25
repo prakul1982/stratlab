@@ -14,7 +14,7 @@ from . import money_dividends as divs
 from . import money_ltcg as ltcg
 from .auth import current_profile
 from .kite_service import IST
-from .plans import allows
+from .plans import FEATURE_PLAN, PLANS, allows
 
 router = APIRouter(prefix="/money", tags=["money"])
 US_LOOKUPS = 15                   # US holdings whose dividend history is read while the page waits
@@ -190,9 +190,12 @@ def advance_view(profile, fy: int | None = None) -> dict:
     t = today()
     fy = fy or tax_lots.fy_of(t.isoformat())
     full = allows(profile["_plan"], "tax_tools")
+    # the reminders are the money calendar's (Basic), as Plans lists them: a plan without them never shows them on (DP2-004)
+    can_remind = allows(profile["_plan"], "money_reminders")
     saved = adv.load(profile["id"])
     mine = saved["years"].get(fy) or adv.clean_year({})
-    out = {"fy": fy, "label": tax_lots.fy_label(fy), "dates": adv.due_dates(fy), "remind": saved["remind"],
+    out = {"fy": fy, "label": tax_lots.fy_label(fy), "dates": adv.due_dates(fy), "remind": saved["remind"] and can_remind,
+           "remind_locked": not can_remind, "remind_plan": PLANS[FEATURE_PLAN["money_reminders"]]["name"],
            "locked": not full, "as_of": t.isoformat(), "assumptions": adv.ASSUMPTIONS, "threshold": adv.THRESHOLD,
            "current_fy": tax_lots.fy_of(t.isoformat())}
     if not full:
@@ -249,6 +252,8 @@ def advance_tax_reminders(req: RemindReq, profile=Depends(current_profile)):
     """Turn the reminders 7 days and 1 day before each due date on or off (email to a confirmed address, and phone
     notifications where set up). Dates only; no amounts are sent."""
     M = _m()
+    if req.on:                    # turning them off is always allowed (DP2-004: Free could turn them on)
+        M.need(profile, "money_reminders", "Advance tax reminders")
     M.throttle(profile, "tax_edit", 120, 3600, "That's a lot of changes in an hour. Try again a little later.")
     adv.set_remind(profile["id"], req.on)
     return {"remind": req.on}
@@ -266,6 +271,8 @@ def long_term(profile=Depends(current_profile)):
     out = ltcg.tracker({**c, "realised": equity, "open": c["equity_open"], "unit_rows": instrument_kinds.bucket_rows(units, c["names"])},
                        i["quotes"], i["today"], full)
     below = tax_lots.below_cost(c["open"], i["quotes"], i["today"])
+    if not full:                  # lot-by-lot facts are Pro: a locked figure is no figure, never a false 0 (DP2-003)
+        out = {**out, "open_lt": None, "soon_counts": None}
     return M.ok({**out, "below_cost": below if full else {**below, "rows": []}, "names": c["names"],
                  "prices": i["live"], "trades": len(i["trades"])})
 

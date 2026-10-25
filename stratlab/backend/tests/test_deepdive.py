@@ -469,14 +469,16 @@ def test_monthly_deep_dives_and_decks_count_each_company_once(api, monkeypatch):
     r = c.get("/research/deep/CCC")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deepdive_limit"
     msg = r.json()["detail"]["message"]
-    assert "You've opened 2 companies in the deep dive this month" in msg and msg.endswith("Basic gives 15.")
+    assert "You've opened 2 companies in the deep dive this month" in msg and "The count starts again on " in msg and "Basic gives 15 a month." in msg   # DP2-022
     assert c.get("/research/deep/AAA").status_code == 200                        # already opened: still opens
     assert c.post("/research/deep/CCC/card").status_code == 402                  # the report card counts the same way
     assert c.get("/research/deep/AAA/deck").status_code == 200
     r = c.get("/research/deep/AAA/deck?region=US")
     assert r.status_code == 402 and r.json()["detail"]["code"] == "deck_limit"
-    assert r.json()["detail"]["message"] == ("You've made 1 company deck this month. A company's PDF and PowerPoint count as one deck, "
-                                                "so the deck of a company you've already made one for still downloads in either format. Basic gives 5.")
+    from app.plans import resets_on
+    assert r.json()["detail"]["message"] == (f"You've made 1 company deck this month. The count starts again on {resets_on()}. A company's PDF and "
+                                                "PowerPoint count as one deck, so the deck of a company you've already made one for still downloads in "
+                                                "either format. Basic gives 5 a month.")
     assert usage.count("deepdive") == 2 and usage.count("deck") == 1
     who["p"] = {"id": "u1", "plan": "basic", "_plan": "basic"}
     for i in range(13):

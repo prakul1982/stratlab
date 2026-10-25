@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { Download } from "../../components/Icons";
+import { Download, Lock } from "../../components/Icons";
+import { lockWords } from "../../lib/lockText";
 import { track } from "../../lib/analytics";
 import { Card, CardHead, DataTable, EmptyState, ErrorState, Field, FormGrid, Notice, PageHeader, PlanNote, Select, Skeleton, Stat, StatRow, type Column } from "../../components/kit";
 import { movedYearNote, rememberFy, savedFy } from "../../lib/fy";
@@ -119,14 +120,19 @@ export function ItrExportPage() {
           <Card>
             <CardHead title={`Download for ${v.label} (AY ${v.ay})`} />
             {/* the same words as the lock shown while the page loads, on every plan (R6O-013) */}
-            {v.locked && <PlanNote>Part of this page is on {v.plan}. {featureName("itr_export")}: on the {v.plan} plan. You're on {yours}; the rest of the page is yours, and below is what each schedule would hold.</PlanNote>}
+            {/* the page lock's words (PageLock.lockWords), so the two never read differently (R6O-013, DP2-012) */}
+            {v.locked && <PlanNote>Part of this page is on the {v.plan} plan. {lockWords(featureName("itr_export"), v.plan, yours, false)} Below is what each schedule would hold.</PlanNote>}
+            {/* the three downloads look alike, and when they're off the reason is under them (DP2-011: a dark PDF button beside two
+                faint ones, all three off with no word) */}
             <div className="k-downloads">
               {FORMATS.map(([f, label, hint]) => (
-                <button key={f} type="button" className={`btn${f === "pdf" ? "" : " quiet"}`} disabled={v.locked || !!getting || loadingFy != null} onClick={() => download(f)}>
-                  <Download size={16} /><span>{getting === f ? "Making it…" : label}<small>{hint}</small></span>
+                <button key={f} type="button" className="btn outline" disabled={v.locked || !!getting || loadingFy != null} onClick={() => download(f)}
+                  aria-describedby={v.locked ? "itr-why-off" : undefined} title={v.locked ? `On the ${v.plan} plan` : undefined}>
+                  {v.locked ? <Lock size={16} /> : <Download size={16} />}<span>{getting === f ? "Making it…" : label}<small>{hint}</small></span>
                 </button>
               ))}
             </div>
+            {v.locked && <p id="itr-why-off" className="k-small k-muted">The downloads are on the {v.plan} plan.</p>}
             <StatRow>{v.summary.map((s) => <Stat key={s.label} label={s.label} value={/^[−+-]?[₹$\d]/.test(s.value) && s.value.length < 18 ? s.value : <span className="k-stat-text">{s.value}</span>} />)}</StatRow>
           </Card>
 

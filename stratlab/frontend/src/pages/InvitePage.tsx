@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { shareLink, siteUrl } from "../lib/share";
 import { track } from "../lib/analytics";
-import { FRIEND_GETS, inviteRows, plural, youGet, type Invites } from "../lib/invite";
+import { FRIEND_GETS, inviteRows, plural, youGetLines, type Invites } from "../lib/invite";
 import { Share } from "../components/Icons";
 import { Badge, Card, CardHead, ErrorState, Field, FormActions, FormGrid, PageHeader, Skeleton } from "../components/kit";
 
@@ -38,14 +38,16 @@ function InviteCard() {
   };
   return (
     <Card id="invite" label="Invite friends">
-      <CardHead title="Your invite link" actions={<span data-testid="friends-joined"><Badge dot={false}>{plural(v.joined, "friend")} joined · {plural(v.months ?? 0, "free month")} earned</Badge></span>} />
+      {/* the card is named for what it counts, so "Your invite link" is said once, on its box (DP2-035: three times) */}
+      <CardHead title="Friends and free time" actions={<span data-testid="friends-joined"><Badge dot={false}>{plural(v.joined, "friend")} joined · {plural(v.months ?? 0, "free month")} earned</Badge></span>} />
       <FormGrid label="Sharing" onSubmit={(e) => { e.preventDefault(); void share(); }}>
         <Field label="Your invite link" wide readOnly value={link} onFocus={(e) => e.target.select()} />
         <FormActions><button type="submit" className="btn outline"><Share size={16} /> Share your link</button></FormActions>
       </FormGrid>
       <div className="k-stack" data-testid="invite-reward-line">
         <p className="k-small"><b>What a friend gets.</b> {FRIEND_GETS}</p>
-        <p className="k-small"><b>What you get.</b> {youGet(v, paid)}</p>
+        <p className="k-small"><b>What you get:</b></p>
+        <ul className="k-list">{youGetLines(v, paid).map((l) => <li key={l}>{l}</li>)}</ul>
       </div>
       <div className="k-rows" data-testid="invite-status" aria-label="Your invites">
         {inviteRows(v, paid).map(([k, val]) => <div key={k}><span>{k}</span><b>{val}</b></div>)}

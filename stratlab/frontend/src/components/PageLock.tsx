@@ -5,9 +5,11 @@ import { useApp } from "../lib/app";
 import { featureName, gateFor, gatePlan } from "../lib/gates";
 import { unlockHint, EARLY_ACCESS_EMAIL } from "../lib/offer";
 import { PLAN_NAME } from "../lib/plans";
+import { lockWords } from "../lib/lockText";
 import { usePlanPrice } from "../lib/currency";
 import { Notice } from "./kit";
 import { PlanActions } from "./PlanInterest";
+import { Lock } from "./Icons";
 
 /** At the top of a page holding a paid feature the person's plan doesn't include: which plan has it, and what to do,
  * honestly (no checkout while paid plans aren't on sale). The server refuses the feature either way (plans.allows).
@@ -23,7 +25,9 @@ export function PageLock() {
   useEffect(() => {
     setOwn(false);
     if (!locked) return;
-    const look = () => setOwn(!!document.querySelector("main .plan-note:not(.page-lock)"));
+    // a page that words each of its locks where it applies (Tax tools: Basic's dividend detail, Pro's amounts) says so with
+    // data-plan-notes, so its tabs don't get the page's note on one tab and their own on another (DP2-012)
+    const look = () => setOwn(!!document.querySelector("main .plan-note:not(.page-lock), main [data-plan-notes]"));
     look();
     const mo = new MutationObserver(look);
     const main = document.querySelector("main");
@@ -37,8 +41,8 @@ export function PageLock() {
   const hint = unlockHint(me.offer, CFG.CONTACT_EMAIL || EARLY_ACCESS_EMAIL, price);
   return (
     <Notice className="page-lock plan-note" label={`${plan} feature`} actions={<PlanActions source="lock" />}>
-      <b>🔒 {gate.whole ? `This page is a ${plan} feature.` : `Part of this page is on ${plan}.`}</b>{" "}
-      {gate.whole ? `${what}. You're on ${yours}.` : `${what}: on the ${plan} plan. You're on ${yours}; the rest of the page is yours.`}{" "}
+      <b><Lock />{gate.whole ? `This page is on the ${plan} plan.` : `Part of this page is on the ${plan} plan.`}</b>{" "}
+      {lockWords(what, plan, yours, gate.whole)}{" "}
       {hint}
     </Notice>
   );

@@ -90,7 +90,8 @@ test("the menu locks only a page that is locked whole; a part-paid page is descr
   const part = featureTag("basic", null, { canUse: false, part: true });
   assert.equal(part.locked, false);
   assert.equal(part.label, "Basic for part");
-  assert.equal(featureTag("basic", null, { canUse: false }).label, "🔒 Basic");
+  assert.equal(featureTag("basic", null, { canUse: false }).label, "Basic");        // the lock is the tag's icon (DP2-022)
+  assert.equal(featureTag("basic", null, { canUse: false }).locked, true);
   assert.equal(featureTag("basic", null, { canUse: true, part: true, paid: "basic" }).label, "Basic");
   // the two pages say what is free, where the numbers are
   assert.match(read("pages/money/NetWorthPage.tsx"), /of \{view\.limit\} free entries used/);
