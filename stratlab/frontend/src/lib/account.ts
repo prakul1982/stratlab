@@ -63,9 +63,10 @@ export function countOf(used: number, limit: number): string {
 }
 
 /** The deep dive's line under its buttons: "Companies opened this month: 2 of 2 (limit reached). Decks: 1 of 1 (limit
- * reached). Opening a company again this month doesn't count." (R22-002) */
+ * reached). Opening a company again this month doesn't count." (R22-002). A deck is a company's: its PDF and its PowerPoint
+ * count as one, so the line says so (DP1-026). */
 export function deepDiveLimitLine(deepdiveUsed: number, deepdiveLimit: number, deckUsed: number, deckLimit: number | null | undefined): string {
-  return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}.` : ""} Opening a company again this month doesn't count.`;
+  return `Companies opened this month: ${countOf(deepdiveUsed, deepdiveLimit)}.${deckLimit != null ? ` Decks: ${countOf(deckUsed, deckLimit)}; a company's PDF and PowerPoint are one deck.` : ""} Opening a company again this month doesn't count.`;
 }
 
 /** AI builds this month: "5 of 100", or on a plan with no monthly limit "5 (unlimited; up to 200 a day)", the daily safety cap

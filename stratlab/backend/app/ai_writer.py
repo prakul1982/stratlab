@@ -16,9 +16,14 @@ _ASKED = re.compile(r"\b(time ?frame|candle|interval|stop|target|take[- ]profit|
                     r"capital|risk|position size|sizing)\b", re.I)
 
 
+# the AI talking about the person in the third person ("User asked about weather, not a trading strategy.") is its own
+# reasoning, not a line for them to read (DP1-006)
+_THIRD_PERSON = re.compile(r"^\W*(?:the\s+)?user(?:'s)?\b", re.I)
+
+
 def user_note(note: str) -> bool:
     """Whether one of the AI's notes is for the person: not internal wording, not about what the app asks anyway."""
-    if _INTERNAL.search(note):
+    if _INTERNAL.search(note) or _THIRD_PERSON.search(note):
         return False
     return not (_UNSAID.search(note) and _ASKED.search(note))
 
@@ -151,6 +156,7 @@ def write_strategy(text: str, pro: bool) -> dict:
         raw_notes = []
     out = {"notes": [n for n in (str(x).strip() for x in raw_notes) if n and user_note(n)][:8]}
     allowed = None if pro else {"price", "num", "sma", "ema", "rsi"}
+    locked: list[str] = []
 
     def conds(items, what: str):
         res = []
@@ -162,6 +168,8 @@ def write_strategy(text: str, pro: bool) -> dict:
                 continue
             if allowed and (cond.l.t not in allowed or cond.r.t not in allowed):
                 out["notes"].append("Advanced indicators (MACD, Bollinger, VWAP, Supertrend, ADX, Stochastic, ATR, Donchian, volume) need the Basic plan or above, so that part was left out.")
+                # what was left out, by name: the builder refuses such an idea whole rather than build the rest (DP1-002)
+                locked.extend(TYPE_NAME.get(t, t) for t in (cond.l.t, cond.r.t) if t not in allowed)
                 continue
             res.append(cond.model_dump(exclude_none=True))
         if len(res) > 10:
@@ -194,7 +202,8 @@ def write_strategy(text: str, pro: bool) -> dict:
         out["notes"].append("Some session times couldn't be read and were left out.")
     out["product"] = "intraday" if data.get("product") == "intraday" else "auto"
     out["tf"] = data.get("tf") if data.get("tf") in ("1d", "1h", "15m", "5m") else None
-    out["name"] = str(data.get("name") or "")[:80] or None
+    # a name the way the person would write it: "MACD VWAP BTC", not "MACD_VWAP_BTC" (DP1-011)
+    out["name"] = re.sub(r"\s+", " ", str(data.get("name") or "").replace("_", " ")).strip()[:80] or None
     out["instrument"] = str(data["instrument"])[:40] if data.get("instrument") else None
     out["market"] = data.get("market") if data.get("market") in ("IN", "CRYPTO", "US", "UK", "EU", "JP", "FX", "MCX", "CDS", "CMDTY") else None
     out["universe"] = _universe(data.get("universe"))
@@ -229,6 +238,7 @@ def write_strategy(text: str, pro: bool) -> dict:
         mentioned.add("instrument")
     out["mentioned"] = sorted(mentioned)
     out["notes"] = list(dict.fromkeys(out["notes"]))
+    out["locked"] = list(dict.fromkeys(locked))
     return out
 
 
@@ -275,6 +285,53 @@ def options_idea(text: str) -> bool:
     return bool(_OPTIONS.search(text or ""))
 
 
+# ---------- indicators beyond Free's price, SMA, EMA and RSI (DP1-002, DP1-003) ----------
+# An idea built on one of these was built without it on Free: "Short Bitcoin when the price falls below the lowest low of
+# the last 20 days" came back as "Price is below 20", and a MACD crossover as "That one is on our side". Such an idea is
+# refused whole, by name and before any AI build is used, never built from what is left.
+TYPE_NAME = {"macd": "MACD", "macd_signal": "MACD", "macd_hist": "MACD", "bb_upper": "Bollinger Bands", "bb_mid": "Bollinger Bands",
+             "bb_lower": "Bollinger Bands", "vwap": "VWAP", "supertrend": "Supertrend", "stage": "the market stage (Stage 2)",
+             "adx": "ADX", "stoch_k": "Stochastic", "atr_pct": "ATR", "atr": "ATR",
+             "dc_upper": "the highest high or lowest low of past candles", "dc_lower": "the highest high or lowest low of past candles",
+             "volume": "volume", "vol_sma": "volume", "open": "the candle's open, high, low and wicks", "high": "the candle's open, high, low and wicks",
+             "low": "the candle's open, high, low and wicks", "body": "the candle's open, high, low and wicks",
+             "upper_wick": "the candle's open, high, low and wicks", "lower_wick": "the candle's open, high, low and wicks",
+             "range": "the candle's open, high, low and wicks", "prev_close": "the day's open, high, low and change",
+             "day_open": "the day's open, high, low and change", "day_high": "the day's open, high, low and change",
+             "day_low": "the day's open, high, low and change", "day_chg": "the day's open, high, low and change",
+             "india_vix": "India VIX", "india_vix_chg": "India VIX"}
+_NAMED_LOCKED = (
+    ("MACD", r"\bmacd\b"),
+    ("Bollinger Bands", r"\bbollinger\b"),
+    ("VWAP", r"\bvwap\b"),
+    ("Supertrend", r"\bsuper[- ]?trend\b"),
+    ("the market stage (Stage 2)", r"\bstage[- ]?(?:[1-4]|one|two|three|four)\b|\bweinstein\b"),
+    ("ADX", r"\badx\b"),
+    ("Stochastic", r"\bstoch(?:astic)?\b"),
+    ("ATR", r"\batr\b|\baverage true range\b"),
+    ("the highest high or lowest low of past candles",
+     r"\bdonchian\b|\b(?:highest|lowest)\s+(?:high|low|close)\b|\b\d+[- ]?(?:day|week|bar|candle|period|month)s?[- ]?(?:high|low)s?\b"
+     r"|\b(?:52|fifty[- ]?two)[- ]?(?:weeks?|wks?|w)\b[- ]*(?:low|high)s?\b|\b(?:one|1)[- ]?year[- ]*(?:low|high)s?\b"),
+    ("volume", r"\bvolumes?\b"),
+    ("India VIX", r"\bvix\b"),
+)
+
+
+def locked_named(text: str) -> list[str]:
+    """The indicators beyond price, SMA, EMA and RSI that the sentence names, in plain words (empty: none)."""
+    return [name for name, pat in _NAMED_LOCKED if re.search(pat, text or "", re.I)]
+
+
+def locked_message(names: list[str]) -> str:
+    """Why the idea wasn't built on Free: what it uses and which plan has it ("MACD is on the Basic plan…"). The app adds the
+    price beside it."""
+    names = list(dict.fromkeys(names))
+    said = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    said = said[0].upper() + said[1:]
+    return (f"{said} {'is' if len(names) == 1 else 'are'} on the Basic plan. On Free, notebook rules use price, SMA, EMA and RSI, "
+            "so this idea wasn't built: leaving that part out would test a different idea. No AI build was used.")
+
+
 # ---------- the AI's rules checked against the sentence they came from (R11C-004, R11C-005) ----------
 # values on the price's own scale: compared with a number, it must be a price above 0
 FLIP = {"gt": "lt", "lt": "gt", "xa": "xb", "xb": "xa", "eq": "eq"}
@@ -289,7 +346,11 @@ _NO_STOP = re.compile(r"\b(no|without(?: an?| any)?|don'?t use(?: an?)?|not? use
 _NO_TGT = re.compile(r"\b(no|without(?: an?| any)?)\s+(target|take[- ]?profit|profit target)s?\b", re.I)
 _AFTER = re.compile(r"\b(?:after|hold(?:ing)? for|for at most|at most)\s+(\d+)\s+(bars?|candles?|days?|sessions?)\b", re.I)
 _EXIT_WORDS = re.compile(r"\b(sell|sells|exit|close|square[- ]?off|cover|get out)\b", re.I)
-_CMP = r"(?:is |was |goes |moves |rises |falls |drops |crosses |closes )?(?:back )?(above|over|greater than|more than|>|below|under|less than|<)\s*(-?\d+(?:\.\d+)?)"
+_OR = re.compile(r"\b(?:or|either|any of|any one|one of)\b", re.I)
+_STOP_WORDS = re.compile(r"\b(?:stop|stops|stop[- ]?loss(?:es)?|sl|cut (?:the |my )?loss(?:es)?|risk(?:ing)?)\b", re.I)
+_TGT_WORDS = re.compile(r"\b(?:target|targets|tgt|take[- ]?profit|tp|profit|book|gain)\b", re.I)
+_TRAIL_WORDS = re.compile(r"\btrail", re.I)
+_CMP = r"(?:is |was |goes|moves |rises |falls |drops |crosses |closes )?(?:back )?(above|over|greater than|more than|>|below|under|less than|<)\s*(-?\d+(?:\.\d+)?)"
 
 
 def _same(a: dict, b: dict) -> bool:
@@ -455,6 +516,11 @@ def check_against_text(out: dict, text: str) -> dict:
         if k in ("entry", "shortEntry") and out[k] and len(out[k]) < before and out.get("entryJoin") in ("any", "score"):
             # the rest of an "any of these" list decides alone once a rule is gone (R18-002: volume alone opened 3,014 trades)
             notes.append("A rule was left out of the entry rules, so the ones left now decide the entry on their own. Check them before you run it.")
+    # "MACD crosses above its signal and price is above VWAP" came back as "any of these" (DP1-005): rules the sentence
+    # joins with "and" and never with "or" all have to hold at once
+    if out.get("entryJoin") == "any" and (len(out.get("entry") or []) > 1 or len(out.get("shortEntry") or []) > 1) and not _OR.search(text):
+        out["entryJoin"] = "all"
+        notes.append('The entry rules all have to hold at once, as your words join them with "and". Say "or" to enter on any one of them.')
     if out.get("entry") or out.get("shortEntry"):
         notes = [n for n in notes if not _NO_RULES_NOTE.search(n)]       # rules came out: a note saying none could must not stand (DA-001)
     # "Sell when it crosses below" is the way out of a buy, not a short sale (R11C-004)
@@ -469,10 +535,16 @@ def check_against_text(out: dict, text: str) -> dict:
             notes.append('"Sell" was read as selling what was bought, not as a short sale. Say "sell short" to trade short.')
     risk = {**dict(out.get("risk") or {}), **{k: v for k, v in risk0.items() if k in ("tgt", "sl")}}
     mentioned = set(out.get("mentioned") or [])
-    if risk0.get("tgt"):
-        mentioned.add("tgt")
-    if risk0.get("sl"):
-        mentioned.add("sl")
+    # a stop or target the sentence never asks for is the AI's own (DP1-005: a 2% stop nobody asked for, counted as said):
+    # left out, so the notebook's default stop is shown as a default and the question about it is asked
+    first = out.get("risk") or {}
+    read_here = {k for k in ("tgt", "sl") if risk0.get(k) and risk0.get(k) != first.get(k)}     # read above from a rule
+    for k, said in (("sl", _STOP_WORDS), ("tgt", _TGT_WORDS), ("trail", _TRAIL_WORDS)):
+        v = risk.get(k)
+        if v and isinstance(v, (int, float)) and k not in read_here and not said.search(text) and not re.search(rf"(?<![\d.]){v:g}\s*%", text):
+            risk.pop(k)
+            mentioned.discard(k)
+    mentioned |= read_here              # a target or stop read from a rule counts as said
     if _NO_STOP.search(text):
         risk["sl"] = 0                      # said: no stop, and so not asked again (R11C-005: it came back as a 2% stop)
         mentioned.add("sl")

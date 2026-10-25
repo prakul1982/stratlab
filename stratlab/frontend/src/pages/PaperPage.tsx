@@ -21,7 +21,7 @@ import { foSymbol } from "../lib/foChanges";
 import { Earlier, splitToday } from "../components/Earlier";
 import { OrderList, type PaperOrder } from "../components/OrderList";
 import { moneyCompact } from "../lib/chartFormat";
-import { fillsLine, rulesLines, STOP_DIALOG, stoppedOpenLine } from "../lib/paperText";
+import { fillsLine, rulesLines, STOP_DIALOG, stoppedOpenLine, trialLastDay } from "../lib/paperText";
 import { opSay, refName, stopWords } from "../lib/rules";
 import "./trade/trade.css";
 import "./trade/paper.css";
@@ -306,7 +306,8 @@ export function PaperPage() {
   let sub = me ? `${me.plan_info.name} plan · ${me.live_running} of ${me.live_limit} running` : "";
   if (me?.plan === "free" && me.trial) {
     sub = !me.trial.started ? "Free trial: 5 market days, starting with your first session"
-      : me.trial.active ? `Free trial until ${fmtDateTime(me.trial.ends_at, { year: false, zone: true })}`
+      // the trial's last day in India's calendar, where it is counted, not "30 Oct, 18:30 UTC" (DP1-013)
+      : me.trial.active && me.trial.ends_at ? `Free trial until the end of ${trialLastDay(me.trial.ends_at)} (India time)`
         : viewedFreeKeepsSessions(me) ? "Viewing as Free: your sessions keep running here; on a real Free plan they stop when the free trial ends"
           : "Free trial ended · sessions are stopped; upgrade to keep paper trading";
   }

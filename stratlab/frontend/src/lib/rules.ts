@@ -116,6 +116,27 @@ function baseName(r: Ref): string {
 
 const allConds = (s: Strategy) => [...s.entry, ...s.exit, ...(s.shortEntry ?? []), ...(s.shortExit ?? [])];
 export const usesPro = (s: Strategy) => allConds(s).some((c) => PRO_TYPES.has(c.l.t) || PRO_TYPES.has(c.r.t));
+/** The indicators beyond price, SMA, EMA and RSI that the rules use, by their names in the rule editor ("Supertrend"). */
+export const proNames = (s: Strategy) => [...new Set(allConds(s).flatMap((c) => [c.l.t, c.r.t]).filter((t) => PRO_TYPES.has(t))
+  .map((t) => INDICATORS.find((i) => i.t === t)!.name))];
+
+/** The rules in a few plain lines, as the simple converter read them: shown for a yes before a notebook is made from them,
+ * since the converter can get an idea wrong (DP1-004). `mentioned`: what the words said, so a default stop is called one. */
+export function ruleLines(s: Strategy, mentioned: string[] = []): string[] {
+  const say = (c: Cond) => `${refName(c.l)} ${opSay(c.op)} ${c.r.t === "num" ? c.r.v : refName(c.r)}`;
+  const join = s.entryJoin === "any" ? " or " : " and ";
+  const short = s.side === "short";
+  const out: string[] = [];
+  if (s.entry.length) out.push(`${short ? "Sell short" : "Buy"} when ${s.entry.map(say).join(join)}`);
+  if (s.exit.length) out.push(`${short ? "Buy back" : "Sell"} when ${s.exit.map(say).join(" or ")}`);
+  if (s.side === "both" && (s.shortEntry ?? []).length) out.push(`Sell short when ${(s.shortEntry ?? []).map(say).join(join)}`);
+  if (s.side === "both" && (s.shortExit ?? []).length) out.push(`Buy back a short when ${(s.shortExit ?? []).map(say).join(" or ")}`);
+  const pct = (k: "stopType" | "tgtType") => ((s.risk[k] ?? "pct") === "pct" ? "%" : "");
+  if (s.risk.sl > 0) out.push(`Stop loss ${s.risk.sl}${pct("stopType")}${mentioned.includes("sl") ? "" : " (a default: your words set none)"}`);
+  if (s.risk.tgt > 0) out.push(`Target ${s.risk.tgt}${pct("tgtType")}`);
+  if ((s.risk.trail ?? 0) > 0) out.push(`Trailing stop ${s.risk.trail}%`);
+  return out;
+}
 
 export const NO_SESSION = { start: "", end: "", squareoff: "", maxTradesDay: 0, cooldown: 0, dailyLossPct: 0 };
 // no target unless the person asks for one (R5O-010): "Stop loss 2%" must not come back as "2% stop or a 6% target"
@@ -539,3 +560,18 @@ export function ruleWarnings(idea: string, s: Strategy, dropped: string[], names
  * share and puts in the most one trade may hold ("Max capital per trade (%)", maxAlloc). */
 export const sizedWithoutStop = (r: Pick<Risk, "sl" | "trail" | "sizing">) => (r.sizing ?? "risk") === "risk" && !(r.sl > 0) && !((r.trail ?? 0) > 0);
 export const NO_STOP_SIZE_NOTE = "There is no stop loss, so there is nothing to measure risk from. Position size comes from \"Max capital per trade (%)\" under More settings instead, and the risk per trade does not apply.";
+
+/** What a library strategy needs that the plan doesn't have, said on its card before "Copy and re-test" (DP1-008: a copy of
+ * "Supertrend flip, 20 US large caps" on Free was a notebook that couldn't run). Null when the plan runs it as it is. */
+export function copyNeeds(s: Strategy, groupSize: number, plan: { allIndicators: boolean; groupCap: number | null | undefined; basicCap: number; proCap: number }): string | null {
+  const parts: string[] = [];
+  let needs: "Basic" | "Pro" = "Basic";
+  const names = plan.allIndicators ? [] : proNames(s);
+  if (names.length) parts.push(`it uses ${names.slice(0, 3).join(", ")}`);
+  if (plan.groupCap != null && groupSize > plan.groupCap) {
+    parts.push(`its group of ${groupSize} is over your plan's ${plan.groupCap}`);
+    if (groupSize > plan.basicCap) needs = "Pro";
+  }
+  if (!parts.length) return null;
+  return `Runs on ${needs}: ${parts.join(", and ")}. A copy is yours to edit on any plan.`;
+}

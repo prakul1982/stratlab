@@ -2,7 +2,10 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { useApp } from "../lib/app";
-import { blankStrategy, detectInstrument, detectTf, meaningful, nameFor, noRuleNote, parseStrategyText, questionFrom, riskForCurrency, ruleWarnings, withDefaultExit } from "../lib/rules";
+import { blankStrategy, detectInstrument, detectTf, meaningful, nameFor, noRuleNote, parseStrategyText, proNames, questionFrom, riskForCurrency, ruleLines, ruleWarnings, usesPro, withDefaultExit } from "../lib/rules";
+import { listing } from "../lib/offer";
+import { usePlanPrice } from "../lib/currency";
+import { PlanActions } from "./PlanInterest";
 import type { Cond, Instrument, Risk, Session, Strategy, Tf, Group } from "../lib/types";
 import { Info } from "./ui";
 import { Notice } from "./kit";
@@ -31,8 +34,10 @@ const SAMPLE: Record<string, [string, string, string]> = {
   MCX: ["GOLDM", "CRUDEOIL", "SILVERM"], CDS: ["USDINR", "EURINR", "GBPINR"], CMDTY: ["gold", "WTI crude", "silver"],
 };
 
-/** Example ideas in the market (and on the instrument) you picked, so one click never tests the wrong thing. */
-function examplesFor(market?: string, symbol?: string | null): { placeholder: string; list: string[] } {
+/** Example ideas in the market (and on the instrument) you picked, so one click never tests the wrong thing. The last two
+ * use Basic's indicators (the lowest low of past days, Stage 2 and the Supertrend): tagged so on Free, where they can't be
+ * built (DP1-003). */
+export function examplesFor(market?: string, symbol?: string | null): { placeholder: string; list: string[]; basic: string[] } {
   const [a, b, c] = symbol ? [symbol, symbol, symbol] : SAMPLE[market || ""] ?? ["it", "it", "it"];
   const on = (x: string) => (x === "it" ? "" : ` ${x}`);
   return {
@@ -41,6 +46,10 @@ function examplesFor(market?: string, symbol?: string | null): { placeholder: st
       `Buy${on(a)} when the 20 EMA crosses above the 50 EMA, stop loss 2%`,
       `Buy${on(b)} when RSI drops below 30, sell when it goes back above 55`,
       `Buy${on(c)} when price is above the 200-day average and RSI crosses above 50`,
+      `Short${on(a)} when the price falls below the lowest low of the last 20 days, with a 5% trailing stop`,
+      `Buy${on(b)} when it's in Stage 2 and the price is above the Supertrend, sell when it crosses back below`,
+    ],
+    basic: [
       `Short${on(a)} when the price falls below the lowest low of the last 20 days, with a 5% trailing stop`,
       `Buy${on(b)} when it's in Stage 2 and the price is above the Supertrend, sell when it crosses back below`,
     ],
@@ -61,10 +70,19 @@ export async function findInstrument(name: string, market?: string | null): Prom
   }
 }
 
+/** Why an idea on Basic's indicators isn't built on a plan without them (the server words its own the same way). */
+export const lockedNote = (names: string[]) => {
+  const said = listing(names);
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)} ${names.length === 1 ? "is" : "are"} on the Basic plan. On Free, notebook rules use price, SMA, EMA and RSI, so this idea wasn't built: leaving that part out would test a different idea. No AI build was used.`;
+};
+
 /** Turn a sentence into rules: the AI builder, or the simple converter when the AI can't run (or hands back no rule).
  * Returns the built strategy, or a note saying what's missing (`system`: the fault is ours, not the wording's).
+ * `confirm`: the simple converter made the rules, which can be wrong, so they are shown for a yes first (DP1-004).
+ * `locked`: the idea uses indicators the plan doesn't have, so nothing was built (DP1-002). `allIndicators`: whether the
+ * plan has every indicator (unknown: taken as yes, and the server says so).
  * Throws only on errors worth showing as-is. */
-export async function buildIdea(idea: string, market?: string): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean; options?: boolean }> {
+export async function buildIdea(idea: string, market?: string, opts: { allIndicators?: boolean } = {}): Promise<{ built: Built | null; note: string; usedAI: boolean; system?: boolean; options?: boolean; confirm?: boolean; locked?: boolean }> {
   let out: AIOut, usedAI = true, fallback = "";
   let parsedDropped: string[] = [];   // rules the simple converter read and left out as meaningless: said, never silent
   let parsedUnread: string[] = [];    // clauses the simple converter could not read at all: said, never guessed at (DA-002)
@@ -74,11 +92,14 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     const err = e as ApiError;
     // an options idea (a single option, a straddle, a multi-leg position) is refused whole: no rules are made from a part of it (DA-001)
     if (err.code === "options_idea") return { built: null, usedAI: false, system: false, options: true, note: err.message };
+    // an idea built on Basic's indicators is refused whole on Free, by name, and costs no build (DP1-002, DP1-003)
+    if (err.code === "indicator_plan") return { built: null, usedAI: false, system: false, locked: true, note: err.message };
     if (!(["ai_busy", "ai_limit", "ai_daily_limit", "ai_failed", "no_backend", "network"].includes(err.code || "") || err.status >= 500)) throw e;
     usedAI = false;
+    // the converter can get an idea wrong ("crosses below 6" from "idea 6"), so it is said, never used quietly (DP1-004)
     fallback = err.code === "ai_limit" || err.code === "ai_daily_limit"
-      ? `${err.message} We used the simple converter instead.`
-      : "The AI builder isn't available right now, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
+      ? `${err.message} The simple converter read your idea instead, and it can get an idea wrong, so check the rules it made.`
+      : "The AI builder isn't available right now, so the simple converter read your idea (it understands SMA, EMA, RSI and price rules). It can get an idea wrong, so check the rules it made.";
     const p = parseStrategyText(idea);
     parsedDropped = p.dropped;
     parsedUnread = p.unread;
@@ -100,7 +121,7 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
       if (p.exit.length) mentioned.push("exit");
       if (tf) mentioned.push("tf");
       if (inst) mentioned.push("instrument");
-      fallback = "The AI builder gave back no rules for this, so we used the simple converter (it understands SMA, EMA, RSI and price rules).";
+      fallback = "The AI builder gave back no rules for this, so the simple converter read your idea (it understands SMA, EMA, RSI and price rules). It can get an idea wrong, so check the rules it made.";
       out = { ...out, entry: p.entry, exit: p.exit, entryJoin: "all", tf: out.tf ?? tf, instrument: out.instrument ?? inst, risk: { ...out.risk, ...p.risk }, mentioned, side: p.side };
     }
   }
@@ -136,9 +157,12 @@ export async function buildIdea(idea: string, market?: string): Promise<{ built:
     const r = noRuleNote(idea, out.notes);
     return { built: null, usedAI, system: r.system, note: (fallback ? fallback + " " : "") + r.note };
   }
+  // the simple converter reads the lowest low of past days and Stage 2 too: on a plan without them nothing is built from
+  // part of the idea (DP1-003)
+  if (fallback && opts.allIndicators === false && usesPro(strategy)) return { built: null, usedAI, system: false, locked: true, note: lockedNote(proNames(strategy)) };
   const built = withDefaultExit(strategy, mentioned);
   return {
-    usedAI, note: fallback,
+    usedAI, note: fallback, confirm: !!fallback,
     // the sell rule the questions offer as the default is the one the notebook runs until the person picks another
     built: { strategy: built, instrument, question: questionFrom(idea, instrument?.symbol),
       gaps: { mentioned, notes: out.notes || [], instName: out.instrument, instMarket: out.market ?? (market && market !== "CSV" ? market : null), usedAI, fallback,
@@ -156,12 +180,16 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
   market?: string; symbol?: string | null;
 }) {
   const ex = examplesFor(market, symbol);
-  const { me, refreshMe, fail } = useApp();
+  const { me, refreshMe, fail, allIndicators } = useApp();
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [stuck, setStuck] = useState(false);     // a build found no rule: offer another go, the classic ideas, the manual builder
   const [options, setOptions] = useState(false);   // the idea trades options: the way on is the Options builder, not another go (DA-001)
+  const [locked, setLocked] = useState(false);     // the idea uses Basic's indicators: the plan and its price, not another go (DP1-002)
+  // rules the simple converter made, shown for a yes before a notebook is made from them (DP1-004)
+  const [pending, setPending] = useState<{ built: Built; idea: string } | null>(null);
+  const basicPrice = usePlanPrice(!allIndicators ? "basic" : null);
 
   const building = useRef(false);            // Ctrl+Enter in the box while a build runs must not start a second one
   const build = async (idea = text) => {
@@ -169,21 +197,43 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
     idea = idea.trim();
     setStuck(false);
     setOptions(false);
+    setLocked(false);
+    setPending(null);
     if (idea.length < 5) { setNote("Describe your idea first, for example: \"Buy NIFTY 50 when it's above the 50-day average\"."); return; }
     building.current = true;
     setBusy(true);
     setNote(null);
     try {
-      const r = await buildIdea(idea, market);
-      if (r.usedAI) refreshMe();
-      if (!r.built) { setNote(r.note); setOptions(!!r.options); setStuck(!r.options); return; }
+      const r = await buildIdea(idea, market, { allIndicators: me ? allIndicators : undefined });
+      if (!r.built) { setNote(r.note); setOptions(!!r.options); setLocked(!!r.locked); setStuck(!r.options && !r.locked); return; }
+      if (r.confirm) { setNote(r.note); setPending({ built: r.built, idea }); return; }
       if ((await onBuilt(r.built)) !== false) setText("");
     } catch (e) {
       fail(e);
     } finally {
+      // the count of builds left, read again after every try: one that made no rules costs none, and the box must say the
+      // number the server holds, not the one from before (DP1-001)
+      refreshMe();
       building.current = false;
       setBusy(false);
     }
+  };
+  const keep = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      if ((await onBuilt(pending.built)) !== false) { setText(""); setPending(null); setNote(null); }
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  // an example on Basic's indicators, picked on Free: said at once, nothing sent and no build used (DP1-003)
+  const pick = (idea: string) => {
+    setText(idea);
+    if (!allIndicators && me && ex.basic.includes(idea)) {
+      const named = idea.includes("Supertrend") ? ["the market stage (Stage 2)", "Supertrend"] : ["the highest high or lowest low of past candles"];
+      setPending(null); setOptions(false); setStuck(false); setLocked(true); setNote(lockedNote(named));
+      return;
+    }
+    void build(idea);
   };
 
   const classic = typeof document !== "undefined" ? document.getElementById("classic-ideas") : null;
@@ -211,18 +261,38 @@ export function IdeaComposer({ onBuilt, busyLabel = "Build my notebook", autoFoc
           <Info>The AI turns your sentence into exact rules. If it's unavailable, a simple built-in converter takes over (it understands SMA, EMA, RSI and price rules).</Info></span>}
       </div>
       {note && (
-        <Notice tone="warn" role="status" actions={options ? <Link className="btn sm" to="/options">Open the Options builder</Link> : stuck ? <>
+        <Notice tone="warn" role="status" actions={options ? <Link className="btn sm" to="/options">Open the Options builder</Link> : locked ? <>
+          <PlanActions />
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
+        </> : pending ? <>
+          <button type="button" className="btn sm" disabled={busy} onClick={() => void keep()}>Build with these rules</button>
+          {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas (no AI build)</button>}
+          {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}
+        </> : stuck ? <>
           <button type="button" className="btn sm" disabled={busy} onClick={() => build()}>Try again</button>
           {classic && <button type="button" className="btn quiet sm" onClick={() => classic.scrollIntoView({ behavior: "smooth" })}>Classic ideas</button>}
           {byHand && <button type="button" className="btn quiet sm" disabled={busy} onClick={() => void buildByHand()}>Build the rules by hand</button>}
-        </> : undefined}>{note}</Notice>
+        </> : undefined}>
+          <span className="k-stack k-tight">
+            <span>{note}{locked && basicPrice ? ` ${basicPrice}` : ""}</span>
+            {pending && (
+              <span className="k-stack k-tight" data-testid="converter-read">
+                <span>It read your idea as:</span>
+                <ul className="k-list">{ruleLines(pending.built.strategy, pending.built.gaps.mentioned).map((l) => <li key={l}>{l}</li>)}</ul>
+                {(pending.built.gaps.warnings ?? []).map((w) => <span key={w}>{w}</span>)}
+              </span>
+            )}
+          </span>
+        </Notice>
       )}
       <div className="k-stack k-tight">
         <span className="k-small k-muted">Not sure what to write? Try one of these:</span>
         <div className="examples">
-          {ex.list.map((ex) => (
-            <button key={ex} type="button" disabled={busy} onClick={() => { setText(ex); build(ex); }}>
-              <span aria-hidden="true">→</span>{ex}
+          {ex.list.map((idea) => (
+            <button key={idea} type="button" disabled={busy} onClick={() => pick(idea)}>
+              <span aria-hidden="true">→</span>{idea}
+              {/* an example the plan can't build is tagged before it is picked (DP1-003) */}
+              {me && !allIndicators && ex.basic.includes(idea) && <span className="k-small k-muted" data-testid="example-basic"> · Basic</span>}
             </button>
           ))}
         </div>
