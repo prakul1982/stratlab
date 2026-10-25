@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, supabase } from "../lib/api";
 import { searchAiNotice } from "../lib/aiReason";
 import { useApp } from "../lib/app";
-import { match, resolve } from "../lib/features";
+import { match, OWN_PAGES, resolve } from "../lib/features";
 import { matchHelp } from "../lib/helpTopics";
 import { askExamples, useRotating } from "../lib/rotating";
 import type { Experiment, Instrument, Notebook } from "../lib/types";
 import { buildIdea, findInstrument } from "./IdeaComposer";
 import { track, trackBacktest } from "../lib/analytics";
-import { Book, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
+import { Book, Close, Compass, Lens, Search, Sparkle, Upload } from "./Icons";
 import { SPACES, spaceOf, type Space } from "../lib/spaces";
 import { useDialogFocus } from "./kit/Dialog";
-import { asksContract, compareTo, firstForQuestion, namesFeature, offerIdeas, pickCompany } from "../lib/paletteRank";
+import { asksContract, companyFirst, companyHits, compareTo, firstForQuestion, isCompany, namesFeature, offerIdeas, pickCompany, type CompanyHit } from "../lib/paletteRank";
+import { signOutHere } from "../lib/signout";
 
 interface Idea { title: string; text: string; why: string; market: string; symbol: string | null; tf: string }
 /** `space`: which of Trade, Invest and Money the result opens in, shown as a small label. */
@@ -53,17 +54,23 @@ function intentFor(q: string): Intent | null {
   return null;
 }
 
+/** The company directory "Look up a company" uses: it answers when the India feed is off and allows for a typo (DI-001). */
+type Suggested = { symbol: string; id: string; name: string; exchange: string; market: "IN" | "US"; match?: number };
+const suggestCompanies = (q: string) =>
+  api<{ rows: Suggested[] }>(`/suggest/companies?ranked=true&q=${encodeURIComponent(q.trim().slice(0, 40))}`).then((r) => r.rows ?? []).catch(() => [] as Suggested[]);
+
 /** A listed company (a stock or ETF with a company page) for a name, in any market: the exact symbol first, else the best
- * match the search gives. Null when nothing like it is listed. */
-async function findCompany(name: string): Promise<(Instrument & { market: "IN" | "US" }) | null> {
+ * match the search gives, else the company directory's (the feed off at a weekend, DI-001). Null when nothing like it is listed. */
+async function findCompany(name: string): Promise<{ symbol: string; market: "IN" | "US" } | null> {
   const rows = await api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(name.trim().slice(0, 40))}`).catch(() => [] as Instrument[]);
-  return pickCompany(rows, name) as (Instrument & { market: "IN" | "US" }) | null;
+  const hit = pickCompany(rows, name) as (Instrument & { market: "IN" | "US" }) | null;
+  if (hit) return hit;
+  const s = (await suggestCompanies(name))[0];
+  return s ? { symbol: s.id || s.symbol, market: s.market } : null;
 }
 
 /** What to look up as a company: the line without a leading "research", "open", "show me"… ("research HDFC Bank"). */
 const companyPart = (q: string) => q.trim().replace(/^(?:research|open|show(?: me)?|find|search(?: for)?|look ?up|about|quote(?: for| of)?|price of|chart(?: of)?)\s+/i, "").trim();
-/** A stock or ETF with a company page, as opposed to an index, a coin or a contract. */
-const isCompany = (i: Instrument) => (i.market === "IN" || i.market === "US") && !i.fno && (i.type === "EQ" || i.type === "ETF");
 /** How well the search matched (the server's groups, 0 best): the symbol, a short name, or the start of a symbol or name. */
 const STRONG = 3;
 
@@ -83,6 +90,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const loc = useLocation();
   const [q, setQ] = useState("");
   const [insts, setInsts] = useState<Instrument[]>([]);
+  const [suggested, setSuggested] = useState<Suggested[]>([]);
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
   const [ideasFor, setIdeasFor] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -108,12 +116,15 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
   const asked = useRef(0);
   useEffect(() => {
     const n = ++asked.current;
-    setInsts([]);
+    setInsts([]); setSuggested([]);
     if (code || lookup.length < 2 || lookup.split(/\s+/).length > 5 || asks(text)) return;
     const t = window.setTimeout(() => {
       api<Instrument[]>(`/instruments/search?q=${encodeURIComponent(lookup.slice(0, 40))}`)
         .then((r) => { if (n === asked.current) setInsts(r.slice(0, 8)); })
         .catch(() => { if (n === asked.current) setInsts([]); });
+      // the company directory too: the instrument search has no Indian stocks while the feed is off (a weekend), and it
+      // allows for a typo ("relaince") (DI-001, DI-003)
+      void suggestCompanies(lookup).then((r) => { if (n === asked.current) setSuggested(r); });
     }, 220);
     return () => window.clearTimeout(t);
   }, [text, lookup, code]);
@@ -246,6 +257,14 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       out.push({ group: "Browse", items: [{ key: "features", icon: <Compass size={18} />, title: "All features", sub: "Every page by space and group, with what it is for in a line", run: () => go("/features") }] });
       return out;
     }
+    const feats = code ? [] : match(text, 5);
+    // companies by symbol or name ("hdfc bank", "infosys") from the live search and the company directory, each opening its page
+    const companies: CompanyHit[] = code ? [] : companyHits(insts, suggested, 5);
+    // a feature named by the words typed ("sip" → Test a SIP, "tax" → Tax report) beats a company that merely has those
+    // letters as its symbol or in its name (SIPL, the TAX ETF) (R5O-024)
+    const exactFeature = feats.some((f) => f.title.toLowerCase() === text.toLowerCase() || namesFeature(f.title, text));
+    // a page of the person's own named ("settings", "invoice", "dark mode") is where to go, not an idea to test (DI-003)
+    const ownPage = exactFeature || (!!feats[0] && OWN_PAGES.includes(feats[0].id) && words <= 2);
     const act: Row[] = [];
     if (code) act.push({ key: "imp", icon: <Upload size={18} />, title: "Import this strategy", sub: "Pine Script, Python, a config file…", run: () => go("/import", { importText: q }) });
     else {
@@ -254,7 +273,7 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
         run: () => { doIt(); } });
       if (words >= 3 && !isQuestion(text)) act.push({ key: "edit", icon: <Book size={18} />, title: "Write it up in a new notebook first", sub: "Check the rules before anything runs", run: () => testIdea(text) });
       // not for a lone word that matched nothing ("zzzzqq"): there is nothing to have ideas about (R5O-024)
-      if (offerIdeas(text, { features: match(text, 5).length, companies: insts.filter(isCompany).length, helps: matchHelp(text, 2).length, intent: !!intent }))
+      if (offerIdeas(text, { features: feats.length, companies: companies.length, helps: matchHelp(text, 2).length, intent: !!intent, page: ownPage }))
         act.push({ key: "ideas", icon: <Compass size={18} />, title: thinking ? "Thinking of ideas…" : `Get strategy ideas for “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`,
         sub: "4 testable ideas, each one click from a verdict", run: () => { if (!thinking) getIdeas(); } });
     }
@@ -262,10 +281,10 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     out.push({ group: "Do", items: act });
     if (ideas && ideasFor === text) out.push({ group: "Ideas", items: ideas.map((i, n) => ({
       key: `idea${n}`, icon: <Sparkle size={18} />, title: i.title, sub: `${i.symbol ? i.symbol + " · " : ""}${i.text}`, space: "trade", run: () => testIdea(i.text, i.market, i.symbol) })) });
-    const feats = code ? [] : match(text, 5);
     if (feats.length) {
       const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
       out.push({ group: "Features", items: feats.map((f) => {
+        if (f.to === "@signout") return { key: f.id, icon: <Search size={18} />, title: f.title, sub: f.what, run: () => { if (!cancelled.current) { onClose(); void signOutHere(supabase.auth); } } };
         const to = resolve(f.to, loc.pathname, latest);
         return { key: f.id, icon: <Search size={18} />, title: f.title, sub: f.what, space: spaceOf(to.split(/[?#]/)[0]), run: () => go(to) };
       }) });
@@ -277,25 +296,20 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
       run: () => setAnswer({ q: text, title: h.title, text: h.text }) })) });
     const nbs = (notebooks ?? []).filter((n) => !code && n.name.toLowerCase().includes(text.toLowerCase())).slice(0, 4);
     if (nbs.length) out.push({ group: "Your notebooks", items: nbs.map((n) => ({ key: n.id, icon: <Book size={18} />, title: n.name, sub: n.question ?? undefined, space: "trade", run: () => go(`/n/${n.id}`) })) });
-    // companies by symbol or name ("hdfc bank", "infosys"), each opening its page; then something to test on
-    const companies = insts.filter(isCompany).slice(0, 5);
-    if (companies.length) out.push({ group: "Companies", items: companies.map((i) => {
-      const mk = i.market || "IN";
-      const named = !!i.name && i.name.toUpperCase() !== i.symbol.toUpperCase();
-      return { key: `r-${i.id}`, icon: <Lens size={18} />, title: named ? i.name! : i.symbol,
-        sub: [named ? i.symbol : null, i.exchange || mk, "Company page"].filter(Boolean).join(" · "), space: "invest" as Space,
-        run: () => go(`/research/${mk}/${encodeURIComponent(i.symbol)}`) };
+    // each company opens its page; then something to test on
+    if (companies.length) out.push({ group: "Companies", items: companies.map((c) => {
+      const named = !!c.name && c.name.toUpperCase() !== c.symbol.toUpperCase();
+      return { key: `r-${c.key}`, icon: <Lens size={18} />, title: named ? c.name! : c.symbol,
+        sub: [named ? c.symbol : null, c.exchange || c.market, "Company page"].filter(Boolean).join(" · "), space: "invest" as Space,
+        run: () => go(c.to) };
     }) });
     // futures and options only when the search asks for a contract: "tcs" is the company, not three TCS futures (R5O-024)
-    const tradable = [...companies.slice(0, 1), ...insts.filter((i) => !isCompany(i) && (!i.fno || asksContract(text) || !companies.length))].slice(0, 4);
+    const tradable = [...insts.filter(isCompany).slice(0, 1), ...insts.filter((i) => !isCompany(i) && (!i.fno || asksContract(text) || !companies.length))].slice(0, 4);
     if (tradable.length) out.push({ group: "Markets", items: tradable.map((i) => {
       const mk = i.market || "IN";
       return { key: `t-${i.id}`, icon: <Sparkle size={18} />, title: `Test an idea on ${i.symbol}`, sub: [i.name, mk].filter(Boolean).join(" · "), space: "trade" as Space, run: () => testIdea("", mk, i.symbol, i.id) };
     }) });
     const first = (group: string) => { const n = out.findIndex((g) => g.group === group); if (n > 0) out.unshift(...out.splice(n, 1)); };
-    // a feature named by the words typed ("sip" → Test a SIP, "tax" → Tax report) beats a company that merely has those
-    // letters as its symbol or in its name (SIPL, the TAX ETF) (R5O-024)
-    const exactFeature = feats.some((f) => f.title.toLowerCase() === text.toLowerCase() || namesFeature(f.title, text));
     if (words <= 2 && feats.length) first("Features");          // a short search that names a feature ("walk forward") opens it on Enter
     // a company named by its symbol or name comes first: "hdfc bank" is HDFC Bank, not the Holdings page
     if (companies.length && (companies[0].match ?? 9) <= STRONG && !exactFeature && !intent) first("Companies");
@@ -308,9 +322,11 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
     const lead = code ? null : firstForQuestion(asks(text) || /\?\s*$/.test(text), matchHelp(text, 1, true).length);
     if (lead === "help") first("Help");
     else if (lead === "ai") { first("Do"); const d = out[0].items.findIndex((r) => r.key === "do"); if (d > 0) out[0].items.unshift(...out[0].items.splice(d, 1)); }
+    // a company it found is never below the AI's "Do it": Enter on "infosys" opens Infosys (DI-002)
+    if (lead !== "ai" && companyFirst({ companies, words, firstGroup: out[0]?.group, intent: !!intent })) first("Companies");
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, q, code, words, ideas, ideasFor, thinking, insts, notebooks, loc.pathname, steps, intent, focus]);
+  }, [text, q, code, words, ideas, ideasFor, thinking, insts, suggested, notebooks, loc.pathname, steps, intent, focus]);
 
   const flat = rows.flatMap((g) => g.items);
   useEffect(() => { setSel(0); setAnswer((a) => (a && a.q !== text ? null : a)); }, [text]);
@@ -330,6 +346,8 @@ export function SearchPalette({ onClose }: { onClose: () => void }) {
           <textarea ref={input} rows={Math.min(6, Math.max(1, q.split("\n").length))} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={key}
             placeholder={typeof window !== "undefined" && window.matchMedia?.("(max-width: 640px)").matches ? "Search or ask anything" : `Try: ${example}`} aria-label="Search or ask anything" disabled={!!steps} />
           <kbd className="small muted esc-hint">Esc</kbd>
+          {/* a phone has no Esc key: a close button there instead (DI-004) */}
+          <button type="button" className="icon-btn palette-x" aria-label="Close search" onClick={close}><Close size={18} /></button>
         </div>
         {steps && (
           <div className="palette-work" role="status" aria-live="polite">

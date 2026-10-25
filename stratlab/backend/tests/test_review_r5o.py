@@ -443,7 +443,7 @@ def test_stored_briefs_get_one_style_and_the_pages_rotation(monkeypatch):
     n = job.repair_briefs("IN", shifts=lambda region, wk, day: [])
     assert n == 2
     w = job.load("market.IN.2026-10-03-weekly")
-    assert w["subject"] == "Market Brief India, week to 3 Oct: NIFTY 50 −3.11%"
+    assert w["subject"] == "Market Brief India, week to 1 Oct: NIFTY 50 −3.11%"     # its last session: Fri 2 Oct was a holiday (DI-026)
     assert "−3.11% over the week" in w["sections"][0]["items"][0]["text"] and "-3.11" not in w["html"] + w["text"]
     d = job.load("market.IN.2026-10-08")
     assert [s["title"] for s in d["sections"]] == ["Indices"] and "Leading" not in d["html"] + d["text"]

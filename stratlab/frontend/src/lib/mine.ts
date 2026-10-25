@@ -3,6 +3,7 @@ import { api } from "./api";
 import { happened, istHm, loadEvents, type EvKind } from "./marketEvents";
 import type { Region } from "./research";
 import { istToday } from "./format";
+import { resultsLine } from "./mineLayout";
 
 /* The data behind "My space" (/mine): only what the app already reads for its other pages, gathered. Nothing here is
  * made up: a figure that cannot be read stays null and the card shows an empty state with the next step. */
@@ -128,8 +129,13 @@ const CAT_TAG: Record<string, string> = { tax: "Tax", holdings: "Your stocks", m
 const KINDS: EvKind[] = ["holiday", "rbi", "india", "us", "budget", "index"];
 
 /** The dates ahead from every calendar the app has: the money calendar (tax, your stocks' results and dividends, your own
- * dates), the market events (RBI, data releases, the Fed, index changes) and results for your watchlist. null while loading. */
+ * dates), the market events (RBI, data releases, the Fed, index changes) and results for your watchlist, in date order.
+ * `limit` is how many the card lists; `total` how many there are, so the card can say "+N more" (DI-009). null while loading. */
 export function useComingUp(limit = 6, enabled = true): Up[] | null {
+  return useComingUpAll(enabled)?.slice(0, limit) ?? null;
+}
+
+export function useComingUpAll(enabled = true): Up[] | null {
   const [rows, setRows] = useState<Up[] | null>(null);
   useEffect(() => {
     if (!enabled) return;
@@ -145,8 +151,10 @@ export function useComingUp(limit = 6, enabled = true): Up[] | null {
       for (const e of money?.events ?? []) {
         if (e.date < today) continue;
         if (e.kind === "results_out") continue;          // results already filed are not "coming up" (R6O-016)
-        out.push({ key: `${e.date}|${e.symbol ?? ""}|${/result/i.test(e.title) ? "results" : e.title.toLowerCase()}`, date: e.date, title: e.title, tag: CAT_TAG[e.cat] ?? "Money",
-          detail: [e.detail, e.amount != null ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });
+        // a holding's results day reads as the results feed's does: "AAVAS results · Among your stocks" (DI-009)
+        const res = e.symbol && /result/i.test(e.title) ? resultsLine(e.symbol, e.detail) : null;
+        out.push({ key: `${e.date}|${e.symbol ?? ""}|${/result/i.test(e.title) ? "results" : e.title.toLowerCase()}`, date: e.date, title: res?.title ?? e.title, tag: CAT_TAG[e.cat] ?? "Money",
+          detail: res?.detail ?? [e.detail, e.amount != null ? `₹${Math.round(e.amount).toLocaleString("en-IN")}` : ""].filter(Boolean).join(" · "), to: e.url ?? "/money/calendar", tone: e.cat === "tax" ? "warn" : "plain" });
       }
       // when the money calendar already carries the market events (its own switch), they are not listed twice
       // the nearest weekly expiry within a week too (R52-013: Monday's NIFTY expiry missing from "Next up"); later weeklies
@@ -163,13 +171,13 @@ export function useComingUp(limit = 6, enabled = true): Up[] | null {
       }
       for (const v of [inRes, usRes]) for (const w of v?.weeks ?? []) for (const r of w.rows) {
         if (r.date < today || r.date > end || r.out) continue;
-        out.push({ key: `${r.date}|${r.symbol}|results`, date: r.date, title: `${r.symbol} results`, detail: ["Among your stocks", r.when].filter(Boolean).join(" · "),
+        out.push({ key: `${r.date}|${r.symbol}|results`, date: r.date, ...resultsLine(r.symbol, null, r.when),
           to: `/research/${r.region}/${encodeURIComponent(r.symbol)}`, tag: "Results", tone: "plain" });
       }
       const seen = new Set<string>();
-      setRows(out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)).filter((u) => (seen.has(u.key) ? false : (seen.add(u.key), true))).slice(0, limit));
+      setRows(out.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title)).filter((u) => (seen.has(u.key) ? false : (seen.add(u.key), true))));
     });
     return () => { live = false; };
-  }, [limit, enabled]);
+  }, [enabled]);
   return rows;
 }

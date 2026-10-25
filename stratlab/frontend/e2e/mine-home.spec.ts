@@ -53,7 +53,7 @@ test("my space: opens from / for 'all of it', with a greeting, six cards and a f
   await expect(home.getByRole("heading", { level: 1 })).toContainText(/^(Good (morning|afternoon|evening)|Hello)/);
   // the date is India's (the test browser runs in UTC, which the page treats as no real zone), so it is right after midnight IST too
   const ist = (o: Intl.DateTimeFormatOptions) => new Date().toLocaleDateString("en-GB", { ...o, timeZone: "Asia/Kolkata" });
-  await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}$`));
+  await expect(home.locator(".k-eyebrow")).toContainText(new RegExp(`^${ist({ weekday: "long" })}, ${ist({ day: "numeric" })} ${ist({ month: "long" })}( in India)?$`));     // "in India" when the reader's clock is elsewhere (DI-011)
   await expect(home.locator(".k-lede")).not.toBeEmpty();
   expect(await order(page)).toEqual(CARDS.map((c) => c.id));
 
@@ -97,7 +97,7 @@ test("my space: the owner's net worth, holdings and sessions fill the tiles", as
   await expect(pnl).toContainText(/₹|needs live prices/);
   await expect(pnl.getByRole("link", { name: "Holdings" })).toHaveAttribute("href", "/holdings");
   // a link on every card leads to the page the figure comes from
-  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Calendar" })).toHaveAttribute("href", "/money/calendar");
+  await expect(page.getByTestId("mine-coming").getByRole("link", { name: "Calendar", exact: true })).toHaveAttribute("href", "/money/calendar");
   await expect(page.getByTestId("mine-watch").getByRole("link", { name: "All" })).toHaveAttribute("href", "/research/watchlist");
   await sane(page, errors, phone);
   if (SHOTS) {
@@ -146,7 +146,7 @@ test("my space: Customise hides, shows and reorders the cards, and remembers it"
   await sane(page, errors, phone);
 });
 
-test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI assistant; a page pinned from its breadcrumb shows under Pinned", async ({ page, request }, info) => {
+test("my space: the menu has My space, Pinned, Briefs, Watchlist, Stock alerts, Connected accounts, Settings and (on a plan with it) the AI assistant; a page pinned from its breadcrumb shows under Pinned", async ({ page, request }, info) => {
   const phone = info.project.name === "phone";
   const u = who(254, phone);
   await answer(request, u, "money");
@@ -159,7 +159,12 @@ test("my space: the menu has My space, Pinned, Briefs, Connected accounts and AI
   await expect(side.locator('[data-group="pinned"]')).toContainText("Nothing pinned yet");
   await expect(side.getByRole("link", { name: "Briefs" })).toHaveAttribute("href", "/news");
   await expect(side.getByRole("link", { name: "Connected accounts" })).toHaveAttribute("href", "/settings#accounts");
-  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveAttribute("href", "/assistant");
+  await expect(side.getByRole("link", { name: "Watchlist" })).toHaveAttribute("href", "/research/watchlist");
+  await expect(side.getByRole("link", { name: "Stock alerts" })).toHaveAttribute("href", "/alerts");
+  await expect(side.getByRole("link", { name: "Settings", exact: true })).toHaveAttribute("href", "/settings");
+  // the assistant only for a plan that has it, not as a locked upsell (DI-018)
+  const feats = (await (await request.get(`${API}/me`, { headers: auth(u) })).json()).plan_info.features;
+  await expect(side.getByRole("link", { name: "AI assistant" })).toHaveCount(feats.assistant === false ? 0 : 1);
   if (phone) await page.getByRole("button", { name: "Close menu" }).click();
 
   // pin Margin funding from its own breadcrumb menu
@@ -225,12 +230,12 @@ test("my space: greets by first name, writes the dollar rate without a rupee sig
   }
 });
 
-test("the AI assistant, Get the app and Invite friends pages drop 'Mine ·' from their eyebrow (the breadcrumb says Mine)", async ({ page }) => {
+test("the AI assistant, Get the app and Invite friends pages have no eyebrow repeating their title (the breadcrumb says My space)", async ({ page }) => {
   const errors = await signIn(page, ADMIN, "/assistant");
   for (const [path, title] of [["/assistant", "Connect an AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"]]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator("main .k-eyebrow").first()).toHaveText(title);
+    await expect(page.locator("main .k-page-head .k-eyebrow")).toHaveCount(0);           // DI-019: "SETTINGS / Settings"
     await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("My space");
   }
   expect(errors).toEqual([]);

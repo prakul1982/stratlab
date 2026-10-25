@@ -4,19 +4,22 @@ import { MINE_HOME, MINE_NAME } from "../lib/spaces";
 import { NAV, groupPath, locate, locateGroup } from "../lib/nav";
 import { usePins } from "../lib/pins";
 
-/** The personal pages that are not in a space: "My space › Settings". */
-const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "Connect an AI assistant", "/app": "Get the app", "/invite": "Invite friends" };
+/** The personal pages that are not in a space: "My space › Settings". Plans, Help and All features too, so every page of
+ * the account menu has the same trail (DI-019: /plans and /help had none, /features said "StratLab › All features"). */
+const PERSONAL: Record<string, string> = { "/account": "Account", "/settings": "Settings", "/assistant": "Connect an AI assistant", "/app": "Get the app", "/invite": "Invite friends",
+  "/plans": "Plans", "/help": "Help", "/features": "All features" };
+/** The space pages My space's own menu links to (Shell's MINE_LINKS): opened from My space, their trail says so. */
+const MINE_LINKED = ["/news", "/alerts", "/research/watchlist"];
 
 /** The breadcrumb for the page showing, drawn from the one map of pages (lib/nav.ts): "Space › Group › Page ▾". It sits
  * at the top of every page that is in the menu, so no page needs its own row of tabs. */
-export function PageBreadcrumb() {
+export function PageBreadcrumb({ mine = false }: { mine?: boolean }) {
   const { pathname } = useLocation();
   const pins = usePins();
   if (pathname === MINE_HOME) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} />;
   // every space's home starts the same way as My space: its one-word name (R1-028)
   const home = (Object.keys(NAV) as (keyof typeof NAV)[]).find((k) => NAV[k].home === pathname);
   if (home) return <Breadcrumb trail={[{ label: NAV[home].label, to: NAV[home].home }]} />;
-  if (pathname === "/features") return <Breadcrumb trail={[{ label: "StratLab", to: "/" }]} page="All features" />;
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} page="Admin" />;
   if (PERSONAL[pathname]) return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} page={PERSONAL[pathname]} />;
   const g = locateGroup(pathname);
@@ -24,6 +27,10 @@ export function PageBreadcrumb() {
   const at = locate(pathname);
   if (!at) return null;
   const { space, group, page } = at;
+  // opened from My space's own menu (Briefs, Watchlist, Stock alerts), the trail is My space's, as the menu beside it is
+  // (DI-017: Briefs showed My space in the menu and "Invest › Company news" above the page)
+  if (mine && MINE_LINKED.includes(page.to))
+    return <Breadcrumb trail={[{ label: MINE_NAME, to: MINE_HOME }]} page={page.label} pinned={pins.has(page.to)} onTogglePin={() => pins.toggle(page.to)} />;
   return (
     <Breadcrumb
       trail={[{ label: NAV[space].label, to: NAV[space].home }, { label: group.label, to: groupPath(space, group) }]}

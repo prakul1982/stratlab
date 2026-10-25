@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { canInstall, disablePush, enablePush, install, installed, isIos, onInstallChange, pushOnHere, pushSupported } from "../lib/pwa";
 import { Badge, Card, CardHead } from "./kit";
+import { InstallSteps, onPhone } from "./InstallSteps";
 
 /** Put StratLab on the home screen and get trade alerts and the daily report as phone notifications. */
 export function PhoneCard() {
@@ -39,9 +40,10 @@ export function PhoneCard() {
         <CardHead title="Install StratLab" actions={installed() ? <Badge tone="ok">Installed</Badge> : undefined} />
         {installed() ? <p className="k-small k-muted">StratLab is installed on this device.</p> : (
           <>
-            <p className="k-small k-muted">Install StratLab like an app: its own icon, full screen, and notifications without Telegram.</p>
+            {/* no word of Telegram: Settings has no Telegram option to compare with (DI-029) */}
+            <p className="k-small k-muted">Install StratLab like an app: its own icon, full screen, and notifications on your phone.</p>
             {canInstall() ? <button type="button" className="btn outline k-btn-end" onClick={() => void install()}>Install StratLab</button>
-              : <p className="k-small">{isIos() ? "On an iPhone: tap Share, then Add to Home Screen." : "In Chrome or Edge: open the browser menu and choose Install app (or Add to Home screen)."}</p>}
+              : <InstallSteps ios={isIos()} phone={onPhone()} />}
           </>
         )}
       </Card>

@@ -1,11 +1,11 @@
-"""The first-steps checklist on Home for new accounts: five things to try, each ticked from what the user has really
-done (not from clicking the step). Dismissed for good from Home; gone by itself once every step is done or the
+"""The first-steps checklist on Home for new accounts: four or five things to try, picked by what they came for, each
+ticked from what the user has really done (not from clicking the step). Dismissed for good from Home; gone by itself once every step is done or the
 account is a month old. Stored in app_settings as firststeps:<uid> (dismissed, and whether a deep dive was opened)."""
 import json
 import threading
 from datetime import datetime, timedelta, timezone
 
-from . import db, holdings, newsletter_prefs, push
+from . import db, holdings, money_networth, newsletter_prefs, push, tax_lots
 from .plans import _dt
 
 KEY = "firststeps:"
@@ -18,8 +18,19 @@ STEPS = [
     ("watchlist", "Add a stock to your watchlist", "/research"),
     ("deepdive", "Open a company deep dive", "/research/IN/RELIANCE/deep"),
     ("paper", "Start paper trading", "/paper"),
-    ("alerts", "Set up newsletters or phone alerts", "/account#newsletters"),
+    ("alerts", "Set up newsletters or phone alerts", "/settings#notifications"),
+    ("holdings", "Add your holdings from your broker's file", "/holdings"),
+    ("networth", "Add something you own to your net worth", "/money/net-worth"),
+    ("tax", "Upload a tradebook for this year's tax estimate", "/tax-report"),
 ]
+# the steps for what the person said they came for (Settings → What you see first): someone here for their money is
+# asked to add holdings, not to backtest (DI-008). Trade, and no answer yet, keep the strategy lab's five.
+BY_FOCUS = {
+    "trade": ("backtest", "watchlist", "deepdive", "paper", "alerts"),
+    "invest": ("watchlist", "deepdive", "holdings", "alerts"),
+    "money": ("holdings", "networth", "tax", "alerts"),
+    "both": ("backtest", "watchlist", "deepdive", "holdings", "alerts"),
+}
 
 _marked: set[tuple[str, str]] = set()      # (uid, step) already stored, so a busy page doesn't write on every visit
 _lock = threading.Lock()
@@ -84,7 +95,17 @@ def done(profile: dict, st: dict | None = None) -> dict[str, bool]:
         "paper": bool(db.user_sessions(uid, 1, running=False)),
         "alerts": (any(v != "off" for v in news.values()) or bool(profile.get("telegram_chat_id"))
                    or bool(push.devices(uid))),
+        "holdings": _has(lambda: holdings.load(uid)["items"]),
+        "networth": _has(lambda: money_networth.load(uid)["items"]),
+        "tax": _has(lambda: tax_lots.load(uid)["trades"]),
     }
+
+
+def _has(read) -> bool:
+    try:
+        return bool(read())
+    except Exception:
+        return False
 
 
 def is_new(profile: dict, now: datetime | None = None) -> bool:
@@ -94,13 +115,15 @@ def is_new(profile: dict, now: datetime | None = None) -> bool:
         return False
 
 
-def view(profile: dict, now: datetime | None = None) -> dict:
-    """What Home shows: the steps with their ticks, and whether to show the checklist at all."""
+def view(profile: dict, now: datetime | None = None, focus: str | None = None) -> dict:
+    """What Home shows: the steps for what the person came for (`focus`), with their ticks, and whether to show the
+    checklist at all."""
     st = state(profile["id"])
     dismissed = bool(st.get("dismissed"))
     if dismissed or not is_new(profile, now):
         return {"show": False, "dismissed": dismissed, "done": 0, "steps": []}
     ticks = done(profile, st)
-    steps = [{"id": i, "title": t, "to": to, "done": ticks[i]} for i, t, to in STEPS]
+    pick = BY_FOCUS.get(focus or "trade", BY_FOCUS["trade"])
+    steps = [{"id": i, "title": t, "to": to, "done": ticks[i]} for i, t, to in sorted((s for s in STEPS if s[0] in pick), key=lambda s: pick.index(s[0]))]
     n = sum(s["done"] for s in steps)
     return {"show": n < len(steps), "dismissed": False, "done": n, "steps": steps}

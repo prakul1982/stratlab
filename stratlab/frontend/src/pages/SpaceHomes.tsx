@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
-import { homeOf } from "../lib/spaces";
+import { homeOf, startView } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
 import { NAV_GROUPS } from "../lib/navGroups";
@@ -35,9 +35,9 @@ import { PLAN_NAME, planOf } from "../lib/plans";
 
 /** `/`: the home of the space showing (for "All", of what the person came for). Waits for the account on a first visit. */
 export function SpaceHome() {
-  const { me, meError, space, focus } = useApp();
+  const { me, meError } = useApp();
   if (!me && !meError) return <Loading label="Opening StratLab" />;
-  return <Navigate to={homeOf(space, focus)} replace />;
+  return <Navigate to={homeOf(startView(me?.prefs?.focus, me?.prefs?.space))} replace />;
 }
 
 /** The launch offer and the new-account checklist, right under every space home's heading. */
@@ -385,7 +385,7 @@ function RedFlags({ region }: { region: Region }) {
 }
 
 /* ---------- Money: what you own ---------- */
-type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number;
+type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced?: number;
   no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[]; session?: string | null };
 type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
@@ -421,6 +421,14 @@ export function MoneyHome() {
   );
 }
 
+/** Why the gain or loss is missing: the prices not in yet (the feed off at a weekend), or no buy prices in the file. The
+ * buy prices were there and the tile sent people to fix their file (DI-007). */
+export function gainMissing(t: { count: number; priced?: number; no_cost?: { count: number } | null }): string {
+  const noCost = t.no_cost?.count ?? 0;
+  if (t.priced === 0 && noCost < t.count) return "Needs today's prices, not in yet";
+  return "Needs the buy prices";
+}
+
 function HoldingsSummary() {
   const [h, setH] = useState<Holdings | null | "error">(null);
   const { markets } = useApp();
@@ -441,7 +449,7 @@ function HoldingsSummary() {
               {(() => { const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
                 return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
               <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
-                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
+                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing={gainMissing(h.totals)} />
               {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
               {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? `Last session (${fmtDate(h.totals.session, { weekday: true, year: false })})` : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
               {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
