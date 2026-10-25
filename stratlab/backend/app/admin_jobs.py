@@ -39,16 +39,36 @@ def plain_error(text: str | None) -> str | None:
 HOLIDAYS_ENOUGH = 30          # days of holidays on file that keep a failed read of the exchange's list a Check (R13-012)
 
 
+# What a source left unread means, and whose fault it looks like (DJ-021: "Not read: … answered 404" said neither what was
+# missing nor whether anything had to be done)
+_SITE_FAULT = re.compile(r"answered (4\d\d|5\d\d)|couldn't (be )?reach|timed out|refused|redirect", re.I)
+
+
+def missing_words(problem: str, effects: dict[str, str] | None, next_run: str | None) -> str:
+    """" Index rebalance dates may be missing. The provider's site isn't answering, not StratLab; tried again at 6:40 PM
+    IST.": what the unread source leaves out, and that nothing needs doing when the site is at fault."""
+    label = problem.split(":", 1)[0].strip()
+    effect = (effects or {}).get(label)
+    if not effect:
+        return ""
+    fault = (" Its site isn't answering properly, so the fault looks like the site's, not StratLab's: nothing to do"
+             if _SITE_FAULT.search(problem) else " Its page may have changed: the reader needs a look")
+    return f" {effect}.{fault}{f'; it is tried again at {next_run}' if next_run else ''}."
+
+
 def _row(id: str, name: str, schedule: str, last_run: str | None, error: str | None = None, log: list[str] | None = None,
-         run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None) -> dict:
+         run: list[dict] | None = None, running: bool = False, note: str | None = None, parts: int | None = None,
+         effects: dict[str, str] | None = None, next_run: str | None = None) -> dict:
     """One job. `parts`: how many sources the last run tried, for a job that reads several (each failed one is a line
-    of `log`); when some were read and some weren't, the run is partial: Check, not Problem."""
+    of `log`); when some were read and some weren't, the run is partial: Check, not Problem. `effects` says, per source,
+    what is missing while it is unread (DJ-021), `next_run` when it is tried again."""
     state = "bad" if error else "ok" if last_run else "warn"
     problems = [str(x) for x in (log or []) if x] if error else []
     failed = len(problems)
     if error and parts and 0 < failed < parts:
         state = "warn"
-        error = f"Partial: {parts - failed} of {parts} sources read. Not read: {plain_error(problems[0])}" + (f" And {failed - 1} more (see the log)." if failed > 1 else "")
+        error = (f"Partial: {parts - failed} of {parts} sources read. Not read: {plain_error(problems[0])}"
+                 + missing_words(problems[0], effects, next_run) + (f" And {failed - 1} more (see the log)." if failed > 1 else ""))
     else:
         error = plain_error(error)
     # a provider's own error text can carry an account identifier: Admin shows it hidden (R29B-022)
@@ -111,6 +131,47 @@ def plural(n: int, one: str) -> str:
 
 def _problems(st: dict) -> list[str]:
     return [str(p) for p in (st.get("problems") or [])]
+
+
+def clock(hhmm: str) -> str:
+    """"18:40" as "6:40 PM"."""
+    h, m = (int(x) for x in hhmm.split(":"))
+    return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+
+def next_slot(runs, now: datetime | None = None) -> str | None:
+    """The next of a job's daily runs ((name, zone, "HH:MM"), ...), as "6:40 PM IST" (with the day when it is tomorrow)."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    best = None
+    for _, tz, at in runs:
+        local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz))
+        h, m = (int(x) for x in at.split(":"))
+        t = local.replace(hour=h, minute=m, second=0, microsecond=0)
+        if t <= local:
+            t += timedelta(days=1)
+        if best is None or t < best[0]:
+            best = (t, tz, local)
+    if not best:
+        return None
+    t, tz, local = best
+    zone = "IST" if tz == "Asia/Kolkata" else "New York time" if tz == "America/New_York" else tz
+    return f"{clock(t.strftime('%H:%M'))} {zone}" + ("" if t.date() == local.date() else " tomorrow")
+
+
+def results_schedule(R) -> str:
+    """The results job's whole clock (DJ-022: a run at 5 PM New York time beside "US 6:00 AM" read as off-schedule): the
+    calendar's refreshes, the morning notes, and the hourly look for new filings."""
+    return (f"Calendar: India {' and '.join(clock(t) for t in R.REFRESH_AT['IN'])} IST, US {' and '.join(clock(t) for t in R.REFRESH_AT['US'])} "
+            f"New York time. Results-day notes {clock(R.MORNING_AT['IN'])} IST and {clock(R.MORNING_AT['US'])} New York time. "
+            f"New filings looked for every hour from {clock(R.CHECK_FROM['IN'])} IST and {clock(R.CHECK_FROM['US'])} New York time until midnight")
+
+
+def corp_schedule(C) -> str:
+    """The corporate-actions job's whole clock (DJ-022): the list, the price histories, and the evening-before notes."""
+    return (f"List: India {' and '.join(clock(t) for t in C.REFRESH_AT['IN'])} IST, US {' and '.join(clock(t) for t in C.REFRESH_AT['US'])} "
+            f"New York time. Price histories {clock(C.HISTORY_AT['IN'])} IST and {clock(C.HISTORY_AT['US'])} New York time. "
+            f"Evening-before notes {clock(C.EVE_AT['IN'])} IST and {clock(C.EVE_AT['US'])} New York time")
 
 
 KEPT = ("newsletters", "positioning", "etf", "results", "corp", "events", "fo", "surveillance", "closing-auction", "vix", "option-chains", "connect")
@@ -276,7 +337,8 @@ def rows() -> list[dict]:
 
     def results():
         st = _plain(m.results_job, "results")
-        return _row("results", "Results calendar", "India 7:15 AM and 6:30 PM IST, US 6:00 AM New York time", st.get("last_run"),
+        from . import results as R
+        return _row("results", "Results calendar", results_schedule(R), st.get("last_run"),
                     st.get("last_error"), _problems(st), [{"label": "Run now", "path": "/admin/results/refresh"}])
     add("Results calendar", results)
 
@@ -284,7 +346,7 @@ def rows() -> list[dict]:
         st = _plain(m.corp_job, "corp")
         from . import corp_actions
         at, why = _ran(st, "last_run", data=lambda: max(filter(None, (corp_actions.load(r).get("at") for r in corp_actions.REGIONS)), default=None))
-        return _row("corp", "Corporate actions", "India 7:20 AM and 6:40 PM IST, US 6:10 AM New York time", at,
+        return _row("corp", "Corporate actions", corp_schedule(corp_actions), at,
                     st.get("last_error"), _problems(st) + why, [{"label": "Run now", "path": "/admin/corp-actions/refresh"},
                                                            {"label": "Read the whole US universe", "path": "/admin/corp-actions/refresh?universe=true"}],
                     running=bool(getattr(m.corp_job, "universe_running", False)),
@@ -297,7 +359,8 @@ def rows() -> list[dict]:
         from . import market_events
         at, why = _ran(st, "last_run", data=lambda: market_events.load_state().get("last_run"))
         return _row("events", "Market events", "7:20 AM and 6:40 PM IST", at, st.get("last_error"), _problems(st) + why,
-                    [{"label": "Run now", "path": "/admin/events/refresh"}], parts=st.get("parts"))
+                    [{"label": "Run now", "path": "/admin/events/refresh"}], parts=st.get("parts"),
+                    effects=market_events.MISSING, next_run=next_slot(r.job.RUNS))
     add("Market events", events)
 
     def fo():

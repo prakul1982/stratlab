@@ -12,7 +12,8 @@ type Issue = { level: Level; area: string; detail: string };
 /** A company's page: BSE-only companies (BSE:543210) open by their BSE code. */
 const pageSymbol = (s: string) => (s.startsWith("BSE:") ? s.slice(4) : s);   // a BSE code opens the same page as its symbol
 
-type Row = { symbol: string; name: string; seconds: number; issues: Issue[] };
+/** `at`: when the company was checked (the whole-market audit's rows), shown on each so an old result isn't read as today's (DJ-026) */
+type Row = { symbol: string; name: string; seconds: number; issues: Issue[]; at?: string | null };
 type Summary = { companies: number; clean: number; mismatches: number; gaps: number; errors: number; facts?: number; pending?: number; avg_seconds: number | null;
   by_area: Record<string, Partial<Record<Level, number>>>; slowest: { symbol: string; seconds: number }[] };
 interface AuditState {
@@ -22,6 +23,16 @@ interface AuditState {
 }
 
 const SHOWN = 300;
+const PAGE_ROWS = 30;          // companies shown at a time, then "Show more" (DJ-030: a 10,880px page on a phone)
+const STALE_DAYS = 7;          // an audit older than this says so above its results (DJ-028)
+
+/** "These results are 23 days old" for a finished audit more than STALE_DAYS old, else "" (DJ-028). */
+export function staleNote(finishedAt: string | null | undefined, now = Date.now()): string {
+  const t = finishedAt ? Date.parse(finishedAt) : NaN;
+  if (!Number.isFinite(t)) return "";
+  const days = Math.floor((now - t) / 86400000);
+  return days > STALE_DAYS ? `These results are ${days} days old: the companies' data has moved on since. Run the audit again for today's.` : "";
+}
 const LEVEL: Record<Level, [string, "warn" | "plain"]> = { mismatch: ["Mismatch", "warn"], error: ["Error", "warn"], gap: ["Gap", "plain"], fact: ["Fact", "plain"], pending: ["Not checked yet", "plain"] };
 /** Which areas need a look first: mismatches, then errors, then gaps. */
 const weight = (c: Partial<Record<Level, number>>) => (c.mismatch ?? 0) * 3 + (c.error ?? 0) * 2 + (c.gap ?? 0);
@@ -71,6 +82,7 @@ export function AuditPanel({ region }: { region: Region }) {
               <p className="k-small"><b>{s.label}</b>{s.docs ? " with documents" : ""} · {s.running ? `started ${ago(s.started_at!)}` : s.finished_at ? `${s.cancelled ? "stopped" : "finished"} ${ago(s.finished_at)}` : ""}
                 {" · "}{sum.companies} checked, {sum.clean} clean · <span className="k-down">{count(sum.mismatches, "mismatch", "mismatches")}</span> · {tally(sum)}
                 {sum.avg_seconds != null && ` · ${sum.avg_seconds}s a company`}</p>
+              {!s.running && staleNote(s.finished_at) && <Notice tone="warn">{staleNote(s.finished_at)}</Notice>}
               <Findings rows={s.rows ?? []} sum={sum} running={s.running} file="stratlab-audit.csv" region={s.region ?? region} />
             </>
           )}
@@ -230,14 +242,15 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
   /** the whole-market audit: check one company again now */ onRecheck?: (symbol: string) => Promise<void> }) {
   const [show, setShow] = useState<Level | "all">("mismatch");
   const [again, setAgain] = useState<string | null>(null);
+  const [upTo, setUpTo] = useState(PAGE_ROWS);
   const rows = useMemo(() => all.map((r) => ({ ...r, shown: r.issues.filter((i) => show === "all" || i.level === show) }))
     .filter((r) => r.shown.length), [all, show]);
   const csv = () => {
-    const lines = [["symbol", "name", "level", "area", "detail"].join(",")];
+    const lines = [["symbol", "name", "checked", "level", "area", "detail"].join(",")];
     // names and details come from the exchanges' feeds: a leading = + - @ (or tab/CR) would run as a spreadsheet
     // formula when the file is opened, so such a cell is written as text
     const cell = (x: unknown) => { const s = String(x ?? ""); return `"${(/^[=+\-@\t\r]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"`; };
-    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, i.level, i.area, i.detail].map(cell).join(","));
+    for (const r of all) for (const i of r.issues) lines.push([r.symbol, r.name, r.at ?? "", i.level, i.area, i.detail].map(cell).join(","));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })); a.download = file; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -255,23 +268,28 @@ function Findings({ rows: all, sum, running, file, region, onRecheck }: { rows: 
     <>
       {areas.length > 0 && <DataTable label={onRecheck ? "Whole-market findings by area" : "Data audit findings by area"} rows={areas} rowKey={([a]) => a} columns={cols} />}
       <div className="k-toolbar">
-        <ChipBar label="Show" value={show} onChange={(v) => setShow(v as Level | "all")}
+        <ChipBar label="Show" value={show} onChange={(v) => { setShow(v as Level | "all"); setUpTo(PAGE_ROWS); }}
           options={(["mismatch", "error", "gap", "fact", "pending", "all"] as const).map((k) => ({ value: k, label: SHOWS[k] }))} />
         {!!all.length && <button type="button" className="btn quiet sm" onClick={csv}>Download CSV</button>}
       </div>
       {rows.length === 0 ? <EmptyState title={`Nothing of this kind${running ? " yet" : ""}`}>Pick another kind above to see the rest.</EmptyState> : (
         <div className="k-stack">
           {rows.length > SHOWN && <p className="k-small k-muted">Showing {SHOWN} of {rows.length} companies; the CSV has all of them.</p>}
-          {rows.slice(0, SHOWN).map((r) => (
+          {rows.slice(0, Math.min(SHOWN, upTo)).map((r) => (
             <div key={r.symbol} className="k-stack k-small">
               <span className="k-row">
-                <span><Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(r.symbol))}/deep`}><b>{r.name}</b></Link> <span className="adm-mono k-muted">{r.symbol} · {r.seconds}s</span></span>
+                <span><Link className="link" to={`/research/${region}/${encodeURIComponent(pageSymbol(r.symbol))}/deep`}><b>{r.name}</b></Link> <span className="adm-mono k-muted">{r.symbol} · {r.seconds}s</span>
+                  {r.at && <span className="k-muted" data-testid="audit-checked"> · checked {fmtDate(r.at, { year: false })}</span>}</span>
                 {onRecheck && <button type="button" className="btn quiet sm" disabled={!!again} aria-label={`Re-check ${r.name}`}
                   onClick={async () => { setAgain(r.symbol); try { await onRecheck(r.symbol); } finally { setAgain(null); } }}>{again === r.symbol ? "Checking…" : "Re-check"}</button>}
               </span>
               {r.shown.map((i, n) => <span key={n}><Badge tone={LEVEL[i.level][1]} dot={false}>{show === "all" && i.level !== "pending" ? `${LEVEL[i.level][0]}: ` : ""}{i.area}</Badge> {i.detail}</span>)}
             </div>
           ))}
+          {rows.length > upTo && upTo < SHOWN && (
+            <div className="k-row"><span className="k-note">Showing {upTo} of {Math.min(rows.length, SHOWN)}.</span>
+              <button type="button" className="btn quiet sm" onClick={() => setUpTo((n) => n + PAGE_ROWS)}>Show {Math.min(PAGE_ROWS, Math.min(rows.length, SHOWN) - upTo)} more</button></div>
+          )}
         </div>
       )}
     </>

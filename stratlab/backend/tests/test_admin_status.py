@@ -42,7 +42,10 @@ def test_a_partial_run_is_check_with_how_many_sources_were_read(w, monkeypatch):
     r.job.record(now, [rbi], 5)
     row = _jobs(w["client"])["events"]
     assert row["state"] == "warn"
-    assert row["error"] == "Partial: 4 of 5 sources read. Not read: Central bank (MPC): Couldn't reach www.rbi.org.in."
+    assert row["error"].startswith("Partial: 4 of 5 sources read. Not read: Central bank (MPC): Couldn't reach www.rbi.org.in.")
+    # what is missing meanwhile, whose fault it looks like and when it is tried again (DJ-021)
+    assert "RBI policy dates and the repo rate may be out of date" in row["error"] and "not StratLab's" in row["error"]
+    assert "tried again at" in row["error"] and " IST" in row["error"]
     assert row["log"] == [rbi]                                  # the log keeps the whole text
     r.job.record(now, [rbi, "US Fed (FOMC): federalreserve.gov answered 503."], 5)
     assert _jobs(w["client"])["events"]["error"].endswith("And 1 more (see the log).")

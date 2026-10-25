@@ -16,7 +16,9 @@ def test_every_market_says_where_its_holidays_come_from_and_how_far_ahead(monkey
     assert rows["IN"]["source"] == "Exchange's own list, read daily" and rows["CDS"]["source"] == rows["IN"]["source"]
     assert rows["US"]["source"] == "Built-in calendar rules"
     for m in ("CRYPTO", "FX"):
-        assert rows[m]["source"] == "No exchange holidays (24/7 / weekdays)" and rows[m]["state"] == "none" and rows[m]["next"] is None
+        assert rows[m]["state"] == "none" and rows[m]["next"] is None
+    assert rows["CRYPTO"]["source"] == "No exchange holidays: trades 24/7"                  # DJ-024: each its own
+    assert rows["FX"]["source"] == "No exchange holidays: trades on weekdays"
     us = rows["US"]
     assert us["state"] == "ok" and us["days_left"] >= 60 and us["next"] == "2026-11-26" and us["next_name"] == "Thanksgiving"
     assert rows["JP"]["next_name"] == "Health and Sports Day"           # the "(2022 onwards)" note is dropped

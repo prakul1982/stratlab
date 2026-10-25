@@ -421,6 +421,11 @@ def _provider_view(name: str, now: float) -> dict:
     pin_admin = R.pins().get(name)
     pin_env = model_setting(name) if name != "anthropic" else ""
     listed = list(dict.fromkeys(use + list(st.order) + [m for m, s in st.models.items() if s.probe_tries or s.live]))
+    # a model no job can use (a music or agent model measured before the filter knew it) isn't listed, unless it is in
+    # use, pinned or blocked (DJ-036: "lyria-3-clip-preview" among the chat models)
+    from .ai_catalog import unusable
+    keep = set(use) | {pin_admin, pin_env} | {b.split("/", 1)[1] for b in R.blocks() if b.startswith(name + "/")}
+    listed = [m for m in listed if m in keep or unusable(name, m) != "not a chat model"]
     models = []
     for m in listed[:12]:
         s = R.stats(name, m)
@@ -466,6 +471,15 @@ def _provider_view(name: str, now: float) -> dict:
         state, text = "ok", "Working."
     else:
         state, text = "idle", "Key set. Press Test to check it." if st.ranked_at else "Key set. Press Test to check it, or Re-rank to measure its models."
+    if is_on and result == "failed" and state in ("ok", "idle"):
+        # the badge says what the summary counts (DJ-031: SambaNova "OK, Working" while its only model timed out, counted
+        # among the failing): the last real result was a failure
+        why = st.last_error or next((m["last_error"] for m in models if m["in_use"] and m["last_error"]), None) \
+            or "its models in use didn't answer on the last tries"
+        state, text = "fail", f"Failing: {why}. The others take over; press Test to try it again."
+    elif is_on and state == "idle" and st.ranked_at and st.discovered == 0:
+        # measured, but the provider listed no models: nothing was tried, and that often means the key is wrong (DJ-031)
+        text = "Not tried yet, and the provider listed no models when asked, which often means the key is wrong. Check the key, then press Test."
     pin = pin_admin or pin_env
     if pin and R.pin_gone(name, pin):
         text += (f" The pinned model {pin} isn't available any more ({R.stats(name, pin).last_error}), so the measured models "

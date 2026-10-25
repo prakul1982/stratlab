@@ -29,7 +29,22 @@ export function ratesRead(readAt: Record<string, string> | null | undefined, ago
   return `Exchange rates read ${ago(newest)}; ${[...byTime].map(([t, cs]) => `${cs.join(", ")} ${ago(t)}`).join("; ")}.`;
 }
 
-/** A typed price: a number (commas allowed) or null for an empty box (Automatic); undefined when it isn't a positive number. */
+/** A price's label in Admin (DJ-015, as pricing.py sets them): "Fixed (set 24 Oct)", "Fixed by you", or "Follows the rupee
+ * price" for an older server's automatic one. */
+export function priceLabel(set: "default" | "owner" | "follows", fixedOn: string | null | undefined): string {
+  if (set === "owner") return "Fixed by you";
+  if (set === "follows") return "Follows the rupee price";
+  const d = fixedOn ? new Date(`${fixedOn}T00:00:00`) : null;
+  return d && !Number.isNaN(d.getTime()) ? `Fixed (set ${d.getDate()} ${d.toLocaleDateString("en-GB", { month: "short" })})` : "Fixed";
+}
+
+/** "about ₹697" for a price at today's rate (rupees a unit), so the spread between currencies shows (DJ-019); "" without one. */
+export function aboutRupees(price: number, rate: number | null | undefined): string {
+  if (!(price > 0) || !rate || !(rate > 0)) return "";
+  return `about ₹${Math.round(price * rate).toLocaleString("en-IN")}`;
+}
+
+/** A typed price: a number (commas allowed) or null for an empty box (the set price); undefined when it isn't a positive number. */
 export function parsePrice(v: string | undefined): number | null | undefined {
   const t = (v ?? "").trim();
   if (!t) return null;

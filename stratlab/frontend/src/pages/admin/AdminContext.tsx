@@ -30,7 +30,12 @@ export interface Overview {
     billing_enabled: boolean; ai: AIRow[]; research?: { finnhub: boolean }; promo_until?: string | null;
     calendar?: CalendarStatus; invoice_seller?: InvoiceSeller;
     rules_watch?: { failing: { name: string; fails: number; error: string | null }[]; pending: string[] };
-    audit_mismatches?: Partial<Record<"IN" | "US", number>>; admin_alerts?: { email_ready: boolean; via?: string | null; to: string[] };
+    audit_mismatches?: Partial<Record<"IN" | "US", number>>;
+    /** when the whole-market audit's mismatched rows were checked (DJ-026) */
+    audit_checked?: Partial<Record<"IN" | "US", { oldest: string; newest: string }>>;
+    admin_alerts?: { email_ready: boolean; via?: string | null; to: string[]; quota?: BrevoQuota | null };
+    /** while Indian data is offline: whether India is shut today anyway, and when the data login runs (DJ-003) */
+    data_note?: { closed: "weekend" | "holiday" | null; back_at: string | null } | null;
     /** which build the server is (R24-009; older servers don't send it) */
     build?: ServerBuild;
     option_recorder?: { enabled: boolean; targets: string[]; every_minutes: number; today: number; day: string | null; last_at: string | null; last_error: string | null };
@@ -39,8 +44,17 @@ export interface Overview {
     /** paid plans with a subscription behind them, and those the owner gave by hand (older servers send neither) */
     paying?: Record<"basic" | "pro", number>; given?: Record<"basic" | "pro", number>;
     /** people who pressed "Tell me when plans open" (older servers don't send it) */
-    plan_interest?: number };
+    plan_interest?: number;
+    /** the test accounts left out of every count above, unless shown (DJ-001) */
+    test_accounts?: number;
+    /** the invoices of the last 30 days, by currency (DJ-004) */
+    revenue_30d?: { days: number; count: number; by_currency: Record<string, number> } | null;
+    /** people who signed in or ran something in the last 7 days (DJ-004) */
+    active_7d?: number | null };
 }
+
+/** Brevo's own figures for today (DJ-034): sends made, and what the plan has left of its daily limit. */
+export type BrevoQuota = { sent_today: number | null; left_today: number | null; plan: string | null; limit_kind: string | null; error: string | null; dashboard: string };
 
 export type JobRow = {
   id: string; name: string; schedule: string; last_run: string | null; error: string | null; state: "ok" | "warn" | "bad"; running: boolean;
@@ -54,6 +68,8 @@ export type Reported = { entries: ReportedRow[]; reasons: Record<string, string>
 
 type Ctx = {
   ov: Overview | null; setOv: (f: (o: Overview | null) => Overview | null) => void;
+  /** whether the test accounts are counted and listed (DJ-001), and the switch */
+  showTest: boolean; setShowTest: (on: boolean) => void;
   jobs: JobRow[] | null; reported: Reported | null; loading: boolean;
   reload: () => Promise<void>; reloadJobs: () => Promise<void>;
 };
@@ -67,6 +83,11 @@ export function AdminData({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [reported, setReported] = useState<Reported | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTest, setShowTestState] = useState(() => { try { return localStorage.getItem("admin-show-test") === "1"; } catch { return false; } });
+  const setShowTest = useCallback((on: boolean) => {
+    setShowTestState(on);
+    try { localStorage.setItem("admin-show-test", on ? "1" : "0"); } catch { /* remembered for this visit only */ }
+  }, []);
   const reloadJobs = useCallback(async () => {
     try { setJobs((await api<{ jobs: JobRow[] }>("/admin/jobs")).jobs); } catch (e) { fail(e); }
   }, [fail]);
@@ -74,14 +95,21 @@ export function AdminData({ children }: { children: ReactNode }) {
     setLoading(true);
     // the three reads at once, each shown as it arrives: one after another made a cold Admin 7 s (R8O-007). The server
     // keeps Overview's counts 45 s; Refresh and a change made from a section read them again (fresh)
-    const ovDone = api<Overview>(fresh ? "/admin/overview?fresh=1" : "/admin/overview").then(setOvState).catch(fail);
+    const ovDone = api<Overview>(overviewPath(fresh, showTest)).then(setOvState).catch(fail);
     const libDone = api<Reported>("/admin/library").then(setReported).catch(fail);
     try { await Promise.all([ovDone, libDone, reloadJobs()]); } finally { setLoading(false); }
-  }, [fail, reloadJobs]);
+  }, [fail, reloadJobs, showTest]);
   const reload = useCallback(() => load(true), [load]);
   useEffect(() => { load(false); }, [load]);
-  const value = useMemo<Ctx>(() => ({ ov, setOv: (f) => setOvState((o) => f(o)), jobs, reported, loading, reload, reloadJobs }), [ov, jobs, reported, loading, reload, reloadJobs]);
+  const value = useMemo<Ctx>(() => ({ ov, setOv: (f) => setOvState((o) => f(o)), showTest, setShowTest, jobs, reported, loading, reload, reloadJobs }),
+    [ov, showTest, setShowTest, jobs, reported, loading, reload, reloadJobs]);
   return <AdminCtx.Provider value={value}>{children}</AdminCtx.Provider>;
+}
+
+/** Overview's address: read again (`fresh`), and with the test accounts counted (DJ-001). */
+export function overviewPath(fresh: boolean, test: boolean): string {
+  const q = [fresh && "fresh=1", test && "test=1"].filter(Boolean).join("&");
+  return `/admin/overview${q ? `?${q}` : ""}`;
 }
 
 export function useAdmin(): Ctx {

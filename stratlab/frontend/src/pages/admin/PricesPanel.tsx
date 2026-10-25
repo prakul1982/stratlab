@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
-import { ago, money } from "../../lib/format";
+import { ago, fmtDate, money } from "../../lib/format";
 import { useMoreColumns } from "../../components/MoreColumns";
 import { Badge, Card, CardHead, DataTable, ErrorState, Field, FormGrid, Skeleton, type Column } from "../../components/kit";
-import { parsePrice, rateNote, ratesRead } from "./prices";
+import { aboutRupees, parsePrice, priceLabel, rateNote, ratesRead } from "./prices";
 
 type Row = { symbol: string; name: string; basic: number; pro: number; basic_year: number; pro_year: number; charged_in: string;
   auto: boolean; rate: number | null; no_rate?: boolean;
+  /** how the price is set (DJ-015): the fixed price of `fixed_on`, one typed here, or (older rows) following the rupee price */
+  price_set?: "default" | "owner" | "follows";
   plan_basic: string | null; plan_pro: string | null; plan_basic_year: string | null; plan_pro_year: string | null };
-type View = { currencies: Record<string, Row>; rates_at: string | null; rates_read_at?: Record<string, string>; rate_errors: string[] };
+type View = { currencies: Record<string, Row>; fixed_on?: string; rates_at: string | null; rates_read_at?: Record<string, string>; rate_errors: string[] };
 const PRICE = ["basic", "pro", "basic_year", "pro_year"] as const;
 const PLAN = ["plan_basic", "plan_pro", "plan_basic_year", "plan_pro_year"] as const;
 const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / month", basic_year: "Basic / year", pro_year: "Pro / year" };
@@ -18,8 +20,9 @@ const LABEL: Record<string, string> = { basic: "Basic / month", pro: "Pro / mont
 export function PricesPanel() {
   const { fail, notify } = useApp();
   const [rows, setRows] = useState<Record<string, Row> | null>(null);
+  const [fixedOn, setFixedOn] = useState<string | null>(null);
   const [fx, setFx] = useState<{ readAt: Record<string, string>; errors: string[] }>({ readAt: {}, errors: [] });
-  const show = (x: View) => { setRows(x.currencies); setFx({ readAt: x.rates_read_at ?? (x.rates_at ? { all: x.rates_at } : {}), errors: x.rate_errors }); };
+  const show = (x: View) => { setRows(x.currencies); setFixedOn(x.fixed_on ?? null); setFx({ readAt: x.rates_read_at ?? (x.rates_at ? { all: x.rates_at } : {}), errors: x.rate_errors }); };
   const [edit, setEdit] = useState<Record<string, Partial<Record<string, string>>>>({});
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
@@ -50,7 +53,7 @@ export function PricesPanel() {
       for (const [f, v] of Object.entries(ch)) {
         if (!(PRICE as readonly string[]).includes(f)) { body[c][f] = (v ?? "").trim(); continue; }
         const n = parsePrice(v);
-        if (n === undefined) bad[`${c}.${f}`] = "Type a number, like 8 or 1,999.50. Leave it empty for Automatic.";
+        if (n === undefined) bad[`${c}.${f}`] = `Type a number, like 8 or 1,999.50. Leave it empty for the price set ${fixedOn ? fmtDate(fixedOn, { year: false }) : "by StratLab"}.`;
         else body[c][f] = n;
       }
     }
@@ -64,13 +67,16 @@ export function PricesPanel() {
   const cols: Column<{ c: string; r: Row }>[] = [
     { key: "cur", header: "Currency", rowHeader: true, wrap: true, cell: ({ c, r }) => (
       <span><b>{c}</b> <span className="k-small k-muted">{r.name}{r.rate ? ` · ${money(r.rate, "INR", r.rate < 1 ? 4 : 2)}` : ""}</span></span>) },
-    ...shown.map((f): Column<{ c: string; r: Row }> => ({ key: f, header: LABEL[f], numeric: true, cell: ({ c }) => (
-      <span><input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`}
+    ...shown.map((f): Column<{ c: string; r: Row }> => ({ key: f, header: LABEL[f], numeric: true, cell: ({ c, r }) => (
+      <span className="k-stack"><input className="k-input adm-num-input" value={val(c, f)} onChange={(e) => set(c, f, e.target.value)} inputMode="decimal" aria-label={`${c} ${LABEL[f]}`}
         aria-invalid={errs[`${c}.${f}`] ? true : undefined} aria-describedby={errs[`${c}.${f}`] ? `price-err-${c}-${f}` : undefined} />
+        {/* what the price is in rupees today, so the spread between currencies shows (DJ-019) */}
+        {aboutRupees(Number(val(c, f)), r.rate) && <span className="k-note k-muted">{aboutRupees(Number(val(c, f)), r.rate)}</span>}
         {errs[`${c}.${f}`] && <span id={`price-err-${c}-${f}`} className="k-note" role="alert">{errs[`${c}.${f}`]}</span>}</span>) })),
     { key: "mode", header: "Price", cell: ({ c, r }) => r.no_rate ? <Badge tone="warn" dot={false}>No rate: not shown to visitors</Badge>
-      : r.auto ? <Badge tone="ok" dot={false}>Automatic</Badge>
-      : <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)} title="Follow the rupee price again">Fixed · make automatic</button> },
+      : r.price_set === "owner" ? <button type="button" className="btn quiet sm" disabled={busy} onClick={() => automatic(c)}
+        title={`Go back to the price set ${fixedOn ? fmtDate(fixedOn, { year: false }) : "by StratLab"}`}>{priceLabel(r.price_set, fixedOn)} · undo</button>
+      : <Badge tone="ok" dot={false}>{priceLabel(r.price_set ?? (r.auto ? "follows" : "owner"), fixedOn)}</Badge> },
     { key: "in", header: "Charged in", cell: ({ c, r }) => <Badge tone={r.charged_in === c ? "ok" : "plain"} dot={false}>{r.charged_in === c ? c : "Rupees"}</Badge> },
     { key: "plans", header: <span className="sr-only">Razorpay plans</span>, action: true, cell: ({ c }) => <button type="button" className="btn quiet sm" onClick={() => setOpen(open === c ? null : c)}>{open === c ? "Hide plans" : "Razorpay plans"}</button> },
   ];
@@ -78,7 +84,7 @@ export function PricesPanel() {
   return (
     <Card label="Prices outside India">
       <CardHead title="Prices outside India"
-        info={<>Visitors see prices in their own currency (picked from their country; they can switch). <b>Automatic</b> prices follow the rupee price at today's exchange rate, rounded to a tidy amount, so changing the rupee price changes them all. Type a price to fix it instead. No Razorpay plan is needed: without one, visitors pay the rupee price and their card converts it. Only to charge in a currency itself, create a plan in Razorpay in that currency for the same amount, fix the price here to match, and paste the plan ID.</>}
+        info={<>Visitors see prices in their own currency (picked from their country; they can switch). Every price here is <b>fixed</b>: set {fixedOn ? fmtDate(fixedOn) : "by StratLab"} from the rupee price and rounded, it doesn't move with the exchange rate, and changing the rupee price doesn't change it. Type a price to change one; empty the box to go back to the set price. <b>Read today's rates</b> only updates the "about ₹…" notes and what a card charged in rupees pays. No Razorpay plan is needed: without one, visitors pay the rupee price and their card converts it. Only to charge in a currency itself, create a plan in Razorpay in that currency for the same amount and paste the plan ID.</>}
         actions={<>
           {more.toggle}
           <button type="button" className="btn quiet sm" disabled={busy} onClick={readRates}>Read today's rates</button>

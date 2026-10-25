@@ -199,7 +199,9 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
         off = _off(ours, snap["pe"])
         explained = any("P/E is based on" in n for n in nums.get("notes") or [])
         if off is not None and off > PE_TOLERANCE and abs(ours - snap["pe"]) > PE_ROUNDING and not explained:
-            out.append(_issue("mismatch", "Valuation", f"P/E {snap['pe']:.1f} on the company page, {ours:.1f} from market cap ÷ trailing profit"))
+            out.append(_issue("mismatch", "Valuation", f"P/E {pe_text(snap['pe'])} on the company page, {pe_text(ours)} from market cap ÷ trailing profit"))
+    if snap.get("pe") is not None and 0 < float(snap["pe"]) < SUSPECT_PE:
+        out.append(_issue("gap", "Valuation", suspect_pe(snap["pe"])))
     ttm_sales = _last_ttm(p.get("pl"), "Sales", "Revenue")
     last4 = (nums.get("quarters") or [])[-4:]
     q = [x.get("sales") for x in last4]
@@ -215,6 +217,20 @@ def check_numbers(p: dict, nums: dict, snap: dict, group: str | None = None, you
             else:
                 out.append(_issue("mismatch", "Numbers", f"Trailing revenue {ttm_sales:,.0f} cr vs last four quarters {sum(q):,.0f} cr"))
     return out
+
+
+SUSPECT_PE = 1.0               # a P/E under 1 (the price under one year's profit) is almost never real: a units slip (DJ-027)
+
+
+def pe_text(v: float) -> str:
+    """A P/E with the decimals it needs: 24.3, but 0.08 rather than "0.1" beside "0.1" (DJ-027)."""
+    v = float(v)
+    return f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}"
+
+
+def suspect_pe(pe) -> str:
+    return (f"P/E {pe_text(pe)} on the company page is under 1, which almost never happens: the price or the profit is "
+            "probably in the wrong units, so the valuation figures need a look")
 
 
 def _quarterly(cols: list) -> bool:
@@ -507,6 +523,10 @@ def restate(issue: dict, us: bool = False) -> dict | None:
             from .deepdive import money
             return _issue(level, area, f"Trailing revenue {money(a, '$ million')} vs last four quarters {money(b, '$ million')}")
         return issue
+    m = re.match(r"P/E ([\d,.]+) on the company page, ([\d,.]+) from market cap", detail)
+    if level == "mismatch" and area == "Valuation" and m and abs(num(m[1]) - num(m[2])) <= PE_ROUNDING:
+        # within rounding is no mismatch (DJ-027: "P/E 0.1 on the company page, 0.1 from …"); a P/E under 1 is still suspect
+        return _issue("gap", area, suspect_pe(num(m[1]))) if 0 < num(m[1]) < SUSPECT_PE else None
     m = re.match(r"Last close ([\d,.]+) vs ([\d,.]+)", detail)
     if level == "mismatch" and area == "Prices" and m and abs(num(m[1]) - num(m[2])) <= PRICE_TICK:
         return None
@@ -694,6 +714,8 @@ class Runner:
 
 MARKET = "audit:market"        # settings keys: the switch and list state, the list itself, and results in shards
 RETRY_HOURS = 1                # a check a source turned away is tried again no sooner than this
+STALE_MISMATCH_HOURS = 20      # a price mismatch is checked again after this long, so one that has resolved drops off
+                               # (DJ-026: a 5 Oct close shown on 25 Oct as today's mismatch)
 MAX_TRIES = 3                  # an error from an unreachable source is tried this many times in all; "not checked
                                # yet" (a source refusing us) is tried for as long as it takes, at the slow pace below
 RETRY_BATCH = 20               # retries go in small batches: this many, then a pause of RETRY_GAP hours...
@@ -952,9 +974,22 @@ class MarketAudit:
             return []
         return self.waiting(now)[:max(0, int(r.get("left") or 0))]
 
+    def stale_mismatches(self, now: datetime | None = None) -> list[str]:
+        """Companies whose price disagreed with a source when last checked, STALE_MISMATCH_HOURS or more ago, oldest
+        first: checked again each day, so a price that has caught up drops off the list (DJ-026)."""
+        cut = ((now or datetime.now(timezone.utc)) - timedelta(hours=STALE_MISMATCH_HOURS)).isoformat()
+        out = []
+        for sym in self.listing:
+            row = self.rows.get(sym) or {}
+            at = row.get("at")
+            if at and at < cut and any(i.get("level") == "mismatch" and i.get("area") == "Prices" for i in row.get("issues") or []):
+                out.append((at, sym))
+        return [s for _, s in sorted(out)]
+
     def queue(self) -> list[str]:
         """Companies due a check, in order: new listings not yet checked (newest first), this batch of checks to
-        retry, then (during a full check) every company not yet checked since it started."""
+        retry, price mismatches a day old (DJ-026), then (during a full check) every company not yet checked since it
+        started."""
         now = datetime.now(timezone.utc)
         today = now.date()
         new = []
@@ -962,6 +997,8 @@ class MarketAudit:
             if not (self.rows.get(sym) or {}).get("at") and self._is_new(sym, today):
                 new.append((info.get("listed") or info.get("seen") or "", sym))
         first = [s for _, s in sorted(new, reverse=True)] + self._retries_now(now)
+        taken = set(first)
+        first += [s for s in self.stale_mismatches(now) if s not in taken]
         taken = set(first)
         return first + [s for s in self._full_left() if s not in taken]
 

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { useApp } from "../../lib/app";
 import { ago, fmtDateTime, IST, plainDates } from "../../lib/format";
-import { Card, CardHead, StatusList, StatusRow, type HealthState } from "../../components/kit";
+import { Card, CardHead, Notice, StatusList, StatusRow, type HealthState } from "../../components/kit";
+import { useAdmin } from "./AdminContext";
 
 type Check = { name: string; area: string; state: "pass" | "warn" | "fail"; detail: string; seconds: number | null };
 /** `build`: the short commit of the server that ran it (older results have none), so an old run isn't read as today's code's */
@@ -11,9 +12,17 @@ type Day = { at: string; auto: boolean; pass: number; warn: number; fail: number
 const LIGHT: Record<Check["state"], HealthState> = { pass: "ok", warn: "warn", fail: "bad" };
 const WORD: Record<Check["state"], string> = { pass: "Pass", warn: "Check", fail: "Fail" };
 
+/** Whether a check ran on another build than the one running now (both short commits); false when either isn't known. */
+export function olderBuild(ran: string | null | undefined, now: string | null | undefined): boolean {
+  if (!ran || !now) return false;
+  const n = Math.min(ran.length, now.length);
+  return n >= 7 && ran.slice(0, n).toLowerCase() !== now.slice(0, n).toLowerCase();
+}
+
 /** Every feature once on live data, with what came back compared to what it should be. */
 export function PlatformPanel() {
   const { fail } = useApp();
+  const { ov } = useAdmin();
   const [r, setR] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<Day[]>([]);
@@ -30,7 +39,8 @@ export function PlatformPanel() {
       <CardHead title="Check every feature"
         info="Runs each part of StratLab once on this server with live data: prices in every market and how fresh they are, a two-year backtest per market, the NIFTY 50 and US scans, sector rotation, the NIFTY option chain, exchange filings, company pages, news, the database and the holiday calendar. No AI is used. It also runs by itself every day at 4:50 PM IST: anything that fails is tried again two minutes later, and if it still fails it is emailed to you (and sent to your phone or Telegram if set in Account). Run it by hand after a deploy."
         actions={<button type="button" className="btn sm" disabled={busy} onClick={go}>{busy ? "Checking… (about a minute)" : "Run checks"}</button>} />
-      {history.length > 1 && <p className="k-note k-muted">Last {history.length} runs: {history.map((h) => (h.fail ? "✗" : "✓")).join(" ")}
+      {/* oldest on the left, said so (DJ-032: "✗ ✗ ✗ ✗ ✓ ✓…" read as the latest four failing) */}
+      {history.length > 1 && <p className="k-note k-muted">Last {history.length} runs, oldest first: {history.map((h) => (h.fail ? "✗" : "✓")).join(" ")} (newest)
         {history.some((h) => h.fail) ? ` · last failure ${ago(history.filter((h) => h.fail).slice(-1)[0].at)}` : " · no failures"}</p>}
       {history.some((h) => h.fail && h.failed_detail?.length) && (
         <ul className="k-note k-muted" aria-label="Failed runs">
@@ -41,6 +51,9 @@ export function PlatformPanel() {
       )}
       {r && (
         <>
+          {olderBuild(r.build, ov?.server.build?.short ?? ov?.server.build?.sha) && (
+            <Notice tone="warn">These results are from an older build ({r.build}); this server now runs {(ov?.server.build?.short ?? ov?.server.build?.sha ?? "").slice(0, 7)}. Run checks to see today's code.</Notice>
+          )}
           <p className="k-small">{r.auto ? "Automatic check" : "Ran"} {fmtDateTime(r.at, { weekday: true, tz: IST, zone: true })} ({ago(r.at)}){r.build ? ` on build ${r.build}` : ""} · <b>{r.counts.pass} pass</b> · {r.counts.warn} to check · <span className={r.counts.fail ? "k-down" : ""}>{r.counts.fail} fail</span></p>
           <StatusList label="Feature checks">
             {[...r.checks].sort((a, b) => order[a.state] - order[b.state] || a.area.localeCompare(b.area)).map((c) => (

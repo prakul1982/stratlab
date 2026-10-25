@@ -111,7 +111,7 @@ test("smaller: Zerodha asks before disconnecting; plan interest can be retried; 
 test("smaller: admin times carry a zone, admin invoice dates use the app's format, Open and Stop name their row", () => {
   assert.match(fmtDateTime("2026-10-15T08:30:00Z", { seconds: true, zone: true, tz: "Asia/Kolkata" }), /^15 Oct 2026, 14:00:00 IST$/);
   assert.equal(dateOnly("2026-10-15"), "15 Oct 2026");
-  assert.match(src("pages/admin/SystemSection.tsx"), /fmtDateTime\(x\.at, \{ seconds: true, zone: true \}\)/);
+  assert.match(src("pages/admin/SystemSection.tsx"), /fmtDateTime\(x\.at, \{ seconds: true, zone: true, tz: IST \}\)/);   // in IST, as the rest of Admin (DJ-035)
   assert.match(src("pages/admin/InvoiceAdminPanel.tsx"), /dateOnly\(r\.date\)/);
   assert.match(src("pages/admin/InvoiceAdminPanel.tsx"), /aria-label=\{`Open invoice \$\{r\.number\}`\}/);
   assert.match(src("components/InvoicesCard.tsx"), /aria-label=\{`Open invoice \$\{r\.number\}`\}/);
