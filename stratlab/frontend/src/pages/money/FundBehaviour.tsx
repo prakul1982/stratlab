@@ -88,8 +88,9 @@ export function FundBehaviour({ version }: { version: string }) {
           <Stat label={<>Gap in rupees, all funds <Info label="How the gap in rupees is worked out">Your value today and what you took out, less what the same purchases and redemptions would come to at each fund's own yearly NAV return. Positive: timing added to the fund's return. Negative: it took away.</Info></>}
             value={rupees(t.gap_rupees)} note={`${t.compared} of ${t.schemes} fund${t.schemes === 1 ? "" : "s"} compared`} />
           <Stat label="SIPs" value={t.sips ?? 0} note={`${t.sips_running ?? 0} running · ${t.sips_stopped ?? 0} stopped · ${t.months_missed ?? 0} month${t.months_missed === 1 ? "" : "s"} missed`} />
-          <Stat label={`Redemptions after a ${b.fall_pct}% fall`} value={t.falls ?? 0} note={(t.falls ?? 0) > 0 ? `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today` : undefined} />
-          <Stat label="Redeemed units held, on average" value={span(t.avg_days_held)} note={t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% for a year or less` : undefined} />
+          <Stat label={`Redemptions after a ${b.fall_pct}% fall`} value={b.pending > 0 ? "–" : t.falls ?? 0} note={b.pending > 0 ? "Reading the NAV history" : (t.falls ?? 0) > 0 ? `${inr(t.falls_received)} received · ${inr(t.falls_worth_today)} today` : undefined} />
+          {/* DG-025: by the money redeemed, not by units of different schemes */}
+          <Stat label="Money redeemed was held, on average" value={span(t.avg_days_held)} note={t.held_under_year_pct != null ? `${t.held_under_year_pct.toFixed(0)}% of it for a year or less` : undefined} />
           <Stat label={`Today's value held over ${b.long_years} years`} value={t.long_share == null ? "–" : `${t.long_share.toFixed(0)}%`} note={t.long_value != null ? inr(t.long_value) : undefined} />
         </StatRow>
       )}
@@ -121,11 +122,13 @@ export function FundBehaviour({ version }: { version: string }) {
       {b.full && (
         <div className="k-stack">
           <h3 className="k-sub">Redemptions after a fall of {b.fall_pct}% or more</h3>
-          {falls.length === 0
+          {/* DG-027: while the funds' NAV history is still being read, the highs are only those in the statement: the list
+              waits for it rather than reading as fact and then changing */}
+          {b.pending > 0 ? <p className="k-note" role="status">Reading the NAV history of {b.pending} fund{b.pending === 1 ? "" : "s"} to find each high; the list shows once it is in.</p>
+            : falls.length === 0
             ? <p className="k-note">None: no redemption or switch out came {b.fall_pct}% or more below the fund's high since your first purchase in it.</p>
             : <DataTable label="Redemptions after a fall" columns={fallCols} rows={falls} rowKey={(f) => String(f.i)} />}
           <p className="k-note">"Those units today" is hindsight arithmetic: the same units at today's NAV, known only afterwards.</p>
-          {b.pending > 0 && <p className="k-note" role="status">Reading NAV history for {b.pending} fund{b.pending === 1 ? "" : "s"}; until it arrives, highs come from the NAVs in your statement.</p>}
         </div>
       )}
 

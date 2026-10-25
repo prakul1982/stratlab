@@ -6,7 +6,8 @@ import { useApp } from "../lib/app";
 import { featureTag } from "../lib/offer";
 import { gateFor } from "../lib/gates";
 
-/** The small tags on a page's card: "New" for what shipped lately and the plan, when the page is on a paid one. A paid
+/** The small tags on a page's card: "New" for what shipped lately and the plan, when the page is on a paid one this viewer
+ * lacks. A paid
  * page the person can use today without that plan (early access, the launch offer) says "open now", as Pricing does. */
 export function PageTags({ page }: { page: NavPage }) {
   const { me } = useApp();
@@ -17,7 +18,11 @@ export function PageTags({ page }: { page: NavPage }) {
   const plan = flag ? planOf(flag) : "free";
   if (!page.isNew && plan === "free") return null;
   const part = gate?.whole === false;       // lib/gates.ts: the lock is for whole pages only (as in the menu)
-  const tag = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part }) : null;
+  const got = plan !== "free" ? featureTag(plan, me?.offer, { paid: me?.paid_plan ?? me?.plan, canUse: !!(flag && me?.plan_info?.features?.[flag]), part }) : null;
+  // a page the person's own plan has needs no plan badge: badges say what is locked (or open only for now) for this viewer
+  // (DI-031: Basic saw "Basic (On the Basic plan)" on every page it already had)
+  const tag = got && (got.locked || got.label !== (plan === "pro" ? "Pro" : "Basic")) ? got : null;
+  if (!page.isNew && !tag) return null;
   return (
     <span className="page-tags">
       {page.isNew && <span title={`Shipped by ${NEW_SINCE}`}><Badge tone="ok" dot={false}>New</Badge></span>}

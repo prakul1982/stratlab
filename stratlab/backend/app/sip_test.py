@@ -35,8 +35,8 @@ DISCLAIMER = ("History of the rule you set, on past prices with today's charges.
 ASSUMPTIONS = [
     "Each instalment is invested at that day's close (or the next trading day's when the market was shut), in whole shares; "
     "what can't pay for a whole share waits and joins the next instalment.",
-    "Charges are today's for delivery purchases: STT, exchange and SEBI fees, stamp duty and GST, plus your brokerage per "
-    "order. No sale is made, so no selling charges or tax are counted.",
+    "Charges are today's for delivery purchases: STT (none on ETF units), exchange and SEBI fees, stamp duty and GST, plus "
+    "your brokerage per order. No sale is made, so no selling charges or tax are counted.",
     "Value is the shares at the last close plus any cash waiting. XIRR treats each instalment as money in and the value as "
     "money out on the last day.",
     "Deepest fall: the largest drop of the pot from a high, leaving out the instalments themselves (a time-weighted index). "
@@ -46,7 +46,9 @@ ASSUMPTIONS = [
     "number of trading days, then all the waiting cash is invested. Extra on dips: an instalment due on such a day is raised by the "
     "set share.",
     "The lump sum puts all the money the SIP put in, on the SIP's first day, into the same split.",
-    "Closes come from the market data source and may not be adjusted for every corporate action; dividends aren't added.",
+    "Closes are the daily closes as the market data keeps them: adjusted for splits and bonuses, and for some stocks also for a "
+    "demerger or a dividend (ITC's are), for others not. Dividends aren't added, so two stocks' results aren't quite on the "
+    "same footing.",
 ]
 
 
@@ -55,17 +57,25 @@ def _day(t) -> str:
     return str(t)[:10]
 
 
-def charge_rate() -> float:
+def charge_rate(kind: str = "in_eq") -> float:
     """Charges on a delivery purchase as a share of its value, before brokerage (STT, fees, stamp duty, GST on fees)."""
-    r = C.IN_EQUITY
-    return r["stt"] + (r["exchange"] + r["sebi"]) * (1 + C.GST) + r["stamp_buy"]
+    r = C.IN_RATES[kind]
+    return r.get("stt", 0) + (r["exchange"] + r["sebi"]) * (1 + C.GST) + r["stamp_buy"]
+
+
+def cost_kind(inst: dict) -> str:
+    """The cost model of a SIP leg: an ETF's units carry no STT on a purchase (DG-031: NIFTYBEES comes back as "EQ" and was
+    charged 0.1% on every instalment, ₹712 over five years at ₹10,000 a month against about ₹112)."""
+    from . import instrument_kinds
+    etf = inst.get("type") == "ETF" or instrument_kinds.base(instrument_kinds.classify(inst.get("symbol"), inst.get("isin"), inst.get("name"))) == "etf"
+    return "in_etf" if etf else "in_eq"
 
 
 def buy(cash: float, price: float, brokerage: float, kind: str = "in_eq") -> tuple[int, float, float]:
     """Whole shares `cash` buys at `price` with charges: (shares, money spent with charges, stamp duty)."""
     if price <= 0 or cash <= brokerage * (1 + C.GST):
         return 0, 0.0, 0.0
-    q = int(max(0.0, cash - brokerage * (1 + C.GST)) // (price * (1 + charge_rate())))
+    q = int(max(0.0, cash - brokerage * (1 + C.GST)) // (price * (1 + charge_rate(kind))))
     while q > 0:
         c = C.order_costs(kind, "buy", q, price, brokerage)
         spent = q * price + C.total(c)
@@ -165,7 +175,7 @@ def simulate(legs: list[dict], plan: dict, start: str, end: str, keep: bool = Tr
                     if d in leg["closes"]:
                         q = max(1, round(plan["qty"] * leg["weight"] * grow)) if leg["weight"] else 0
                         if q:
-                            c = C.order_costs("in_eq", "buy", q, leg["closes"][d], plan["brokerage"])
+                            c = C.order_costs(leg.get("kind", "in_eq"), "buy", q, leg["closes"][d], plan["brokerage"])
                             cost = q * leg["closes"][d] + C.total(c)
                             units[j] += q
                             spent_leg[j] += cost
@@ -188,7 +198,7 @@ def simulate(legs: list[dict], plan: dict, start: str, end: str, keep: bool = Tr
                     continue
                 if rule == "only_dips" and not is_dip(leg, d):
                     continue
-                q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"])
+                q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"], leg.get("kind", "in_eq"))
                 if q:
                     units[j] += q
                     pots[j] -= cost
@@ -244,7 +254,7 @@ def _once(legs, plan, first, end):
             add = plan["amount"]
         for j, leg in enumerate(legs):
             if d in leg["closes"] and pots[j] > 0:
-                q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"])
+                q, cost, st = buy(pots[j], leg["closes"][d], plan["brokerage"], leg.get("kind", "in_eq"))
                 if q:
                     units[j] += q
                     pots[j] -= cost
@@ -334,7 +344,7 @@ def words(plan: dict, legs: list[dict]) -> str:
     when = {"daily": "Every trading day", "weekly": f"Every {WEEKDAYS[plan['weekday']]} (or the next trading day)",
             "monthly": f"On day {plan['dom']} of every month (or the next trading day)"}[plan["freq"]]
     what = (f"invest {_inr(plan['amount'])}" if plan["mode"] == "amount" else f"purchase {plan['qty']} share{'s' if plan['qty'] != 1 else ''}")
-    s = f"{when}, {what} in {split}" + (" (split by these weights)" if len(legs) > 1 and plan["mode"] == "amount" else "") + "."
+    s = f"{when}, {what} {'of' if plan['mode'] == 'qty' else 'in'} {split}" + (" (split by these weights)" if len(legs) > 1 and plan["mode"] == "amount" else "") + "."
     if plan["step_up"]:
         s += f" Raise the amount by {plan['step_up'] * 100:g}% each year."
     if plan["rule"] == "only_dips":
@@ -377,7 +387,10 @@ def _m():
 
 
 def closes_of(prov, inst: dict) -> tuple[dict[str, float], list[str]]:
-    bars = prov.history(inst, "1d", HISTORY_DAYS) or []
+    return closes_from(prov.history(inst, "1d", HISTORY_DAYS) or [])
+
+
+def closes_from(bars: list[dict]) -> tuple[dict[str, float], list[str]]:
     closes = {}
     for b in bars:
         c = b.get("c")
@@ -419,13 +432,13 @@ def run(req: SipReq, profile: dict) -> dict:
     m = _m()
     legs = []
     for leg in req.legs:
-        prov, inst = m.get_instrument(leg.inst_id)
+        inst, bars = m.sip_closes(leg.inst_id)
         if inst.get("market") != "IN" or inst.get("type") not in ("EQ", "ETF") or inst.get("exchange") in ("NFO", "BFO", "MCX", "CDS"):
             err(400, "not_a_stock", f"{inst.get('symbol') or 'That instrument'} isn't an Indian stock or ETF. A SIP test takes shares and ETFs only.")
-        closes, days = closes_of(prov, inst)
+        closes, days = closes_from(bars)
         if len(days) < 30:
             err(400, "no_history", f"There isn't enough price history for {inst.get('symbol')} yet.")
-        legs.append({"symbol": inst.get("symbol") or leg.inst_id, "name": inst.get("name") or "", "inst_id": leg.inst_id,
+        legs.append({"symbol": inst.get("symbol") or leg.inst_id, "name": inst.get("name") or "", "inst_id": leg.inst_id, "kind": cost_kind(inst),
                      "weight": (leg.weight / total_w) if len(req.legs) > 1 else 1.0, "closes": closes, "days": days,
                      "high": recent_highs(closes, days, req.lookback) if req.rule != "plain" else {}})
     first_day = max(leg["days"][0] for leg in legs)              # every leg has prices from here

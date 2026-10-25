@@ -26,7 +26,7 @@ const SECTIONS = [
   { value: "check", label: "Connection check" },
 ];
 /** Older links and the ids of the cards inside a section. */
-const ALIAS: Record<string, string> = { newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", connection: "check" };
+const ALIAS: Record<string, string> = { theme: "experience", newsletters: "notifications", emails: "notifications", alerts: "notifications", connected: "accounts", connection: "check" };
 
 type Row = { t: string; s: "pass" | "fail" | "warn"; d: string };
 const TONE = { pass: "ok", warn: "warn", fail: "warn" } as const;
@@ -56,7 +56,7 @@ export function SettingsPage() {
 
   return (
     <div className="k-page">
-      <PageHeader eyebrow="Settings" title="Settings" lede="Where your alerts and emails go, what you see first, and the accounts and files StratLab reads." />
+      <PageHeader title="Settings" lede="Where your alerts and emails go, what you see first, and the accounts and files StratLab reads." />
       <div className="k-section-nav"><Seg label="Settings sections" options={SECTIONS} value={section} onChange={go} /></div>
       {!me ? <Card label="Loading your settings"><AccountWait label="Loading your settings" /></Card> : <>
         {section === "notifications" && <><AlertSettingsCard /><TipsCard /><NewslettersCard /></>}

@@ -63,7 +63,9 @@ def test_totals_notes_and_lines_without_a_quantity():
     csv = b"Symbol,Qty,Avg price\nRELIANCE,10,2500\nTCS,,3500\n\nNotes: prices as of close\nTotal,10,\nINFY,0,1500\n"
     got = hf.parse(csv)
     assert [r["symbol"] for r in got["rows"]] == ["RELIANCE"]                            # INFY at 0 is sold: left out
-    assert got["problems"] == [{"line": 3, "text": "TCS", "reason": "No quantity on this line."}]
+    # ...and said, not dropped unseen (DG-004)
+    assert got["problems"] == [{"line": 3, "text": "TCS", "reason": "No quantity on this line."},
+                               {"line": 7, "text": "INFY", "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."}]
 
 
 def test_a_bare_list_and_other_separators():
@@ -104,7 +106,7 @@ def test_offline_matching_uses_the_exchange_list_only():
     assert m.match({"isin": "INE002A01018"})[0] == {"symbol": "RELIANCE", "exchange": "NSE", "name": "Reliance Industries"}
     assert m.match({"symbol": "NSE:RELIANCE"})[0]["symbol"] == "RELIANCE"
     hit, why = m.match({"symbol": "TINYCO"})
-    assert hit is None and "offline" in why
+    assert hit is None and "once market data is back" in why
 
 
 def test_symbols_lose_the_exchange_around_them():
@@ -154,7 +156,7 @@ def test_zerodha_console_import_nse_series_and_bse_only(w):
     assert rows["RELIANCE"]["exchange"] == "NSE"                                          # on both: the NSE one
     assert body["unmatched"] == []
     # an INF ISIN is a fund: kept as an ETF with its badge, in its own group rather than a sector
-    assert (rows["NIFTYBEES"]["kind"], rows["NIFTYBEES"]["kind_label"], rows["NIFTYBEES"]["sector"]) == ("etf", "Equity ETF", "ETFs")
+    assert (rows["NIFTYBEES"]["kind"], rows["NIFTYBEES"]["kind_label"], rows["NIFTYBEES"]["sector"]) == ("etf", "Equity ETF", "Equity ETFs")   # by what it holds (DG-003)
     assert rows["RELIANCE"]["kind"] == "stock" and rows["RELIANCE"]["kind_label"] is None
 
 

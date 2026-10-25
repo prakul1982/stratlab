@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { asOf as asOfText, dateOnly, inr, pctPlain } from "../../lib/format";
-import { expectedNote } from "../../lib/networth";
+import { expectedNote, nextResetNote } from "../../lib/networth";
 import { Info } from "../../components/ui";
 import { Earlier } from "../../components/Earlier";
 import { Card, CardHead, Disclosure, EmptyState, PlanNote, Stat, StatRow } from "../../components/kit";
@@ -16,7 +16,7 @@ type Change = { date: string; from: number; to: number; repo: number | null; bal
 type Check = {
   id: string; name: string; benchmark: string; benchmark_label: string; rate: number; current_rate: number | null; reset_months: number | null; ready: boolean;
   why?: string; spread?: number | null; spread_inferred?: boolean; expected?: number | null; last_reset?: string | null; next_reset?: string;
-  repo_at_reset?: number | null; changes: Change[]; outstanding?: number; emis_paid?: number; left?: number;
+  repo_at_reset?: number | null; repo_now?: number | null; next_expected?: number | null; changes: Change[]; outstanding?: number; emis_paid?: number; left?: number;
   gap: { pts: number; rupees_year: number; matches: boolean; after: string | null } | null;
 };
 type Reply = {
@@ -33,7 +33,7 @@ function ChangeRow({ c }: { c: Change }) {
   return (
     <li className="k-small">
       <b>{dateOnly(c.date)}: {pct(c.from)} to {pct(c.to)}</b>{c.repo != null && <span className="k-note"> · repo {pct(c.repo)}</span>}
-      <div className="k-note">On {inr(c.balance)} owed: a new EMI of {inr(c.new_emi)} ({signedInr(c.emi_change)} a month) for the same months, interest left {inr(c.interest_if_new_emi)};
+      <div className="k-note">On {inr(c.balance)} owed: a new EMI of {inr(c.new_emi)} ({signedInr(c.emi_change)} a month against the old rate's EMI for the same months), interest left {inr(c.interest_if_new_emi)};
         {" "}or the same EMI of {inr(c.emi_before)} for {c.months_change === 0 ? "the same months" : months(c.months_change)}
         {c.interest_if_same_emi != null ? `, interest left ${inr(c.interest_if_same_emi)}` : ""}. Before the change: {inr(c.interest_before)} of interest left.</div>
     </li>
@@ -67,7 +67,7 @@ export function LoanCheck({ version }: { version: string }) {
               </StatRow>
             )}
             {c.gap && !c.gap.matches && (
-              <p className="k-small" role="status">Your entered rate is {Math.abs(c.gap.pts).toFixed(2)}% {c.gap.pts > 0 ? "above" : "below"} repo + spread{c.gap.after ? ` after the ${dateOnly(c.gap.after)} reset` : ""}.</p>
+              <p className="k-small" role="status">Your entered rate is {Math.abs(c.gap.pts).toFixed(2)} {Math.abs(c.gap.pts) === 1 ? "point" : "points"} {c.gap.pts > 0 ? "above" : "below"} repo + spread{c.gap.after ? ` after the ${dateOnly(c.gap.after)} reset` : ""}.</p>
             )}
             {c.benchmark !== "repo" && <p className="k-small k-muted">The lender sets this benchmark itself, so it isn't checked here; the change from the sanctioned {pct(c.rate)} to your statement's {pct(c.current_rate)} is worked out below.</p>}
             {c.changes.length > 0 ? (() => {
@@ -77,7 +77,7 @@ export function LoanCheck({ version }: { version: string }) {
                 <Earlier label="Earlier rate changes" count={older.length} className="in-card"><ul className="k-list">{older.map((x) => <ChangeRow key={x.date} c={x} />)}</ul></Earlier>
               </>;
             })() : <p className="k-note">No rate change since the loan started.</p>}
-            {c.next_reset && <p className="k-note">Next reset: {dateOnly(c.next_reset)} (in your money calendar).</p>}
+            {c.next_reset && <p className="k-note">Next reset: {dateOnly(c.next_reset)} (in your money calendar).{nextResetNote(c)}</p>}
           </>}
         </article>
       ))}

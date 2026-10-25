@@ -4,9 +4,10 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
 import { uploadedLine } from "../lib/journalTax";
-import { homeOf } from "../lib/spaces";
+import { homeOf, startView } from "../lib/spaces";
 import { homeRegion } from "../lib/homeMarket";
 import { usTodayNote } from "../lib/marketHours";
+import { dayLabel, pnlLabel, priceNote, type Closes } from "../lib/holdingsEdit";
 import { NAV_GROUPS } from "../lib/navGroups";
 import { evWhen, useEvents } from "../lib/marketEvents";
 import { useWatchlist, REGION_NAME, type Region } from "../lib/research";
@@ -22,7 +23,7 @@ import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
-import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
+import { fyLabel, fyLink, movedYearNote, openFy, savedFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
 import { PLAN_NAME, planOf } from "../lib/plans";
@@ -35,9 +36,9 @@ import { PLAN_NAME, planOf } from "../lib/plans";
 
 /** `/`: the home of the space showing (for "All", of what the person came for). Waits for the account on a first visit. */
 export function SpaceHome() {
-  const { me, meError, space, focus } = useApp();
+  const { me, meError } = useApp();
   if (!me && !meError) return <Loading label="Opening StratLab" />;
-  return <Navigate to={homeOf(space, focus)} replace />;
+  return <Navigate to={homeOf(startView(me?.prefs?.focus, me?.prefs?.space))} replace />;
 }
 
 /** The launch offer and the new-account checklist, right under every space home's heading. */
@@ -389,9 +390,10 @@ function RedFlags({ region }: { region: Region }) {
 }
 
 /* ---------- Money: what you own ---------- */
-type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number;
+type Totals = { value: number; invested: number; pnl: number | null; pnl_pct: number | null; day: number | null; day_pct: number | null; count: number; priced?: number;
+  pnl_partial?: { priced: number; lines: number } | null;
   no_cost?: { count: number; symbols: string[]; value: number } | null; other_session?: string[]; session?: string | null };
-type Holdings = { rows: unknown[]; totals: Totals; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
+type Holdings = { rows: { value: number | null; market?: string }[]; totals: Totals; prices?: boolean; closes?: Closes; us?: (Totals & { in_total: boolean }) | null; usd_inr?: number | null; updated_at: string | null; prices_at?: string | null };
 type TaxYear = { fy: number; label: string; count: number; intraday: { count: number }; business: { segments: unknown[] }; units?: unknown; tax_with_cess: number; stcg: { net: number }; ltcg: { net: number }; exemption: { left: number };
   total?: { available: boolean; total?: number; income?: { business?: number; intraday?: number } }; audit?: string | null };
 type Tax = { years: TaxYear[]; current_fy: number; updated_at: string | null; last_trade?: string | null; prices_at: string | null; trades: number; business_lines?: number; mf?: { count: number } | null; us_trades?: number };
@@ -406,7 +408,8 @@ export function MoneyHome() {
       <Head eyebrow="Money · seen only by you" title="Your money">
         What you own and what it means at tax time, from your own files. Facts and arithmetic.
       </Head>
-      <Top />
+      {/* DG-051: the first-steps list is about trading (a backtest, paper trading, a deep dive), so Money home leaves it to Home */}
+      <PromoCountdown />
       <div className="grid2 space-panels">
         <HoldingsSummary />
         <TaxSummary />
@@ -423,6 +426,14 @@ export function MoneyHome() {
       )}
     </div>
   );
+}
+
+/** Why the gain or loss is missing: the prices not in yet (the feed off at a weekend), or no buy prices in the file. The
+ * buy prices were there and the tile sent people to fix their file (DI-007). */
+export function gainMissing(t: { count: number; priced?: number; no_cost?: { count: number } | null }): string {
+  const noCost = t.no_cost?.count ?? 0;
+  if (t.priced === 0 && noCost < t.count) return "Needs today's prices, not in yet";
+  return "Needs the buy prices";
 }
 
 function HoldingsSummary() {
@@ -444,15 +455,17 @@ function HoldingsSummary() {
             <div className="k-stats">
               {(() => { const n = h.totals.count - (h.totals.no_cost?.count ?? 0);   // the lines the value is of
                 return <Fig label={`Value · ${n} stock${n === 1 ? "" : "s"}`} value={money(h.totals.value, "INR")} />; })()}
-              <Fig label="Gain or loss" tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
-                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing="Needs the buy prices" />
+              {/* DG-050: of the lines with a price only, said so, as My Holdings says it (DG-001) */}
+              <Fig label={pnlLabel("Gain or loss", h.totals.pnl_partial)} tone={signCls(h.totals.pnl)} value={h.totals.pnl != null && money(h.totals.pnl, "INR")}
+                note={h.totals.pnl_pct != null && pct(h.totals.pnl_pct)} noteTone={signCls(h.totals.pnl)} missing={gainMissing(h.totals)} />
               {/* "Today" only of today's session: the session the change belongs to is named when it is an earlier day (R41A) */}
-              {h.totals.day != null && <Fig label={h.totals.session && h.totals.session < istToday() ? `Last session (${fmtDate(h.totals.session, { weekday: true, year: false })})` : "Today"} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
+              {h.totals.day != null && <Fig label={dayLabel(h.totals.session, istToday(), (d) => fmtDate(d, { weekday: true, year: false }))} tone={signCls(h.totals.day)} value={money(h.totals.day, "INR")} />}
               {h.us && h.us.count > 0 && <Fig label={`US stocks${h.us.in_total ? " (in the rupee value)" : ""}`} value={money(h.us.value, "USD")}
                 note={h.us.in_total && h.usd_inr ? `at ₹${h.usd_inr.toFixed(2)} a dollar` : undefined} />}
             </div>
             {/* the same lines as My Holdings: one with a price but no buy price is named, not half counted (R5O-004) */}
             {h.totals.no_cost && <p className="small muted">Not in these totals: {h.totals.no_cost.symbols.join(", ")} ({h.totals.no_cost.count === 1 ? "no buy price" : "no buy prices"}), except Today, which includes {h.totals.no_cost.count === 1 ? "its" : "their"} change.</p>}
+            {(() => { const n = priceNote(h.prices ?? true, h.closes, h.rows, (d) => fmtDate(d, { weekday: true, year: false })); return n && <p className="small muted" data-testid="holdings-prices">{n}{h.totals.pnl_partial ? " The gain or loss is of the lines with a price." : ""}</p>; })()}
             {usNote && <p className="small muted" data-testid="us-today">{usNote}</p>}
             {(h.totals.other_session?.length ?? 0) > 0 && <p className="small muted">Today leaves out {h.totals.other_session!.join(", ")}: {h.totals.other_session!.length === 1 ? "its" : "their"} last change is from an earlier session.</p>}
             <AsOf parts={[["Prices", h.prices_at], ["Holdings", h.updated_at]]} />
@@ -476,7 +489,7 @@ function TaxSummary() {
         : t === "error" ? <p className="small muted">The tax report couldn't be opened just now. <Link className="link" to="/tax-report">Try the page</Link>.</p>
         : !taxHasData(t) ? (
           <div className="k-stack start">
-            <p className="small muted">Upload your broker's tradebooks to see this financial year's capital gains and the tax on them.</p>
+            <p className="small muted">Upload your broker's tradebooks to see each financial year's capital gains and the tax on them.</p>
             <Link to="/tax-report" className="btn sm">Add your tradebooks</Link>
           </div>
         ) : (
@@ -492,7 +505,7 @@ function TaxSummary() {
               <Fig label="Long-term gains" tone={signCls(year?.ltcg.net)} value={money(year?.ltcg.net ?? 0, "INR")} />
             </div>
             {year?.audit && <p className="small">{year.audit}</p>}
-            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""} An estimate to check with your CA.</p>
+            <p className="tiny muted">{year?.total?.available ? "As the tax report works it out: the trades and other income in your files, at that year's slab and special rates, with surcharge and 4% cess." : "Assumes only the sales in the tradebooks you uploaded, matched first in, first out, at that year's rates after set-off and the yearly long-term exemption, with 4% cess and before any surcharge."} {year?.count ? `${year.count} sale${year.count === 1 ? "" : "s"} in ${year.label}.` : `No sales in ${year?.label ?? "this year"}.`}{year && open?.from != null ? ` ${movedYearNote(open.from, year.fy, ok!.current_fy, "sales")}` : ""}{year && open?.from == null && savedFy() === year.fy && year.fy !== ok!.current_fy - 1 ? ` ${fyLabel(year.fy)} is the year last picked on a Money page.` : ""} An estimate to check with your CA.</p>
             {(t.updated_at || t.last_trade) && <p className="tiny muted" data-testid="tax-uploaded">{uploadedLine(t.updated_at, t.last_trade, (iso) => fmtDate(iso, { tz: "Asia/Kolkata" }))}</p>}
             {/* no "Prices as of": nothing on this card is at today's price, only sales already made (R66-008) */}
           </div>

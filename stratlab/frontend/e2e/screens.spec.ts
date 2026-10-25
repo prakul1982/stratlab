@@ -184,6 +184,8 @@ async function spills(page: Page): Promise<string[]> {
       if (el.closest("svg, canvas, .sr-only, [hidden], .k-chipbar, .k-tbl-wrap, .info-pop, .popover") || el.matches(".sr-only")) continue;
       const cs = getComputedStyle(el);
       if (cs.display === "inline" || cs.display === "none" || cs.visibility === "hidden" || !el.clientWidth) continue;
+      // hidden for the eye, kept for a screen reader, the way .sr-only is (the full tab names on a phone, DI-028)
+      if (/rect\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\)/.test(cs.clip) && el.clientWidth <= 1) continue;
       const own = [...el.childNodes].filter((n) => n.nodeType === 3 && (n.textContent || "").trim());
       if (!own.length) continue;                                                                          // its own words only
       const box = el.getBoundingClientRect();

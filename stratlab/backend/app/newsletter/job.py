@@ -64,7 +64,47 @@ def load(iid: str) -> dict | None:
     if not parts:
         return None
     issue = db.json_value(db.get_setting(_key(*parts)), {}) or None
-    return _plain_heads(issue) if issue else None
+    return _by_today(_plain_heads(issue)) if issue else None
+
+
+_ROTATION_TAIL = re.compile(r" on the rotation chart \(weekly\)$")
+
+
+def _by_today(issue: dict) -> dict:
+    """A stored Market Brief as today's rules write it (DI-024..027), without rewriting what is stored: a weekly one's
+    title runs to its last session (a Friday holiday too), its summary opens with the index moves when it had lost them,
+    the AI's dates are day first, the rotation lines name their benchmark, and a week with a holiday says so."""
+    if issue.get("kind") != "market" or not issue.get("day"):
+        return issue
+    out = {**issue}
+    region, weekly = out.get("region") or "IN", bool(out.get("weekly"))
+    secs = [s for s in out.get("sections") or [] if isinstance(s, dict)]
+    rot = next((s.get("items") or [] for s in secs if s.get("title") == "Sector rotation"), [])
+    if rot:
+        basis = " on the rotation chart " + write.rotation_basis(region)
+        secs = [{**s, "items": [{**i, "text": _ROTATION_TAIL.sub(basis, str(i.get("text") or ""))} for i in s.get("items") or []]}
+                if s.get("title") == "Sector rotation" else s for s in secs]
+    indices = out.get("indices") or _indices_of(out)
+    f = {"kind": "market", "region": region, "day": out["day"], "weekly": weekly, "indices": indices, "rotation": rot}
+    moved = [i for i in indices if i.get("change_pct") is not None]
+    if moved:
+        if weekly:
+            out.update(subject=write.subject(f), title=write.headline(f))
+        if "%" not in str(out.get("summary") or ""):          # a facts line without a single move (3 Oct: "8 sectors moved…")
+            out["summary"] = write.fix_counts(write.template(f), secs)
+    if weekly and not any(s.get("title") == "No session" for s in secs):
+        try:
+            gaps = content.holidays_in_week(region, date.fromisoformat(str(out["day"])[:10]))
+        except Exception:
+            gaps = []
+        extra = [s for s in write.market_sections({**f, "indices": [], "rotation": [], "holidays": gaps}) if s.get("title") == "No session"]
+        if extra:
+            at = next((n for n, s in enumerate(secs) if s.get("title") == "Headlines"), len(secs))
+            secs = secs[:at] + extra + secs[at:]
+    if out.get("ai_summary"):
+        out["ai_summary"] = write.day_first(out["ai_summary"])
+    out["sections"] = secs
+    return out
 
 
 def _stored(iid: str) -> dict | None:

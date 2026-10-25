@@ -128,8 +128,12 @@ def stage2_names(region: str, weekly: bool) -> dict:
     window = 5 if weekly else 1
 
     def row(r):
-        return {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2),
-                "change_pct": None if r.get("chg") is None else round(r["chg"], 2)}
+        out = {"symbol": r["symbol"], "name": r.get("name"), "price": round(r["price"], 2)}
+        # the scan's change is the last session's alone: a weekly brief carried it and its summary called a one-day fall
+        # the week's (DI-024: "Tech Mahindra dropped 2.14%" in a week it was flat), so only a daily brief has it
+        if not weekly:
+            out["change_pct"] = None if r.get("chg") is None else round(r["chg"], 2)
+        return out
     # the scan's own reading of each stock (analyse): in Stage 2 with the Supertrend up is the whole rule, whichever of the two
     # came later; new = either began within the window. Stage 2 alone is Stage 2 with the Supertrend not up (R30-001: GOOGL,
     # in Stage 2 for a day with its Supertrend up for 19 days, was listed as "its Supertrend isn't up")
@@ -451,6 +455,18 @@ def closures_after(region: str, day: date) -> list[dict]:
     return []
 
 
+def holidays_in_week(region: str, day: date) -> list[dict]:
+    """The weekdays of a weekly brief's week the market was shut, with the holiday's name when the calendar has one: the
+    week of 20 Oct's holiday said nothing of the missing session (DI-027)."""
+    from ..data.calendar import holiday_name
+    out, d = [], day - timedelta(days=6)
+    while d <= day:
+        if d.weekday() < 5 and not is_trading_day(region, d):
+            out.append({"day": d.isoformat(), "name": _safe(lambda d=d: holiday_name(region, d))})
+        d += timedelta(days=1)
+    return out
+
+
 def market_headlines(region: str, day: date | None = None, weekly: bool = False, indices: list[dict] | None = None) -> list[dict]:
     rows = [h for h in _main().research_hub.headlines(region) if h.get("headline")]
     if day is None:
@@ -477,6 +493,10 @@ def market_facts(region: str, day: date, weekly: bool = False) -> dict:
     shut = _safe(lambda: closures_after(region, day), [])
     if shut:
         facts["closures"] = shut
+    if weekly:
+        gaps = _safe(lambda: holidays_in_week(region, day), [])
+        if gaps:
+            facts["holidays"] = gaps
     if any(k in facts for k in ("indices", "rotation", "scan", "headlines")):
         _cache.set(key, facts, 6 * 3600)
     return facts

@@ -271,6 +271,10 @@ export const landingHeading = (path: string): string | undefined => {
   return p && p.path !== "/" && p.heading !== TAGLINE ? p.heading : undefined;
 };
 
+/** The line under such an address's own heading: its description (DI-033: /help, /faq, /pricing and /about each drew the
+ * home page's hero). */
+export const landingIntro = (path: string): string | undefined => (landingHeading(path) ? pageMeta(path)?.description : undefined);
+
 /** What a page that is not in the table says: a sign-in page for an address inside the app, or a missing page. */
 export const GATE_DESCRIPTION = "Sign in to StratLab to open this page.";
 export const FEATURES_DESCRIPTION = "What StratLab does: test trading ideas on real prices, research companies from their filings, and track your holdings and tax.";

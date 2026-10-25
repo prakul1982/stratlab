@@ -97,9 +97,10 @@ test("every landing address's raw h1 is the h1 the page draws there (R8V-008)", 
     assert.deepEqual(h1s(files[`${p.slice(1)}/index.html`]), [h], p);
   }
   const login = read("src/pages/Login.tsx");
-  assert.match(login, /heading \? <h1 className="eyebrow">\{heading\}<\/h1>/);
-  assert.match(login, /\? <p className="serif lp-h1"><em>Test<\/em> it, research it, track it\.<\/p>/);
-  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} \/>/);
+  // the address's own heading is the hero's h1, the tagline above it (DI-033: it was drawn as the eyebrow)
+  assert.match(login, /\? <h1 className="serif lp-h1 lp-own-h1">\{heading\}<\/h1>/);
+  assert.match(login, /<span className="eyebrow">\{heading \? <><em>Test<\/em> it, research it, track it\.<\/> :/);
+  assert.match(read("src/visitor/VisitorApp.tsx"), /<Login section=\{view\.section\} panel=\{view\.panel\} heading=\{landingHeading\(pathname\)\} intro=\{landingIntro\(pathname\)\} plansOnly=\{isPlansPath\(pathname\)\} \/>/);
   assert.match(read("src/styles.css"), /h1\.eyebrow \{ font-weight: 400; \}/);
 });
 

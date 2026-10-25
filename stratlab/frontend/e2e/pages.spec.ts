@@ -874,7 +874,7 @@ test("the markets now: one line in the footer that opens the list, by mouse or k
   await sane(page, errors);
 });
 
-test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All features, Help and Sign out, with arrow keys and Esc", async ({ page }, info) => {
+test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All features, Help, the tour and Sign out, with arrow keys and Esc", async ({ page }, info) => {
   const phone = info.project.name === "phone";
   const errors = await open(page, "/research", "Companies");
   let side = await menu(page, phone);
@@ -884,8 +884,9 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   await btn.click();
   const acct = page.getByRole("menu", { name: "Account" });
   await expect(acct).toBeVisible();
-  await expect(acct.getByRole("menuitem")).toHaveText([/^Account\s*Pro$/, "Settings", "Plan", "Invite friends", "Get the app", "Admin", "All features", "Help", "Sign out"]);
-  for (const [name, href] of [["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"]])
+  // the plan is named once, on Plan; Help opens the help page and the tour is its own item (DI-014, DI-022)
+  await expect(acct.getByRole("menuitem")).toHaveText(["Account", "Settings", /^Plan\s*Pro$/, "Invite friends", "Get the app", "Admin", "All features", "Help", "Take the tour", "Sign out"]);
+  for (const [name, href] of [["Account", "/account"], ["Settings", "/settings"], ["Plan", "/plans"], ["Invite friends", "/invite"], ["Get the app", "/app"], ["All features", "/features"], ["Help", "/help"]])
     await expect(acct.getByRole("menuitem", { name })).toHaveAttribute("href", href);
   if (phone) {
     for (const el of await acct.getByRole("menuitem").all()) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(40);
@@ -913,9 +914,9 @@ test("the account menu: Account, Settings, Plan, Invite, Get the app, Admin, All
   await expect(acct.getByRole("menuitem", { name: /mode$/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  // Help opens the tour
+  // Take the tour opens the tour
   await btn.click();
-  await acct.getByRole("menuitem", { name: "Help" }).click();
+  await acct.getByRole("menuitem", { name: "Take the tour" }).click();
   await expect(page.getByRole("tablist", { name: "Tour steps" })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^(Close|Skip|Done)/ }).first().click({ timeout: 2000 }).catch(() => undefined);
@@ -1504,7 +1505,7 @@ test("mutual funds: a password-protected CAS read, holdings, allocation, gains b
   await expect(page.getByText(/That password didn't open the PDF/)).toBeVisible({ timeout: 30_000 });
   await page.getByLabel("PDF password").fill("ABCDE1234F");
   await page.getByRole("button", { name: "Read my funds" }).click();
-  await expect(page.getByText(/7 transactions added/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/5 transactions and 2 stamp duty or tax lines added/)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Costs are being read; check back shortly.")).toBeVisible();
   await expect(page.getByLabel("PDF password")).toHaveCount(0);              // the password field goes with the file
 

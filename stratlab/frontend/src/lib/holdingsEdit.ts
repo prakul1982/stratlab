@@ -35,3 +35,31 @@ export function syncedNote(via: string): string {
 export function unpricedNote(prices: boolean, rows: { value: number | null }[]): boolean {
   return !prices && rows.some((r) => r.value == null);
 }
+
+/** The closes the holdings are valued at while live prices are off (DP2-001, DG-002): how many are at the exchange's close
+ * of which day, and how many at the close in the uploaded file. */
+export type Closes = { day: string | null; close: number; file: number } | null | undefined;
+
+/** The line under the totals about where the prices are from: null while live prices cover every stock. `fmt` names a day. */
+export function priceNote(prices: boolean, closes: Closes, rows: { value: number | null; market?: string }[], fmt: (iso: string) => string): string | null {
+  const unpriced = rows.filter((r) => r.value == null && r.market !== "US").length;
+  const parts: string[] = [];
+  if (closes && (closes.close || closes.file)) {
+    const at = [closes.close ? `the exchange's close${closes.day ? ` of ${fmt(closes.day)}` : ""}` : "", closes.file ? `the close in your holdings file for ${closes.file}` : ""].filter(Boolean).join(", and ");
+    parts.push(`Live prices are off right now, so these are at their last close: ${at}.`);
+  }
+  if (unpriced && !prices) parts.push(`${unpriced} ${unpriced === 1 ? "stock has" : "stocks have"} no price, so ${unpriced === 1 ? "it is" : "they are"} shown at cost.`);
+  return parts.length ? parts.join(" ") : null;
+}
+
+/** The gain-or-loss figure's label: of every line, or of the lines with a price when some are at cost (DG-001, DG-050: one
+ * priced US stock's +131.8% stood for nine lines, eight of them with no price). */
+export function pnlLabel(base: string, partial: { priced: number; lines: number } | null | undefined): string {
+  return partial ? `${base} · ${partial.priced} of ${partial.lines} lines` : base;
+}
+
+/** "Today", or the session the day's change is of when that is an earlier day (DG-005: Friday's move labelled "Today" on a
+ * Sunday, while Money home said "Last session (Fri 23 Oct)"). */
+export function dayLabel(session: string | null | undefined, today: string, fmt: (iso: string) => string): string {
+  return session && session < today ? `Last session (${fmt(session)})` : "Today";
+}

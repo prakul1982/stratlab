@@ -11,6 +11,7 @@ import { signIn } from "../lib/signin";
 import { hasSavedSession } from "../lib/entry";
 import { LoadFailed } from "../components/LoadGuard";
 import { useDocTitle, withBrand } from "../lib/title";
+import { InstallSteps, onPhone } from "../components/InstallSteps";
 
 /* The pages between a visitor and what they asked for: signed out on an app address ("Sign in to see …") and an address
  * nothing is at ("Page not found"). Each says what happened and offers the way on; none moves anyone somewhere else
@@ -54,6 +55,20 @@ export function SignInGate() {
   // a saved sign-in, or settings that never loaded: signed out isn't known, so no sign-in prompt (R20-002)
   const unsure = !window.STRATLAB_CONFIG || hasSavedSession(window.STRATLAB_CONFIG.SUPABASE_URL, (() => { try { return localStorage; } catch { return null; } })());
   if (unsure) return <main><LoadFailed what="your account" /></main>;
+  // Get the app is readable signed out: putting StratLab on the home screen needs no account (DI-029)
+  if (loc.pathname.replace(/\/$/, "") === "/app") return (
+    <PublicFrame className="gate">
+      <PageHeader eyebrow="StratLab" title="Get the app" lede="Put StratLab on your phone's home screen, with its own icon and full screen. Sign in once it opens, and turn on notifications in it." />
+      <Card label="Install StratLab">
+        <CardHead title="Install StratLab" level={2} />
+        <InstallSteps ios={/iphone|ipad|ipod/i.test(navigator.userAgent)} phone={onPhone()} />
+      </Card>
+      <div className="gate-actions">
+        <SignInButton />
+        <Link className="btn quiet" to="/">What is StratLab?</Link>
+      </div>
+    </PublicFrame>
+  );
   return (
     <PublicFrame className="gate">
       <PageHeader eyebrow="StratLab" title={title}

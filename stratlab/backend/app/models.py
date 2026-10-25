@@ -380,10 +380,18 @@ class PushReq(BaseModel):
     subscription: PushSubscription
 
 
+class MineLayoutReq(BaseModel):
+    """My space's cards in the person's order, and the ones hidden (the app keeps only the cards it knows)."""
+    order: list[Annotated[str, Field(max_length=24)]] = Field(default_factory=list, max_length=24)
+    hidden: list[Annotated[str, Field(max_length=24)]] = Field(default_factory=list, max_length=24)
+
+
 class PrefsReq(BaseModel):
     level: Literal["new", "some", "pro"] | None = None
     focus: Literal["invest", "trade", "money", "both"] | None = None     # what the user came for: orders menus and suggestions
     space: Literal["trade", "invest", "money", "all"] | None = None       # the menu's space last picked in the sidebar
+    # My space's layout, kept on the account so a phone and a laptop show the same My space (DI-006)
+    mine: MineLayoutReq | None = None
 
 
 class PlanInterestReq(BaseModel):

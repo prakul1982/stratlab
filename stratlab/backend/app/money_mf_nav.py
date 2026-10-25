@@ -14,8 +14,16 @@ import httpx
 from . import db, leader
 
 DAILY_URL = "https://www.amfiindia.com/spages/NAVAll.txt"
-# the NAV history report for one day, every scheme
+# the NAV history report for one day, every scheme. DG-020: since October 2026 it answers "Object moved" to the site's
+# nav-download page (seen 25 Oct 2026), so it is no longer read; a list saved from it before is still used
 GF_URL = "https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx?frmdt=31-Jan-2018&todt=31-Jan-2018"
+# ...and each scheme's 31 Jan 2018 NAV comes from the industry body's NAV history service, one scheme at a time (UTI Nifty
+# 50 Index Fund Direct Growth, code 120716: 71.3422 on 31 Jan 2018), kept in the same saved list
+HIST_URL = "https://www.amfiindia.com/api/nav-history"
+GF_DAY = "2018-01-31"
+GF_FROM = "2018-01-24"             # a scheme with no NAV that day (none was published) takes its last one before it
+GF_LOOKUPS = 6                     # schemes looked up on one page; the rest on the next visit
+UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
 DAILY_KEY = "mfnav:daily"          # the last good daily file, compact: {"at", "cats", "amcs", "rows"}
 GF_KEY = "mfnav:2018-01-31"        # {"code": {amfi code: nav}, "isin": {isin: nav}}
 MAX_AGE = 6 * 3600                 # the daily file is published each evening; re-read it after this long
@@ -28,7 +36,7 @@ MIN_SCHEMES = 50                   # fewer in a file means it came back cut shor
 _lock = threading.Lock()
 _restore_lock = threading.Lock()
 _daily: dict = {"at": 0.0, "data": None, "tried": 0.0, "thread": None}
-_gf: dict = {"data": None, "tried": 0.0}
+_gf: dict = {"data": None, "tried": 0.0, "one": {}}       # one: code -> when its lookup last failed
 
 CATEGORY_RX = re.compile(r"^\s*(Open Ended|Close Ended|Interval Fund)\s+Schemes?\s*\(\s*(.+?)\s*\)\s*$", re.I)
 
@@ -51,7 +59,7 @@ def forget():
         t.join(5)                                   # a read still running would write into the next test's copy
     with _lock:
         _daily.update(at=0.0, data=None, tried=0.0, thread=None)
-        _gf.update(data=None, tried=0.0)
+        _gf.update(data=None, tried=0.0, one={})
 
 
 def _num(s: str) -> float | None:
@@ -255,13 +263,15 @@ def keep_fresh(every: float = 900.0) -> None:
 
 
 def gf_navs() -> dict:
-    """Every scheme's NAV on 31 Jan 2018 as {"code": {code: nav}, "isin": {isin: nav}}: saved once read; {} parts
-    when it can't be read (tried again after a while)."""
+    """Every scheme's NAV on 31 Jan 2018 known so far, as {"code": {code: nav}, "isin": {isin: nav}}: the saved list,
+    else the day's whole report read once (tried again after a while: it now answers "Object moved", DG-020); gf_one adds
+    to it one scheme at a time. {} parts when there is nothing yet."""
     with _lock:
         if _gf["data"] is not None:
             return _gf["data"]
     got = db.json_value(db.get_setting(GF_KEY), {})
     if isinstance(got, dict) and isinstance(got.get("code"), dict) and got["code"]:
+        got.setdefault("isin", {})
         with _lock:
             _gf["data"] = got
         return got
@@ -275,7 +285,7 @@ def gf_navs() -> dict:
         if len(data["schemes"]) < MIN_SCHEMES:
             raise ValueError("too few schemes")
     except Exception as e:
-        print("31 Jan 2018 NAVs unavailable:", type(e).__name__)
+        print("31 Jan 2018 NAV report unavailable:", type(e).__name__)
         return {"code": {}, "isin": {}}
     out = {"code": {c: r["nav"] for c, r in data["schemes"].items()}, "isin": {}}
     for c, r in data["schemes"].items():
@@ -289,6 +299,58 @@ def gf_navs() -> dict:
     with _lock:
         _gf["data"] = out
     return out
+
+
+def fetch_history(code: str, start: str, end: str) -> dict:
+    """One scheme's NAV history for a range, as the industry body's service sends it. Tests replace this."""
+    with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": UA, "Accept": "application/json"}) as c:
+        r = c.get(HIST_URL, params={"query_type": "historical_period", "from_date": start, "to_date": end, "sd_id": code})
+        if r.status_code == 200 and "No records" in r.text[:200]:
+            return {}
+        r.raise_for_status()
+        return r.json()
+
+
+def nav_on(got: dict, day: str) -> float | None:
+    """The NAV on `day` from a NAV history answer, else the last one before it; None when it has none by then."""
+    groups = ((got or {}).get("data") or {}).get("nav_groups") if isinstance(got, dict) else None
+    best = None
+    for rec in ((groups or [{}])[0] or {}).get("historical_records") or []:
+        d, n = str(rec.get("date") or "")[:10], _num(rec.get("nav"))
+        if n and d and d <= day and (best is None or d > best[0]):
+            best = (d, n)
+    return best[1] if best else None
+
+
+def gf_one(code: str) -> float | None:
+    """One scheme's NAV on 31 Jan 2018 (by AMFI code): the saved one, else read from the NAV history service and saved
+    for everyone (past NAVs don't change). None when it has none, or the service can't be read (asked again later)."""
+    code = str(code or "").strip()
+    if not code.isdigit():
+        return None
+    have = gf_navs()
+    if code in have["code"]:
+        return have["code"][code] or None           # 0: asked, and the scheme had no NAV by then
+    with _lock:
+        if time.time() - _gf["one"].get(code, 0.0) < RETRY:
+            return None
+        _gf["one"][code] = time.time()
+    try:
+        nav = nav_on(fetch_history(code, GF_FROM, GF_DAY), GF_DAY)
+    except Exception as e:
+        print("31 Jan 2018 NAV unavailable:", code, type(e).__name__)
+        return None
+    with _lock:
+        _gf["one"].pop(code, None)
+        data = _gf["data"] if _gf["data"] and _gf["data"].get("code") is not None else {"code": {}, "isin": {}}
+        data = {"code": {**data["code"], code: nav or 0}, "isin": data.get("isin") or {}}
+        _gf["data"] = data
+        snap = json.dumps(data, separators=(",", ":"))
+    try:
+        db.set_setting(GF_KEY, snap)
+    except Exception as e:
+        print("31 Jan 2018 NAVs not saved:", type(e).__name__)
+    return nav
 
 
 # ---------- finding a scheme ----------

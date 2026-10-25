@@ -212,7 +212,7 @@ test("settings: notifications keep their settings, with the alerts, StratLab ema
   const nav = main.getByRole("radiogroup", { name: "Settings sections" });
   await expect(nav.getByRole("radio")).toHaveText(["Notifications", "Experience", "Connected accounts", "Connection check"]);
   await expect(nav.getByRole("radio", { name: "Notifications" })).toHaveAttribute("aria-checked", "true");
-  for (const h of [/^Alerts/, /^Newsletters/]) await expect(main.getByRole("heading", { name: h })).toBeVisible({ timeout: 30_000 });
+  for (const h of [/^Paper-trade alerts/, /^Newsletters/]) await expect(main.getByRole("heading", { name: h })).toBeVisible({ timeout: 30_000 });
   await expect(main.getByRole("heading", { name: "Emails from StratLab" })).toBeVisible();
 
   // alerts: what to send and where, one Save, the same call as before
@@ -314,7 +314,7 @@ test("the alerts page points at Settings for where alerts go and what to send", 
   await expect(page.locator("main").getByRole("link", { name: "Where alerts go and what to send" })).toHaveAttribute("href", "/settings#notifications");
   await page.locator("main").getByRole("link", { name: "Where alerts go and what to send" }).click();
   await expect(page).toHaveURL(/\/settings#notifications$/);
-  await expect(page.locator("main").getByRole("heading", { name: /^Alerts/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("main").getByRole("heading", { name: /^Paper-trade alerts/ })).toBeVisible({ timeout: 30_000 });
   expect(errors).toEqual([]);
 });
 

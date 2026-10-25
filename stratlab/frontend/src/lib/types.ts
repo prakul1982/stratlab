@@ -31,6 +31,8 @@ export interface Instrument {
   match?: number;           // search results: how well it matched (0 the symbol itself … 5 with a typo)
   market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
   strike?: number | null; tz?: string;
+  etf?: boolean;            // an Indian ETF the broker lists as "EQ" (DG-003)
+  stored?: boolean;         // from the stored company list while live market data is off (DP2-002)
   contract?: string; unit?: string; lot_units?: number;   // MCX: the contract traded, the price unit, price units per lot
 }
 
@@ -161,7 +163,7 @@ export interface Me {
   /** The site owner is viewing the app as this plan (lib/viewAs.ts); the server sends it for the owner only, null when it is off. */
   view_as?: "free" | "basic" | "pro" | null;
   promo?: { until: string } | null; free_basic_until?: string | null;
-  prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null };
+  prefs?: { level: Level | null; focus?: Focus | null; space?: "trade" | "invest" | "money" | "all" | null; mine?: { order: string[]; hidden: string[] } | null };
   /** What anyone can buy and use today: the same answer /pricing gives the landing page (lib/offer.ts words it). */
   offer?: Offer;
   /** The first-run guide, kept on the account: shown once per person, not once per device. */

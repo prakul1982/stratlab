@@ -37,6 +37,10 @@ COLUMNS = {
             "buyavg", "buyaverage", "buyavgprice", "buyprice", "purchaseprice", "costprice", "avgrate", "averagerate",
             "avgtradingprice", "avgcostprice", "averagepurchaseprice", "buyavgrate", "avgbuyrate"},
     "exchange": {"exchange", "exch", "exchg"},
+    # the close a broker's export carries (Zerodha Console's "Previous Closing Price"): the price a holding is valued at
+    # while live prices are off and the exchange's own close isn't stored (DG-002). A live "LTP" isn't read: its time is unknown
+    "close": {"previousclosingprice", "previousclose", "prevclose", "prevclosingprice", "previousdayclose", "closingprice",
+              "closeprice", "lastclose", "lastclosingprice"},
 }
 # Zerodha Console splits the quantity: shares pledged or not yet settled are held too, so they count
 EXTRA_QTY = {"quantitydiscrepant", "quantitypledgedmargin", "quantitypledgedloan"}
@@ -496,14 +500,17 @@ def parse(data: bytes, filename: str = "") -> dict:
             if any(number(c) is not None for c in row):
                 problems.append({"line": n, "text": text, "reason": "No quantity on this line."})
             continue                        # a heading or a note between the rows
-        if qty <= 0:
-            continue                        # sold, or only listed for its history
+        if qty <= 0:                        # sold, or only listed for its history: said, never dropped unseen (DG-004)
+            problems.append({"line": n, "text": text, "reason": "The quantity is 0 or less (sold, or listed only for its history), so it's left out."
+                             if qty == 0 else "The quantity is below 0, so it's left out: a holding can't be negative."})
+            continue
         avg = number(_cell(row, cols.get("avg")))
+        close = number(_cell(row, cols.get("close")))
         if len(out) >= MAX_ROWS:
             raise too_many(MAX_ROWS)
         out.append({"line": n, "symbol": sym.upper(), "isin": isin if ISIN.match(isin) else "", "name": nm,
                     "exchange": _cell(row, cols.get("exchange")).upper()[:6], "qty": qty,
-                    "avg": avg if avg and avg > 0 else None, "text": text})
+                    "avg": avg if avg and avg > 0 else None, "text": text, **({"close": close} if close and close > 0 else {})})
     if not out and not problems:
         raise FileError("That file has the right columns but no holdings in it.")
     return {"broker": name, "rows": out, "problems": problems}

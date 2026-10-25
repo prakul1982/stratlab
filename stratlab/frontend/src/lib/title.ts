@@ -11,7 +11,7 @@ export const DEFAULT_TITLE = "StratLab: test it, research it, track it";
 
 /** Pages that are not in a space's menu, by address. */
 const OWN: Record<string, string> = {
-  "/mine": "My space", "/account": "Account", "/settings": "Settings", "/assistant": "AI assistant", "/app": "Get the app",
+  "/mine": "My space", "/account": "Account", "/settings": "Settings", "/assistant": "Connect an AI assistant", "/app": "Get the app",
   "/invite": "Invite friends", "/plans": "Plans", "/features": "All features", "/dev/kit": "Design kit", "/new": "New notebook",
   "/trade": "Trade home", "/invest": "Invest home", "/money": "Money home", "/research/compare": "Compare", "/help": "Help",
 };
@@ -90,7 +90,8 @@ export function signedOutTitle(path: string): string {
   if (p === "/pricing" || p === "/upgrade") return withBrand("Plans");
   if (p === "/help") return withBrand("Help");
   if (p === "/") return HOME_TITLE;
-  if (p === "/features") return DEFAULT_TITLE;
+  if (p === "/features") return withBrand("What StratLab does");      // its own title, not the home page's (DI-033)
+  if (p === "/app") return withBrand("Get the app");                 // readable signed out: the install steps (DI-029)
   if (!isAppPath(p)) return NOT_FOUND_TITLE;
   if (p === "/admin" || p.startsWith("/admin/")) return withBrand("Sign in");     // never names a page only some open
   const t = titleFor(p);
