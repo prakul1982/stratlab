@@ -9,7 +9,7 @@ import { LineChart } from "../../components/Charts";
 import { Info } from "../../components/ui";
 import { sipParams } from "../../lib/sip";
 import { numberProblem, type Limits } from "../../lib/validate";
-import { Card, CardHead, ChartFrame, DataTable, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Signed, Stat, StatRow, type Column } from "../../components/kit";
+import { Card, CardHead, ChartFrame, DataTable, DateField, Disclosure, Field, FieldGroup, FormActions, FormGrid, PageHeader, PlanNote, Select, Seg, Signed, Stat, StatRow, type Column } from "../../components/kit";
 
 /* /money/sip-test: test a stock or ETF SIP before setting one up: a fixed amount (or number of shares) every day, week or
  * month into one Indian stock or ETF or a split across up to 10, with a yearly step-up and an optional dip rule, on past
@@ -64,6 +64,7 @@ export function SipTestPage() {
   const [weekday, setWeekday] = useState("0");
   const [stepUp, setStepUp] = useState("0");
   const [years, setYears] = useState(() => sipParams(params).years ?? "5");
+  const [start, setStart] = useState("");             // DG-034: the window's first day, or the latest years when empty
   const [brokerage, setBrokerage] = useState("0");
   const [rule, setRule] = useState<Rule>("plain");
   const [dip, setDip] = useState("10");
@@ -103,7 +104,7 @@ export function SipTestPage() {
       const body = {
         legs: picks.map((p) => ({ inst_id: p.id, weight: picks.length > 1 ? Number(p.weight) : 100 })), mode, amount: Number(amount), qty: Number(qty), freq,
         dom: Number(dom), weekday: Number(weekday), step_up: Number(stepUp) || 0, years: Number(years), brokerage: Number(brokerage) || 0,
-        rule, dip: Number(dip), lookback: Number(lookback), extra: Number(extra),
+        rule, dip: Number(dip), lookback: Number(lookback), extra: Number(extra), ...(start ? { start } : {}),
       };
       setRes(await api<Reply>("/invest/sip-test", { method: "POST", body }));
     } catch (e) {
@@ -121,7 +122,7 @@ export function SipTestPage() {
     && (freq !== "monthly" || !numberProblem(dom, DOM));
   // a greyed-out button says what it is waiting for
   const waiting = ready ? null
-    : picks.length === 0 ? "Pick a stock or fund first."
+    : picks.length === 0 ? "Pick a stock or ETF first."
     : picks.length > 1 && Math.abs(total - 100) >= 0.5 ? `The shares of the money add up to ${Math.round(total * 10) / 10}%, not 100%.`
     : mode === "amount" ? (Number(amount) > 0 ? "Fix the day of the month." : "Enter the amount of each instalment.")
     : Number(qty) >= 1 ? "Fix the day of the month." : "Enter at least 1 share for each instalment.";
@@ -152,7 +153,7 @@ export function SipTestPage() {
   return (
     <div className="k-page sip-test">
       <PageHeader eyebrow="Money · Plan" title="Test a SIP"
-        lede="What a stock or ETF SIP of your own would have done on past prices, with the charges on every purchase, beside the same money put in on day one."
+        lede="What a stock or ETF SIP of your own would have done on past prices, with the charges on every purchase, beside the same money put in on day one. Mutual fund SIPs, priced at each day's NAV, aren't tested here yet."
         info="History of the rule you set, not a forecast or a suggestion." infoLabel="About the SIP test" />
 
       <Card label="Your SIP">
@@ -189,6 +190,7 @@ export function SipTestPage() {
           {freq === "weekly" && <Field label="Day of the week">{(id) => <Select id={id} value={weekday} onChange={setWeekday} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />}</Field>}
           <Field label="Step-up a year" unit="%" type="number" min={0} max={50} value={stepUp} onChange={(e) => setStepUp(e.target.value)} info="Raises the amount by this much each year." />
           <Field label="Years">{(id) => <Select id={id} value={years} onChange={setYears} options={YEARS} />}</Field>
+          <DateField label="Start" optional value={start} onChange={setStart} info="The first day of the window. Empty: the latest years up to the last close." />
           <Field label="Brokerage per order" unit="₹" type="number" min={0} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} />
           <Field label="Dip rule">{(id) => (
             <Select id={id} value={rule} onChange={(v) => setRule(v as Rule)} disabled={mode === "qty"} options={[
@@ -209,6 +211,9 @@ export function SipTestPage() {
         {!canDip && <PlanNote>Dip rules, and the same SIP run from every start month, are on the Basic plan.</PlanNote>}
       </Card>
 
+      {/* DG-034: a result of other picks than the form now lists says so (two quick picks, then a one-leg result) */}
+      {res && r && res.legs.map((l) => l.inst_id).join("|") !== picks.map((p) => p.id).join("|") && picks.length > 0 &&
+        <p className="k-small k-muted" role="status" data-testid="sip-stale">This result is of {res.legs.map((l) => l.symbol).join(", ")}; run the test again for the stocks picked now.</p>}
       {res && r && (
         <section className="k-page" aria-label="What the SIP did">
           <Card>
@@ -217,7 +222,8 @@ export function SipTestPage() {
             <StatRow>
               <Stat label="Put in" value={inr(r.invested)} />
               <Stat label="Value at the end" value={inr(r.value)} note={<><Signed value={r.gain_pct}>{pct(r.gain_pct)}</Signed> on the money put in</>} />
-              <Stat label="XIRR" value={rateNode(r.xirr)} />
+              {/* DG-034: a fact, in the page's plain colour, beside the same money put in on day one */}
+              <Stat label="XIRR" value={rate(r.xirr)} note={res.lump_sum ? `${rate(res.lump_sum.xirr)} for the lump sum on day one` : undefined} />
               <Stat label={<>Deepest fall <Info label="What the deepest fall is">The largest drop of the pot from a high, leaving out the instalments themselves.</Info></>} value={pctPlain(r.deepest_fall_pct, 1)} />
               <Stat label="Longest below the money put in" value={r.underwater_days ? span(r.underwater_days) : "Never"} note={r.underwater_from ? `${dateOnly(r.underwater_from)} to ${dateOnly(r.underwater_to)}` : undefined} />
               <Stat label="Charges" value={inr(r.charges)} note={`${inr(r.stamp)} of it stamp duty`} />
@@ -247,7 +253,7 @@ export function SipTestPage() {
                 <p className="k-small k-muted">{res.spread.count} runs of {res.spread.years} year{res.spread.years === 1 ? "" : "s"} each, starting {res.spread.every_months > 1 ? `every ${res.spread.every_months} months` : "every month"} from {month(res.spread.runs[0].start)}.</p>
                 <StatRow>
                   <Stat label="Lowest XIRR" value={rateNode(res.spread.worst.xirr)} note={`from ${month(res.spread.worst.start)}`} />
-                  <Stat label="Middle XIRR" value={rateNode(res.spread.median)} />
+                  <Stat label="Median XIRR" value={rateNode(res.spread.median)} />
                   <Stat label="Highest XIRR" value={rateNode(res.spread.best.xirr)} note={`from ${month(res.spread.best.start)}`} />
                   <Stat label="Runs below zero" value={`${res.spread.below_zero} of ${res.spread.count}`} />
                 </StatRow>
@@ -257,7 +263,7 @@ export function SipTestPage() {
                   ...(res.spread.dip ? [{ key: "p", header: "No dip rule", numeric: true, cell: (x: SpreadRun) => rateNode(x.plain_xirr) }] : [])] }}
               footer={res.spread.dip && (
                 <p className="k-small">The dip rule's XIRR was above the plain SIP's in {res.spread.dip.beat} of {res.spread.dip.compared} start months;
-                  the middle difference was {ptsNode(res.spread.dip.median_diff_pp)} (from {ptsNode(res.spread.dip.worst_diff_pp)} to {ptsNode(res.spread.dip.best_diff_pp)}).</p>
+                  the median difference was {ptsNode(res.spread.dip.median_diff_pp)} (from {ptsNode(res.spread.dip.worst_diff_pp)} to {ptsNode(res.spread.dip.best_diff_pp)}).</p>
               )}>
               <LineChart lines={[{ values: res.spread.runs.map((x) => x.xirr * 100), color: "var(--series-1)", width: 2, label: "XIRR" },
                 ...(res.spread.dip ? [{ values: res.spread.runs.map((x) => (x.plain_xirr == null ? null : x.plain_xirr * 100)), color: "var(--series-2)", width: 2, dash: "4 3", label: "No dip rule" }] : [])]}

@@ -100,8 +100,8 @@ test("Money: the tax card shows the F&O income the tax is on; Today names its US
   const us = { id: "US", name: "US", venues: "", currency: "USD", symbol: "", tz: "America/New_York", hours: { open: "09:30", close: "16:00", days: "Mon-Fri" },
     what: "", costs: "", brokerage: 0, status: "live", max_days: null };
   const live = new Date("2026-10-08T18:00:00Z");          // 14:00 in New York, 23:30 in India
-  assert.equal(usTodayNote([us], { day: 5.28, in_total: true }, 96.77, live), "Today includes US stocks, US, live: it moves until the US close: +$5.28 (₹511 at ₹96.77 a dollar).");
-  assert.match(usTodayNote([us], { day: -2, in_total: true }, 96.77, new Date("2026-10-09T03:00:00Z")), /US, at their last close: −\$2\.00/);
+  assert.equal(usTodayNote([us], { day: 5.28, in_total: true }, 96.77, live), "Today includes your US stocks live, moving until the US close: +$5.28 (₹511 at ₹96.77 a dollar).");
+  assert.match(usTodayNote([us], { day: -2, in_total: true }, 96.77, new Date("2026-10-09T03:00:00Z")), /your US stocks at their last close: −\$2\.00/);
   assert.equal(usTodayNote([us], { day: 5.28, in_total: false }, 96.77, live), null);       // not in the rupee Today: nothing to name
   assert.match(read("src/pages/HoldingsPage.tsx"), /usTodayNote\(markets, view\.us, view\.usd_inr\)/);
 });

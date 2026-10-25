@@ -189,5 +189,6 @@ export function usTodayNote(markets: Market[], us: { day: number | null; in_tota
   const live = !!m && marketState(m, now).open;
   const usd = `${us.day < 0 ? "−" : "+"}$${Math.abs(us.day).toFixed(2)}`;
   const inr = usdInr ? ` (₹${Math.round(Math.abs(us.day) * usdInr).toLocaleString("en-IN")} at ₹${usdInr.toFixed(2)} a dollar)` : "";
-  return `Today includes US stocks, ${live ? "US, live: it moves until the US close" : "US, at their last close"}: ${usd}${inr}.`;
+  // DG-005: "Today includes US stocks, US, at their last close" read as a typo
+  return `Today includes your US stocks ${live ? "live, moving until the US close" : "at their last close"}: ${usd}${inr}.`;
 }

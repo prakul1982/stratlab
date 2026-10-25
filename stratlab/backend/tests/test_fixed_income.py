@@ -70,7 +70,7 @@ def test_repo_history_and_a_new_rate_seen(w, rbi, monkeypatch):
     R.forget()
     assert R.current()["rates"]["repo"] == 5.0
     h = R.repo_history()
-    assert h[-1][1] == 5.0 and h[-2] == ("2025-12-05", 5.25)
+    assert h[-1][1] == 5.0 and h[-2] == ("2026-10-07", 5.50)       # after the 7 Oct 2026 hike (DG-013)
 
 
 # ---------- the arithmetic ----------

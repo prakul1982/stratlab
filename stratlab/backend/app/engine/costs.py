@@ -13,6 +13,9 @@ from datetime import datetime
 # equity futures, ₹3,512.99 + ₹0.01 a crore of premium in equity options (the same total as the ₹297/173/3,503
 # charge plus ₹10 IPFT before). SEBI's fee is ₹10 a crore. Stamp duty on buys (Indian Stamp Act, from 1 Jul 2020).
 IN_EQUITY = {"stt": 0.001, "exchange": 0.0000307, "sebi": 0.000001, "stamp_buy": 0.00015}
+# DG-031: ETF units bought for delivery carry no STT; selling units of an equity-oriented fund on the exchange carries
+# 0.001% (Securities Transaction Tax, Finance (No. 2) Act 2004 as amended; checked 25 Oct 2026). Fees and stamp duty as shares
+IN_ETF = {"stt_sell": 0.00001, "exchange": 0.0000307, "sebi": 0.000001, "stamp_buy": 0.00015}
 IN_EQUITY_MIS = {"stt_sell": 0.00025, "exchange": 0.0000307, "sebi": 0.000001, "stamp_buy": 0.00003}   # intraday
 IN_FUTURES = {"stt_sell": 0.0005, "exchange": 0.0000183, "sebi": 0.000001, "stamp_buy": 0.00002}     # STT 0.05% on sells (0.02% before 1 Apr 2026)
 IN_OPTIONS = {"stt_sell": 0.0015, "exchange": 0.0003513, "sebi": 0.000001, "stamp_buy": 0.00003}    # STT 0.15% of premium on sells (0.1% before 1 Apr 2026)
@@ -21,7 +24,7 @@ IN_MCX_OPTIONS = {"stt_sell": 0.0005, "exchange": 0.000418, "sebi": 0.000001, "s
 IN_MCX_FUTURES = {"stt_sell": 0.0001, "exchange": 0.000021, "sebi": 0.000001, "stamp_buy": 0.00002}   # CTT on non-agri sells
 IN_CDS_FUTURES = {"stt_sell": 0.0, "exchange": 0.0000035, "sebi": 0.000001, "stamp_buy": 0.000001}  # no STT on currency
 IN_CDS_OPTIONS = {"stt_sell": 0.0, "exchange": 0.000311, "sebi": 0.000001, "stamp_buy": 0.000001}   # on premium; no STT
-IN_RATES = {"in_eq": IN_EQUITY, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_bse_opt": IN_BSE_OPTIONS,
+IN_RATES = {"in_eq": IN_EQUITY, "in_etf": IN_ETF, "in_eq_mis": IN_EQUITY_MIS, "in_fut": IN_FUTURES, "in_opt": IN_OPTIONS, "in_bse_opt": IN_BSE_OPTIONS,
             "in_mcx_opt": IN_MCX_OPTIONS, "in_mcx_fut": IN_MCX_FUTURES, "in_cds_fut": IN_CDS_FUTURES, "in_cds_opt": IN_CDS_OPTIONS}
 GST = 0.18
 # The depository (DP) charge on a sale of delivered shares: once per stock sold from a demat account on a day, whatever the

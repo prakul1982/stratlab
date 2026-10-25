@@ -177,8 +177,8 @@ def broad_of(category: str, kind: str) -> tuple[str, str]:
         return "Solution oriented", sub
     if h.startswith("other"):
         s = sub.lower()
-        if "index" in s:
-            return "Index funds", ""
+        if "index" in s:                    # an index fund holds what its index does (DG-023: a Nifty 50 index fund is equity)
+            return ("Debt" if kind == "debt" else "Equity"), "Index funds"
         if "etf" in s:
             return "ETFs", sub
         if "fof" in s:
@@ -400,6 +400,9 @@ def parse_csv(data: bytes) -> dict:
         reason = ("No date could be read." if not d else "The type isn't one of purchase, SIP, redemption, switch in or out, "
                   "dividend, stamp duty or STT." if not kind else "No ISIN, AMFI code or scheme name." if not (isin or code or name)
                   else "No units." if kind in IN_TYPES | OUT_TYPES and not units
+                  # DG-022: "-5000, -50 units" read as a purchase of +50; a cancelled purchase is a reversal, not new units
+                  else "A purchase with negative units or amount: left out. If it cancels an earlier purchase, remove both lines, "
+                       "or mark it as a reversal." if kind in IN_TYPES and ((units or 0) < 0 or (amount or 0) < 0)
                   else "No amount." if kind in ("stamp", "stt", "tds", "div_payout") and not amount else None)
         if reason:
             problems.append({"line": n, "text": ", ".join(r)[:120], "reason": reason})
@@ -482,7 +485,11 @@ def merge(before: dict, got: dict, limit: int | None) -> tuple[dict, dict]:
             break
         out["txns"].append(t)
         added += 1
-    return out, {"added": added, "duplicates": dup, "over_limit": over, "schemes": len(got["schemes"])}
+    charges = sum(1 for t in out["txns"][len(out["txns"]) - added:] if t["t"] in ("stamp", "stt", "tds")) if added else 0
+    # DP2-017: the schemes kept beside the file's own count ("4 transactions added, from 7 schemes" then "3 were left out");
+    # DG-026: stamp duty, STT and TDS lines apart from the transactions ("133 transactions added" counted 63 stamp duty lines)
+    return out, {"added": added, "duplicates": dup, "over_limit": over, "schemes": len(got["schemes"]),
+                 "kept": sum(1 for s in got["schemes"] if s["k"] in have), "charges": charges}
 
 
 # ---------- lots, sales and cash flows ----------
@@ -521,13 +528,16 @@ def classify(kind: str, bought: str, sold: str, cost: float, sale: float, qty: f
     return {"term": "ST", "bucket": "st_slab", "rate": None, "cost": cost, "gf": None}
 
 
-def compute(data: dict, kinds: dict[str, str], gf: dict[str, float]) -> dict:
+def compute(data: dict, kinds: dict[str, str], gf: dict[str, float], elss: set[str] | None = None) -> dict:
     """Every scheme's open lots, realised sales (classified), cash flows and dividends, first in first out per folio
-    and scheme. Scheme mergers carry the old lots over to the new scheme within the folio."""
+    and scheme. Scheme mergers carry the old lots over to the new scheme within the folio. Units redeemed with no
+    purchase before them are kept with their sale value (`short`, `short_sale`: DG-021), and ELSS units (schemes in
+    `elss`) redeemed inside their three-year lock-in are counted (`elss_early`: DG-024)."""
+    elss = elss or set()
     lots: dict[str, list[dict]] = {s["k"]: [] for s in data["schemes"]}
     folio_of = {s["k"]: s.get("folio") or "" for s in data["schemes"]}
     out = {"realised": [], "flows": {k: [] for k in lots}, "dividends": {}, "stt": {}, "unknown": {}, "short": {},
-           "notes": set(), "lots": lots}
+           "short_sale": {}, "elss_early": {}, "notes": set(), "lots": lots}
     pending: list[dict] = []           # merger-outs waiting for their merger-in
     order = sorted(enumerate(data["txns"]), key=lambda x: (x[1]["d"], PRIORITY.get(x[1]["t"], 1 if x[1]["t"] in IN_TYPES else 4), x[0]))
 
@@ -549,6 +559,8 @@ def compute(data: dict, kinds: dict[str, str], gf: dict[str, float]) -> dict:
             taken.append(piece)
             if not taxed:
                 continue
+            if k in elss and add_months(piece["d"], 12 * ELSS_LOCK_YEARS) > _d(d):
+                out["elss_early"][k] = out["elss_early"].get(k, 0.0) + q
             if piece["cost"] is None or each is None:
                 out["unknown"][k] = out["unknown"].get(k, 0.0) + q
                 continue
@@ -563,6 +575,8 @@ def compute(data: dict, kinds: dict[str, str], gf: dict[str, float]) -> dict:
                 out["notes"].add("gift")
         if left > EPS:
             out["short"][k] = out["short"].get(k, 0.0) + left
+            if each is not None and taxed:
+                out["short_sale"][k] = out["short_sale"].get(k, 0.0) + left * each
         return taken
 
     for _, t in order:
@@ -694,9 +708,20 @@ def _gf(data: dict, info: dict[str, dict], need: bool) -> dict[str, float]:
     if not need:
         return out
     navs_2018 = navs.gf_navs()
+    early = _gf_schemes(data, {k: v["kind"] for k, v in info.items()})
+    asked = 0
     for s in data["schemes"]:
         if s["k"] in out:
             continue
+        rec = info[s["k"]]["rec"] or {}
+        code = s.get("amfi") or rec.get("code")
+        # DG-020: the scheme's own NAV history from the industry body, for a scheme the saved 31 Jan 2018 list lacks
+        if code and s["k"] in early and code not in navs_2018.get("code", {}) and asked < navs.GF_LOOKUPS:
+            asked += 1
+            got = navs.gf_one(code)
+            if got:
+                out[s["k"]] = got
+                continue
         rec = info[s["k"]]["rec"] or {}
         for code in (s.get("amfi"), rec.get("code")):
             if code and code in navs_2018.get("code", {}):
@@ -710,6 +735,11 @@ def _gf(data: dict, info: dict[str, dict], need: bool) -> dict[str, float]:
     return out
 
 
+def _gf_schemes(data: dict, kinds: dict[str, str]) -> set[str]:
+    """The equity schemes with units bought on or before 31 Jan 2018: the ones a 31 Jan 2018 NAV is looked up for."""
+    return {t["k"] for t in data["txns"] if t["t"] in IN_TYPES and t["d"] <= tax_lots.GF_DATE and kinds.get(t["k"]) == "equity"}
+
+
 def _needs_gf(data: dict, kinds: dict[str, str]) -> bool:
     early = {t["k"] for t in data["txns"] if t["t"] in IN_TYPES and t["d"] <= tax_lots.GF_DATE and kinds.get(t["k"]) == "equity"}
     return any(t["k"] in early and t["t"] in OUT_TYPES and t["d"] >= tax_lots.LTCG_START for t in data["txns"])
@@ -721,7 +751,8 @@ def worked(data: dict, daily: dict | None = None) -> dict:
     info = _resolve(data, daily)
     kinds = {k: v["kind"] for k, v in info.items()}
     gf = _gf(data, info, _needs_gf(data, kinds))
-    return {"info": info, "kinds": kinds, "gf": gf, "c": compute(data, kinds, gf), "daily": daily}
+    elss = {s["k"] for s in data["schemes"] if is_elss(info[s["k"]]["category"], s["name"])}
+    return {"info": info, "kinds": kinds, "gf": gf, "c": compute(data, kinds, gf, elss), "daily": daily}
 
 
 def names(data: dict) -> dict[str, dict]:
@@ -740,10 +771,12 @@ def holdings(data: dict, w: dict, today: str) -> dict:
         invested = sum(l["cost"] for l in lots if l["cost"] is not None)
         value = units * inf["nav"] if inf["nav"] and units > EPS else (0.0 if units <= EPS else None)
         flows = list(w["c"]["flows"][k])
-        if value:
-            flows.append((today, value))
+        if value:                               # DG-026: valued at the NAV's own date, not today's
+            flows.append((min(inf["nav_date"] or today, today), value))
         known = not unknown and k not in w["c"]["unknown"] and k not in w["c"]["short"]
         x = xirr(flows) if known and value is not None else None
+        first = min((d for d, a in flows if a < 0), default=None)
+        held_days = (_d(today) - _d(first)).days if first else None      # under a year, a yearly rate swings widely (DG-026)
         if known and value is not None:         # a fund with no NAV has no closing value, so its flows stay out
             all_flows += flows
         realised = sum(r["sale"] - (r.get("actual_cost") or r["cost"]) for r in w["c"]["realised"] if r["key"] == k)
@@ -763,8 +796,9 @@ def holdings(data: dict, w: dict, today: str) -> dict:
                      "nav_source": inf["nav_source"], "invested": None if unknown else _r(invested),
                      "value": _r(value), "gain": None if unknown or value is None else _r(value - invested),
                      "gain_pct": None if unknown or not invested or value is None else _r((value - invested) / invested * 100, 2),
-                     "xirr": x, "realised": _r(realised), "cost_unknown": unknown or k in w["c"]["unknown"],
-                     "short_units": _r(w["c"]["short"].get(k), 4), "elss": elss,
+                     "xirr": x, "held_days": held_days, "realised": _r(realised), "cost_unknown": unknown or k in w["c"]["unknown"],
+                     "short_units": _r(w["c"]["short"].get(k), 4), "short_sale": _r(w["c"].get("short_sale", {}).get(k)), "elss": elss,
+                     "elss_early_units": _r(w["c"].get("elss_early", {}).get(k), 4),
                      "txns": sum(1 for t in data["txns"] if t["k"] == k), "fmv_2018": w["gf"].get(k), "fmv_yours": k in data["fmv"]})
     rows.sort(key=lambda r: (-(r["value"] or 0), r["name"]))
     held = [r for r in rows if (r["units"] or 0) > EPS]
@@ -966,9 +1000,17 @@ def _import(profile, data: bytes, filename: str, password: str, mode: str):
         err(400, "wrong_password" if "password" in str(e) else "bad_file", str(e))
     uid = profile["id"]
     counts, limit = apply_import(profile, got, filename, mode)
-    return ok({"kind": got["kind"], **counts, "problems": got["problems"], "limit": limit,
+    v = view(uid, profile["_plan"])
+    # DG-021, DG-024: a redemption of more units than the files hold, and ELSS units redeemed inside the lock-in, are said
+    # with the import as well as on the scheme (6,000 units redeemed of 2,551.943 held was accepted without a word)
+    warn = [{"line": None, "text": r["name"][:80], "reason": f"{r['short_units']:,.3f} units were redeemed with no purchase before them in your files"
+             + (f", so ₹{r['short_sale']:,.0f} of sale value is left out of the capital gains." if r.get("short_sale") else ".")}
+            for r in v.get("schemes") or [] if (r.get("short_units") or 0) > EPS]
+    warn += [{"line": None, "text": r["name"][:80], "reason": f"{r['elss_early_units']:,.3f} ELSS units were redeemed within 3 years of "
+              "buying them, inside the lock-in. Check the dates in your statement."} for r in v.get("schemes") or [] if (r.get("elss_early_units") or 0) > EPS]
+    return ok({"kind": got["kind"], **counts, "problems": got["problems"] + warn, "limit": limit,
                "upgrade": f"{PLANS['basic']['name']} keeps every scheme." if counts["over_limit"] else None,
-               "view": view(uid, profile["_plan"])})
+               "view": v})
 
 
 def apply_import(profile, got: dict, filename: str, mode: str = "add") -> tuple[dict, int | None]:

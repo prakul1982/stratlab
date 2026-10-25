@@ -69,7 +69,8 @@ test("a typed number is checked against its named limits, and the server's own c
   assert.equal(numberProblem("-5", { min: 0, above: true }), "Enter more than 0.");
   assert.equal(numberProblem("99999999999", { min: 0, above: true, max: 1e9 }), "Enter at most 1,00,00,00,000.");
   assert.equal(numberProblem("1,00,000", { min: 0, max: 1e12, unit: "₹" }), null);
-  assert.equal(numberProblem("1e20", { min: 0, max: 1e12, unit: "₹" }), "Enter at most ₹10,00,00,00,00,000.");
+  assert.equal(numberProblem("1e20", { min: 0, max: 1e12, unit: "₹" }), "Type the number in digits, like 100000.");   // DP2-005
+  assert.equal(numberProblem("100000000000000000000", { min: 0, max: 1e12, unit: "₹" }), "Enter at most ₹10,00,00,00,00,000.");
   assert.equal(numberProblem("45", { min: 1, max: 28, whole: true }), "Enter at most 28.");
   assert.equal(numberProblem("2.5", { whole: true }), "Enter a whole number.");
   assert.equal(numberProblem("abc"), "Enter a number, like 10.");

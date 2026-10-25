@@ -70,7 +70,7 @@ test("loan check: a repo-linked loan against repo + spread, each change's effect
   // sanctioned at 8.5% with the repo rate at 6.5%: a spread of 2; after the 1 Oct 2026 reset, 5.25 + 2 = 7.25%
   await expect(card.getByText("7.25%").first()).toBeVisible();
   await expect(card.getByText("+0.40 pts")).toBeVisible();
-  await expect(card.getByText(/Your entered rate is 0.40% above repo \+ spread after the 1 Oct 2026 reset/)).toBeVisible();
+  await expect(card.getByText(/Your entered rate is 0.40 points above repo \+ spread after the 1 Oct 2026 reset/)).toBeVisible();
   const changes = card.getByRole("list", { name: "Rate changes on Home loan, Example Bank" });
   await expect(changes.getByText(/1 Jan 2026: 7.50% to 7.25%/)).toBeVisible();
   await expect(card.getByText(/Earlier rate changes/)).toBeVisible();

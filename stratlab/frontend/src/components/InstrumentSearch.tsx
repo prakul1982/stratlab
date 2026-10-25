@@ -35,7 +35,7 @@ function useHeld(on: boolean): string[] {
 
 const instKind = (r: Instrument) =>
   r.market === "MCX" ? `MCX futures · ${r.contract ?? ""}`.trim() : r.market === "CDS" ? `Currency futures · ${r.contract ?? ""}`.trim() : r.market === "CMDTY" ? "Futures, front month"
-    : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "ETF" ? "ETF" : r.type === "FX" ? "Currency pair"
+    : r.etf || r.type === "ETF" ? "ETF" : r.type === "EQ" ? "Stock" : r.type === "INDEX" ? "Index" : r.type === "FX" ? "Currency pair"
     : r.type === "CRYPTO" ? r.currency : `${r.type}${r.expiry ? " " + r.expiry : ""}`;
 
 const PLACEHOLDER: Record<string, string> = {

@@ -231,32 +231,58 @@ def emis_paid(start: date, months: int, at: date) -> int:
     return min(months, months_between(start, at))
 
 
-def loan_state(principal: float, rate: float, months: int, start: date, at: date) -> dict:
+def loan_state(principal: float, rate: float, months: int, start: date, at: date, changes: list[dict] | None = None) -> dict:
     """A loan on `at`: its EMI, EMIs paid and left, the balance owed, interest paid this financial year and so far,
-    the end date and the interest still to pay."""
+    the end date and the interest still to pay. `changes`: a floating-rate loan's rate changes ({"date", "to"}, from
+    loan_check.rate_changes), followed month by month with the EMI kept, as the floating-rate check follows them, so the
+    balance, the interest and the months left are on the rate actually charged (DG-011: the loan's table ran at the
+    sanctioned 8.5% while the check beside it knew the rate had been 7.25% since January, about ₹77,000 apart). An EMI that
+    no longer covers the interest is raised to keep the tenure."""
     pay = emi(principal, rate, months)
     k = emis_paid(start, months, at)
-    r = rate / 100 / 12
+    now = rate
     bal, fy_int, all_int = float(principal), 0.0, 0.0
     since = fy_start(at)
+    steps = sorted(changes or [], key=lambda c: c["date"])
+    ci = 0
     for j in range(1, k + 1):
+        due = add_months(start, j)
+        while ci < len(steps) and steps[ci]["date"] <= due.isoformat():
+            now = steps[ci]["to"]
+            ci += 1
+        r = now / 100 / 12
         i = bal * r
+        if steps and pay <= i:
+            pay = emi(bal, now, max(1, months - j + 1))
         bal = max(0.0, bal + i - pay)
         all_int += i
-        if add_months(start, j) >= since:
+        if due >= since:
             fy_int += i
-    left = months - k
+        if bal <= 0.005:
+            k = j
+            break
+    while ci < len(steps) and steps[ci]["date"] <= at.isoformat():     # a reset since the last EMI sets today's rate
+        now = steps[ci]["to"]
+        ci += 1
+    if steps:                                        # the same EMI at today's rate: the months and interest it takes from here
+        left, int_left = payoff(bal, now, pay) if bal > 0.005 else (0, 0.0)
+        int_left = 0.0 if int_left == math.inf else int_left
+    else:
+        left = months - k
+        int_left = max(0.0, pay * left - bal) if left else 0.0
     return {"emi": pay, "paid": k, "left": left, "outstanding": bal if left else 0.0, "interest_fy": fy_int,
-            "interest_paid": all_int, "interest_left": max(0.0, pay * left - bal) if left else 0.0,
+            "interest_paid": all_int, "interest_left": int_left,
             "next_emi": add_months(start, k + 1).isoformat() if left else None,
-            "ends": add_months(start, months).isoformat()}
+            "ends": add_months(start, k + left).isoformat(), "rate_now": now}
 
 
-def prepay(principal: float, rate: float, months: int, start: date, at: date, amount: float) -> dict:
+def prepay(principal: float, rate: float, months: int, start: date, at: date, amount: float, changes: list[dict] | None = None) -> dict:
     """What prepaying `amount` now does, two ways: keep the EMI and finish sooner, or keep the end date and pay a
-    smaller EMI. Arithmetic on the entered rate only (a lender may charge for prepaying or work it out differently)."""
-    s = loan_state(principal, rate, months, start, at)
-    bal, left, pay = s["outstanding"], s["left"], s["emi"]
+    smaller EMI. Arithmetic on the rate charged now: the entered rate, or a floating loan's rate after its resets
+    (`changes`, as loan_state follows them; DG-011: the prepayment maths ran at the sanctioned rate). A lender may charge
+    for prepaying or work it out differently."""
+    s = loan_state(principal, rate, months, start, at, changes)
+    bal, left, pay, rate = s["outstanding"], s["left"], s["emi"], s["rate_now"]
     if not left or bal <= 0:
         return {"outstanding": 0.0, "closes": True, "error": "This loan is already repaid on the dates entered."}
     old_months, old_int = payoff(bal, rate, pay)
@@ -264,14 +290,27 @@ def prepay(principal: float, rate: float, months: int, start: date, at: date, am
     new_bal = bal - amount
     if new_bal <= 0.005:
         return {"outstanding": bal, "amount": amount, "closes": True, "emi": pay, "months_left": old_months,
-                "interest_saved": old_int, "tenure": None, "lower_emi": None}
+                "interest_saved": old_int, "tenure": None, "lower_emi": None, "rate": rate}
     t_months, t_int = payoff(new_bal, rate, pay)
     e2 = emi(new_bal, rate, old_months)
     e_months, e_int = payoff(new_bal, rate, e2)
     return {"outstanding": bal, "amount": amount, "closes": False, "emi": pay, "months_left": old_months, "interest_left": old_int,
             "tenure": {"months_left": t_months, "months_saved": old_months - t_months, "interest_saved": old_int - t_int,
                        "ends": add_months(start, s["paid"] + t_months).isoformat()},
-            "lower_emi": {"emi": e2, "emi_change": e2 - pay, "interest_saved": old_int - e_int, "months_left": e_months}}
+            "lower_emi": {"emi": e2, "emi_change": e2 - pay, "interest_saved": old_int - e_int, "months_left": e_months}, "rate": rate}
+
+
+def rate_changes(i: dict, at: date) -> list[dict]:
+    """A floating-rate loan's rate changes up to `at` (loan_check: repo-linked ones on the repo rate's path, others to the
+    rate on the statement); none for a fixed-rate loan or one that can't be followed."""
+    if (i.get("benchmark") or "fixed") == "fixed" or not (i.get("tenure_months") and _date(i.get("start"))):
+        return []
+    try:
+        from . import loan_check, rbi_rates                # they import this module, so not at the top
+        return loan_check.rate_changes(i, at, rbi_rates.repo_history())
+    except Exception as e:                              # the sanctioned rate stands, as before
+        print("net worth: loan rate path unavailable:", type(e).__name__)
+        return []
 
 
 # ---------- policies ----------
@@ -307,6 +346,7 @@ class ItemReq(BaseModel):
     balance: Optional[float] = Field(None, ge=0, le=1e12)
     monthly: Optional[float] = Field(None, ge=0, le=1e10)
     yearly: Optional[float] = Field(None, ge=0, le=1e10)
+    paid_since: Optional[float] = Field(None, ge=0, le=150000)     # PPF: deposited since the balance's date (DG-016)
     rate: Optional[float] = Field(None, ge=0, le=60)
     opened: Optional[str] = Field(None, max_length=10)
     tier1: Optional[float] = Field(None, ge=0, le=1e12)
@@ -349,7 +389,7 @@ class PrepayReq(BaseModel):
 # kind: (fields kept, fields required)
 FIELDS = {
     "epf": (("balance", "monthly", "rate", "as_of"), ("balance",)),
-    "ppf": (("balance", "yearly", "rate", "as_of", "opened"), ("balance",)),
+    "ppf": (("balance", "yearly", "rate", "as_of", "opened", "paid_since"), ("balance",)),
     "nps": (("tier1", "tier2", "as_of"), ("tier1",)),
     "fd": (("principal", "rate", "compounding", "start", "maturity"), ("principal", "rate", "start", "maturity")),
     "rd": (("monthly", "rate", "start", "maturity"), ("monthly", "rate", "start", "maturity")),
@@ -395,6 +435,10 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
     missing = [WORDS.get(f, f) for f in required if out.get(f) in (None, "")]
     if missing:
         raise EntryError(f"{LABEL[req.kind]}: enter {' and '.join(missing)}.")
+    # DP2-005: an amount of 0 is no entry ("0" was saved, and took one of Free's five places)
+    zero = [WORDS.get(f, f) for f in required if isinstance(out.get(f), (int, float)) and f != "rate" and out[f] <= 0]
+    if zero:
+        raise EntryError(f"{LABEL[req.kind]}: enter {' and '.join(zero)} above 0.")
     k = req.kind
     if k in ("epf", "ppf", "nps", "cash", "property", "other", "gold", "crypto"):
         out.setdefault("as_of", now.isoformat())
@@ -404,6 +448,8 @@ def clean(req: ItemReq, now: date | None = None) -> dict:
         out.setdefault("rate", PPF_RATE)
         if (out.get("yearly") or 0) > PPF_YEARLY_MAX:
             raise EntryError(f"PPF: a year's deposit can't be more than {_inr(PPF_YEARLY_MAX)}.")
+        if not out.get("paid_since"):
+            out.pop("paid_since", None)
     if k in ("fd", "rd") and out["maturity"] <= out["start"]:
         raise EntryError("The maturity date has to be after the start date.")
     if k == "fd":
@@ -483,7 +529,7 @@ def history(uid: str) -> list[dict]:
     return [h for h in db.json_value(db.get_setting(LOG + uid), []) if isinstance(h, dict) and h.get("d")]
 
 
-def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[dict]:
+def record(uid: str, totals: dict, why: str, day: date | None = None, added: float | None = None) -> list[dict]:
     """Add a snapshot of the totals (one a day: a later one the same day replaces it). A partial total is stored flagged
     with what's missing: as the month's snapshot always (a fund with neither NAV nor cost may never be valued, and
     history mustn't stop for it), and as a "change" when what's missing is a holding or entry that has nothing to value
@@ -492,7 +538,8 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
     show as a fall that didn't happen. A partial snapshot (month or change) never replaces a complete one of its day,
     and a month keeps one "month" snapshot, the complete one if any. A "change" is always dated today, the day the entry changed
     (dated by the last close, a weekend edit would replace Friday's snapshot, the one the headline change is read
-    against, and read as no change)."""
+    against, and read as no change). `added`: what an entry added, changed or removed today put into the total (DP2-006: a
+    new FD read as "+₹1.07 lakh since 23 Oct"), summed over the day's changes, so the headline change can leave it out."""
     partial = bool(totals.get("partial"))
     if partial and not (why == "month" or (why == "change" and totals.get("partial_lasting"))):
         return history(uid)
@@ -503,6 +550,9 @@ def record(uid: str, totals: dict, why: str, day: date | None = None) -> list[di
         return old
     rows = [h for h in old if h["d"] != d and not (why == "month" and h["d"][:7] == d[:7] and h.get("why") == "month" and h.get("partial"))]
     snap = {"d": d, "net": _r(totals["net"]), "assets": _r(totals["assets"]), "liabilities": _r(totals["liabilities"]), "why": why}
+    moved = sum(h.get("added") or 0 for h in old if h["d"] == d) + (added or 0)     # the day's earlier changes stay counted
+    if abs(moved) >= 0.005:
+        snap["added"] = _r(moved)
     if totals.get("partial"):
         snap["partial"] = list(totals["partial"])
     rows = sorted(rows + [snap], key=lambda h: h["d"])[-MAX_LOG:]
@@ -564,23 +614,26 @@ def _asset(i: dict, at: date, now_iso: str, gold, crypto, usd_inr) -> dict:
     elif k == "ppf":
         since = _date(i.get("as_of")) or at
         rate = i.get("rate", PPF_RATE)
-        now_v = provident(i["balance"], rate, since, at, yearly=i.get("yearly") or 0)
+        # DG-016: a deposit made since the balance's date (this year's, once the 1 April balance is in) counts from that date
+        start_bal = i["balance"] + (i.get("paid_since") or 0)
+        now_v = provident(start_bal, rate, since, at, yearly=i.get("yearly") or 0)
         opened = _date(i.get("opened"))
-        row.update(value=now_v["value"], rule=f"Balance of {_day(since)}, plus {'the yearly deposit on each 1 April since, and ' if i.get('yearly') else ''}interest at {rate:g}% a year, worked out monthly and "
+        paid = f", plus {_inr(i['paid_since'])} deposited since" if i.get("paid_since") else ""
+        row.update(value=now_v["value"], rule=f"Balance of {_day(since)}{paid}, plus {'the yearly deposit on each 1 April since, and ' if i.get('yearly') else ''}interest at {rate:g}% a year, worked out monthly and "
                                                "credited on 31 March" + (f" ({PPF_RATE_NOTE})" if rate == PPF_RATE else ""))
         facts = {"interest_so_far": _r(now_v["interest"]), "rate": rate, "maturity": None, "maturity_value": None}
         if opened:
             m = ppf_maturity(opened)
             facts["maturity"] = m.isoformat()
             if m > at:
-                proj = provident(i["balance"], rate, since, m, yearly=i.get("yearly") or 0)
+                proj = provident(start_bal, rate, since, m, yearly=i.get("yearly") or 0)
                 facts["maturity_value"] = _r(proj["value"])
                 facts["maturity_rule"] = (f"If the rate stays {rate:g}%" + (f" and {_inr(i['yearly'])} goes in by 5 April each year" if i.get("yearly") else "")
                                           + "; the rate is reset every quarter.")
         row["facts"] = facts
     elif k == "nps":
         row.update(value=(i.get("tier1") or 0) + (i.get("tier2") or 0), basis="as entered", as_of=i.get("as_of") or at.isoformat(),
-                   rule="Tier I and Tier II values as entered")
+                   rule="Tier I and Tier II values as entered; the funds' NAVs aren't followed, so update it from your NPS statement")
         row["facts"] = {"tier1": i.get("tier1"), "tier2": i.get("tier2")}
     elif k == "fd":
         start, mat = date.fromisoformat(i["start"]), date.fromisoformat(i["maturity"])
@@ -652,9 +705,12 @@ def _loan(i: dict, at: date) -> dict:
            "value": None, "as_of": at.isoformat(), "basis": "calculated", "rule": "", "facts": {}, "entry": i}
     start = _date(i.get("start"))
     if i.get("tenure_months") and start:
-        s = loan_state(i["principal"], i["rate"], i["tenure_months"], start, at)
+        changes = rate_changes(i, at)
+        s = loan_state(i["principal"], i["rate"], i["tenure_months"], start, at, changes)
+        moved = (f"; the floating rate since, {s['rate_now']:g}% now after {len(changes)} {'reset' if len(changes) == 1 else 'resets'}, "
+                 "with the EMI kept") if changes else ""
         row.update(value=_r(s["outstanding"]), rule=f"{_inr(i['principal'])} at {i['rate']:g}% a year over {i['tenure_months']} months from "
-                                                     f"{_day(start)}, with the first EMI a month later")
+                                                     f"{_day(start)}, with the first EMI a month later" + moved)
         row["facts"] = {k: (_r(v) if isinstance(v, float) else v) for k, v in s.items()} | {"fy": fy_label(at)}
     else:
         row.update(value=_r(i["principal"]), basis="as entered", rule="Amount owed as entered")
@@ -929,6 +985,23 @@ def _cell(v):
     return v
 
 
+def _csv_day(v) -> str:
+    """An as-of date as a plain date: a time of reading ("2026-10-24T21:22:49.157766+00:00") is its day in India (DG-015)."""
+    raw = str(v or "")
+    if "T" in raw and len(raw) > 10:
+        try:
+            t = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return (t if t.tzinfo else t.replace(tzinfo=IST)).astimezone(IST).date().isoformat()
+        except ValueError:
+            return raw[:10]
+    return raw[:10]
+
+
+def _plain(v) -> str:
+    """A detail's value in words a spreadsheet reader reads: yes or no, not Python's True and False (DG-015)."""
+    return "yes" if v is True else "no" if v is False else str(v)
+
+
 def to_csv(view: dict, hist: list[dict] | None) -> str:
     """Every number on the page, one row each, with its as-of date and how it was worked out."""
     buf = io.StringIO()
@@ -939,11 +1012,11 @@ def to_csv(view: dict, hist: list[dict] | None) -> str:
     put(["Section", "Type", "Name", "Value (INR)", "As of", "How it's worked out", "Details"])
 
     def details(r):
-        return "; ".join(f"{k.replace('_', ' ')}: {v}" for k, v in (r.get("facts") or {}).items() if v not in (None, "", {}))
+        return "; ".join(f"{k.replace('_', ' ')}: {_plain(v)}" for k, v in (r.get("facts") or {}).items() if v not in (None, "", {}))
     for r in view["assets"]:
-        put(["Asset", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
+        put(["Asset", r["label"], r["name"], r["value"], _csv_day(r.get("as_of")), r.get("rule") or "", details(r)])
     for r in view["liabilities"]:
-        put(["Liability", r["label"], r["name"], r["value"], r.get("as_of") or "", r.get("rule") or "", details(r)])
+        put(["Liability", r["label"], r["name"], r["value"], _csv_day(r.get("as_of")), r.get("rule") or "", details(r)])
     t = view["totals"]
     for label, v in (("Total assets", t["assets"]), ("Total liabilities", t["liabilities"]), ("Net worth", t["net"])):
         put(["Total", label, "", v, view["as_of"], "", ""])
@@ -1059,7 +1132,16 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             print("net worth: holdings unavailable:", type(e).__name__)
             return {"failed": True}
 
-    def page(profile, why: str | None = None) -> dict:
+    def entry_net(i: dict | None) -> float:
+        """What one entry adds to the net worth today (a loan takes away; a policy is 0)."""
+        if not i:
+            return 0.0
+        try:
+            return float(build([{**i, "id": i.get("id") or "new"}], None, None, prices)["totals"]["net"] or 0)
+        except Exception:
+            return 0.0
+
+    def page(profile, why: str | None = None, added: float | None = None) -> dict:
         uid = profile["id"]
         items = load(uid)["items"]
         # the holdings, the mutual funds, the history and the deposits' tax are separate reads: asked together, not one after
@@ -1073,7 +1155,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         day = _date(v["as_of"])                              # a snapshot is dated by the prices in it: out of hours, the last close
         this_month = (day or today()).strftime("%Y-%m")      # so "this month" is the month of that day (the 1st on a weekend is the last close's)
         if why and has_any:
-            hist = record(uid, v["totals"], why, day)
+            hist = record(uid, v["totals"], why, day, added)
         elif (has_any and not any(h["d"].startswith(this_month) and not h.get("partial") for h in hist)
               and (not v["totals"].get("partial") or not any(h["d"].startswith(this_month) for h in hist))
               and db.get_setting(SKIP + uid) != this_month):
@@ -1111,7 +1193,7 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             entry["id"] = secrets.token_hex(4)
             return items + [entry]
         update(profile["id"], add)
-        return page(profile, "change")
+        return page(profile, "change", entry_net(entry))
 
     @r.put("/items/{iid}")
     def edit_item(iid: str, req: ItemReq, profile=Depends(current_profile)):
@@ -1125,11 +1207,13 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             except EntryError as e:
                 bad(422, "bad_entry", str(e))
             old = next(i for i in items if i["id"] == iid)
+            was["old"], was["new"] = old, entry
             # an entry read from a statement or passbook stays that (the next one updates it) while it stays the same kind
             keep = {"auto": old["auto"]} if old.get("auto") and old["kind"] == entry["kind"] else {}
             return [{**entry, **keep, "id": iid} if i["id"] == iid else i for i in items]
+        was: dict = {}
         update(profile["id"], edit)
-        return page(profile, "change")
+        return page(profile, "change", entry_net(was.get("new")) - entry_net(was.get("old")))
 
     @r.delete("/items/{iid}")
     def delete_item(iid: str, profile=Depends(current_profile)):
@@ -1137,9 +1221,11 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
         def drop(items):
             if not any(i["id"] == iid for i in items):
                 bad(404, "not_found", "That entry isn't in your net worth any more.")
+            was["old"] = next(i for i in items if i["id"] == iid)
             return [i for i in items if i["id"] != iid]
+        was: dict = {}
         update(profile["id"], drop)
-        return page(profile, "change")
+        return page(profile, "change", -entry_net(was.get("old")))
 
     @r.post("/prepay")
     def prepay_loan(req: PrepayReq, profile=Depends(current_profile)):
@@ -1149,15 +1235,17 @@ def make_router(current_profile, stocks_of: Callable[[dict], dict | None], price
             bad(404, "not_found", "That loan isn't in your net worth any more.")
         if not (loan.get("tenure_months") and _date(loan.get("start"))):
             bad(400, "no_tenure", "Enter the loan's tenure and start date to work out a prepayment.")
-        got = prepay(loan["principal"], loan["rate"], loan["tenure_months"], date.fromisoformat(loan["start"]), today(), req.amount)
+        changes = rate_changes(loan, today())
+        got = prepay(loan["principal"], loan["rate"], loan["tenure_months"], date.fromisoformat(loan["start"]), today(), req.amount, changes)
         if got.get("error"):
             bad(400, "repaid", got["error"])
         out = {k: (_r(v) if isinstance(v, float) else v) for k, v in got.items()}
         for k in ("tenure", "lower_emi"):
             if out.get(k):
                 out[k] = {a: (_r(b) if isinstance(b, float) else b) for a, b in out[k].items()}
-        return {**out, "rate": loan["rate"], "as_of": today().isoformat(),
-                "note": "Worked out on the rate and dates you entered. Your lender may charge for prepaying, or round differently."}
+        return {**out, "rate": got.get("rate", loan["rate"]), "as_of": today().isoformat(),
+                "note": ("Worked out on today's rate after the floating rate's resets, and the dates you entered." if changes else
+                         "Worked out on the rate and dates you entered.") + " Your lender may charge for prepaying, or round differently."}
 
     @r.get("/upcoming")
     def upcoming(days: int = Query(60, ge=1, le=366), profile=Depends(current_profile)):

@@ -9,7 +9,9 @@ import { track } from "../../lib/analytics";
 import { BarList, Card, CardHead, ConfirmDialog, DataTable, Delta, Disclosure, EmptyState, ErrorState, Field, FormActions, FormGrid, Notice, PageHeader, PlanNote, Seg, Select, Signed, Skeleton, Stat, StatRow, UploadButton, type Column } from "../../components/kit";
 import { FundCosts } from "./FundCosts";
 import { FundBehaviour } from "./FundBehaviour";
+import { Earlier } from "../../components/Earlier";
 import { movedYearNote, openFy, rememberFy } from "../../lib/fy";
+import { importLine } from "../../lib/mfImport";
 import { useAskedFy } from "../../lib/useFy";
 import { PlanInline } from "../../components/PlanInterest";
 
@@ -21,7 +23,7 @@ type Scheme = {
   key: string; name: string; amc: string; folio: string; isin: string; amfi: string; category: string; broad: string; sub: string;
   kind: Kind; kind_auto: Kind; kind_set: boolean; units: number; nav: number | null; nav_date: string | null; nav_source: "daily" | "statement" | null;
   invested: number | null; value: number | null; gain: number | null; gain_pct: number | null; xirr: number | null; realised: number | null;
-  cost_unknown: boolean; short_units: number | null; elss: { locked_units: number; next_free: string; all_free: string } | null; txns: number;
+  cost_unknown: boolean; short_units: number | null; short_sale?: number | null; elss_early_units?: number | null; held_days?: number | null; elss: { locked_units: number; next_free: string; all_free: string } | null; txns: number;
   fmv_2018: number | null; fmv_yours: boolean;
 };
 type Bucket = { key: string; label: string; rate: number; gains: number; after_setoff: number; exempt: number; taxable: number; tax: number; slab?: boolean };
@@ -40,12 +42,13 @@ type View = {
   updated_at: string | null; txns: number; kinds: Record<Kind, string>; nav_date: string | null; assumptions: string[]; disclaimer: string; as_of: string;
 };
 type Problem = { line?: number; text: string; reason: string };
-type ImportReply = { kind: "cas" | "csv"; added: number; duplicates: number; over_limit: string[]; schemes: number; problems: Problem[]; limit: number | null; upgrade: string | null; view: View };
+type ImportReply = { kind: "cas" | "csv"; added: number; duplicates: number; over_limit: string[]; schemes: number; kept?: number; charges?: number; problems: Problem[]; limit: number | null; upgrade: string | null; view: View };
 
 const MAX_MB = 5;
 const rate = (r: number | null, slab?: boolean) => (r == null || slab ? "Slab" : `${+(r * 100).toFixed(2)}%`);
 const xirrText = (x: number | null) => (x == null ? "–" : pct(x * 100));
-const KIND_SHORT: Record<Kind, string> = { equity: "Equity-oriented", debt: "Debt", hybrid: "Other (35–65% equity)", other: "Other (under 35% equity)" };
+// short enough for the table's narrow box (DG-026: "Equity-oriente"); the full meanings are listed under the table
+const KIND_SHORT: Record<Kind, string> = { equity: "Equity", debt: "Debt", hybrid: "35–65% equity", other: "Under 35% equity" };
 const tone = (v: number | null | undefined) => { const t = signTone(v); return t ? `k-${t}` : undefined; };
 
 export function MutualFundsPage() {
@@ -133,13 +136,19 @@ export function MutualFundsPage() {
         <span className="k-sub-line">Folio {s.folio}{s.category ? ` · ${s.category}` : ""}</span>
         {s.elss && <span className="k-sub-line">ELSS lock-in: {qtyText(s.elss.locked_units)} units locked; the next free on {dateOnly(s.elss.next_free)}, all by {dateOnly(s.elss.all_free)}.</span>}
         {s.cost_unknown && <span className="k-sub-line k-down">Some units have no purchase in the statement, so their cost isn't known. A statement from your first investment fixes this.</span>}
+        {/* DG-021: units redeemed with no purchase before them, and the sale value that isn't in the capital gains */}
+        {(s.short_units ?? 0) > 0 && <span className="k-sub-line k-down" data-testid="mf-short">{qtyText(s.short_units!)} units were redeemed with no purchase before them in your files{s.short_sale ? `, so ${inr(s.short_sale)} of sale value is left out of the capital gains` : ""}. A statement from your first investment fixes this.</span>}
+        {/* DG-024: ELSS units redeemed inside their three-year lock-in */}
+        {(s.elss_early_units ?? 0) > 0 && <span className="k-sub-line k-down" data-testid="mf-elss-early">{qtyText(s.elss_early_units!)} ELSS units were redeemed within 3 years of buying them, inside the lock-in. Check the dates in your statement.</span>}
       </>) },
     { key: "units", header: "Units", numeric: true, cell: (s) => qtyText(s.units) },
     { key: "nav", header: "NAV", numeric: true, cell: (s) => <>{price(s.nav, "INR")}<span className="k-sub-line">{s.nav_date ? dateOnly(s.nav_date) : "–"}{s.nav_source === "statement" ? " · statement" : ""}</span></> },
     { key: "inv", header: "Invested", numeric: true, cell: (s) => inr(s.invested) },
     { key: "val", header: "Value", numeric: true, cell: (s) => inr(s.value) },
     { key: "gain", header: "Gain", numeric: true, cell: (s) => (s.gain == null ? "–" : <><span className={tone(s.gain)}>{inr(s.gain)}</span><span className="k-sub-line"><Signed value={s.gain}>{pct(s.gain_pct)}</Signed></span></>) },
-    { key: "xirr", header: "XIRR", numeric: true, cell: (s) => <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span> },
+    // DG-026: a yearly rate of a few months' holding (137 days to −25.8%) isn't shown as one
+    { key: "xirr", header: "XIRR", numeric: true, cell: (s) => (s.held_days != null && s.held_days < 365 && s.units > 0
+      ? <>–<span className="k-sub-line">under a year</span></> : <span className={tone(s.xirr)}>{xirrText(s.xirr)}</span>) },
     { key: "kind", header: "Taxed as", cell: (s) => (
       <>
         <Select small label={`How ${s.name} is taxed`} value={s.kind} onChange={(k) => setKind(s.key, k === s.kind_auto ? null : k as Kind)} options={(Object.keys(KIND_SHORT) as Kind[]).map((k) => ({ value: k, label: KIND_SHORT[k] }))} />
@@ -196,8 +205,7 @@ export function MutualFundsPage() {
         {result && (
           <div className="k-stack" role="status">
             <p className="k-small">
-              <b>{result.kind === "cas" ? "Read your statement" : "Read as a CSV file"}:</b> {result.added} transaction{result.added === 1 ? "" : "s"} added
-              {result.duplicates > 0 && `, ${result.duplicates} already saved (skipped)`}, from {result.schemes} scheme{result.schemes === 1 ? "" : "s"}.
+              <b>{result.kind === "cas" ? "Read your statement" : "Read as a CSV file"}:</b> {importLine(result)}
             </p>
             {result.over_limit.length > 0 && (
               <p className="k-small">Your plan keeps {result.limit} schemes, so {result.over_limit.length} {result.over_limit.length === 1 ? "was" : "were"} left out: {result.over_limit.slice(0, 8).join(", ")}{result.over_limit.length > 8 ? "…" : ""}. {result.upgrade} <PlanInline /></p>
@@ -245,7 +253,9 @@ export function MutualFundsPage() {
 
           <Card>
             <CardHead title="Schemes" info={'Gain is the current value less the cost of the units held. XIRR counts every purchase, redemption and dividend paid out in the scheme; it isn\'t shown for less than 30 days, or when the cost of some units isn\'t known. "Taxed as" is read from the category; change it where your fund\'s documents say otherwise.'} />
-            <DataTable label="Schemes" columns={schemeCols} rows={schemes} rowKey={(s) => s.key} />
+            {/* fully redeemed schemes apart, so the table is what you hold (DG-026); a list of cards on a phone */}
+            <DataTable label="Schemes" columns={schemeCols} rows={held} rowKey={(s) => s.key} stack />
+            <Earlier label="Schemes you no longer hold" count={schemes.length - held.length} className="in-card"><DataTable label="Schemes you no longer hold" columns={schemeCols} rows={schemes.filter((s) => s.units <= 0)} rowKey={(s) => s.key} stack /></Earlier>
             <Disclosure summary="What each tax kind means">
               <ul className="k-list muted">{(Object.keys(view.kinds) as Kind[]).map((k) => <li key={k}>{view.kinds[k]}</li>)}</ul>
             </Disclosure>
@@ -280,7 +290,8 @@ export function MutualFundsPage() {
               )}
               {view.gains.gf_missing.length > 0 && (
                 <div className="k-stack">
-                  <p className="k-small">Units held on 31 Jan 2018 cost at least that day's NAV. It isn't known for these schemes; enter it to use it:</p>
+                  {/* DG-020: the year the sales are in is named, so the ask isn't under another year's tab */}
+                  <p className="k-small">Units held on 31 Jan 2018 cost at least that day's NAV{gfYears(view.gains.years) ? `, for sales in ${gfYears(view.gains.years)}` : ""}. It couldn't be found for these schemes; enter it to use it:</p>
                   {view.gains.gf_missing.map((k) => <FmvRow key={k} label={name(k)} onSave={(v) => setFmv(k, v)} />)}
                 </div>
               )}
@@ -304,6 +315,11 @@ export function MutualFundsPage() {
       {asking && <ConfirmDialog title="Delete my mutual fund data?" confirmLabel="Delete my mutual fund data" busy={busy} onConfirm={() => void remove()} onClose={() => setAsking(false)}>Every scheme and transaction is removed from StratLab. Your folios aren't touched.</ConfirmDialog>}
     </div>
   );
+}
+
+/** The financial years whose sales need a 31 Jan 2018 NAV that is missing. */
+function gfYears(years: { label: string; rows: { gf?: string | null }[] }[]): string {
+  return years.filter((y) => y.rows.some((r) => r.gf === "missing")).map((y) => y.label).join(", ");
 }
 
 function FmvRow({ label, onSave }: { label: string; onSave: (v: number | null) => void }) {

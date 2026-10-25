@@ -408,6 +408,8 @@ def year(fy: int, rows: list[dict], usd_inr: float | None, full: bool = True, hi
         if v is None:
             unpriced += 1
             continue
+        if not r.get("amount"):                # DP2-018: a line of ₹0 (a file's empty row) isn't a payment counted
+            continue
         k = (r["cur"], r.get("isin") or r["sym"])
         cur = by.setdefault(k, {"symbol": r["sym"], "name": r.get("name") or "", "country": "US" if r["cur"] == "USD" else "IN",
                                 "count": 0, "amount": 0.0, "amount_usd": 0.0 if r["cur"] == "USD" else None, "tds_file": None,

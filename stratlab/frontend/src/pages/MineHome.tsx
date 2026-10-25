@@ -4,10 +4,11 @@ import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { asOf, dayIn, firstName, inr, inrCompact, pct, price, signedInrCompact } from "../lib/format";
 import { evWhen } from "../lib/marketEvents";
-import { netWorthDelta } from "../lib/networth";
+import { netWorthDelta, sinceNote } from "../lib/networth";
 import { inWords, marketState, usSettling, usTodayNote } from "../lib/marketHours";
 import { useMinute } from "../lib/clock";
 import { MARKET_TILES, goldInr10g, moverDay, tileMarket, tileToday, tileWhen, useComingUp, useMarketStrip, type Up } from "../lib/mine";
+import { goldLine, type IndiaGold } from "../lib/gold";
 import { fmtDate, monthShort } from "../lib/format";
 import { CARDS, DEFAULT_LAYOUT, cleanLayout, type CardId, type Layout } from "../lib/mineLayout";
 import { usePersisted } from "../lib/persist";
@@ -130,7 +131,7 @@ function CustomisePanel({ layout, onChange, onDone }: { layout: Layout; onChange
 /* ---------- net worth ---------- */
 type NwView = {
   as_of: string; totals: { assets: number; liabilities: number; net: number; partial?: string[] | null }; assets: unknown[]; liabilities: unknown[];
-  history: { d: string; net: number; partial?: string[] }[] | null; history_allowed: boolean;
+  history: { d: string; net: number; partial?: string[]; added?: number }[] | null; history_allowed: boolean;
 };
 
 function NetWorthCard() {
@@ -155,7 +156,7 @@ function NetWorthCard() {
       <CardHead title="Net worth" actions={<Link className="btn quiet sm" to="/money/net-worth" aria-label="Open net worth">Open</Link>} />
       <Stat label="What you own minus what you owe" value={inrCompact(v.totals.net)}
         delta={diff !== null ? <Delta value={diff}>{signedInrCompact(diff)}</Delta> : undefined}
-        note={move ? `since ${asOf(move.since)}` : `As of ${asOf(v.as_of) ?? "today"}`} />
+        note={move ? sinceNote(move, (d) => asOf(d) ?? d, inrCompact) : `As of ${asOf(v.as_of) ?? "today"}`} />
       {whole.length >= 2 ? <Spark values={whole.map((h) => h.net)} tone={diff !== null && diff < 0 ? "down" : "up"} area height={64} label="Net worth over time" />
         : <HistoryPlaceholder allowed={v.history_allowed} />}
     </Card>
@@ -235,6 +236,8 @@ function PaperCard() {
 /* ---------- the markets ---------- */
 function MarketsCard({ later }: { later: boolean }) {
   const series = useMarketStrip(later);
+  const [gold, setGold] = useState<IndiaGold | null>(null);
+  useEffect(() => { if (later) api<IndiaGold>("/money/gold").then(setGold).catch(() => setGold(null)); }, [later]);
   const { markets } = useApp();
   const closed = (id: string | null) => { const m = id ? markets.find((x) => x.id === id) : null; return !!m && !marketState(m).open; };
   // the US closing prints settle about 50 minutes after the bell (the server's SETTLE_MIN): until then a tile's last value is the last trade
@@ -253,7 +256,7 @@ function MarketsCard({ later }: { later: boolean }) {
                 : (
                   <>
                     <span className="mine-mkt-v">{t.fmt(s.last)}</span>
-                    {t.id === "gold" && series.usdinr && <span className="k-note">{inr(goldInr10g(s.last, series.usdinr.last))} per 10 g at the dollar rate, before Indian duty and GST</span>}
+                    {t.id === "gold" && (() => { const line = goldLine(gold, series.usdinr ? goldInr10g(s.last, series.usdinr.last) : null, inr); return line && <span className="k-note" data-testid="mine-gold-inr">{line}</span>; })()}
                     <span className="k-stat-d">{s.changePct != null ? <Delta value={s.changePct} tone={t.neutral ? "neutral" : "auto"}>{pct(s.changePct, 2)}</Delta> : "No change to show"}
                       {/* a move that isn't today's says its day (R7T-003) */}
                       {s.changePct != null && (() => { const w = tileWhen(s.day, tileToday(t), (d) => fmtDate(d, { year: false }), closed(tileMarket(t)), !!tileMarket(t), settling(tileMarket(t)), !tileMarket(t)); return w && <span className={w.includes("settling") ? "k-note" : "k-note nowrap"} data-testid="mine-mkt-when"> {w}</span> /* "on 16 Oct" stays together (R53-008); the long settling words wrap inside the tile (R89-003) */; })()}</span>

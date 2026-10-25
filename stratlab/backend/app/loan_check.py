@@ -99,8 +99,28 @@ def rate_path(loan: dict, at: date, history: list[tuple[str, float]]) -> dict:
     nxt = nw.add_months(anchor, step)
     while nxt <= at:
         nxt = nw.add_months(nxt, step)
+    # DG-013: the repo rate in force today, and what the next reset would bring if it stays (the 7 Oct 2026 hike to 5.50%
+    # waits for a loan's next reset: the card said "expected now 7.25%" with no word that the next one will likely be 7.50%)
+    repo_now = rbi_rates.repo_on(at.isoformat(), history)
+    nxt_rate = round(repo_now + spread, 2) if repo_now is not None else None
     return {"spread": spread, "inferred": inferred, "reset_months": step, "last_reset": resets[-1].isoformat() if resets else None,
-            "next_reset": nxt.isoformat(), "changes": changes, "expected": points[-1][1], "repo_at_reset": points[-1][2]}
+            "next_reset": nxt.isoformat(), "changes": changes, "expected": points[-1][1], "repo_at_reset": points[-1][2],
+            "repo_now": repo_now, "next_expected": nxt_rate}
+
+
+def rate_changes(loan: dict, at: date, history: list[tuple[str, float]]) -> list[dict]:
+    """A floating-rate loan's rate changes up to `at`, as the check works them out: a repo-linked loan's from the repo
+    rate's path (rate_path), any other's from the sanctioned rate to the statement's rate on its last reset. The same list
+    values the loan in Net worth (money_networth.loan_state), so the two never show two balances (DG-011)."""
+    bench = loan.get("benchmark") or "fixed"
+    if bench == "fixed" or not _d(loan.get("start")):
+        return []
+    if bench == "repo":
+        return rate_path(loan, at, history)["changes"]
+    cur = loan.get("current_rate")
+    if cur is not None and abs(cur - loan["rate"]) > 1e-9:
+        return [{"date": (loan.get("last_reset") or at.isoformat()), "from": loan["rate"], "to": cur, "repo": None}]
+    return []
 
 
 def walk(principal: float, rate0: float, months: int, start: date, changes: list[dict], at: date) -> tuple[list[dict], float, int]:
@@ -120,10 +140,13 @@ def walk(principal: float, rate0: float, months: int, start: date, changes: list
             left_months = months - (j - 1)
             old_m, old_int = nw.payoff(bal, c["from"], pay)
             new_emi = nw.emi(bal, c["to"], left_months)
+            # DG-012: the new EMI is set against the EMI for the same months at the rate before (a rise showed as "−₹3,413 a
+            # month" against the sanctioned EMI, which an earlier cut had left above that)
+            was_emi = nw.emi(bal, c["from"], left_months)
             same_emi_m, same_emi_int = nw.payoff(bal, c["to"], pay)
             _, new_emi_int = nw.payoff(bal, c["to"], new_emi)
             out.append({**c, "balance": round(bal, 2), "emi_before": round(pay, 2),
-                        "new_emi": round(new_emi, 2), "emi_change": round(new_emi - pay, 2),
+                        "new_emi": round(new_emi, 2), "emi_change": round(new_emi - was_emi, 2), "emi_same_months_before": round(was_emi, 2),
                         "months_before": old_m, "months_if_same_emi": None if same_emi_int == math.inf else same_emi_m,
                         "months_change": None if same_emi_int == math.inf else same_emi_m - old_m,
                         "interest_before": None if old_int == math.inf else round(old_int, 2),
@@ -155,21 +178,21 @@ def check(loan: dict, at: date, history: list[tuple[str, float]]) -> dict:
     if bench == "repo":
         p = rate_path(loan, at, history)
         out.update(spread=p["spread"], spread_inferred=p["inferred"], expected=p["expected"], last_reset=p.get("last_reset"),
-                   next_reset=p.get("next_reset"), repo_at_reset=p.get("repo_at_reset"))
+                   next_reset=p.get("next_reset"), repo_at_reset=p.get("repo_at_reset"), repo_now=p.get("repo_now"),
+                   next_expected=p.get("next_expected"))
         changes = p["changes"]
     else:
-        changes = []
-        cur = loan.get("current_rate")
-        if cur is not None and abs(cur - loan["rate"]) > 1e-9:
-            changes = [{"date": (loan.get("last_reset") or at.isoformat()), "from": loan["rate"], "to": cur, "repo": None}]
+        changes = rate_changes(loan, at, history)
         anchor = _d(loan.get("last_reset")) or start
         step = int(loan.get("reset_months") or 12)
         nxt = nw.add_months(anchor, step)
         while nxt <= at:
             nxt = nw.add_months(nxt, step)
         out.update(expected=None, next_reset=nxt.isoformat(), last_reset=loan.get("last_reset"))
-    effects, bal, paid = walk(loan["principal"], loan["rate"], months, start, changes, at)
-    out.update(changes=effects, outstanding=round(bal, 2), emis_paid=paid, left=months - paid)
+    effects, _, _ = walk(loan["principal"], loan["rate"], months, start, changes, at)
+    st = nw.loan_state(loan["principal"], loan["rate"], months, start, at, changes)      # the balance Net worth shows too
+    bal, paid = st["outstanding"], st["paid"]
+    out.update(changes=effects, outstanding=round(bal, 2), emis_paid=paid, left=st["left"])
     cur = loan.get("current_rate")
     if bench == "repo" and cur is not None and out.get("expected") is not None:
         diff = round(cur - out["expected"], 2)

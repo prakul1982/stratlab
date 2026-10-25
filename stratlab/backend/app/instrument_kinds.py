@@ -48,6 +48,8 @@ FUNDS = ("equity", "gold", "silver", "debt", "intl")
 LABELS = {"stock": "Shares", "etf": "ETF", "reit": "REIT", "invit": "InvIT", "sgb": "Gold bond"}
 FUND_LABELS = {"equity": "Equity ETF", "gold": "Gold ETF", "silver": "Silver ETF", "debt": "Debt ETF", "intl": "International ETF"}
 SECTORS = {"etf": "ETFs", "reit": "REITs and InvITs", "invit": "REITs and InvITs", "sgb": "Sovereign Gold Bonds"}
+# an ETF's line in the sector mix is what it holds (DG-003: a Nifty 50 ETF and a gold ETF were one "ETFs" sector)
+FUND_SECTORS = {"equity": "Equity ETFs", "gold": "Gold ETFs", "silver": "Silver ETFs", "debt": "Debt ETFs", "intl": "International ETFs"}
 
 ETFS = {"MAFANG", "MON100", "MASPTOP50", "MAHKTECH", "MANXT50", "MAN50ETF", "MAM150ETF", "MAKEINDIA", "CONSUMBEES"}
 REITS = {"EMBASSY", "MINDSPACE", "BIRET", "NXST", "KRT"}
@@ -117,6 +119,12 @@ def base(code) -> str:
 def fund(code) -> str | None:
     c = str(code or "")
     return c[4:] if c.startswith("etf-") and c[4:] in FUNDS else ("equity" if c == "etf" else None)
+
+
+def sector(code) -> str | None:
+    """The sector-mix line of a fund, REIT, InvIT or gold bond ("Gold ETFs"); None for a company's shares."""
+    f = fund(code)
+    return FUND_SECTORS[f] if f else SECTORS.get(base(code))
 
 
 def label(code) -> str:

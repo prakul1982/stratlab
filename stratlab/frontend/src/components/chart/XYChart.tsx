@@ -254,7 +254,7 @@ export function XYChart(p: XYChartProps) {
         for (const d of dayTicks(T, Math.max(in0, Math.ceil(a)), Math.min(in1, Math.floor(b)), p.tz)) push(sx(X[d.i]), d.label);
         return out.map((t) => ({ ...t, anchor: (t.px - textWidth(t.label) / 2 < padL ? "start" : t.px + textWidth(t.label) / 2 > padL + plotW ? "end" : "middle") as "start" | "middle" | "end" }));
       }
-      const ticks = timeTicks(ta, tb, max, p.tz);
+      const ticks = timeTicks(ta, tb, max, p.tz, !intraday);
       // a clock-time axis in a market's zone names the zone once, on its last clock time: "12:00 IST"
       const lastClock = intraday && p.tz ? ticks.map((t) => /^\d\d:\d\d$/.test(t.label)).lastIndexOf(true) : -1;
       ticks.forEach((t, k) => {

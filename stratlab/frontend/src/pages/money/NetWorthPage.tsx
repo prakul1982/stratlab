@@ -4,8 +4,8 @@ import { api, type ApiError } from "../../lib/api";
 import { numberProblem, type Limits } from "../../lib/validate";
 import { useApp } from "../../lib/app";
 import { LoanCheck } from "./LoanCheck";
-import { asOf, axisInr, dateOnly, inr, istToday, pctPlain, signedInrCompact } from "../../lib/format";
-import { netWorthDelta } from "../../lib/networth";
+import { asOf, axisInr, dateOnly, inr, inrCompact, istToday, pctPlain, signedInrCompact } from "../../lib/format";
+import { netWorthDelta, sinceNote } from "../../lib/networth";
 import { Modal } from "../../components/ui";
 import { XYChart } from "../../components/Charts";
 import { Download, Trash } from "../../components/Icons";
@@ -25,7 +25,7 @@ type Policy = {
   id: string; label: string; name: string; insurer: string; sum_assured: number | null; premium: number; frequency: string; yearly_premium: number | null;
   next_due: string | null; due_in: number | null; nominee: string | null; entry: Entry;
 };
-type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[] };
+type Snapshot = { d: string; net: number; assets: number; liabilities: number; why: string; partial?: string[]; added?: number };
 type View = {
   as_of: string; computed_at: string; totals: { assets: number; liabilities: number; net: number; oldest_as_of: string | null; partial?: string[] | null; partial_lasting?: boolean; notes?: string[] | null };
   allocation: { class: string; label: string; value: number; pct: number | null }[]; assets: Row[]; liabilities: Row[];
@@ -61,6 +61,7 @@ const FORM: Record<Kind, { title: string; fields: F[]; note?: string }> = {
     { ...RATE, optional: true, hint: "8.25", info: "Leave it empty to use the declared rate." }],
     note: "Interest is worked out monthly on the running balance and credited on 31 March, at the declared rate unless you enter another." },
   ppf: { title: "PPF", fields: [NAME, { k: "balance", label: "Balance", type: "money" }, { k: "as_of", label: "Balance as of", type: "date", optional: true },
+    { k: "paid_since", label: "Deposited since that date", type: "money", optional: true, info: "This year's deposit, when the balance above is from before it (the 1 April balance, say)." },
     { k: "yearly", label: "Yearly deposit (up to ₹1,50,000)", type: "money", optional: true }, { k: "opened", label: "Account opened on", type: "date", optional: true },
     { ...RATE, optional: true, hint: "7.1", info: "Leave it empty to use the declared rate." }],
     note: "Matures after 15 whole financial years from the end of the year it was opened in." },
@@ -155,14 +156,15 @@ function body(kind: Kind, form: Record<string, string>) {
 
 /** The limits the server keeps for each kind of box (ItemReq in money_networth.py), checked here first so a problem is
  * said under its box with the limit named. */
-const SMALL_MONEY = ["monthly", "yearly", "premium"];
+const SMALL_MONEY = ["monthly", "yearly", "premium", "paid_since"];
 const SMALL_NUM = ["grams", "price_per_g", "units", "issue_price"];
 function limitsFor(f: F): Limits | null {
   const optional = !!f.optional;
   if (f.k === "purity") return { min: 1, max: 24, whole: true, optional };
   if (f.k === "tenure_months") return { min: 0, max: 600, whole: true, optional };
   if (f.k === "spread") return { min: -10, max: 30, optional, unit: "%" };
-  if (f.type === "money") return { min: 0, max: SMALL_MONEY.includes(f.k) ? 1e10 : SMALL_NUM.includes(f.k) ? 1e7 : 1e12, optional, unit: "₹" };
+  // DP2-005: a required amount of 0 is no entry (a "0" took one of Free's five places)
+  if (f.type === "money") return { min: 0, above: !optional, max: SMALL_MONEY.includes(f.k) ? 1e10 : SMALL_NUM.includes(f.k) ? 1e7 : 1e12, optional, unit: "₹" };
   if (f.type === "rate") return { min: 0, max: 60, optional, unit: "%" };
   if (f.type === "int") return { min: 0, whole: true, optional };
   if (f.type === "num") return { min: 0, max: SMALL_NUM.includes(f.k) ? 1e7 : 1e12, optional };
@@ -178,6 +180,10 @@ function formProblems(kind: Kind, form: Record<string, string>): Record<string, 
     const lim = limitsFor(f);
     const p = lim ? numberProblem(v, lim) : !f.optional && f.type !== "select" && !v.trim() ? "Fill this in." : null;
     if (p) out[f.k] = p;
+  }
+  // DG-014: dates in the wrong order are said under the maturity date, not in a toast that goes in seconds
+  if (form.start && form.maturity && (kind === "fd" || kind === "rd" || kind === "sgb") && form.maturity <= form.start && !out.maturity) {
+    out.maturity = "The maturity date has to be after the start date.";
   }
   return out;
 }
@@ -242,6 +248,12 @@ function Facts({ r, tax }: { r: Row; tax?: DepositTax | null }) {
   return <span className="k-sub-line">{bits.join(" · ")}</span>;
 }
 
+/** A loan's rate: the sanctioned one, and today's after a floating rate's resets when it differs (DG-011). */
+function loanRate(r: Row): string {
+  const sanctioned = Number(r.entry?.rate), now = r.facts?.rate_now;
+  return now != null && Number.isFinite(sanctioned) && Math.abs(now - sanctioned) > 1e-9 ? `${now}% a year now (${sanctioned}% at the start)` : `${r.entry?.rate}% a year`;
+}
+
 function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
   const { fail } = useApp();
   const [amount, setAmount] = useState("");
@@ -257,7 +269,7 @@ function PrepayBox({ loan, onClose }: { loan: Row; onClose: () => void }) {
   return (
     <Modal title={`Prepay: ${loan.name}`} onClose={onClose}>
       <div className="k-stack">
-        <p className="k-small k-muted">Owed today {inr(loan.value)} at {loan.entry?.rate}% a year, EMI {inr(loan.facts.emi)}, {loan.facts.left} EMIs left.</p>
+        <p className="k-small k-muted">Owed today {inr(loan.value)} at {loanRate(loan)}, EMI {inr(loan.facts.emi)}, {loan.facts.left} EMIs left.</p>
         <FormGrid onSubmit={(e) => { e.preventDefault(); void work(); }}>
           <Field label="Prepay" unit="₹" inputMode="decimal" placeholder="1,00,000" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <FormActions><button type="submit" className="btn" disabled={busy}>Work it out</button></FormActions>
@@ -389,7 +401,8 @@ export function NetWorthPage() {
     ) : r.linked ? <Link className="btn quiet sm" to={r.linked}>Open</Link> : null) },
   ];
   const loanCols: Column<Row>[] = [
-    { key: "loan", header: "Loan", rowHeader: true, cell: (r) => <><b>{r.name}</b><span className="k-sub-line">{r.entry?.rate}% a year{r.basis === "as entered" ? " · as entered" : ""}</span></> },
+    // DG-011: a floating loan's rate after its resets, beside the sanctioned one
+    { key: "loan", header: "Loan", rowHeader: true, cell: (r) => <><b>{r.name}</b><span className="k-sub-line">{loanRate(r)}{r.basis === "as entered" ? " · as entered" : ""}</span></> },
     { key: "owed", header: "Owed today", numeric: true, cell: (r) => inr(r.value) },
     { key: "emi", header: "EMI", numeric: true, cell: (r) => (r.facts.emi != null ? inr(r.facts.emi) : "–") },
     { key: "left", header: "EMIs left", numeric: true, cell: (r) => r.facts.left ?? "–" },
@@ -415,6 +428,22 @@ export function NetWorthPage() {
       </span>) },
   ];
 
+  // the history's snapshots, each removable: under the chart when there is one (DP2-006)
+  const snapsList = (cls: string) => (
+    <details className={cls} data-testid="nw-snapshots" open={empty || undefined}>
+      <summary className="k-small">The history's snapshots ({hist.length}): remove one</summary>
+      <ul className="k-stack k-tight">
+        {[...hist].reverse().map((h) => (
+          <li key={h.d} className="k-row">
+            <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}{h.added ? ` · ${signedInrCompact(h.added)} from entries added or changed` : ""}{h.partial?.length ? ` · partial (not counted: ${h.partial.join("; ")})` : ""}</span>
+            <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`}>
+              <Trash size={14} /> Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
   // "Prices as of" only over market prices: with none on the page the server dates it today, and "Prices as of 19 Oct" stood
   // before that day's open (R60-008)
   const priced = !!view?.assets.some((r) => r.basis === "market price" && r.value);
@@ -433,12 +462,13 @@ export function NetWorthPage() {
             <CardHead title="Where you stand" info={t.oldest_as_of ? `The oldest value you entered is as of ${day(t.oldest_as_of)}.` : undefined}
               actions={<button type="button" className="btn sm" onClick={() => setAdding(true)}>Add an entry</button>} />
             <StatRow>
-              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? `since ${day(move.since)}` : undefined} />
+              <Stat label="Net worth" value={inr(t.net)} delta={move ? <Delta value={move.change}>{signedInrCompact(move.change)}</Delta> : undefined} note={move ? sinceNote(move, day, inrCompact) : undefined} />
               <Stat label="Assets" value={inr(t.assets)} />
               <Stat label="Loans" value={inr(t.liabilities)} />
             </StatRow>
             {/* a source that couldn't be read or valued: named; snapshots of such a total are marked partial */}
-            {t.partial && t.partial.length > 0 && <Notice tone="warn" role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
+            {/* DG-016: something with no price yet is a routine note; a source that couldn't be read is the warning */}
+            {t.partial && t.partial.length > 0 && <Notice tone={t.partial_lasting ? "info" : "warn"} role="status" label="Partial total">Not in this total: {t.partial.join("; ")}. {t.partial_lasting ? "The history goes on meanwhile, with each snapshot marked partial." : "Only the monthly snapshot is kept meanwhile, marked partial."}</Notice>}
             {t.notes && t.notes.length > 0 && <p className="k-note" data-testid="nw-notes">{t.notes.join("; ")}.</p>}
             {/* what the plan includes, said where the numbers are: the menu has no lock on this page, it is free in the main */}
             {view.limit != null && <p className="k-note">{view.count} of {view.limit} free entries used. Basic keeps as many as you like, with the monthly history.</p>}
@@ -472,7 +502,7 @@ export function NetWorthPage() {
 
           {view.history_allowed && whole.length >= 2 && (
             <ChartFrame title="History" info="Net worth at each snapshot: the 1st of each month and the days you changed an entry." ranges={rangeChoices} range={range} onRange={setPick}
-              footer={<p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>}
+              footer={<><p className="k-note">Last snapshot {day(last.d)}.{marked.length > 0 && " Marked points are partial: something wasn't counted that day (named in the snapshots below)."}</p>{snapsList("nw-snaps")}</>}
               table={{ label: "Net worth at each snapshot", rows: [...shown].reverse(), rowKey: (h) => h.d,
                 columns: [{ key: "d", header: "Day", rowHeader: true, cell: (h) => dateOnly(h.d) }, { key: "net", header: "Net worth", numeric: true, cell: (h) => <>{inr(h.net)}{h.partial?.length ? <span className="k-sub-line">partial</span> : null}</> },
                   { key: "a", header: "Assets", numeric: true, cell: (h) => inr(h.assets) }, { key: "l", header: "Loans", numeric: true, cell: (h) => inr(h.liabilities) }] }}>
@@ -481,26 +511,13 @@ export function NetWorthPage() {
             </ChartFrame>
           )}
 
-          {view.history_allowed && hist.length > 0 && (
-            <details className="k-card nw-snaps" data-testid="nw-snapshots" open={empty || undefined}>
-              <summary className="k-small">The history's snapshots ({hist.length}): remove one</summary>
-              <ul className="k-stack k-tight">
-                {[...hist].reverse().map((h) => (
-                  <li key={h.d} className="k-row">
-                    <span className="k-small"><b>{dateOnly(h.d)}</b> · {inr(h.net)}{h.why === "change" ? " · taken when an entry changed" : h.why === "month" ? " · monthly" : ""}{h.partial?.length ? ` · partial (not counted: ${h.partial.join("; ")})` : ""}</span>
-                    <button type="button" className="btn quiet sm" onClick={() => askRemoveSnapshot(h.d)} aria-label={`Remove the snapshot of ${dateOnly(h.d)}`}>
-                      <Trash size={14} /> Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          {/* with a chart, the snapshots list sits under it; alone it was an empty-looking card of its own (DP2-006) */}
+          {view.history_allowed && hist.length > 0 && whole.length < 2 && snapsList("k-card nw-snaps")}
 
           {view.assets.length > 0 && (
             <Card>
               <CardHead title="Assets" />
-              <DataTable label="Assets" columns={assetCols} rows={view.assets} rowKey={(r) => r.id} />
+              <DataTable label="Assets" columns={assetCols} rows={view.assets} rowKey={(r) => r.id} stack />
               {view.gold_price && <p className="k-note">Gold at {inr(view.gold_price.per_g)} a gram (24 carat), from the front-month gold future on the commodity exchange, as of {day(view.gold_price.as_of)}.</p>}
             </Card>
           )}
@@ -508,7 +525,7 @@ export function NetWorthPage() {
           {view.liabilities.length > 0 && (
             <Card>
               <CardHead title="Loans" info={`Balances owed as of ${day(view.as_of)}, worked out from the amount, rate, tenure and start date you entered (reducing balance, monthly EMIs). Your lender's statement is the final word.`} />
-              <DataTable label="Loans" columns={loanCols} rows={view.liabilities} rowKey={(r) => r.id} />
+              <DataTable label="Loans" columns={loanCols} rows={view.liabilities} rowKey={(r) => r.id} stack />
             </Card>
           )}
 
@@ -518,7 +535,7 @@ export function NetWorthPage() {
             <Card>
               <CardHead title="Insurance policies" info="A due date that has passed moves on by the payment period. Policies aren't counted in net worth."
                 actions={<span className="k-small">Premiums a year: <b>{inr(view.insurance.yearly_premium)}</b></span>} />
-              <DataTable label="Insurance policies" columns={policyCols} rows={view.insurance.policies} rowKey={(p) => p.id} />
+              <DataTable label="Insurance policies" columns={policyCols} rows={view.insurance.policies} rowKey={(p) => p.id} stack />
             </Card>
           )}
 

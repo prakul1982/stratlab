@@ -45,6 +45,7 @@ KEY = "moneycal:"                 # moneycal:<uid> = {"events": [...], "feed": {
 FEED_KEY = "moneycalfeed:"        # moneycalfeed:<sha256 of the token> = uid
 JOB_KEY = "moneycaljob:reminders"  # the last day the reminders went out
 CATS = ("tax", "holdings", "money", "custom", "market")
+RESULTS_WORDS = re.compile(r"result|financial|quarter|half[- ]?year|annual accounts|audited|unaudited", re.I)
 CAT_NAMES = {"tax": "Tax", "holdings": "Holdings", "money": "Money", "custom": "Your events", "market": "Market events"}
 REMIND_CATS = CATS[:4]            # market events have their own reminders (market_events.py), so none go out twice
 MAX_EVENTS = 200                  # the user's own events
@@ -215,7 +216,9 @@ def holdings_events(uid: str, frm: date, to: date) -> list[dict]:
                                symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))
             elif d:
                 why = f" ({r['when']})" if r.get("when") else ""
-                out.append(_ev(d, f"{r['symbol']}: results{why}", "holdings", "results", r.get("purpose") or "Board meeting on results.",
+                # DP2-016: a meeting whose stated purpose isn't results ("Board Meeting Intimation") is a board meeting
+                what = "board meeting" if r.get("purpose") and not RESULTS_WORDS.search(r["purpose"]) else "results"
+                out.append(_ev(d, f"{r['symbol']}: {what}{why}", "holdings", "results", r.get("purpose") or "Board meeting on results.",
                                symbol=r["symbol"], url=f"/research/{region}/{r['symbol']}"))
     corp_actions.prefetch("IN", held)
     cal = corp_actions.load("IN")["rows"]

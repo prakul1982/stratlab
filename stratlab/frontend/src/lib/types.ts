@@ -31,6 +31,8 @@ export interface Instrument {
   match?: number;           // search results: how well it matched (0 the symbol itself … 5 with a typo)
   market?: string; currency?: string; step?: number; lot?: number; fno?: boolean; expiry?: string | null;
   strike?: number | null; tz?: string;
+  etf?: boolean;            // an Indian ETF the broker lists as "EQ" (DG-003)
+  stored?: boolean;         // from the stored company list while live market data is off (DP2-002)
   contract?: string; unit?: string; lot_units?: number;   // MCX: the contract traded, the price unit, price units per lot
 }
 

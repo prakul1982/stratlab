@@ -193,7 +193,7 @@ def test_kind_from_category_and_name(cat, name, kind):
 
 def test_broad_class_for_the_allocation():
     assert M.broad_of("Equity Scheme - Flexi Cap Fund", "equity") == ("Equity", "Flexi Cap Fund")
-    assert M.broad_of("Other Scheme - Index Funds", "equity") == ("Index funds", "")
+    assert M.broad_of("Other Scheme - Index Funds", "equity") == ("Equity", "Index funds")      # equity, by what it holds (DG-023)
     assert M.broad_of("Other Scheme - FoF Overseas", "other") == ("Funds of funds", "FoF Overseas")
     assert M.broad_of("Income", "debt") == ("Debt", "Income") and M.broad_of("", "hybrid") == ("Hybrid", "")
 

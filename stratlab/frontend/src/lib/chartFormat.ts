@@ -139,10 +139,13 @@ function onStep(p: ReturnType<typeof parts>, unit: Unit, n: number): boolean {
 
 /** Round-valued ticks for a time axis between t0 and t1 (ms), at most `max` of them. Intraday spans tick on clock
  * times ("10:15"), days on "1 Oct", months on "Oct", years (and each January on a month axis) on "2026". */
-export function timeTicks(t0: number, t1: number, max = 6, tz?: string): TimeTick[] {
+export function timeTicks(t0: number, t1: number, max = 6, tz?: string, days = false): TimeTick[] {
   if (!Number.isFinite(t0) || !Number.isFinite(t1)) return [];
   if (!(t1 > t0)) return [{ t: t0, label: tickLabel(t0, "day", tz) }];
-  const [unit, n] = STEPS.find(([, , ms]) => (t1 - t0) / ms <= max) ?? STEPS[STEPS.length - 1];
+  // `days`: daily points are named by their days, however few (DP2-006: two net worth snapshots two days apart had an axis of
+  // "12:00 … 06:00")
+  const steps = days ? STEPS.filter(([u]) => u !== "minute" && u !== "hour") : STEPS;
+  const [unit, n] = steps.find(([, , ms]) => (t1 - t0) / ms <= max) ?? steps[steps.length - 1];
   // walk in steps no coarser than the clock's quarter hours (India sits at +5:30), so a round time is never stepped over
   const step = unit === "minute" ? MIN * (n >= 5 ? 5 : 1) : unit === "hour" || (unit === "day" && n === 1) ? 15 * MIN : DAY;
   const out: TimeTick[] = [];

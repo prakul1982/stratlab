@@ -373,7 +373,9 @@ def behaviour(uid: str, plan: str) -> dict:
     if full:
         gaps = [r["gap_rupees"] for r in out if r["gap_rupees"] is not None]
         sold = [r for r in w["c"]["realised"]]
-        units = sum(r["qty"] for r in sold)
+        # DG-025: weighted by the money redeemed, not by units, which aren't the same size from one scheme to the next (an
+        # average of 3.4 years by units was 4.3 by value)
+        units = sum(r["sale"] for r in sold)
         val = sum(r["value"] or 0 for r in out if r["held"] and r.get("long_value") is not None)
         long_val = sum(r["long_value"] or 0 for r in out if r["held"] and r.get("long_value") is not None)
         sips = [r["sip"] for r in out if r.get("sip")]
@@ -384,8 +386,8 @@ def behaviour(uid: str, plan: str) -> dict:
             months_missed=sum(x["months_missed"] for x in sips),
             falls=len(all_falls), falls_received=_r(sum(f["received"] or 0 for f in all_falls)),
             falls_worth_today=_r(sum(f["worth_today"] or 0 for f in all_falls if f["worth_today"] is not None)),
-            avg_days_held=round(sum((_d(r["sold"]) - _d(r["bought"])).days * r["qty"] for r in sold) / units) if units > mf.EPS else None,
-            held_under_year_pct=round(sum(r["qty"] for r in sold if (_d(r["sold"]) - _d(r["bought"])).days <= 365) / units * 100, 1) if units > mf.EPS else None,
+            avg_days_held=round(sum((_d(r["sold"]) - _d(r["bought"])).days * r["sale"] for r in sold) / units) if units > mf.EPS else None,
+            held_under_year_pct=round(sum(r["sale"] for r in sold if (_d(r["sold"]) - _d(r["bought"])).days <= 365) / units * 100, 1) if units > mf.EPS else None,
             long_share=round(long_val / val * 100, 1) if val else None, long_value=_r(long_val) if val else None)
     return {**base, "schemes": out, "total": total, "pending": len(pending), "last_txn": last_txn}
 

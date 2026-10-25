@@ -48,6 +48,7 @@ from . import chart_routes
 from . import drawings_routes
 from . import maindb, market_store, storage, usage_slots
 from . import official_close
+from . import last_session
 from . import money_itr, money_us_routes
 from . import rules, rules_watch
 from . import suggest
@@ -68,7 +69,7 @@ from . import research
 from .engine import walkforward
 from . import rule_check
 from .engine.verdict import restate_empty, restated as verdict_restated, with_notes
-from .data import DataError, Registry
+from .data import DataError, Registry, split_id
 from .data import calendar as trading_calendar
 from .intel import routes as research_routes
 from .intel.company import Research, at_live_price
@@ -660,6 +661,36 @@ def get_instrument(inst_id: str) -> tuple:
     if not inst:
         err(404, "instrument_not_found", "That instrument was not found. Search again.")
     return prov, inst
+
+
+def sip_closes(inst_id: str) -> tuple[dict, list[dict]]:
+    """(the instrument, its daily candles over the SIP test's ten years) for a SIP leg: from the broker while its session
+    is on; else, or for an id by symbol ("IN:RELIANCE", from the company search), the stored company list and the daily
+    closes the company pages chart offline (DG-030, DP2-002: the test only needs past closes, but needed a live broker
+    session and answered "offline" from Saturday 01:30 to Sunday 08:00)."""
+    prov, inst = markets.resolve(inst_id)
+    market, key = split_id(inst_id)
+    if prov is not None and prov.ready() and inst:
+        return inst, prov.history(inst, "1d", sip_test.HISTORY_DAYS) or []
+    if market != "IN":
+        return get_instrument(inst_id)[1], []
+    sym = (inst or {}).get("symbol")
+    if not sym and key.isdigit():
+        sym = (_quiet(kite.instrument, int(key)) or {}).get("symbol")      # the day's list, while it is still held
+    sym = (sym or ("" if key.isdigit() else key)).strip().upper()
+    hit = _quiet(suggester.find, sym, "IN") if sym else None
+    if not sym or not (hit or stock_pages.find("IN", sym)):
+        if not kite.ready():
+            raise KiteNotReady("Indian market data is offline right now, and that stock isn't on the stored list.")
+        err(404, "instrument_not_found", "That instrument was not found. Search again.")
+    name = (hit or {}).get("name") or (inst or {}).get("name") or sym
+    kind = instrument_kinds.base(instrument_kinds.classify(sym, None, name))
+    found = {"symbol": sym, "name": name, "market": "IN", "exchange": "NSE", "type": "ETF" if kind == "etf" else "EQ"}
+    try:
+        bars = research_hub.chart("IN", sym, "max", "1d")["candles"]
+    except Exception:
+        bars = []
+    return found, bars
 
 
 def check_features(profile, strategy: Strategy, inst: dict | None):
@@ -1321,7 +1352,29 @@ def instrument_defaults(profile=Depends(current_profile)):
 @app.get("/instruments/search")
 def instrument_search(q: str = Query(..., min_length=2, max_length=40), market: str | None = Query(None, max_length=10),
                       profile=Depends(current_profile)):
-    return markets.search(q, market.upper() if market else None, allow_fno=fno(profile))
+    m = market.upper() if market else None
+    rows = markets.search(q, m, allow_fno=fno(profile))
+    if m in (None, "IN") and not kite.ready():
+        rows = _offline_india(q) + rows
+    # DG-003: an ETF the broker lists as "EQ" is named an ETF in the suggestions, not a stock
+    return [{**r, "etf": True} if r.get("market") == "IN" and r.get("type") == "EQ" and instrument_kinds.base(
+        instrument_kinds.classify(r.get("symbol"), None, r.get("name"))) == "etf" else r for r in rows]
+
+
+def _offline_india(q: str) -> list[dict]:
+    """Indian stocks and ETFs for a search while the broker's session is off, from the stored company list, by symbol
+    (DP2-002: the SIP test's search answered nothing for every query on a Saturday, its own placeholder included). Only a
+    tool that works from stored history (the SIP test) can run them then."""
+    out = []
+    for r in _quiet(suggester.search, q, "IN", 12) or []:
+        sym = str(r.get("symbol") or "").upper()
+        if not sym or sym.isdigit():
+            continue                      # a BSE code alone reads as a broker token
+        kind = instrument_kinds.base(instrument_kinds.classify(sym, None, r.get("name")))
+        out.append({"id": f"IN:{sym}", "token": None, "symbol": sym, "name": r.get("name") or sym, "exchange": "NSE",
+                    "type": "ETF" if kind == "etf" else "EQ", "lot": 1, "step": 1, "expiry": None, "strike": None, "fno": False,
+                    "market": "IN", "currency": "INR", "tz": "Asia/Kolkata", "stored": True})
+    return out
 
 
 @app.get("/instruments/{inst_id}")
@@ -3041,21 +3094,96 @@ def _prices_at(quotes: list[dict]) -> str:
     return (holdings.latest_trade(quotes, now) or now).isoformat(timespec="minutes")
 
 
+CLOSE_LOOKBACK = 10                # days searched back for the exchange's stored closes
+FILE_CLOSE_DAYS = 10               # a close from a holdings file is used for this many days after its session
+
+
+def _close_at(day: str) -> str:
+    return f"{day}T15:30:00+05:30"
+
+
+def stored_closes(now: datetime | None = None) -> tuple[str | None, dict, dict]:
+    """(the day, its closes, the session before it's closes) from the exchange's official closes as stored (the cash
+    bhavcopy of each evening, official_close): the latest stored session on or before the market's latest completed one."""
+    try:
+        latest = date.fromisoformat(last_session.latest_day("IN", now))
+    except Exception:
+        return None, {}, {}
+    d = latest
+    for n in range(CLOSE_LOOKBACK):
+        if trading_calendar.is_trading_day("IN", d):
+            got = (official_close.closes(d, now) if n == 0 else None) or official_close.stored(d)
+            if got:
+                prev = last_session.on_or_before("IN", d - timedelta(days=1))
+                return d.isoformat(), got, official_close.stored(prev) or {}
+        d -= timedelta(days=1)
+    return None, {}, {}
+
+
+def close_quotes(items: list[dict], now: datetime | None = None) -> dict[str, dict]:
+    """Quotes for Indian holdings while the broker's live prices are off (DP2-001, DG-002: every holding showed "no
+    price today" and the page was at cost on a Saturday, while Friday's close was on the alert form and the ETF badge):
+    the exchange's stored close of the latest session, with its change on the session before; else the close a broker's
+    file carried (Zerodha Console's "Previous Closing Price"), within FILE_CLOSE_DAYS of its session, with no change.
+    `from` says which ("close" or "file")."""
+    day, got, prev = stored_closes(now)
+    ref = day or _quiet(last_session.latest_day, "IN", now)
+    out = {}
+    for i in items:
+        s = i["symbol"]
+        c = got.get(s)
+        if c:
+            p = prev.get(s)
+            out[s] = {"price": c, "change": round(c - p, 2) if p else None, "change_pct": round((c / p - 1) * 100, 2) if p else None,
+                      "at": _close_at(day), "change_day": day, "from": "close"}
+            continue
+        fd = str(i.get("file_close_day") or "")[:10]
+        try:
+            fresh = bool(fd and ref) and (date.fromisoformat(ref) - date.fromisoformat(fd)).days <= FILE_CLOSE_DAYS
+        except ValueError:
+            fresh = False
+        if i.get("file_close") and fresh:
+            out[s] = {"price": float(i["file_close"]), "change": None, "change_pct": None, "at": _close_at(fd), "change_day": fd, "from": "file"}
+    return out
+
+
 def _read_prices(ind: list[dict], us: list[str]) -> dict:
     """The prices behind a holdings view, read once: the quotes, the US quotes, the dollar rate, and the time of the
-    latest trade among them (the exchange's own stamp, never the moment of asking)."""
+    latest trade among them (the exchange's own stamp, never the moment of asking). Indian holdings the live prices
+    don't cover (the broker logged out, a weekend) are at their last close (close_quotes)."""
     quotes, live = {}, bool(ind) and kite.ready()
     if live:
         try:
             quotes = kite.quote([i["symbol"] for i in ind])
         except Exception:
             live = False
+    todo = [i for i in ind if not (quotes.get(i["symbol"]) or {}).get("price")]
+    closed = (_quiet(close_quotes, todo) or {}) if todo else {}
+    quotes = {**quotes, **closed}
     us_quotes = {}
     for n in range(0, len(us), 24):          # the US prices are read 24 at a time
         us_quotes.update({k: v for k, v in (_quiet(research_hub.quotes, "US", us[n:n + 24]) or {}).items() if v})
     rate, rate_at = usd_inr_read() if us else (None, None)
+    by = {k: sum(q.get("from") == k for q in closed.values()) for k in ("close", "file")}
     return {"quotes": quotes, "live": live, "us_quotes": us_quotes, "rate": rate, "rate_at": rate_at,
-            "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes else None}
+            "closes": {"day": max((q["change_day"] for q in closed.values()), default=None), **by} if closed else None,
+            "prices_at": _prices_at([q for q in [*quotes.values(), *us_quotes.values()] if q]) if live or us_quotes or closed else None}
+
+
+def _etf_named(items: list[dict]) -> list[dict]:
+    """The holdings, an ETF saved under its symbol named as the exchange's ETF list names it (DG-003: "NIFTYBEES" for
+    Nippon India ETF Nifty 50 BeES)."""
+    etfs = None
+    out = []
+    for i in items:
+        if str(i.get("kind") or "").startswith("etf") and (i.get("name") or i["symbol"]) == i["symbol"]:
+            if etfs is None:
+                etfs = (_quiet(etf_nav.load_live) or {}).get("rows") or {}
+            nm = (etfs.get(i["symbol"]) or {}).get("name")
+            if nm and nm != i["symbol"]:
+                i = {**i, "name": nm}
+        out.append(i)
+    return out
 
 
 def holdings_view(profile) -> dict:
@@ -3077,8 +3205,8 @@ def holdings_view(profile) -> dict:
                     _PRICED.pop(k, None)
             _PRICED[key] = (time.monotonic(), got)
     live, us_quotes = got["live"], got["us_quotes"]
-    return {**holdings.view(h["items"], got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
-            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"],
+    return {**holdings.view(_etf_named(h["items"]), got["quotes"], us_quotes, got["rate"]), "source": h["source"], "updated_at": h["updated_at"],
+            "prices": live or (not ind and bool(us_quotes)), "prices_at": got["prices_at"], "closes": got.get("closes"),
             "us_prices": bool(us_quotes) if us else None, "usd_inr_at": got.get("rate_at") if us and got["rate"] else None,
             "limit": holdings_limit(profile["_plan"]), "facts_max": HOLDINGS_FACTS}
 
@@ -3135,7 +3263,7 @@ def holdings_import(req: HoldingsImportReq, profile=Depends(current_profile)):
         parsed = holdings_file.parse(data, req.filename)
     except holdings_file.FileError as e:
         err(400, "bad_file", str(e))
-    found, missed = holdings.match_all(parsed["rows"], holdings_matcher())
+    found, missed = holdings.match_all(parsed["rows"], holdings_matcher(), _quiet(last_session.latest_day, "IN"))
     missed = sorted(parsed["problems"] + missed, key=lambda m: m.get("line") or 0)
     limit = holdings_limit(profile["_plan"])
     out = {}
@@ -3361,14 +3489,43 @@ def _nw_cached(key: str, read):
     return got
 
 
+GOLD_LAST = "money:gold:last"       # {"per_g", "at"}: the last gold price read, kept for while the broker is logged out
+
+
 def _nw_gold():
-    """Rupees a gram of 24 carat gold: the front-month gold future on the commodity exchange (quoted per 10 g)."""
+    """Rupees a gram of 24 carat gold: the front-month gold future on the commodity exchange (quoted per 10 g), the one
+    gold price every page uses (DG-060). While the broker's session is off (a weekend), the last price read, with the time
+    it is of (DG-010: gold showed "–" and was left out of the total, and a gold bond fell back to its issue price, on a
+    Saturday that understated net worth by about ₹8.1 lakh)."""
     def read():
         prov = markets.provider("MCX")
         inst = prov.instrument("GOLD") if prov and prov.ready() else None
         p = prov.ltp(inst) if inst else None
-        return (p / 10, _gold_read_at()) if p and p > 0 else None
+        if p and p > 0:
+            got = (p / 10, _gold_read_at())
+            _quiet(db.set_setting, GOLD_LAST, json.dumps({"per_g": got[0], "at": got[1]}))
+            return got
+        kept = db.json_value(_quiet(db.get_setting, GOLD_LAST), {})
+        if isinstance(kept, dict) and isinstance(kept.get("per_g"), (int, float)) and kept["per_g"] > 0 and kept.get("at"):
+            return float(kept["per_g"]), str(kept["at"])
+        return None
     return _nw_cached("gold", read)
+
+
+# India's import duty on gold, which is most of the gap between the world price at the dollar rate and the price in
+# India (DG-060, DP2-040): 10% basic customs duty and 5% AIDC from 13 May 2026 (6% from July 2024 before that), with 3%
+# IGST on top. Change here when it is notified again.
+GOLD_DUTY_PCT = 15.0
+GOLD_DUTY_NOTE = "India's import duty on gold is 15% (10% customs duty and 5% AIDC) since 13 May 2026, with 3% GST on top"
+
+
+@app.get("/money/gold")
+def money_gold(profile=Depends(current_profile)):
+    """The gold price in India the Money pages use (Net worth's gold and gold bonds): rupees a gram and per 10 g of 24
+    carat, with when it is from, and the import duty that sits between it and the world price."""
+    g = _quiet(_nw_gold)
+    return ok({"per_g": round(g[0], 2) if g else None, "per_10g": round(g[0] * 10, 2) if g else None, "as_of": g[1] if g else None,
+               "duty_pct": GOLD_DUTY_PCT, "duty_note": GOLD_DUTY_NOTE})
 
 
 def _gold_read_at(now: datetime | None = None) -> str:
