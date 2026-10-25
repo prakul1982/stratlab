@@ -1,5 +1,5 @@
 """MS1: the whole-market sweep. A US company that has traded for decades is not a new listing because the SEC's list gained
-it; a share that has just listed is checked the day it appears, each day of its first weeks, and with the checks only a
+it; a share that has just listed is checked the day it appears, each day of its first 10 days, and with the checks only a
 new listing has (the range since listing, the first session against the issue price, the market value on the shares in
 issue now, no growth rate from a tiny base); a read of the list that comes back short is a failed read."""
 from datetime import date, datetime, timedelta, timezone
@@ -83,11 +83,12 @@ def test_a_list_read_that_comes_back_short_keeps_the_last_good_list_and_every_re
 
 
 # ---------- MS1-006: a new listing is checked the day it lists, then every day ----------
-def test_a_new_listing_is_checked_the_day_it_appears_and_again_each_day_of_its_first_weeks(w):
+def test_a_new_listing_is_checked_the_day_it_appears_and_again_each_day_of_its_first_10_days(w):
     today = date.today()
     listing = [{"symbol": "OLD", "name": "OLD", "listed": "2001-01-01"},
                {"symbol": "TODAY", "name": "TODAY", "listed": today.isoformat()},
                {"symbol": "WEEKOLD", "name": "WEEKOLD", "listed": (today - timedelta(days=7)).isoformat()},
+               {"symbol": "TWELVE", "name": "TWELVE", "listed": (today - timedelta(days=12)).isoformat()},
                {"symbol": "MONTHOLD", "name": "MONTHOLD", "listed": (today - timedelta(days=45)).isoformat()}]
     a = audit.MarketAudit(lambda: listing, _clean, pause=0, key="audit:ms1-new")
     a.set_enabled(True)
@@ -95,6 +96,7 @@ def test_a_new_listing_is_checked_the_day_it_appears_and_again_each_day_of_its_f
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     a.rows["WEEKOLD"] = {**_clean("WEEKOLD"), "at": yesterday}
     a.rows["MONTHOLD"] = {**_clean("MONTHOLD"), "at": yesterday}
+    a.rows["TWELVE"] = {**_clean("TWELVE"), "at": yesterday}          # past its first 10 days: no more daily checks
     assert a.queue() == ["TODAY", "WEEKOLD"]                                   # the unchecked listing, then the one not yet seen today
     assert [a.step(), a.step()] == ["TODAY", "WEEKOLD"] and a.step() is None   # and the old ones aren't repeated by this
     a.rows["TODAY"]["at"] = yesterday

@@ -1433,7 +1433,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
     by_area: n ? { Numbers: { mismatch: 1, gap: 1, error: 1, fact: 0, pending: 0 } } : {} });
   let s = { enabled: false, paused: "off", listed: 5058, checked: 3844, due: 0, current: null, eta_hours: null, rate_per_hour: 0, list_at: null, list_error: null,
     full: { running: true, since: new Date(Date.now() - 7 * 3600e3).toISOString(), done_at: null, left: 1214, checked: 3844, everything: true, pending_only: false },
-    daily: { on: true, last: "2026-10-25", next: "2026-10-26" },
+    monthly: { on: true, last: "2026-10", next: "2026-11-01" },
     ages: { open: 40, today: 6, days_1_2: 4, days_3_7: 10, over_a_week: 20, oldest_days: 19 },
     retry: { waiting: 1868, due: 0, next: new Date(Date.now() + 40 * 60e3).toISOString(), gap_hours: 1, batch: 20 },
     bse: { refusing: true, waiting: 1868 }, pending: 1911, new_listings: [], rows: [err], summary: summary(1) } as Record<string, unknown>;
@@ -1446,7 +1446,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
       if ("on" in body) s = { ...s, enabled: body.on, paused: body.on ? null : "off" };
       if (body.reset) s = { ...s, enabled: true, paused: null, checked: 0, due: 5058, rate_per_hour: 0, rows: [], summary: summary(0),
         full: { running: true, since: new Date().toISOString(), done_at: null, left: 5058, checked: 0, everything: true, pending_only: false } };
-      if ("daily" in body) s = { ...s, daily: { on: body.daily, last: "2026-10-25", next: body.daily ? "2026-10-26" : null } };
+      if ("monthly" in body) s = { ...s, monthly: { on: body.monthly, last: "2026-10", next: body.monthly ? "2026-11-01" : null } };
     }
     await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(us ? { ...s, bse: undefined, rows: [], summary: summary(0), full: { ...(s.full as object), running: false } } : s) });
   });
@@ -1460,7 +1460,7 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByText("1 mismatch", { exact: true })).toBeVisible();
   await expect(india.getByText("1 gap · 1 error")).toBeVisible();
   await expect(india.getByText(/BSE is refusing requests from this server; 1,868 companies waiting/)).toBeVisible();
-  await expect(india.getByText("Next pass starts 26 Oct")).toBeVisible();
+  await expect(india.getByText("Next full check: 1 Nov")).toBeVisible();
   // the problems standing say how long they have stood (MS1-004)
   await expect(india.getByTestId("audit-ages")).toContainText("Problems standing: 40 (6 found today, 14 up to a week old, 20 over a week old) · the oldest for 19 days.");
   if (info.project.name === "phone") await touchable(page);
@@ -1473,8 +1473,8 @@ test("admin: the whole-market audit starts, pauses, resets, re-checks one compan
   await expect(india.getByTestId("audit-age")).toHaveText(" · open 3 days");
   await india.getByRole("button", { name: "Re-check Acme Ltd" }).click();
   await expect.poll(() => sent.at(-1)).toEqual({ region: "IN", recheck: "ACME" });
-  // the daily pass can be switched off
-  await india.getByRole("checkbox", { name: "Check every company every day" }).click();
+  // the monthly check can be switched off
+  await india.getByRole("checkbox", { name: "Full re-check on the 1st of each month" }).click();
   await expect(india.getByText("Only new listings, until you reset")).toBeVisible();
   // reset asks first, in the page (never the browser's own box): Cancel does nothing, confirming clears and starts from 0
   const boxes: string[] = [];
