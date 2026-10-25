@@ -18,9 +18,16 @@ export interface ResultRow {
   region: Region; symbol: string; name: string | null; date: string; when: string | null; purpose: string; url: string | null;
   mine?: boolean; out?: { at: string; title: string; url: string | null; numbers: ResultNumber[] } | null;
 }
+/** One day of a week: how many companies it has and how many of them came in this answer (DE-026). */
+export interface ResultDay { date: string; count: number; shown: number }
 interface ResultsView {
   region: Region; scope: "mine" | "all"; today: string; updated_at: string | null; more: number; mine_count: number; alerts: boolean; note: string;
-  weeks: { label: string; from: string; to: string; rows: ResultRow[] }[];
+  day_rows?: number; weeks: { label: string; from: string; to: string; rows: ResultRow[]; days?: ResultDay[] }[];
+}
+
+/** "Sat 31 Oct · 66 companies": a day's heading says how many it has, so a long day can't end without saying so (DE-026). */
+export function dayHeading(iso: string, count: number, today: string) {
+  return `${resultDay(iso)}${iso === today ? " · today" : ""} · ${count.toLocaleString("en-IN")} compan${count === 1 ? "y" : "ies"}`;
 }
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
@@ -56,19 +63,21 @@ export function ResultsPage() {
   const [data, setData] = useState<ResultsView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
+  // the one day of "All companies" opened in full (DE-026: each day shows its first rows and says how many more it has)
+  const [openDay, setOpenDay] = useState("");
   // another market or another set of companies is a different list: the find-a-company text and the old list don't carry over
   const [shownFor, setShownFor] = useState(`${region}|${scope}`);
-  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); }
+  if (shownFor !== `${region}|${scope}`) { setShownFor(`${region}|${scope}`); setQ(""); setData(null); setOpenDay(""); }
 
   useEffect(() => {
     let live = true;
     setError(null);
     const t = setTimeout(() => {
-      const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "" });
+      const qs = new URLSearchParams({ region, scope, q: scope === "all" ? q : "", day: scope === "all" ? openDay : "" });
       api<ResultsView>(`/research/results?${qs}`).then((x) => live && setData(x)).catch((e) => live && setError((e as Error).message));
     }, q ? 300 : 0);
     return () => { live = false; clearTimeout(t); };
-  }, [region, scope, q, tries]);
+  }, [region, scope, q, openDay, tries]);
 
   const setScope = (s: string) => { const p = new URLSearchParams(params); p.set("scope", s); setParams(p, { replace: true }); };
   const toggleAlerts = async () => {
@@ -95,7 +104,7 @@ export function ResultsPage() {
         <Card>
           {scope === "all" && (
             <Field key={region} label="Find a company">
-              {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder="Find a company, like TCS or Infosys" />}
+              {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder={region === "IN" ? "Like TCS or Infosys" : "Like AAPL or Apple"} />}
             </Field>
           )}
           {data && (
@@ -120,12 +129,23 @@ export function ResultsPage() {
       {data && !empty && data.weeks.map((w) => {
         const days = [...new Set(w.rows.map((r) => r.date))];
         const ahead = days.filter((d) => d >= data.today), past = days.filter((d) => d < data.today);     // the days gone by fold away
-        const day = (d: string) => (
-          <div key={d} className="inv-day">
-            <span className="k-eyebrow">{resultDay(d)}{d === data.today ? " · today" : ""}</span>
-            <div className="inv-rows">{w.rows.filter((r) => r.date === d).map((r) => <ResultLine key={`${r.symbol}-${r.date}`} r={r} showMine={scope === "all"} />)}</div>
-          </div>
-        );
+        const about = (d: string) => w.days?.find((x) => x.date === d);
+        const day = (d: string) => {
+          const on = w.rows.filter((r) => r.date === d);
+          const info = about(d) ?? { date: d, count: on.length, shown: on.length };
+          return (
+            <div key={d} className="inv-day" data-testid="results-day">
+              <span className="k-eyebrow">{dayHeading(d, info.count, data.today)}</span>
+              <div className="inv-rows">{on.map((r) => <ResultLine key={`${r.symbol}-${r.date}`} r={r} showMine={scope === "all"} />)}</div>
+              {info.count > info.shown && (
+                <div className="k-row">
+                  <span className="k-note">Showing {info.shown} of {info.count.toLocaleString("en-IN")} on {resultDay(d)}.</span>
+                  <button type="button" className="btn quiet sm" onClick={() => setOpenDay(d)}>Show all {info.count.toLocaleString("en-IN")}</button>
+                </div>
+              )}
+            </div>
+          );
+        };
         return (
           <Card key={w.label}>
             <CardHead title={w.label} actions={<span className="k-note">{resultDay(w.from)} to {resultDay(w.to)}</span>} />
@@ -137,7 +157,7 @@ export function ResultsPage() {
           </Card>
         );
       })}
-      {data && data.more > 0 && <p className="k-note">And {data.more} more.{scope === "all" ? " Find a company by name to narrow the list." : ""}</p>}
+      {data && data.more > 0 && <p className="k-note">Each day shows its first {data.day_rows ?? 40} companies, yours first; {data.more.toLocaleString("en-IN")} more are a click away under their day, or find a company by name.</p>}
       {data && <p className="k-note inv-text">{data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );

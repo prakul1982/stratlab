@@ -336,7 +336,8 @@ def types(region: str) -> list[dict]:
     """The flag types a region's list can hold: [{id, label, severity}] (the filter's choices)."""
     if region == "US":
         return [{"id": v[0], "label": v[1].split(" (")[0], "severity": v[2]} for v in US_ITEMS.values()]
-    return [{"id": cid, "label": label, "severity": sev} for cid, label, sev, _ in filings.RULES if sev != "info"]
+    return [{"id": cid, "label": label, "severity": sev} for cid, label, sev, _ in filings.RULES if sev != "info"] + \
+        [{"id": cid, "label": filings.LABEL[cid], "severity": sev} for cid, sev in filings.EXTRA_FLAGS]
 
 
 def current(region: str, rows: list[dict]) -> list[dict]:
@@ -441,6 +442,33 @@ def listing(region: str, flag: str = "", frm: str | None = None, to: str | None 
             "types": [{**t, "count": counts.get(t["id"], 0)} for t in types(region)],
             "as_of": st.get("through"), "updated_at": st.get("at"),
             "covers": universes.sp500_doc()["name"] if region == "US" else "NSE-listed companies"}
+
+
+def stored_rows(symbols: list[str], today: date | None = None, days: int = filings.WINDOW_DAYS) -> dict[str, dict]:
+    """The watchlist view's row for each of `symbols` from the evening's stored read of every company's filings (DE-032):
+    {symbol: {"symbol", "summary", "flags", "stored": True}}, for a company whose own list didn't answer just now, so
+    its red flags still show (counted from the flagged filings alone: the stored read keeps no routine ones). A company
+    with nothing flagged is there too, with zero counts, when the stored read covers the window."""
+    today = today or datetime.now(ZoneInfo("Asia/Kolkata")).date()
+    st = state("IN")
+    if not st.get("through") or not symbols:
+        return {}
+    want = {s.upper() for s in symbols}
+    rows = [i for i in current("IN", flags.between("IN", today - timedelta(days=days), today)) if i["symbol"] in want]
+    rows.sort(key=lambda i: (i["at"], i["id"]), reverse=True)
+    out = {}
+    for sym in sorted(want):
+        mine = [i for i in rows if i["symbol"] == sym]
+        counts: dict[str, int] = {}
+        for i in mine:
+            counts[i["category"]] = counts.get(i["category"], 0) + 1
+        raise_ = [i for i in mine if i["category"] in filings.FUND_RAISE]
+        out[sym] = {"symbol": sym, "stored": True, "as_of": st.get("through"), "flags": [{**i, "text": i.get("text") or ""} for i in mine[:5]],
+                    "summary": {"days": days, "total": None, "red": sum(1 for i in mine if i["severity"] == "red"),
+                                "amber": sum(1 for i in mine if i["severity"] == "amber"), "fund_raise": bool(raise_),
+                                "fund_raise_last": raise_[0]["at"] if raise_ else None,
+                                "flags": [{"category": c, "label": filings.LABEL[c], "count": n} for c, n in sorted(counts.items(), key=lambda kv: -kv[1])]}}
+    return out
 
 
 def holders_listing(symbol: str = "", form: str = "", page: int = 1, size: int = PAGE, today: date | None = None) -> dict:

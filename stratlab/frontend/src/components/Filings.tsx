@@ -7,7 +7,8 @@ import { Badge, CheckField, EmptyState, ErrorState, Skeleton } from "./kit";
 export type Severity = "red" | "amber" | "info";
 export interface FilingItem { id: string; at: string; category: string; label: string; severity: Severity; subject: string; text: string; url: string | null }
 export interface FilingSummary {
-  days: number; total: number; red: number; amber: number; fund_raise: boolean; fund_raise_last: string | null;
+  /** null: counted from the stored read of flagged filings alone, so the number of filings in all isn't known (DE-032) */
+  days: number; total: number | null; red: number; amber: number; fund_raise: boolean; fund_raise_last: string | null;
   flags: { category: string; label: string; count: number }[];
 }
 export interface FilingReport { symbol: string; items: FilingItem[]; summary: FilingSummary; window_days: number; lookback_days: number }
@@ -25,6 +26,12 @@ function SevBadge({ s, label }: { s: Severity; label: string }) {
 /** The last-3-months verdict in one line: what was found, stated as facts. A list that shows only the flagged filings passes
  * `to` (the company's own filings), so "N filings in all" is a link to the rest whenever there are more than the ones listed. */
 export function SummaryLine({ s, to }: { s: FilingSummary; to?: string }) {
+  if (s.total == null) return (
+    <span className="k-small">
+      Last {s.days} days: <b>{s.red} red flag{s.red === 1 ? "" : "s"}</b>, {s.amber} to look closer at, from the evening's read of every company's filings.{" "}
+      {s.fund_raise ? <b>Fund raise filed on {day(s.fund_raise_last!)}.</b> : <span className="k-muted">No fund raise filed.</span>}
+    </span>
+  );
   if (!s.total) return <span className="k-small k-muted">No filings in the last {s.days} days.</span>;
   return (
     <span className="k-small">

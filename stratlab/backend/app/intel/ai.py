@@ -250,16 +250,32 @@ _CALL_OPENING = re.compile(r"^\W*(buy|sell|accumulate|avoid|add|pick|hold|load|g
 
 def theme_text(text, length: int) -> str:
     """A theme read's sentence as it goes out: none that advises or forecasts (the model has no source to forecast from),
-    and a sentence with a figure marked as the AI's own estimate, since no fact backs it."""
+    and none with a figure (DE-013: "defence budget to Rs 5.5 lakh crore (+12%)" while the year's allocation was about
+    ₹6.81 lakh crore; an "(AI estimate)" tag didn't make a wrong figure right). A map has no source to check a budget,
+    a growth rate or a target against, so it names things and states no numbers; a sentence kept before this with its
+    "(AI estimate)" tag goes too."""
     kept = []
     for x in grounding._SENT.split(" ".join(str(text or "").split())):
         if not x or grounding.ADVICE.search(x) or _CALL_OPENING.search(x):
             continue
-        if grounding._numbers(x) and "(AI estimate)" not in x:
-            x = x.rstrip()
-            x = f"{x[:-1]} (AI estimate){x[-1]}" if x[-1:] in ".!?" else f"{x} (AI estimate)"
-        kept.append(x)
+        if grounding._numbers(x) or "(AI estimate)" in x:
+            continue
+        kept.append(grounding.tidy_text(x))
     return " ".join(kept)[:length]
+
+
+def theme_served(out: dict) -> dict:
+    """A stored theme map's text as today's checks would write it (DE-013), however long ago it was kept."""
+    out = dict(out)
+    for k, n in (("summary", 900), ("core", 120)):
+        out[k] = theme_text(out.get(k), n)
+    out["sub_themes"] = [{**x, "detail": theme_text(x.get("detail"), 400)} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
+    out["sub_themes"] = [x for x in out["sub_themes"] if x["detail"]]
+    out["value_chain"] = [{**v, "description": theme_text(v.get("description"), 600)} for v in out.get("value_chain") or [] if isinstance(v, dict)]
+    out["screen"] = [{**x, "one_line": theme_text(x.get("one_line"), 300)} for x in out.get("screen") or [] if isinstance(x, dict)]
+    out["tailwinds"] = [t for t in (theme_text(x, 400) for x in out.get("tailwinds") or []) if t]
+    out["risks"] = [t for t in (theme_text(x, 400) for x in out.get("risks") or []) if t]
+    return out
 
 
 def theme_list(x, n: int, length: int = 400) -> list:
@@ -281,9 +297,13 @@ Return ONLY this JSON:
  "screen": [{{"name": "", "ticker": "", "layer": "value-chain layer", "one_line": "what it supplies to the theme, as a fact"}}],
  "value_chain": [{{"layer": "", "description": "3 sentences on its economics and where the margin sits",
                    "companies": [{{"name": "", "ticker": ""}}]}}],
- "tailwinds": ["specific sentences with numbers or names"], "risks": ["specific sentences with numbers or names"]}}
-Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub-themes, 6-8 screen names (listed
-companies with the most direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 companies, 4 tailwinds, 4 risks. Nothing generic.
+ "tailwinds": ["specific sentences naming the policy, programme, product or customer"], "risks": ["specific sentences naming what could go wrong"]}}
+Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes, 6-8 screen names (listed companies with the most
+direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks. Nothing generic.
+Only companies listed on the market's exchanges, each with its own ticker: never a private company, an unlisted
+subsidiary or a division under its parent's ticker. No figures at all (no budgets, market sizes, growth rates, order
+values, targets or years of targets): there is no source here to check them. Name only programmes, products and
+policies that exist; leave out anything you aren't sure of.
 {RULES}"""
     r = _ask(system, f"THEME: {q}\nTODAY: {ist_date().isoformat()}", ai, 6000)
 

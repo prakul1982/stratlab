@@ -93,6 +93,10 @@ test("company: /research/US/BRK.B moves to BRK-B and asks only for BRK-B (R13-00
 test("breadth: an earlier day the latest run changed says so beside the numbers (R13-009)", async ({ page }) => {
   const errors = await open(page, "/invest/breadth", [[/\/invest\/breadth\?/, edited((j) => ({ ...j, live: null, pending: null,
     revised: [{ day: j.today?.prev_day ?? "2026-10-08", before: { adv: 337, dec: 163, unch: 1 }, after: { adv: 338, dec: 163, unch: 1 } }] }))]]);
-  await expect(page.getByTestId("breadth-revised")).toContainText("revised: 338 rose, 163 fell, 1 unchanged (was 337, 163, 1)", { timeout: 30_000 });
+  // one short line in the headline card, the details behind its (i) (DE-023)
+  const note = page.getByTestId("breadth-revised");
+  await expect(note).toContainText("An earlier day's count was revised", { timeout: 30_000 });
+  await note.getByRole("button", { name: "About the revision" }).click();
+  await expect(note).toContainText("revised: 338 rose, 163 fell, 1 unchanged (was 337, 163, 1)");
   expect(errors).toEqual([]);
 });

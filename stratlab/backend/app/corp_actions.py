@@ -8,7 +8,8 @@ tracked companies' dividend, bonus and split notices are read from their announc
 the ex-date (India settles T+1, so the two are the same day).
 US: the dividends and splits in each company's price history, for the whole US universe (the S&P 500 and StratLab's own
 groups, one company at a time at a gentle pace) as well as the tracked ones. A price history holds ex-dates that have
-already happened, so the US calendar has recent ex-dates and today's, and no dates ahead.
+already happened, so the dividends declared with an ex-date ahead come from the US market calendar, a day at a time
+for the next four weeks (DE-028); splits ahead aren't in either.
 
 Each region's calendar is stored as corpact:cal:<region>, a rolling window from four weeks back to two months
 ahead; one company's history (three years) as corpact:hist:<region>:<symbol>. Facts only: the action as the company
@@ -36,6 +37,7 @@ HIST_DAYS = 3 * 366                  # one company's history goes back this far
 HIST_MAX_AGE = 20 * 3600             # a stored history older than this is fetched again when asked for
 MAX_ROWS = 4000
 MAX_LOOKUPS = 80                     # per-company lookups in one refresh
+US_AHEAD_DAYS = 28                   # US: the market calendar's declared dividends are read this far ahead (a day at a time)
 UNIVERSE_AT = "06:20"                # US, local time: the whole universe's histories are read (several minutes), after the tracked refresh
 UNIVERSE_PACE = 0.8                  # seconds between two companies: a steady pace under the price source's limit
 UNIVERSE_GIVE_UP = 6                 # this many busy answers in a row: the read stops and the stored rows stay
@@ -74,11 +76,34 @@ def _n(v: float) -> str:
     return f"{v:g}"
 
 
+_DIST = re.compile(r"distribution\W*" + _RS + r"\s*" + _NUM + r"\s*per unit\s+consists?\s+of\s+(.*)$", re.I)
+_DIST_PART = re.compile(_RS + r"\s*" + _NUM + r"\s*per unit\s+as\s+([a-z][a-z ]*?)\s*(?=/|,|;|$)", re.I)
+
+
+def distribution(text: str, cur: str = "₹") -> dict | None:
+    """A trust's distribution with its parts (DE-029): "Distribution - Rs 2.75 Per Unit Consist Of Re 0.60821 Per Unit
+    As Interest/ Re 0.34940 Per Unit As Dividend/ Rs 1.78940 Per Unit As Capital Repayment/Re 0.00299 Per Unit As Other
+    Income" is one payment of ₹2.75 a unit, not a distribution and a separate ₹0.3494 dividend. None for other text."""
+    m = _DIST.search(re.sub(r"\s+", " ", str(text or ""))[:400])
+    total = _f(m.group(1)) if m else None
+    if not total or total <= 0:
+        return None
+    parts = [{"label": p.group(2).strip().lower(), "amount": _f(p.group(1))} for p in _DIST_PART.finditer(m.group(2))]
+    parts = [p for p in parts if p["amount"] is not None]
+    said = ", ".join(f"{money(p['amount'], cur)} {p['label']}" for p in parts)
+    return {"kind": "dividend", "sub": "distribution", "label": "Distribution", "amount": total, "ratio": None, "factor": None, "premium": None,
+            "parts": parts, "short": f"Distribution {money(total, cur)} a unit",
+            "text": f"Distribution {money(total, cur)} a unit" + (f": {said}" if said else "")}
+
+
 def parse_purpose(text: str, face_value: float | None = None, cur: str = "₹") -> list[dict]:
     """The actions in the exchange's purpose text: "Interim Dividend - Rs 9 Per Share", "Bonus 1:1", "Face Value
     Split (Sub-Division) - From Rs 10/- Per Share To Re 1/- Per Share", "Rights 1:5 @ Premium Rs 100/-", "Buy Back".
     Each is {kind, sub, label, text, short, amount, ratio, factor, premium}; anything else (meetings, interest
-    payments, redemptions) is left out."""
+    payments, redemptions) is left out. A trust's distribution that lists its parts is one action (see distribution)."""
+    whole = distribution(text, cur)
+    if whole:
+        return [whole]
     out = []
     for seg in _PARTS.split(re.sub(r"\s+", " ", str(text or ""))[:400]):
         seg = seg.strip(" -–:,.")
@@ -153,7 +178,7 @@ def row(region: str, symbol: str, action: dict, ex: date, *, record: date | None
             "name": name or None, "kind": action["kind"], "label": action["label"], "text": action["text"], "short": action.get("short") or action["label"],
             "amount": action.get("amount"), "ratio": action.get("ratio"), "factor": action.get("factor"), "premium": action.get("premium"),
             "currency": "INR" if region == "IN" else "USD", "ex_date": ex.isoformat(), "record_date": record.isoformat() if record else None,
-            "purpose": str(purpose or "")[:200], "src": src}
+            "purpose": str(purpose or "")[:200], "src": src, **({"parts": action["parts"]} if action.get("parts") else {})}
 
 
 def _rows(region, symbol, purpose, ex, record, name, fv=None, src="exchange") -> list[dict]:
@@ -204,11 +229,66 @@ def us_rows(symbol: str, events: dict) -> list[dict]:
         if not ex or not num or not den or num <= 0 or den <= 0 or num == den:
             continue
         f = num / den
+        if not split_ratio(num, den):
+            # DE-030: CTVA "Split 6665-for-1000" on 1 Oct was the price history's adjustment for its separation, not a
+            # split: no share count changes, so it is never applied to a holding (adjusts() reads only bonus and split)
+            text = (f"The price history was adjusted {f:.4g} for 1 on this day. That isn't a split ratio (a split is a ratio of "
+                    "small whole numbers); a spin-off or a large special payment is recorded this way. The company's filing says which.")
+            out.append(row("US", symbol, {"kind": "demerger", "sub": f"adj{_n(num)}:{_n(den)}", "label": "Price adjustment", "text": text,
+                                          "short": "price adjustment"}, ex, src="price history"))
+            continue
         label = "Split" if f > 1 else "Reverse split"
         text = f"{label} {_n(num)}-for-{_n(den)}"
         out.append(row("US", symbol, {"kind": "split", "sub": f"{_n(num)}:{_n(den)}", "label": label, "text": text, "short": text.lower(),
                                       "factor": f}, ex, src="price history"))
     return out
+
+
+def split_ratio(num: float, den: float) -> bool:
+    """A ratio a company splits (or reverse-splits) its shares by: whole numbers that, reduced, are both 100 or less
+    (2-for-1, 3-for-2, 1-for-10, 1-for-50). The price history also records a spin-off as a "split" by the price's
+    drop, which reduces to nothing like that (6665-for-1000 is 1333-for-200)."""
+    if abs(num - round(num)) > 1e-9 or abs(den - round(den)) > 1e-9:
+        return False
+    a, b = int(round(num)), int(round(den))
+    g = math.gcd(a, b) or 1
+    return a // g <= 100 and b // g <= 100
+
+
+def calendar_dividends(raw: list, universe: set[str], names: dict | None = None) -> list[dict]:
+    """The dividends companies have declared with an ex-date ahead, from the US market calendar (DE-028), for the
+    companies the US list covers. The row's id is the price history's for the same dividend, so the history's row
+    replaces it once the ex-date has passed."""
+    names = names or {}
+    out = []
+    for d in raw or []:
+        sym, ex, amt = str(d.get("symbol") or "").upper(), parse_day(d.get("ex_date")), _f(d.get("amount"))
+        if not sym or sym not in universe or not ex or not amt or amt <= 0:
+            continue
+        r = row("US", sym, {"kind": "dividend", "sub": "dividend", "label": "Dividend", "text": f"Dividend {money(amt, '$')} a share",
+                            "short": f"Dividend {money(amt, '$')} a share", "amount": round(amt, 4)}, ex,
+                record=parse_day(d.get("record_date")), name=names.get(sym) or results.us_name(d.get("name")),
+                purpose=f"Declared {d['declared']}" if d.get("declared") else "", src="market calendar")
+        if d.get("pay_date"):
+            r["pay_date"] = d["pay_date"]
+        out.append(r)
+    return out
+
+
+def us_declared(sources: dict, universe: set[str], today: date, problems: list) -> tuple[list[dict], set[str]]:
+    """Every declared dividend going ex from today to US_AHEAD_DAYS ahead, and the days the calendar didn't answer."""
+    from . import universes
+    cal, rows, unread = sources.get("cal"), [], set()
+    if cal is None:
+        return rows, unread
+    names = universes.sp500_names()
+    for d in results.weekdays(today, today + timedelta(days=US_AHEAD_DAYS)):
+        try:
+            rows += calendar_dividends(cal.dividends(d), universe, names)
+        except (SourceError, AttributeError) as e:
+            unread.add(d.isoformat())
+            problems.append(f"calendar {d.isoformat()}: {str(e)[:100]}")
+    return rows, unread
 
 
 def from_announcements(symbol: str, items: list[dict], today: date) -> list[dict]:
@@ -415,6 +495,19 @@ def refresh(region: str, sources: dict, tracked: set[str] | None = None, today: 
                 rows += [r for r in got if in_window(r)]
             except (SourceError, AttributeError, KeyError, TypeError) as e:
                 problems.append(f"{sym}: {str(e)[:120]}")
+        declared, unread = us_declared(sources, set(us_universe(tracked)), today, problems)
+        have = {r["id"] for r in rows}
+        rows += [r for r in declared if r["id"] not in have]
+        if declared or unread:
+            with _lock:
+                old = load(region)["rows"]
+            # the calendar's rows of the days it answered are its fresh list (a dividend withdrawn drops off); the other
+            # days', and every company's own rows, stay as they were (merged below like any partial read)
+            asked_days = {d.isoformat() for d in results.weekdays(today, today + timedelta(days=US_AHEAD_DAYS))} - unread
+            stale = {r["id"] for r in old if r.get("src") == "market calendar" and r["ex_date"] in asked_days}
+            rows += [r for r in old if r["id"] not in stale and r["id"] not in {x["id"] for x in rows}
+                     and r["symbol"] not in tracked and r["ex_date"] >= frm.isoformat()]
+            whole = bool(declared)
     if not whole and not rows and (problems or region == "IN"):
         return {"rows": None, "fresh": 0, "problems": problems}
     with _lock:
@@ -472,6 +565,9 @@ def refresh_universe(sources: dict, tracked=(), today: date | None = None, pace:
         cal = load(region)
         old, first = cal["rows"], not cal["at"]
         rows += [r for r in old if r["symbol"] not in done and r["ex_date"] >= frm.isoformat()]     # a failed company keeps its rows
+        # a declared dividend still ahead isn't in any price history yet: the calendar's row stays (DE-028)
+        have = {r["id"] for r in rows}
+        rows += [r for r in old if r.get("src") == "market calendar" and r["ex_date"] >= today.isoformat() and r["id"] not in have]
         merged = merge(old, rows, frm, today, first)
         save(region, merged, universe=len(done))
     return {"rows": len(merged), "read": len(done), "failed": len(problems), "problems": problems[:10]}
@@ -897,6 +993,12 @@ def _clean_q(q: str) -> str:
     return re.sub(r"[^A-Z0-9&.\- ]", "", (q or "").upper()).strip()[:30]
 
 
+def ahead_known(region: str, rows: list[dict]) -> bool:
+    """Whether the calendar knows the dates ahead: India's exchange list does; the US list does once the market
+    calendar's declared dividends are in it (DE-028)."""
+    return region == "IN" or any(r.get("src") == "market calendar" for r in rows)
+
+
 def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = "", today: date | None = None, limit: int = 400) -> dict:
     """Ex-dates from today on, and the last two weeks: the user's own stocks, or every company in the calendar."""
     today = today or local_today(region)
@@ -905,14 +1007,14 @@ def view(region: str, uid: str, scope: str = "mine", q: str = "", kind: str = ""
     q, kind = _clean_q(q), kind if kind in KINDS else ""
     rows = [r for r in cal["rows"] if (scope == "all" or r["symbol"] in mine) and (not kind or r["kind"] == kind)
             and (not q or q in r["symbol"] or q in str(r.get("name") or "").upper())]
-    recent_days = KEEP_DAYS if region == "US" else RECENT_DAYS      # the US calendar has no dates ahead: its list reaches back further
+    recent_days = KEEP_DAYS if region == "US" else RECENT_DAYS      # the US list's past ex-dates are its fullest part: it reaches back further
     t, back = today.isoformat(), (today - timedelta(days=recent_days)).isoformat()
     ahead = sorted((r for r in rows if r["ex_date"] >= t), key=lambda r: (r["ex_date"], r["symbol"] not in mine, r["symbol"]))
     recent = sorted((r for r in rows if back <= r["ex_date"] < t), key=lambda r: (r["ex_date"], r["symbol"]), reverse=True)
     show = lambda rs: [{k: v for k, v in {**r, "mine": r["symbol"] in mine}.items() if k != "fresh"} for r in rs[:limit]]
     return {"region": region, "scope": scope, "kind": kind, "today": t, "updated_at": cal["at"], "ahead": show(ahead), "recent": show(recent),
             "more": max(0, len(ahead) - limit) + max(0, len(recent) - limit), "mine_count": len(mine), "alerts": alerts_on(uid),
-            "kinds": list(KINDS), "ahead_known": region == "IN", "note": NOTE, "recent_days": recent_days,
+            "kinds": list(KINDS), "ahead_known": ahead_known(region, cal["rows"]), "note": NOTE, "recent_days": recent_days,
             "universe": {"companies": cal.get("universe"), "updated_at": cal.get("universe_at")} if region == "US" else None}
 
 
@@ -1043,7 +1145,7 @@ def company(region: str, symbol: str, sources: dict | None, today: date | None =
     return {"region": region, "symbol": symbol.upper(), "today": t, "ahead": [strip(r) for r in rows if r["ex_date"] > t],
             "past": [strip(r) for r in sorted((r for r in rows if r["ex_date"] <= t), key=lambda r: r["ex_date"], reverse=True)[:30]],
             "dividends_12m": {"amount": round(sum(r["amount"] for r in divs), 4), "count": len(divs), "currency": CUR[region]} if divs else None,
-            "ahead_known": region == "IN", "note": NOTE}
+            "ahead_known": ahead_known(region, load_cached(region)["rows"]) if region == "US" else True, "note": NOTE}
 
 
 # ---------- open paper positions ----------

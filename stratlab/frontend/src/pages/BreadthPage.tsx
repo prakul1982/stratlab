@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../lib/app";
 import {
-  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, thrustDays,
+  BROAD_GROUP, breadthApi, breadthChipLabel, dailyTitle, breadthStart, count, delta, liveReadLine, MOVES_LABEL, MOVES_TITLE, liveSeries, sectorColumnLabel, liveNoticeTone, liveTag, liveTitle, orderGroups, revisionLines, savePick, share, shortDay, spikeCap, thrustDays,
   type BreadthAlerts, type BreadthView, type Group, type GroupId, type History, type LiveView, type Revision, type SectorTable, type Today,
 } from "../lib/breadth";
 import { cutSeries, firstInPeriod, isPeriod, offeredPresets, periodDays, spanDays } from "../lib/period";
@@ -213,7 +213,8 @@ function Headline({ t, help, live, pending, revised }: { t: Today; help: Record<
   const pair = (a: keyof Today, b: keyof Today) => {
     const x = t[a] as Today["adv"], y = t[b] as Today["adv"];
     if (!t.prev_day || (x.prev == null && y.prev == null)) return undefined;
-    return x.change === 0 && y.change === 0 ? `Same as ${shortDay(t.prev_day)}` : `${shortDay(t.prev_day)}: ${count(x.prev)} / ${count(y.prev)}`;
+    // DE-023: "Same as 22 Oct" didn't say what was the same
+    return x.change === 0 && y.change === 0 ? `${shortDay(t.prev_day)}: the same ${count(x.prev)} / ${count(y.prev)}` : `${shortDay(t.prev_day)}: ${count(x.prev)} / ${count(y.prev)}`;
   };
   return (
     <Card label={`Breadth on ${shortDay(t.day)}`} testId="breadth-today">
@@ -221,7 +222,7 @@ function Headline({ t, help, live, pending, revised }: { t: Today; help: Record<
       <StatRow>
         <Stat label={lab("Rose / fell", help.ad)} value={<><span className="k-up">{count(t.adv.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.dec.value)}</span></>}
           note={<>Ratio {t.ad_ratio.value == null ? "–" : t.ad_ratio.value.toFixed(2)} · {count(t.unch.value)} unchanged · {count(t.stocks.value)} stocks{pair("adv", "dec") ? ` · ${pair("adv", "dec")}` : ""}</>} />
-        <Stat label={lab("Above 50-day average", help.ma)} value={share(t.pct50.value)} delta={pts("pct50")} note={`20-day: ${share(t.pct20.value)}`} />
+        <Stat label={lab("Above 50-day average", help.ma)} value={share(t.pct50.value)} delta={pts("pct50")} note={<span className="nowrap">{`20\u2011day: ${share(t.pct20.value)}`}</span>} />
         <Stat label={lab("Above 200-day average", help.ma)} value={share(t.pct200.value)} delta={pts("pct200")} />
         <Stat label={lab("52-week highs / lows", help.highs_lows)} value={<><span className="k-up">{count(t.highs.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.lows.value)}</span></>} note={pair("highs", "lows")} />
         <Stat label={lab(MOVES_LABEL, help.moves)} value={<><span className="k-up">{count(t.up4.value)}</span> <span className="k-muted">/</span> <span className="k-down">{count(t.down4.value)}</span></>} note={pair("up4", "down4")} />
@@ -230,7 +231,9 @@ function Headline({ t, help, live, pending, revised }: { t: Today; help: Record<
           delta={chg(t.mcclellan.change, "", 1)} note={t.summation.value == null ? undefined : `Summation ${fmt1(t.summation.value)}`} />
         <Stat label={lab("TRIN", help.trin)} value={t.trin.value == null ? "–" : t.trin.value.toFixed(2)} delta={chg(t.trin.change, "", 2, true)} />
       </StatRow>
-      {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.join(". ")}. A stock's price was corrected after the day was first counted.</p>}
+      {/* DE-023: the correction is one short line with its details behind the (i), not a paragraph in the headline card */}
+      {changed.length > 0 && <p className="k-note" data-testid="breadth-revised">{changed.length === 1 ? "An earlier day's count was revised" : `${changed.length} earlier counts were revised`}
+        <Info label="About the revision">{changed.join(". ")}. A stock's price was corrected after the day was first counted.</Info></p>}
     </Card>
   );
 }
@@ -244,6 +247,8 @@ function AlertBox({ group }: { group: Group }) {
   useEffect(() => { breadthApi.alerts().then(setAlerts).catch(() => setAlerts(null)); }, []);
   const n = Number(level);
   const ok = level.trim() !== "" && Number.isFinite(n) && n >= 1 && n <= 99;
+  // DE-024: a level the alert can't take says why, not only a greyed-out button
+  const why = level.trim() === "" ? "Enter a level from 1 to 99%." : !ok ? "The level is a share of stocks: a number from 1 to 99." : null;
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ok) return;
@@ -265,6 +270,8 @@ function AlertBox({ group }: { group: Group }) {
       <FormGrid label="New breadth alert" onSubmit={add}>
         <Field label="Alert level" unit="%" inputMode="decimal" value={level} onChange={(e) => setLevel(e.target.value)} aria-invalid={!ok}
           aria-label={`Alert me when the share of ${group.name} stocks above their 50-day average crosses`} />
+        {why && <p className="k-note k-down k-field wide" role="alert" data-testid="breadth-alert-why">{why}</p>}
+        {ok && alerts && mine.length >= alerts.limit && <p className="k-note k-field wide">You have the {alerts.limit} alerts a plan keeps: delete one to add another.</p>}
         <FormActions>
           <button className="btn" disabled={!ok || busy || (alerts ? mine.length >= alerts.limit : false)}>Add alert</button>
         </FormActions>
@@ -307,6 +314,9 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
   const last = h.days.length ? shortDay(h.days[h.days.length - 1]) : "";
   const thrusts = (data.thrusts ?? []).filter((d) => !h.days.length || d >= h.days[0]);
   const f = (v: number | null | undefined, fn: (x: number) => string) => (v == null ? "–" : fn(v));
+  // one spike (TRIN near 10) flattened every other day: the rare days above the cap are drawn at the top edge (DE-022)
+  const trinCap = spikeCap(h.trin);
+  const trinOver = trinCap == null ? 0 : h.trin.filter((v) => v != null && v > trinCap).length;
   return (
     <div data-testid="breadth-charts" className="k-page">
       <div className="k-cols">
@@ -325,19 +335,20 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             : <p className="k-small k-muted">The index's prices weren't available for these days.</p>}
         </Box>
         <Box title="New 52-week highs and lows" info={help.highs_lows} h={h} cols={[{ header: "New highs", get: (i) => count(h.highs[i]) }, { header: "New lows", get: (i) => count(h.lows[i]) }]} none={flatZero(h.highs, h.lows)} note={`Highs drawn up, lows down · last ${last}`}>
-          <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
+          <PairBars up={h.highs} down={h.lows} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} upLabel="new highs" downLabel="new lows" upName="New highs" downName="New lows" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="New 52-week highs (up) and lows (down) each day" />
         </Box>
         <Box title="McClellan oscillator" info={help.mcclellan} h={h} cols={[{ header: "Oscillator", get: (i) => fmt1(h.mcclellan[i]) }]} note={`Last ${last}`}>
           <LineChart lines={[{ values: h.mcclellan, color: A, label: "Oscillator", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan oscillator" />
         </Box>
-        <Box title="McClellan summation index" info={help.summation} h={h} cols={[{ header: "Summation", get: (i) => fmt1(h.summation[i]) }]} note={`Added up from ${since ?? "the first day"} · last ${last}`}>
+        <Box title="McClellan summation index" info={help.summation} h={h} cols={[{ header: "Summation", get: (i) => fmt1(h.summation[i]) }]}
+          note={`Added up from ${since ?? "the first day"}, the first day stored for this group, so its level depends on that start: read its direction, not its level against another group's · last ${last}`}>
           <LineChart lines={[{ values: h.summation, color: A, label: "Summation", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200}
             baseline={0} format={fmt1} axisFormat={fmtInt} ariaLabel="McClellan summation index" />
         </Box>
         <Box title={MOVES_TITLE} info={help.moves} h={h} cols={[{ header: "Up 4%+", get: (i) => count(h.up4[i]) }, { header: "Down 4%+", get: (i) => count(h.down4[i]) }]} none={flatZero(h.up4, h.down4)} note={`Last ${last}`}>
-          <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} upLabel="up 4%+" downLabel="down 4%+" upName="Up 4% or more" downName="Down 4% or more" upColor={A} downColor={B}
+          <PairBars up={h.up4} down={h.down4} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} upLabel="up 4%+" downLabel="down 4%+" upName="Up 4% or more" downName="Down 4% or more" upColor={A} downColor={B}
             format={fmtInt} ariaLabel="Stocks up 4% or more (up) and down 4% or more (down) each day" />
         </Box>
         <Box title="Share in Stage 2" info={help.stage2} h={h} cols={[{ header: "In Stage 2", get: (i) => share(h.stage2[i]) }]} none={flatZero(h.stage2)} note={`Last ${last}`}>
@@ -350,9 +361,11 @@ function Charts({ data, h, help }: { data: BreadthView; h: History; help: Record
             levels={[{ v: 40, color: "var(--dash)", label: "40%" }, { v: 61.5, color: "var(--dash)", label: "61.5%" }]}
             format={fmtPct} axisFormat={(v) => `${Math.round(v)}%`} ariaLabel="Breadth thrust measure, with lines at 40% and 61.5%" />
         </Box>
-        <Box title="TRIN" info={help.trin} h={h} cols={[{ header: "TRIN", get: (i) => f(h.trin[i], (v) => v.toFixed(2)) }]} note={`Dashed line at 1 · last ${last}`}>
-          <LineChart lines={[{ values: h.trin, color: A, label: "TRIN", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200} refs={[{ v: 1, dash: true }]}
-            format={(v) => v.toFixed(2)} ariaLabel="TRIN each day, with a line at 1" />
+        <Box title="TRIN" info={help.trin} h={h} cols={[{ header: "TRIN", get: (i) => f(h.trin[i], (v) => v.toFixed(2)) }]}
+          note={`Dashed line at 1${trinCap != null ? ` · ${trinOver} day${trinOver === 1 ? "" : "s"} above ${trinCap} drawn at the top edge (the table and the tooltip give the value)` : ""} · last ${last}`}>
+          <LineChart lines={[{ values: trinCap != null ? h.trin.map((v) => (v == null ? v : Math.min(v, trinCap))) : h.trin, color: A, label: "TRIN", width: 2 }]} labels={labels} times={h.days} sync="breadth" ranges={false} table={false} height={200} refs={[{ v: 1, dash: true }]}
+            format={(v) => v.toFixed(2)} tipExtra={trinCap != null ? (i) => (h.trin[i] != null && h.trin[i]! > trinCap ? <span>Actual: {h.trin[i]!.toFixed(2)}</span> : null) : undefined}
+            ariaLabel="TRIN each day, with a line at 1" />
         </Box>
       </div>
       {data.sectors && data.sectors.rows.length > 0 && (
@@ -383,6 +396,7 @@ function SectorHeat({ t }: { t: SectorTable }) {
         <span>0%</span><span className="inv-scale" /><span>100%</span>
         <span className="k-note">Darker: more of the sector's stocks above their 50-day average.</span>
       </div>
+      {t.small && t.small.length > 0 && <p className="k-note" data-testid="breadth-small-sectors">Not shown, with fewer than {t.min_stocks ?? 5} stocks to count: {t.small.map((x) => `${x.sector} (${x.stocks})`).join(", ")}.</p>}
     </div>
   );
 }

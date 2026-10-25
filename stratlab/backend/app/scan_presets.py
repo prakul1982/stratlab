@@ -65,7 +65,9 @@ PRESETS: list[dict] = [
      "text": "The close is within 5% of the lowest low of the previous 252 trading days, or below it.",
      "rules": [_c(PRICE, "lt", {"t": "dc_lower", "p": YEAR, "k": 1.05})]},
     {"id": "pullback", "name": "Pullback in an uptrend", "within": 1,
-     "text": "The 50-day average is above the 200-day average and the close is above the 50-day, but below the 20-day average.",
+     # the rule reads the 20-day exponential average (EMA), so the words say so (DE-006: MSFT's match used the EMA's 524.78,
+     # the plain 20-day average was 526.70)
+     "text": "The 50-day average is above the 200-day average and the close is above the 50-day, but below the 20-day exponential average (EMA).",
      "rules": [_c({"t": "sma", "p": 50}, "gt", {"t": "sma", "p": 200}), _c(PRICE, "gt", {"t": "sma", "p": 50}),
                _c(PRICE, "lt", {"t": "ema", "p": 20})]},
 ]
@@ -127,12 +129,33 @@ def _detail(pid: str, ctx: Ctx, i: int, live: bool = False) -> str:
             return f"{at} {_f(px)}, {(px / low - 1) * 100:.1f}% above the previous 252-day low of {_f(low)}" if px >= low \
                 else f"{at} {_f(px)}, below the previous 252-day low of {_f(low)}"
         if pid == "pullback":
-            return f"{at} {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
+            return f"{at} {_f(px)}: above the 50-day average {_f(val('sma', p=50))}, below the 20-day EMA {_f(val('ema', p=20))}; 50-day above 200-day {_f(val('sma', p=200))}"
         if pid == "st_s2":
             return f"Stage 2, and the {word} {_f(px)} is above the Supertrend {_f(val('supertrend', p=10, m=3))}"
     except (TypeError, ValueError, ZeroDivisionError):
         pass
     return ""
+
+
+def _trend_days(ctx: Ctx, i: int) -> dict:
+    """For a Stage 2 + Supertrend match: how many candles the price has been above the Supertrend and the stock in Stage
+    2, counted as the scan of a small group counts them (scan.analyse), so the 500-stock groups can show the same
+    fresh / already split and columns (DE-003). `stage_capped`: Stage 2 began at or before the first candle read."""
+    df = ctx.df
+    try:
+        st = compute(Ref(t="supertrend", p=10, m=3), df, False).to_numpy()
+        stg = compute(Ref(t="stage", p=150, m=20), df, False).to_numpy()
+    except Exception:
+        return {}
+    c = df["c"].to_numpy()
+    up = 0
+    while up < i and c[i - up - 1] > st[i - up - 1]:
+        up += 1
+    since = 0
+    while since < i and stg[i - since - 1] == 2:
+        since += 1
+    capped = since >= i or not math.isfinite(float(stg[i - since - 1]))
+    return {"st_days": up + 1, "stage_days": since + 1, "stage_capped": bool(capped)}
 
 
 def evaluate(bars: list[dict], through: str | None = None, only: list[str] | None = None, live: bool = False) -> dict | None:
@@ -163,7 +186,8 @@ def evaluate(bars: list[dict], through: str | None = None, only: list[str] | Non
                 if squeeze is not None and not squeeze[i]:
                     continue
                 if all(eval_cond(ctx, c, i) for c in p["conds"]):
-                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": _detail(p["id"], ctx, i, live)}
+                    out["matches"][p["id"]] = {"days_ago": back, "day": str(rows[i]["t"])[:10], "detail": _detail(p["id"], ctx, i, live),
+                                               **(_trend_days(ctx, i) if p["id"] == "st_s2" else {})}
                     break
         except Exception as e:      # one preset's data problem leaves the others' answers standing
             print("scan preset:", p["id"], str(e)[:100])
@@ -218,7 +242,8 @@ def build(per_stock: dict[str, dict], now: datetime | None = None) -> dict:
             counts[pid] += 1
         if found:
             rows.append({"s": sym, "p": round(r["price"], 4), "c": None if r["chg"] is None else round(r["chg"], 2), "d": r["as_of"],
-                         "m": {pid: [m["days_ago"], m["day"], m["detail"]] for pid, m in found.items()}})
+                         "m": {pid: [m["days_ago"], m["day"], m["detail"]] + ([{k: m[k] for k in ("st_days", "stage_days", "stage_capped")}]
+                                                                                 if "st_days" in m else []) for pid, m in found.items()}})
     checked = [r for r in per_stock.values() if r]
     return {"as_of": max((r["as_of"] for r in checked), default=None), "at": (now or datetime.now(ZoneInfo("UTC"))).isoformat(timespec="seconds"),
             "checked": len(checked), "counts": counts, "rows": rows}
@@ -247,7 +272,7 @@ def stored_view(group: str, preset: str) -> dict | None:
         m = (r.get("m") or {}).get(preset)
         if m:
             rows.append({"symbol": r["s"], "price": r.get("p"), "chg": r.get("c"), "as_of": r.get("d"),
-                         "days_ago": m[0], "day": m[1], "detail": m[2]})
+                         "days_ago": m[0], "day": m[1], "detail": m[2], **(m[3] if len(m) > 3 and isinstance(m[3], dict) else {})})
     rows.sort(key=lambda x: (x["days_ago"], x["symbol"]))
     return {"as_of": doc.get("as_of"), "at": doc.get("at"), "checked": doc.get("checked", 0), "rows": rows,
             "counts": doc.get("counts") or {}}

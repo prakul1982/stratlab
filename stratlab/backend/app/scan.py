@@ -116,6 +116,41 @@ def _bars(registry, iid: str) -> list[dict]:
     return bars
 
 
+class LastCloseIndia:
+    """India's daily candles up to the last close from the public price history, for the hours the broker's data is
+    offline (nights, weekends): a registry with one market, so scan.run and run_preset read it like the broker's
+    (DE-001: on Saturday every Indian scan said "The scan didn't run" while the screener, breadth and rotation showed
+    Friday's close). Instrument ids are "IN:close:<symbol>", apart from the broker's "IN:<token>"."""
+    market = "IN"
+
+    def __init__(self, yahoo):
+        self.yahoo = yahoo
+
+    def provider(self, market: str):
+        return self if market == "IN" else None
+
+    def ready(self) -> bool:
+        return True
+
+    def equity(self, symbol: str) -> dict:
+        sym = str(symbol or "").upper()
+        return {"id": f"IN:close:{sym}", "symbol": sym, "type": "EQ", "exchange": "BSE" if sym.isdigit() else "NSE", "currency": "INR"}
+
+    def search(self, q: str, allow_fno: bool = False, limit: int = 8) -> list[dict]:
+        return []
+
+    def instrument(self, key: str) -> dict | None:
+        sym = str(key or "").split(":", 1)[-1].upper()
+        return {"symbol": sym, "currency": "INR", "exchange": "BSE" if sym.isdigit() else "NSE"} if sym else None
+
+    def resolve(self, iid: str):
+        return self, self.instrument(iid.split(":", 1)[-1])
+
+    def history(self, inst: dict, tf: str, days: int, ttl: float | None = None) -> list[dict]:
+        sym = inst["symbol"]
+        return self.yahoo.chart(f"{sym}.BO" if sym.isdigit() else f"{sym}.NS", tf, days)["candles"]
+
+
 def company_name(market: str, inst: dict | None, iid: str) -> str | None:
     """A stock's name as its company page shows it: the stored company lists' and the stored page facts' name first, then
     the instrument master's short exchange name ("ADANI PORT & SEZ") only as the fallback (R29D-001, R31-020)."""
@@ -129,7 +164,9 @@ def company_name(market: str, inst: dict | None, iid: str) -> str | None:
         if not got:
             got = ((stock_pages._setting(f"stocks:page:{region}:{sym}") or {}).get("facts") or {}).get("name")
         if got and str(got).strip():
-            return got
+            # a US company's name as its SEC filing writes it ("MICROSOFT CORP", "COSTCO WHOLESALE CORP /NEW"): the clean
+            # name the company pages show (DE-005)
+            return stock_pages.proper_name(got) if region == "US" else got
     except Exception:
         pass
     return master

@@ -56,6 +56,8 @@ function fromDraft(d: Draft): { ranges: Partial<Record<RangeId, Bound>>; bad: Se
       return n;
     };
     const b = { min: read(v.min, "min"), max: read(v.max, "max") };
+    // "at least 50, at most 10" can't be met: said under the boxes, and the screen says so instead of its last list (DE-010)
+    if (b.min != null && b.max != null && b.min > b.max) bad.add(`${k}.order`);
     if (b.min != null || b.max != null) ranges[k] = b;
   }
   return { ranges, bad };
@@ -138,7 +140,8 @@ export function ScreensPage() {
         restore.current = 0;
         rememberLoaded(screenKey, shown);
       })
-      .catch((e) => { if (n === seq.current) { restore.current = 0; setError((e as Error).message); } })
+      // a screen that can't run shows why where the list was, not under the last list's rows (DE-010)
+      .catch((e) => { if (n === seq.current) { restore.current = 0; setError((e as Error).message); setOut(null); setRows([]); } })
       .finally(() => { if (n === seq.current) setLoading(false); });
   }, [region, current, sort, desc, screenKey]);
   const runRef = useRef(run);
@@ -186,7 +189,7 @@ export function ScreensPage() {
   const more = useMoreColumns("screens", Math.max(0, cols.length - 5));
   const tableCols: Column<ScreenRow>[] = cols.map((c) => c.id === "name"
     ? { key: c.id, header: c.short ?? c.label, rowHeader: true, wrap: true, sortable: true, cell: (r: ScreenRow) => (
-      <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link> <span className="k-note">{r.symbol}</span>
+      <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link><span className="k-sub-line k-note">{r.symbol}</span>
         {r.surveillance && r.surveillance.length > 0 && <> <SurvBadges region={region} symbol={r.symbol} codes={r.surveillance} /></>}</>) }
     : { key: c.id, header: c.short ?? c.label, numeric: !c.text, sortable: true, cell: (r: ScreenRow) => (
       // a row whose close is of another day than the header's says its own day (R7O-004)
@@ -194,7 +197,10 @@ export function ScreensPage() {
         ? <>{c.cell(r, region)}<span className="k-sub-line">{fmtDate(r.price_at.slice(0, 10), { year: false })} close</span></>
         : c.cell(r, region)) });
 
-  const shownCols = more.on ? tableCols : tableCols.filter((c, i) => i < 5 || c.key === sort);
+  // a column a condition is on is shown with the first five, so the value filtered on is in view (DE-011)
+  const filtered = new Set<string>([...Object.keys(current.ranges), ...(current.stage.length ? ["stage"] : []), ...(current.red_flags ? ["red_flags"] : [])]);
+  const shownCols = more.on ? tableCols : tableCols.filter((c, i) => i < 5 || c.key === sort || filtered.has(c.key));
+  const unvalued = Object.entries(out?.no_value ?? {}).filter(([, k]) => k > 0);
   return (
     <div className="k-page">
       <PageHeader eyebrow={eyebrowOf("/research/screens")} title="Filter companies by plain facts" asOf={out?.as_of} asOfLabel={out?.as_of_newest && out.as_of && out.as_of_newest.slice(0, 10) !== out.as_of.slice(0, 10) ? "Oldest close" : "Prices as of"} asOfTz={marketTz(region)}
@@ -243,6 +249,7 @@ export function ScreensPage() {
                     <span className="k-unit">{r.unit === "%" ? "%" : "times"}</span>
                   </div>
                   {(bad.has(`${r.id}.min`) || bad.has(`${r.id}.max`)) && <span className="k-note k-down">Enter a plain number, like 15 or -10.</span>}
+                  {bad.has(`${r.id}.order`) && <span className="k-note k-down" role="alert">"At least" is above "at most": no company can meet this.</span>}
                 </Group>
               ))}
               <Group title="Stage" help={help.stage}>
@@ -291,6 +298,9 @@ export function ScreensPage() {
             {error && <ErrorState title="The companies couldn't be read" action={{ label: "Try again", onClick: () => run(0) }}>{error}</ErrorState>}
             {out && out.indexed === 0 && <EmptyState title="Still gathering company numbers">StratLab is still gathering company numbers for {REGION_NAME[region]}. Check back in a little while.</EmptyState>}
             {out && out.indexed > 0 && out.total === 0 && <EmptyState title="No company meets every condition.">Try widening one of them.</EmptyState>}
+            {unvalued.length > 0 && (
+              <p className="k-note" data-testid="screens-no-value">Left out for want of a figure: {unvalued.map(([k, c]) => `${c.toLocaleString("en-IN")} with no ${(cols.find((x) => x.id === k)?.label ?? k).replace(/^Stage$/, "Stage worked out yet")}`).join("; ")}. A blank never counts as meeting a condition.</p>
+            )}
             {rows.length > 0 && (
               <div className="screens-table">
                 <DataTable label="Companies that match" rows={rows} rowKey={(r) => r.symbol} stack columns={shownCols} sort={{ key: sort, desc, onSort: sortBy }} />
@@ -302,7 +312,7 @@ export function ScreensPage() {
           <Card>
             <CardHead title={open ? `Screen: ${open.name}` : "Save this screen"} info="Saved screens keep your conditions. Turn on the weekly email to hear on Saturday mornings which companies newly meet them. Your plan sets how many you can keep." />
             <FormGrid label="Save this screen" onSubmit={(e) => e.preventDefault()}>
-              <Field label="Name" maxLength={60} placeholder="Like: Low debt, growing revenue" value={name} onChange={(e) => setName(e.target.value)} />
+              <Field label="Name" maxLength={60} placeholder="Like: Low debt" value={name} onChange={(e) => setName(e.target.value)} />
               <FieldGroup label="Email">
                 <CheckField label="Weekly email of new matches" checked={weekly} onChange={setWeekly} />
               </FieldGroup>

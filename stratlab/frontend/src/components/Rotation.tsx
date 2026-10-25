@@ -155,6 +155,12 @@ export function useAnimate(len: number): [number | null, () => void] {
 
 type Placed = { id: string; name: string; x: number; y: number; anchor: "start" | "end" };
 
+/** A dot's name on a phone: "Nifty Financial Services" as "Financial Services", "Consumer discretionary" as "Consumer disc." */
+export function shortName(name: string): string {
+  const n = name.replace(/^Nifty\s+/, "");
+  return n.length > 14 ? `${n.slice(0, 12).trimEnd()}.` : n;
+}
+
 /** Put each name beside its dot (right, else left, else above/below) where it overlaps no other name or dot;
  *  names that fit nowhere are left out. The hovered/focused one is placed first so it always shows. */
 function placeLabels(heads: { id: string; name: string; x: number; y: number }[], plot: { l: number; r: number; t: number; b: number },
@@ -163,8 +169,9 @@ function placeLabels(heads: { id: string; name: string; x: number; y: number }[]
   const hit = (a: [number, number, number, number]) => boxes.some((b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]);
   const order = [...heads].sort((a, b) => (a.id === first ? -1 : b.id === first ? 1 : 0));
   for (const h of order) {
-    if (phone && h.id !== first) continue;
-    const w = h.name.length * 6.6 + 4, own = heads.indexOf(h);
+    // on a phone every dot is named too, by its short name, where it fits (DE-021: no dot had a name, so none could be told apart)
+    const name = phone && h.id !== first ? shortName(h.name) : h.name;
+    const w = name.length * (phone ? 6.0 : 6.6) + 4, own = heads.indexOf(h);
     const tries: [number, number, "start" | "end"][] = [[h.x + 13, h.y + 4, "start"], [h.x - 13, h.y + 4, "end"], [h.x - w / 2, h.y - 15, "start"], [h.x - w / 2, h.y + 22, "start"]];
     for (const [x, y, anchor] of tries) {
       const x0 = anchor === "end" ? x - w : x, box: [number, number, number, number] = [x0, y - 11, x0 + w, y + 3];
@@ -172,7 +179,7 @@ function placeLabels(heads: { id: string; name: string; x: number; y: number }[]
       const mine = boxes[own]; boxes[own] = [0, 0, 0, 0];       // its own dot doesn't block it
       const clash = hit(box); boxes[own] = mine;
       if (clash && h.id !== first) continue;
-      boxes.push(box); out.push({ id: h.id, name: h.name, x, y, anchor }); break;
+      boxes.push(box); out.push({ id: h.id, name, x, y, anchor }); break;
     }
   }
   return out;

@@ -499,7 +499,8 @@ def test_a_refresh_that_read_nothing_is_an_error_and_keeps_its_slot_free(w):
         def board_meetings(self, f, t):
             asked.append(1)
             return super().board_meetings(f, t)
-    job.sources = lambda: {"in": Back(), "us": FakeUS(), "sec": None}
+    # (the US list answers too: an empty whole-market answer is no answer, DE-025)
+    job.sources = lambda: {"in": Back(), "us": FakeUS(us_calendar(TODAY)), "sec": None}
     job.tick(IN_MORNING + timedelta(minutes=10))
     assert not asked                                              # it waits half an hour, not on every five-minute check
     later = IN_MORNING + timedelta(minutes=R.RETRY_MINUTES + 1)
@@ -509,7 +510,7 @@ def test_a_refresh_that_read_nothing_is_an_error_and_keeps_its_slot_free(w):
 
 
 def test_a_refresh_that_read_is_not_an_error_and_uses_its_slot(w):
-    job = R.Job(lambda: {"in": FakeIndia([meeting("RELIANCE", TODAY)]), "us": FakeUS(), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
+    job = R.Job(lambda: {"in": FakeIndia([meeting("RELIANCE", TODAY)]), "us": FakeUS(us_calendar(TODAY)), "sec": None}, send=lambda *a: None, can_alert=lambda p: True)
     job.tick(IN_MORNING)
     assert job.status["last_error"] is None and db.get_setting("resultsjob:refresh-IN-07:15") == "2026-10-05"
 

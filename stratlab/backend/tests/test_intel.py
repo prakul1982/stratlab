@@ -367,7 +367,8 @@ def test_a_theme_read_is_filtered_and_marks_unsourced_figures(monkeypatch):
     fake = lambda *x, **k: json.dumps(resp)      # noqa: E731
     monkeypatch.setattr(A, "complete", lambda *x, **k: fake())      # its own fake reply, not one an earlier test left
     out = A.sector("India defence", "IN", (fake, fake))
-    assert out["summary"] == "Defence orders grew. Orders are worth Rs 9,99,999 crore (AI estimate)."
+    # a figure with no source behind it isn't stated at all, not even marked as an estimate (DE-013)
+    assert out["summary"] == "Defence orders grew."
     assert out["sub_themes"][0]["detail"] == "" and out["core"] == "" and out["screen"][0]["one_line"] == ""
     assert out["value_chain"][0]["description"] == "" and out["tailwinds"] == ["Exports are rising."] and out["risks"] == ["Delays."]
 

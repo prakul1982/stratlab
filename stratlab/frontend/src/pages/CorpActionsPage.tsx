@@ -23,7 +23,7 @@ function DayGroups({ rows, today }: { rows: CorpAction[]; today: string }) {
   return <>{days.map((d) => (
     <div key={d} className="inv-day">
       <span className="k-eyebrow">Ex-date {exDay(d)}{d === today ? " · today" : ""}</span>
-      <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} />)}</div>
+      <div className="inv-rows">{rows.filter((r) => r.ex_date === d).map((r) => <ActionLine key={r.id} a={r} showEx={false} />)}</div>
     </div>
   ))}</>;
 }
@@ -72,9 +72,9 @@ export function CorpActionsPage() {
       <PageHeader eyebrow={eyebrowOf("/research/corporate-actions")} title="Dividends, bonuses and splits" asOf={data?.updated_at} asOfLabel="Updated" asOfTz={marketTz(region)}
         lede={region === "IN"
           ? "Dividends, bonus issues, splits, buybacks, rights issues and demergers by ex-date, as companies announced them to the exchange."
-          : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date. Only ex-dates that have already happened are available for the US."}
-        info={region === "US" ? <>The US list is read once a day from each company's price history: the S&P 500 and StratLab's own groups{data?.universe?.companies ? ` (${data.universe.companies.toLocaleString("en-IN")} companies read)` : ""}, plus any US stock you follow.
-          A price history holds the dividends and splits that have already gone ex, so you see today's and the last four weeks'; announced dates that are still ahead aren't in it. Amounts are per share, as the history records them.</> : undefined}
+          : "Dividends and splits of the S&P 500 and the US companies you follow, by ex-date: dividends companies have declared for the next four weeks, and those that have gone ex."}
+        info={region === "US" ? <>Dividends ahead are the ones companies have declared, from the US market calendar, for the next four weeks, with the record and pay dates the company gave.
+          Past ex-dates, and splits, are read once a day from each company's price history: the S&P 500 and StratLab's own groups{data?.universe?.companies ? ` (${data.universe.companies.toLocaleString("en-IN")} companies read)` : ""}, plus any US stock you follow. A split ahead isn't listed until its ex-date. Amounts are per share.</> : undefined}
         infoLabel="About the US list" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={setRegion} />
@@ -88,7 +88,7 @@ export function CorpActionsPage() {
           </Field>
           {scope === "all" && (
             <Field key={region} label="Find a company">
-              {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder="Find a company, like TCS or Infosys" />}
+              {(id) => <StockPicker id={id} market={region} onText={setQ} onPick={(s) => setQ(s)} placeholder={region === "IN" ? "Like TCS or Infosys" : "Like AAPL or Apple"} />}
             </Field>
           )}
         </FormGrid>
@@ -129,7 +129,7 @@ export function CorpActionsPage() {
         </>
       )}
       {data && data.more > 0 && <p className="k-note">And {data.more} more.{scope === "all" ? " Find a company by name to narrow the list." : ""}</p>}
-      {data && <p className="k-note inv-text">The ex-date is the first day the shares trade without the entitlement; in India it's also the record date. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
+      {data && <p className="k-note inv-text">The ex-date is the first day the shares trade without the entitlement; the record date (on each row when it's another day) is when the company reads its list of holders. {data.note}{data.updated_at ? ` Updated ${ago(data.updated_at)}.` : ""}</p>}
     </div>
   );
 }

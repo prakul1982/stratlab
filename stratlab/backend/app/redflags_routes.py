@@ -1,7 +1,7 @@
 """The pages' side of redflags.py: red-flag filings across every company, and US holders above 5% (13D and 13G)."""
 from fastapi import APIRouter, Depends
 
-from . import redflags, scan
+from . import redflags, results, scan
 from .auth import current_profile
 from .plans import FEATURE_PLAN, PLANS, allows, plan_of
 from .responses import err, ok
@@ -23,13 +23,15 @@ def _need(profile: dict, feature: str, what: str):
 @router.get("/research/redflags")
 def red_flags(region: str = "IN", scope: str = "all", flag: str = "", frm: str = "", to: str = "", q: str = "", page: int = 1,
               size: int = redflags.PAGE, profile=Depends(current_profile)):
-    """The latest red-flag filings across every company (`scope=all`) or the user's watchlist (`mine`), newest first,
+    """The latest red-flag filings across every company (`scope=all`) or the user's own stocks (`mine`), newest first,
     paged, with the type and date filters. Stored daily; nothing is fetched from a source here. Basic and up."""
     region = "US" if region.upper() == "US" else "IN"
     _need(profile, "filings", "Red flags across companies")
     mine = None
     if scope == "mine":
-        mine = {m["symbol"] for m in scan.watchlist_members(profile["id"], region)}
+        # "your stocks", as the results and corporate-actions pages count them: watchlist, holdings, notebooks and paper
+        # sessions, in both markets (DE-036: India's tab said "Your stocks", the US one "Your watchlist")
+        mine = set(results.my_stocks(profile["id"], region)) | {m["symbol"] for m in scan.watchlist_members(profile["id"], region)}
     out = redflags.listing(region, flag[:200], frm[:10], to[:10], page, size, q, mine)
     return ok({**out, "scope": "mine" if scope == "mine" else "all", "note": NOTE[region], "watchlist": None if mine is None else len(mine)})
 

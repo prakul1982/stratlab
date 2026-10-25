@@ -665,11 +665,26 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
+    rows = index_rows(r)
+    # DE-015: letters that spell nothing ("asdkjh qwe zzz") are asked about before an AI read is spent on them
+    if not grounding.looks_like_theme(theme, grounding.vocabulary(rows)):
+        err(400, "bad_theme", f"\"{theme}\" doesn't read as a sector or theme. Try words like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
     got = ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
                   lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
-    # no unsourced market size or growth rate, even on a map kept from before (R7O-012)
-    return ok({**got, "market_size": "", "cagr": None, "cagr_note": ""})
+    # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
+    # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
+    got = grounding.listed_only(A.theme_served(got))
+    return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
+
+
+def index_rows(region: str) -> list[dict]:
+    """The screener's stored index of listed companies ({symbol, name, sector, industry}), or none when it can't be read."""
+    try:
+        from .. import screens
+        return screens.load_index(region).get("rows") or []
+    except Exception:
+        return []
 
 
 def industry_lookup(region: str):

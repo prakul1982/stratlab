@@ -112,7 +112,8 @@ test("the money calendar shows only the answer to the last window asked", () => 
 test("Results and Corporate actions drop the search text and the list when the market or the set changes", () => {
   for (const f of ["src/pages/ResultsPage.tsx", "src/pages/CorpActionsPage.tsx"]) {
     const src = read(f);
-    assert.match(src, /if \(shownFor !== `\$\{region\}\|\$\{scope\}`\) \{ setShownFor\(`\$\{region\}\|\$\{scope\}`\); setQ\(""\); setData\(null\); \}/, f);
+    // (the results page also closes the day it had opened in full, DE-026)
+    assert.match(src, /if \(shownFor !== `\$\{region\}\|\$\{scope\}`\) \{ setShownFor\(`\$\{region\}\|\$\{scope\}`\); setQ\(""\); setData\(null\);( setOpenDay\(""\);)? \}/, f);
     assert.match(src, /<Field key=\{region\} label="Find a company">/, f);
   }
 });

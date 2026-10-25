@@ -7,7 +7,8 @@ export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
 export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number }
 export interface MetricGroup { title: string; items: MetricItem[] }
-export interface NewsItem { headline: string; url: string; source: string; at: string | null }
+/** `similar`: how many near-repeats of this headline were folded into it (DE-017) */
+export interface NewsItem { headline: string; url: string; source: string; at: string | null; similar?: number }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
   high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null;
   /** the session the change is of, when the market hasn't traded today (the last completed one) */ change_day?: string | null }
@@ -80,6 +81,8 @@ export interface SectorAI {
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   value_chain: { layer: string; description: string; companies: Co[] }[];
   tailwinds: string[]; risks: string[]; generated_at: number;
+  /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
+  exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
 }
 /** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */

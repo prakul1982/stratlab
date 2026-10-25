@@ -12,10 +12,22 @@ export interface CorpAction {
   id: string; region: Region; symbol: string; name: string | null; kind: ActionKind; label: string; text: string;
   amount: number | null; ratio: number[] | null; factor: number | null; currency: string;
   ex_date: string; record_date: string | null; purpose: string; src: string; url?: string | null; mine?: boolean;
+  /** a trust's distribution, part by part (interest, dividend, capital repayment): DE-029 */
+  parts?: { label: string; amount: number | null }[]; pay_date?: string | null;
 }
 export const KIND_NAME: Record<ActionKind, string> = {
-  dividend: "Dividends", bonus: "Bonus issues", split: "Splits", buyback: "Buybacks", rights: "Rights issues", demerger: "Demergers",
+  dividend: "Dividends and distributions", bonus: "Bonus issues", split: "Splits", buyback: "Buybacks", rights: "Rights issues", demerger: "Demergers and spin-offs",
 };
+
+/** The dates under an action. Under a day's "Ex-date …" heading the ex-date isn't said again (DE-031), only the record
+ * date (and the pay date, where the company gave one). */
+export function actionDates(a: Pick<CorpAction, "ex_date" | "record_date" | "pay_date">, year = false, showEx = true): string {
+  const rec = a.record_date && a.record_date !== a.ex_date ? `record date ${exDay(a.record_date, year)}` : a.record_date ? (showEx ? "" : "record date the same day") : "";
+  const pay = a.pay_date ? `paid ${exDay(a.pay_date, year)}` : "";
+  if (showEx) return [`Ex-date ${exDay(a.ex_date, year)}${a.record_date && a.record_date === a.ex_date ? " (also the record date)" : ""}`, rec, pay].filter(Boolean).join(" · ");
+  const rest = [rec, pay].filter(Boolean).join(" · ");
+  return rest ? rest[0].toUpperCase() + rest.slice(1) : "";
+}
 
 /** "Thu 15 Oct", from an ISO date, without the browser's time zone moving it a day. */
 export function exDay(iso: string, year = false) {
@@ -23,7 +35,8 @@ export function exDay(iso: string, year = false) {
 }
 
 /** One action: what it is, its ex-date and record date. */
-export function ActionLine({ a, showSymbol = true, year = false }: { a: CorpAction; showSymbol?: boolean; year?: boolean }) {
+export function ActionLine({ a, showSymbol = true, year = false, showEx = true }: { a: CorpAction; showSymbol?: boolean; year?: boolean; showEx?: boolean }) {
+  const dates = actionDates(a, year, showEx);
   return (
     <div className="inv-row">
       {showSymbol && (
@@ -34,10 +47,12 @@ export function ActionLine({ a, showSymbol = true, year = false }: { a: CorpActi
         </span>
       )}
       <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text}</span>
-      <span className="k-note">
-        Ex-date {exDay(a.ex_date, year)}{a.record_date && a.record_date !== a.ex_date ? ` · record date ${exDay(a.record_date, year)}` : a.record_date ? " (also the record date)" : ""}
-        {a.url && <> · <a className="link" href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a></>}
-      </span>
+      {(dates || a.url) && (
+        <span className="k-note">
+          {dates}
+          {a.url && <>{dates ? " · " : ""}<a className="link" href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a></>}
+        </span>
+      )}
     </div>
   );
 }
@@ -70,7 +85,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
       <div className="k-stack">
         <span className="k-eyebrow">Coming up: dividends and splits</span>
         {data.ahead.length ? <div className="inv-rows">{data.ahead.map((a) => <ActionLine key={a.id} a={a} showSymbol={false} />)}</div>
-          : <span className="k-small k-muted">{data.ahead_known ? "Nothing announced with an ex-date ahead." : "Dividend and split dates ahead aren't available for US companies yet (the results date is at the top of the page); past ones are below."}</span>}
+          : <span className="k-small k-muted">{data.ahead_known ? (region === "US" ? "No dividend declared with an ex-date in the next four weeks." : "Nothing announced with an ex-date ahead.") : "Dividend and split dates ahead aren't available for US companies yet (the results date is at the top of the page); past ones are below."}</span>}
       </div>
       <div className="k-stack">
         <span className="k-eyebrow">Past three years</span>

@@ -478,7 +478,9 @@ export function XYChart(p: XYChartProps) {
   const tipLeft = (hx / W) * 100;
   const flip = hx > padL + plotW * 0.6;
   const heading = (i: number) => T ? tipTime(T[i], intraday, p.tz) : p.labels?.[i] ?? (p.xFormat ? p.xFormat(X[i]) : p.axisLabels?.[i] ?? String(i + 1));
-  const toolbar = legendOn || presets.length > 0 || view || canIndex && p.compare || p.table !== false;
+  // a chart that zooms says so whether or not it has a legend or a Table switch (DE-022: the A/D line and the index had no
+  // "Drag to zoom" while the others did)
+  const toolbar = legendOn || presets.length > 0 || view || canIndex && p.compare || p.table !== false || zoomable;
 
   return (
     <div ref={wrap} className="ch" data-testid={p.testId}>
