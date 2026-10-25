@@ -59,7 +59,7 @@ def test_insurers_and_holding_companies_use_return_on_equity():
     p["industry_path"] = ["Financial Services", "Insurance"]
     grp, c = labels(p)
     assert grp == "insurer" and c["Return on equity"]["state"] == "watch"   # 12%: between 8 and 14
-    assert not {"Return on capital employed", "Total debt / equity", "Operating margin holding up"} & c.keys()
+    assert not {"Return on capital employed", "Total debt / equity", "EBITDA margin holding up"} & c.keys()
     p.pop("industry_path")
     p["name"] = "Tata Investment Corporation Ltd"
     grp, c = labels(p)

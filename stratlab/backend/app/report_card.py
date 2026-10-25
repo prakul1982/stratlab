@@ -48,7 +48,67 @@ GUIDANCE_WORDS = [r"guidance", r"we expect", r"we are targeting", r"target", r"g
                   r"FY ?'?\d\d", r"outlook", r"margin", r"growth of", r"capex", r"crore", r"double[- ]digit", r"aspir"]
 
 METRICS = {"revenue_growth": "Revenue growth", "profit_growth": "Profit growth", "margin": "Operating margin",
-           "capex": "Capex", "other": "Other promise"}
+           "capex": "Capex", "revenue": "Revenue", "profit": "Profit", "other": "Other promise"}
+AMOUNT_TOLERANCE = 0.02        # a revenue or profit amount target is met at its low end less 2% (a rounded figure said on a call)
+
+
+# ---------- units ----------
+_CRORE = re.compile(r"\b(?:crore|cr)\b|₹|\brs\.?\s|\binr\b", re.I)
+_MILLION = re.compile(r"\$|\b(?:million|billion|usd)\b", re.I)
+_PCT = re.compile(r"%|\bper ?cent\b|\bbasis points\b|\bbps\b", re.I)
+
+
+def unit_of(g: dict) -> str:
+    """A target's unit: "%", "crore" (rupees), "million" (dollars or a foreign filer's own) or "" (a plain number, such as
+    a count), from what the AI gave, else from the words of the target itself. A target in rupees crore is never printed
+    as a percentage (DD-050: "INR 40,000–50,000 crore" read "Target 40000–50000%")."""
+    given = str(g.get("unit") or "").strip().lower()
+    if given in ("%", "percent", "pct"):
+        given = "%"
+    elif given in ("crore", "cr", "rs crore", "inr crore"):
+        given = "crore"
+    elif given in ("million", "$ million", "usd million"):
+        given = "million"
+    else:
+        given = ""
+    def said_in(text: str) -> str:
+        return "%" if _PCT.search(text) else "crore" if _CRORE.search(text) else "million" if _MILLION.search(text) else ""
+    # the target's own line first ("20% margin"), its quote only when the line gives no unit
+    said = said_in(str(g.get("what") or "")) or said_in(str(g.get("quote") or ""))
+    if given == "%" and said in ("crore", "million"):
+        return said                                  # the AI's "%" for an amount the target itself gives in money
+    return given or said
+
+
+_REVENUE_WORDS = re.compile(r"\b(revenue|sales|top ?line|turnover|income from operations)\b", re.I)
+_PROFIT_WORDS = re.compile(r"\b(net profit|profit after tax|pat|net income|earnings)\b", re.I)
+
+
+def as_amount(metric: str, unit: str, what: str) -> str:
+    """A growth or margin target given as an amount of money is an amount target: revenue or profit when it says so (the
+    reported numbers check it), else "other"."""
+    if metric in TOLERANCE and unit in ("crore", "million"):
+        return "revenue" if _REVENUE_WORDS.search(what) else "profit" if _PROFIT_WORDS.search(what) else "other"
+    if metric == "other" and unit in ("crore", "million"):
+        return "revenue" if _REVENUE_WORDS.search(what) and not _PROFIT_WORDS.search(what) else "profit" if _PROFIT_WORDS.search(what) and not _REVENUE_WORDS.search(what) else "other"
+    return metric
+
+
+# management speaking about the company: a call's quote with none of these is commentary (an economy's GDP mix, an
+# analyst's number read back), not a target (DD-050: a "retail mix 60%" target from a remark on GDP's consumption share)
+_OURS = re.compile(r"\b(we|we'?re|we'?ll|we'?ve|our|ours|us|i|i'?m|i'?d)\b", re.I)
+
+
+_MACRO = re.compile(r"\b(gdp|economy|economic|inflation|industry|industry's|sector|system|country|nation|monsoon|government|rbi|repo)\b", re.I)
+
+
+def ours(quote: str, name: str = "") -> bool:
+    """Whether a quote is a target of the company's own: not one about the economy, the industry or the system with no
+    word of the company in it (we, our, its name). A plain "EBITDA margin should be about 20% in FY26" stands."""
+    if not _MACRO.search(quote or ""):
+        return True
+    words = [w for w in re.findall(r"[A-Za-z]{4,}", name or "") if w.lower() not in ("limited", "india", "company", "corporation")]
+    return bool(_OURS.search(quote or "")) or any(w.lower() in (quote or "").lower() for w in words[:2])
 TOLERANCE = {"revenue_growth": 1.0, "profit_growth": 2.0, "margin": 0.5}      # percentage points; capex uses 10%
 
 
@@ -118,8 +178,9 @@ def _f(v):
         return None
 
 
-def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3) -> list[dict]:
-    """`texts` (label → full text) checks each quote really is in the call it's credited to."""
+def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3, voice: str | None = None) -> list[dict]:
+    """`texts` (label → full text) checks each quote really is in the call it's credited to. `voice` (the company's name):
+    a call's quote must be management speaking about the company (see ours)."""
     out = []
     for g in (d.get("guidance") or [])[:15]:
         if not isinstance(g, dict):
@@ -131,6 +192,8 @@ def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3) -> lis
             continue                                    # every promise must come from a call we read
         if texts is not None and not quote_found(str(g.get("quote") or ""), texts.get(label, "")):
             continue                                    # the quote isn't in that call: treated as made up
+        if voice is not None and not ours(str(g.get("quote") or ""), voice):
+            continue                                    # not the company's own target (DD-050)
         said = date.fromisoformat(src["at"][:10])
         per = parse_period(g.get("period"), said, fye) or parse_period(g.get("what"), said, fye)
         metric = str(g.get("metric") or "other").lower().replace(" ", "_")
@@ -142,9 +205,11 @@ def clean(d: dict, labels: dict, texts: dict | None = None, fye: int = 3) -> lis
             low, high = high, low
         if metric != "other" and low is None:
             metric = "other"
+        unit = unit_of(g)
+        metric = as_amount(metric, unit, what)
         if per and period_end(per, fye) <= said:
             continue                                    # said after the period ended: a result, not a promise
-        out.append({"metric": metric, "low": low, "high": high, "period": period_label(per) if per else None,
+        out.append({"metric": metric, "low": low, "high": high, "unit": unit, "period": period_label(per) if per else None,
                     "what": what[:200], "quote": str(g.get("quote") or "")[:300], "said_at": src["at"],
                     "source": {"title": src["title"], "at": src["at"], "url": src["url"]}})
     return out
@@ -179,7 +244,7 @@ def read_call(symbol: str, name: str, d: dict, text: str, ai) -> list[dict]:
         parsed = extract_json(raw)
     except AIError:
         parsed = {"guidance": salvage_items(raw, "guidance")}       # a reply cut off mid-list keeps what's complete
-    return clean(parsed, labels, texts)
+    return clean(parsed, labels, texts, voice=name)
 
 
 def read(symbol: str, name: str, docs_list: list[dict], docs_api, ai, hosts: tuple[str, ...] = (), years: int = 2) -> dict:
@@ -251,7 +316,9 @@ def settle(out: dict, pairs: list[tuple[dict, str]], ai, name: str, fye: int, to
     lines = []
     for tid, i, end in due:
         g = out["guidance"][i]
-        tgt = f"{g['low']}" + (f" to {g['high']}" if g.get("high") is not None else "") + (" %" if g["metric"] in TOLERANCE else " (money, in the company's currency units)" if g["metric"] == "capex" else "")
+        u = unit_of(g)
+        tgt = f"{g['low']}" + (f" to {g['high']}" if g.get("high") is not None else "") + (
+            " %" if u == "%" else " (money, in the company's currency units)" if u in ("crore", "million") or g["metric"] == "capex" else "")
         lines.append(f"{tid}: {g['what']} | target {tgt} | period {g['period']} (ended {end.isoformat()})")
     try:
         raw = complete(SETTLE, f"COMPANY: {name}\n\nTARGETS:\n" + "\n".join(lines) + "\n\nEXCERPTS:\n" + "\n\n".join(parts),
@@ -293,6 +360,8 @@ def _actual(metric: str, per: dict, nums: dict) -> float | None:
             return r.get("opm")
         if metric == "capex":
             return r.get("capex")
+        if metric in ("revenue", "profit"):            # an amount, as reported for the year (DD-050)
+            return r.get("sales" if metric == "revenue" else "profit")
         key = "sales" if metric == "revenue_growth" else "profit"
         prev = rows[idx - 1].get(key) if idx > 0 else None
         return (r[key] / prev - 1) * 100 if r.get(key) is not None and prev and prev > 0 else None
@@ -303,6 +372,8 @@ def _actual(metric: str, per: dict, nums: dict) -> float | None:
     r = rows[idx]
     if metric == "margin":
         return r.get("opm")
+    if metric in ("revenue", "profit"):
+        return r.get("sales" if metric == "revenue" else "profit")
     key = "sales" if metric == "revenue_growth" else "profit"
     prev = rows[idx - 4].get(key) if idx >= 4 else None
     return (r[key] / prev - 1) * 100 if r.get(key) is not None and prev and prev > 0 else None
@@ -313,7 +384,13 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     today = today or ist_date()
     per = parse_period(g.get("period"))
     us = (nums.get("unit") or "").endswith("million")      # US filings, in dollars or a foreign filer's own currency
-    res = {**g, "actual": None, "result": "unchecked", "unit": ("million" if us else "crore") if g["metric"] == "capex" else "%"}
+    money = "million" if us else "crore"
+    # the target's own unit (DD-050), for a card stored before units were kept worked out from its words; an amount
+    # target as revenue or profit when it says so, so the reported numbers settle it
+    unit = unit_of(g)
+    g = {**g, "metric": as_amount(g["metric"], unit, g.get("what") or "")}
+    unit = money if g["metric"] in ("capex", "revenue", "profit") else "%" if g["metric"] in TOLERANCE else unit
+    res = {**g, "actual": None, "result": "unchecked", "unit": unit}
     dc = g.get("doc_check")
 
     def from_documents(r):            # the company's own later statement of the result, quote checked
@@ -333,6 +410,8 @@ def check(g: dict, nums: dict, today: date | None = None) -> dict:
     # met: at the target or the range's low end, less the tolerance (beating it is met too)
     if g["metric"] == "capex":
         ok = g["low"] * 0.9 <= a <= (g.get("high") or g["low"]) * 1.1      # a spend target is a band: overspending misses it
+    elif g["metric"] in ("revenue", "profit"):
+        ok = a >= g["low"] * (1 - AMOUNT_TOLERANCE)                         # at least the target (its low end), less rounding
     else:
         ok = a >= g["low"] - TOLERANCE[g["metric"]]
     res["result"] = "met" if ok else "missed"
@@ -358,7 +437,8 @@ def _dedupe(items: list[dict]) -> list[dict]:
 def view(stored_card: dict | None, nums: dict, today: date | None = None) -> dict | None:
     if not stored_card:
         return None
-    rows = [check(g, nums, today) for g in _dedupe(stored_card.get("guidance") or [])]
+    # a card read before the voice check keeps no remark about the economy as the company's target (DD-050)
+    rows = [check(g, nums, today) for g in _dedupe([g for g in stored_card.get("guidance") or [] if ours(str(g.get("quote") or ""))])]
     met = sum(r["result"] == "met" for r in rows)
     missed = sum(r["result"] == "missed" for r in rows)
     checked = met + missed
@@ -399,7 +479,8 @@ Return {"guidance": [{"metric": "revenue_growth | profit_growth | margin | capex
 - The company's fiscal year end and the release date are given. Turn "the fourth quarter", "next quarter", "the full
   year" and "fiscal 2026" into Qn FYyyyy or FYyyyy in the COMPANY'S fiscal year (named by the calendar year it ends in).
 - "margin" is an operating or gross margin in %. Growth is year-on-year in %. Capex is in $ million ($1.2 billion is 1200).
-- Revenue given as a dollar range (e.g. "$94 billion to $97 billion") is not a growth rate: use metric "other".
+- Revenue given as a dollar range (e.g. "$94 billion to $97 billion") is not a growth rate: use metric "other" with unit
+  "million" and the amounts in $ million ($94 billion is 94000), so it can be checked against the reported revenue.
 - A single figure goes in "low" with "high" null; a range fills both. "Low to mid single digits" is low 1, high 5.
 - "quote" must be copied word for word from the excerpt, 6 to 25 words. Don't paraphrase it.
 - Up to 12 items. "source" is the label of the excerpt it came from.

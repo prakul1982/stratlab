@@ -253,7 +253,7 @@ def page_figures(region: str, c: dict) -> dict:
     52-week range checked against the price and taking in today's high and low (R7T-001, R7T-007)."""
     from .company import with_today_range
     # the public EPS first: the payout ratio is the dividends over the EPS TTM the page shows, not the source's (R29B-013: $8.72 vs $8.71)
-    out = with_dividend_yield(with_public_eps(region, c), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
+    out = with_dividend_yield(with_filed_results(region, with_public_eps(region, c)), stored_dividends(region, c["symbol"]), datetime.now(IST).date().isoformat())
     return with_today_range(per_share_checked(out))
 
 
@@ -328,6 +328,92 @@ def with_public_eps(region: str, c: dict) -> dict:
         out = _put_metric(out, "EPS TTM", round(eps, 2), basis, "Per share and returns", "money")
     return _put_metric(out, "P/E", round(live / eps, 2), ("The price over earnings per share for the " + stock_pages.pe_label(f)[5:-1]
                                                           + " (the company reports yearly)") if year else "The price over EPS TTM")
+
+
+QUARTER_OF = {3: 1, 6: 2, 9: 3, 0: 4}       # months after the fiscal year's end -> the quarter it closes
+
+
+def fiscal_quarter(end: str, fye_month: int) -> str | None:
+    """"Q2 FY27" for a quarter ending on `end` (ISO) in a fiscal year ending in month `fye_month`, named by the calendar year
+    it ends in (NVIDIA's quarter to 26 Jul 2026 is Q2 FY27; Apple's to 27 Jun 2026, Q3 FY26). A 52/53-week quarter
+    ending a few days into a month counts as the month before."""
+    from datetime import date, timedelta
+    try:
+        d = date.fromisoformat(end[:10]) - timedelta(days=15)
+    except ValueError:
+        return None
+    for m in (fye_month, (fye_month - 2) % 12 + 1):            # a fiscal year "ending" a few days into the next month
+        k = (d.month - m) % 12
+        if k % 3 == 0:
+            fy = d.year + (1 if d.month > m else 0)
+            return f"Q{QUARTER_OF[k]} FY{fy % 100:02d}"
+    return None
+
+
+def filed_results(rows: list[dict], eps_q: dict[str, float], fye_month: int | None) -> tuple[list[dict], str | None]:
+    """The results-versus-estimates rows dated and checked by the company's filings (DD-030, DD-031): each row is matched to
+    the filed quarter it is of (the estimates source dates a quarter by the calendar quarter it falls in: NVIDIA's quarter
+    to 26 Jul 2026 came as "Sep 2026"), dated by that quarter's end, named by its fiscal quarter, with the filings' GAAP
+    diluted EPS beside it. When most rows' EPS is the filed GAAP figure, the source counts GAAP EPS for this company, and a
+    row that disagrees with the filing takes the filed figure (AAPL's quarter to 27 Jun 2026: 1.91 against a filed 2.02,
+    shown as a miss); otherwise the source's figures are adjusted (non-GAAP, as the estimates are), kept, and said so.
+    Returns (rows, "gaap" | "adjusted" | None)."""
+    from datetime import date
+    ends = sorted(e for e, v in (eps_q or {}).items() if v is not None)
+    used, out = set(), []
+    for r in rows:
+        p = str(r.get("period") or "")[:10]
+        try:
+            pd_ = date.fromisoformat(p)
+        except ValueError:
+            out.append(dict(r))
+            continue
+        cand = [e for e in ends if -7 <= (pd_ - date.fromisoformat(e)).days <= 100 and e not in used]
+        e = cand[-1] if cand else None
+        if e is None:
+            out.append(dict(r))
+            continue
+        used.add(e)
+        out.append({**r, "period": e, "gaap": eps_q[e], **({"fiscal": fq} if fye_month and (fq := fiscal_quarter(e, fye_month)) else {})})
+    matched = [r for r in out if r.get("gaap") is not None]
+    if not matched:
+        return out, None
+    same = lambda r: abs(r["actual"] - r["gaap"]) <= max(0.02, 0.01 * abs(r["gaap"]))       # noqa: E731
+    if sum(1 for r in matched if same(r)) * 2 > len(matched):
+        fixed = []
+        for r in out:
+            if r.get("gaap") is not None and not same(r):
+                a, est = r["gaap"], r.get("estimate")
+                r = {**r, "actual": a, "surprise_pct": (a - est) / abs(est) * 100 if est else None, "from_filing": True}
+            fixed.append(r)
+        return fixed, "gaap"
+    return out, "adjusted"
+
+
+def with_filed_results(region: str, c: dict) -> dict:
+    """A US company page with its results-versus-estimates rows checked and dated by its filings (filed_results), and its
+    interest coverage said to be not meaningful when its latest annual report gives no interest expense (DD-035: Apple's
+    "Interest coverage 623" on an interest cost it stopped disclosing after FY23). Unchanged without a stored public page."""
+    if region != "US" or not callable(public_facts):
+        return c
+    try:
+        f = public_facts("US", c["symbol"]) or {}
+    except Exception:
+        return c
+    out = c
+    if f.get("no_interest") and _metric(out, "Interest coverage"):
+        groups = [{**g, "items": [{**i, "value": None, "text": "n/m", "note": "No interest expense in the latest annual report"}
+                                  if i["label"] == "Interest coverage" else i for i in g["items"]]} for g in out.get("metrics") or []]
+        out = {**out, "metrics": groups}
+    if f.get("eps_q") and out.get("earnings"):
+        import re as _re
+        last = ((f.get("years") or [{}])[-1] or {}).get("year") or ""
+        m = _re.match(r"([A-Za-z]{3})", str(last))
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        fye = months.index(m.group(1)) + 1 if m and m.group(1) in months else None
+        rows, basis = filed_results(out["earnings"], f["eps_q"], fye)
+        out = {**out, "earnings": rows, **({"earnings_basis": basis} if basis else {})}
+    return out
 
 
 def per_share_checked(c: dict) -> dict:
@@ -718,6 +804,9 @@ def _watch_key(profile) -> str:
     return f"watchlist:{profile['id']}"
 
 
+known_symbol = None      # (region, symbol) -> True, False (no such listed instrument) or None (can't tell); set by main
+
+
 @router.get("/watchlist")
 def get_watchlist(profile=Depends(current_profile)):
     raw = db.get_setting(_watch_key(profile))
@@ -738,8 +827,15 @@ def put_watchlist(req: WatchReq, profile=Depends(current_profile)):
             items.append({"region": i.region, "symbol": sym, "name": i.name})
     before = get_watchlist(profile)["items"]
     before = before if isinstance(before, list) else []
-    db.set_setting(_watch_key(profile), json.dumps({"items": items}))
     had = {(i.get("region"), str(i.get("symbol") or "").upper()) for i in before if isinstance(i, dict)}
+    # a symbol added must be a listed company or fund: one typed and saved as it was ("ZZZZQQ") showed a row of dashes, was
+    # counted on At a glance and offered a deep dive (DD-070). One already on the list stays; a list that can't be read to
+    # tell (None) doesn't stop the save
+    for i in items:
+        if (i["region"], i["symbol"].upper()) not in had and callable(known_symbol) and known_symbol(i["region"], i["symbol"]) is False:
+            err(400, "unknown_symbol", f"{i['symbol']} isn't a listed company or fund StratLab knows, so it wasn't added. "
+                "Pick one from the suggestions, or check the symbol.")
+    db.set_setting(_watch_key(profile), json.dumps({"items": items}))
     if any((i["region"], i["symbol"].upper()) not in had for i in items):     # a stock added, not only removed
         from .. import invite_rewards
         invite_rewards.safe_touch(profile, "watchlist")

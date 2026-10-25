@@ -6,6 +6,40 @@ import type { MetricItem } from "./research";
 /** What a price read between a market's close and its settle point is called (the company header, the scans, Pulse). */
 export const SETTLING = "Latest, closing prints still settling";
 
+/** The market a research address names ("in", "US"), or null for one research doesn't cover: /research/XX/TCS is not
+ * India's page (DD-005). */
+export function regionOf(r: string | null | undefined): "IN" | "US" | null {
+  const u = String(r ?? "").toUpperCase();
+  return u === "IN" || u === "US" ? u : null;
+}
+
+/** Whether a page opened by a six-digit BSE code is an NSE company's (the code of its BSE listing): its one page is at the
+ * NSE symbol's address (DD-003: 500325 is RELIANCE). A company listed only on BSE stays at its code. */
+export function bseTwinMoved(addressed: string, c: { symbol?: string | null; exchange?: string | null }): boolean {
+  return /^\d{6}$/.test(addressed.trim()) && c.exchange === "NSE" && !!c.symbol && c.symbol.toUpperCase() !== addressed.trim().toUpperCase();
+}
+
+export interface Delisted { how: string; on?: string | null; into?: string | null; into_symbol?: string | null; last_price?: number | null }
+
+/** The line a page of a company that no longer trades opens with: what became of it, when, and that its figures are its
+ * last reported ones (DD-012: HDFC Ltd opened as if live). */
+export function delistedLine(name: string, d: Delisted, day: (iso: string) => string): string {
+  const what = d.into ? `it was merged into ${d.into}` : d.how === "merged" ? "it was merged into another company" : `the exchange lists it as ${d.how}`;
+  const when = d.on ? `${d.into || d.how === "merged" ? " and" : ","} delisted on ${day(d.on)}` : "";
+  const last = d.last_price != null ? ` Its last price on record is ₹${d.last_price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.` : "";
+  return `${name} no longer trades: ${what}${when}. The figures below are its last reported ones.${last}`;
+}
+
+/** Whether a yearly growth rate starts from a base so small the rate says more about the base than the business: the
+ * latest figure 20 times the first or more, at 100% a year or faster (DD-018: TONBO's profit, ₹1 cr to ₹50 cr, "+268.4% a
+ * year"). The same rule as the server's deepdive.tiny_base. */
+export function tinyBase(first: number, last: number, years: number, sales?: number | null): boolean {
+  if (!(first > 0) || !(last > 0) || years <= 0) return false;
+  // a profit's base must also be a sliver (under 3%) of that year's sales: a low year of a large business is no tiny base
+  if (sales !== undefined && !(sales != null && sales > 0 && first / sales < 0.03)) return false;
+  return last / first >= 20 && (Math.pow(last / first, 1 / years) - 1) * 100 >= 100;
+}
+
 /** "&focus=..." for a focus that was typed; nothing for none (an empty parameter is no focus). */
 export function focusParam(focus: string): string {
   const f = focus.trim();
@@ -95,6 +129,7 @@ export function screenCap(v: number | null, region: "IN" | "US" | string): strin
 }
 
 export function metricText(m: MetricItem, currency: string): string {
+  if (m.value == null) return m.text ?? "–";          // "n/m": a rate off a tiny base is no figure (DD-018)
   const v = m.value;
   // a percentage that isn't zero never reads as "0.0%": a tiny one keeps two decimals (a 0.01% net margin)
   // a figure the source gives in whole numbers (its growth rates: "-12%") is shown whole, never as a precise "-12.0%"

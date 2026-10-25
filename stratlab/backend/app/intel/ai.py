@@ -19,7 +19,8 @@ PRO = BASICS + ", MACD, Bollinger Bands, VWAP and Supertrend"
 
 RULES = """Rules:
 - Treat the FACTS as current and authoritative. Never contradict them, never claim the company is delisted or
-  acquired, and don't invent precise figures that aren't in the facts. Mark anything you estimate as an estimate.
+  acquired unless the FACTS' "status" says so, and don't invent precise figures that aren't in the facts. Mark anything
+  you estimate as an estimate.
 - Plain English a retail investor understands. No markdown, no emojis.
 - Facts and analysis only, never advice: no buy, sell, hold, accumulate or avoid; no price targets; no "undervalued",
   "cheap", "expensive" or "worth buying"; no predictions of where a price will go; no ranking of stocks to own.
@@ -77,7 +78,14 @@ def company_facts(c: dict) -> dict:
     # flat label kept only the profit one (R6O-001)
     # each figure as the page writes it ("0.9%", "2.56"), never the raw 2.55977229601518 the model then copies (R7O-001)
     # a figure that compares two periods names them, as the page's note does ("Latest YoY (Sep 2026 vs Sep 2025)", R38-002)
-    metrics = {f"{g['title']}: {i['label']}" + (f" ({i['period']})" if i.get("period") else ""): grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp"))
+    # a figure the page qualifies says so to the model too: a yield with a special dividend in it (DD-014: TCS's 4.4%
+    # repeated without its ₹46 special), a rate off a tiny base as "n/m" (DD-018), a growth rate across a merger (DD-013)
+    def shown(i):
+        v = grounding.page_value(i["value"], i.get("unit") or "x", i.get("dp")) if i.get("value") is not None else i.get("text")
+        note = str(i.get("note") or "")
+        return f"{v} ({note})" if note and note != i.get("period") and ("special" in note or "n/m" in str(v) or "Not meaningful" in note
+                                                                       or "like-for-like" in note or "against a quarter" in note) else v
+    metrics = {f"{g['title']}: {i['label']}" + (f" ({i['period']})" if i.get("period") else ""): shown(i)
                for g in c.get("metrics") or [] for i in g["items"]}
     facts = {"name": c["name"], "symbol": c["symbol"], "market": "India (NSE)" if c["region"] == "IN" else "United States",
              "currency": c.get("currency"), "industry": c.get("industry"), "range_52w": c.get("range52"), "market_cap": market_cap_words(c) or ("Market cap unavailable" if c.get("cap_note") else None),
@@ -92,7 +100,26 @@ def company_facts(c: dict) -> dict:
                                        "Every year in annual_trend is reported: none of them is estimated or upcoming.")
     qt = c.get("quarters") or {}
     if qt.get("cols"):
-        facts["quarterly_results"] = {"quarters": qt["cols"], "sales": qt.get("sales"), "net_profit": qt.get("profit")}
+        # with each quarter's margin, other income and tax rate, so a change against a quarter moved by a one-off is read
+        # as such, and a margin's fall in the latest quarters is seen (DD-015, DD-016)
+        facts["quarterly_results"] = {"quarters": qt["cols"], "sales": qt.get("sales"), "net_profit": qt.get("profit"),
+                                      **({"financing_margin_pct" if c.get("bank") else "ebitda_margin_pct": qt["opm"]} if any(v is not None for v in qt.get("opm") or []) else {}),
+                                      **({"other_income": qt["other_income"]} if any(v is not None for v in qt.get("other_income") or []) else {}),
+                                      **({"tax_rate_pct": qt["tax_pct"]} if any(v is not None for v in qt.get("tax_pct") or []) else {})}
+    if c.get("base_effects"):
+        facts["base_effects"] = ("Quarters moved by one-off items. Any year-on-year change measured against one of these "
+                                 "quarters must say so in the same sentence: " + " ".join(e["text"] for e in c["base_effects"]))
+    if c.get("merger"):
+        m = c["merger"]
+        facts["growth_caveat"] = (f"{m['year']}: {m.get('with') + ', ' if m.get('with') else ''}the share count rose {m['shares']}% and total assets "
+                                  f"{m['assets']}% that year (a merger or acquisition). Growth across it isn't like-for-like: say so with any growth rate that spans it.")
+    if (c.get("range52") or {}).get("since"):
+        facts["listed_since"] = (f"First traded on {c['range52']['since']}: range_52w is the range since listing, not 52 weeks. "
+                                 "Under a year of prices: no 52-week or one-year figure.")
+    if c.get("delisted"):
+        d = c["delisted"]
+        facts["status"] = (f"No longer listed: {'merged into ' + d['into'] if d.get('into') else d.get('how')}"
+                           + (f", delisted on {d['on']}" if d.get("on") else "") + ". Write about it in the past tense; it has no live price and no trading ideas.")
     facts["results"] = results_status(c, ist_date())
     if c["region"] == "IN":
         fq, fy = grounding.fiscal_quarter(ist_date(), "IN")
@@ -173,7 +200,7 @@ def company(c: dict, ai, pro: bool, key_facts: list[dict] | None = None) -> dict
 Given FACTS about one listed company, return ONLY this JSON:
 {{"summary": "2-3 sentences: what the business is and the single most important thing about it right now",
  "valuation_note": "one sentence stating its valuation figures exactly as the FACTS give them (P/E, P/B, dividend yield), no judgement and no comparison",
- "bull": ["3-4 specific strengths, as facts"], "bear": ["3-4 specific risks, as facts"],
+ "bull": ["3-4 specific strengths, as facts, each with a figure from the FACTS"], "bear": ["3-4 specific risks, as facts, each with a figure from the FACTS"],
  "position": "2 sentences on where it sits in its value chain and who it depends on",
  "watch": ["2-3 scheduled things ahead (the next results, a meeting, an ex-date), stated as facts with no view on the price"],
  "ideas": [{{"title": "3-6 words", "text": "one rule to test, in plain English", "why": "one sentence stating a fact from the FACTS that the rule is built on"}}]}}
@@ -207,7 +234,7 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
         facts["key_facts"] = {r["label"]: {i["label"]: i["text"] for i in r["items"]} for r in key_facts}
     r = _ask(system, facts, ai, 2500)
     ideas = []
-    for i in r.get("ideas") or []:
+    for i in ([] if c.get("delisted") else r.get("ideas") or []):       # a share that no longer trades has none to test
         if isinstance(i, dict) and str(i.get("text", "")).strip():
             ideas.append({"title": str(i.get("title") or "Idea")[:60], "text": str(i["text"])[:400],
                           "why": str(i.get("why") or "")[:300]})
@@ -218,7 +245,9 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
             "class_move": grounding.class_move(c.get("shareholding")),
             "valuation_note": str(r.get("valuation_note") or "")[:300],
             # no revenue split: the model's guess isn't sourced (AAPL read "iPhone 100%, Services 0%, Mac 0%")
-            "bull": _clip(r.get("bull"), 5), "bear": _clip(r.get("bear"), 5), "segments": [],
+            # the page lists these as "Notable figures": a line with no figure in it isn't one (DD-016: "Exposure to volatile
+            # energy markets")
+            "bull": figures_only(_clip(r.get("bull"), 5)), "bear": figures_only(_clip(r.get("bear"), 5)), "segments": [],
             "position": str(r.get("position") or "")[:500], "watch": [w for w in _clip(r.get("watch"), 4) if not PAST_WATCH.search(str(w))], "ideas": ideas[:3]}
     # checked in code against the facts it was given: no advice or forecast, no number that isn't in them, the
     # right fiscal-quarter labels, ideas worded as rules to test (R5O-027)
@@ -232,12 +261,21 @@ FACTS write them. Leave out anything the FACTS don't state rather than saying it
     return out
 
 
+_FIGURE = re.compile(r"\d")
+
+
+def figures_only(lines: list) -> list:
+    """The lines that state a figure (a number, a percentage, an amount); a line of words only is no "notable figure"."""
+    return [x for x in lines or [] if _FIGURE.search(str(x))]
+
+
 def clean_company(read: dict) -> dict:
     """A company read as it goes out: any score fields dropped (a read stored before scores were removed may
     still carry them), and an empty list of fact rows when it has none."""
     out = {k: v for k, v in read.items() if k not in SCORE_FIELDS}
     out["facts"] = out.get("facts") if isinstance(out.get("facts"), list) else []
     out["segments"] = []                        # a read stored with the model's unsourced revenue split shows none
+    out["bull"], out["bear"] = figures_only(out.get("bull")), figures_only(out.get("bear"))      # a kept read too (DD-016)
     # a read kept from before today's checks gets them as it is served (R7O-001): the same pass a fresh read had
     out = grounding.polish_company(out, out.get("region") or "IN", bool(out.get("lender")))
     if out.get("lender"):

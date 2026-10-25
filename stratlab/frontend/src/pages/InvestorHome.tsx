@@ -16,6 +16,7 @@ type Row = {
   st_up: boolean | null; signal: "fresh" | "st_s2" | "stage2" | null; sector: { symbol: string; name: string; quadrant: string | null } | null;
   red: number | null; amber: number | null; fund_raise: boolean; checks: { pass: number; watch: number; fail: number; na: number } | null;
   fails: string[]; card: { met: number; missed: number; score: number } | null; has_read: boolean;
+  /** saved before the watchlist checked symbols, and not a listed company or fund (DD-070) */ unknown?: boolean;
 };
 
 const QUAD: Record<string, string> = { leading: "Leading", improving: "Improving", weakening: "Weakening", lagging: "Lagging" };   // one neutral style: a quadrant is a fact, not good or bad
@@ -73,7 +74,8 @@ export function InvestorHomePage() {
         <>
           <Card>
             <StatRow label="Your watchlist in numbers">
-              <Stat item label="Companies" value={total != null && total > rows.length ? `${rows.length} of ${total}` : String(rows.length)} />
+              {/* a saved symbol that is no listed company isn't one of them (DD-070) */}
+              <Stat item label="Companies" value={total != null && total > rows.length ? `${rows.filter((r) => !r.unknown).length} of ${total}` : String(rows.filter((r) => !r.unknown).length)} />
               <Stat item label="In Stage 2" value={String(s2)} />
               <Stat item label="Sector leading the market" value={String(leading)} />
               {!us && <Stat item label="With red-flag filings" value={String(flagged)} />}
@@ -92,9 +94,9 @@ export function InvestorHomePage() {
               <CardHead level={3} title={<Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}`}>{r.name}</Link>}
                 actions={<>{r.price != null && <><span className="k-small">{us ? money(r.price, "USD", 2) : inr(r.price, 2)}</span>{r.chg != null && <Delta value={r.chg}>{pct(r.chg, 2)}</Delta>}
                   {r.price_at && <span className="k-note">{quoteAt(r.price_at, marketTz(region))}</span>}</>}
-                  <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`} aria-label={`Deep dive into ${r.name}`}>Deep dive →</Link></>} />
+                  {!r.unknown && <Link className="btn quiet sm" to={`/research/${region}/${encodeURIComponent(r.symbol)}/deep`} aria-label={`Deep dive into ${r.name}`}>Deep dive →</Link>}</>} />
               <span className="k-note">{r.symbol}</span>
-              {r.problem && <p className="k-note">Company numbers unavailable: {r.problem}</p>}
+              {r.problem && <p className="k-note">{r.unknown ? `${r.symbol} is ${r.problem}` : `Company numbers unavailable: ${r.problem}`}</p>}
               <div className="inv-stat-cells">
                 <Cell label="Trend">{r.stage == null ? "–" : <>Stage {r.stage} · Supertrend {r.st_up ? "up" : "down"}{trendBadge(r.stage, r.signal) && <> · <Badge tone="plain" dot={false}>{trendBadge(r.stage, r.signal)}</Badge></>}</>}</Cell>
                 <Cell label="Sector">{r.sector ? <>{r.sector.name}{r.sector.quadrant && <> · <Badge tone="plain" dot={false}>{QUAD[r.sector.quadrant]}</Badge></>}</> : "–"}</Cell>

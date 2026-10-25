@@ -337,7 +337,7 @@ def _why_na(label: str, years: list[dict], quarters: list[dict]) -> str | None:
         return "history"                          # the stage needs 170 trading days of prices: a young listing has none yet
     sold = [y for y in years if y.get("sales") is not None]          # the years the checklist measures over
     last3, last4 = years[-3:], years[-4:]
-    if label.startswith(("Sales growth", "Operating margin holding up")):
+    if label.startswith(("Sales growth", "EBITDA margin holding up", "Operating margin holding up")):
         if len(years) < 4:
             return "history"
         # a year in the window whose annual report shows no revenue line at all (US filings): no sales that year

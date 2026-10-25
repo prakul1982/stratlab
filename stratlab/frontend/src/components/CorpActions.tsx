@@ -12,6 +12,7 @@ export interface CorpAction {
   id: string; region: Region; symbol: string; name: string | null; kind: ActionKind; label: string; text: string;
   amount: number | null; ratio: number[] | null; factor: number | null; currency: string;
   ex_date: string; record_date: string | null; purpose: string; src: string; url?: string | null; mine?: boolean;
+  /** a dividend declared before a later bonus or split: its amount in today's shares, and why (DD-013) */ now_amount?: number | null; now_note?: string | null;
 }
 export const KIND_NAME: Record<ActionKind, string> = {
   dividend: "Dividends", bonus: "Bonus issues", split: "Splits", buyback: "Buybacks", rights: "Rights issues", demerger: "Demergers",
@@ -33,7 +34,8 @@ export function ActionLine({ a, showSymbol = true, year = false }: { a: CorpActi
           {a.mine && <Badge tone="plain" dot={false}>Yours</Badge>}
         </span>
       )}
-      <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text}</span>
+      <span className="k-small"><Badge tone="plain" dot={false}>{a.label}</Badge> {a.text.toLowerCase().startsWith(a.label.toLowerCase()) ? a.text.slice(a.label.length).replace(/^[\s:·-]+/, "") : a.text}
+        {a.now_note && <span className="k-sub-line" data-testid="div-now">{a.now_note}</span>}</span>
       <span className="k-note">
         Ex-date {exDay(a.ex_date, year)}{a.record_date && a.record_date !== a.ex_date ? ` · record date ${exDay(a.record_date, year)}` : a.record_date ? " (also the record date)" : ""}
         {a.url && <> · <a className="link" href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">Notice ↗</a></>}
@@ -43,7 +45,7 @@ export function ActionLine({ a, showSymbol = true, year = false }: { a: CorpActi
 }
 
 interface CompanyActions {
-  ahead: CorpAction[]; past: CorpAction[]; dividends_12m: { amount: number; count: number; currency: string } | null; ahead_known: boolean; note: string;
+  ahead: CorpAction[]; past: CorpAction[]; dividends_12m: { amount: number; count: number; currency: string; adjusted?: boolean } | null; ahead_known: boolean; note: string;
 }
 
 /** The company page's panel: actions ahead and the last three years'. */
@@ -65,7 +67,7 @@ export function CompanyActions({ region, symbol }: { region: Region; symbol: str
   return (
     <div className="k-stack">
       {data.dividends_12m && (
-        <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
+        <span className="k-small">Dividends with an ex-date in the last 12 months: <b>{price(data.dividends_12m.amount, ccy)}</b> a share{data.dividends_12m.adjusted ? " in today's shares" : ""} ({data.dividends_12m.count} payment{data.dividends_12m.count === 1 ? "" : "s"})</span>
       )}
       <div className="k-stack">
         <span className="k-eyebrow">Coming up: dividends and splits</span>

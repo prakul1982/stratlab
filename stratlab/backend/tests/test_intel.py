@@ -232,7 +232,9 @@ def test_an_empty_ai_read_is_an_error_not_a_blank_card(monkeypatch):
     with pytest.raises(AIError, match="empty"):
         A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)
     monkeypatch.setattr(A, "_ask", lambda *a, **k: {"summary": "Makes chips.", "bull": ["Demand"], "bear": []})
-    assert A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)["bull"] == ["Demand"]
+    got = A.company({"name": "X", "symbol": "X", "region": "US"}, None, False)
+    # the read stands on its summary; "Demand" states no figure, so it is no "notable figure" (DD-016)
+    assert got["summary"] == "Makes chips." and got["bull"] == []
 
 
 def test_ebitda_margin_is_the_last_full_year_beside_the_net_margin():

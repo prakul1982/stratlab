@@ -5,19 +5,22 @@ import { SETTLING, focusParam } from "./researchFormat";
 
 export type Region = "IN" | "US";
 export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United States" };
-export interface MetricItem { label: string; value: number; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number }
+export interface MetricItem { label: string; value: number | null; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number;
+  /** shown instead of a figure: "n/m" for a growth rate off a tiny base (DD-018) */ text?: string }
 export interface MetricGroup { title: string; items: MetricItem[] }
 export interface NewsItem { headline: string; url: string; source: string; at: string | null }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
   high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null;
-  /** the session the change is of, when the market hasn't traded today (the last completed one) */ change_day?: string | null }
+  /** the session the change is of, when the market hasn't traded today (the last completed one) */ change_day?: string | null;
+  /** "issue": a new listing's first session, changed against its issue price, not a previous close (DD-010) */ ref?: "issue" | null }
 export interface SourceStatus { source: string; ok: boolean; error: string | null; /** what the source was for ("prices", "news"), said without its name */ what?: string[] }
 export interface SeriesPoint { y: string; v: number }
 
 export interface Company {
   region: Region; symbol: string; name: string; exchange: string | null; currency: string; logo: string | null;
   website: string | null; industry: string | null; facts: { label: string; value: string }[];
-  market_cap: number | null; cap_note?: string | null; quote: Quote | null; range52: { low: number | null; high: number | null };
+  market_cap: number | null; cap_note?: string | null; quote: Quote | null; range52: { low: number | null; high: number | null; since?: string | null };
+  /** a company that no longer trades (merged or delisted): what became of it (DD-012) */ delisted?: import("./researchFormat").Delisted | null;
   margins: { gross: number | null; operating: number | null; net: number | null } | null;
   metrics: MetricGroup[];
   trend: { unit: string; revenue: SeriesPoint[]; profit: SeriesPoint[]; revenue_label: string; profit_label: string } | null;
@@ -27,7 +30,9 @@ export interface Company {
   /** a bank, lender or insurer: no EBITDA margin or debt-to-equity, and the quarters' margin is the financing margin (R7O-001) */
   bank?: boolean;
   pros?: string[]; cons?: string[];
-  earnings: { period: string; actual: number; estimate: number; surprise_pct: number | null }[];
+  /** each quarter dated by its filing, with its fiscal quarter ("Q2 FY27") and the filed GAAP diluted EPS (DD-030, DD-031) */
+  earnings: { period: string; actual: number; estimate: number; surprise_pct: number | null; fiscal?: string; gaap?: number | null; from_filing?: boolean }[];
+  /** what the estimates' EPS counts: "gaap", or "adjusted" (non-GAAP) for this company (DD-031) */ earnings_basis?: "gaap" | "adjusted" | null;
   next_earnings: { date: string; eps_estimate: number | null } | null;
   insider: { net: number; count?: number; rows: { name: string; change: number; date: string }[] } | null;
   peers: string[]; news: NewsItem[];
@@ -324,9 +329,9 @@ const SCALE: Record<string, Record<string, number>> = {
   automobiles: { "Gross margin": 0.5, "Net margin": 0.5, "P/S": 0.5 },
 };
 
-export function bandPosition(label: string, value: number, industry?: string | null): { pos: number; weak: number; strong: number; tone: "good" | "bad" | "mid" } | null {
+export function bandPosition(label: string, value: number | null, industry?: string | null): { pos: number; weak: number; strong: number; tone: "good" | "bad" | "mid" } | null {
   const b = BANDS[label];
-  if (!b) return null;
+  if (!b || value == null) return null;
   let f = 1;
   const ind = (industry || "").toLowerCase();
   for (const k in SCALE) if (ind.includes(k) && SCALE[k][label]) { f = SCALE[k][label]; break; }
