@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app import db, money_us_tax as us
+from app import db, money_fx as fx, money_us_tax as us
 from tests import fx_rates, world
 from tests.xlsxmaker import make_workbook
 
@@ -22,7 +22,7 @@ def history(short=None, long=None) -> list[list]:
     """The "Transaction History" sheet laid out the way the report has it: a title row, a blank line, a section title, its
     column names, then the lines; formulas left blank."""
     short = [["NVDA", 2, "2025-04-07", 96.3, "2025-06-12", 142.1, 284.2, 192.6, None, 85.6, None],
-             ["NVDA", 0.123456, "2025-04-07", 96.3, "2025-07-01", 150.0, 18.52, 11.89, None, 85.6, None],
+             ["NVDA", 0.123456, "2025-04-07", 96.3, "2025-07-01", 150.0, 18.5184, 11.8888128, None, 85.6, None],
              ["AAPL", 3, "2025-02-03", 200.0, "2025-08-04", 210.0, 630, 600, None, 85.6, None]] if short is None else short
     long = [["MSFT", 1.5, "2022-01-10", 300.0, "2025-09-09", 500.0, 750, 450, None, 85.6, None]] if long is None else long
     return ([["Proceeds from Transactions"], [], ["Short Term Gains (Losses)"], LOT, *short, [],
@@ -52,6 +52,21 @@ def test_the_lots_sold_are_read_as_a_purchase_and_a_sale_each():
         ("2025-02-03", "B", "AAPL", 3, 200.0), ("2025-08-04", "S", "AAPL", 3, 210.0),
         ("2022-01-10", "B", "MSFT", 1.5, 300.0), ("2025-09-09", "S", "MSFT", 1.5, 500.0)])             # the long-term section too
     assert got["problems"] == [] and got["date_note"] is None
+
+
+def test_the_lots_own_proceeds_and_cost_win_over_its_rounded_prices():
+    """The report rounds its prices to the cent but not the lot's proceeds and cost: those give the gain its summary has
+    (Vested's 2025 report was $4.43 apart over 132 lots read from the prices)."""
+    lot = [["AMD", 7, "2025-03-03", 101.24, "2025-05-05", 110.57, 773.97, 708.71, None, 85.6, None]]   # 7 x 110.57 = 773.99
+    got = us.parse_upload(report(short=lot, long=[]), "2025.xlsx")
+    buy, sell = sorted(got["rows"], key=lambda r: r["d"])
+    assert round(sell["qty"] * sell["price"], 2) == 773.97 and round(buy["qty"] * buy["price"], 2) == 708.71
+    m = us.match(got["rows"])["realised"]
+    assert round(sum(x["sale_usd"] - x["cost_usd"] for x in m), 2) == round(773.97 - 708.71, 2)
+    # without those columns the prices are used as they are
+    bare = [r[:6] for r in [LOT] + lot]
+    got = us.parse_upload(make_workbook([("Transaction History", [["Short Term Gains (Losses)"], *bare])]), "gains.xlsx")
+    assert sorted((r["side"], r["price"]) for r in got["rows"]) == [("B", 101.24), ("S", 110.57)]
 
 
 def test_nothing_below_the_gains_sections_is_a_trade_and_the_personal_sheet_is_never_kept():
@@ -119,6 +134,7 @@ def w(monkeypatch):
     built = world.build(monkeypatch)
     fx_rates.seed()
     yield built
+    fx.forget()                     # the seeded rates would stay for the tests after this one
     built["close"]()
 
 

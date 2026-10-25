@@ -65,6 +65,10 @@ GAINS = {
     "sprice": {"sellingpriceusd", "sellingprice", "sellpriceusd", "sellprice", "salepriceusd", "saleprice", "salespriceusd",
                "salepricepershare"},
 }
+# a lot's whole sale proceeds and cost, when the report has them: its prices are rounded to the cent, these aren't, so the
+# gains come out as the report's own summary has them (Vested's 2025 report: $4.43 apart over 132 lots read from the prices)
+GAINS_TOTALS = {"proceeds": {"proceedsusd", "proceeds", "saleproceedsusd", "saleproceeds", "salevalueusd", "salevalue"},
+                "cost": {"costbasisusd", "costbasis", "totalcostusd", "totalcost", "purchasevalueusd", "purchasevalue"}}
 # the workbooks Vested (and others) give next to the tax report: schedules already worked out, not trades
 READY_MADE = [("Schedule FA", re.compile(r"(?i)schedule[\s_-]*fa(?![a-z])")), ("Schedule FSI", re.compile(r"(?i)schedule[\s_-]*fsi(?![a-z])")),
               ("Schedule TR", re.compile(r"(?i)schedule[\s_-]*tr(?![a-z])")), ("Form 67", re.compile(r"(?i)form[\s_-]*67(?!\d)"))]
@@ -197,7 +201,7 @@ def _head(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
 def _gains_cols(row: list[str]) -> dict[str, int]:
     keys = [hf.key(c) for c in row]
     found: dict[str, int] = {}
-    for field, names in GAINS.items():
+    for field, names in (GAINS | GAINS_TOTALS).items():
         for i, k in enumerate(keys):
             if k in names and field not in found and i not in found.values():
                 found[field] = i
@@ -280,6 +284,10 @@ def _gains(rows: list[list[str]], heads: list[int], broker: str | None = None) -
         sym = re.sub(r"[^A-Z0-9.\-]", "", cell(r, c, "symbol").upper()).replace(".", "-")[:10]
         qty, bp, sp = (_money(cell(r, c, f)) for f in ("qty", "bprice", "sprice"))
         qty = abs(qty) if qty is not None else None
+        if qty:                     # each price from the lot's own proceeds and cost where the report has them (GAINS_TOTALS)
+            whole_s, whole_b = _money(cell(r, c, "proceeds")), _money(cell(r, c, "cost"))
+            sp = abs(whole_s) / qty if whole_s else sp
+            bp = abs(whole_b) / qty if whole_b else bp
         bd, sd = _day(cell(r, c, "bought"), order), _day(cell(r, c, "sold"), order)
         if re.match(r"(?i)total", cell(r, c, "symbol")) or (not sym and not bd and not sd):      # a totals line
             continue
