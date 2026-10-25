@@ -193,6 +193,23 @@ export function newsAge(iso: string | null | undefined, now: Date = new Date()):
   return monthsOld(Math.floor(days / 30.4));
 }
 
+/** A headline's time in one style for every item (DD-022: "3 d ago" beside "12 Oct 2026 · 1 week old"): within the day
+ * "40 min ago" or "5 hours ago"; after that its date and its age, "21 Oct · 3 days old", "12 Oct · 1 week old",
+ * "4 Jun · 4 months old", with the year when it isn't this one. */
+export function newsWhen(iso: string | null | undefined, now: Date = new Date()): string | null {
+  if (!iso) return null;
+  const t = new Date(iso);
+  const s = (now.getTime() - t.getTime()) / 1000;
+  if (!Number.isFinite(s)) return null;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) { const h = Math.floor(s / 3600); return `${h} hour${h === 1 ? "" : "s"} ago`; }
+  const days = Math.floor(s / 86400);
+  const date = t.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(t.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }) });
+  const age = days < 7 ? `${days} day${days === 1 ? "" : "s"} old` : newsAge(iso, now);
+  return `${date} · ${age}`;
+}
+
 /** Pulse's opening line, naming only the sections the page shows (R12-011: it promised "where money is flowing" on a
  * page that showed the mood and headlines alone). `ai` is the mood read as loaded, or null before it comes. */
 export function pulseLede(ai: { hot?: unknown[]; flows?: unknown[]; themes?: unknown[] } | null | undefined, closedDay?: string | null, settling = false): string {

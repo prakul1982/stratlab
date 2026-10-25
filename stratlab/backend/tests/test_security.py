@@ -222,7 +222,8 @@ def test_a_ticker_starts_with_a_letter_or_digit(sym):
 # ---------- the AI allowance is held while the call runs ----------
 def _slow_ai(monkeypatch, delay=0.15, fail=None):
     import time
-    out = {"name": "x", "tf": "1d", "entry": [], "exit": [], "risk": {}, "notes": []}
+    # a build that makes a rule: one that makes none is never counted (DP1-001)
+    out = {"name": "x", "tf": "1d", "entry": [{"l": {"t": "rsi", "p": 14}, "op": "lt", "r": {"t": "num", "v": 30}}], "exit": [], "risk": {}, "notes": []}
 
     def write(text, pro):
         time.sleep(delay)

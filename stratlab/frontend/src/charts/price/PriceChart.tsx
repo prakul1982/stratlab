@@ -9,7 +9,7 @@ import { choose, fetchRemote, pushRemote, readLocal, writeLocal, type Layout } f
 import type { ScaleMode } from "./scales";
 import { STAGE_MEANING } from "../../lib/stageNote";
 import { clampParam, newStudy, STAGE_NAMES, STUDIES, STUDY, studyLabel, type StudyConfig, type StudyType } from "./studies";
-import { aggregate, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
+import { aggregate, dropSpikes, indexAtOrBefore, merge, parseTime, toBars, type Bar, type RawCandle } from "./transforms";
 import { ChipBar } from "../../components/kit/ChipBar";
 import { ConfirmDialog } from "../../components/kit/ConfirmDialog";
 import { CHART_TF_UNITS, chartTfCheck } from "../../lib/intervals";
@@ -43,6 +43,8 @@ export interface PriceChartProps {
   /** Candles of another symbol, to compare on a % scale. */
   compareLoad?: (symbol: string) => Promise<RawCandle[]>;
   compareHint?: string;
+  /** Compare with this symbol as soon as the candles are in (the Compare page's % chart of its two companies, DD-060). */
+  compareWith?: string;
   height?: number;
   note?: ReactNode;
   /** How far back the first read of daily candles goes when no range is picked ("1y", "3y", "5y", "max"). */
@@ -77,7 +79,7 @@ const RANGES: { key: RangeKey; tf: Tf; fetch: string }[] = [
   { key: "6M", tf: "1d", fetch: "6m" }, { key: "YTD", tf: "1d", fetch: "ytd" }, { key: "1Y", tf: "1d", fetch: "1y" },
   { key: "5Y", tf: "1w", fetch: "5y" }, { key: "All", tf: "1mo", fetch: "max" },
 ];
-const LS = { type: "stratlab.pc.type", studies: "stratlab.pc.studies", volume: "stratlab.pc.volume", magnet: "stratlab.pc.magnet", risk: "stratlab.pc.risk" };
+const LS = { type: "stratlab.pc.type", volume: "stratlab.pc.volume", magnet: "stratlab.pc.magnet", risk: "stratlab.pc.risk" };
 
 function lsGet<T>(k: string, fallback: T): T {
   try { const v = localStorage.getItem(k); return v == null ? fallback : (JSON.parse(v) as T); } catch { return fallback; }
@@ -145,6 +147,9 @@ const ICON: Record<string, ReactNode> = {
   gear: I(<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></>),
 };
 
+/** The height an indicator in its own pane adds to the chart (DD-040). */
+export const PANE_ADD = 110;
+
 /** How long the chart waits before reading candles again after a busy answer. */
 const BUSY_RETRY_MS = 2500;
 
@@ -165,12 +170,15 @@ export default function PriceChart(props: PriceChartProps) {
   const saved0 = useRef<Layout | null | undefined>(undefined);
   if (saved0.current === undefined) saved0.current = readLocal(storageKey)?.layout ?? null;
   const lay0 = saved0.current;
-  const [tf, setTf] = useState<Tf>(!!load && lay0?.tf && offered.includes(lay0.tf as Tf) ? (lay0.tf as Tf) : props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
-  const [range, setRange] = useState<RangeKey | null>(() => (load ? (lay0?.tf && offered.includes(lay0.tf as Tf) ? ((lay0.range as RangeKey) ?? null) : props.range === undefined ? "1Y" : props.range) : null));
+  // every chart opens on the page's own timeframe and range (a year of daily candles), never the one picked on an earlier
+  // visit: RELIANCE opened at 1 hour, TCS at daily and AAPL at monthly (DD-041)
+  const [tf, setTf] = useState<Tf>(props.tf && offered.includes(props.tf) ? props.tf : offered.includes("1d") ? "1d" : offered[0]);
+  const [range, setRange] = useState<RangeKey | null>(() => (load ? (props.range === undefined ? "1Y" : props.range) : null));
   const [type, setType] = useState<ChartType>(() => { const t = lay0?.type ?? lsGet<string>(LS.type, "candles"); return CHART_TYPES.some((c) => c.type === t) ? t as ChartType : "candles"; });
   const [attempt, setAttempt] = useState(0);          // "Try again" after a failed read reads the same candles again
   const [volume, setVolume] = useState(() => (lay0?.volume ?? lsGet<unknown>(LS.volume, true)) !== false);
-  const [mine, setMine] = useState<StudyConfig[]>(() => validStudies(lay0?.studies ?? lsGet(LS.studies, [])));
+  // the indicators are this symbol's own (its saved layout), never the last ones added on another symbol (DD-041)
+  const [mine, setMine] = useState<StudyConfig[]>(() => validStudies(lay0?.studies ?? []));
   const [pageList, setPageList] = useState<StudyConfig[]>(pageStudies ?? []);
   const [mode, setMode] = useState<ScaleMode>("normal");
   const [auto, setAuto] = useState(true);
@@ -195,6 +203,7 @@ const [saveNote, setSaveNote] = useState("");
   const [cmp, setCmp] = useState<{ symbol: string; bars: Bar[] } | null>(null);
   const [cmpText, setCmpText] = useState("");
   const [cmpBusy, setCmpBusy] = useState(false);
+  const [cmpErr, setCmpErr] = useState("");          // said in the Compare box itself, which stays open to fix it (DD-042)
   const [, setTick] = useState(0);
 
   const studies = useMemo(() => [...pageList, ...mine.map((s) => ({ ...s, slot: s.slot + pageList.length }))], [pageList, mine]);
@@ -253,7 +262,6 @@ const [saveNote, setSaveNote] = useState("");
   useEffect(() => { lsSet(LS.volume, volume); }, [volume]);
   useEffect(() => { engineRef.current?.setDecimals(props.decimals ?? null); setTick((x) => x + 1); }, [props.decimals]);
   useEffect(() => { engineRef.current?.setStudies(studies); rootRef.current!.dataset.studies = String(studies.length); setTick((x) => x + 1); }, [studies]);
-  useEffect(() => { lsSet(LS.studies, mine); }, [mine]);
   useEffect(() => {
     const list = (markers ?? []).map((m) => ({ t: parseTime(m.t)?.[0] ?? NaN, side: m.side })).filter((m) => Number.isFinite(m.t)) as ChartMarker[];
     engineRef.current?.setMarkers(list);
@@ -289,7 +297,6 @@ const [saveNote, setSaveNote] = useState("");
     const st = stateRef.current;
     if (!touched.current) return layoutRef.current;
     const l: Layout = { type: st.type, volume: st.volume, hide_drawings: st.hideAll, studies: st.mine.map((x) => ({ id: x.id, type: x.type, params: x.params, slot: x.slot })) };
-    if (st.load) { l.tf = st.tf; if (st.range) l.range = st.range; }
     layoutRef.current = l;
     return l;
   };
@@ -308,22 +315,22 @@ const [saveNote, setSaveNote] = useState("");
     pending.current = () => { window.clearTimeout(timer.current); void send(); };
     timer.current = window.setTimeout(send, 700);
   };
-  useEffect(() => { if (touched.current) scheduleRef.current(); }, [tf, range, type, volume, mine, ui.hideAll]);
+  useEffect(() => { if (touched.current) scheduleRef.current(); }, [type, volume, mine, ui.hideAll]);
   useEffect(() => {
     const online = () => { const l = readLocal(storageKey); if (l?.dirty) scheduleRef.current(); };
     window.addEventListener("online", online);
     return () => window.removeEventListener("online", online);
   }, [storageKey]);
 
+  // a layout's chart type, volume, indicators and hidden drawings; a symbol with none has no indicators of its own (the
+  // last symbol's stay with it, DD-041). Its timeframe and range, kept by older layouts, are not used (DD-041)
   const applyLayout = useCallback((l: Layout | null) => {
-    if (!l) return;
-    const st = stateRef.current;
+    setMine(validStudies(l?.studies ?? []));
+    if (!l) { engineRef.current?.setHideAll(false); return; }
     if (l.type && CHART_TYPES.some((c) => c.type === l.type)) setType(l.type as ChartType);
     if (l.volume !== undefined) setVolume(l.volume);
-    if (l.studies) setMine(validStudies(l.studies));
-    if (st.load && l.tf && offered.includes(l.tf as Tf)) { setTf(l.tf as Tf); setRange((l.range as RangeKey | undefined) ?? null); }
     engineRef.current?.setHideAll(!!l.hide_drawings);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const e = engineRef.current;
@@ -352,7 +359,8 @@ const [saveNote, setSaveNote] = useState("");
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   // ---------- candles ----------
-  const shownFrom = useCallback((base: Bar[], t: Tf) => (t === "1w" ? aggregate(base, "week") : t === "1mo" ? aggregate(base, "month") : base), []);
+  // monthly candles leave out a lone bad print from the source (DD-043); weekly and shorter candles are shown as read
+  const shownFrom = useCallback((base: Bar[], t: Tf) => (t === "1w" ? aggregate(base, "week") : t === "1mo" ? dropSpikes(aggregate(base, "month")) : base), []);
 
   const openFromRef = useRef(props.openFrom);
   openFromRef.current = props.openFrom;
@@ -451,9 +459,8 @@ const [saveNote, setSaveNote] = useState("");
   }, [load, props.bars, syncData, applyOpenFrom]);
 
   // ---------- actions ----------
-  const pickTf = (t: Tf) => { touched.current = true; setRange(null); setTf(t); setMenu(null); };
+  const pickTf = (t: Tf) => { setRange(null); setTf(t); setMenu(null); };
   const pickRange = (r: RangeKey) => {
-    touched.current = true;
     const want = props.rangesKeepTf ? tf : RANGES.find((x) => x.key === r)!.tf;
     const t = offered.includes(want) ? want : offered.includes("1d") ? "1d" : offered[0];
     setTf(t); setRange(r);
@@ -520,16 +527,34 @@ const [saveNote, setSaveNote] = useState("");
     window.addEventListener("keydown", esc);
     return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", esc); };
   }, [full]);
+  // an unknown symbol ("ZZZZ") is said under the box, in words, and the box stays open to fix it; before, nothing was
+  // said where the person was looking (DD-042)
   const doCompare = async (sym: string) => {
-    if (!compareLoad || !sym.trim()) return;
-    setCmpBusy(true);
+    if (!compareLoad) return;
+    const want = sym.trim().toUpperCase();
+    if (!want) { setCmpErr("Type a symbol to compare with."); return; }
+    if (want === symbol.toUpperCase()) { setCmpErr(`That's ${symbol} itself. Type another symbol.`); return; }
+    setCmpBusy(true); setCmpErr("");
     try {
-      const bars = toBars(await compareLoad(sym.trim().toUpperCase()));
-      if (!bars.length) throw new Error("No prices for that symbol.");
-      setCmp({ symbol: sym.trim().toUpperCase(), bars });
-      setMenu(null);
-    } catch (err) { setError((err as Error).message); setTimeout(() => setError(""), 4000); } finally { setCmpBusy(false); }
+      const bars = toBars(await compareLoad(want));
+      if (!bars.length) throw new Error("none");
+      setCmp({ symbol: want, bars });
+      setMenu(null); setCmpText("");
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      setCmpErr(status && status >= 500 ? "Prices couldn't be read just now. Try again in a moment." : `No prices found for ${want}. Check the symbol${props.compareHint ? ` (${props.compareHint.replace(/^e\.g\. /, "like ")})` : ""}.`);
+    } finally { setCmpBusy(false); }
   };
+
+  // the Compare page's second company, drawn once the first one's candles are in (DD-060)
+  const autoCmp = useRef("");
+  useEffect(() => {
+    const w = props.compareWith?.trim().toUpperCase();
+    if (!w || status !== "ready" || autoCmp.current === w) return;
+    autoCmp.current = w;
+    void doCompare(w);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.compareWith, status]);
 
   // close a menu on a click outside it or Esc
   useEffect(() => {
@@ -564,9 +589,13 @@ const [saveNote, setSaveNote] = useState("");
     ? `${symbol}, ${TF_LONG[tf].toLowerCase()} candles from ${new Date(first.t).toLocaleDateString("en-GB")} to ${new Date(last.t).toLocaleDateString("en-GB")}. Last close ${fmt(last.c)}.`
     : `${symbol} price chart.`;
   const tfSelect = offered.length > 1;
+  // each indicator in a pane of its own (RSI, MACD) adds its height to the chart, so the candles keep theirs: with BB, RSI
+  // and MACD on, the price pane was about 170px of a fixed 418 (DD-040)
+  const ownPanes = studies.filter((s) => STUDY[s.type]?.pane === "own").length;
+  const stageH = height + ownPanes * PANE_ADD;
 
   return (
-    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}`} data-testid="price-chart" style={{ ["--pc-h" as string]: `${height}px` }}>
+    <div ref={rootRef} className={`pc${full ? " pc-full" : ""}`} data-testid="price-chart" data-height={stageH} style={{ ["--pc-h" as string]: `${stageH}px` }}>
       <div className="pc-bar" role="toolbar" aria-label="Chart tools">
         <select className="pc-sel" aria-label="Chart type" value={shownType} onChange={(ev) => { touched.current = true; setType(ev.target.value as ChartType); }}>
           {CHART_TYPES.filter((c) => !props.closesOnly || ["line", "area", "baseline"].includes(c.type)).map((c) => <option key={c.type} value={c.type}>{c.name}</option>)}
@@ -588,7 +617,7 @@ const [saveNote, setSaveNote] = useState("");
           <button type="button" className="pc-btn" aria-haspopup="menu" aria-expanded={menu === "studies"} onClick={() => setMenu(menu === "studies" ? null : "studies")}>Indicators</button>
           {menu === "studies" && (
             <div className="pc-pop" role="menu" aria-label="Add an indicator">
-              {STUDIES.map((d) => <button key={d.type} type="button" role="menuitem" className="item" onClick={() => addStudy(d.type)}>{d.name}<small>{d.about}</small></button>)}
+              {STUDIES.map((d) => <button key={d.type} type="button" role="menuitem" className="item" title={d.detail} onClick={() => addStudy(d.type)}>{d.name}<small>{d.about}</small></button>)}
             </div>
           )}
         </div>
@@ -605,8 +634,12 @@ const [saveNote, setSaveNote] = useState("");
               : <button type="button" className="pc-btn" aria-haspopup="dialog" aria-expanded={menu === "compare"} onClick={() => setMenu(menu === "compare" ? null : "compare")}>Compare</button>}
             {menu === "compare" && (
               <form className="pc-pop right" onSubmit={(ev) => { ev.preventDefault(); doCompare(cmpText); }} aria-label="Compare with another symbol">
-                <label>Symbol<input autoFocus value={cmpText} onChange={(ev) => setCmpText(ev.target.value)} placeholder={props.compareHint ?? "e.g. TCS"} maxLength={20} aria-label="Symbol to compare" /></label>
-                <button type="submit" className="pc-btn" disabled={cmpBusy || !cmpText.trim()}>{cmpBusy ? "Loading…" : "Compare on a % scale"}</button>
+                <label>Symbol<input autoFocus value={cmpText} onChange={(ev) => { setCmpText(ev.target.value); setCmpErr(""); }} placeholder={props.compareHint ?? "e.g. TCS"} maxLength={20}
+                  aria-label="Symbol to compare" aria-invalid={!!cmpErr} aria-describedby={cmpErr ? "pc-cmp-err" : undefined} /></label>
+                {/* a solid button that is always pressable, so it never reads as a greyed-out option (DD-042) */}
+                <button type="submit" className="pc-btn primary" disabled={cmpBusy}>{cmpBusy ? "Loading…" : "Compare"}</button>
+                <small className="pc-pop-note">Both are drawn on a % scale from the first candle on screen.</small>
+                {cmpErr && <span id="pc-cmp-err" className="pc-pop-err" role="alert">{cmpErr}</span>}
               </form>
             )}
           </div>

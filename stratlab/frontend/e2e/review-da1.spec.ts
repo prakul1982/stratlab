@@ -44,8 +44,9 @@ test("notebook: Run with no market chosen is refused with a way to choose one (D
   const errors = await open(page, `/n/${nb.id}`);
   const needs = page.getByTestId("run-needs-market");
   await expect(needs).toContainText("Choose what to test it on before you run it", { timeout: 30_000 });
-  await page.getByRole("button", { name: /Run experiment v1/ }).click();
-  await expect(page.getByRole("button", { name: "Choose market" }).first()).toBeVisible();
+  // the button waits for a choice, as the note under it says (DP1-012: it was enabled before a market was chosen)
+  await expect(page.getByRole("button", { name: /Run experiment v1/ })).toBeDisabled();
+  await page.keyboard.press("Control+Enter");
   expect(runs, "no run was sent").toEqual([]);
   await needs.getByRole("link", { name: "Choose market" }).click();
   await expect(page).toHaveURL(new RegExp(`/n/${nb.id}/market$`));

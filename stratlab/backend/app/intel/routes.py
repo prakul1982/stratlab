@@ -5,7 +5,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -178,11 +178,15 @@ def search(q: str = "", region: str = "IN", profile=Depends(current_profile)):
     return ok(source_call(lambda: hub.search(q, r)))
 
 
-def prices_as_of(c: dict) -> str | None:
+def prices_as_of(c: dict, region: str | None = None, now: datetime | None = None) -> str | None:
     """When a company page's price is from: the time of the quote's last trade (the exchange's own stamp), never the
     moment of asking. A quote without one has no "as of": the page says its time is unknown (review 5c: a price from
-    the fundamentals page, hours or days old, was dated "now")."""
-    now = datetime.now(timezone.utc)
+    the fundamentals page, hours or days old, was dated "now").
+
+    With the `region`, once the session has closed a last trade in its final half hour (or the close's own stamp a few
+    minutes after) is the close, so every page of a closed session says the same time (DD-023: "15:28 IST" on most
+    stocks, "15:30" on the day's IPOs)."""
+    now = now or datetime.now(timezone.utc)
     at = (c.get("quote") or {}).get("at")
     try:
         t = datetime.fromisoformat(at.replace("Z", "+00:00")) if isinstance(at, str) else None
@@ -190,7 +194,19 @@ def prices_as_of(c: dict) -> str | None:
         t = None
     if t is None:
         return None
-    return min(t if t.tzinfo else t.replace(tzinfo=IST), now).isoformat(timespec="minutes")
+    t = t if t.tzinfo else t.replace(tzinfo=IST)
+    if region:
+        from zoneinfo import ZoneInfo
+        from ..data.markets import BY_ID
+        from ..stock_pages import close_of
+        tz = ZoneInfo((BY_ID.get(region) or {}).get("tz") or "UTC")
+        day = t.astimezone(tz).date()
+        hm = close_of(region, day)
+        if hm:
+            close = datetime.combine(day, datetime.strptime(hm, "%H:%M").time(), tz)
+            if close <= now and not market_open(region, now) and close - timedelta(minutes=30) <= t <= close + timedelta(minutes=5):
+                t = close
+    return min(t, now).isoformat(timespec="minutes")
 
 
 def quote_day(region: str, c: dict) -> str | None:
@@ -235,7 +251,7 @@ def company(region: str, symbol: str, lean: bool = False, profile=Depends(curren
     r = region_of(region)
     s = symbol_of(symbol, r)
     c = page_figures(r, source_call(lambda: hub.company(r, s, lean=True) if lean else hub.company(r, s)))
-    return ok({**c, "as_of": prices_as_of(c), "market_open": market_open(r), "phase": price_phase(r, c), "quote_day": quote_day(r, c)})
+    return ok({**c, "as_of": prices_as_of(c, r), "market_open": market_open(r), "phase": price_phase(r, c), "quote_day": quote_day(r, c)})
 
 
 @router.get("/company/{region}/{symbol}/more")
@@ -695,7 +711,8 @@ def pulse_ai(region: str = "IN", focus: str = "", refresh: bool = False, profile
         # the market's mood is one read per market, shared by everyone: it never counts against anyone's daily cap and is
         # never refused for it (R8O-002: India's mood blocked by the cap in market hours); "Ask again" on a read under five
         # minutes old gives that read
-        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day),
+        # "mood": reads kept from before the mood line and main story were added are written again (DD-001)
+        return ok(ai_call(profile, "pulse", (r, f.lower(), hour, mood_key(indices, is_open), cash_day, "mood"),
                           3600 if is_open else settle_ttl or CLOSED_MOOD_TTL, refresh, build, counted=False,
                           min_age=300 if is_open else settle_ttl or CLOSED_MOOD_TTL))
     except HTTPException as e:
@@ -751,11 +768,26 @@ def sector(q: str, region: str = "IN", refresh: bool = False, profile=Depends(cu
     r, theme = region_of(region), " ".join(q.split())[:80]
     if len(theme) < 2:
         err(400, "bad_theme", "Type a sector or theme, like \"India defence\" or \"AI data centers\".")
+    rows = index_rows(r)
+    # DE-015: letters that spell nothing ("asdkjh qwe zzz") are asked about before an AI read is spent on them
+    if not grounding.looks_like_theme(theme, grounding.vocabulary(rows)):
+        err(400, "bad_theme", f"\"{theme}\" doesn't read as a sector or theme. Try words like \"India defence\" or \"AI data centers\".")
     # every ticker the AI wrote is checked against the market's list before the map is kept (R5O-008)
     got = ai_call(profile, "sector", (r, theme.lower()), 24 * 3600, refresh,
                   lambda: grounding.drop_unrelated(grounding.ground_sector(A.sector(theme, r, _ai), r, hub.search), industry_lookup(r)))
-    # no unsourced market size or growth rate, even on a map kept from before (R7O-012)
-    return ok({**got, "market_size": "", "cagr": None, "cagr_note": ""})
+    # no unsourced market size or growth rate, even on a map kept from before (R7O-012); no figure in the text and no
+    # company that isn't listed, and the exchange's own list of the theme's industries beside the map (DE-013)
+    got = grounding.listed_only(A.theme_served(got))
+    return ok({**got, "market_size": "", "cagr": None, "cagr_note": "", "exchange": grounding.exchange_list(got, rows) or None})
+
+
+def index_rows(region: str) -> list[dict]:
+    """The screener's stored index of listed companies ({symbol, name, sector, industry}), or none when it can't be read."""
+    try:
+        from .. import screens
+        return screens.load_index(region).get("rows") or []
+    except Exception:
+        return []
 
 
 def industry_lookup(region: str):
@@ -773,11 +805,15 @@ def industry_lookup(region: str):
 def compare(a: str, b: str, region: str = "IN", refresh: bool = False, profile=Depends(current_profile)):
     r = region_of(region)
     sa, sb = symbol_of(a, r), symbol_of(b, r)
+    # the same company twice is a slip, said kindly: by symbol, or once both pages are read (a BSE code and its NSE
+    # symbol) (DD-061: "The two couldn't be compared")
     if sa == sb:
-        err(400, "same_symbol", "Pick two different companies.")
+        err(400, "same_symbol", f"{sa} is in both boxes. Pick a different company in one of them.")
     # each side's figures as its own page shows them (market value, P/E, range)
     ca = page_figures(r, source_call(lambda: hub.company(r, sa)))
     cb = page_figures(r, source_call(lambda: hub.company(r, sb)))
+    if ca.get("symbol") and ca.get("symbol") == cb.get("symbol"):
+        err(400, "same_symbol", f"{sa} and {sb} are the same company ({ca['symbol']}). Pick a different company in one of the boxes.")
     try:
         verdict = ai_call(profile, "compare", (r, sa, sb, datetime.now(IST).date().isoformat()), 12 * 3600, refresh,
                           lambda: A.compare(ca, cb, _ai))
@@ -805,6 +841,23 @@ def _watch_key(profile) -> str:
 
 
 known_symbol = None      # (region, symbol) -> True, False (no such listed instrument) or None (can't tell); set by main
+
+
+@router.get("/watchlist/facts")
+def watchlist_facts(region: str = "IN", symbols: str = "", profile=Depends(current_profile)):
+    """P/E and the distance below the 52-week high for the watchlist's list view (DD-072: only the price and the day's
+    change), from the screener's daily index as its page shows them: a symbol not in the index has none. Nothing is read
+    from a market-data source here."""
+    r = region_of(region)
+    asked = list(dict.fromkeys(s.strip().upper() for s in symbols.split(",") if s.strip()))[:100]
+    try:
+        from .. import screens
+        idx = screens.load_index(r)
+    except Exception:
+        idx = {"rows": []}
+    rows = {x["symbol"]: x for x in idx.get("rows") or [] if x.get("symbol") in asked}
+    out = {s: {"pe": rows[s].get("pe"), "from_high": rows[s].get("from_high"), "price_at": rows[s].get("price_at")} for s in asked if s in rows}
+    return ok({"facts": out, "as_of": screens.as_of(idx) if rows else None})
 
 
 @router.get("/watchlist")

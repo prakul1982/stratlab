@@ -86,7 +86,7 @@ async function barsAroundZero(page: Page) {
 }
 
 const PAGES: [string, string][] = [
-  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Your research desk"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
+  ["/", "Net worth"], ["/trade", "Straddles, strangles"], ["/invest", "Invest home"], ["/money", "Your money"], ["/notebooks", "notebook"], ["/library", "librar"], ["/options", "Options"], ["/trade/positioning", "Participant-wise open interest"], ["/paper", "Paper"],
   ["/research", "Companies"], ["/research/IN/RELIANCE", "Reliance"], ["/research/US/AAPL", "AAPL"], ["/research/IN/RELIANCE/deep", "Growth and margins"],
   ["/research/scan", "Stage 2"], ["/research/screens", "Filter companies by plain facts"], ["/alerts", "Your stock alerts"], ["/research/watchlist", "Companies you're watching"], ["/research/rotation", "rotation"], ["/invest/breadth", "Rose / fell"], ["/invest/etf-gaps", "ETF price against NAV"], ["/research/results", "Results this week and next"], ["/research/corporate-actions", "Dividends, bonuses and splits"], ["/research/investor", "Investor"], ["/holdings", "By sector"], ["/tax-report", "How FY"], ["/money/tax-tools", "Dividends, advance tax"], ["/news", "Briefs"], ["/plans", "Plans"],
   ["/account", "Account"], ["/settings", "Where your alerts and emails go"], ["/assistant", "AI assistant"], ["/app", "Get the app"], ["/invite", "Invite friends"],
@@ -214,7 +214,7 @@ test.describe("a visitor in India", () => {
 test("plans: short cards, the full comparison, and backtests (not experiments)", async ({ page }, info) => {
   const errors = await open(page, "/plans", "Side by side");
   for (const line of ["Everything in Free, plus:", "Everything in Basic, plus:", "10 backtests a month, each with a full verdict",
-    "2 company deep dives and 1 slide deck a month", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
+    "2 company deep dives a month, each with the report card and checklist, and 1 company slide deck (its PDF and PowerPoint count as one)", "Indian F&O contracts (futures and options on stocks and indices) in notebooks, each backtested on its own past prices; the stocks themselves are on every plan",
     "Options paper trading on your own rules' signals, strikes picked by delta or premium, and what-if sliders with a roll preview"]) {
     await expect(page.locator(".k-plans li", { hasText: line })).toBeVisible();
   }
@@ -228,7 +228,11 @@ test("plans: short cards, the full comparison, and backtests (not experiments)",
   await expect(row("All 20+ indicators in strategy rules")).toHaveText(["All 20+ indicators in strategy rules", "–", "✓", "✓"]);
   await expect(row("Trade notifications")).toHaveText(["Trade notifications", "–", "✓", "✓"]);
   await expect(row("Indian F&O in notebooks and backtests")).toHaveText(["Indian F&O in notebooks and backtests", "–", "–", "✓"]);   // Basic's options paper trading is its own row (R54-008)
-  await expect(row("Red flags on every company page")).toHaveText(["Red flags on every company page", "✓", "✓", "✓"]);
+  // what every plan has is one folded list, and what each plan adds is under its own subheadings (DP1-022, DI-032)
+  await expect(table.getByRole("heading", { name: "Trading" })).toBeVisible();
+  await expect(table.getByRole("heading", { name: "Money and tax" })).toBeVisible();
+  await table.getByText(/^On every plan \(\d+ tools\)$/).click();
+  await expect(table.locator("li", { hasText: "Red flags on every company page" })).toBeVisible();
   await sane(page, errors);
   if (info.project.name === "phone") await touchable(page);
 });
@@ -1170,7 +1174,8 @@ test("deals and insider trades: a dated table on the company page and the deep d
 
   errors = await open(page, "/research/IN/RELIANCE/deep", "Growth and margins");
   await expect(page.getByText("Promoter and insider buying and selling, 6 months").first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".deals-table").first()).toContainText("Pension Plan Two");
+  // the deals are the company page's own table, linked from the deep dive rather than shown twice (DD-054)
+  await expect(page.getByTestId("deep-holders-deals").getByRole("link", { name: "deals and insider trades" })).toHaveAttribute("href", "/research/IN/RELIANCE#deals");
   if (phone) await touchable(page);
   await sane(page, errors);
 });

@@ -16,6 +16,7 @@ from .scan import _pool
 WINDOW = 14          # candles in the normalising window, both axes
 SMOOTH = 3           # EMA of the RS line before normalising, to cut day-to-day jitter
 MAX_TAIL = 12
+VERSION = 2          # the answer's shape: 2 = tail + 1 points, "moved" from `tail` steps back (DE-018); a kept copy of another is redone
 
 SECTORS = {
     "IN": {"benchmark": "NIFTY 500", "name": "NSE sector indices", "members": [
@@ -91,7 +92,7 @@ def path(member: pd.Series, bench: pd.Series, tail: int) -> list[dict]:
 
 
 def heading(pts: list[dict]) -> float | None:
-    """Direction of the last step, in degrees (0 = right, 90 = up)."""
+    """Direction of the last step, in degrees (0 = right, 90 = up): the page says "its last week's move" (DE-020)."""
     if len(pts) < 2:
         return None
     dx, dy = pts[-1]["x"] - pts[-2]["x"], pts[-1]["y"] - pts[-2]["y"]
@@ -189,7 +190,9 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
     def one(item):
         iid, sym = item
         try:
-            pts = path(closes(load(iid, days), interval), bench_s, tail)
+            # a trail of `tail` weeks is tail + 1 points: "4 weeks ago" is the point four steps back, not three (DE-018:
+            # the column read the 1 Oct point, three weeks before the 23 Oct close, and missed IT and Bank turning Leading)
+            pts = path(closes(load(iid, days), interval), bench_s, tail + 1)
             return item, pts, None
         except Exception as e:     # one member's data problem mustn't sink the chart
             return item, [], str(e)[:80] or e.__class__.__name__
@@ -208,11 +211,11 @@ def compute(registry, market: str, members: list[tuple[str, str]], interval: str
         rows.append({"id": iid, "symbol": sym, "name": _label(market, sym, inst), "points": pts, "x": x, "y": y,
                      "quadrant": quadrant(x, y), "heading": heading(pts), "core": market != "IN" or sym in CORE_IN,
                      "stocks": len(sector_members.members(market, sym)),
-                     "moved": None if len(pts) < 2 else quadrant(first["x"], first["y"])})
+                     "moved": quadrant(first["x"], first["y"]) if len(pts) == tail + 1 else None})
     order = {"leading": 0, "improving": 1, "weakening": 2, "lagging": 3}
     rows.sort(key=lambda r: (order[r["quadrant"]], -r["x"]))
     return {"benchmark": _label(market, bsym, None) if bench else bsym, "interval": interval, "tail": tail, "rows": rows, "skipped": skipped,
-            "as_of": max((r["points"][-1]["t"] for r in rows), default=None)}
+            "as_of": max((r["points"][-1]["t"] for r in rows), default=None), "v": VERSION}
 
 
 PAGE_INTERVAL = "weekly"              # the rotation page's chart, which the briefs describe

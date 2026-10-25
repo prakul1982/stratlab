@@ -60,7 +60,8 @@ def test_endpoint_rotates_us_sectors(monkeypatch):
         assert r["benchmark"] == "SPY" and len(r["rows"]) == 10 and r["name"] == "S&P 500 sectors"
         assert len(r["skipped"]) == 1 and r["skipped"][0].startswith("XLU") and "yahoo" not in r["skipped"][0].lower()
         row = r["rows"][0]
-        assert len(row["points"]) == 6 and row["quadrant"] in ("leading", "improving", "weakening", "lagging")
+        # a trail of 6 weeks is 7 points: "6 weeks ago" is six steps back (DE-018)
+        assert len(row["points"]) == 7 and row["quadrant"] in ("leading", "improving", "weakening", "lagging")
         assert {x["name"] for x in r["rows"]} >= {"Technology", "Energy"}
         assert TestClient(main.app).get("/research/rotation?region=US&set=sectors&tail=99").json()["tail"] == 12
     finally:

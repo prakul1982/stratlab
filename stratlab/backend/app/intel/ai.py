@@ -288,16 +288,32 @@ _CALL_OPENING = re.compile(r"^\W*(buy|sell|accumulate|avoid|add|pick|hold|load|g
 
 def theme_text(text, length: int) -> str:
     """A theme read's sentence as it goes out: none that advises or forecasts (the model has no source to forecast from),
-    and a sentence with a figure marked as the AI's own estimate, since no fact backs it."""
+    and none with a figure (DE-013: "defence budget to Rs 5.5 lakh crore (+12%)" while the year's allocation was about
+    ₹6.81 lakh crore; an "(AI estimate)" tag didn't make a wrong figure right). A map has no source to check a budget,
+    a growth rate or a target against, so it names things and states no numbers; a sentence kept before this with its
+    "(AI estimate)" tag goes too."""
     kept = []
     for x in grounding._SENT.split(" ".join(str(text or "").split())):
         if not x or grounding.ADVICE.search(x) or _CALL_OPENING.search(x):
             continue
-        if grounding._numbers(x) and "(AI estimate)" not in x:
-            x = x.rstrip()
-            x = f"{x[:-1]} (AI estimate){x[-1]}" if x[-1:] in ".!?" else f"{x} (AI estimate)"
-        kept.append(x)
+        if grounding._numbers(x) or "(AI estimate)" in x:
+            continue
+        kept.append(grounding.tidy_text(x))
     return " ".join(kept)[:length]
+
+
+def theme_served(out: dict) -> dict:
+    """A stored theme map's text as today's checks would write it (DE-013), however long ago it was kept."""
+    out = dict(out)
+    for k, n in (("summary", 900), ("core", 120)):
+        out[k] = theme_text(out.get(k), n)
+    out["sub_themes"] = [{**x, "detail": theme_text(x.get("detail"), 400)} for x in out.get("sub_themes") or [] if isinstance(x, dict)]
+    out["sub_themes"] = [x for x in out["sub_themes"] if x["detail"]]
+    out["value_chain"] = [{**v, "description": theme_text(v.get("description"), 600)} for v in out.get("value_chain") or [] if isinstance(v, dict)]
+    out["screen"] = [{**x, "one_line": theme_text(x.get("one_line"), 300)} for x in out.get("screen") or [] if isinstance(x, dict)]
+    out["tailwinds"] = [t for t in (theme_text(x, 400) for x in out.get("tailwinds") or []) if t]
+    out["risks"] = [t for t in (theme_text(x, 400) for x in out.get("risks") or []) if t]
+    return out
 
 
 def theme_list(x, n: int, length: int = 400) -> list:
@@ -319,9 +335,13 @@ Return ONLY this JSON:
  "screen": [{{"name": "", "ticker": "", "layer": "value-chain layer", "one_line": "what it supplies to the theme, as a fact"}}],
  "value_chain": [{{"layer": "", "description": "3 sentences on its economics and where the margin sits",
                    "companies": [{{"name": "", "ticker": ""}}]}}],
- "tailwinds": ["specific sentences with numbers or names"], "risks": ["specific sentences with numbers or names"]}}
-Sizes: 4-5 clusters of 4-6 real companies (empty ticker for private ones), 4 sub-themes, 6-8 screen names (listed
-companies with the most direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 companies, 4 tailwinds, 4 risks. Nothing generic.
+ "tailwinds": ["specific sentences naming the policy, programme, product or customer"], "risks": ["specific sentences naming what could go wrong"]}}
+Sizes: 4-5 clusters of 4-6 real listed companies, 4 sub-themes, 6-8 screen names (listed companies with the most
+direct link to the theme, in value-chain order, not ranked), up to 4 ETFs, 4-5 value-chain layers of 3-5 listed companies, 4 tailwinds, 4 risks. Nothing generic.
+Only companies listed on the market's exchanges, each with its own ticker: never a private company, an unlisted
+subsidiary or a division under its parent's ticker. No figures at all (no budgets, market sizes, growth rates, order
+values, targets or years of targets): there is no source here to check them. Name only programmes, products and
+policies that exist; leave out anything you aren't sure of.
 {RULES}"""
     r = _ask(system, f"THEME: {q}\nTODAY: {ist_date().isoformat()}", ai, 6000)
 
@@ -373,7 +393,8 @@ figures, in rupees crore, with their date), with their direction exactly as the 
 Return ONLY this JSON:
 Give a reason for a move only when a headline reports that reason as having happened; never infer one (earnings,
 data, rates) from a headline that previews it or from the moves themselves.
-{{"tone": "3-4 sentences on how the market moved today, giving every index in the FACTS with its level and its change in percent, and what the headlines report",
+{{"driver": "the subject most of today's headlines are about, in 2-4 plain words as the headlines put it (like \"crude oil\" or \"bank results\"), or \"\"",
+ "tone": "3-4 sentences on how the market moved today: what the headlines report as the reason for the move (only when one does), then every index in the FACTS with its level and its change in percent",
  "hot": [{{"name": "", "ticker": "", "why": "2 sentences: what the headlines report about it"}}],
  "flows": [{{"title": "", "detail": "2 sentences, as the headlines report it", "direction": "INFLOW" | "OUTFLOW" | "ROTATION" | ""}}],
  "themes": [{{"theme": "", "detail": "2 sentences", "example": "ticker"}}]}}
@@ -411,9 +432,17 @@ No outlook: describe what happened, not what will happen. Tickers are {'NSE symb
     out = grounding.closed_words(out) if closed else out
     if before_close or settling:     # the model's own wording is not trusted with it
         out = {**out, "tone": re.sub(r"\b(closed|ended|finished) at\b", "stood at", str(out.get("tone") or ""), flags=re.I)}
-    # numbers the page's way (R7O-001), and a day as the app writes it (R70-010: "as of 2026‑10‑16")
-    tidy = lambda t: grounding.app_dates(grounding.tidy_numbers(t, region))          # noqa: E731
-    return {**out, "tone": tidy(out.get("tone")),
+    # numbers the page's way (R7O-001), index levels as the cards show them (DE-017), and a day as the app writes it
+    # (R70-010: "as of 2026‑10‑16")
+    tidy = lambda t: grounding.app_dates(grounding.card_levels(grounding.tidy_numbers(t, region), indices))          # noqa: E731
+    # the mood from the moves and the day's main story from the headlines, both worked out in code, so the read says how
+    # the market felt and what it was about, not only the levels (DD-001); where the FII/DII figures come from whenever
+    # the read quotes them
+    titles = [str(h.get("headline") or "") for h in headlines[:14]]
+    mood = " ".join(x for x in (grounding.mood_line(indices, sectors), grounding.main_story(str(r.get("driver") or ""), titles)) if x)
+    quoted = grounding.flow_text(" ".join([str(out.get("tone") or "")] + [f.get("title", "") + " " + f.get("detail", "") for f in out.get("flows") or []]))
+    return {**out, "tone": tidy(out.get("tone")), "mood": mood,
+            "flows_source": grounding.flows_source(cash_facts) if cash_facts and quoted else "",
             **{k: [{**x, f: tidy(x.get(f))} for x in out.get(k) or []] for k, f in (("hot", "why"), ("flows", "detail"), ("themes", "detail"))}}
 
 
@@ -436,7 +465,8 @@ period, never a fiscal year, and when the two companies' periods differ, say so.
     lender = bool(a.get("bank") or b.get("bank"))
 
     def keep(t):
-        return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s)),
+        # "slightly ahead" held to the figures it sizes (DD-061)
+        return grounding.plain_sentences(grounding.keep_sentences(t, pool, lambda s: not grounding.JUDGE.search(s) and grounding.degree_ok(s)),
                                          lender, a.get("region") or "IN")
     verdict = grounding.whole_sentences(keep(verdict), 700)
     if not verdict:

@@ -22,8 +22,10 @@ export const PAGE_GATES: Record<string, Gate> = {
   "/trade/events": { feature: "event_reminders", whole: false },
   "/invest/etf-gaps": { feature: "etf_gaps", whole: false },
   "/invest/margin-funding": { feature: "mtf", whole: false },
-  "/invest/business-updates": { feature: "biz_updates", whole: false },
-  "/invest/holders": { feature: "holders", whole: false },
+  // on Free these pages hold nothing else (each company's own updates and holders are on its company page), so the menu
+  // marks them locked like the scan (DP1-019: no badge, then a page blank under its banner)
+  "/invest/business-updates": { feature: "biz_updates", whole: true },
+  "/invest/holders": { feature: "holders", whole: true },
   "/money/net-worth": { feature: "networth", whole: false },
   "/money/mutual-funds": { feature: "mf_gains", whole: false },
   "/money/tax-tools": { feature: "tax_tools", whole: false },

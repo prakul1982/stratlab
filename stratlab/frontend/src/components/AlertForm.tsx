@@ -5,7 +5,7 @@ import { price } from "../lib/format";
 import { alertPriceHint, type Shut } from "../lib/alerts";
 import { marketState } from "../lib/marketHours";
 import { researchApi, type Region } from "../lib/research";
-import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, type AlertBody, type AlertsPage, type StockAlert } from "../lib/alerts";
+import { CONDITIONS, EVENT_KINDS, MA_PERIODS, alertsApi, conditionKey, fittingConditions, type AlertBody, type AlertFits, type AlertsPage, type StockAlert } from "../lib/alerts";
 import { Bell } from "./Icons";
 import { Modal } from "./ui";
 import { CheckField, Field, FormActions, FormGrid, Notice, Select, StockPicker } from "./kit";
@@ -40,8 +40,12 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
   const [busy, setBusy] = useState(false);
   // what's wrong, under the box it belongs to (not a toast that outlives the fix)
   const [errs, setErrs] = useState<{ symbol?: string; value?: string }>({});
-  const c = CONDITIONS.find((x) => x.key === cond && (!x.india || region === "IN")) ?? CONDITIONS[0];
   const sym = symbol.trim().toUpperCase();
+  // only the kinds that fit the instrument: no NAV gap for a plain stock, no MWPL without futures (DD-024)
+  const [fits, setFits] = useState<AlertFits | null>(null);
+  const editKey = editing ? conditionKey(editing) : undefined;
+  const offered = fittingConditions(region, fits, editKey);
+  const c = offered.find((x) => x.key === cond) ?? offered[0] ?? CONDITIONS[0];
   const ccy = region === "IN" ? "INR" : "USD";
   // out of hours the price is the last close, and the alert waits for the next open: said beside the price (R13-007)
   const mkt = markets.find((m) => m.id === region);
@@ -50,6 +54,14 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
     day: nowAt ? new Date(nowAt).toLocaleDateString("en-GB", { timeZone: mkt!.tz, day: "numeric", month: "short" }).replace("Sept", "Sep") : null,
     next: st.change ? st.change.toLocaleDateString("en-GB", { timeZone: mkt!.tz, weekday: "short", day: "numeric", month: "short" }).replace(/,/g, "").replace("Sept", "Sep") : null,
   } : null;
+
+  useEffect(() => {
+    setFits(null);
+    if (region !== "IN" || !/^[A-Z0-9&._-]{1,20}$/.test(sym)) return;
+    let live = true;
+    const t = window.setTimeout(() => alertsApi.fits(region, sym).then((f) => live && setFits(f)).catch(() => undefined), 350);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [region, sym]);
 
   // the price now, so the level can be set against it
   useEffect(() => {
@@ -131,7 +143,7 @@ export function AlertForm({ region: r0 = "IN", symbol: s0 = "", editing, choices
         </>
       )}
       <Field label="Alert me when" wide>
-        {(id) => <Select id={id} value={cond} onChange={setCond} options={CONDITIONS.filter((x) => !x.india || region === "IN").map((x) => ({ value: x.key, label: x.label }))} />}
+        {(id) => <Select id={id} value={c.key} onChange={setCond} options={offered.map((x) => ({ value: x.key, label: x.label }))} />}
       </Field>
       {c.kind === "price" && <Field label="Price level" unit={region === "IN" ? "₹" : "$"} inputMode="decimal" value={value} onChange={(e) => takeValue(e.target.value)}
         placeholder={now != null ? String(Math.round(now)) : ""} error={errs.value} hint={now != null ? alertPriceHint(null, price(now, ccy), shut) : undefined} />}

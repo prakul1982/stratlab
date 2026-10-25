@@ -718,6 +718,41 @@ def reported_quarters(rows: list[dict], today: str, n: int = 4) -> list[dict]:
             break
     return out[::-1]
 
+_CUT_WORDS = ("lakh", "crore", "billion", "million", "trillion", "percent", "market", "markets", "investors", "shares", "stocks",
+              "points", "sensex", "nifty", "rupee", "dollar", "session", "trade", "trading", "record", "wealth")
+_HEAD_STOP = {"the", "a", "an", "to", "of", "in", "on", "as", "for", "and", "amid", "after", "at", "by", "with", "is", "are", "its", "today"}
+
+
+def whole_words(title: str) -> str:
+    """A headline that the feed cut off in the middle of a word ("...wipes out Rs 3 lak") ends at its last whole word,
+    with "…" (DE-017)."""
+    t = str(title or "").rstrip()
+    m = re.search(r"\s([A-Za-z]{2,})$", t)
+    if m and m.group(1).lower() not in _CUT_WORDS and any(w.startswith(m.group(1).lower()) for w in _CUT_WORDS):
+        return t[:m.start()].rstrip(" ,;:-–") + "…"
+    return t
+
+
+def _head_words(h: str) -> set[str]:
+    return {w[:4] for w in re.findall(r"[a-z0-9]+", str(h or "").lower()) if w not in _HEAD_STOP and len(w) > 1}
+
+
+def grouped(items: list[dict], alike: float = 0.6) -> list[dict]:
+    """Headlines with near-repeats folded into the first (newest) one, which carries `similar` (how many it stands for):
+    DE-017: five or six "Sensex falls…" stories one under another. Two headlines are alike when `alike` of the shorter
+    one's words (the small ones left out, each by its first four letters, so "falls" and "falling" agree) are in the other."""
+    out: list[tuple[set, dict]] = []
+    for h in sorted(items, key=lambda x: str(x.get("at") or ""), reverse=True):
+        h = {**h, "headline": whole_words(h.get("headline") or "")}
+        w = _head_words(h["headline"])
+        hit = next((kept for words, kept in out if w and words and len(w & words) / min(len(w), len(words)) >= alike), None)
+        if hit is not None:
+            hit["similar"] = hit.get("similar", 0) + 1
+            continue
+        out.append((w, h))
+    return [h for _, h in out]
+
+
 class Research:
     def __init__(self, kite: KiteService | None, finnhub=None, yahoo=None, screener=None, news=None, wiki=None):
         self.kite = kite
@@ -1084,13 +1119,13 @@ class Research:
             return bool(focus) or not market_words or bool(MARKET_WORDS.get(region, MARKET_WORDS["US"]).search(title))
         if region == "US" and self.finnhub.ready() and not focus:
             try:
-                return [{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
-                         "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
-                        for n in self.finnhub.market_news()[:60] if ok(n.get("headline"), False)][:14]
+                return grouped([{"headline": n.get("headline"), "url": n.get("url"), "source": n.get("source"),
+                                 "at": datetime.fromtimestamp(n["datetime"], timezone.utc).isoformat() if n.get("datetime") else None}
+                                for n in self.finnhub.market_news()[:60] if ok(n.get("headline"), False)])[:14]
             except SourceError:
                 pass
         q = (focus + " " if focus else "") + ("Nifty Sensex India stock market" if region == "IN" else "US stock market")
-        return [h for h in self.news.search(q, region, limit=40) if ok(h.get("headline"), True)][:14]
+        return grouped([h for h in self.news.search(q, region, limit=40) if ok(h.get("headline"), True)])[:14]
 
     # ---------- company profiles ----------
     LAZY = ("news", "about")       # what a lean company page leaves for its second request (see company_more)

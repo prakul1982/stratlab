@@ -25,10 +25,14 @@ import {
 /* ---------- Trend scan: Stage 2 + Supertrend, and the preset rule sets (Basic and up) ---------- */
 interface ScanRow {
   id: string; symbol: string; name: string | null; currency: string | null; price: number; chg: number | null;
-  stage: number | null; stage_days: number | null; stage_capped?: boolean; st_up: boolean; st_days: number; signal: "fresh" | "st_s2" | "stage2" | null;
+  stage: number | null; stage_days: number | null; stage_capped?: boolean; st_up: boolean; st_days: number | null; signal: "fresh" | "st_s2" | "stage2" | null;
 }
-interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number>;
-  price_day?: string | null; settling?: boolean }
+interface ScanOut { kind: "st_s2"; name: string; market: Region; rows: ScanRow[]; missing: string[]; problems: string[]; counts: Record<string, number | null>;
+  price_day?: string | null; settling?: boolean;
+  /** a 500-stock group's stored matches: how many were checked and matched (DE-003: one layout for every group) */
+  stored?: boolean; checked?: number; matches?: number; asked?: number; updated_at?: string | null;
+  /** read from the last close while the market's live data is offline (DE-001) */
+  last_close?: boolean }
 interface PresetRow { symbol: string; name: string | null; currency: string | null; price: number; chg: number | null; as_of: string; days_ago: number; day: string; detail: string }
 interface PresetOut {
   kind: "preset"; scan: string; scan_name: string; name: string; market: Region; rows: PresetRow[]; matches: number; checked: number; asked?: number; as_of: string | null;
@@ -36,7 +40,7 @@ interface PresetOut {
 }
 interface ScanInfo { id: string; name: string; text: string; rules: string[]; within: number }
 interface SetInfo { id: string; name: string; count: number; stored?: boolean; as_of?: string | null }
-interface ScanSets { sets: SetInfo[]; alerts: boolean; template: unknown; fresh_days: number; scans?: ScanInfo[]; rotation_sets?: { id: string; name: string }[] }
+interface ScanSets { sets: SetInfo[]; alerts: boolean; channels?: string[]; template: unknown; fresh_days: number; scans?: ScanInfo[]; rotation_sets?: { id: string; name: string }[] }
 
 const STAGE_NAME: Record<number, string> = { 1: "Stage 1 · basing", 2: "Stage 2 · advancing", 3: "Stage 3 · topping", 4: "Stage 4 · declining" };
 const SIGNAL: Record<string, ["ok" | "plain", string]> = {
@@ -82,6 +86,8 @@ export function ScanPage() {
   // why the last scan didn't run, kept on the page until the next one (R48-002: "market data offline" showed for three
   // seconds and the page went back to its prompt, as if the button did nothing)
   const [scanErr, setScanErr] = useState<string | null>(null);
+  // the market's data is offline and no scan can run before it's back: no "Try again" until then (DE-002)
+  const [scanOffline, setScanOffline] = useState(false);
   const [only, setOnly] = useState(false);
   const pro = !!me?.plan_info?.features?.scans;
   const scans = sets?.scans?.length ? sets.scans : [FIRST_SCAN];
@@ -113,16 +119,19 @@ export function ScanPage() {
       if (n === seq.current) setOut(r);
     } catch (err) {
       if (n === seq.current) {
-        if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); } else fail(err);
+        if (err instanceof Error && err.message) { setOut(null); setScanErr(err.message); setScanOffline((err as Error & { code?: string }).code === "data_offline"); } else fail(err);
       }
     } finally { if (n === seq.current) setBusy(false); }
   };
   const toggleAlerts = async () => {
     if (!sets) return;
     try {
-      const r = await api<{ alerts: boolean }>("/research/scan/alerts", { method: "PUT", body: { on: !sets.alerts } });
-      setSets({ ...sets, alerts: r.alerts });
-      notify(r.alerts ? "You'll get a message after each close when a watchlist stock gives a Stage 2 + Supertrend signal." : "Stage 2 + Supertrend alerts off.");
+      const r = await api<{ alerts: boolean; channels?: string[] }>("/research/scan/alerts", { method: "PUT", body: { on: !sets.alerts } });
+      setSets({ ...sets, alerts: r.alerts, channels: r.channels ?? sets.channels });
+      // said both ways, and that it can't reach anyone yet when no phone, Telegram or email is set up (DE-008)
+      const none = r.alerts && r.channels && r.channels.length === 0;
+      notify(r.alerts ? (none ? "Stage 2 + Supertrend alert on. Set up a phone, Telegram or a confirmed email in Settings for it to reach you."
+        : "Stage 2 + Supertrend alert on: a message after each close when a watchlist stock newly meets both.") : "Stage 2 + Supertrend alert off.");
     } catch (e) { fail(e); }
   };
   const testIt = async () => {
@@ -164,7 +173,7 @@ export function ScanPage() {
               {scan.rules.length > 0 && <p className="k-note">Rules: {scan.rules.join("; ")}. {scan.within === 1 ? "Counts as a match when it held on the latest candle." : `Counts as a match when it held on any of the last ${scan.within} candles.`}</p>}
             </div>
           )}
-          <Field label="Group to scan">
+          <Field label="Group to scan" wide>
             {(id) => <Select id={id} value={setId} onChange={chooseSet}
               options={(sets?.sets ?? []).map((s) => ({ value: s.id, label: s.stored && !s.count ? `${s.name} (read after the close)` : `${s.name} (${s.count})`, disabled: (s.id === "watchlist" || !!s.stored) && !s.count }))} />}
           </Field>
@@ -174,11 +183,14 @@ export function ScanPage() {
               label={<>Alert me after each close when a watchlist stock newly meets both (Stage 2 + Supertrend)
                 <Info>{"Checked once a day after the market closes, for the stocks in your watchlist. Sent by phone notification, Telegram or email, whichever you set up in Settings."}</Info></>} />}
           </FormActions>
+          {sets && scan.id === "st_s2" && sets.alerts && sets.channels && sets.channels.length === 0 && (
+            <p className="k-note k-field wide" data-testid="scan-alert-nowhere">The alert is on, but nothing is set up to reach you: add a phone, Telegram or a confirmed email in <Link className="link" to="/settings#notifications">Settings</Link>.</p>
+          )}
         </FormGrid>
       </Card>
       {emptyWatch && <Card compact><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Press Watch on company pages to add stocks, or scan a ready-made group.</EmptyState></Card>}
       {notRead && <Card compact><EmptyState title={`${cur?.name} hasn't been read yet`}>This group is worked out once a day after the market closes. Scan a smaller group meanwhile.</EmptyState></Card>}
-      {scanErr && !busy && <ErrorState title="The scan didn't run" action={{ label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
+      {scanErr && !busy && <ErrorState title="The scan didn't run" action={scanOffline ? undefined : { label: "Try again", onClick: () => void runScan() }}>{scanErr}</ErrorState>}
       {!out && !busy && !scanErr && pro && !!cur?.count && <p className="k-small k-muted">Pick a scan and a group, then press Scan to see which stocks match.</p>}
       {busy && <Card><p className="k-small k-muted" role="status" data-testid="scan-progress"><ScanElapsed count={cur?.count} /></p><SlowFirstScan /><Skeleton label="Reading each stock's daily chart" lines={4} /></Card>}
       {preset && !busy && (
@@ -191,7 +203,7 @@ export function ScanPage() {
             <Stat label="Stocks checked" value={preset.asked && preset.asked > preset.checked ? `${preset.checked} of ${preset.asked}` : String(preset.checked)}
               note={`${preset.stored ? "read after the close" : "read just now"}${preset.asked && preset.asked > preset.checked ? ` · ${preset.asked - preset.checked} skipped, named below` : ""}`} />
           </StatRow>
-          <DataTable label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
+          <DataTable stack phonePage={25} label={`${preset.name}: ${preset.scan_name}`} rows={preset.rows} rowKey={(r) => r.symbol} sticky={preset.rows.length > 12} empty="No stock matches this rule right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -199,7 +211,7 @@ export function ScanPage() {
                   <Link className="link k-small" to={`${link(r.symbol)}/deep`}>Deep dive →</Link></>) },
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
-              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago)}</span></> },
+              { key: "m", header: `Matches ${scan.name.toLowerCase()}`, wrap: true, lead: true, cell: (r) => <>{asOf(r.day)}<span className="k-sub-line">{sessions(r.days_ago)}</span></> },
               { key: "d", header: "The numbers", wrap: true, cell: (r) => r.detail || "–" },
             ]} />
           {preset.matches > preset.rows.length && <p className="k-note">Showing the first {preset.rows.length} of {preset.matches.toLocaleString("en-IN")} matches, the most recent first.</p>}
@@ -217,14 +229,21 @@ export function ScanPage() {
             const today = new Date().toLocaleDateString("en-CA", { timeZone: marketTz(region) });
             const shut = sessionClosed(st2.price_day, today, !!m && marketState(m).open);
             const label = shut || st2.settling ? closeLabel(st2.price_day, { settling: st2.settling, dayText: (d) => fmtDate(d, { year: false }) }) : null;
-            return label && <p className="k-note" data-testid="scan-price-day">Prices: {label}</p>;
+            return label && <p className="k-note" data-testid="scan-price-day">Prices: {label}{st2.stored && st2.updated_at ? ` · worked out after the close, ${asOf(st2.updated_at, { tz: marketTz(region) })}` : ""}</p>;
           })()}
+          {st2.last_close && <p className="k-note" data-testid="scan-last-close">{REGION_NAME[region]}'s live market data is offline, so this scan read each stock's daily candles up to the last close{st2.price_day ? `, ${fmtDate(st2.price_day, { year: false })}` : ""}.</p>}
           <StatRow>
-            <Stat label="Fresh Stage 2 + Supertrend" value={String(st2.counts.fresh)} note={`Supertrend turned up in the last ${sets?.fresh_days ?? 5} days`} />
-            <Stat label="Already in Stage 2 + Supertrend" value={String(st2.counts.st_s2)} />
-            <Stat label="In Stage 2 only" value={String(st2.counts.stage2)} />
+            {st2.counts.fresh == null
+              ? <Stat label="In Stage 2 + Supertrend" value={String(st2.matches ?? st2.rows.length)} note="the fresh and already split comes with the next close's run" />
+              : <>
+                <Stat label="Fresh Stage 2 + Supertrend" value={String(st2.counts.fresh)} note={`Supertrend turned up in the last ${sets?.fresh_days ?? 5} days`} />
+                <Stat label="Already in Stage 2 + Supertrend" value={String(st2.counts.st_s2 ?? 0)} />
+              </>}
+            {st2.counts.stage2 != null && <Stat label="In Stage 2 only" value={String(st2.counts.stage2)} />}
+            <Stat label="Stocks checked" value={(st2.checked ?? (st2.rows.length + st2.problems.length + st2.missing.length)).toLocaleString("en-IN")}
+              note={st2.stored ? "read after the close; matches only are kept" : st2.problems.length + st2.missing.length ? `${st2.problems.length + st2.missing.length} skipped, named below` : "read just now"} />
           </StatRow>
-          <DataTable label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
+          <DataTable stack phonePage={25} label={`${st2.name}: stage and Supertrend`} rows={rows} rowKey={(r) => r.id} sticky={rows.length > 12} empty="Nothing matches right now."
             columns={[
               { key: "s", header: "Stock", rowHeader: true, wrap: true, cell: (r) => (
                 <><Link className="link" to={link(r.symbol)}><b>{r.symbol}</b></Link>
@@ -233,8 +252,8 @@ export function ScanPage() {
               { key: "p", header: "Price", numeric: true, cell: (r) => (
                 <>{price(r.price, r.currency ?? (region === "IN" ? "INR" : "USD"))}{r.chg != null && <span className="k-sub-line"><Delta value={r.chg}>{pct(r.chg, 2)}</Delta></span>}</>) },
               { key: "st", header: "Stage", info: STAGES_EXPLAINED, cell: (r) => <>{r.stage ? STAGE_NAME[r.stage] : "–"}{r.stage_days ? <span className="k-sub-line">{stageDaysText(r.stage_days, r.stage_capped)}</span> : null}</> },
-              { key: "sp", header: "Supertrend", cell: (r) => <>{r.st_up ? "Up" : "Down"}<span className="k-sub-line">for {days(r.st_days)}</span></> },
-              { key: "sg", header: "Signal", cell: (r) => (r.signal ? <Badge tone={SIGNAL[r.signal][0]} dot={false}>{SIGNAL[r.signal][1]}</Badge> : <span className="k-muted">–</span>) },
+              { key: "sp", header: "Supertrend", cell: (r) => <>{r.st_up ? "Up" : "Down"}{r.st_days != null && <span className="k-sub-line">for {days(r.st_days)}</span>}</> },
+              { key: "sg", header: "Signal", lead: true, cell: (r) => (r.signal ? <Badge tone={SIGNAL[r.signal][0]} dot={false}>{SIGNAL[r.signal][1]}</Badge> : <span className="k-muted">–</span>) },
             ]} />
           {(st2.missing.length > 0 || st2.problems.length > 0) && <p className="k-note">Skipped: {[...st2.missing, ...st2.problems].join(" · ")}</p>}
         </Card>
@@ -255,6 +274,9 @@ interface RotationOut {
   /** the last answer, kept while the market's data is offline (nights and weekends) */
   kept?: boolean;
 }
+
+/** What the Strength and Momentum numbers are in (DE-019: "100 = its usual level" read as a percentage). */
+export const ROTATION_UNITS = "Not a percentage. 100 is the ratio's own average of the last 14 candles; each point above or below is one usual swing (a standard deviation) of that ratio. 102.79 is about 2.8 swings above its average.";
 
 const ARROW = (deg: number | null) => deg == null ? "–" : ["→", "↗", "↑", "↖", "←", "↙", "↓", "↘"][Math.round(((deg + 360) % 360) / 45) % 8];
 
@@ -278,7 +300,8 @@ export function RotationPage() {
   const [busy, setBusy] = useState(false);
   const [tries, setTries] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
-  const [step, animate] = useAnimate(out?.tail ?? tail);
+  // a trail of N weeks is N + 1 points (DE-018); a copy kept before that has N
+  const [step, animate] = useAnimate(out ? Math.max(1, ...out.rows.map((r) => r.points.length)) : tail);
 
   useEffect(() => {
     api<ScanSets>(`/research/scan/sets?region=${region}`).then(setSets).catch(fail);
@@ -366,14 +389,14 @@ export function RotationPage() {
           actions={<div className="rot-legend" role="group" aria-label="Legend">{QUADRANTS.map((q) => <span key={q.id} title={q.says}><QuadrantTag q={q.id} /></span>)}</div>}
           footer={all.length > 0 ? <p className="k-note">Each dot is where it is now; the faint line is where it came from. Hover or tap a dot, or a row below, to follow one.</p> : undefined}>
           <div className="k-stack">
-            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${unit} ${step} of ${out.tail}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
+            <span className="k-small k-muted" data-testid="rot-count">{rows.length === all.length ? `All ${all.length}` : `${rows.length} of ${all.length}`} on the chart · {out.interval === "weekly" ? "weekly" : "daily"} closes{out.as_of ? ` to ${fmtDate(out.as_of)}` : ""}{step !== null ? ` · replaying ${step === 1 ? `from ${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago` : `${unit} ${step - 1} of ${out.tail}`}` : ""}{out.kept ? " · kept from the last close; it updates when the market reopens" : ""}</span>
             {rows.length > 0 && (
               <div className="rot-read">
                 {([["leading", `stronger than ${drilled && out.parent ? out.parent.name : "the market"} and still gaining`], ["improving", "weaker, but picking up"],
                    ["weakening", "stronger, but losing pace"], ["lagging", "weaker and still slipping"]] as [Quadrant, string][]).map(([q, says]) => (
                   <div key={q}><QuadrantTag q={q} /><span className="k-muted k-small">{says}</span><span className="k-small" data-testid={`rot-${q}`}>{names(q).length ? `${names(q).length} of ${all.length} · ${few(names(q))}` : `none of ${all.length}`}</span></div>
                 ))}
-                {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail} {unit}s: <b>{few(entered)}</b></p>}
+                {entered.length > 0 && <p className="k-small">Moved into Leading over the last {out.tail === 1 ? unit : `${out.tail} ${unit}s`}: <b>{few(entered)}</b></p>}
               </div>
             )}
             {rows.length === 0 ? <EmptyState title={all.length ? "Nothing is ticked" : "Not enough price history to draw this yet"}>{all.length ? "Tick a few in the table below to draw them." : "It fills in as more closes are stored."}</EmptyState>
@@ -395,26 +418,31 @@ export function RotationPage() {
                     {(r.stocks ?? 0) > 0 && <button className="btn quiet sm" onClick={() => openStocks(r)} title={`Its ${r.stocks} main stocks against the ${r.name} index`}>Stocks →</button>}</span>
                 : <Link className="link" to={`/research/${region}/${encodeURIComponent(r.name)}`}>{r.name}</Link>) },
               { key: "q", header: "Now", cell: (r) => <QuadrantTag q={r.quadrant} /> },
-              { key: "x", header: "Strength", numeric: true, cell: (r) => r.x.toFixed(2) },
+              { key: "x", header: "Strength", numeric: true, info: ROTATION_UNITS, cell: (r) => r.x.toFixed(2) },
               { key: "y", header: "Momentum", numeric: true, cell: (r) => r.y.toFixed(2) },
               { key: "h", header: "Heading", cell: (r) => <span aria-label={r.heading == null ? "no move" : `${Math.round(r.heading)} degrees`}>{ARROW(r.heading)}</span> },
-              { key: "m", header: `${out.tail} ${unit}s ago`, cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">same</span> : <QuadrantTag q={r.moved} />) : "–") },
+              { key: "m", header: `${out.tail} ${unit}${out.tail === 1 ? "" : "s"} ago`, cell: (r) => (r.moved ? (r.moved === r.quadrant ? <span className="k-small k-muted">same</span> : <QuadrantTag q={r.moved} />) : "–") },
             ]} />
-          <p className="k-note">Heading is the way its dot moved over the trail: → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. The counts above are for all {all.length}, not only the ones ticked.</p>
+          <p className="k-note">Heading is the way its dot moved in the last {unit} (the trail's last step): → stronger, ← weaker, ↑ gaining pace, ↓ losing pace, and the diagonals both at once. The trail on the chart shows the {out.tail} {unit}{out.tail === 1 ? "" : "s"} before it. The counts above are for all {all.length}, not only the ones ticked.</p>
           {out.skipped.length > 0 && <p className="k-note">Skipped (not enough history or not available): {out.skipped.join(" · ")}</p>}
         </Card>
       )}
       <p className="k-note inv-text">
         {drilled && out?.parent ? `Here each stock is measured against the ${out.parent.name} index itself, so Leading means it's beating its own sector. These are the sector's largest stocks, not its full official list. ` : ""}
-        Strength: each one's price divided by {drilled && out?.parent ? `the ${out.parent.name} index` : region === "IN" ? "the Nifty 500" : "the S&P 500"}, compared with its own last 14 {unit}s (100 = its usual level). Momentum: the same for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
+        Strength: each one's price divided by {drilled && out?.parent ? `the ${out.parent.name} index` : region === "IN" ? "the Nifty 500" : "the S&P 500"}, against that ratio's own average of the last 14 {unit}s, counted in its usual {unit}-to-{unit} swings (standard deviations): 100 is the average, 101 one usual swing above it. So 102.79 means about 2.8 usual swings above its own average, not 2.79% stronger. Momentum: the same measure for the change in that strength. StratLab's own calculation. Where something sits today doesn't predict where it goes next, and nothing here is investment advice.
       </p>
     </div>
   );
 }
 
 interface FilingsOverview {
-  rows: { symbol: string; summary: FilingSummary; flags: FilingItem[]; stale?: boolean }[]; problems: string[]; days: number; alerts: boolean; send_at: string;
+  rows: { symbol: string; summary: FilingSummary; flags: FilingItem[]; stale?: boolean; stored?: boolean; as_of?: string | null }[];
+  problems: string[]; days: number; alerts: boolean; send_at: string;
+  /** companies still being read when the answer went: asked again once, a few seconds later (DE-032) */
+  reading?: string[];
 }
+/** How long the watchlist's red flags wait before asking again for the companies still being read. */
+export const FILINGS_REREAD_MS = 6000;
 interface AllItem { id: string; symbol: string; company: string | null; at: string; category: string; label: string; severity: "red" | "amber" | "info"; subject: string; url: string | null; copies?: number }
 interface FlagType { id: string; label: string; severity: "red" | "amber"; count: number }
 interface AllOut {
@@ -434,11 +462,19 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [tries, setTries] = useState(0);
 
+  const reread = useRef(false);
   useEffect(() => {
     if (!pro) return;
     setBusy(true); setError(null);
     api<FilingsOverview>("/research/filings").then(setData).catch((e) => setError((e as Error).message)).finally(() => setBusy(false));
   }, [pro, tries]);
+  // the companies the exchange was slow on keep being read behind the answer: one more look picks them up (DE-032)
+  useEffect(() => {
+    if (!data?.reading?.length || reread.current) return;
+    reread.current = true;
+    const t = window.setTimeout(() => setTries((n) => n + 1), FILINGS_REREAD_MS);
+    return () => window.clearTimeout(t);
+  }, [data]);
 
   const toggleAlerts = async () => {
     if (!data) return;
@@ -467,16 +503,22 @@ function WatchlistFilings({ pro }: { pro: boolean }) {
             {data.rows.map((r) => (
               <Card key={r.symbol}>
                 <CardHead title={<Link className="link" to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`}>{r.symbol}</Link>}
-                  actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
+                  actions={<>{r.stale && <Badge tone="plain">Last read, not refreshed</Badge>}{r.stored && <Badge tone="plain">From the evening's read{r.as_of ? ` (${asOf(r.as_of)})` : ""}</Badge>}<Link className="btn quiet sm" to={`/research/IN/${encodeURIComponent(r.symbol)}/deep`}>Deep dive →</Link></>} />
                 <SummaryLine s={r.summary} to={`/research/IN/${encodeURIComponent(r.symbol)}#filings`} />
                 {r.flags.length > 0 ? <div className="inv-rows">{r.flags.map((i) => <FilingRow key={i.id} i={i} />)}</div>
                   : <span className="k-small k-muted">Nothing flagged in the last {data.days} days.</span>}
               </Card>
             ))}
-            {data.problems.length > 0 && (
-              <p className="k-note" data-testid="filings-unread">{unreadLine(unreadSymbols(data.problems))}{" "}
-                <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button></p>
-            )}
+            {data.problems.length > 0 && (() => {
+              const shown = new Set(data.rows.filter((r) => r.stored).map((r) => r.symbol));
+              const left = unreadSymbols(data.problems).filter((x) => !shown.has(x));
+              return (
+                <p className="k-note" data-testid="filings-unread">
+                  {left.length > 0 && <>{unreadLine(left)} </>}
+                  {shown.size > 0 && <>{[...shown].join(", ")}: the company's own list didn't answer just now, so {shown.size === 1 ? "its row shows" : "their rows show"} the red flags from the evening's read of every company. </>}
+                  <button type="button" className="btn quiet sm" onClick={() => setTries((n) => n + 1)}>Try again</button></p>
+              );
+            })()}
           </>
         ))}
     </>
@@ -524,11 +566,11 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
   }, [pro, region, scope, flag, frm, to, qP, page, tries]);
 
   if (!pro) return null;
-  const noun = scope === "mine" ? "on your watchlist" : "across companies";
+  const noun = scope === "mine" ? "of your stocks" : "across companies";
   return (
     <>
       <Card>
-        <CardHead title={scope === "mine" ? "Your watchlist's red flags" : "Red flags across companies"}
+        <CardHead title={scope === "mine" ? "Your stocks' red flags" : "Red flags across companies"}
           info={data ? <>{data.covers}. {data.as_of ? `Read through ${asOf(data.as_of, { tz: marketTz(region) })}. ` : ""}Filings are read once a day in the evening, so today's may not be in yet.</> : undefined} />
         <FieldGroup label="Type of flag" wide>
           <ChipBar label="Flag types" value={flag} onChange={(v) => setParam({ flag: v || null })}
@@ -549,18 +591,18 @@ function AllFilings({ region, scope, pro }: { region: Region; scope: "all" | "mi
       {!data && !error && <Card><Skeleton label="Opening the stored filings" lines={4} /></Card>}
       {data && (
         scope === "mine" && data.watchlist === 0 ? (
-          <Card><EmptyState title={`Your ${REGION_NAME[region]} watchlist is empty`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Open a company and press Watch: its red flags show up here.</EmptyState></Card>
+          <Card><EmptyState title={`No ${REGION_NAME[region]} stocks yet`} action={{ label: "Find a company", to: `/research?region=${region}` }}>Open a company and press Watch, or add your holdings: their red flags show up here.</EmptyState></Card>
         ) : (
           <Card>
             <CardHead title={`${data.total.toLocaleString("en-IN")} filing${data.total === 1 ? "" : "s"} ${noun}`}
               actions={<span className="k-small k-muted">{data.companies.toLocaleString("en-IN")} compan{data.companies === 1 ? "y" : "ies"} · {asOf(data.from)} to {asOf(data.to)}</span>} />
-            <DataTable label="Red-flag filings, newest first" rows={data.items} rowKey={(r) => r.id} empty="Nothing matches these filters."
+            <DataTable stack label="Red-flag filings, newest first" rows={data.items} rowKey={(r) => r.id} empty="Nothing matches these filters."
               columns={[
                 { key: "d", header: "Filed", cell: (r) => asOf(r.at.slice(0, 10)) ?? "–" },
                 { key: "c", header: "Company", rowHeader: true, wrap: true, cell: (r) => (
                   <><Link className="link" to={`/research/${region}/${encodeURIComponent(r.symbol)}#filings`}><b>{r.symbol}</b></Link>
                     {r.company && r.company !== r.symbol && <span className="k-sub-line">{r.company}</span>}</>) },
-                { key: "f", header: "Flag", wrap: true, cell: (r) => <Badge tone={r.severity === "red" ? "warn" : "plain"} dot={false}>{r.severity === "red" ? "⚑ " : ""}{r.label}</Badge> },
+                { key: "f", header: "Flag", wrap: true, lead: true, cell: (r) => <Badge tone={r.severity === "red" ? "warn" : "plain"} dot={false}>{r.severity === "red" ? "⚑ " : ""}{r.label}</Badge> },
                 { key: "s", header: "The filing", wrap: true, cell: (r) => (
                   <>{r.subject}{(r.copies ?? 1) > 1 && <span className="k-note"> · listed {r.copies} times by the exchange</span>}{r.url && <span className="k-sub-line"><a className="link" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the filing ↗</a></span>}</>) },
               ]} />
@@ -589,10 +631,10 @@ export function FilingsPage() {
         lede={region === "IN" ? "What companies told the exchange that is worth a closer read: fund raises, pledges, resignations, defaults." : "What S&P 500 companies told the SEC in a Form 8-K that is worth a closer read: bankruptcy, delisting, auditor and officer changes."}
         info={region === "IN"
           ? "Fund raises (QIP, preferential, rights, warrants), promoter pledges, auditor and director resignations, defaults, regulator action and rating downgrades. The last 3 months of the stocks you hold and watch, or the latest from every company."
-          : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your watchlist, or the latest from every S&P 500 company."} infoLabel="What counts" />
+          : "Bankruptcy, a delisting notice, a change of auditor, financial statements that can no longer be relied on, and director or officer changes. Your stocks (watchlist, holdings, notebooks and paper sessions), or the latest from every S&P 500 company."} infoLabel="What counts" />
       <div className="k-toolbar">
         <RegionSwitch region={region} setRegion={pickRegion} />
-        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: region === "IN" ? "Your stocks" : "Your watchlist" }, { value: "all", label: "All companies" }]} />
+        <Seg label="Which companies" value={view} onChange={pickView} options={[{ value: "mine", label: "Your stocks" }, { value: "all", label: "All companies" }]} />
       </div>
       {!pro && me && <PlanNote>Red flags for your whole watchlist, with an evening alert, and the latest red flags across every company are on the Basic plan. Each company's own page shows its red flags on every plan.</PlanNote>}
       {view === "mine" && region === "IN" ? <WatchlistFilings pro={pro} /> : <AllFilings region={region} scope={view} pro={pro} />}

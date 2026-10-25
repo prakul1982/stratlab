@@ -169,9 +169,10 @@ class Wikipedia(Source):
     def __init__(self, transport: httpx.BaseTransport | None = None):
         super().__init__("https://en.wikipedia.org", per_minute=60, burst=10, transport=transport)
 
-    def _summary(self, title: str) -> dict | None:
+    def _summary(self, title: str, cached: bool = False) -> dict | None:
+        path = f"/api/rest_v1/page/summary/{quote(title.replace(' ', '_'))}"
         try:
-            d = self.fetch(f"/api/rest_v1/page/summary/{quote(title.replace(' ', '_'))}", ttl=7 * 86400)
+            d = self.peek(path, ttl=7 * 86400) if cached else self.fetch(path, ttl=7 * 86400)
         except SourceError:
             return None
         if not d or not d.get("extract") or d.get("type") == "disambiguation":
@@ -180,23 +181,24 @@ class Wikipedia(Source):
             f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
         return {"title": d.get("title"), "description": d.get("description"), "extract": d["extract"], "url": url}
 
-    def company(self, name: str) -> dict | None:
+    def company(self, name: str, cached: bool = False) -> dict | None:
         """The company's own article, or None. A search's top hit (or a page under the name) that isn't about this
-        company (another of the group's companies, a person, a place) is never shown as its description."""
+        company (another of the group's companies, a person, a place) is never shown as its description. `cached`: only
+        what the company page already read (the deck's cover, DD-053), never a call to the site."""
         if not name:
             return None
         clean = _SUFFIX.sub("", name.strip()) or name
         try:
-            s = self.fetch("/w/api.php", {"action": "query", "list": "search", "srsearch": f"{clean} company",
-                                          "srlimit": 1, "format": "json"}, ttl=7 * 86400)
+            q = {"action": "query", "list": "search", "srsearch": f"{clean} company", "srlimit": 1, "format": "json"}
+            s = self.peek("/w/api.php", q, ttl=7 * 86400) if cached else self.fetch("/w/api.php", q, ttl=7 * 86400)
             hit = ((s or {}).get("query") or {}).get("search") or []
             if hit and is_about(clean, hit[0].get("title") or ""):
-                r = self._summary(hit[0]["title"])
+                r = self._summary(hit[0]["title"], cached)
                 if r and is_about(clean, r.get("title") or hit[0]["title"]):
                     return r
         except SourceError:
             pass
-        r = self._summary(clean)
+        r = self._summary(clean, cached)
         return r if r and is_about(clean, r.get("title") or clean) else None
 
 

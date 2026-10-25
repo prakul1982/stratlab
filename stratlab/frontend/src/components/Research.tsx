@@ -4,9 +4,9 @@ import { Link } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { aiLimited, aiReason } from "../lib/aiReason";
 import { stageMeaning } from "../lib/stageNote";
-import { ago, writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
+import { writtenAt, fmtDate, marketTz, monthLong, num, pct, price, safeHref, signCls, signedMove } from "../lib/format";
 import {
-  SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsAge, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
+  SETTLING, bandPosition, metricText, holderRowName, missingLine, monthsOld, newsWhen, ordinal, plausibleRange, priceLabel, researchApi, staleQuarter, trendShort, trendValue, useWatchlist, watchNote,
   type Company, type CompanyAI, type FactRow, type Idea, type MetricGroup, type NewsItem, type Quote, type Region, type SeriesPoint,
 } from "../lib/research";
 import { companyLoader, PriceChart as PriceChartView } from "../charts/price/lazy";
@@ -97,13 +97,14 @@ export function Change({ q, currency, closed: shut = false, preOpen = false, set
 
 /* ---------- price chart ---------- */
 /** The company's candles in the shared price chart (its code loads only on pages that show one). */
-export function PriceChart({ region, symbol, currency, price: shown, asOf: shownAt }: { region: Region; symbol: string; currency: string; price?: number | null; asOf?: string | null }) {
+export function PriceChart({ region, symbol, currency, price: shown, asOf: shownAt, compareWith }: { region: Region; symbol: string; currency: string; price?: number | null; asOf?: string | null;
+  /** Drawn against this company on a % scale from the start (the Compare page, DD-060). */ compareWith?: string }) {
   // the header's price and the title's are this page's one reading; the newest candle is it too (see settleLast)
   const load = useMemo(() => companyLoader(region, symbol, { price: shown, asOf: shownAt, tz: marketTz(region) }), [region, symbol, shown, shownAt]);
   const compare = useCallback((other: string) => companyLoader(region, other)("1d", { range: "max" }).then((r) => r.candles), [region]);
   return (
     <PriceChartView symbol={symbol} storageKey={`${region}:${symbol}`} currency={currency} load={load}
-      timeframes={["5m", "15m", "1h", "1d", "1w", "1mo"]} compareLoad={compare} compareHint={region === "IN" ? "e.g. TCS" : "e.g. MSFT"}
+      timeframes={["5m", "15m", "1h", "1d", "1w", "1mo"]} compareLoad={compare} compareHint={region === "IN" ? "e.g. TCS" : "e.g. MSFT"} compareWith={compareWith}
       note="Prices adjusted for splits and bonus issues, not for regular dividends. Intraday candles cover recent weeks." />
   );
 }
@@ -236,6 +237,11 @@ export function TrendBars({ points, label, unit, tone = "ink", baseSales }: { po
   const lossYears = points.some((p) => p.v <= 0);
   const small = !lossYears && tinyBase(first, last, points.length - 1, baseSales);          // a rate off a tiny base is n/m (DD-018)
   const growth = !lossYears && first > 0 && !small ? (Math.pow(last / first, 1 / (points.length - 1)) - 1) * 100 : null;
+  // a figure too long for its bar ("10,55,780" over ten bars at half the page) is written in short for every bar of the
+  // chart ("10.56L"), never cut with an ellipsis ("10,55,7…"); the whole figure is in the bar's tooltip and the table
+  // (DD-020, DD-054)
+  const tight = points.some((p) => trendValue(p.v, unit).length > (points.length >= DENSE_BARS ? 6 : 7));
+  const shown = (v: number) => (tight ? compactValue(v, unit) ?? trendShort(v, unit) : null) ?? trendValue(v, unit);
   return (
     <div className="k-stack">
       <div className="k-spread">
@@ -252,7 +258,7 @@ export function TrendBars({ points, label, unit, tone = "ink", baseSales }: { po
           const cls = `tbar-bar${neg ? " neg" : i === points.length - 1 ? ` last ${tone}` : ""}`;
           return (
             <div key={p.y} className={`tbar${labelledBar(i, points.length) ? "" : " alt"}`} title={`${p.y}: ${p.v.toLocaleString(/cr/i.test(unit) ? "en-IN" : "en-US", { maximumFractionDigits: 2 })} ${unit}`}>
-              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{trendValue(p.v, unit)}</span>{(compact ?? trendShort(p.v, unit)) && <span className="tbar-short">{compact ?? trendShort(p.v, unit)}</span>}</span>
+              <span className={`tbar-num${neg ? " neg" : ""}`}><span className="tbar-full">{shown(p.v)}</span>{(compact ?? trendShort(p.v, unit)) && <span className="tbar-short">{compact ?? trendShort(p.v, unit)}</span>}</span>
               <svg className="tbar-plot" viewBox={`0 0 10 ${PLOT}`} preserveAspectRatio="none" aria-hidden="true">
                 {down > 0 && <line className="tbar-zero" x1="0" x2="10" y1={zero} y2={zero} vectorEffect="non-scaling-stroke" />}
                 <rect className={cls} data-v={p.v} x="1.5" width="7" y={neg ? zero : zero - h} height={h} />
@@ -330,11 +336,10 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
   return (
     <div className="inv-news">
       {sorted.slice(0, limit).map((n, i) => {
-        const old = newsAge(n.at);
         return (
           <a key={i} className="inv-news-row" href={safeHref(n.url)} target="_blank" rel="noopener noreferrer">
             <span>{n.headline}</span>
-            <span className="k-note">{[n.source, n.at ? ago(n.at) : null, old].filter(Boolean).join(" · ")} ↗</span>
+            <span className="k-note">{[n.source, newsWhen(n.at), n.similar ? `${n.similar} similar ${n.similar === 1 ? "story" : "stories"}` : null].filter(Boolean).join(" · ")} ↗</span>
           </a>
         );
       })}

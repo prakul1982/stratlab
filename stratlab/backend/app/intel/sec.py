@@ -907,6 +907,33 @@ def documents(subs: dict, days: int = 730) -> list[dict]:
     return sorted(out, key=lambda d: d["at"], reverse=True)
 
 
+_DISPLAY = re.compile(r"^(.*?)\s+\(([^()]*)\)\s+\(CIK\s*(\d+)\)\s*$")
+
+
+def earnings_hits(raw: dict) -> list[dict]:
+    """The earnings releases (8-K with item 2.02) in one page of the SEC's filing search: [{symbol, name, cik, at, url}],
+    the company's first ticker as the SEC lists it (DE-025). A filer with no ticker (a private issuer of listed bonds)
+    and an amendment (8-K/A) are left out."""
+    out = []
+    for h in (((raw or {}).get("hits") or {}).get("hits")) or []:
+        s = (h or {}).get("_source") or {}
+        if s.get("file_type") != "8-K" or "2.02" not in (s.get("items") or []):
+            continue
+        m = _DISPLAY.match(str((s.get("display_names") or [""])[0]))
+        at = str(s.get("file_date") or "")[:10]
+        if not m or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", at):
+            continue
+        tickers = [t.strip().upper() for t in m.group(2).split(",") if re.fullmatch(r"[A-Z0-9][A-Z0-9.\-]{0,11}", t.strip().upper())]
+        common = [t for t in tickers if not non_common(t)] or tickers
+        if not common:
+            continue
+        cik = int(m.group(3))
+        accn, _, doc = str(h.get("_id") or "").partition(":")
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accn.replace('-', '')}/{doc}" if accn and doc else None
+        out.append({"symbol": price_symbol(common[0]), "name": m.group(1).strip(), "cik": cik, "at": at, "url": url})
+    return out
+
+
 class SEC(Source):
     name = "The SEC"
 
@@ -969,6 +996,30 @@ class SEC(Source):
     def cik(self, symbol: str) -> int:
         """The company's SEC number for a ticker (see listing)."""
         return self.listing(symbol)["cik"]
+
+    SEARCH = "https://efts.sec.gov/LATEST/search-index"
+    SEARCH_PAGES = 8                  # 100 filings a page: a busy reporting day files 300 to 400 8-Ks
+
+    def earnings_filed(self, day: date, ttl: float = 3600) -> list[dict]:
+        """Every earnings release (8-K, item 2.02) filed on one day, from the SEC's filing search: the results that
+        are out, for the whole market in a few calls (DE-025). See earnings_hits."""
+        key = ("earnings8k", day.isoformat())
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        out, seen = [], set()
+        for page in range(self.SEARCH_PAGES):
+            raw = self._json(f"{self.SEARCH}?forms=8-K&dateRange=custom&startdt={day.isoformat()}&enddt={day.isoformat()}&from={page * 100}")
+            for x in earnings_hits(raw):
+                if (x["symbol"], x["at"]) not in seen:
+                    seen.add((x["symbol"], x["at"]))
+                    out.append(x)
+            hits = (raw.get("hits") or {}) if isinstance(raw, dict) else {}
+            total = ((hits.get("total") or {}).get("value")) or 0
+            if len(hits.get("hits") or []) < 100 or (page + 1) * 100 >= total:
+                break
+        self.cache.set(key, out, ttl)
+        return out
 
     def submissions(self, cik: int, fresh: bool = False) -> dict:
         """The company's details and recent filing list, cached six hours (`fresh` asks again, for a results day)."""

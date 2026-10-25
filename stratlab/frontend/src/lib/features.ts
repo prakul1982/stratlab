@@ -8,6 +8,8 @@ export interface Feature {
   state?: Record<string, unknown>; level?: "all" | "advanced";
   /** Which goal it serves on the home page, grouped and ordered by what the user came for. */
   goal?: Goal;
+  /** The plan feature (plans.ts) it needs, so a home tile is tagged for a plan without it (DP1-020). */
+  flag?: string;
 }
 
 export type Goal = "find" | "understand" | "test" | "trade";
@@ -68,23 +70,23 @@ export const FEATURES: Feature[] = [
   { id: "share", title: "Share a verdict", what: "A card from your phone or a public link. Your rules stay private.", to: "@verdict",
     words: "share link card image whatsapp twitter public verdict" },
   { id: "alerts", title: "Alerts and the daily report", what: "On your phone or by email for each trade, and a report after the market closes.", to: "/settings#notifications",
-    words: "alerts telegram email notifications daily report close", home: true, goal: "trade" },
+    words: "alerts telegram email notifications daily report close", home: true, goal: "trade", flag: "alerts" },
   { id: "themes", title: "Themes", what: "Map a sector or trend and see the listed companies linked to it.", to: "/research/themes", words: "themes sector industry shortlist ev defence banks", goal: "understand" },
   { id: "pulse", title: "Market pulse", what: "Index levels, headlines and today's mood.", to: "/research/pulse", words: "market pulse today news mood indices" },
   { id: "rcompare", title: "Compare two companies", what: "Side by side, with an AI read.", to: "/research/compare", words: "compare companies versus vs", home: true, goal: "understand" },
   { id: "watchlist", title: "Watchlist", what: "Companies you're keeping an eye on.", to: "/research/watchlist", words: "watchlist saved favourites" },
   { id: "scan", title: "Stage 2 + Supertrend scan", what: "Which stocks are in a rising trend (Stage 2) with the Supertrend line also pointing up, with a daily watchlist alert.", to: "/research/scan",
-    words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert", home: true, goal: "find" },
+    words: "scan screener stage 2 stage two supertrend st s2 weinstein signals alert", home: true, goal: "find", flag: "scans" },
   { id: "rotation", title: "Sector rotation", what: "Which sectors lead, weaken, lag or improve against the market. Click one to see its stocks.", to: "/research/rotation",
     words: "sector rotation relative strength momentum quadrant leading lagging improving weakening rrg sectors", home: true, goal: "find" },
   { id: "breadth", title: "Market breadth", what: "How many stocks rose or fell, sit above their 50- and 200-day averages or made 52-week highs and lows, with McClellan and sectors.", to: "/invest/breadth",
     words: "market breadth advance decline advances declines a/d line ad ratio mcclellan oscillator summation index new highs lows 52 week dma moving average stage 2 trin arms thrust sector breadth nifty 500 midcap smallcap" },
   { id: "filings", title: "Filings and red flags", what: "Fund raises (QIP), pledges, resignations and defaults your watchlist companies filed, with an evening alert.", to: "/research/filings",
-    words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find" },
+    words: "filings announcements red flags qip fund raise preferential rights issue pledge resignation auditor default sebi rating downgrade nse bse alert", home: true, goal: "find", flag: "filings" },
   { id: "deepdive", title: "Company deep dive", what: "Open any Indian or US company, then Deep dive: 10 years of numbers, its business, capex plans and whether management delivered.", to: "/research",
     words: "deep dive business model segments capex capacity expansion growth margins cash flow free cash flow presentation concall transcript management guidance report card promises checklist deck slides powerpoint pptx", home: true, goal: "understand" },
   { id: "investor", title: "Investor home", what: "Every watchlist company, India or US, on one page: trend, sector, red flags, checklist and management's track record.", to: "/research/investor",
-    words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find" },
+    words: "investor home dashboard watchlist checklist report card management track record long term", home: true, goal: "find", flag: "investor_home" },
   { id: "holdings", title: "My Holdings", what: "Upload your holdings file from Zerodha, Groww, Upstox, Angel One, ICICI Direct or HDFC Securities: value, P&L, sectors and each stock's filings.", to: "/holdings",
     words: "holdings portfolio my stocks import upload broker zerodha console kite groww upstox angel one icici direct hdfc securities csv excel xlsx pnl p&l profit loss value sector allocation", home: true, goal: "find" },
   { id: "networth", title: "Net worth", what: "Everything you own minus what you owe: stocks, EPF, PPF, NPS, FDs, gold, property and loans, with your insurance policies.", to: "/money/net-worth",

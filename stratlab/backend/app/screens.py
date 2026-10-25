@@ -522,7 +522,21 @@ def run(region: str, filters: dict, sort: str = "market_cap", desc: bool | None 
     page = [_shown(region, r, flags) for r in rows[offset:offset + limit]]
     oldest, newest = rows_as_of(page, as_of(index))
     return {"region": region, "filters": f, "sort": sort, "desc": bool(desc), "total": len(rows), "offset": offset,
-            "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "stale": stale_rows(page), "index_at": index.get("at")}
+            "rows": page, "indexed": len(index["rows"]), "as_of": oldest, "as_of_newest": newest, "stale": stale_rows(page), "index_at": index.get("at"),
+            "no_value": no_value(region, index["rows"], f) if offset == 0 else {}}
+
+
+def no_value(region: str, rows: list[dict], f: dict) -> dict[str, int]:
+    """For each number or Stage condition, how many companies meet every other condition but have no value for this one,
+    so are left out by it (DE-009: TCS and INFY, with no Stage worked out, dropped from a Stage 1 screen without a word).
+    {column: count}, only the ones above zero."""
+    out = {}
+    for k in (["stage"] if f["stage"] else []) + list(f["ranges"]):
+        rest = {**f, "stage": [] if k == "stage" else f["stage"], "ranges": {x: b for x, b in f["ranges"].items() if x != k}}
+        n = sum(1 for r in rows if _num(r.get(k)) is None and matches(region, r, rest))
+        if n:
+            out[k] = n
+    return out
 
 
 def _shown(region: str, r: dict, flags: dict) -> dict:

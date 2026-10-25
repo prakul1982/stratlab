@@ -196,7 +196,7 @@ from app.intel import filings as F  # noqa: E402
     ("Resignation of Director/KMP/SMP", "Resignation of Ms. B Rao as Chief Financial Officer and Key Managerial Personnel", "kmp_resign", "amber"),
     ("Change in Directorate", "Cessation of Mr. C Shah as Independent Director on completion of his second term", "officer_change", "info"),
     ("Change in Directorate", "Resignation of Mr X as Independent Director", "kmp_resign", "amber"),
-    ("Resignation of Director/KMP/SMP", "", "kmp_resign", "amber"),                 # nothing says who: kept
+    ("Resignation of Director/KMP/SMP", "", "resign_unnamed", "amber"),             # nothing says who: kept, apart (DE-034)
 ])
 def test_red_flag_rules_on_real_filings(desc, text, cat, sev):
     assert F.classify(desc, text) == (cat, sev)
@@ -699,12 +699,13 @@ def test_theme_tickers_are_checked_against_the_list():
           "etfs": [{"ticker": "NIFTYDEF", "name": "Nifty India Defence ETF"}, {"ticker": "INDDEF", "name": "India Defence Fund"},
                    {"ticker": "MODEFENCE", "name": "Motilal Oswal Nifty India Defence ETF"}]}
     out = ground_sector(ai, "IN", fake_lookup)
+    # each named as the exchange's list names it (DE-013)
     assert [(s["ticker"], s["name"]) for s in out["screen"]] == [
-        ("BHEL", "Bharat Heavy Electricals Ltd"), ("MAZDOCK", "Mazagon Dock Shipbuilders"), ("HAL", "Hindustan Aeronautics")]
+        ("BHEL", "Bharat Heavy Electricals"), ("MAZDOCK", "Mazagon Dock Shipbuilders"), ("HAL", "Hindustan Aeronautics")]
     cos = out["clusters"][0]["companies"]
+    # a company the list doesn't have is left out, not shown as "not listed" (DE-013)
     assert [(c["name"], c["ticker"], c["listed"]) for c in cos] == [
-        ("Bharat Heavy Electricals Ltd", "BHEL", True), ("Tata Advanced Systems", "", False), ("Antrix", "", False),
-        ("Bharat Electronics", "BEL", True)]
+        ("Bharat Heavy Electricals", "BHEL", True), ("Bharat Electronics", "BEL", True)]
     assert out["value_chain"][0]["companies"][0]["ticker"] == "MAZDOCK"
     assert out["etfs"] == [{"ticker": "MODEFENCE", "name": "MOTILAL OSWAL NIFTY INDIA DEFENCE ETF"}]
 

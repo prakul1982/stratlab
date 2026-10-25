@@ -75,6 +75,7 @@ from .intel.company import Research, at_live_price
 from .intel.net import RequestWaits, TTLCache
 from .intel import filings, sec
 from .intel.sec import SEC
+from .intel.us_calendar import USCalendar
 from .intel.net import SourceError
 from .docs import Docs
 from .intel.screener import summary as screener_summary
@@ -219,6 +220,7 @@ def _filing_alert_ok(profile: dict) -> bool:
     return allows(plan_of(profile), "filings") and bool(alerts.jobs_for(profile, "", ""))
 
 
+us_market_calendar = USCalendar()      # the US companies reporting, and the dividends going ex, each day (DE-025, DE-028)
 filings_feed = filings.IndiaFilings(filings.NSEFilings(), filings.BSEFilings(), lambda s: bse_code(s), lambda s: bse_twin(s))
 filing_alerts_job = filings.Alerts(filings_feed, notify=lambda p, subject, text, url: alerts.notify(p, subject, text, url=url),
                                    can_alert=_filing_alert_ok)
@@ -239,10 +241,10 @@ kite.on_invalid = _kite_cancelled
 newsletter_job = news.Job("newsletters")      # its status is kept for Admin → Data and jobs
 # the results calendar reads the feeds at call time, so the tests' fakes (and sec_feed, made further down) are used
 deals_job = deals.Job(lambda: filings_feed, lambda rows, now: stock_alerts.fire_events(rows, now, _alert_limit))
-results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "sec": sec_feed})
+results_job = results_calendar.Job(lambda: {"in": filings_feed, "us": research_hub.finnhub, "cal": us_market_calendar, "sec": sec_feed})
 # corporate actions: the exchange's list for India, the price history's dividends and splits for the US
 money_calendar_job = money_calendar.Job()
-corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo})
+corp_job = corp_actions.Job(lambda: {"in": filings_feed, "us": research_hub.yahoo, "cal": us_market_calendar})
 # red-flag filings of every company (India: the exchange's list; US: the SEC's 8-K items) and US 13D/13G holders, read each evening
 redflags_runner = redflags.Runner(lambda: {"in": filings_feed, "sec": sec_feed})
 redflags_job = redflags.Job(redflags_runner)
@@ -684,7 +686,8 @@ def offline_when(message: str) -> str:
     if not nxt or "comes back" in message:
         return message
     at = datetime.fromisoformat(nxt)
-    day = "today" if at.date() == datetime.now(IST).date() else f"on {at:%a} {at.day} {at:%b}"
+    # the day by name, as the banner says it (DE-002: "today at 08:00 IST" while it was still Saturday where the reader is)
+    day = f"on {at:%a} {at.day} {at:%b}"
     return f"{message.rstrip('.').replace(' Try again soon', '').replace(' right now', '')}. Indian market data comes back with the daily data login, {day} at {at:%H:%M} IST."
 
 
@@ -1425,10 +1428,13 @@ def import_strategy(req: ImportReq, profile=Depends(current_profile)):
     try:
         with ai_slot(profile) as (used, limit):
             out = write_strategy(importer.ai_prompt(fmt, req.text), pro=all_indicators(profile))
+            out.pop("locked", None)             # an import keeps what it can read and says what it left out in the notes
             cached = last_from_cache()          # an answer served from the cache costs nothing
-            if not cached:
+            # an import that finds no entry rule makes no notebook, so it costs no build (DP1-001)
+            charged = not cached and bool(out["entry"] or out.get("shortEntry"))
+            if charged:
                 db.add_usage(profile["id"], "ai")
-        used_ai, usage = True, {"ai_used": used + (not cached), "ai_limit": limit}
+        used_ai, usage = True, {"ai_used": used + charged, "ai_limit": limit}
         if not out["entry"] and fmt == "pine":
             out, used_ai = importer.pine(req.text), False
     except AIError as e:
@@ -1453,18 +1459,27 @@ def ai_strategy(req: AIReq, profile=Depends(current_profile)):
         # a single option, a straddle or any multi-leg idea can't be tested as rules on a price series: said before any AI
         # build is used, and the same whether or not the month's builds are left (DA-001, DA-009)
         err(422, "options_idea", ai_writer.OPTIONS_IDEA_MESSAGE)
+    pro = all_indicators(profile)
+    if not pro and (named := ai_writer.locked_named(req.text)):
+        # an idea built on Basic's indicators is said to be so, by name, before any build is used (DP1-002, DP1-003)
+        upgrade(ai_writer.locked_message(named), "indicator_plan")
     with ai_slot(profile) as (used, limit):
         try:
-            out = write_strategy(req.text, pro=all_indicators(profile))
+            out = write_strategy(req.text, pro=pro)
         except AIBusy as e:
             err(503, "ai_busy", str(e))
         except AIError as e:
             err(422, "ai_failed", str(e))
+        if locked := out.pop("locked", []):
+            upgrade(ai_writer.locked_message(locked), "indicator_plan")     # the rules came back with them: refused, not charged
         out = ai_writer.check_against_text(out, req.text)     # the rules checked against the words they came from (R11C-004)
         cached = last_from_cache()              # an answer served from the cache costs nothing
-        if not cached:
+        # only a build that makes rules is counted: a sentence that isn't a strategy ("the weather in Paris") or one the AI
+        # gave back nothing for makes no notebook, so it costs nothing (DP1-001)
+        charged = not cached and bool(out.get("entry") or out.get("shortEntry"))
+        if charged:
             db.add_usage(profile["id"], "ai")
-    out["usage"] = {"ai_used": used + (not cached), "ai_limit": limit}
+    out["usage"] = {"ai_used": used + charged, "ai_limit": limit}
     return out
 
 
@@ -1767,8 +1782,9 @@ def run_experiment(nid: str, req: ExperimentReq, profile=Depends(current_profile
     same = research.unchanged(experiments, strategy, f"GROUP:{group.get('id') or 'custom'}" if group else (nb.get("instrument") or {}).get("id"),
                               req.days, db.now_iso()) if not req.bars and not req.instrument else None
     if same is not None:
-        err(409, "unchanged", f"Nothing has changed since v{same}: the same rules, market and period, already run "
-            f"today. Its result stands, and no experiment was used. Change something to run a new one.")
+        last_v = experiments[-1].get("v") if experiments else None
+        err(409, "unchanged", f"{'Nothing has changed since' if same == last_v else 'This is the same set-up as'} v{same}: the same rules, "
+            f"market and period, already run today. Its result stands, and no experiment was used. Change something to run a new one.")
     if group and not req.bars:
         rec, usage = run_group_test(profile, strategy, group, req, version)
         out = {"usage": usage}
@@ -1906,7 +1922,7 @@ def scan_sets(region: str = "IN", profile=Depends(current_profile)):
         big.append({"id": b["id"], "name": b["name"], "count": (doc or {}).get("checked", 0), "stored": True, "as_of": (doc or {}).get("as_of")})
     return {"sets": [{"id": "watchlist", "name": "Your watchlist", "count": len(scan.watchlist_members(profile["id"], region))}]
             + [{"id": p["id"], "name": p["name"], "count": p["count"]} for p in universes.presets(region)] + big,
-            "alerts": scan.alert_on(profile["id"]), "template": scan.ST_S2, "fresh_days": scan.FRESH,
+            "alerts": scan.alert_on(profile["id"]), "channels": stock_alerts.channels(profile), "template": scan.ST_S2, "fresh_days": scan.FRESH,
             "scans": scan_presets.listing(),
             "rotation_sets": [{"id": k, "name": v["name"]} for k, v in rotation.index_sets(region).items()]}
 
@@ -1943,6 +1959,28 @@ def _stored_scan(profile, region: str, group: str, preset: str, name: str) -> di
     names = _scan_names(region, [r["symbol"] for r in rows])
     return {"rows": [{**r, **names.get(r["symbol"], {})} for r in rows], "matches": len(got["rows"]), "checked": got["checked"], "as_of": got["as_of"],
             "updated_at": got["at"], "missing": [], "problems": [], "stored": True}
+
+
+def stored_st_s2(region: str, out: dict) -> dict:
+    """A 500-stock group's stored Stage 2 + Supertrend matches in the shape of a small group's scan (scan.run): each match
+    with its Stage and Supertrend days and the fresh / already signal, so every group shows one layout (DE-003: the S&P
+    500 showed "Match the rule 103 · Stocks checked 501" and "The numbers", the 20 largest Fresh / Already with Stage
+    and Supertrend columns). The daily run keeps matches only, so "Stage 2 only" isn't counted for these groups; a match
+    stored before the days were kept has no fresh / already split until the next close's run."""
+    rows = []
+    for r in out["rows"]:
+        st_days = r.get("st_days")
+        rows.append({"id": f"{region}:{r['symbol']}", "symbol": r["symbol"], "name": r.get("name"), "currency": r.get("currency"),
+                     "price": r.get("price"), "chg": r.get("chg"), "t": r.get("as_of"), "as_of": r.get("as_of"), "stage": 2,
+                     "stage_days": r.get("stage_days"), "stage_capped": bool(r.get("stage_capped")), "st_up": True, "st_days": st_days,
+                     "signal": "fresh" if st_days is not None and st_days <= scan.FRESH else "st_s2"})
+    split = all(r["st_days"] is not None for r in rows)
+    rows.sort(key=lambda r: (scan.RANK.get(r["signal"], 3), -(r["chg"] or 0)))
+    fresh = sum(1 for r in rows if r["signal"] == "fresh")
+    return {"kind": "st_s2", "rows": rows, "missing": [], "problems": [], "stored": True, "checked": out["checked"], "matches": out["matches"],
+            "as_of": out["as_of"], "updated_at": out.get("updated_at"),
+            "counts": {"fresh": fresh if split else None, "st_s2": len(rows) - fresh if split else None, "stage2": None},
+            "price_day": out["as_of"], "settling": False}
 
 
 SCAN_ROWS = 300       # the most rows one scan answer carries (the count of all matches is given beside them)
@@ -1988,23 +2026,32 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     if big:
         preset = scan_presets.BY_ID[req.scan]
         out = _stored_scan(profile, req.region, big["id"], req.scan, big["name"])
+        if req.scan == "st_s2":            # the same layout as a small group's Stage 2 + Supertrend scan (DE-003)
+            return ok({"name": big["name"], "market": req.region, **stored_st_s2(req.region, out)})
         return ok({"kind": "preset", "scan": req.scan, "scan_name": preset["name"], "name": big["name"], "market": req.region, **out})
     name, members = scan_members(profile, req.region, req.set)
     if not members:
         err(400, "empty", "Your watchlist has no stocks in this market yet. Star a few companies in Research first.")
     prov = markets.provider(req.region)
+    registry, offline = markets, False
     if prov is None or not prov.ready():
-        raise KiteNotReady("Market data for this market is offline right now.")
+        if req.region != "IN":
+            raise KiteNotReady("Market data for this market is offline right now.")
+        # DE-001: India's broker data is offline (nights, weekends): the scan reads each stock's daily candles up to the
+        # last close from the public price history instead, and says so over the prices
+        registry, offline = scan.LastCloseIndia(research_hub.yahoo), True
     # an answer from before the close settled isn't kept past it (R13-005)
-    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region))
+    key = ("scan", req.scan, req.region, tuple(_member_key(m) for m in members), scan.settled_at(req.region), offline)
     out = _results.get(key)
     if out is None:                       # the same group gives everyone the same answer until prices move
         if req.scan == "st_s2":
-            out = {"kind": "st_s2", **scan.run(markets, req.region, members, session=scan.session_day(req.region))}
+            out = {"kind": "st_s2", **scan.run(registry, req.region, members, session=scan.session_day(req.region))}
         else:
-            got = scan.run_preset(markets, req.region, members, req.scan, session=scan.session_day(req.region))
+            got = scan.run_preset(registry, req.region, members, req.scan, session=scan.session_day(req.region))
             out = {"kind": "preset", "scan": req.scan, "scan_name": scan_presets.BY_ID[req.scan]["name"], "matches": len(got["rows"]),
                    "stored": False, **got}
+        if offline and not out.get("rows") and (out.get("problems") or out.get("missing")) and not out.get("checked", len(out.get("rows") or [])):
+            raise KiteNotReady("Market data for this market is offline right now.")      # the price history didn't answer either
         _results.set(key, out, 300)
     out = dict(out)
     out["rows"] = with_nse_close(req.region, out.get("rows") or [], "t" if out.get("kind") == "st_s2" else "as_of", "chg")
@@ -2014,6 +2061,7 @@ def run_scan(req: ScanReq, profile=Depends(current_profile)):
     days = sorted(str(r.get("t") or r.get("as_of") or "")[:10] for r in out["rows"] if r.get("t") or r.get("as_of"))
     out["price_day"] = days[-1] if days else None
     out["settling"] = bool(out["price_day"]) and stock_pages.settling(req.region) == out["price_day"]
+    out["last_close"] = offline          # read from the last close while the live data is offline (DE-001)
     return ok({"name": name, "market": req.region, **out})
 
 
@@ -2051,7 +2099,7 @@ def rotation_after_close(now: datetime | None = None) -> list[str]:
         name = rotation.index_sets(region)["sectors"]["name"]
         for interval in ("weekly", "daily"):
             kept = db.json_value(db.get_setting(f"rotation:last:{region}:sectors:{interval}:5"), {})
-            if str((kept or {}).get("as_of") or "")[:10] >= day:
+            if str((kept or {}).get("as_of") or "")[:10] >= day and (kept or {}).get("v") == rotation.VERSION:
                 continue
             try:
                 rotation_run(region, "sectors", None, interval, 5, name)
@@ -2105,7 +2153,8 @@ def scan_alerts(req: ScanAlertReq, profile=Depends(current_profile)):
     if req.on:
         need(profile, "scans", "ST S2 watchlist alerts")
     scan.set_alert(profile["id"], req.on)
-    return {"alerts": req.on}
+    # where the alert would go, so the page can say when nothing is set up to reach the person (DE-008)
+    return {"alerts": req.on, "channels": stock_alerts.channels(profile)}
 
 
 # ---------- stock alerts people set (price, day move, moving average, RSI, Stage, 52-week high or low) ----------
@@ -2198,6 +2247,14 @@ def list_stock_alerts(profile=Depends(current_profile)):
     return ok(alerts_page(profile))
 
 
+@app.get("/alerts/fits")
+def stock_alert_fits(region: str = "IN", symbol: str = "", profile=Depends(current_profile)):
+    """Whether a symbol is an ETF and whether it has stock futures: the alert form offers only the kinds that fit (DD-024)."""
+    if not re.match(r"^[A-Za-z0-9&._-]{1,20}$", symbol or ""):
+        err(400, "bad_symbol", "That doesn't look like a ticker.")
+    return ok(stock_alerts.fits(region, symbol))
+
+
 @app.post("/alerts")
 def create_stock_alert(req: StockAlertReq, profile=Depends(current_profile)):
     throttle(profile, "stock_alert", 60, 3600, "That's a lot of alerts in an hour. Try again later.")
@@ -2239,7 +2296,14 @@ def filings_watchlist(profile=Depends(current_profile)):
     """Red flags in the last 3 months for each Indian stock the person holds or watches."""
     need(profile, "filings", "Watchlist red flags")
     syms = filings.followed_symbols(profile["id"])
-    out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS}
+    out = filings.overview(filings_feed, syms) if syms else {"rows": [], "problems": [], "days": filings.WINDOW_DAYS, "reading": []}
+    # DE-032: a company whose own filings didn't answer in time (NTPC, TECHM and HEXT on two loads) shows its red flags
+    # from the evening's stored read of every company instead of only "couldn't read"; it stays listed as unread
+    have = {r["symbol"] for r in out["rows"]}
+    unread = [s for s in dict.fromkeys(p.split(":", 1)[0].strip() for p in out["problems"]) if s and s not in have]
+    kept = redflags.stored_rows(unread) if unread else {}
+    out["rows"] = sorted(out["rows"] + [kept[s] for s in unread if s in kept],
+                         key=lambda r: (-r["summary"]["red"], -r["summary"]["amber"], r["symbol"]))
     out["problems"] = [public_text(x) for x in out["problems"]]
     return ok({**out, "alerts": bool(filings.alert_state(profile["id"]).get("on")), "send_at": filings.SEND_AT})
 
@@ -2310,11 +2374,12 @@ def results_ready(region: str):
 
 
 @app.get("/research/results")
-def results_page(region: str = "IN", scope: str = "mine", q: str = "", profile=Depends(current_profile)):
-    """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company."""
+def results_page(region: str = "IN", scope: str = "mine", q: str = "", day: str = "", profile=Depends(current_profile)):
+    """Results dates this week and next: the user's stocks (watchlist, notebooks, paper sessions) or every company,
+    day by day; `day` opens one day of "All companies" in full (DE-026)."""
     r = research_routes.region_of(region)
     results_ready(r)
-    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30]))
+    return research_routes.ok(results_calendar.view(r, profile["id"], "all" if scope == "all" else "mine", q[:30], day=day[:10] or None))
 
 
 @app.get("/research/results/{region}/{symbol}")
@@ -2686,7 +2751,9 @@ def check_deep(profile, kind: str, sym: str, region: str) -> str | None:
         if kind == "deepdive":
             upgrade(f"You've opened {limit} compan{'y' if limit == 1 else 'ies'} in the deep dive this month. Companies "
                     f"you've already opened this month still open.{more}", "deepdive_limit")
-        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month.{more}", "deck_limit")
+        # a deck is a company's: its PDF and its PowerPoint count as one, so those still download (DP1-026)
+        upgrade(f"You've made {limit} company deck{'' if limit == 1 else 's'} this month. A company's PDF and PowerPoint count as "
+                f"one deck, so the deck of a company you've already made one for still downloads in either format.{more}", "deck_limit")
     return mark
 
 
@@ -3665,6 +3732,20 @@ def tax_export_file(fy: int = Query(..., ge=2000, le=2100), format: str = Query(
                     headers={"Content-Disposition": f'attachment; filename="{name}.csv"'})
 
 
+def deck_cover(sym: str, base: dict) -> str:
+    """The deck cover's description: the first paragraph of the one the company page leads "What they do" with (its
+    encyclopedia entry, as the page last read it), else the first of the filed profile (DD-053: the cover opened with the
+    profile's history paragraph, the page's second). Never a fresh call to the encyclopedia while the deck is made."""
+    p = base.get("p") or {}
+    try:
+        w = research_hub.wiki.company(p.get("name") or sym, cached=True)
+    except Exception:
+        w = None
+    text = str((w or {}).get("extract") or p.get("about") or "")
+    first = next((x.strip() for x in re.split(r"\n\s*\n|\n", text) if len(x.strip()) > 30), text.strip())
+    return first[:1200]
+
+
 @app.get("/research/deep/{symbol}/deck")
 def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profile=Depends(current_profile)):
     """The deep dive as a deck, PowerPoint or PDF (the same slides): numbers, business, plans, report card and
@@ -3677,7 +3758,7 @@ def deep_dive_deck(symbol: str, region: str = "IN", format: str = "pptx", profil
         if mark:
             db.add_usage(profile["id"], k)
             db.add_usage(profile["id"], mark)
-    view = deep_view(sym, base)
+    view = {**deep_view(sym, base), "cover": deck_cover(sym, base)}
     if format == "pdf":
         return Response(deck.build_pdf(view), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{sym}-deep-dive.pdf"'})

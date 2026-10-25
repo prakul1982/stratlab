@@ -149,7 +149,8 @@ export function timeTicks(walls: number[], from: number, to: number, x: (i: numb
     let w = 0, label = "";
     if (d.getUTCFullYear() !== p.getUTCFullYear()) { w = 5; label = String(d.getUTCFullYear()); }
     else if (d.getUTCMonth() !== p.getUTCMonth()) { w = 4; label = MONTHS[d.getUTCMonth()]; }
-    else if (d.getUTCDate() !== p.getUTCDate()) { w = 3; label = String(d.getUTCDate()); }
+    // a day always says its month ("7 Mar", never a bare "7" or "21" after "Mar", DD-045)
+    else if (d.getUTCDate() !== p.getUTCDate()) { w = 3; label = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; }
     else if (d.getUTCHours() !== p.getUTCHours()) { w = 2; label = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; }
     else if (d.getUTCMinutes() % 30 === 0 && d.getUTCMinutes() !== p.getUTCMinutes()) { w = 1; label = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; }
     if (w) marks.push({ i, w, label });
@@ -166,8 +167,6 @@ export function timeTicks(walls: number[], from: number, to: number, x: (i: numb
     }
   }
   out.sort((p, q) => p.i - q.i);
-  // a day before any month label says its month: a phone's axis read "21 · Oct · 14" with 21 being September (R95-005)
-  if (out[0] && /^\d{1,2}$/.test(out[0].label)) out[0].label += ` ${MONTHS[new Date(walls[out[0].i]).getUTCMonth()]}`;
   return out;
 }
 

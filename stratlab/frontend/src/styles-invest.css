@@ -24,6 +24,10 @@
 .inv-badges:empty { display: none; }
 /* the price, its 52-week range and the next results day, in one column on the right of the header */
 .inv-head-price { width: min(280px, 100%); gap: var(--s2); }
+/* the price column runs down both rows; the actions sit under the market value, not below the whole head (DD-019) */
+.inv-head > .inv-head-price { grid-column: 2; grid-row: 1 / span 2; }
+.inv-head > .inv-actions { grid-column: 1; grid-row: 2; align-self: start; }
+@media (max-width: 640px) { .inv-head > .inv-head-price, .inv-head > .inv-actions { grid-column: auto; grid-row: auto; } }
 .inv-rail52 { display: grid; gap: var(--s1); }
 .inv-rail52 .k-spread { gap: var(--s3); }
 @media (max-width: 640px) { .inv-head-price { width: 100%; } }
@@ -146,7 +150,8 @@ a.inv-theme:hover { border-color: var(--ink); }
 .inv-sticky { position: static; }
 .inv-toggle { display: none; }
 @media (max-width: 1360px) { .inv-toggle { display: inline-flex; } }
-.inv-bounds { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--s2); align-items: end; }
+/* the unit's column is one width for "%" and "times", so every row's boxes line up (DE-012) */
+.inv-bounds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.75rem; gap: var(--s2); align-items: end; }
 .inv-bounds .k-unit { padding-bottom: 12px; color: var(--muted); font-size: var(--t-note); }
 
 /* sector rotation chart bits */
@@ -155,3 +160,8 @@ a.inv-theme:hover { border-color: var(--ink); }
 .rot-g { transition: opacity .15s; }
 .rot-label.hl { font-weight: 600; }
 .rot-hit { cursor: pointer; outline: none; }
+/* Compare: every section's table with the same column widths, so the two companies' columns line up down the page (DD-060) */
+@media (min-width: 641px) {
+  .cmp-sections .k-table { table-layout: fixed; width: 100%; }
+  .cmp-sections .k-table th:first-child { width: 44%; }
+}

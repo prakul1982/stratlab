@@ -120,13 +120,15 @@ export function SplitBars({ built, unseen, builtLabel, unseenLabel }: { built: n
 
 /* Two counts a day on one scale: the first drawn up from zero, the second down (new highs over new lows, stocks up 4%
  * over those down 4%). Thin columns with a per-day tooltip; zoom, ranges and linked crosshairs come from XYChart. */
-export function PairBars({ up, down, labels, times, upLabel, downLabel, upName, downName, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v), sync, ranges }: {
+export function PairBars({ up, down, labels, times, upLabel, downLabel, upName, downName, upColor, downColor, ariaLabel, height = 200, format = (v) => String(v), sync, ranges, table }: {
   up: number[]; down: number[]; labels: string[]; times?: string[]; upLabel: string; downLabel: string; upName?: string; downName?: string; upColor: string; downColor: string;
   ariaLabel: string; height?: number; format?: (v: number) => string; sync?: string; ranges?: boolean;
+  /** false: the card around it has the Table switch (one per chart, DE-022) */
+  table?: boolean;
 }) {
   const abs = (v: number) => format(Math.abs(v));
   return (
-    <XYChart ariaLabel={ariaLabel} height={height} times={times} labels={times ? undefined : labels} axisLabels={labels} sync={sync} ranges={ranges}
+    <XYChart ariaLabel={ariaLabel} height={height} times={times} labels={times ? undefined : labels} axisLabels={labels} sync={sync} ranges={ranges} table={table}
       format={abs} axisFormat={abs} refs={[{ v: 0, strong: true }]}
       series={[
         { id: "up", label: upName ?? upLabel, tipLabel: upLabel, values: up, color: upColor, kind: "bar" },

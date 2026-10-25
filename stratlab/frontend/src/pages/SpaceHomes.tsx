@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { ago, fmtDate, istToday, money, pct, signCls } from "../lib/format";
@@ -18,15 +18,14 @@ import { Panel, QuoteGrid } from "../components/Research";
 import { SummaryLine, type FilingSummary } from "../components/Filings";
 import { FirstSteps } from "../components/FirstSteps";
 import { BreadthCard } from "../components/BreadthCard";
-import { typingFirst } from "../lib/typingFirst";
 import { PromoCountdown } from "../components/PromoCountdown";
 import { Explore } from "../components/Explore";
-import { CompanySearch } from "../components/CompanySearch";
 import { Book, Calendar, Compass, Layers, Library, Pulse, Search } from "../components/Icons";
 import { resultDay, type ResultRow } from "./Research";
 import { fyLink, movedYearNote, openFy, taxHasData, yearHasTrades } from "../lib/fy";
 import { investStrip, withRegion } from "../lib/investUi";
 import { notRunning } from "../lib/tradeUi";
+import { PLAN_NAME, planOf } from "../lib/plans";
 
 /* The three spaces' home pages: /trade, /invest and /money. `/` opens the one whose menu shows. Each reuses the
  * pages' own pieces; nothing here is new data, only what those pages already show, gathered.
@@ -53,11 +52,15 @@ function Head({ eyebrow, title, children }: { eyebrow: string; title: string; ch
 
 /** One tool on a space's strip. `status`: a live line (e.g. "2 running"); null while it loads (a placeholder of the
  * same height); left out, the card's foot says where it goes instead. */
-type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; plain?: boolean; go?: string; lead?: boolean; testId?: string; data?: Record<string, string> };
+type Tool = { to: string; icon: ReactNode; title: string; line: string; status?: ReactNode; plain?: boolean; go?: string; lead?: boolean; testId?: string; data?: Record<string, string>;
+  /** the plan feature it needs: a plan without it sees which plan has it on the card (DP1-020) */
+  flag?: string };
 
 /** Four tools in one row of equal cards (two by two when the column is narrow). The lead tool is marked by its
  * border and tint, not its size. Every card has the same three lines, so the row never jumps when a status loads. */
 function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
+  const { me } = useApp();
+  const lockedOn = (flag?: string) => (flag && me?.plan_info.features?.[flag] === false ? PLAN_NAME[planOf(flag)] : null);
   return (
     <nav className="space-strip" aria-label={label}>
       {tools.map((t) => (
@@ -65,7 +68,7 @@ function ToolStrip({ label, tools }: { label: string; tools: Tool[] }) {
           <span className="space-card-title">{t.icon}<b>{t.title}</b></span>
           <span className="small muted space-card-line">{t.line}</span>
           {t.status === null ? <span className="space-card-foot" aria-hidden="true"><span className="skel" /></span>
-            : <span className={`small space-card-foot${t.status && !t.plain ? " live" : ""}`} data-testid={t.testId}>{t.status || t.go || "Open →"}</span>}
+            : <span className={`small space-card-foot${t.status && !t.plain ? " live" : ""}`} data-testid={t.testId}>{lockedOn(t.flag) ? `On the ${lockedOn(t.flag)} plan →` : t.status || t.go || "Open →"}</span>}
         </Link>
       ))}
     </nav>
@@ -212,31 +215,26 @@ const INVEST_LINKED = ["breadth", "filings", "investor", "watchlist", "rotation"
 const INVEST_STRIP: Record<string, Omit<Tool, "to">> = {
   screens: { icon: <Search size={18} />, title: "Screener", lead: true, line: "Filter companies by plain facts: growth, debt, returns." },
   rotation: { icon: <Compass size={18} />, title: "Sector rotation", line: "Which sectors lead or lag the market, with their stocks." },
-  scan: { icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up." },
+  scan: { icon: <Pulse size={18} />, title: "Trend scan", line: "Stocks in a rising trend with the Supertrend up.", flag: "scans" },
   dividends: { icon: <Calendar size={18} />, title: "Dividends", line: "Dividends, bonuses and splits ahead, for your stocks and all." },
 };
 
 export function InvestHome() {
-  const nav = useNavigate();
   const [region, setRegion] = useState<Region>(homeRegion);
-  const popular = region === "IN" ? ["RELIANCE", "HDFCBANK", "TCS", "TITAN", "LT"] : ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"];
   // every card and link opens its page on the market picked here (review 5c)
   const tools: Tool[] = investStrip(region).map((t) => ({ ...INVEST_STRIP[t.key], to: t.to }));
+  // the one Invest home: what you follow and the market around it. Looking up a company is its own page (Look up a company,
+  // the menu's main button), so this page has no second search box (DD-002)
   return (
     <div className="space-home">
-      <Head eyebrow="Invest · your research desk" title="Your research desk">
-        What your watchlist, results days and red flags say today, and the market around them. Facts, not tips.
+      <Head eyebrow="Invest" title="Invest home">
+        What your watchlist, results days and red flags say today, and the market around them. Facts, not tips. To open any
+        company, use <Link to={`/research?region=${region}`} className="link">Look up a company</Link>.
       </Head>
       <Top compact />
-      <Card className="space-next" label="Jump to a company">
+      <div className="k-toolbar" aria-label="Market">
         <Seg label="Market" value={region} onChange={(v) => setRegion(v as Region)} options={[{ value: "IN", label: "₹ India" }, { value: "US", label: "$ United States" }]} />
-        {/* not on a touch screen: focusing it there raises the keyboard over the page (R58-014) */}
-        <CompanySearch region={region} autoFocus={typingFirst()} />
-        <div className="k-row">
-          <span className="k-small k-muted">Popular:</span>
-          {popular.map((p) => <button key={p} className="chip" onClick={() => nav(`/research/${region}/${p}`)}>{p}</button>)}
-        </div>
-      </Card>
+      </div>
       <ToolStrip label="Invest tools" tools={tools} />
       <NextEvents region={region} />
       <div className="grid2 space-panels">

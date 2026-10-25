@@ -8,9 +8,7 @@ import { asOf, CRORE, inrCompact, marketTz, pct, safeHref, signTone, fmtDate } f
 import { eyebrowOf } from "../lib/eyebrow";
 import { millionsOf, scaleFor, usdAmount } from "../lib/research";
 import { Panel, TrendBars } from "../components/Research";
-import { DealsPanel } from "../components/Deals";
 import { BizUpdatesPanel } from "../components/BizUpdates";
-import { NamedHoldersPanel } from "../components/NamedHolders";
 import { Badge, Card, DataTable, ErrorState, Meter, PageHeader, PlanNote, Select, Signed, Skeleton, Stat, StatRow } from "../components/kit";
 import { AlertButton } from "../components/AlertForm";
 import { ShareCompanyButton } from "../components/ShareCompany";
@@ -261,11 +259,11 @@ export function DeepDivePage() {
             {(n.notes ?? []).map((t) => <p key={t} className="k-small k-muted inv-text">{t}</p>)}
             <div className="k-cols">
               <TrendBars points={years.map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.sales as number) / salesS.k }))} label={us ? "Revenue" : "Sales"} unit={salesS.unit} />
-              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit} tone="blue"
+              <TrendBars points={years.filter((y) => y.profit != null).map((y) => ({ y: y.year.replace("Mar ", "FY"), v: (y.profit as number) / profitS.k }))} label="Net profit" unit={profitS.unit}
                 baseSales={(() => { const f = years.find((y) => y.profit != null); return f?.sales != null ? f.sales / profitS.k : null; })()} />
             </div>
             {n.quarters.length > 0 && (
-              <DataTable label="The last eight quarters" rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
+              <DataTable label="The last eight quarters" stack rows={n.quarters.slice(-8)} rowKey={(q) => q.quarter}
                 columns={[{ key: "q", header: <>Quarter <span className="k-note">({qS.unit})</span></>, rowHeader: true, cell: (q) => q.quarter },
                   { key: "s", header: "Sales", numeric: true, cell: (q) => qS.fmt(q.sales) },
                   { key: "y", header: "vs a year ago", numeric: true, cell: (q) => (q.sales_yoy == null ? "–" : <Signed value={q.sales_yoy}>{pct(q.sales_yoy)}</Signed>) },
@@ -290,11 +288,11 @@ export function DeepDivePage() {
           {!us && <BizUpdatesPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Business updates" right={right}
             info="Monthly or quarterly numbers the company files between results, copied from its own filing with the line and page each comes from.">{body}</Panel>} />}
 
-          {!us && <NamedHoldersPanel symbol={v.symbol} wrap={(body, right) => <Panel title="Named holders" right={right}
-            info="From the latest quarterly shareholding pattern: the promoter group's members and every public holder above 1%.">{body}</Panel>} />}
-
-          {!us && <Panel title="Deals and insider trades" info="Who bought or sold, from exchange disclosures: promoters' and insiders' own trades and pledges, substantial acquisitions, and bulk and block deals.">
-            <DealsPanel symbol={v.symbol} />
+          {/* the named holders and the deals tables are the company page's: linked from here, not shown twice (DD-054) */}
+          {!us && <Panel title="Holders and deals">
+            <p className="k-small" data-testid="deep-holders-deals">The named holders above 1% and the deals and insider trades are on the company page:{" "}
+              <Link className="link" to={`/research/IN/${encodeURIComponent(v.symbol)}#named-holders`}>named holders</Link>,{" "}
+              <Link className="link" to={`/research/IN/${encodeURIComponent(v.symbol)}#deals`}>deals and insider trades</Link>.</p>
           </Panel>}
 
           {n.bank ? (
@@ -306,7 +304,7 @@ export function DeepDivePage() {
             ? `Capex as the company reports it in its cash flow statement (purchases of property, plant and equipment). Free cash flow is cash from operations minus capex. Figures in ${capS.unit}.`
             : `Capex is estimated from the balance sheet: the rise in fixed assets and work in progress, plus the year's depreciation. Free cash flow is cash from operations minus that capex. Figures in ${capS.unit}.`}>
             {n.capex_3y_total != null && <p className="k-small">{n.capex_reported ? "" : "About "}<b>{us ? usdAmount(n.capex_3y_total, cur) : inrAmount(n.capex_3y_total)}</b> spent on capex over {(n.capex_years ?? 3) >= 3 ? "the last three years" : `${n.capex_years} of the last three years (no figure for the rest)`}. Figures in {capS.unit}.</p>}
-            <DataTable label="Capex and cash by year" rows={[...years].reverse().slice(0, 8)} rowKey={(y) => y.year}
+            <DataTable label="Capex and cash by year" stack rows={[...years].reverse().slice(0, 8)} rowKey={(y) => y.year}
               columns={[{ key: "y", header: <>Year <span className="k-note">({capS.unit})</span></>, rowHeader: true, cell: (y) => y.year },
                 { key: "s", header: "Sales", numeric: true, cell: (y) => capS.fmt(y.sales) }, { key: "c", header: "Capex", numeric: true, cell: (y) => capS.fmt(y.capex) },
                 { key: "cs", header: "Capex / sales", numeric: true, cell: (y) => pc(y.capex_pct_sales) }, { key: "cfo", header: "Cash from operations", numeric: true, cell: (y) => capS.fmt(y.cfo) },

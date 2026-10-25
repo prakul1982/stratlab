@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../lib/app";
 import { FEATURES, GOAL_ORDER, GOALS, resolve, type Goal } from "../lib/features";
-import { Search } from "./Icons";
+import { PLAN_NAME, planOf } from "../lib/plans";
 import "../pages/trade/trade.css";
 
 const OPEN_KEY = "stratlab.explore.open";
@@ -12,7 +12,9 @@ const OPEN_KEY = "stratlab.explore.open";
  * is pressed (remembered), so the page under it stays short. `hide` leaves out tools the page above already links to,
  * so a space's home offers each one once. `order`: a space home lists its own space's goals first. */
 export function Explore({ title = "What you can do here", skip = [], hide = [], order }: { title?: string; skip?: Goal[]; hide?: string[]; order?: "trade" | "invest" }) {
-  const { notebooks, level, focus } = useApp();
+  const { notebooks, level, focus, me } = useApp();
+  // a tool the plan doesn't include says which plan has it, on the tile, before the click (DP1-020)
+  const lockedOn = (flag?: string) => (flag && me?.plan_info.features?.[flag] === false ? PLAN_NAME[planOf(flag)] : null);
   const nav = useNavigate();
   const loc = useLocation();
   const latest = notebooks?.[0] ? { id: notebooks[0].id } : null;
@@ -29,10 +31,8 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
   };
   return (
     <section className="k-stack k-explore" aria-labelledby="explore-h">
-      <div className="k-spread">
-        <h2 id="explore-h" className="h2">{title}</h2>
-        <button className="btn quiet sm" onClick={() => window.dispatchEvent(new Event("stratlab:search"))}><Search size={16} />Search everything</button>
-      </div>
+      {/* no "Search everything" here: the menu's search box is on every page, and a second one read as another search (DD-002) */}
+      <h2 id="explore-h" className="h2">{title}</h2>
       {goals.slice(0, all ? goals.length : 1).map((g) => {
         const items = shown.filter((f) => f.goal === g);
         return (
@@ -46,7 +46,7 @@ export function Explore({ title = "What you can do here", skip = [], hide = [], 
                 <button key={f.id} className="k-linkcard explore-card" onClick={() => open(f.to)}>
                   <b>{f.title}</b>
                   <span className="small muted">{f.what}</span>
-                  <span className="small explore-go">{f.to.startsWith("@") && !latest ? "Starts with a notebook →" : "Open →"}</span>
+                  <span className="small explore-go">{lockedOn(f.flag) ? `On the ${lockedOn(f.flag)} plan →` : f.to.startsWith("@") && !latest ? "Starts with a notebook →" : "Open →"}</span>
                 </button>
               ))}
             </div>

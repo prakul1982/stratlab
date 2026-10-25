@@ -49,8 +49,11 @@ RULES: list[tuple[str, str, str, list[str]]] = [
         r"\b(nclt|national company law tribunal|tribunal)\b.{0,60}\bconvened\b",
         r"meeting of (the )?(equity shareholders|shareholders|members|(secured |unsecured )?creditors)\b.{0,120}\b(nclt|tribunal)\b",
         r"\bvoting results?\b.{0,160}\b(nclt|tribunal|convened)\b", r"\b(nclt|tribunal|convened)\b.{0,160}\bvoting results?\b"]),
+    # the exchange asking about a news report is about the report, not a filing of the company's own (DE-034: GRASIM's
+    # "News Verification" on a tax case read as a rights issue, from the headline it quoted)
     ("news_clarification", "Clarification of a news report", "info", [
-        r"clarification .{0,40}\b(media|news|article|rumou?rs?|report(ed|s)?)\b", r"\b(media|news) (report|item|article)s?\b.{0,80}\bclarif"]),
+        r"clarification .{0,40}\b(media|news|article|rumou?rs?|report(ed|s)?)\b", r"\b(media|news) (report|item|article)s?\b.{0,80}\bclarif",
+        r"\bnews verification\b", r"sought clarification .{0,80}\bnews\b"]),
     # explicit insolvency or CIRP wording only: "NCLT" alone names the tribunal, which sanctions mergers too (R8O-003);
     # the company must be the debtor as well (DEBTOR, classify)
     ("insolvency", "Insolvency proceedings", "red", [r"corporate insolvency resolution", r"insolvency (and bankruptcy|resolution|proceedings?|petition|application)",
@@ -64,6 +67,12 @@ RULES: list[tuple[str, str, str, list[str]]] = [
     ("regulator", "Regulator or tax action", "red", [r"\bsebi\b.{0,40}(order|penalt|show cause|adjudicat)", r"show[- ]cause", r"search (and|&) seizure",
                                                    r"income tax (search|survey)", r"enforcement directorate", r"\bpenalty\b"]),
     ("rating_down", "Credit rating downgraded", "red", [r"downgrad", r"rating .{0,30}(revised|placed) .{0,30}(negative|watch)"]),
+    # DE-033: the exchange's "Credit Rating- Revision" summary never says which way (12 of 85 rating filings, 12-23 Oct),
+    # so a downgrade could never be flagged: a revision that names no direction is one to read; one that says it is an
+    # upgrade or a reaffirmation is routine (the plain "Credit rating" rule below)
+    ("rating_revised", "Credit rating revised (direction not stated)", "amber", [
+        r"^(?!.*\b(?:upgrad\w*|reaffirm\w*))(?=.*(?:credit rating\s*-\s*revision|\brevision (?:in|of) (?:the )?(?:credit )?ratings?\b|"
+        r"\b(?:credit )?ratings? (?:has been |have been |was |were )?revised\b))"]),
     # a cessation of a person, not of a subsidiary, joint venture or other company (R48-007: "Cessation of Abraham & Thakore
     # Private Limited as subsidiary of the Company" read as a resignation)
     ("kmp_resign", "Director or key officer resigned", "amber", [r"resignation", r"resigned",
@@ -92,16 +101,21 @@ RULES: list[tuple[str, str, str, list[str]]] = [
 _COMPILED = [(i, label, sev, [re.compile(p, re.I) for p in pats]) for i, label, sev, pats in RULES]
 FUND_RAISE = {"qip", "preferential", "rights", "warrants", "fund_raise"}
 LABEL = {i: label for i, label, _, _ in RULES} | {"other": "Other update", "officer_change": "Director or officer change",
-                                                  "insolvency_other": "Insolvency filing, the company not shown as the debtor"}
+                                                  "insolvency_other": "Insolvency filing, the company not shown as the debtor",
+                                                  "resign_unnamed": "Resignation filed (who isn't stated)"}
+# flags that no rule above names directly (worked out from a rule's match): the filter lists them too
+EXTRA_FLAGS = [("resign_unnamed", "amber")]
 # raised when the rules change, so the stored whole-market list is read again (5: "NCLT" alone is no longer insolvency,
 # tribunal-convened meetings and news clarifications are routine, R8O-003)
-RULES_VERSION = 5
+RULES_VERSION = 6        # 6: credit rating revisions, news verifications and monitoring agency reports (DE-033, DE-034)
 
 # R6O-002: the filing's subject says what it is about. A routine certificate is routine whatever its body names
 # (ICICIBANK's "Certificate under SEBI (Depositories and Participants) Regulations, 2018" read as a debt raise).
 ROUTINE_SUBJECT = re.compile(r"depositories and participants|regulation 74\s*\(5\)|trading window|loss of share certificate|"
                              r"duplicate share certificate|statement of investor complaints|newspaper|compliance certificate|"
-                             r"transfer of (physical )?shares|dematerial", re.I)
+                             r"transfer of (physical )?shares|dematerial|monitoring agency", re.I)
+# DE-034: a monitoring agency's report on money raised earlier read as a QIP and a preferential issue, from the issue it
+# reports on
 # a generic subject ("Updates", "General Updates") names nothing: a flag needs the body to report a decision or an
 # event, not a passing mention (TITAN's "Updates" read as a debt raise, RAYMONDREL's "General Updates" as a
 # preferential issue), and a report on money already raised is routine
@@ -179,7 +193,9 @@ def _officer_change(desc: str, text: str) -> tuple[str, str]:
         return "kmp_resign", "amber"
     if text and _SENIOR_ONLY.search(hay):
         return "officer_change", "info"
-    return "kmp_resign", "amber"              # nothing says who: kept, to be read
+    # nothing says who (the exchange's own "Resignation of Director/KMP/SMP" form): kept, to be read, apart from the named
+    # director and key officer resignations (DE-034: 1,060 of 1,562 flags read "Director or key officer resigned")
+    return "resign_unnamed", "amber"
 
 
 def classify(desc: str, text: str, url: str | None = None) -> tuple[str, str]:
@@ -272,7 +288,9 @@ def _same_filing_key(i: dict) -> tuple:
 
 def one_per_filing(items: list[dict]) -> list[dict]:
     """The rows with each filing once (the latest copy, which keeps its id), and `copies` when it was listed more
-    than once (KSHITIJPOL's one resignation, 7 Oct 2026, three times)."""
+    than once (KSHITIJPOL's one resignation, 7 Oct 2026, three times). The exchange's bare resignation form beside the
+    company's own letter on the same day is the same resignation (DE-034: BAJAJHFL's CFO and XCHANGING's company
+    secretary each listed twice): it counts as a copy of the letter."""
     best: dict[tuple, dict] = {}
     for i in items:
         k = _same_filing_key(i)
@@ -282,7 +300,18 @@ def one_per_filing(items: list[dict]) -> list[dict]:
             continue
         keep = i if (i["at"], i["id"]) > (have["at"], have["id"]) else have
         best[k] = {**keep, "copies": have.get("copies", 1) + 1}
-    return list(best.values())
+    named = {}
+    for k, i in best.items():
+        if i.get("category") in ("kmp_resign", "officer_change"):
+            named.setdefault((i.get("symbol"), str(i.get("at"))[:10]), k)
+    out = []
+    for k, i in best.items():
+        letter = named.get((i.get("symbol"), str(i.get("at"))[:10])) if i.get("category") == "resign_unnamed" else None
+        if letter is not None:
+            best[letter]["copies"] = best[letter].get("copies", 1) + i.get("copies", 1)
+            continue
+        out.append(i)
+    return out
 
 
 def summarise(items: list[dict], now: datetime | None = None) -> dict:
@@ -1526,7 +1555,7 @@ def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
     wait = OVERVIEW_WAIT if wait is None else wait
     jobs = {sym: _overview_pool.submit(_overview_row, feed, sym) for sym in symbols}
     done, _ = futures_wait(jobs.values(), timeout=wait)
-    rows, problems, now = [], [], time.time()
+    rows, problems, reading, now = [], [], [], time.time()
     try:
         kept_rows = _last_rows.setdefault(feed, {})
     except TypeError:                            # a feed that can't be weakly referenced has no "last good row"
@@ -1544,6 +1573,8 @@ def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
         else:
             job.cancel()
             why = "The exchange is slow to answer for this one."
+            if not job.cancelled():              # still being read: its answer is cached for the next look (DE-032)
+                reading.append(sym)
         if row is None:
             problems.append(f"{sym}: {why}")
             kept = kept_rows.get(sym)
@@ -1552,7 +1583,7 @@ def overview(feed, symbols: list[str], wait: float | None = None) -> dict:
         if row is not None:
             rows.append(row)
     rows.sort(key=lambda r: (-r["summary"]["red"], -r["summary"]["amber"], r["symbol"]))
-    return {"rows": rows, "problems": problems, "days": WINDOW_DAYS}
+    return {"rows": rows, "problems": problems, "days": WINDOW_DAYS, "reading": reading}
 
 
 def alert_text(new: list[tuple[str, dict]]) -> str:

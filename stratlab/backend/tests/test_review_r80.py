@@ -187,10 +187,11 @@ def test_rotation_after_close_brings_kept_copies_to_the_close(monkeypatch):
 
     def run(markets, region, set_, members, interval, tail):
         ran.append((region, interval))
-        return {"rows": [{"points": [{"t": "2026-10-22"}]}], "skipped": [], "as_of": "2026-10-22", "interval": interval, "tail": tail}
+        return {"rows": [{"points": [{"t": "2026-10-22"}]}], "skipped": [], "as_of": "2026-10-22", "interval": interval, "tail": tail,
+                "v": main.rotation.VERSION}
     monkeypatch.setattr(main.rotation, "run", run)
     _db.set_setting("rotation:last:IN:sectors:weekly:5", _json.dumps({"rows": [1], "as_of": "2026-10-21"}))
-    _db.set_setting("rotation:last:US:sectors:weekly:5", _json.dumps({"rows": [1], "as_of": "2026-10-22"}))
+    _db.set_setting("rotation:last:US:sectors:weekly:5", _json.dumps({"rows": [1], "as_of": "2026-10-22", "v": main.rotation.VERSION}))
     done = main.rotation_after_close(_dt(2026, 10, 22, 12, 0, tzinfo=_tz.utc))
     assert done == ["IN weekly", "IN daily", "US daily"] and ran == [("IN", "weekly"), ("IN", "daily"), ("US", "daily")]
     kept = _db.json_value(_db.get_setting("rotation:last:IN:sectors:weekly:5"), {})

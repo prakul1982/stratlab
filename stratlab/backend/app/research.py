@@ -388,22 +388,23 @@ def _setup(strategy: dict | None) -> dict:
 
 
 def unchanged(experiments: list[dict], strategy, inst_id: str | None, days: int, now: str) -> int | None:
-    """The version of the last experiment when running again would repeat it exactly: the same rules, instrument and
-    period (as asked for, not as capped to what the source holds), run today (on a later day there are newer candles, so that run is a new one)
-    and, on intraday candles, with no candle closed since its last one (a 15-minute test rerun an hour later has four
-    more). None when something differs."""
-    if not experiments:
-        return None
-    last = experiments[-1]
-    if str(last.get("created_at") or "")[:10] != now[:10]:
-        return None
-    if strategy.tf in TF_MINUTES and _newer_candle(last, strategy.tf, now):
-        return None
-    if _setup(last.get("strategy")) != _setup(strategy.model_dump()):
-        return None
-    if (last.get("instrument") or {}).get("id") != inst_id or last.get("req_days", last.get("days")) != days:
-        return None
-    return last.get("v")
+    """The version of an experiment that running again would repeat exactly: the same rules, instrument and period (as
+    asked for, not as capped to what the source holds), run today (on a later day there are newer candles, so that run is a
+    new one) and, on intraday candles, with no candle closed since its last one (a 15-minute test rerun an hour later has
+    four more). Any of today's runs counts, not only the last: going back to v6's set-up after v7 to v9 made v10, a copy
+    of v6 that used a backtest (DP1-009). None when nothing matches."""
+    setup = _setup(strategy.model_dump())
+    for e in reversed(experiments):
+        if str(e.get("created_at") or "")[:10] != now[:10]:
+            continue
+        if strategy.tf in TF_MINUTES and _newer_candle(e, strategy.tf, now):
+            continue
+        if _setup(e.get("strategy")) != setup:
+            continue
+        if (e.get("instrument") or {}).get("id") != inst_id or e.get("req_days", e.get("days")) != days:
+            continue
+        return e.get("v")
+    return None
 
 
 def _newer_candle(last: dict, tf: str, now: str) -> bool:

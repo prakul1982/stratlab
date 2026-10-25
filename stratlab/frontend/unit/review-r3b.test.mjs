@@ -48,7 +48,7 @@ test("one name for the person's own space, and the company lookup and the Invest
   }
   const research = src("pages/Research.tsx"), invest = src("pages/SpaceHomes.tsx");
   assert.match(research, /title="Look up a company"/);
-  assert.match(invest, /title="Your research desk"/);
+  assert.match(invest, /title="Invest home"/);
   // the watchlist lives on the desk (and its own page), not on both
   const lookup = research.slice(research.indexOf("export function ResearchHome"), research.indexOf("/* ================= One company"));
   assert.doesNotMatch(lookup, /title="Your watchlist"/);
@@ -89,7 +89,9 @@ test("while no plan can be bought, locks offer 'Tell me when plans open', not a 
   // every lock banner, plan limit and plan note goes through the one component
   for (const f of ["components/PageLock.tsx", "components/kit/Notice.tsx", "components/BizUpdates.tsx", "pages/trade/JournalPage.tsx"]) assert.match(src(f), /<PlanActions /, f);
   for (const f of ["pages/NotebookPage.tsx", "pages/OptionsPage.tsx"]) assert.match(src(f), /usePlansToast\(\)/, f);
-  for (const f of ["pages/trade/ReplayPage.tsx", "pages/trade/SignalsPage.tsx"]) assert.match(src(f), /usePlansAction\(\)/, f);
+  // Chart replay and Forward test show what they hold under the lock, with the same plan actions (DP1-019)
+  for (const f of ["pages/trade/ReplayPage.tsx", "pages/trade/SignalsPage.tsx"]) assert.match(src(f), /<LockedPreview /, f);
+  assert.match(src("components/LockedPreview.tsx"), /<PlanActions source="lock" \/>/);
   for (const f of ["pages/NotebookPage.tsx", "pages/OptionsPage.tsx", "components/PageLock.tsx", "pages/HoldingsPage.tsx", "pages/money/MutualFundsPage.tsx"]) assert.doesNotMatch(src(f), /label: "See plans"|>See plans</, f);
   assert.match(src("pages/PlansPage.tsx"), /<PlanInterestButton source="plans" \/>/);
   assert.match(src("pages/admin/OverviewSection.tsx"), /Waiting for plans/);

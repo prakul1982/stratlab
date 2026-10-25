@@ -76,8 +76,10 @@ test("My space has one name, and Look up a company differs from the Invest home 
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("My space");
 
   await page.goto("/invest");
-  await expect(page.getByRole("heading", { level: 1, name: "Your research desk" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("[aria-label=\"Jump to a company\"]")).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "Invest home" })).toBeVisible({ timeout: 30_000 });
+  // one search box for companies, on Look up a company: the Invest home links there instead (DD-002)
+  await expect(page.locator("main").getByRole("combobox")).toHaveCount(0);
+  await expect(page.locator("main").getByRole("link", { name: "Look up a company", exact: true })).toBeVisible();
   await page.goto("/research");
   await expect(page.getByRole("heading", { level: 1, name: "Look up a company" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Your watchlist" }), "the watchlist is on the Invest home").toHaveCount(0);

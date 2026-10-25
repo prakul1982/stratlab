@@ -8,7 +8,8 @@ export const REGION_NAME: Record<Region, string> = { IN: "India", US: "United St
 export interface MetricItem { label: string; value: number | null; unit: "x" | "%" | "%±" | "money" | "cr"; note?: string; dp?: number;
   /** shown instead of a figure: "n/m" for a growth rate off a tiny base (DD-018) */ text?: string }
 export interface MetricGroup { title: string; items: MetricItem[] }
-export interface NewsItem { headline: string; url: string; source: string; at: string | null }
+/** `similar`: how many near-repeats of this headline were folded into it (DE-017) */
+export interface NewsItem { headline: string; url: string; source: string; at: string | null; similar?: number }
 export interface Quote { price: number | null; change?: number | null; change_pct?: number | null; open?: number | null;
   high?: number | null; low?: number | null; prev_close?: number | null; volume?: number | null; at?: string | null;
   /** the session the change is of, when the market hasn't traded today (the last completed one) */ change_day?: string | null;
@@ -85,6 +86,8 @@ export interface SectorAI {
   screen: { name: string; ticker: string; layer: string; one_line: string }[];
   value_chain: { layer: string; description: string; companies: Co[] }[];
   tailwinds: string[]; risks: string[]; generated_at: number;
+  /** the listed companies the exchange puts in the theme's industries, A to Z (DE-013); `named`: the map names it too */
+  exchange?: { industries: string[]; total: number; companies: { ticker: string; name: string; industry: string; named: boolean }[] } | null;
 }
 /** One index's tile. `day`: the session its level and change are of; `live`: today's while the market trades; `stale`: the
  * market trades today but this is still a previous session's level, so its change is never "today's" (R7T-003). */
@@ -165,6 +168,10 @@ export interface PulseAI {
   tone: string; hot: { name: string; ticker: string; why: string }[];
   flows: { title: string; detail: string; direction: "INFLOW" | "OUTFLOW" | "ROTATION" | "" }[];
   themes: { theme: string; detail: string; example: string }[]; generated_at: number; levels_at?: string | null;
+  /** The mood worked out from the day's moves, and the headlines' main story (DD-001); absent on an older read. */
+  mood?: string;
+  /** Where the FII/DII figures the read quotes come from, when it quotes them (DD-001). */
+  flows_source?: string;
 }
 export interface CompareAI {
   verdict: string; differences: string[];
@@ -302,7 +309,7 @@ export function useWatchlist() {
 /* Big money in the units people say ($4.31T, ₹1.51 lakh cr): bigMoney, in format.ts. Units for groups of amounts,
  * trend values and metric figures: researchFormat.ts (no browser needed, so the unit tests read them). */
 export { bigMoney } from "./format";
-export { focusParam, holderRowName, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
+export { focusParam, holderRowName, linkLabel, metricText, missingLine, missingWhat, millionsOf, monthsOld, newsAge, newsWhen, periodEnd, pulseClosedDay, pulseLede, resultsFiled, scaleFor, screenCap, screenNum, staleQuarter, trendShort, trendValue, usdAmount, type Scale } from "./researchFormat";
 
 /* ---------- where a number sits in a typical range (from Hindsight) ----------
  * [floor, weak edge, strong edge, ceiling, higher-is-better]. Loose large-cap defaults,

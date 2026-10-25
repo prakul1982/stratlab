@@ -7,6 +7,8 @@ import { safeHref } from "../lib/format";
 import { bizChange, bizValue, filedOn, periodName, type Exchange } from "../components/BizUpdates";
 import { foldEmptyMonths } from "../lib/biz";
 import { Badge, Card, CardHead, ChipBar, DataTable, EmptyState, ErrorState, PageHeader, PlanNote, Seg, Skeleton, type Column } from "../components/kit";
+import { LockedPreview } from "../components/LockedPreview";
+import { useApp } from "../lib/app";
 
 /* Business updates: the latest monthly or quarterly headline figure each company filed (NSE and BSE filings), with the change
  * on the previous period and on the year. First "My stocks" (your holdings, then your watchlist), then a sector side by side
@@ -48,20 +50,25 @@ export function BizUpdatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [tries, setTries] = useState(0);
+  // the plan says it's locked: nothing is asked of the server that it would refuse (DP1-019: 402s in the console)
+  const { me } = useApp();
+  const off = me?.plan_info.features?.biz_updates === false;
 
   useEffect(() => {
+    if (off) return;
     let live = true;
     api<Mine>("/invest/business-updates/mine").then((x) => live && setMine(x)).catch(() => live && setMine(null));
     return () => { live = false; };
-  }, [tries]);
+  }, [tries, off]);
   useEffect(() => {
+    if (off) { setLocked(true); return; }
     let live = true;
     setD(null); setError(null); setLocked(false);
     api<Sector>(`/invest/business-updates?sector=${encodeURIComponent(sector)}`)
       .then((x) => live && setD(x))
       .catch((e) => { if (!live) return; if ((e as ApiError).status === 402) setLocked(true); else setError((e as Error).message); });
     return () => { live = false; };
-  }, [sector, tries]);
+  }, [sector, tries, off]);
 
   const pick = (id: string) => { const p = new URLSearchParams(params); p.set("sector", id); setParams(p, { replace: true }); };
   const filed = (d?.rows ?? []).filter((r) => r.value != null);
@@ -74,7 +81,15 @@ export function BizUpdatesPage() {
         // only what is filed and read: no cement, telecom or airline list, which file no such update (DF-013)
         lede="Monthly and quarterly figures companies file with the exchanges (NSE and BSE): automakers' sales, banks' and lenders' deposits and advances, port and airport traffic, power capacity, metals and mining output, and retailers' quarterly updates. Read into numbers, each linked to its filing. Facts, not advice." />
       {locked ? (
-        <PlanNote>The sector view of business updates is on the Basic plan. Each company page lists its own update filings for everyone.</PlanNote>
+        <>
+          <PlanNote>The sector view of business updates is on the Basic plan. Each company page lists its own update filings for everyone.</PlanNote>
+          <LockedPreview title="Business updates" actions={false} points={[
+            "Each sector's monthly and quarterly figures side by side: automakers' sales, banks' deposits and advances, port and airport traffic, power capacity and generation, metals and mining, and retail.",
+            "Every company's change on the month and on the year, each figure linked to the filing it was read from.",
+            "My stocks: your holdings and watchlist first, with the latest update each has filed.",
+            "A message when a new update is read for a stock you hold or watch.",
+          ]} />
+        </>
       ) : error ? <ErrorState title="The business updates couldn't be read" action={{ label: "Try again", onClick: () => setTries((n) => n + 1) }}>{error}</ErrorState>
         : !d ? <Card><Skeleton label="Reading the business updates" lines={4} /></Card> : (
         <>
